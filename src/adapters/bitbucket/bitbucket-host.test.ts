@@ -46,6 +46,7 @@ const hostWith = (
   });
 
 const key = (value: string) => CommentKey.parse(value);
+const file = (path: string) => ({ sha: HEAD_SHA, path });
 
 const publication: Publication = {
   verdict: "request_changes",
@@ -377,7 +378,10 @@ describe("createBitbucketHost", () => {
         fetch,
       });
 
-      expect(await host.getFile(repo, HEAD_SHA, "big.bin")).toEqual({ ok: true, value: "content" });
+      expect(await host.getFiles(repo, [file("big.bin")])).toEqual({
+        ok: true,
+        value: ["content"],
+      });
       expect(requests.map((request) => request.authorization !== null)).toEqual([true, true]);
     });
 
@@ -396,9 +400,9 @@ describe("createBitbucketHost", () => {
         fetch,
       });
 
-      expect(await host.getFile(repo, HEAD_SHA, "big.bin")).toEqual({
+      expect(await host.getFiles(repo, [file("big.bin")])).toEqual({
         ok: true,
-        value: "lfs content",
+        value: ["lfs content"],
       });
       expect(requests).toEqual([
         { url: fileUrl, authorization: expect.stringMatching(/^Basic /) },
@@ -411,19 +415,19 @@ describe("createBitbucketHost", () => {
       const hops = Array.from({ length: 6 }, (_, n) =>
         exchange("GET", n === 0 ? fileUrl : hop(n), 302, "", { headers: { location: hop(n + 1) } }),
       );
-      const result = await hostWith(hops).getFile(repo, HEAD_SHA, "big.bin");
+      const result = await hostWith(hops).getFiles(repo, [file("big.bin")]);
       expect(!result.ok && result.error.kind).toBe("unexpected");
     });
   });
 
-  describe("getFile", () => {
+  describe("getFiles", () => {
     it("encodes each path segment but keeps the slashes", async () => {
       const result = await hostWith([
         exchange("GET", `${REPO_URL}/src/${HEAD_SHA}/docs/a%20b%23c.md`, 200, "content", {
           headers: { "content-type": "text/markdown" },
         }),
-      ]).getFile(repo, HEAD_SHA, "docs/a b#c.md");
-      expect(result).toEqual({ ok: true, value: "content" });
+      ]).getFiles(repo, [file("docs/a b#c.md")]);
+      expect(result).toEqual({ ok: true, value: ["content"] });
     });
 
     it("decodes content as UTF-8", async () => {
@@ -431,8 +435,21 @@ describe("createBitbucketHost", () => {
         exchange("GET", `${REPO_URL}/src/${HEAD_SHA}/a.txt`, 200, "é", {
           headers: { "content-type": "application/octet-stream" },
         }),
-      ]).getFile(repo, HEAD_SHA, "a.txt");
-      expect(result).toEqual({ ok: true, value: "é" });
+      ]).getFiles(repo, [file("a.txt")]);
+      expect(result).toEqual({ ok: true, value: ["é"] });
+    });
+
+    it("fails with the first error when any file fails", async () => {
+      const result = await hostWith([
+        exchange("GET", `${REPO_URL}/src/${HEAD_SHA}/a.txt`, 200, "a", {
+          headers: { "content-type": "text/plain" },
+        }),
+        exchange("GET", `${REPO_URL}/src/${HEAD_SHA}/b.txt`, 403, {
+          type: "error",
+          error: { message: "Forbidden" },
+        }),
+      ]).getFiles(repo, [file("a.txt"), file("b.txt")]);
+      expect(!result.ok && result.error.kind).toBe("forbidden");
     });
   });
 

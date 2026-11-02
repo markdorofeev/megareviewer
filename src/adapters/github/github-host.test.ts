@@ -292,30 +292,141 @@ describe("createGitHubHost", () => {
     });
   });
 
-  describe("getFile", () => {
-    it("encodes each path segment but keeps the slashes", async () => {
-      const result = await hostWith([
-        exchange(
-          "GET",
-          `${API}/repos/sindresorhus/is/contents/docs/a%20b%23c.md?ref=${HEAD_SHA}`,
-          200,
-          "content",
-          {
-            accept: "application/vnd.github.raw",
-            headers: { "content-type": "application/vnd.github.raw; charset=utf-8" },
+  describe("getFiles", () => {
+    const GRAPHQL_URL = `${API}/graphql`;
+    const blobs = (repository: Record<string, unknown>) =>
+      exchange("POST", GRAPHQL_URL, 200, { data: { repository } });
+    const blob = (text: string, extra: Record<string, unknown> = {}) => ({
+      __typename: "Blob",
+      text,
+      isBinary: false,
+      isTruncated: false,
+      ...extra,
+    });
+    const raw = (path: string, status: number, body: string) =>
+      exchange(
+        "GET",
+        `${API}/repos/sindresorhus/is/contents/${path}?ref=${HEAD_SHA}`,
+        status,
+        body,
+        {
+          accept: "application/vnd.github.raw",
+          headers: { "content-type": "application/vnd.github.raw; charset=utf-8" },
+        },
+      );
+    const file = (path: string) => ({ sha: HEAD_SHA, path });
+
+    it("reads a batch in one query, naming each file by a variable, with null for a missing one", async () => {
+      const answer = createFixtureFetch([blobs({ f0: blob("a"), f1: null })]);
+      const bodies: unknown[] = [];
+      const host = createGitHubHost({
+        token: "t",
+        version: "test",
+        clock: new FixedClock(),
+        logger: new RecordingLogger(),
+        fetch: async (input, init) => {
+          const request = new Request(input, init);
+          bodies.push(await request.clone().json());
+          return answer(request);
+        },
+      });
+
+      const result = await host.getFiles(repo, [file("a.ts"), file("gone.ts")]);
+
+      expect(result).toEqual({ ok: true, value: ["a", null] });
+      expect(bodies).toEqual([
+        {
+          query: expect.stringContaining("f1: object(expression: $e1)"),
+          variables: {
+            owner: "sindresorhus",
+            repo: "is",
+            e0: `${HEAD_SHA}:a.ts`,
+            e1: `${HEAD_SHA}:gone.ts`,
           },
-        ),
-      ]).getFile(repo, HEAD_SHA, "docs/a b#c.md");
-      expect(result).toEqual({ ok: true, value: "content" });
+        },
+      ]);
     });
 
-    it("decodes content without a charset as UTF-8", async () => {
+    it("splits more than 25 files into several queries, keeping the order", async () => {
+      const first = Object.fromEntries(
+        Array.from({ length: 25 }, (_, i) => [`f${i}`, blob(`${i}`)]),
+      );
       const result = await hostWith([
+        blobs(first),
+        blobs({ f0: blob("25"), f1: blob("26") }),
+      ]).getFiles(
+        repo,
+        Array.from({ length: 27 }, (_, i) => file(`${i}.ts`)),
+      );
+      expect(result).toEqual({
+        ok: true,
+        value: Array.from({ length: 27 }, (_, i) => `${i}`),
+      });
+    });
+
+    it("reads truncated, binary and non-file objects through the REST API", async () => {
+      const result = await hostWith([
+        blobs({
+          f0: blob("cut", { isTruncated: true }),
+          f1: { __typename: "Blob", text: null, isBinary: true, isTruncated: false },
+          f2: { __typename: "Commit" },
+        }),
+        raw("big.ts", 200, "whole"),
+        raw("logo.png", 200, "png"),
+        raw("vendor/lib", 200, "submodule"),
+      ]).getFiles(repo, [file("big.ts"), file("logo.png"), file("vendor/lib")]);
+      expect(result).toEqual({ ok: true, value: ["whole", "png", "submodule"] });
+    });
+
+    it("encodes each path segment but keeps the slashes over REST", async () => {
+      const result = await hostWith([
+        blobs({ f0: blob("cut", { isTruncated: true }) }),
+        raw("docs/a%20b%23c.md", 200, "content"),
+      ]).getFiles(repo, [file("docs/a b#c.md")]);
+      expect(result).toEqual({ ok: true, value: ["content"] });
+    });
+
+    it("decodes REST content without a charset as UTF-8", async () => {
+      const result = await hostWith([
+        blobs({ f0: blob("cut", { isTruncated: true }) }),
         exchange("GET", `${API}/repos/sindresorhus/is/contents/a.txt?ref=${HEAD_SHA}`, 200, "é", {
           headers: { "content-type": "application/octet-stream" },
         }),
-      ]).getFile(repo, HEAD_SHA, "a.txt");
-      expect(result).toEqual({ ok: true, value: "é" });
+      ]).getFiles(repo, [file("a.txt")]);
+      expect(result).toEqual({ ok: true, value: ["é"] });
+    });
+
+    it("treats a file GitHub won't serve as too large as unavailable", async () => {
+      const result = await hostWith([
+        blobs({ f0: blob("cut", { isTruncated: true }) }),
+        exchange("GET", `${API}/repos/sindresorhus/is/contents/huge.bin?ref=${HEAD_SHA}`, 406, {
+          message: "Sorry, this file is too large to be displayed.",
+        }),
+      ]).getFiles(repo, [file("huge.bin")]);
+      expect(result).toEqual({ ok: true, value: [null] });
+    });
+
+    it("returns not-found when GraphQL can't resolve the repository", async () => {
+      const result = await hostWith([
+        exchange("POST", GRAPHQL_URL, 200, {
+          data: { repository: null },
+          errors: [
+            {
+              type: "NOT_FOUND",
+              message: "Could not resolve to a Repository with the name 'sindresorhus/is'.",
+            },
+          ],
+        }),
+      ]).getFiles(repo, [file("a.ts")]);
+      expect(result).toEqual({
+        ok: false,
+        error: {
+          kind: "not-found",
+          message:
+            "GitHub answered: Could not resolve to a Repository with the name 'sindresorhus/is'.",
+          retryAfterSeconds: null,
+        },
+      });
     });
   });
 

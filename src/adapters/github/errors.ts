@@ -15,6 +15,12 @@ const OctokitError = z.object({
     .optional(),
 });
 
+/** What octokit.graphql throws when GitHub answers 200 with errors, e.g. a missing repository. */
+const GraphqlResponseError = z.object({
+  name: z.literal("GraphqlResponseError"),
+  errors: z.array(z.object({ type: z.string().optional(), message: z.string() })).min(1),
+});
+
 export interface GitHubErrorResponse {
   readonly status: number;
   readonly headers: Readonly<Record<string, unknown>>;
@@ -98,6 +104,12 @@ export const fromErrorResponse = (response: GitHubErrorResponse, now: string): H
  * this adapter, so it's rethrown.
  */
 export const fromOctokitError = (error: unknown, now: string): HostError => {
+  const graphql = GraphqlResponseError.safeParse(error);
+  if (graphql.success) {
+    const { errors } = graphql.data;
+    const message = `GitHub answered: ${errors.map((detail) => detail.message).join("; ")}`;
+    return hostError(errors[0]?.type === "NOT_FOUND" ? "not-found" : "unexpected", message);
+  }
   const parsed = OctokitError.safeParse(error);
   if (!parsed.success) throw error;
   const { response, message } = parsed.data;

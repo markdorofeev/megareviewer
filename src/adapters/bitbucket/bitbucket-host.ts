@@ -45,6 +45,7 @@ export interface BitbucketHostOptions {
 /** Repositories scanned for PRs to review: Bitbucket has no cross-repo reviewer search. */
 const SCANNED_REPOS = 50;
 const SCAN_CONCURRENCY = 5;
+const FILE_CONCURRENCY = 8;
 const PAGE_SIZE = 50;
 
 /** Merge-base failures that a fallback can't fix, because every other call fails the same way. */
@@ -242,11 +243,25 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
       );
     },
 
-    async getFile(repo, sha, path) {
-      const encodedPath = path.split("/").map(segment).join("/");
-      const content = await client.text(`${repoUrl(repo)}/src/${sha}/${encodedPath}`, "*/*");
-      if (!content.ok && content.error.kind === "not-found") return ok(null);
-      return content;
+    async getFiles(repo, files) {
+      // Bitbucket has no batch read, so files come one request each, a few at a time.
+      const contents = await mapLimit(files, FILE_CONCURRENCY, async ({ sha, path }) => {
+        const encodedPath = path.split("/").map(segment).join("/");
+        const content = await client.text(`${repoUrl(repo)}/src/${sha}/${encodedPath}`, "*/*");
+        if (
+          !content.ok &&
+          (content.error.kind === "not-found" || content.error.kind === "too-large")
+        ) {
+          return ok(null);
+        }
+        return content;
+      });
+      const found: (string | null)[] = [];
+      for (const content of contents) {
+        if (!content.ok) return content;
+        found.push(content.value);
+      }
+      return ok(found);
     },
 
     async listPullRequests() {

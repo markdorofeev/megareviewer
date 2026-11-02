@@ -39,8 +39,7 @@ export const retryingGitHost = (host: GitHost, { sleep, logger }: RetryOptions):
     host: host.host,
     currentUser: () => retried("the current user", () => host.currentUser()),
     getPullRequest: (ref) => retried("the pull request", () => host.getPullRequest(ref)),
-    getFile: (repo, sha, path) =>
-      retried(`${path} at ${sha.slice(0, 7)}`, () => host.getFile(repo, sha, path)),
+    getFiles: (repo, files) => retried(`${files.length} files`, () => host.getFiles(repo, files)),
     listPullRequests: () => retried("the pull request list", () => host.listPullRequests()),
     publish: (ref, publication, options) => host.publish(ref, publication, options),
   };

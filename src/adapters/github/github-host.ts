@@ -1,12 +1,13 @@
 import { Octokit } from "@octokit/rest";
 import { z } from "zod";
-import type { Clock, GitHost, Logger } from "../../application/ports/index.ts";
-import type { CommentKey, HostError, HostUser } from "../../domain/review/index.ts";
+import type { Clock, FileAt, GitHost, Logger } from "../../application/ports/index.ts";
+import type { CommentKey, HostError, HostUser, RepoRef } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import { fromOctokitError, invalidResponse, timedOut } from "./errors.ts";
 import { byUpdatedAtDesc, toHostUser, toPullRequest, toSummaries } from "./map.ts";
 import { matchComments, planReview, SUMMARY } from "./publish.ts";
 import {
+  GitHubBlobs,
   GitHubCommit,
   GitHubComparison,
   GitHubPullRequest,
@@ -33,8 +34,23 @@ const RAW = "application/vnd.github.raw";
 /** GitHub's cap on `GET /pulls/{n}/commits`. */
 const MAX_COMMITS = 250;
 const SEARCH_PAGE_SIZE = 50;
+/** Files per GraphQL query: each is an alias, so one request reads them all. */
+const FILES_PER_QUERY = 25;
 /** A stalled read is abandoned after this, so it can be retried. */
 export const REQUEST_TIMEOUT_MS = 60_000;
+
+/** Reads `count` files, each named by a "sha:path" variable so paths are never interpolated. */
+const blobsQuery = (count: number): string => {
+  const indexes = Array.from({ length: count }, (_, i) => i);
+  const variables = indexes.map((i) => `$e${i}: String!`).join(", ");
+  const objects = indexes
+    .map(
+      (i) =>
+        `f${i}: object(expression: $e${i}) { __typename ... on Blob { text isBinary isTruncated } }`,
+    )
+    .join("\n    ");
+  return `query ($owner: String!, $repo: String!, ${variables}) {\n  repository(owner: $owner, name: $repo) {\n    ${objects}\n  }\n}`;
+};
 
 /** Octokit's per-request options: the signal that enforces the deadline. */
 interface RequestOptions {
@@ -82,6 +98,30 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
     }
     const parsed = schema.safeParse(data);
     return parsed.success ? ok(parsed.data) : err(invalidResponse(what, parsed.error));
+  };
+
+  /** One file through the REST API, which gives files of any size; null when it isn't there. */
+  const fileOverRest = async (
+    repo: RepoRef,
+    { sha, path }: FileAt,
+  ): Promise<Result<string | null, HostError>> => {
+    // Octokit would encode the slashes of a {path} parameter, so the path goes in as is.
+    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+    const content = await read(`${path} at ${sha}`, GitHubText, async (request) => {
+      return (
+        await octokit.request(`GET /repos/{owner}/{repo}/contents/${encodedPath}`, {
+          owner: repo.owner,
+          repo: repo.repo,
+          ref: sha,
+          headers: { accept: RAW },
+          request,
+        })
+      ).data;
+    });
+    if (!content.ok && (content.error.kind === "not-found" || content.error.kind === "too-large")) {
+      return ok(null);
+    }
+    return content;
   };
 
   let cachedUser: HostUser | null = null;
@@ -167,22 +207,39 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
       );
     },
 
-    async getFile(repo, sha, path) {
-      // Octokit would encode the slashes of a {path} parameter, so the path goes in as is.
-      const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-      const content = await read(`${path} at ${sha}`, GitHubText, async (request) => {
-        return (
-          await octokit.request(`GET /repos/{owner}/{repo}/contents/${encodedPath}`, {
+    async getFiles(repo, files) {
+      const found: (string | null)[] = [];
+      for (let start = 0; start < files.length; start += FILES_PER_QUERY) {
+        const chunk = files.slice(start, start + FILES_PER_QUERY);
+        const blobs = await read(`${chunk.length} files`, GitHubBlobs, (request) =>
+          octokit.graphql(blobsQuery(chunk.length), {
             owner: repo.owner,
             repo: repo.repo,
-            ref: sha,
-            headers: { accept: RAW },
+            ...Object.fromEntries(chunk.map(({ sha, path }, i) => [`e${i}`, `${sha}:${path}`])),
             request,
-          })
-        ).data;
-      });
-      if (!content.ok && content.error.kind === "not-found") return ok(null);
-      return content;
+          }),
+        );
+        if (!blobs.ok) return blobs;
+        for (const [i, file] of chunk.entries()) {
+          const object = blobs.value.repository[`f${i}`];
+          if (object === null) {
+            found.push(null);
+          } else if (
+            object?.__typename === "Blob" &&
+            typeof object.text === "string" &&
+            object.isBinary !== true &&
+            object.isTruncated !== true
+          ) {
+            found.push(object.text);
+          } else {
+            // Large, binary or not a plain file: the REST API gives it whole, as before.
+            const content = await fileOverRest(repo, file);
+            if (!content.ok) return content;
+            found.push(content.value);
+          }
+        }
+      }
+      return ok(found);
     },
 
     async listPullRequests() {

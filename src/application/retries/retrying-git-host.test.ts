@@ -64,12 +64,13 @@ describe("retryingGitHost", () => {
 
   it("retries file reads", async () => {
     const { fake, host } = setup();
-    fake.failNext("getFile", networkError);
+    fake.failNext("getFiles", networkError);
     const [path, content] = Object.entries(smallFeature.headFiles)[0] ?? [];
+    const sha = smallFeature.pullRequest.headSha;
 
-    const result = await host.getFile(ref.repo, smallFeature.pullRequest.headSha, path ?? "");
+    const result = await host.getFiles(ref.repo, [{ sha, path: path ?? "" }]);
 
-    expect(result).toEqual({ ok: true, value: content });
+    expect(result).toEqual({ ok: true, value: [content] });
   });
 
   it.each([

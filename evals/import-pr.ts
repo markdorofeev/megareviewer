@@ -40,9 +40,10 @@ const write = (path: string, content: string) => {
   writeFileSync(path, content);
 };
 const fetchTo = async (side: "base" | "head", sha: string, path: string) => {
-  const content = await host.getFile(ref.value.repo, sha, path);
-  if (!content.ok) throw new Error(`${path}@${sha}: ${content.error.message}`);
-  if (content.value !== null) write(join(caseDir, "files", side, path), content.value);
+  const contents = await host.getFiles(ref.value.repo, [{ sha, path }]);
+  if (!contents.ok) throw new Error(`${path}@${sha}: ${contents.error.message}`);
+  const [content] = contents.value;
+  if (typeof content === "string") write(join(caseDir, "files", side, path), content);
 };
 
 for (const file of files.value) {

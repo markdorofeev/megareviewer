@@ -12,6 +12,12 @@ import type {
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
 
+/** A file at a commit. */
+export interface FileAt {
+  readonly sha: string;
+  readonly path: string;
+}
+
 export interface PublishOptions {
   /** The head SHA the comments' line numbers refer to. */
   readonly headSha: string;
@@ -25,8 +31,15 @@ export interface GitHost {
   readonly host: HostKind;
   currentUser(): Promise<Result<HostUser, HostError>>;
   getPullRequest(ref: PullRequestRef): Promise<Result<PullRequest, HostError>>;
-  /** File content at a commit. ok(null) when the file doesn't exist there. */
-  getFile(repo: RepoRef, sha: string, path: string): Promise<Result<string | null, HostError>>;
+  /**
+   * File contents at commits, in the order of `files`: null for a file that doesn't exist at its
+   * commit or that the host won't serve because it's too large. Hosts that can fetch many files
+   * in one request do, so fewer requests can fail.
+   */
+  getFiles(
+    repo: RepoRef,
+    files: readonly FileAt[],
+  ): Promise<Result<readonly (string | null)[], HostError>>;
   /** Open PRs where the current user is a requested reviewer or the author. */
   listPullRequests(): Promise<Result<PullRequestSummary[], HostError>>;
   /**

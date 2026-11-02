@@ -172,15 +172,15 @@ describe("FakeGitHost", () => {
 
     const result = await host.getPullRequest(ref);
     expect(result.ok && result.value.headSha).toBe(newSha);
-    expect(await host.getFile(ref.repo, newSha, "src/services/receipts.ts")).toEqual(
-      ok(smallFeature.headFiles["src/services/receipts.ts"]),
-    );
+    expect(
+      await host.getFiles(ref.repo, [{ sha: newSha, path: "src/services/receipts.ts" }]),
+    ).toEqual(ok([smallFeature.headFiles["src/services/receipts.ts"]]));
     expect(() => host.setHeadSha({ ...ref, number: 999 }, newSha)).toThrow();
   });
 
   it("returns not-found for an unknown commit", async () => {
     const host = new FakeGitHost({ host: "github", fixtures: allFixtures });
-    const result = await host.getFile(ref.repo, "0".repeat(40), "README.md");
+    const result = await host.getFiles(ref.repo, [{ sha: "0".repeat(40), path: "README.md" }]);
     expect(!result.ok && result.error.kind).toBe("not-found");
   });
 

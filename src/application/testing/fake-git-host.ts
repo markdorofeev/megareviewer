@@ -11,14 +11,14 @@ import {
   type RepoRef,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { Clock, GitHost, PublishOptions } from "../ports/index.ts";
+import type { Clock, FileAt, GitHost, PublishOptions } from "../ports/index.ts";
 import { FixedClock } from "./fixed-clock.ts";
 import { fixtureReviewers, type PullRequestFixture } from "./fixtures/index.ts";
 
 export type GitHostMethod =
   | "currentUser"
   | "getPullRequest"
-  | "getFile"
+  | "getFiles"
   | "listPullRequests"
   | "publish";
 
@@ -121,16 +121,23 @@ export class FakeGitHost implements GitHost {
       : ok(structuredClone(pullRequest));
   }
 
-  async getFile(
+  /** Every call, with the files it asked for. */
+  readonly getFilesCalls: FileAt[][] = [];
+
+  async getFiles(
     repo: RepoRef,
-    sha: string,
-    path: string,
-  ): Promise<Result<string | null, HostError>> {
-    const failure = this.fail("getFile");
+    files: readonly FileAt[],
+  ): Promise<Result<readonly (string | null)[], HostError>> {
+    this.getFilesCalls.push([...files]);
+    const failure = this.fail("getFiles");
     if (failure !== null) return failure;
-    const contents = this.commits.get(commitKey(repo, sha));
-    if (contents === undefined) return err(notFound(`commit ${commitKey(repo, sha)}`));
-    return ok(contents.get(path) ?? null);
+    const found: (string | null)[] = [];
+    for (const { sha, path } of files) {
+      const contents = this.commits.get(commitKey(repo, sha));
+      if (contents === undefined) return err(notFound(`commit ${commitKey(repo, sha)}`));
+      found.push(contents.get(path) ?? null);
+    }
+    return ok(found);
   }
 
   async listPullRequests(): Promise<Result<PullRequestSummary[], HostError>> {

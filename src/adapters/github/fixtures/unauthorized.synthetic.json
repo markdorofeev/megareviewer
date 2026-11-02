@@ -31,8 +31,8 @@
   },
   {
     "request": {
-      "method": "GET",
-      "url": "https://api.github.com/repos/sindresorhus/is/contents/source/index.ts?ref=b177d02e3aee907af72dc76aece21faf74be7935"
+      "method": "POST",
+      "url": "https://api.github.com/graphql"
     },
     "response": {
       "status": 401,

@@ -6,10 +6,13 @@
 // real review, so publish.synthetic.json is too.
 
 import { writeFile } from "node:fs/promises";
-import type { z } from "zod";
+import { setTimeout as sleep } from "node:timers/promises";
+import { z } from "zod";
+import { retryingGitHost } from "../../../application/retries/index.ts";
 import { parsePullRequestUrl } from "../../../domain/review/index.ts";
 import { createGitHubHost } from "../github-host.ts";
 import {
+  GitHubBlobs,
   GitHubCommit,
   GitHubComparison,
   GitHubErrorBody,
@@ -31,6 +34,7 @@ const BODY_SCHEMAS: [RegExp, z.ZodType][] = [
   [/\/pulls\/\d+$/, GitHubPullRequest],
   [/\/pulls\/\d+\/commits$/, GitHubCommit.array()],
   [/\/compare\/[^/]+$/, GitHubComparison],
+  [/^\/graphql$/, z.object({ data: GitHubBlobs })],
 ];
 
 const prune = (url: string, status: number, body: unknown): unknown => {
@@ -98,13 +102,19 @@ const main = async (): Promise<void> => {
   const log = (message: string): void => {
     process.stderr.write(`${message}\n`);
   };
-  const host = createGitHubHost({
-    token,
-    version: "fixture-recorder",
-    clock: { now: () => new Date().toISOString() },
-    logger: { debug: () => {}, info: log, warn: log, error: log },
-    fetch: recordingFetch,
-  });
+  const logger = { debug: () => {}, info: log, warn: log, error: log };
+  // Retried like the app's hosts, so a flaky link doesn't stop a recording. A failed attempt
+  // records nothing.
+  const host = retryingGitHost(
+    createGitHubHost({
+      token,
+      version: "fixture-recorder",
+      clock: { now: () => new Date().toISOString() },
+      logger,
+      fetch: recordingFetch,
+    }),
+    { sleep, logger },
+  );
 
   const pullRequest = await host.getPullRequest(ref.value);
   if (!pullRequest.ok) throw new Error(pullRequest.error.message);
@@ -113,13 +123,20 @@ const main = async (): Promise<void> => {
   if (changedPath === undefined) throw new Error("the PR changes no file at head");
 
   await host.currentUser();
-  await host.getFile(ref.value.repo, headSha, changedPath);
-  await host.getFile(ref.value.repo, headSha, "megareviewer-missing-file.txt");
+  // The order the contract suite asks in: a missing file, then one the PR changes.
+  await host.getFiles(ref.value.repo, [
+    { sha: headSha, path: "megareviewer-missing-file.txt" },
+    { sha: headSha, path: changedPath },
+  ]);
   await host.getPullRequest({ ...ref.value, number: 999_999_999 });
 
+  // A retry records the requests that succeeded in the failed attempt again; keep one of each.
+  const unique = [
+    ...new Map(exchanges.map((exchange) => [JSON.stringify(exchange.request), exchange])).values(),
+  ];
   const out = new URL("read.json", import.meta.url);
-  await writeFile(out, `${JSON.stringify(exchanges, null, 2)}\n`);
-  log(`wrote ${exchanges.length} exchanges to ${out.pathname}`);
+  await writeFile(out, `${JSON.stringify(unique, null, 2)}\n`);
+  log(`wrote ${unique.length} exchanges to ${out.pathname}`);
 };
 
 await main();

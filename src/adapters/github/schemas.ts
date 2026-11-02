@@ -47,6 +47,20 @@ export const GitHubText = z.union([
   z.instanceof(ArrayBuffer).transform((buffer) => new TextDecoder().decode(buffer)),
 ]);
 
+/** One file of a GraphQL batch read: a Blob, another kind of object (a submodule), or nothing. */
+const GitHubObject = z.object({
+  __typename: z.string(),
+  text: z.string().nullable().optional(),
+  isBinary: z.boolean().nullable().optional(),
+  isTruncated: z.boolean().optional(),
+});
+
+/** The data of a batch read: the files under aliases f0, f1, …, null where there is none. */
+export const GitHubBlobs = z.object({
+  repository: z.record(z.string(), GitHubObject.nullable()),
+});
+export type GitHubBlobs = z.infer<typeof GitHubBlobs>;
+
 export const GitHubSearchResult = z.object({
   total_count: z.number().int().nonnegative(),
   incomplete_results: z.boolean(),

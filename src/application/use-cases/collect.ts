@@ -6,7 +6,13 @@ import type { AppDeps } from "./deps.ts";
 import { appError, type UseCaseError } from "./errors.ts";
 import { mapLimit } from "./text.ts";
 
-const FETCH_CONCURRENCY = 8;
+/**
+ * Files per host call, and calls at a time. A host that batches reads (GitHub) makes one
+ * request per call, so a PR's files take a few requests, each small enough to finish on a slow
+ * link.
+ */
+const FILES_PER_BATCH = 10;
+const BATCH_CONCURRENCY = 2;
 /** Larger files are treated as unavailable: too big to parse or to send to the model. */
 const MAX_FILE_BYTES = 1024 * 1024;
 
@@ -41,18 +47,6 @@ export const collect = async (
   }));
 
   const { repo } = pullRequest.ref;
-  const fetchFile = async (sha: string, path: string) => {
-    const result = await host.getFile(repo, sha, path);
-    if (result.ok) return ok(fitsSize(result.value));
-    if (result.error.kind === "too-large") return ok(null);
-    return err(
-      appError(
-        "host-error",
-        `Couldn't fetch ${path} at ${sha.slice(0, 7)}: ${result.error.message}`,
-      ),
-    );
-  };
-
   const fetches = [
     { side: "attributes" as const, sha: pullRequest.baseSha, path: ".gitattributes" },
     ...files
@@ -66,9 +60,12 @@ export const collect = async (
           : [{ side: "head" as const, sha: pullRequest.headSha, path: file.path }]),
       ]),
   ];
-  const fetched = await mapLimit(fetches, FETCH_CONCURRENCY, async (fetch) => ({
-    ...fetch,
-    content: await fetchFile(fetch.sha, fetch.path),
+  const batches = Array.from({ length: Math.ceil(fetches.length / FILES_PER_BATCH) }, (_, i) =>
+    fetches.slice(i * FILES_PER_BATCH, (i + 1) * FILES_PER_BATCH),
+  );
+  const results = await mapLimit(batches, BATCH_CONCURRENCY, async (batch) => ({
+    batch,
+    contents: await host.getFiles(repo, batch),
   }));
 
   let gitattributes: string | null = null;
@@ -78,10 +75,20 @@ export const collect = async (
     if (file.status === "added") baseContents.set(file.path, null);
     if (file.status === "deleted") headContents.set(file.path, null);
   }
-  for (const { side, path, content } of fetched) {
-    if (!content.ok) return content;
-    if (side === "attributes") gitattributes = content.value;
-    else (side === "base" ? baseContents : headContents).set(path, content.value);
+  for (const { batch, contents } of results) {
+    if (!contents.ok) {
+      return err(
+        appError(
+          "host-error",
+          `Couldn't fetch the pull request's files: ${contents.error.message}`,
+        ),
+      );
+    }
+    for (const [i, { side, path }] of batch.entries()) {
+      const content = fitsSize(contents.value[i] ?? null);
+      if (side === "attributes") gitattributes = content;
+      else (side === "base" ? baseContents : headContents).set(path, content);
+    }
   }
 
   return ok({

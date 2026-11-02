@@ -35,7 +35,7 @@ The pipeline and UI never talk to a host directly. Each host is a connector behi
 | Get PR (title, description, branch, head SHA) | `GET /repos/{o}/{r}/pulls/{n}` | `GET /2.0/repositories/{ws}/{repo}/pullrequests/{id}` |
 | Get commits | `.../pulls/{n}/commits` | `.../pullrequests/{id}/commits` |
 | Get diff (unified) | `.../compare/{base}...{head}` at the PR's SHAs, with diff media type, so a push while loading can't mismatch diff and head SHA | `.../diff/{head}..{dest}?topic=true` at the PR's commits: the same three-dot diff the PR's diff endpoint redirects to, pinned the same way |
-| Get file at commit | `.../contents/{path}?ref={sha}` | `.../src/{sha}/{path}` |
+| Get files at commits | One GraphQL query per 25 files (`object(expression: "sha:path")`); `.../contents/{path}?ref={sha}` for a file GraphQL truncates or won't give as text | `.../src/{sha}/{path}`, one request per file, 8 at a time |
 | List PRs to review | Search API (`review-requested:@me`, `author:@me`) | PRs to review: per repo, the 50 most recently updated of the configured workspace. Own PRs: one workspace-wide call |
 | Publish review | One PR review with inline comments and a verdict | Approve or request changes, plus one call per inline comment |
 

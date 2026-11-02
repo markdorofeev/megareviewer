@@ -137,8 +137,10 @@ const main = async (): Promise<void> => {
   const changedPath = /^\+\+\+ b\/(.+)$/m.exec(diff)?.[1];
   if (changedPath === undefined) throw new Error("the PR changes no file at head");
 
-  await host.getFile(ref.value.repo, headSha, changedPath);
-  await host.getFile(ref.value.repo, headSha, "megareviewer-missing-file.txt");
+  await host.getFiles(ref.value.repo, [
+    { sha: headSha, path: changedPath },
+    { sha: headSha, path: "megareviewer-missing-file.txt" },
+  ]);
   await host.getPullRequest({ ...ref.value, number: 999_999_999 });
 
   const out = new URL("read.json", import.meta.url);

@@ -309,19 +309,18 @@ describe("the analysis pipeline", () => {
 
     it("fails when a file can't be fetched", async () => {
       const { analyze, github } = setup();
-      github.failNext("getFile", hostError("network"));
+      github.failNext("getFiles", hostError("network"));
       const analysis = await analyze();
       expect(analysis.error).toEqual({
         stage: "collect",
         code: "host-error",
-        message: `Couldn't fetch .gitattributes at ${smallFeature.pullRequest.baseSha.slice(0, 7)}: network from host`,
+        message: "Couldn't fetch the pull request's files: network from host",
       });
       expect(analysis.stages.prep).toBe("pending");
     });
 
-    it("treats files the host calls too large, or over 1 MB, as unavailable", async () => {
+    it("treats files over 1 MB as unavailable", async () => {
       const { analyze, github, model } = setup();
-      github.failNext("getFile", hostError("too-large"));
       const { ref, headSha } = smallFeature.pullRequest;
       github.setFiles(ref.repo, headSha, {
         "src/services/receipts.ts": "x".repeat(1024 * 1024 + 1),

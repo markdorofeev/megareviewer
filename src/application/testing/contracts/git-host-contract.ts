@@ -69,15 +69,19 @@ export const describeGitHostContract = (name: string, setup: () => GitHostContra
       expect(!result.ok && result.error.kind).toBe("not-found");
     });
 
-    it("returns a file's content at a commit", async () => {
-      const { repo, sha, path } = s.existingFile;
-      const result = await s.host("ok").getFile(repo, sha, path);
-      expect(result.ok && typeof result.value).toBe("string");
+    it("returns files' contents at commits, in the order asked, with null for a missing one", async () => {
+      const existing = { sha: s.existingFile.sha, path: s.existingFile.path };
+      const missing = { sha: s.missingFile.sha, path: s.missingFile.path };
+      const result = await s.host("ok").getFiles(s.existingFile.repo, [missing, existing]);
+      if (!result.ok) throw new Error(`getFiles failed: ${result.error.message}`);
+
+      expect(result.value).toHaveLength(2);
+      expect(result.value[0]).toBeNull();
+      expect(typeof result.value[1]).toBe("string");
     });
 
-    it("returns ok(null) for a file that isn't at the commit", async () => {
-      const { repo, sha, path } = s.missingFile;
-      expect(await s.host("ok").getFile(repo, sha, path)).toEqual({ ok: true, value: null });
+    it("returns no contents for no files", async () => {
+      expect(await s.host("ok").getFiles(s.existingFile.repo, [])).toEqual({ ok: true, value: [] });
     });
 
     it("lists PRs as valid summaries", async () => {
@@ -118,7 +122,9 @@ export const describeGitHostContract = (name: string, setup: () => GitHostContra
       const results = [
         await host.currentUser(),
         await host.getPullRequest(s.existingPr),
-        await host.getFile(s.existingFile.repo, s.existingFile.sha, s.existingFile.path),
+        await host.getFiles(s.existingFile.repo, [
+          { sha: s.existingFile.sha, path: s.existingFile.path },
+        ]),
         await host.listPullRequests(),
         await host.publish(s.publishablePr.ref, s.publication, options),
       ];
