@@ -8,7 +8,7 @@ import {
   DecisionId,
   type PublicationReceipt,
 } from "../../../../src/domain/review/index.ts";
-import { fixtureAnalysisView } from "../../../dev/fixtures/index.ts";
+import { fixtureAnalysisView, fixtureHunks } from "../../../dev/fixtures/index.ts";
 import { mockFetch } from "../../../dev/mock-fetch.ts";
 import { createMockApi } from "../../../dev/mock-routes.ts";
 import { analysisFailed, analysisInProgress } from "../../../dev/progress.ts";
@@ -20,6 +20,7 @@ import { ReviewPage } from "./ReviewPage.tsx";
 const fixture = fixtureAnalysisView;
 const analysis = fixture.analysis;
 const id = analysis.id;
+const h = fixtureHunks;
 const otherId = AnalysisId.parse("a_00000000000000ff");
 const viewPath = `/api/analyses/${id}`;
 
@@ -681,12 +682,115 @@ describe("keyboard shortcuts", () => {
     await loaded();
     await userEvent.keyboard("?");
     const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
-    expect(within(dialog).getAllByRole("term")).toHaveLength(9);
+    expect(within(dialog).getAllByRole("term")).toHaveLength(13);
     // Page shortcuts are off while a dialog is open.
     await userEvent.keyboard("n");
     expect(mainHeading()).toBe("The receipt endpoint");
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("navigation", () => {
+  it("follows a call-graph link to its hunk in another step, and Esc goes back", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(
+      within(mainArea()).getByRole("button", { name: "calls cachedReceipt ↓" }),
+    );
+    expect(mainHeading()).toBe("Retrying the tax service and caching receipts");
+    expect(document.activeElement?.getAttribute("aria-label")).toMatch(
+      /^src\/services\/receipts\.ts/,
+    );
+    expect(
+      within(mainArea()).getByRole("button", { name: "called by cachedReceipt ↑" }),
+    ).toBeTruthy();
+
+    await userEvent.keyboard("{Escape}");
+    expect(mainHeading()).toBe("The receipt endpoint");
+  });
+
+  it("marks hunks reviewed, counts them, and remembers them by hunk", async () => {
+    const { unmount } = renderReview();
+    await loaded();
+    const [first] = within(mainArea()).getAllByRole("region");
+    if (first === undefined) throw new Error("no hunk");
+    await userEvent.click(within(first).getByRole("checkbox", { name: "Reviewed" }));
+    expect(within(tour()).getByText(/^1 of \d+ hunks reviewed$/)).toBeTruthy();
+    expect(window.localStorage.getItem("megareviewer:reviewed-hunks")).toContain(h.receiptRoute);
+
+    unmount();
+    renderReview();
+    await loaded();
+    const [again] = within(mainArea()).getAllByRole("region");
+    if (again === undefined) throw new Error("no hunk");
+    expect(
+      within(again).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" }).checked,
+    ).toBe(true);
+  });
+
+  it("x marks the focused hunk reviewed and moves on; ] finds the next unreviewed one", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.keyboard("jxx");
+    expect(
+      within(tour()).getByRole("button", { name: /The receipt endpoint/ }).textContent,
+    ).toContain("(reviewed)");
+    await userEvent.keyboard("]");
+    expect(mainHeading()).toBe("Retrying the tax service and caching receipts");
+    expect(document.activeElement?.getAttribute("aria-label")).toMatch(
+      /^src\/services\/receipts\.ts/,
+    );
+    // "[[" types one "[" in user-event's key syntax.
+    await userEvent.keyboard("[[");
+    expect(mainHeading()).toBe("Retrying the tax service and caching receipts");
+  });
+
+  it("t finds a file and jumps to its first hunk", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.keyboard("t");
+    expect(screen.getByRole("dialog", { name: "Go to file" })).toBeTruthy();
+    await userEvent.keyboard("receipts{Enter}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mainHeading()).toBe("Dates and prices on the receipt");
+  });
+});
+
+describe("without the model", () => {
+  const withoutModel: AnalysisView = {
+    ...fixture,
+    analysis: {
+      ...analysis,
+      intent: null,
+      decisions: [],
+      stages: { ...analysis.stages, intent: "skipped", decisions: "skipped" },
+      pullRequest:
+        analysis.pullRequest === null
+          ? null
+          : { ...analysis.pullRequest, description: "Adds receipts. <b>Not bold</b>" },
+    },
+  };
+
+  it("shows what was asked as text, with tickets and commits, and no decisions", async () => {
+    renderReview({ view: withoutModel });
+    await loaded();
+    const asked = screen.getByRole("region", { name: "What was asked" });
+    expect(within(asked).getByText("Adds receipts. <b>Not bold</b>")).toBeTruthy();
+    expect(within(asked).getByText(/^SHOP-142 · /)).toBeTruthy();
+    expect(within(asked).getByText("Commits (3)")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Decisions" })).toBeNull();
+  });
+
+  it("cuts the description to its first lines after the first visit", async () => {
+    const { unmount } = renderReview({ view: withoutModel });
+    await loaded();
+    expect(screen.queryByRole("button", { name: "Show all" })).toBeNull();
+    unmount();
+    renderReview({ view: withoutModel });
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(screen.getByRole("button", { name: "Show less" })).toBeTruthy();
   });
 });
 

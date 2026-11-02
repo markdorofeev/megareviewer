@@ -7,21 +7,25 @@ import {
   type DecisionId,
   pullRequestUrl,
 } from "../../../../src/domain/review/index.ts";
-import { errorMessage, useAnalysisView, useApi, useMutation } from "../../api/index.ts";
+import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from "../../api/index.ts";
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
 import { DecisionList } from "./DecisionList.tsx";
+import { FileFinder } from "./FileFinder.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { MainArea, type MainHeading } from "./MainArea.tsx";
 import {
   entryKey,
+  entryOf,
   type Focus,
   hunkIndex,
+  hunkLinks,
   hunksInPathOrder,
   inReadingOrder,
   type MainView,
   mechanicalCount,
   readingOrder,
+  reviewOrder,
   riskMix,
   riskTotals,
   sameView,
@@ -34,6 +38,7 @@ import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { ShortcutsDialog } from "./ShortcutsDialog.tsx";
+import { StatedIntent } from "./StatedIntent.tsx";
 import { type ShortcutAction, useShortcuts } from "./shortcuts.ts";
 import { parseBoolean, parseStrings, useStoredState } from "./storage.ts";
 import { TourNav } from "./TourNav.tsx";
@@ -41,6 +46,8 @@ import { UsageFooter } from "./UsageFooter.tsx";
 import { useVerdicts } from "./useVerdicts.ts";
 
 const NONE: readonly string[] = [];
+/** Reviewed marks kept across analyses, most recent last; older ones are forgotten. */
+const MAX_REVIEWED = 5_000;
 
 export const ReviewPage = ({ analysisId }: { readonly analysisId: AnalysisId }) => {
   // A retry, or a re-analysis of an unchanged PR, runs again under the same ID. A new run starts
@@ -108,6 +115,8 @@ const Review = ({
   readonly restart: () => void;
 }) => {
   const { client } = useApi();
+  // Until the status says otherwise, a missing intent is still coming from the model.
+  const modelOn = useStatus().status?.model.enabled !== false;
   const { analysis, publication, isAuthor } = view;
   const analysisId = analysis.id;
   const complete = analysis.status === "complete";
@@ -151,6 +160,10 @@ const Review = ({
   const [focusedHunkId, setFocusedHunkId] = useState<HunkId | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [finding, setFinding] = useState(false);
+  // Where each followed call-graph link came from, for Esc to go back.
+  const [trail, setTrail] = useState<readonly { entry: TourEntry; hunkId: HunkId | null }[]>([]);
+  const pendingFocus = useRef<HunkId | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   const commentField = useRef<HTMLTextAreaElement | null>(null);
   const setCommentField = useCallback((field: HTMLTextAreaElement | null) => {
@@ -182,6 +195,34 @@ const Review = ({
     if (!tourReady) return;
     setVisited((previous) => (previous.includes(mainKey) ? previous : [...previous, mainKey]));
   }, [mainKey, tourReady, setVisited]);
+
+  const links = useMemo(() => hunkLinks(analysis.callGraph, index), [analysis.callGraph, index]);
+  const linksOf = useCallback((id: HunkId) => links.get(id) ?? [], [links]);
+  // Kept by hunk ID, not by analysis: a hunk a new push didn't change stays reviewed.
+  const [reviewedList, setReviewedList] = useStoredState("reviewed-hunks", NONE, parseStrings);
+  const reviewedHunks = useMemo(() => new Set(reviewedList), [reviewedList]);
+  const toReview = useMemo(() => reviewOrder(steps), [steps]);
+  const reviewed = useMemo(
+    () => ({
+      done: toReview.filter(({ hunkId }) => reviewedHunks.has(hunkId)).length,
+      of: toReview.length,
+      steps: new Set<string>(
+        steps
+          .filter((step) => step.hunkIds.length > 0)
+          .filter((step) => step.hunkIds.every((id) => reviewedHunks.has(id)))
+          .map((step) => step.id),
+      ),
+    }),
+    [toReview, reviewedHunks, steps],
+  );
+  const setHunkReviewed = useCallback(
+    (id: HunkId, value: boolean) =>
+      setReviewedList((previous) => {
+        const without = previous.filter((other) => other !== id);
+        return value ? [...without, id].slice(-MAX_REVIEWED) : without;
+      }),
+    [setReviewedList],
+  );
 
   const verdicts = useVerdicts(analysisId, view.verdicts);
   const selectedDecision = focus?.kind === "decision" ? focus.decisionId : null;
@@ -250,8 +291,13 @@ const Review = ({
   const scrollOnChange = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the view changes.
   useEffect(() => {
-    setFocusedHunkId(null);
-    if (scrollOnChange.current) mainRef.current?.scrollIntoView({ block: "start" });
+    // A followed link focuses its hunk, which scrolls to it, instead of the view's top.
+    const target = pendingFocus.current;
+    pendingFocus.current = null;
+    setFocusedHunkId(target);
+    if (scrollOnChange.current && target === null) {
+      mainRef.current?.scrollIntoView({ block: "start" });
+    }
     scrollOnChange.current = false;
   }, [viewKey]);
 
@@ -264,6 +310,47 @@ const Review = ({
     scrollOnChange.current = true;
     setFocus(update);
   };
+  /** Shows a hunk wherever the tour has it, and focuses it. */
+  const goToHunk = (id: HunkId) => {
+    if (filtered && !contractHunks.has(id)) setContractOnly(() => false);
+    const entry = entryOf(id, steps, index);
+    if (!tourReady || (focus === null && sameView(entry, mainView))) {
+      setFocusedHunkId(id);
+      return;
+    }
+    pendingFocus.current = id;
+    goTo(entry);
+  };
+  const currentEntry = (): TourEntry =>
+    mainView.kind === "files" ? { kind: "mechanical" } : mainView;
+  const follow = (id: HunkId) => {
+    if (tourReady)
+      setTrail((previous) => [...previous, { entry: currentEntry(), hunkId: focusedHunkId }]);
+    goToHunk(id);
+  };
+  const goBack = () => {
+    const last = trail.at(-1);
+    if (last === undefined) return;
+    setTrail((previous) => previous.slice(0, -1));
+    if (last.hunkId !== null) goToHunk(last.hunkId);
+    else goTo(last.entry);
+  };
+  /** The next or previous hunk to review that isn't marked reviewed, across steps. */
+  const goToUnreviewed = (direction: 1 | -1) => {
+    let at = toReview.findIndex((item) => item.hunkId === focusedHunkId);
+    if (at === -1) {
+      const first = toReview.findIndex(
+        (item) => mainView.kind === "step" && item.stepId === mainView.stepId,
+      );
+      at =
+        first === -1 ? (direction === 1 ? -1 : toReview.length) : first - (direction === 1 ? 1 : 0);
+    }
+    for (let i = at + direction; i >= 0 && i < toReview.length; i += direction) {
+      const item = toReview[i];
+      if (item !== undefined && !reviewedHunks.has(item.hunkId)) return goToHunk(item.hunkId);
+    }
+  };
+
   const previousEntry = tourReady && entryIndex > 0 ? entries[entryIndex - 1] : undefined;
   const nextEntry = tourReady && entryIndex >= 0 ? entries[entryIndex + 1] : undefined;
 
@@ -312,18 +399,32 @@ const Review = ({
       case "reject":
         if (selectedDecision !== null) toggleVerdict(selectedDecision, "rejected");
         return;
+      case "toggle-reviewed":
+        if (focusedHunkId !== null && !index.mechanical.has(focusedHunkId)) {
+          setHunkReviewed(focusedHunkId, !reviewedHunks.has(focusedHunkId));
+          moveHunk(1);
+        }
+        return;
+      case "next-unreviewed":
+        return goToUnreviewed(1);
+      case "previous-unreviewed":
+        return goToUnreviewed(-1);
+      case "find-file":
+        setFinding(true);
+        return;
       case "comment":
         commentField.current?.focus();
         return;
       case "escape":
         if (focus !== null) changeFocus(() => null);
+        else goBack();
         return;
       case "help":
         setShowShortcuts(true);
         return;
     }
   };
-  useShortcuts(!publishing && !showShortcuts, onShortcut);
+  useShortcuts(!publishing && !showShortcuts && !finding, onShortcut);
 
   const prUrl = analysis.pullRequest?.url ?? pullRequestUrl(analysis.key.ref);
   const reanalyze = useMutation(client.startAnalysis);
@@ -390,11 +491,18 @@ const Review = ({
           selectedMismatch={focus?.kind === "mismatch" ? focus.index : null}
           onSelectMismatch={selectMismatch}
         />
+      ) : modelOn && analysis.status === "running" ? (
+        <div className="intent-panel pending" aria-busy="true">
+          <p className="muted intent-pending">Working out the intent…</p>
+        </div>
       ) : (
-        analysis.status === "running" && (
-          <div className="intent-panel pending" aria-busy="true">
-            <p className="muted intent-pending">Working out the intent…</p>
-          </div>
+        analysis.pullRequest !== null && (
+          <StatedIntent
+            analysisId={analysisId}
+            pullRequest={analysis.pullRequest}
+            tickets={analysis.tickets}
+            missingTicketKeys={analysis.missingTicketKeys}
+          />
         )
       )}
 
@@ -407,6 +515,7 @@ const Review = ({
               mixes={mixes}
               contractCounts={contractCounts}
               totals={totals}
+              reviewed={reviewed}
               contractOnly={contractOnly}
               onContractOnly={(value) => setContractOnly(() => value)}
               current={focus === null ? mainView : null}
@@ -459,6 +568,7 @@ const Review = ({
               )}
             </>
           ) : (
+            modelOn &&
             analysis.status === "running" && (
               <section className="decision-list">
                 <h2>Decisions</h2>
@@ -480,6 +590,10 @@ const Review = ({
             mechanicalCount={mechanical}
             trailingProofs={trailing}
             contractOnly={filtered}
+            linksOf={linksOf}
+            onFollow={follow}
+            reviewedHunkIds={reviewedHunks}
+            onReviewed={setHunkReviewed}
             onFocusHunk={setFocusedHunkId}
             onBack={() => changeFocus(() => null)}
             onPrevious={previousEntry === undefined ? null : () => goTo(previousEntry)}
@@ -511,6 +625,18 @@ const Review = ({
         />
       )}
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+      {finding && (
+        <FileFinder
+          files={analysis.files}
+          onClose={() => setFinding(false)}
+          onPick={(file) => {
+            setFinding(false);
+            const first =
+              file.hunks.find((hunk) => !index.mechanical.has(hunk.id)) ?? file.hunks[0];
+            if (first !== undefined) goToHunk(first.id);
+          }}
+        />
+      )}
       <p className="shortcut-hint muted">
         Press <kbd>?</kbd> for keyboard shortcuts.
       </p>

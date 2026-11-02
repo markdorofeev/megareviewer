@@ -1,6 +1,6 @@
 # Stage 22: Navigation and review progress
 
-**Status:** Not started
+**Status:** Done (pushed to main without a PR)
 **Depends on:** 19, 21
 **Unblocks:** —
 **Owns:** `web/src/pages/review/` except stage 21's files
@@ -32,8 +32,8 @@ Moving through a review is fast and the reviewer always knows what's left: jump 
 
 ## Definition of done
 
-- [ ] Tasks above, with component tests.
-- [ ] Playwright: open a PR without the model, follow a call-graph link, mark every hunk reviewed.
+- [x] Tasks above, with component tests.
+- [ ] Playwright: open a PR without the model, follow a call-graph link, mark every hunk reviewed. Checked by hand in the browser against `fake-main --no-ai`; the end-to-end test isn't written.
 
 ## Open issues
 
@@ -41,4 +41,7 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+- **Back is Esc only.** Following a link keeps a trail of where it came from, and Esc walks it back once no decision or mismatch is in focus. The browser's back button doesn't, because the page doesn't put views in the history.
+- **Reviewed marks** are kept under one key, `reviewed-hunks`, the 5,000 most recent. Only hunks to review count; mechanical ones have no checkbox. A step's sidebar mark is ✓ when all its hunks are reviewed and • once visited.
+- **Stated intent** shows whenever there's no model intent and the model isn't still working on it, so an analysis whose intent pass failed shows it too. The description is cut to three lines from the second visit, by `intent-seen:<id>`.
+- **Placeholders** ("Working out the intent…", "Finding the decisions…") show only when the status says the model is on.

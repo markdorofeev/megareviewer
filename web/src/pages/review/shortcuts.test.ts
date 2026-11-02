@@ -6,18 +6,23 @@ const press = (key: string, target: EventTarget | null = document.body, modifier
 
 describe("shortcutFor", () => {
   it("maps each shortcut key to its action", () => {
-    expect(["j", "k", "n", "p", "a", "r", "c", "Escape", "?"].map((key) => press(key))).toEqual([
+    const keys = ["j", "k", "n", "p", "x", "]", "[", "t", "a", "r", "c", "Escape", "?"];
+    expect(keys.map((key) => press(key))).toEqual([
       "next-hunk",
       "previous-hunk",
       "next-step",
       "previous-step",
+      "toggle-reviewed",
+      "next-unreviewed",
+      "previous-unreviewed",
+      "find-file",
       "approve",
       "reject",
       "comment",
       "escape",
       "help",
     ]);
-    expect(press("x")).toBeNull();
+    expect(press("z")).toBeNull();
     expect(press("J")).toBeNull();
   });
 

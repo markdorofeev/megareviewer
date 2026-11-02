@@ -38,6 +38,13 @@ export const FilePath = ({ file }: { readonly file: Pick<FileChange, "path" | "o
   </span>
 );
 
+/** Another hunk this one is linked to by the call graph. */
+export interface HunkLink {
+  readonly direction: "calls" | "called-by";
+  readonly symbol: string;
+  readonly hunkId: HunkId;
+}
+
 /** One hunk: a header with its file, place and risk, and its lines. */
 export const HunkCard = memo(function HunkCard({
   hunk,
@@ -48,6 +55,10 @@ export const HunkCard = memo(function HunkCard({
   focused = false,
   onFocus,
   lineLimit,
+  links = [],
+  onFollow,
+  reviewed,
+  onReviewed,
 }: {
   readonly hunk: Hunk;
   readonly file: FileChange;
@@ -60,6 +71,12 @@ export const HunkCard = memo(function HunkCard({
   readonly onFocus?: (id: HunkId) => void;
   /** Shows this many lines at first, with a button for the rest. */
   readonly lineLimit?: number;
+  /** Hunks this one calls or is called by, which `onFollow` goes to. */
+  readonly links?: readonly HunkLink[];
+  readonly onFollow?: (id: HunkId) => void;
+  /** Whether the reviewer has read this hunk; without `onReviewed` there's no checkbox. */
+  readonly reviewed?: boolean;
+  readonly onReviewed?: (id: HunkId, reviewed: boolean) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
   const [showAll, setShowAll] = useState(false);
@@ -107,7 +124,30 @@ export const HunkCard = memo(function HunkCard({
           <span className="hunk-contract-reason model-text">{risk.reason}</span>
         )}
         {risk !== null && <RiskBadge risk={risk} />}
+        {onReviewed !== undefined && (
+          <label className="hunk-reviewed">
+            <input
+              type="checkbox"
+              checked={reviewed === true}
+              onChange={(event) => onReviewed(hunk.id, event.target.checked)}
+            />
+            Reviewed
+          </label>
+        )}
       </header>
+      {links.length > 0 && onFollow !== undefined && (
+        <ul className="hunk-links" aria-label="Call graph">
+          {links.map((link) => (
+            <li key={`${link.direction}:${link.symbol}:${link.hunkId}`}>
+              <button type="button" className="hunk-link" onClick={() => onFollow(link.hunkId)}>
+                {link.direction === "calls"
+                  ? `calls ${link.symbol} ↓`
+                  : `called by ${link.symbol} ↑`}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div
         className="hunk-body"
         // Off screen, the lines are as tall as they will be, so the scrollbar doesn't jump.

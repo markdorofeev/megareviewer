@@ -33,6 +33,7 @@ export const TourNav = ({
   mixes,
   contractCounts,
   totals,
+  reviewed,
   current,
   visited,
   contractOnly,
@@ -47,6 +48,12 @@ export const TourNav = ({
   readonly contractCounts: ReadonlyMap<string, number>;
   /** Hunks by risk class across the pull request. */
   readonly totals: RiskMix;
+  /** Hunks to review and how many are reviewed: in all, and the step IDs fully reviewed. */
+  readonly reviewed: {
+    readonly done: number;
+    readonly of: number;
+    readonly steps: ReadonlySet<string>;
+  };
   /** null while a decision or a mismatch is in focus. */
   readonly current: MainView | null;
   readonly visited: ReadonlySet<string>;
@@ -80,6 +87,9 @@ export const TourNav = ({
           </span>{" "}
           · {totals.logic} logic · {totals.mechanical} mechanical
         </p>
+        <p className="review-progress">
+          {reviewed.done} of {reviewed.of} {reviewed.of === 1 ? "hunk" : "hunks"} reviewed
+        </p>
         <label className="contract-only">
           <input
             type="checkbox"
@@ -94,6 +104,7 @@ export const TourNav = ({
           const key = entryKey(entry);
           const isCurrent = key === currentKey;
           const seen = visited.has(key);
+          const done = reviewed.steps.has(key);
           const mix = mixes.get(key);
           const contract = contractCounts.get(key) ?? 0;
           const dimmed = contractOnly && contract === 0;
@@ -105,8 +116,8 @@ export const TourNav = ({
                 aria-current={isCurrent ? "step" : undefined}
                 onClick={() => onSelect(entry)}
               >
-                <span className="tour-mark" aria-hidden="true">
-                  {seen ? "✓" : ""}
+                <span className={`tour-mark${done ? " reviewed" : ""}`} aria-hidden="true">
+                  {done ? "✓" : seen ? "•" : ""}
                 </span>
                 {entry.number !== "" && <span className="tour-number">{entry.number}</span>}
                 <span className="tour-title model-text">{entry.label}</span>
@@ -116,7 +127,11 @@ export const TourNav = ({
                     <span className="visually-hidden"> contract</span>
                   </span>
                 )}
-                {seen && <span className="visually-hidden">(visited)</span>}
+                {done ? (
+                  <span className="visually-hidden">(reviewed)</span>
+                ) : (
+                  seen && <span className="visually-hidden">(visited)</span>
+                )}
               </button>
               {mix !== undefined && <MixBar mix={mix} />}
             </li>

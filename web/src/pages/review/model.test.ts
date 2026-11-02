@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks } from "../../../dev/fixtures/index.ts";
 import {
+  entryOf,
   hunkIndex,
+  hunkLinks,
   hunksInPathOrder,
   inReadingOrder,
   mechanicalCount,
   readingOrder,
+  reviewOrder,
   riskMix,
   riskTotals,
   tourSteps,
@@ -163,5 +166,53 @@ describe("risk counts", () => {
     const trailing = trailingProofs(analysis, index);
     expect(trailing.some((proof) => proof.hunkId === h.formatMoneyRemoved)).toBe(false);
     expect(trailing).toHaveLength(analysis.proofs.length - 1);
+  });
+});
+
+describe("hunkLinks", () => {
+  const index = hunkIndex(analysis);
+
+  it("links a caller down to its callee and the callee back up, once per symbol", () => {
+    const hints = [...analysis.callGraph, ...analysis.callGraph];
+    const links = hunkLinks(hints, index);
+    expect(links.get(h.receiptRoute)).toEqual([
+      { direction: "calls", symbol: "cachedReceipt", hunkId: h.retryAndCache },
+    ]);
+    expect(links.get(h.retryAndCache)).toEqual([
+      { direction: "called-by", symbol: "cachedReceipt", hunkId: h.receiptRoute },
+    ]);
+  });
+
+  it("drops hints to unknown hunks and keeps at most six links each way", () => {
+    const unknown = { ...analysis.callGraph[0], toHunkId: h.dependency, fromHunkId: h.dependency };
+    expect(
+      hunkLinks(
+        [unknown].map((hint) => ({ ...hint, symbol: "x" })),
+        hunkIndex({ ...analysis, files: [] }),
+      ).size,
+    ).toBe(0);
+    const many = Array.from({ length: 9 }, (_, i) => ({
+      fromHunkId: h.receiptRoute,
+      toHunkId: h.retryAndCache,
+      symbol: `s${i}`,
+    }));
+    expect(hunkLinks(many, index).get(h.receiptRoute)).toHaveLength(6);
+  });
+});
+
+describe("entryOf and reviewOrder", () => {
+  const index = hunkIndex(analysis);
+  const steps = tourSteps(analysis, index);
+
+  it("finds the step that shows a hunk, mechanical ones in place included", () => {
+    expect(entryOf(h.retryAndCache, steps, index)).toEqual({ kind: "step", stepId: "s2" });
+    expect(entryOf(h.formatMoneyRemoved, steps, index)).toEqual({ kind: "step", stepId: "s1" });
+    expect(entryOf(h.formatMoneyAdded, steps, index)).toEqual({ kind: "mechanical" });
+  });
+
+  it("lists the hunks to review in tour order", () => {
+    expect(reviewOrder(steps).map((item) => item.hunkId)).toEqual(
+      steps.flatMap((step) => step.hunkIds),
+    );
   });
 });

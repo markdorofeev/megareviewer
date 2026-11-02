@@ -5,6 +5,10 @@ export type ShortcutAction =
   | "previous-hunk"
   | "next-step"
   | "previous-step"
+  | "toggle-reviewed"
+  | "next-unreviewed"
+  | "previous-unreviewed"
+  | "find-file"
   | "approve"
   | "reject"
   | "comment"
@@ -20,10 +24,22 @@ export const SHORTCUTS: readonly {
   { keys: ["k"], action: "previous-hunk", description: "Previous hunk" },
   { keys: ["n"], action: "next-step", description: "Next tour step" },
   { keys: ["p"], action: "previous-step", description: "Previous tour step" },
+  {
+    keys: ["x"],
+    action: "toggle-reviewed",
+    description: "Mark the hunk reviewed and go to the next",
+  },
+  { keys: ["]"], action: "next-unreviewed", description: "Next unreviewed hunk" },
+  { keys: ["["], action: "previous-unreviewed", description: "Previous unreviewed hunk" },
+  { keys: ["t"], action: "find-file", description: "Go to a file" },
   { keys: ["a"], action: "approve", description: "Approve the selected decision" },
   { keys: ["r"], action: "reject", description: "Reject the selected decision" },
   { keys: ["c"], action: "comment", description: "Comment on the selected decision" },
-  { keys: ["Escape"], action: "escape", description: "Back to the tour" },
+  {
+    keys: ["Escape"],
+    action: "escape",
+    description: "Back to the tour, or to where a link was followed from",
+  },
   { keys: ["?"], action: "help", description: "Show these shortcuts" },
 ];
 

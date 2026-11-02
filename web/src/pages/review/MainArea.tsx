@@ -1,7 +1,13 @@
 import { type Ref, useId } from "react";
 import type { HunkId, MechanicalProof } from "../../../../src/domain/diff/index.ts";
 import type { Analysis, TourStep } from "../../../../src/domain/review/index.ts";
-import { DiffView, FileNotices, type HunkItem, MechanicalGroup } from "../../diff/index.ts";
+import {
+  DiffView,
+  FileNotices,
+  type HunkItem,
+  type HunkLink,
+  MechanicalGroup,
+} from "../../diff/index.ts";
 import type { MainView } from "./model.ts";
 
 /** What the main area is about, above the hunks. */
@@ -26,6 +32,10 @@ export const MainArea = ({
   mechanicalCount,
   trailingProofs,
   contractOnly,
+  linksOf,
+  onFollow,
+  reviewedHunkIds,
+  onReviewed,
   onFocusHunk,
   onBack,
   onPrevious,
@@ -43,6 +53,10 @@ export const MainArea = ({
   readonly trailingProofs: readonly MechanicalProof[];
   /** Only contract hunks are in `items`. */
   readonly contractOnly: boolean;
+  readonly linksOf: (id: HunkId) => readonly HunkLink[];
+  readonly onFollow: (id: HunkId) => void;
+  readonly reviewedHunkIds: ReadonlySet<string>;
+  readonly onReviewed: (id: HunkId, reviewed: boolean) => void;
   readonly onFocusHunk: (id: HunkId) => void;
   readonly onBack: () => void;
   readonly onPrevious: (() => void) | null;
@@ -109,6 +123,10 @@ export const MainArea = ({
         highlightedHunkIds={highlightedHunkIds}
         focusedHunkId={focusedHunkId}
         onFocusHunk={onFocusHunk}
+        linksOf={linksOf}
+        onFollow={onFollow}
+        reviewedHunkIds={reviewedHunkIds}
+        onReviewed={onReviewed}
       />
 
       {showMechanical && (

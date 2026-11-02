@@ -1,4 +1,5 @@
 import type {
+  CallGraphHint,
   FileChange,
   Hunk,
   HunkId,
@@ -11,7 +12,7 @@ import {
   type TourStep,
   TourStepId,
 } from "../../../../src/domain/review/index.ts";
-import type { HunkItem } from "../../diff/index.ts";
+import type { HunkItem, HunkLink } from "../../diff/index.ts";
 
 /** What the main area shows. */
 export type MainView =
@@ -196,3 +197,51 @@ export const trailingProofs = (analysis: Analysis, index: HunkIndex): Mechanical
   );
   return analysis.proofs.filter((proof) => proof.hunkId === null || !reviewed.has(proof.path));
 };
+
+/** Links a hunk card shows in each direction, at most. */
+const MAX_LINKS = 6;
+
+/**
+ * Each hunk's call-graph links: the hunks it calls, then those that call it, once per symbol and
+ * hunk. Hints to hunks the page doesn't know are dropped.
+ */
+export const hunkLinks = (
+  callGraph: readonly CallGraphHint[],
+  index: HunkIndex,
+): ReadonlyMap<HunkId, readonly HunkLink[]> => {
+  const links = new Map<HunkId, HunkLink[]>();
+  const add = (from: HunkId, link: HunkLink) => {
+    const list = links.get(from) ?? [];
+    const same = (other: HunkLink) =>
+      other.direction === link.direction &&
+      other.symbol === link.symbol &&
+      other.hunkId === link.hunkId;
+    const inDirection = list.filter((other) => other.direction === link.direction).length;
+    if (!list.some(same) && inDirection < MAX_LINKS) links.set(from, [...list, link]);
+  };
+  for (const hint of callGraph) {
+    if (!index.hunks.has(hint.fromHunkId) || !index.hunks.has(hint.toHunkId)) continue;
+    add(hint.fromHunkId, { direction: "calls", symbol: hint.symbol, hunkId: hint.toHunkId });
+  }
+  for (const hint of callGraph) {
+    if (!index.hunks.has(hint.fromHunkId) || !index.hunks.has(hint.toHunkId)) continue;
+    add(hint.toHunkId, { direction: "called-by", symbol: hint.symbol, hunkId: hint.fromHunkId });
+  }
+  return links;
+};
+
+/** The tour entry that shows a hunk: the first step holding it in place, else the last entry. */
+export const entryOf = (
+  hunkId: HunkId,
+  steps: readonly TourStep[],
+  index: HunkIndex,
+): TourEntry => {
+  const step = steps.find((one) => withMechanicalInPlace(one.hunkIds, index).includes(hunkId));
+  return step === undefined ? { kind: "mechanical" } : { kind: "step", stepId: step.id };
+};
+
+/** Every hunk to review, in tour order: where "next unreviewed" looks. */
+export const reviewOrder = (
+  steps: readonly TourStep[],
+): readonly { readonly stepId: TourStepId; readonly hunkId: HunkId }[] =>
+  steps.flatMap((step) => step.hunkIds.map((hunkId) => ({ stepId: step.id, hunkId })));
