@@ -1,9 +1,9 @@
-import type { FileChange, HunkId } from "../../domain/diff/index.ts";
+import type { CallGraphHint, FileChange, HunkId } from "../../domain/diff/index.ts";
 import {
   type CoverageProblem,
+  codeTour,
   type Decision,
   DecisionId,
-  fallbackTour,
   type Intent,
   type ModelError,
   type ModelPass,
@@ -215,7 +215,7 @@ export const runDecisions = async (
   };
 };
 
-/** Never fails: a tour the model can't build is replaced by the file-order fallback. */
+/** Never fails: a tour the model can't build is replaced by the one from the call graph. */
 export const runTour = async (
   model: AnalysisModel,
   input: AnalysisInput,
@@ -225,6 +225,9 @@ export const runTour = async (
     readonly decisions: readonly Decision[];
     readonly files: readonly FileChange[];
     readonly required: ReadonlySet<HunkId>;
+    readonly callGraph: readonly CallGraphHint[];
+    /** Every hunk's final risk, for the call-graph tour's order. */
+    readonly assessments: readonly RiskAssessment[];
   },
   logger: Logger,
 ): Promise<{ tour: Tour; usage: readonly ModelUsage[]; warnings: readonly string[] }> => {
@@ -236,9 +239,9 @@ export const runTour = async (
     logger,
   );
   const fallback = (reason: string) => ({
-    tour: fallbackTour(context.files, required),
+    tour: codeTour(context.files, required, context.callGraph, context.assessments),
     usage,
-    warnings: [`${reason}, so hunks are shown in file order`],
+    warnings: [`${reason}, so the tour follows the call graph instead`],
   });
   if (!outcome.ok) {
     return fallback(`The guided tour couldn't be built (${outcome.error.message})`);

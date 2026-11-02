@@ -16,7 +16,8 @@ export interface AppDeps {
   readonly hosts: Partial<Record<HostKind, GitHost>>;
   readonly tickets: TicketSource;
   readonly model: AnalysisModel;
-  readonly modelConfigured: boolean;
+  /** Whether the model passes run. Off, the analysis is built by deterministic code alone. */
+  readonly modelEnabled: boolean;
   readonly store: AnalysisStore;
   readonly fileCache: FileCache;
   readonly parser: CodeParser;

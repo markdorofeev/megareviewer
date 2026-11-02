@@ -3,9 +3,10 @@ import { parseCliArgs } from "./args.ts";
 
 describe("parseCliArgs", () => {
   it.each([
-    [[], { kind: "serve", port: 0, open: true }],
-    [["--port", "4823"], { kind: "serve", port: 4823, open: true }],
-    [["--port=0", "--no-open"], { kind: "serve", port: 0, open: false }],
+    [[], { kind: "serve", port: 0, open: true, ai: false }],
+    [["--port", "4823"], { kind: "serve", port: 4823, open: true, ai: false }],
+    [["--port=0", "--no-open"], { kind: "serve", port: 0, open: false, ai: false }],
+    [["--ai"], { kind: "serve", port: 0, open: true, ai: true }],
     [["doctor"], { kind: "doctor" }],
     [["--version"], { kind: "version" }],
     [["--help"], { kind: "help" }],
@@ -24,6 +25,7 @@ describe("parseCliArgs", () => {
     [["serve"], "Unknown command: serve"],
     [["doctor", "now"], "Unexpected argument: now"],
     [["doctor", "--no-open"], "doctor takes no options"],
+    [["doctor", "--ai"], "doctor takes no options"],
     [["--version", "--port", "1"], "--version takes no other arguments"],
     [["doctor", "--version"], "--version takes no other arguments"],
     [["--no-open=yes"], "--no-open"],

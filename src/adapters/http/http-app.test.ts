@@ -58,7 +58,7 @@ const setupApp = (
       hosts: options.onlyGithub ? { github } : { github, bitbucket },
       tickets: new FakeTicketSource({ tickets: allFixtures.flatMap((fixture) => fixture.tickets) }),
       model: options.model ?? new FakeAnalysisModel(),
-      modelConfigured: true,
+      modelEnabled: true,
       store,
       fileCache: new InMemoryFileCache(),
       parser: new FakeCodeParser(),
@@ -248,7 +248,7 @@ describe("GET /api/status", () => {
       version: "1.2.3",
       hosts: { github: { configured: true, error: null }, bitbucket: { configured: false } },
       jira: { configured: true },
-      model: { configured: true },
+      model: { enabled: true },
     });
   });
 });

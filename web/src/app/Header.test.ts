@@ -11,7 +11,7 @@ const withHosts = (hosts: Partial<StatusResponse["hosts"]>): StatusResponse => (
 const off = { configured: false, user: null, error: null };
 
 describe("statusIndicator", () => {
-  it("is ready with a host and the model configured", () => {
+  it("is ready with a host", () => {
     expect(statusIndicator(fixtureStatus, null)).toEqual({
       tone: "ok",
       label: "Ready",
@@ -19,10 +19,10 @@ describe("statusIndicator", () => {
     });
   });
 
-  it("needs setup without a host or the model", () => {
+  it("needs setup without a host, and is ready with the model off", () => {
     expect(statusIndicator(withHosts({ github: off }), null).label).toBe("Setup needed");
-    expect(statusIndicator({ ...fixtureStatus, model: { configured: false } }, null).label).toBe(
-      "Setup needed",
+    expect(statusIndicator({ ...fixtureStatus, model: { enabled: false } }, null).label).toBe(
+      "Ready",
     );
   });
 

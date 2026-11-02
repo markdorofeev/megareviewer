@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 import { err, ok, type Result } from "../domain/shared/index.ts";
 
 export type Command =
-  | { readonly kind: "serve"; readonly port: number; readonly open: boolean }
+  | { readonly kind: "serve"; readonly port: number; readonly open: boolean; readonly ai: boolean }
   | { readonly kind: "doctor" }
   | { readonly kind: "version" }
   | { readonly kind: "help" };
@@ -10,7 +10,9 @@ export type Command =
 export const EXIT = { ok: 0, config: 1, usage: 2 } as const;
 
 export const USAGE = `Usage:
-  megareviewer [--port <n>] [--no-open]   Start the review UI (any free port by default)
+  megareviewer [--port <n>] [--no-open] [--ai]
+                                          Start the review UI (any free port by default);
+                                          --ai adds intent, decisions and a guided tour from Claude
   megareviewer doctor                     Check credentials and setup
   megareviewer --version
   megareviewer --help`;
@@ -32,7 +34,7 @@ export const parseCliArgs = (argv: readonly string[]): Result<Command, string> =
 
   const [command, ...extra] = positionals;
   if (extra.length > 0) return err(`Unexpected argument: ${extra.join(" ")}`);
-  const serveFlags = values.port !== undefined || values["no-open"] === true;
+  const serveFlags = values.port !== undefined || values["no-open"] === true || values.ai === true;
 
   if (values.version === true) {
     if (command !== undefined || serveFlags) return err("--version takes no other arguments");
@@ -51,7 +53,7 @@ export const parseCliArgs = (argv: readonly string[]): Result<Command, string> =
     }
     port = Number(values.port);
   }
-  return ok({ kind: "serve", port, open: values["no-open"] !== true });
+  return ok({ kind: "serve", port, open: values["no-open"] !== true, ai: values.ai === true });
 };
 
 const parse = (argv: readonly string[]) =>
@@ -60,6 +62,7 @@ const parse = (argv: readonly string[]) =>
     options: {
       port: { type: "string" },
       "no-open": { type: "boolean" },
+      ai: { type: "boolean" },
       version: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },

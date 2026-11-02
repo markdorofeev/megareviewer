@@ -31,6 +31,8 @@ export interface ComposeOptions {
   readonly grammarsDir: string;
   /** The built UI, or null when there is none (in development, Vite serves it). */
   readonly staticDir: string | null;
+  /** Run the model passes (`--ai`). They need Anthropic credentials. */
+  readonly ai: boolean;
   readonly version: string;
   readonly logger: Logger;
 }
@@ -38,7 +40,7 @@ export interface ComposeOptions {
 export interface Composition {
   readonly useCases: UseCases;
   readonly sessionToken: string;
-  readonly modelConfigured: boolean;
+  readonly modelEnabled: boolean;
   /** The HTTP app for a server listening on `port`, which its Host check needs. */
   app(port: number): Hono;
   /** Closes the database. Safe to call more than once. */
@@ -53,7 +55,7 @@ export const newSessionToken = (): string => randomBytes(32).toString("base64url
 export const allowedHosts = (port: number): string[] => [`127.0.0.1:${port}`, `localhost:${port}`];
 
 export const NO_ANTHROPIC_CREDENTIALS =
-  "No Anthropic credentials found. Set ANTHROPIC_API_KEY or run `ant auth login`, then restart megareviewer.";
+  "--ai needs Anthropic credentials. Set ANTHROPIC_API_KEY or run `ant auth login`, then restart megareviewer --ai.";
 
 export const createHosts = (
   config: Pick<Config, "github" | "bitbucket">,
@@ -123,7 +125,7 @@ export const assemble = async (
   return {
     useCases,
     sessionToken,
-    modelConfigured: deps.modelConfigured,
+    modelEnabled: deps.modelEnabled,
     app: (port) =>
       createHttpApp({
         useCases,
@@ -142,7 +144,8 @@ const messageOf = (error: unknown): string =>
 
 /**
  * Wires the real adapters into the use cases. The only place that knows them. Fails with a
- * message for the user when the home directory or the database can't be opened.
+ * message for the user when the home directory or the database can't be opened, or when `--ai`
+ * asks for the model and there are no Anthropic credentials.
  */
 export const compose = async (
   config: Config,
@@ -150,6 +153,9 @@ export const compose = async (
 ): Promise<Result<Composition, string>> => {
   const { logger } = options;
   const clock = systemClock;
+  const client = new Anthropic();
+  const modelConfigured = await anthropicConfigured(client, logger);
+  if (options.ai && !modelConfigured) return err(NO_ANTHROPIC_CREDENTIALS);
   try {
     mkdirSync(config.home, { recursive: true, mode: 0o700 });
   } catch (error) {
@@ -166,8 +172,6 @@ export const compose = async (
   }
 
   try {
-    const client = new Anthropic();
-    const modelConfigured = await anthropicConfigured(client, logger);
     const claude = createClaudeAnalysisModel({ client, logger });
     return ok(
       await assemble(
@@ -175,7 +179,7 @@ export const compose = async (
           hosts: createHosts(config, { version: options.version, clock, logger }),
           tickets: createTicketSource(config, logger),
           model: modelConfigured ? claude : unconfiguredModel(claude.version),
-          modelConfigured,
+          modelEnabled: options.ai,
           store,
           fileCache: store,
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),

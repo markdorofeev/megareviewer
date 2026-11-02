@@ -107,4 +107,4 @@ jobs:
           echo "$output"
           test "$status" -eq 1
           echo "$output" | grep -q "No git host is configured"
-          echo "$output" | grep -q "No Anthropic credentials found"
+          echo "$output" | grep -q "Anthropic: not configured: reviews run without the model"

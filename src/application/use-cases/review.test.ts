@@ -55,7 +55,7 @@ const setup = (
       hosts: options.noHosts ? {} : options.onlyGithub ? { github } : { github, bitbucket },
       tickets,
       model: new FakeAnalysisModel(),
-      modelConfigured: false,
+      modelEnabled: false,
       store,
       fileCache: new InMemoryFileCache(),
       parser: new FakeCodeParser(),
@@ -341,7 +341,7 @@ describe("getStatus", () => {
         bitbucket: { configured: true, user: null, error: "Bad token" },
       },
       jira: { configured: true },
-      model: { configured: false },
+      model: { enabled: false },
     });
   });
 

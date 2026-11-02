@@ -11,7 +11,8 @@ import { Tour } from "./tour.ts";
 export const StageName = z.enum(["collect", "prep", "intent", "risk", "decisions", "tour"]);
 export type StageName = z.infer<typeof StageName>;
 
-export const StageStatus = z.enum(["pending", "running", "done", "failed"]);
+/** skipped: a model pass that didn't run because the model is off. */
+export const StageStatus = z.enum(["pending", "running", "done", "failed", "skipped"]);
 export type StageStatus = z.infer<typeof StageStatus>;
 
 export const AnalysisId = z

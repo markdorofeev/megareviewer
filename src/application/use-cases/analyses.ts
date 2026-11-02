@@ -88,7 +88,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     const key: AnalysisKey = {
       ref: pullRequest.ref,
       headSha: pullRequest.headSha,
-      pipelineVersion: pipelineVersion(deps.model),
+      pipelineVersion: pipelineVersion(deps.model, deps.modelEnabled),
     };
     const existing = await deps.store.findByKey(key);
     const id = existing?.id ?? analysisId(key);

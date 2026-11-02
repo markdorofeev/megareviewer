@@ -6,7 +6,7 @@ import {
   type Hunk,
   HunkId,
 } from "../diff/index.ts";
-import { classifyByRules, isTestFile } from "./index.ts";
+import { classifyByRules, isTestFile, raiseByRules } from "./index.ts";
 
 const h = (n: number): HunkId => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
 
@@ -99,6 +99,7 @@ describe("classifyByRules", () => {
     ["src/OAuthClient.ts", "auth or security path"],
     ["lib/JWTToken.go", "auth or security path"],
     ["app/permissions_controller.rb", "auth or security path"],
+    ["src/middleware/require-admin.ts", "auth or security path"],
   ])("marks %s as contract: %s", (path, reason) => {
     expect(reasonOf(path)).toBe(reason);
   });
@@ -317,5 +318,40 @@ describe("isTestFile", () => {
     "src/spec.md",
   ])("knows %s isn't", (path) => {
     expect(isTestFile(path)).toBe(false);
+  });
+});
+
+describe("raiseByRules", () => {
+  const assessed = (n: number, riskClass: "logic" | "contract" | "mechanical", reason: string) => ({
+    hunkId: h(n),
+    riskClass,
+    reason,
+    source: "model" as const,
+  });
+  const rule = (n: number, riskClass: "logic" | "contract", reason: string) => ({
+    hunkId: h(n),
+    riskClass,
+    reason,
+    source: "rule" as const,
+  });
+
+  it("keeps the model's class unless a rule says contract", () => {
+    const model = [
+      assessed(1, "logic", "m1"),
+      assessed(2, "contract", "m2"),
+      assessed(3, "logic", "m3"),
+    ];
+    const rules = [rule(1, "contract", "r1"), rule(2, "contract", "r2"), rule(3, "logic", "r3")];
+
+    expect(raiseByRules(model, rules)).toEqual([
+      rule(1, "contract", "r1"),
+      assessed(2, "contract", "m2; r2"),
+      assessed(3, "logic", "m3"),
+    ]);
+  });
+
+  it("leaves hunks the rules didn't assess alone", () => {
+    const model = [assessed(1, "mechanical", "moved")];
+    expect(raiseByRules(model, [rule(2, "contract", "r")])).toEqual(model);
   });
 });

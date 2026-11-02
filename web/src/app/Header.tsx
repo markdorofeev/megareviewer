@@ -16,7 +16,7 @@ export const statusIndicator = (
   if (status === null) return { tone: "muted", label: "Connecting…", detail: "" };
   const version = `megareviewer ${status.version}`;
   const { github, bitbucket } = status.hosts;
-  if (!status.model.configured || (!github.configured && !bitbucket.configured)) {
+  if (!github.configured && !bitbucket.configured) {
     return { tone: "warning", label: "Setup needed", detail: version };
   }
   if (github.error !== null || bitbucket.error !== null) {

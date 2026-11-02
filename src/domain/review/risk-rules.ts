@@ -53,6 +53,7 @@ const CI_BASENAMES = new Set([".gitlab-ci.yml", "bitbucket-pipelines.yml", "Jenk
 const INFRASTRUCTURE_EXTENSIONS = new Set([".tf", ".tfvars"]);
 const CONFIG_BASENAMES = new Set([".npmrc", "CODEOWNERS", ".gitattributes"]);
 const SECURITY_WORDS = new Set([
+  "admin",
   "auth",
   "authn",
   "authz",
@@ -185,6 +186,24 @@ const HUNK_RULES: readonly HunkRule[] = [
   (hunk, file) =>
     isTestFile(file.path) && count(textOf(hunk, "add"), TEST_SKIPS) > 0 ? "skips tests" : null,
 ];
+
+/**
+ * The model's risk raised by the rules: a hunk is contract if either says so. A rule's contract
+ * over the model's logic keeps the rule's assessment; when both say contract, the reasons join.
+ */
+export const raiseByRules = (
+  assessments: readonly RiskAssessment[],
+  rules: readonly RiskAssessment[],
+): RiskAssessment[] => {
+  const byHunk = new Map(rules.map((rule) => [rule.hunkId, rule]));
+  return assessments.map((assessment) => {
+    const rule = byHunk.get(assessment.hunkId);
+    if (rule === undefined || rule.riskClass !== "contract") return assessment;
+    return assessment.riskClass === "contract"
+      ? { ...assessment, reason: `${assessment.reason}; ${rule.reason}` }
+      : rule;
+  });
+};
 
 /**
  * Risk for every hunk without a mechanical proof, from deterministic rules. A hunk any rule

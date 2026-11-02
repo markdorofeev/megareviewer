@@ -42,9 +42,9 @@ const printSummary = (config: Config, composition: Composition, url: string, ui:
       : `as ${config.bitbucket.username} (${config.bitbucket.credential})${config.bitbucket.workspace === null ? "" : `, workspace ${config.bitbucket.workspace}`}`;
   const jira =
     config.jira === null ? "not configured: ticket keys aren't fetched" : config.jira.baseUrl;
-  const model = composition.modelConfigured
-    ? "credentials found"
-    : "no credentials: analyses will fail until ANTHROPIC_API_KEY is set or `ant auth login` runs";
+  const model = composition.modelEnabled
+    ? "on: intent, decisions and the guided tour come from Claude"
+    : "off: start with --ai to add intent, decisions and a guided tour from Claude";
   console.log(`megareviewer ${version}
   GitHub     ${github}
   Bitbucket  ${bitbucket}
@@ -84,7 +84,11 @@ const stopOnSignal = (stop: () => Promise<void>, logger: Logger): void => {
 };
 
 /** Resolves to an exit code, or null while the server runs. */
-const start = async (options: { port: number; open: boolean }): Promise<number | null> => {
+const start = async (options: {
+  port: number;
+  open: boolean;
+  ai: boolean;
+}): Promise<number | null> => {
   const { config, problems } = await loadConfig();
   if (problems.length > 0) {
     printProblems(problems);
@@ -92,7 +96,7 @@ const start = async (options: { port: number; open: boolean }): Promise<number |
   }
   const logger = createLogger({ level: config.logLevel });
   const assets = locateAssets();
-  const composed = await compose(config, { ...assets, version, logger });
+  const composed = await compose(config, { ...assets, ai: options.ai, version, logger });
   if (!composed.ok) {
     printProblems([composed.error]);
     return EXIT.config;

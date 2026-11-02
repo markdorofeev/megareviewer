@@ -48,7 +48,7 @@ const setup = () => {
     hosts: { github: host },
     tickets: new FakeTicketSource({ configured: false }),
     model: new FakeAnalysisModel(),
-    modelConfigured: true,
+    modelEnabled: true,
     store: new InMemoryAnalysisStore(),
     fileCache,
     parser: new FakeCodeParser(),

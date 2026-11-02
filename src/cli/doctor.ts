@@ -5,13 +5,7 @@ import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
 import type { GitHost, Logger, TicketSource } from "../application/ports/index.ts";
 import type { HostKind } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
-import {
-  anthropicConfigured,
-  createHosts,
-  createTicketSource,
-  NO_ANTHROPIC_CREDENTIALS,
-  systemClock,
-} from "./compose.ts";
+import { anthropicConfigured, createHosts, createTicketSource, systemClock } from "./compose.ts";
 import type { BitbucketCredential, Config, GitHubTokenSource } from "./config.ts";
 import { NODE_FIX, nodeSupported } from "./node-version.ts";
 
@@ -124,7 +118,12 @@ const checkJira = async (deps: DoctorDeps): Promise<Check> => {
 
 const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
   if (!deps.anthropic.configured) {
-    return check("fail", "Anthropic", "no credentials found", NO_ANTHROPIC_CREDENTIALS);
+    return check(
+      "skip",
+      "Anthropic",
+      "not configured: reviews run without the model",
+      "Set ANTHROPIC_API_KEY or run `ant auth login` to use --ai.",
+    );
   }
   const retrieved = await deps.anthropic.retrieveModel();
   return retrieved.ok

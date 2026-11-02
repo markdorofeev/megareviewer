@@ -151,7 +151,7 @@ export const createFakeApp = async (options: {
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
       model: failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url),
-      modelConfigured: true,
+      modelEnabled: true,
       store: new InMemoryAnalysisStore(),
       fileCache: new InMemoryFileCache(),
       parser: options.parser,

@@ -24,6 +24,7 @@ import {
   InMemoryAnalysisStore,
   InMemoryFileCache,
   type PullRequestFixture,
+  promptInjection,
   RecordingLogger,
   refactorMove,
   smallFeature,
@@ -54,6 +55,7 @@ const setup = (
     parser?: CodeParser;
     onlyGithub?: boolean;
     fileCache?: InMemoryFileCache;
+    modelEnabled?: boolean;
   } = {},
 ) => {
   const clock = new FixedClock("2026-10-21T09:00:00Z");
@@ -89,7 +91,7 @@ const setup = (
       hosts: options.onlyGithub ? { github } : { github, bitbucket },
       tickets,
       model,
-      modelConfigured: true,
+      modelEnabled: options.modelEnabled ?? true,
       store,
       fileCache,
       parser,
@@ -178,7 +180,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("1+fake-model/1");
+    expect(analysis.key.pipelineVersion).toBe("2+fake-model/1");
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
     );
@@ -691,10 +693,10 @@ describe("the analysis pipeline", () => {
 
       expect(model.callsTo("tour")).toHaveLength(2);
       expect(analysis.status).toBe("complete");
-      expect(analysis.tour?.builtBy).toBe("file-order");
+      expect(analysis.tour?.builtBy).toBe("code");
       expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
       expect(analysis.warnings).toEqual([
-        "The guided tour didn't cover every hunk exactly once, so hunks are shown in file order",
+        "The guided tour didn't cover every hunk exactly once, so the tour follows the call graph instead",
       ]);
     });
 
@@ -722,9 +724,9 @@ describe("the analysis pipeline", () => {
       expect(model.callsTo("tour")).toHaveLength(1);
       expect(analysis.status).toBe("complete");
       expect(analysis.stages.tour).toBe("done");
-      expect(analysis.tour?.builtBy).toBe("file-order");
+      expect(analysis.tour?.builtBy).toBe("code");
       expect(analysis.warnings).toEqual([
-        "The guided tour couldn't be built (Overloaded), so hunks are shown in file order",
+        "The guided tour couldn't be built (Overloaded), so the tour follows the call graph instead",
       ]);
     });
   });
@@ -930,5 +932,51 @@ describe("retryAnalysis", () => {
     expect(await useCases.retryAnalysis(failed.id)).toEqual(
       err({ code: "host-error", message: "unauthorized from host" }),
     );
+  });
+});
+
+describe("without the model", () => {
+  it("completes after prep, with rule risk and the call-graph tour, and calls no model", async () => {
+    const { analyze, model, emitted } = setup({ modelEnabled: false });
+    const analysis = await analyze();
+
+    expect(model.calls).toEqual([]);
+    expect(analysis.status).toBe("complete");
+    expect(analysis.error).toBeNull();
+    expect(analysis.stages).toEqual({
+      collect: "done",
+      prep: "done",
+      intent: "skipped",
+      risk: "skipped",
+      decisions: "skipped",
+      tour: "skipped",
+    });
+    expect(analysis.key.pipelineVersion).toBe("2+no-model");
+    expect(analysis.intent).toBeNull();
+    expect(analysis.decisions).toEqual([]);
+    expect(analysis.usage).toEqual([]);
+    expect(analysis.risk.map((risk) => [risk.hunkId, risk.source])).toEqual(
+      smallFeatureHunks.map((hunkId) => [hunkId, "rule"]),
+    );
+    expect(analysis.tour?.builtBy).toBe("code");
+    expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
+    expect(emitted.at(-1)?.event).toEqual({ type: "done" });
+  });
+
+  it("marks rule matches contract", async () => {
+    const { analyze } = setup({ modelEnabled: false });
+    const analysis = await analyze(promptInjection);
+    expect(analysis.risk.map((risk) => [risk.riskClass, risk.reason])).toContainEqual([
+      "contract",
+      "auth or security path",
+    ]);
+  });
+
+  it("keeps a rule's contract over the model's logic when the model runs", async () => {
+    const { analyze } = setup();
+    const analysis = await analyze(promptInjection);
+    const contract = analysis.risk.filter((risk) => risk.riskClass === "contract");
+    expect(contract.length).toBeGreaterThan(0);
+    expect(contract.every((risk) => risk.source === "rule")).toBe(true);
   });
 });

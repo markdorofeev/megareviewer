@@ -35,7 +35,7 @@ export const StatusResponse = z
     version: z.string(),
     hosts: z.object({ github: HostStatus, bitbucket: HostStatus }).readonly(),
     jira: z.object({ configured: z.boolean() }).readonly(),
-    model: z.object({ configured: z.boolean() }).readonly(),
+    model: z.object({ enabled: z.boolean() }).readonly(),
   })
   .readonly();
 export type StatusResponse = z.infer<typeof StatusResponse>;

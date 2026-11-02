@@ -13,7 +13,7 @@ describe("setupItems", () => {
         text: "Not configured: set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN",
       },
       { name: "Jira", state: "ok", text: "Configured" },
-      { name: "Claude", state: "ok", text: "Configured" },
+      { name: "Claude", state: "ok", text: "On" },
     ]);
   });
 
@@ -23,16 +23,18 @@ describe("setupItems", () => {
       ...fixtureStatus,
       hosts: { github: off, bitbucket: off },
       jira: { configured: false },
-      model: { configured: false },
+      model: { enabled: false },
     });
     expect(items.map((item) => [item.name, item.state])).toEqual([
       ["GitHub", "missing"],
       ["Bitbucket", "missing"],
       ["Jira", "optional"],
-      ["Claude", "missing"],
+      ["Claude", "optional"],
     ]);
     expect(items[0]?.text).toBe("Not configured: set GITHUB_TOKEN or run gh auth login");
-    expect(items[3]?.text).toBe("Not configured: set ANTHROPIC_API_KEY or run ant auth login");
+    expect(items[3]?.text).toBe(
+      "Off: start megareviewer with --ai to add intent, decisions and a guided tour from Claude",
+    );
   });
 
   it("shows a configured host's error", () => {

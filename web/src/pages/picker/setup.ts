@@ -38,12 +38,12 @@ export const setupItems = (status: StatusResponse): readonly SetupItem[] => {
           state: "optional",
           text: "Not configured: set JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN to read linked tickets",
         },
-    status.model.configured
-      ? { name: "Claude", state: "ok", text: "Configured" }
+    status.model.enabled
+      ? { name: "Claude", state: "ok", text: "On" }
       : {
           name: "Claude",
-          state: "missing",
-          text: "Not configured: set ANTHROPIC_API_KEY or run ant auth login",
+          state: "optional",
+          text: "Off: start megareviewer with --ai to add intent, decisions and a guided tour from Claude",
         },
   ];
 };

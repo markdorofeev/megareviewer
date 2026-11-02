@@ -62,7 +62,7 @@ const fakeComposition = () => {
       hosts: { github: new FakeGitHost({ host: "github", fixtures: allFixtures, clock }) },
       tickets: new FakeTicketSource(),
       model: new FakeAnalysisModel(),
-      modelConfigured: true,
+      modelEnabled: true,
       store: new InMemoryAnalysisStore(),
       fileCache: new InMemoryFileCache(),
       parser: new FakeCodeParser(),
@@ -115,7 +115,7 @@ describe("assemble and serve", () => {
         hosts: {},
         tickets: new FakeTicketSource(),
         model: new FakeAnalysisModel(),
-        modelConfigured: true,
+        modelEnabled: true,
         store,
         fileCache: new InMemoryFileCache(),
         parser: new FakeCodeParser(),
@@ -133,7 +133,7 @@ describe("assemble and serve", () => {
         hosts: {},
         tickets: new FakeTicketSource(),
         model: new FakeAnalysisModel(),
-        modelConfigured: false,
+        modelEnabled: false,
         store: new InMemoryAnalysisStore(),
         fileCache: new InMemoryFileCache(),
         parser: new FakeCodeParser(),
@@ -143,7 +143,7 @@ describe("assemble and serve", () => {
       { staticDir: null, version: "1", sessionToken: "fixed", close: async () => {} },
     );
     expect(composition.sessionToken).toBe("fixed");
-    expect(composition.modelConfigured).toBe(false);
+    expect(composition.modelEnabled).toBe(false);
   });
 });
 
@@ -160,7 +160,7 @@ describe("compose", () => {
     home: join(await mkdtemp(join(tmpdir(), "megareviewer-cli-")), "home"),
     logLevel: "info",
   });
-  const options = { grammarsDir: GRAMMARS, staticDir: null, version: "1.2.3" };
+  const options = { grammarsDir: GRAMMARS, staticDir: null, ai: false, version: "1.2.3" };
 
   const composed = async (config: Config): Promise<Composition> => {
     const result = await compose(config, { ...options, logger: new RecordingLogger() });

@@ -446,20 +446,19 @@ describe("tour", () => {
     expect(screen.getByRole("button", { name: "Next →" }).hasAttribute("disabled")).toBe(true);
   });
 
-  it("says when the tour is the fallback grouped by file", async () => {
+  it("says when the model's tour failed and the call-graph tour replaced it", async () => {
     renderReview({
       view: {
         ...fixture,
         analysis: {
           ...analysis,
-          tour:
-            analysis.tour === null ? null : { ...analysis.tour, builtBy: "file-order" as const },
+          tour: analysis.tour === null ? null : { ...analysis.tour, builtBy: "code" as const },
         },
       },
     });
     await loaded();
     expect(
-      screen.getByText("The model's tour wasn't usable, so changes are grouped by file."),
+      screen.getByText("The model's tour wasn't usable, so this one follows the call graph."),
     ).toBeTruthy();
   });
 });

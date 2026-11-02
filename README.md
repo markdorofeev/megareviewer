@@ -1,6 +1,8 @@
 # megareviewer
 
-Turns a GitHub or Bitbucket Cloud pull request into a guided review. You see what the PR was asked to do next to what the code actually does. Changes are sorted by risk, with mechanical ones collapsed and proved. Changes are ordered as a tour, and the decisions the code makes are listed for you to approve or reject. Your verdicts are posted back to the PR as one review.
+Turns a GitHub or Bitbucket Cloud pull request into a guided review. Changes are ordered as a tour that follows the call graph, with each test next to the code it tests. Risky changes (dependencies, schemas, auth, CI, removed tests) stand out, and mechanical ones are collapsed with proof. Your review is posted back to the PR.
+
+With `--ai`, Claude adds what the PR was asked to do next to what the code actually does, a guided tour, and the decisions the code makes for you to approve or reject.
 
 ## Run
 
@@ -10,7 +12,7 @@ Needs Node 22.13 or later.
 npx megareviewer
 ```
 
-It starts a server on `127.0.0.1` and opens the review UI in your browser. `--port <n>` picks the port, `--no-open` skips the browser.
+It starts a server on `127.0.0.1` and opens the review UI in your browser. `--port <n>` picks the port, `--no-open` skips the browser, and `--ai` turns on the Claude analysis.
 
 ```bash
 npx megareviewer doctor
@@ -20,7 +22,7 @@ npx megareviewer doctor
 
 ## Credentials
 
-Set them as environment variables. You need at least one git host and Anthropic.
+Set them as environment variables. You need at least one git host.
 
 **GitHub.** The first one found is used:
 
@@ -39,7 +41,7 @@ Set them as environment variables. You need at least one git host and Anthropic.
 | `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD` | Used instead of the two above when they aren't set: your Bitbucket username and an app password with Account: read, Repositories: read and Pull requests: write. Atlassian removed app passwords in July 2026, so they only work where Bitbucket still accepts them |
 | `BITBUCKET_WORKSPACE` | Optional. The workspace whose PRs the picker lists. It scans the 50 most recently updated repositories; a pasted PR URL always works |
 
-**Anthropic.** `ANTHROPIC_API_KEY`, or a profile from `ant auth login`. Analyses use Claude Haiku 5.5 and are billed to your account.
+**Anthropic.** Only for `--ai`: `ANTHROPIC_API_KEY`, or a profile from `ant auth login`. Analyses use Claude Haiku 5.5 and are billed to your account.
 
 **Jira.** Optional: without it, ticket keys are shown but not fetched.
 
@@ -51,7 +53,7 @@ Set them as environment variables. You need at least one git host and Anthropic.
 
 ## Privacy
 
-Your code goes only to Anthropic's API, for the analysis. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and verdicts are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
+Without `--ai`, your code goes nowhere but your machine and your git host. With it, your code also goes to Anthropic's API, for the analysis. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and verdicts are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
 
 ## Contributing
 

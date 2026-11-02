@@ -106,7 +106,7 @@ Versions are published to npm from CI: pushing a `v*` tag runs every check, buil
 |---|---|---|
 | GitHub | `GITHUB_TOKEN`, else `GH_TOKEN`, else `gh auth token` | For GitHub PRs |
 | Bitbucket Cloud | `BITBUCKET_EMAIL` + `BITBUCKET_API_TOKEN` (scoped Atlassian API token), else `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD`; `BITBUCKET_WORKSPACE` for the picker | For Bitbucket PRs |
-| Anthropic | SDK default resolution: `ANTHROPIC_API_KEY`, else an `ant auth login` profile | Yes |
+| Anthropic | SDK default resolution: `ANTHROPIC_API_KEY`, else an `ant auth login` profile | For `--ai`, which fails at startup without them |
 | Jira | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | No. Without it, ticket keys are shown but not fetched |
 
 Bitbucket app passwords are accepted because existing setups for other tools often have them, and both kinds are the same Basic auth to the adapter. Atlassian removed app passwords in July 2026, so `doctor` points to an API token when one is rejected; rejecting them outright at startup was the alternative.
@@ -115,7 +115,9 @@ At least one git host must be configured. Credentials stay in the server process
 
 ## Analysis pipeline
 
-Input is a PR URL from either host. Output is one analysis, cached by `(host, repo, PR, head SHA, pipeline version)`, so reopening a PR is instant and a new push triggers a fresh analysis.
+Input is a PR URL from either host. Output is one analysis, cached by `(host, repo, PR, head SHA, pipeline version)`, so reopening a PR is instant and a new push triggers a fresh analysis. The pipeline version says whether the model ran, so starting with `--ai` analyzes again.
+
+The model passes run only with `--ai`. Without it, the analysis is complete after prep, and the four model stages show as skipped.
 
 ### 1. Collect
 
@@ -134,11 +136,14 @@ Input is a PR URL from either host. Output is one analysis, cached by `(host, re
   - formatting-only changes (tree-sitter syntax trees are identical before and after).
 - Build call-graph hints with tree-sitter: which changed symbols are defined, and which changed code references them.
 
-The model can't override a mechanical proof. It only classifies the hunks that remain.
+- Classify every remaining hunk as *contract* or *logic* with rules: dependency manifests, schemas and migrations, CI and infrastructure, repository config, auth and security paths, risky calls in added lines, and removed or skipped tests. A rule can only raise a hunk to *contract*; one no rule matches is *logic*.
+- Build the tour from the call-graph hints. Each changed file joins with its tests and docs; files that call each other form a step, read from the entry point, callers before callees; files with no links are grouped by directory. Steps with contract hunks come first. The tour has no step cap: unlike the model's, it can't group by concept, and merging unrelated code to meet a cap would hide the story.
+
+The model can't override a mechanical proof. It only classifies the hunks that remain, and a hunk a rule marks *contract* stays *contract* whatever the model says. When the model's tour fails validation twice, the call-graph tour replaces it.
 
 ### 3. Model passes
 
-All passes use **Claude Haiku 5.5** (`claude-haiku-5-5`) with structured outputs (Zod schemas) and streaming. They share one cached prompt prefix holding the PR context, so the PR is paid for in full once and read from cache by the later passes. Effort is set per pass. Changing the output format or the top-level effort between requests would invalidate that cache, so every pass sends the same output schema (a union of the four outputs, tagged by pass) and sets its effort in a system message after the PR context.
+Only with `--ai`. All passes use **Claude Haiku 5.5** (`claude-haiku-5-5`) with structured outputs (Zod schemas) and streaming. They share one cached prompt prefix holding the PR context, so the PR is paid for in full once and read from cache by the later passes. Effort is set per pass. Changing the output format or the top-level effort between requests would invalidate that cache, so every pass sends the same output schema (a union of the four outputs, tagged by pass) and sets its effort in a system message after the PR context.
 
 | Pass | Output | Effort | Runs |
 |---|---|---|---|
@@ -167,7 +172,7 @@ PR content is untrusted. A description or code comment can contain text aimed at
 
 **Review page.**
 
-- **Top:** intent panel. One line when the code does what was asked; stated and inferred intent side by side, with the mismatches, when it doesn't. Behavior changes are behind a toggle.
+- **Top:** intent panel, with `--ai`. One line when the code does what was asked; stated and inferred intent side by side, with the mismatches, when it doesn't. Behavior changes are behind a toggle.
 - **Left:** tour steps and the decision checklist. Each decision can be approved, rejected or commented on.
 - **Main:** the diff for the current step, with a risk badge on each hunk. Mechanical hunks are collapsed with their proof ("moved, verified identical"), and the user can expand them.
 

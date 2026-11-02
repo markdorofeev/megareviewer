@@ -23,7 +23,7 @@ export interface Status {
   readonly version: string;
   readonly hosts: Readonly<Record<HostKind, HostStatus>>;
   readonly jira: { readonly configured: boolean };
-  readonly model: { readonly configured: boolean };
+  readonly model: { readonly enabled: boolean };
 }
 
 const HOSTS: readonly HostKind[] = HostKinds.options;
@@ -63,7 +63,7 @@ export const createStatusUseCases = (deps: AppDeps, version: string) => ({
       version,
       hosts: { github, bitbucket },
       jira: { configured: deps.tickets.configured },
-      model: { configured: deps.modelConfigured },
+      model: { enabled: deps.modelEnabled },
     };
   },
 });

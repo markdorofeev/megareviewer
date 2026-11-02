@@ -33,7 +33,7 @@ const responses: Record<RouteName, unknown> = {
       bitbucket: { configured: false, user: null, error: null },
     },
     jira: { configured: false },
-    model: { configured: true },
+    model: { enabled: true },
   },
   listPullRequests: {
     items: [

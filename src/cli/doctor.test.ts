@@ -124,11 +124,13 @@ describe("runDoctor", () => {
     expect((await lines({ tickets: failing }))[3]).toMatch(/^✗ Jira: Jira said 401\n/);
   });
 
-  it("fails Anthropic without credentials or when the model can't be fetched", async () => {
+  it("skips Anthropic without credentials, and fails when the model can't be fetched", async () => {
     const missing = await lines({
       anthropic: { configured: false, retrieveModel: async () => ok(undefined) },
     });
-    expect(missing[4]).toMatch(/^✗ Anthropic: no credentials found\n {4}No Anthropic credentials/);
+    expect(missing[4]).toBe(
+      "– Anthropic: not configured: reviews run without the model\n    Set ANTHROPIC_API_KEY or run `ant auth login` to use --ai.",
+    );
     const rejected = await lines({
       anthropic: { configured: true, retrieveModel: async () => err("401 invalid x-api-key") },
     });

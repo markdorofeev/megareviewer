@@ -7,5 +7,5 @@ export const fixtureStatus: StatusResponse = {
     bitbucket: { configured: false, user: null, error: null },
   },
   jira: { configured: true },
-  model: { configured: true },
+  model: { enabled: true },
 };

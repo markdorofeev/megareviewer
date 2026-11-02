@@ -14,6 +14,7 @@ const STATUS_NAMES: Readonly<Record<StageStatus, string>> = {
   running: "running",
   done: "done",
   failed: "failed",
+  skipped: "skipped",
 };
 
 const MARKS: Readonly<Record<StageStatus, string>> = {
@@ -21,6 +22,7 @@ const MARKS: Readonly<Record<StageStatus, string>> = {
   running: "◐",
   done: "●",
   failed: "✗",
+  skipped: "–",
 };
 
 /**

@@ -1,12 +1,16 @@
 import type { HunkId } from "../../domain/diff/index.ts";
-import type {
-  Analysis,
-  AnalysisError,
-  FilesFetched,
-  PullRequest,
-  StageName,
-  StageStatus,
+import {
+  type Analysis,
+  type AnalysisError,
+  classifyByRules,
+  codeTour,
+  type FilesFetched,
+  type PullRequest,
+  raiseByRules,
+  type StageName,
+  type StageStatus,
 } from "../../domain/review/index.ts";
+import { ok } from "../../domain/shared/index.ts";
 import type { GitHost } from "../ports/index.ts";
 import { collect } from "./collect.ts";
 import type { AppDeps } from "./deps.ts";
@@ -14,6 +18,8 @@ import type { UseCaseError } from "./errors.ts";
 import { buildAnalysisInput, fitToModel } from "./model-input.ts";
 import { runDecisions, runIntent, runRisk, runTour } from "./model-passes.ts";
 import { prep } from "./prep.ts";
+
+const MODEL_STAGES: readonly StageName[] = ["intent", "risk", "decisions", "tour"];
 
 type Patch = Partial<Analysis> | ((analysis: Analysis) => Partial<Analysis>);
 
@@ -112,6 +118,35 @@ const stages = async (
 
   await tracker.setStage("prep", "running");
   const prepared = await prep(deps.parser, collected.value);
+  const { proofs, callGraph, required } = prepared;
+  const proofRisk = proofs.flatMap((proof) =>
+    proof.hunkId === null
+      ? []
+      : [
+          {
+            hunkId: proof.hunkId,
+            riskClass: "mechanical" as const,
+            reason: proof.detail,
+            source: "proof" as const,
+          },
+        ],
+  );
+  const ruleRisk = classifyByRules(files, new Set(proofRisk.map((risk) => risk.hunkId)));
+  const prepPatch = { proofs, callGraph };
+
+  // Without the model, risk comes from proofs and rules and the tour from the call graph.
+  if (!deps.modelEnabled) {
+    const risk = [...proofRisk, ...ruleRisk];
+    await tracker.setStage("prep", "done", (analysis) => ({
+      ...prepPatch,
+      risk,
+      tour: codeTour(files, required, callGraph, risk),
+      ...adding(prepared)(analysis),
+    }));
+    for (const stage of MODEL_STAGES) await tracker.setStage(stage, "skipped");
+    return tracker.finish(null);
+  }
+
   const fitted = await fitToModel(
     model,
     buildAnalysisInput({
@@ -122,8 +157,6 @@ const stages = async (
       prepared,
     }),
   );
-  const { proofs, callGraph, required } = prepared;
-  const prepPatch = { proofs, callGraph };
   if (!fitted.ok) {
     await tracker.save((analysis) => ({ ...prepPatch, ...adding(prepared)(analysis) }));
     return tracker.fail("prep", fitted.error);
@@ -150,25 +183,16 @@ const stages = async (
 
   await tracker.setStage("risk", "running");
   await tracker.setStage("decisions", "running");
-  const proofRisk = proofs.flatMap((proof) =>
-    proof.hunkId === null
-      ? []
-      : [
-          {
-            hunkId: proof.hunkId,
-            riskClass: "mechanical" as const,
-            reason: proof.detail,
-            source: "proof" as const,
-          },
-        ],
-  );
   const [risk, decisions] = await Promise.all([
     runRisk(model, input, intent, required, logger).then(async (result) => {
+      const assessments = result.outcome.ok
+        ? [...proofRisk, ...raiseByRules(result.outcome.value.assessments, ruleRisk)]
+        : [];
       await tracker.setStage("risk", result.outcome.ok ? "done" : "failed", (analysis) => ({
-        ...(result.outcome.ok ? { risk: [...proofRisk, ...result.outcome.value.assessments] } : {}),
+        ...(result.outcome.ok ? { risk: assessments } : {}),
         ...adding(result)(analysis),
       }));
-      return result.outcome;
+      return result.outcome.ok ? ok({ ...result.outcome.value, assessments }) : result.outcome;
     }),
     runDecisions(model, input, intent, knownHunks, logger).then(async (result) => {
       await tracker.setStage("decisions", result.outcome.ok ? "done" : "failed", (analysis) => ({
@@ -193,7 +217,15 @@ const stages = async (
   const tour = await runTour(
     model,
     input,
-    { intent, risk: risk.value.forTour, decisions: decisions.value, files, required },
+    {
+      intent,
+      risk: risk.value.forTour,
+      decisions: decisions.value,
+      files,
+      required,
+      callGraph,
+      assessments: risk.value.assessments,
+    },
     logger,
   );
   await tracker.setStage("tour", "done", (analysis) => ({

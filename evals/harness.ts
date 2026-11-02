@@ -45,7 +45,7 @@ export const analyzeCase = async (
       hosts: { [host]: new FakeGitHost({ host, fixtures: [fixture], clock: systemClock }) },
       tickets: new FakeTicketSource({ tickets: fixture.tickets }),
       model: options.model,
-      modelConfigured: true,
+      modelEnabled: true,
       store,
       fileCache: new InMemoryFileCache(),
       parser: options.parser,
