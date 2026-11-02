@@ -6,6 +6,6 @@ import { MODEL } from "./request.ts";
  * of the analysis cache key, so a stale one would serve analyses made with the old prompts.
  */
 export const PROMPT_VERSION = 2;
-export const PROMPT_FINGERPRINT = "48148dfb218342f0";
+export const PROMPT_FINGERPRINT = "336039a64d22dafa";
 
 export const VERSION = `${MODEL}/p${PROMPT_VERSION}`;

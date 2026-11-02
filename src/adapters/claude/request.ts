@@ -3,7 +3,8 @@ import type { ModelPass } from "../../domain/review/index.ts";
 import { PASS_ANSWER_FORMAT } from "./output-schema.ts";
 import { SYSTEM_PROMPT } from "./prompts/system.ts";
 
-export const MODEL = "claude-opus-5-5";
+/** The cheapest model, so a review costs cents. ARCHITECTURE.md has the trade-off. */
+export const MODEL = "claude-haiku-5-5";
 export const MAX_TOKENS = 64_000;
 
 type Effort = "low" | "medium" | "high";
@@ -23,8 +24,6 @@ export const PASS_EFFORT: Readonly<Record<ModelPass, Effort>> = {
 const BASE_EFFORT: Effort = "medium";
 
 export const BETAS = [
-  // fallbacks: "default", which answers a refused request on the model Anthropic recommends.
-  "server-side-fallback-2026-07-01",
   // Effort in a role: "system" message.
   "mid-conversation-output-config-2026-07-01",
 ] as const;
@@ -43,7 +42,6 @@ export const passRequest = (
   model: MODEL,
   max_tokens: MAX_TOKENS,
   betas: [...BETAS],
-  fallbacks: "default",
   thinking: { type: "adaptive" },
   output_config: { effort: BASE_EFFORT, format: PASS_ANSWER_FORMAT },
   system: SYSTEM_PROMPT,

@@ -1,7 +1,7 @@
 import type { Baseline } from "./baseline.ts";
 
-/** Per case before anything was measured: ARCHITECTURE.md's "on the order of $1" plus the judge. */
-export const UNMEASURED_COST_PER_CASE_USD = 1.1;
+/** Per case before anything was measured: a few cents of Haiku passes plus the Opus judge. */
+export const UNMEASURED_COST_PER_CASE_USD = 0.15;
 
 export interface CostEstimate {
   readonly totalUsd: number;

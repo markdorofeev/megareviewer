@@ -4,22 +4,8 @@
       "id": "msg_synthetic_refusal",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-4-8",
-      "content": [
-        {
-          "type": "fallback",
-          "from": {
-            "model": "claude-opus-5-5"
-          },
-          "to": {
-            "model": "claude-opus-4-8"
-          },
-          "trigger": {
-            "type": "refusal",
-            "category": "cyber"
-          }
-        }
-      ],
+      "model": "claude-haiku-5-5",
+      "content": [],
       "stop_reason": "refusal",
       "stop_sequence": null,
       "stop_details": {
@@ -30,7 +16,7 @@
       "container": null,
       "context_management": null,
       "usage": {
-        "input_tokens": 0,
+        "input_tokens": 6250,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
         "cache_creation": {
@@ -38,32 +24,7 @@
           "ephemeral_1h_input_tokens": 0
         },
         "output_tokens": 0,
-        "iterations": [
-          {
-            "type": "message",
-            "model": "claude-opus-5-5",
-            "input_tokens": 6250,
-            "cache_creation_input_tokens": 0,
-            "cache_read_input_tokens": 0,
-            "cache_creation": {
-              "ephemeral_5m_input_tokens": 0,
-              "ephemeral_1h_input_tokens": 0
-            },
-            "output_tokens": 0
-          },
-          {
-            "type": "fallback_message",
-            "model": "claude-opus-4-8",
-            "input_tokens": 6250,
-            "cache_creation_input_tokens": 0,
-            "cache_read_input_tokens": 0,
-            "cache_creation": {
-              "ephemeral_5m_input_tokens": 0,
-              "ephemeral_1h_input_tokens": 0
-            },
-            "output_tokens": 0
-          }
-        ],
+        "iterations": null,
         "server_tool_use": null,
         "service_tier": "standard"
       }
@@ -72,7 +33,7 @@
       "id": "msg_synthetic_max_tokens",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-5-5",
+      "model": "claude-haiku-5-5",
       "content": [
         {
           "type": "thinking",
@@ -108,7 +69,7 @@
       "id": "msg_synthetic_malformed",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-5-5",
+      "model": "claude-haiku-5-5",
       "content": [
         {
           "type": "thinking",
@@ -144,7 +105,7 @@
       "id": "msg_synthetic_outside_schema",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-5-5",
+      "model": "claude-haiku-5-5",
       "content": [
         {
           "type": "thinking",
@@ -180,7 +141,7 @@
       "id": "msg_synthetic_wrong_pass",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-5-5",
+      "model": "claude-haiku-5-5",
       "content": [
         {
           "type": "thinking",
@@ -208,85 +169,6 @@
         },
         "output_tokens": 400,
         "iterations": null,
-        "server_tool_use": null,
-        "service_tier": "standard"
-      }
-    },
-    "servedByFallback": {
-      "id": "msg_synthetic_fallback",
-      "type": "message",
-      "role": "assistant",
-      "model": "claude-opus-4-8",
-      "content": [
-        {
-          "type": "thinking",
-          "thinking": "",
-          "signature": "c2lnbmF0dXJlLXN5bnRoZXRpYy1lcnJvcnM"
-        },
-        {
-          "type": "text",
-          "text": "{\"answer\":{\"pass\":\"intent\",\"intent\":",
-          "citations": null
-        },
-        {
-          "type": "fallback",
-          "from": {
-            "model": "claude-opus-5-5"
-          },
-          "to": {
-            "model": "claude-opus-4-8"
-          },
-          "trigger": {
-            "type": "refusal",
-            "category": "cyber"
-          }
-        },
-        {
-          "type": "text",
-          "text": "{\"answer\":{\"pass\":\"intent\",\"intent\":{\"stated\":{\"summary\":\"Let customers download a plain-text receipt for one of their orders, cached for a configurable time.\",\"sources\":[{\"kind\":\"description\",\"ref\":null},{\"kind\":\"ticket\",\"ref\":\"SHOP-123\"}]},\"inferred\":{\"summary\":\"Adds GET /orders/:id/receipt, which renders a receipt and caches it in memory for a hard-coded hour. Also raises the rate limit tenfold.\",\"behaviorChanges\":[\"New endpoint GET /orders/:id/receipt returns a plain-text receipt for the user's own order, or 404.\",\"Receipts are cached in process memory for one hour, with no eviction.\",\"The rate limit goes from 60 to 600 requests per minute.\"]},\"mismatches\":[{\"kind\":\"unrequested\",\"description\":\"The rate limit is raised from 60 to 600 requests per minute.\",\"hunkIds\":[\"h_fbaf18305007c20a\"]},{\"kind\":\"missing\",\"description\":\"The cache lifetime should be configurable. Config adds cache.ttlSeconds.receipts, but the code uses a hard-coded hour.\",\"hunkIds\":[\"h_2e2332fa455a2146\",\"h_a2e0236601ffc778\"]}]}}}",
-          "citations": null
-        }
-      ],
-      "stop_reason": "end_turn",
-      "stop_sequence": null,
-      "stop_details": null,
-      "container": null,
-      "context_management": null,
-      "usage": {
-        "input_tokens": 6250,
-        "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 0,
-        "cache_creation": {
-          "ephemeral_5m_input_tokens": 0,
-          "ephemeral_1h_input_tokens": 0
-        },
-        "output_tokens": 400,
-        "iterations": [
-          {
-            "type": "message",
-            "model": "claude-opus-5-5",
-            "input_tokens": 6250,
-            "cache_creation_input_tokens": 0,
-            "cache_read_input_tokens": 0,
-            "cache_creation": {
-              "ephemeral_5m_input_tokens": 0,
-              "ephemeral_1h_input_tokens": 0
-            },
-            "output_tokens": 20
-          },
-          {
-            "type": "fallback_message",
-            "model": "claude-opus-4-8",
-            "input_tokens": 6250,
-            "cache_creation_input_tokens": 0,
-            "cache_read_input_tokens": 0,
-            "cache_creation": {
-              "ephemeral_5m_input_tokens": 0,
-              "ephemeral_1h_input_tokens": 0
-            },
-            "output_tokens": 400
-          }
-        ],
         "server_tool_use": null,
         "service_tier": "standard"
       }

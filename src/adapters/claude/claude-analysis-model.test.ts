@@ -54,7 +54,7 @@ describeAnalysisModelContract("claude", () => modelWith(recorded()).model);
 describe("ClaudeAnalysisModel", () => {
   it("names the model and the prompt version", () => {
     expect(modelWith({}).model.version).toBe(VERSION);
-    expect(VERSION).toMatch(/^claude-opus-5-5\/p\d+$/);
+    expect(VERSION).toMatch(/^claude-haiku-5-5\/p\d+$/);
   });
 
   describe("requests", () => {
@@ -104,18 +104,17 @@ describe("ClaudeAnalysisModel", () => {
       );
     });
 
-    it("streams Opus 5.5 with refusal fallbacks and the betas they need", async () => {
+    it("streams Haiku 5.5, which has no refusal fallbacks, with the beta for per-pass effort", async () => {
       const [request] = await runAllPasses();
+      expect(request?.body).not.toHaveProperty("fallbacks");
       expect(request?.body).toMatchObject({
-        model: "claude-opus-5-5",
+        model: "claude-haiku-5-5",
         max_tokens: 64_000,
         stream: true,
-        fallbacks: "default",
         thinking: { type: "adaptive" },
         output_config: { effort: "medium", format: { type: "json_schema" } },
       });
       expect(request?.headers.get("anthropic-beta")?.split(",")).toEqual([
-        "server-side-fallback-2026-07-01",
         "mid-conversation-output-config-2026-07-01",
       ]);
     });
@@ -161,7 +160,7 @@ describe("ClaudeAnalysisModel", () => {
         cacheWriteTokens: 0,
         outputTokens: 261,
       };
-      const price = PRICES["claude-opus-5-5"];
+      const price = PRICES["claude-haiku-5-5"];
       if (price === undefined) throw new Error("no price for the model");
       expect(output.value.usage).toEqual({
         pass: "risk",
@@ -171,32 +170,8 @@ describe("ClaudeAnalysisModel", () => {
       expect(logger.entries).toContainEqual(
         expect.objectContaining({
           level: "info",
-          fields: expect.objectContaining({ pass: "risk", model: "claude-opus-5-5" }),
+          fields: expect.objectContaining({ pass: "risk", model: "claude-haiku-5-5" }),
         }),
-      );
-    });
-
-    it("takes the answer after a fallback and bills every attempt at its model's price", async () => {
-      const { result, logger } = runPass("intent", errors.messages.servedByFallback);
-      const output = await result;
-      if (!output.ok) throw new Error(output.error.message);
-
-      expect(output.value.value).toEqual(smallFeatureIntent);
-      const [opus55, opus48] = [PRICES["claude-opus-5-5"], PRICES["claude-opus-4-8"]];
-      if (opus55 === undefined || opus48 === undefined) throw new Error("missing prices");
-      const attempt = (inputTokens: number, outputTokens: number) => ({
-        inputTokens,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        outputTokens,
-      });
-      expect(output.value.usage).toEqual({
-        pass: "intent",
-        ...attempt(12_500, 420),
-        costUsd: costUsd(opus55, attempt(6250, 20)) + costUsd(opus48, attempt(6250, 400)),
-      });
-      expect(logger.entries).toContainEqual(
-        expect.objectContaining({ fields: expect.objectContaining({ model: "claude-opus-4-8" }) }),
       );
     });
 
@@ -226,7 +201,7 @@ describe("ClaudeAnalysisModel", () => {
       if (message !== undefined) expect(output.error.message).toMatch(message);
     };
 
-    it("reports a refusal that the fallbacks also refused, with its category", () =>
+    it("reports a refusal with its category", () =>
       failsWith("intent", errors.messages.refusal, "refusal", /category: cyber/));
 
     it("reports an answer cut off at the output limit", () =>

@@ -39,7 +39,7 @@ Set them as environment variables. You need at least one git host and Anthropic.
 | `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD` | Used instead of the two above when they aren't set: your Bitbucket username and an app password with Account: read, Repositories: read and Pull requests: write. Atlassian removed app passwords in July 2026, so they only work where Bitbucket still accepts them |
 | `BITBUCKET_WORKSPACE` | Optional. The workspace whose PRs the picker lists. It scans the 50 most recently updated repositories; a pasted PR URL always works |
 
-**Anthropic.** `ANTHROPIC_API_KEY`, or a profile from `ant auth login`. Analyses use Claude Opus 5.5 and are billed to your account.
+**Anthropic.** `ANTHROPIC_API_KEY`, or a profile from `ant auth login`. Analyses use Claude Haiku 5.5 and are billed to your account.
 
 **Jira.** Optional: without it, ticket keys are shown but not fetched.
 

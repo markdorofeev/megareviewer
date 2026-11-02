@@ -7,7 +7,7 @@
       "id": "msg_synthetic_intent",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-5-5",
+      "model": "claude-haiku-5-5",
       "content": [
         {
           "type": "thinking",
@@ -43,7 +43,7 @@
       "id": "msg_synthetic_risk",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-5-5",
+      "model": "claude-haiku-5-5",
       "content": [
         {
           "type": "thinking",
@@ -79,7 +79,7 @@
       "id": "msg_synthetic_decisions",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-5-5",
+      "model": "claude-haiku-5-5",
       "content": [
         {
           "type": "thinking",
@@ -115,7 +115,7 @@
       "id": "msg_synthetic_tour",
       "type": "message",
       "role": "assistant",
-      "model": "claude-opus-5-5",
+      "model": "claude-haiku-5-5",
       "content": [
         {
           "type": "thinking",

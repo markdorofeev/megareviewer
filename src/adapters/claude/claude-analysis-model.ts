@@ -14,7 +14,7 @@ import { PassAnswer } from "./output-schema.ts";
 import { costUsd, HIGHEST_PRICE, PRICES, type TokenCounts } from "./pricing.ts";
 import { type EarlierResults, passMessage } from "./prompts/passes.ts";
 import { renderInput } from "./render-input.ts";
-import { countTokensRequest, MAX_TOKENS, MODEL, passRequest } from "./request.ts";
+import { countTokensRequest, MAX_TOKENS, passRequest } from "./request.ts";
 import { VERSION } from "./version.ts";
 
 export interface ClaudeAnalysisModelOptions {
@@ -28,46 +28,15 @@ export interface ClaudeAnalysisModelOptions {
 type Answer = PassAnswer["answer"];
 type Message = Anthropic.Beta.Messages.BetaMessage;
 
-/** Token counts for one model that worked on the request. */
-interface Attempt extends TokenCounts {
-  readonly model: string;
-}
+const tokenCounts = ({ usage }: Message): TokenCounts => ({
+  inputTokens: usage.input_tokens,
+  cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+  cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+  outputTokens: usage.output_tokens,
+});
 
-/**
- * With fallbacks, top-level usage covers only the attempt that produced the message. The
- * iterations list every attempt, each billed at its own model's prices.
- */
-const attempts = (message: Message): Attempt[] => {
-  const { usage } = message;
-  const iterations = usage.iterations ?? [];
-  if (iterations.length === 0) {
-    return [
-      {
-        model: message.model,
-        inputTokens: usage.input_tokens,
-        cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-        cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
-        outputTokens: usage.output_tokens,
-      },
-    ];
-  }
-  return iterations.map((iteration) => ({
-    model: "model" in iteration && typeof iteration.model === "string" ? iteration.model : MODEL,
-    inputTokens: iteration.input_tokens,
-    cacheReadTokens: iteration.cache_read_input_tokens,
-    cacheWriteTokens: iteration.cache_creation_input_tokens,
-    outputTokens: iteration.output_tokens,
-  }));
-};
-
-/** The text of the model that produced the final answer: after the last fallback switch. */
-const answerText = (message: Message): string => {
-  const lastSwitch = message.content.findLastIndex((block) => block.type === "fallback");
-  return message.content
-    .slice(lastSwitch + 1)
-    .flatMap((block) => (block.type === "text" ? [block.text] : []))
-    .join("");
-};
+const answerText = (message: Message): string =>
+  message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
 
 const parseAnswer = (text: string): Result<Answer, ModelError> => {
   let json: unknown;
@@ -89,23 +58,12 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
   const { logger } = options;
 
   const usageOf = (pass: ModelPass, message: Message): ModelUsage => {
-    const all = attempts(message);
-    const cost = all.reduce((sum, attempt) => {
-      const price = PRICES[attempt.model];
-      if (price === undefined) {
-        logger.warn("No price for model, using the highest known", { model: attempt.model });
-      }
-      return sum + costUsd(price ?? HIGHEST_PRICE, attempt);
-    }, 0);
-    const total = (key: keyof TokenCounts) => all.reduce((sum, attempt) => sum + attempt[key], 0);
-    return {
-      pass,
-      inputTokens: total("inputTokens"),
-      cacheReadTokens: total("cacheReadTokens"),
-      cacheWriteTokens: total("cacheWriteTokens"),
-      outputTokens: total("outputTokens"),
-      costUsd: cost,
-    };
+    const price = PRICES[message.model];
+    if (price === undefined) {
+      logger.warn("No price for model, using the highest known", { model: message.model });
+    }
+    const tokens = tokenCounts(message);
+    return { pass, ...tokens, costUsd: costUsd(price ?? HIGHEST_PRICE, tokens) };
   };
 
   const runPass = async <T>(
@@ -139,7 +97,6 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
     }
 
     const usage = usageOf(pass, message);
-    // A fallback may answer on another model, so the log names the one that did.
     logger.info("Model pass finished", {
       ...usage,
       model: message.model,

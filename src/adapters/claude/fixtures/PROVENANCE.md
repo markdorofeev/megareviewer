@@ -4,8 +4,8 @@ Both files are synthetic: no Anthropic credentials were available while building
 
 | File | Source |
 |---|---|
-| `small-feature.synthetic.json` | A `count_tokens` answer and one final message per pass for the `small-feature` fixture, shaped like the Messages API's documented response (an empty `thinking` block, as Opus 5.5 returns by default, then the JSON answer). The answers are the fixture analysis's own intent, risk, decisions and tour. Usage shows a cache write on the first pass and cache reads on the rest. |
-| `errors.synthetic.json` | Messages that stop on a refusal after fallbacks, on `max_tokens`, with text that isn't JSON, with JSON outside the schema, with another pass's answer, and one answered by a fallback model after the first model declined mid-answer. Error bodies for 400, 401, 403, 429, 500 and 529 in the API's documented shape. |
+| `small-feature.synthetic.json` | A `count_tokens` answer and one final message per pass for the `small-feature` fixture, shaped like the Messages API's documented response (an empty `thinking` block, as Haiku 5.5 returns by default, then the JSON answer). The answers are the fixture analysis's own intent, risk, decisions and tour. Usage shows a cache write on the first pass and cache reads on the rest. |
+| `errors.synthetic.json` | Messages that stop on a refusal, on `max_tokens`, with text that isn't JSON, with JSON outside the schema, and with another pass's answer. Error bodies for 400, 401, 403, 429, 500 and 529 in the API's documented shape. |
 
 ## Recording real responses
 

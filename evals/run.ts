@@ -61,7 +61,7 @@ const estimate = estimateCost(
   baseline,
 );
 console.log(
-  `${selected.length} case${selected.length === 1 ? "" : "s"} on ${JUDGE_MODEL}: about $${estimate.totalUsd.toFixed(2)} ` +
+  `${selected.length} case${selected.length === 1 ? "" : "s"}, judged by ${JUDGE_MODEL}: about $${estimate.totalUsd.toFixed(2)} ` +
     `(${estimate.measured} at their baseline cost, ${estimate.assumed} at ` +
     `$${estimate.assumedPerCaseUsd.toFixed(2)} each${baseline === null ? ", not measured yet" : ""}).`,
 );

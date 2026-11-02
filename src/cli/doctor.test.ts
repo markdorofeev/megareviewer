@@ -50,7 +50,7 @@ describe("runDoctor", () => {
       "✓ GitHub: signed in as lee-park (token from gh auth token)",
       "✓ Bitbucket: signed in as Lee Park, listing PRs in acme",
       "✓ Jira: signed in at https://acme.atlassian.net",
-      "✓ Anthropic: credentials work, claude-opus-5-5 is available",
+      "✓ Anthropic: credentials work, claude-haiku-5-5 is available",
       "✓ Home: /home/lee/.megareviewer is writable and the database opens",
     ]);
   });

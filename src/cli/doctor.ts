@@ -39,7 +39,7 @@ export interface DoctorDeps {
 }
 
 /** The model the Claude adapter uses. */
-const MODEL = "claude-opus-5-5";
+const MODEL = "claude-haiku-5-5";
 /** A key no Jira site has, so a working login answers "missing". */
 const PROBE_TICKET = "MEGAREVIEWER-0";
 

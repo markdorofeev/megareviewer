@@ -42,6 +42,6 @@ describe("prompt version", () => {
   });
 
   it("is part of the version", () => {
-    expect(VERSION).toBe(`claude-opus-5-5/p${PROMPT_VERSION}`);
+    expect(VERSION).toBe(`claude-haiku-5-5/p${PROMPT_VERSION}`);
   });
 });
