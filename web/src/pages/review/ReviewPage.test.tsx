@@ -452,7 +452,8 @@ describe("tour", () => {
         ...fixture,
         analysis: {
           ...analysis,
-          tour: analysis.tour === null ? null : { ...analysis.tour, fallback: true },
+          tour:
+            analysis.tour === null ? null : { ...analysis.tour, builtBy: "file-order" as const },
         },
       },
     });

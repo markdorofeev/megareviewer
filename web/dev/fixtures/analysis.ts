@@ -616,7 +616,7 @@ const analysis: Analysis = {
         hunkIds: [h.dependency],
       },
     ],
-    fallback: false,
+    builtBy: "model",
   },
   warnings: [
     "Full file contents omitted for 1 file to fit the model's limit",

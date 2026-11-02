@@ -252,7 +252,7 @@ export const runTour = async (
         ...step,
         id: TourStepId.parse(`s${index + 1}`),
       })),
-      fallback: false,
+      builtBy: "model",
     },
     usage,
     warnings: [],

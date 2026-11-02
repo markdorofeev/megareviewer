@@ -134,7 +134,7 @@ describe("scoreCase", () => {
 
     const tourFallback = {
       ...smallFeatureAnalysis,
-      tour: { steps: [], fallback: true },
+      tour: { steps: [], builtBy: "file-order" as const },
     };
     expect(scoreCase(tourFallback, labels, oracleVerdict).fallbackUsed).toBe(true);
     const dropped = {

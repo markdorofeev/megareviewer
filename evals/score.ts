@@ -96,7 +96,7 @@ export const scoreCase = (
     firstTryValid: callsTo(analysis, "risk") === 1 && callsTo(analysis, "tour") === 1,
     fallbackUsed:
       analysis.risk.some((risk) => risk.source === "fallback") ||
-      analysis.tour?.fallback === true ||
+      (analysis.tour !== null && analysis.tour.builtBy !== "model") ||
       analysis.warnings.some((warning) => FALLBACK_WARNING.test(warning)),
   };
 };

@@ -48,7 +48,7 @@ describe("tourSteps", () => {
     const steps = analysis.tour?.steps ?? [];
     const partial: Analysis = {
       ...analysis,
-      tour: { steps: steps.slice(0, 2), fallback: false },
+      tour: { steps: steps.slice(0, 2), builtBy: "model" },
     };
     const result = tourSteps(partial, hunkIndex(partial));
     expect(result).toHaveLength(3);

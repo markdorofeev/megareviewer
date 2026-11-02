@@ -33,7 +33,7 @@ describe("fallbackTour", () => {
     const files = [file("src/b.ts", h(3), h(2)), file("README.md", h(5)), file("src/a.ts", h(1))];
     const tour = fallbackTour(files, new Set([h(1), h(2), h(3), h(5)]));
 
-    expect(tour.fallback).toBe(true);
+    expect(tour.builtBy).toBe("file-order");
     expect(tour.steps.map((step) => [step.id, step.title, step.hunkIds])).toEqual([
       ["s1", "README.md", [h(5)]],
       ["s2", "src/a.ts", [h(1)]],
@@ -49,7 +49,10 @@ describe("fallbackTour", () => {
   });
 
   it("is empty when nothing is required", () => {
-    expect(fallbackTour([file("a.ts", h(1))], new Set())).toEqual({ steps: [], fallback: true });
+    expect(fallbackTour([file("a.ts", h(1))], new Set())).toEqual({
+      steps: [],
+      builtBy: "file-order",
+    });
   });
 
   it("passes validateTour and parses as a Tour", () => {

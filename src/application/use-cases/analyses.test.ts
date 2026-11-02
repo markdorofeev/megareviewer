@@ -198,7 +198,7 @@ describe("the analysis pipeline", () => {
     );
     expect(analysis.decisions.map((decision) => decision.id)).toEqual(["d1", "d2", "d3"]);
     expect(analysis.tour?.steps.map((step) => step.id)).toEqual(["s1", "s2", "s3"]);
-    expect(analysis.tour?.fallback).toBe(false);
+    expect(analysis.tour?.builtBy).toBe("model");
     expect(analysis.warnings).toEqual([]);
     expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
     expect(analysis.usage.map((usage) => usage.pass)).toEqual([
@@ -271,7 +271,7 @@ describe("the analysis pipeline", () => {
     ]);
     expect(analysis.risk.every((risk) => risk.source === "proof")).toBe(true);
     expect(analysis.risk).toHaveLength(4);
-    expect(analysis.tour).toEqual({ steps: [], fallback: false });
+    expect(analysis.tour).toEqual({ steps: [], builtBy: "model" });
     expect(analysis.warnings).toEqual([
       "pnpm-lock.yaml changed without a change to package.json or pnpm-workspace.yaml",
     ]);
@@ -691,7 +691,7 @@ describe("the analysis pipeline", () => {
 
       expect(model.callsTo("tour")).toHaveLength(2);
       expect(analysis.status).toBe("complete");
-      expect(analysis.tour?.fallback).toBe(true);
+      expect(analysis.tour?.builtBy).toBe("file-order");
       expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
       expect(analysis.warnings).toEqual([
         "The guided tour didn't cover every hunk exactly once, so hunks are shown in file order",
@@ -709,7 +709,7 @@ describe("the analysis pipeline", () => {
       );
       expect(analysis.tour).toEqual({
         steps: [{ id: "s1", title: "All", explanation: "", hunkIds: smallFeatureHunks }],
-        fallback: false,
+        builtBy: "model",
       });
     });
 
@@ -722,7 +722,7 @@ describe("the analysis pipeline", () => {
       expect(model.callsTo("tour")).toHaveLength(1);
       expect(analysis.status).toBe("complete");
       expect(analysis.stages.tour).toBe("done");
-      expect(analysis.tour?.fallback).toBe(true);
+      expect(analysis.tour?.builtBy).toBe("file-order");
       expect(analysis.warnings).toEqual([
         "The guided tour couldn't be built (Overloaded), so hunks are shown in file order",
       ]);

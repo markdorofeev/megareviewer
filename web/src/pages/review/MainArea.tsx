@@ -62,7 +62,7 @@ export const MainArea = ({
             {heading.step.title}
           </h2>
           <p className="model-text">{heading.step.explanation}</p>
-          {analysis.tour?.fallback === true && (
+          {analysis.tour?.builtBy === "file-order" && (
             <p className="banner">
               The model's tour wasn't usable, so changes are grouped by file.
             </p>

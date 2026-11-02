@@ -296,7 +296,7 @@ export const smallFeatureAnalysis: Analysis = {
         hunkIds: [cacheTtlHunk.id, receiptsConfigHunk.id, rateLimitHunk.id],
       },
     ],
-    fallback: false,
+    builtBy: "model",
   },
   warnings: [],
   usage: [

@@ -21,8 +21,11 @@ export type TourStep = z.infer<typeof TourStep>;
 export const Tour = z
   .object({
     steps: z.array(TourStep).readonly(),
-    /** Built by code in file order because the model's tour failed. */
-    fallback: z.boolean(),
+    /**
+     * model: the tour pass; code: from the call graph, without the model; file-order: one step
+     * per file, when nothing better could be built.
+     */
+    builtBy: z.enum(["model", "code", "file-order"]),
   })
   .readonly();
 export type Tour = z.infer<typeof Tour>;
@@ -48,5 +51,5 @@ export const fallbackTour = (
       });
     }
   }
-  return { steps, fallback: true };
+  return { steps, builtBy: "file-order" };
 };

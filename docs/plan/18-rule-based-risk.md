@@ -1,6 +1,6 @@
 # Stage 18: Rule-based risk
 
-**Status:** In progress (branch stage/18-rule-based-risk)
+**Status:** Done (pushed to main without a PR: 4b84610, 113752f)
 **Depends on:** —
 **Unblocks:** 19, 20, 21
 **Owns:** `src/domain/review/risk-rules.ts` and its tests
@@ -63,7 +63,7 @@ Stage 20 runs it after prep, always. When the model's risk pass also runs, a hun
 
 ## Definition of done
 
-- [ ] Contract PR: `"rule"` in `RiskAssessment.source`, change log line in stage 02. Both are done on the branch; still to split into their own PR.
+- [x] Contract change in its own commit (4b84610), change log line in stage 02.
 - [x] `classifyByRules` with the rules above, exported.
 - [x] Tests above; 90% branch coverage holds.
 
