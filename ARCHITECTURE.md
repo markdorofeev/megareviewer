@@ -147,6 +147,8 @@ All passes use **Claude Opus 5.5** (`claude-opus-5-5`) with structured outputs (
 | Decisions | Decisions the code makes, each with a category, why it matters, and the hunk IDs it rests on | high | In parallel with Risk |
 | Tour | Hunks ordered into concept steps, starting from the entry point, using the call-graph hints | medium | Last, needs Risk and Decisions |
 
+Intent and tour are kept short, because the reviewer reads them before any code. Each intent summary is one sentence, with at most 5 behavior changes. The tour has at most 7 steps, one per concept. Tests, generated files and docs join the step of the code they belong to instead of getting their own. A 12-step tour with a step each for tests, generated types and docs was the first version, and reviewers found it noisy.
+
 The server validates every response: every referenced hunk ID must exist, and the tour must cover every non-mechanical hunk exactly once. On failure it retries the pass once, then shows the error.
 
 PR content is untrusted. A description or code comment can contain text aimed at the model, so:
@@ -165,7 +167,7 @@ PR content is untrusted. A description or code comment can contain text aimed at
 
 **Review page.**
 
-- **Top:** intent panel showing stated and inferred intent side by side, with mismatches highlighted.
+- **Top:** intent panel. One line when the code does what was asked; stated and inferred intent side by side, with the mismatches, when it doesn't. Behavior changes are behind a toggle.
 - **Left:** tour steps and the decision checklist. Each decision can be approved, rejected or commented on.
 - **Main:** the diff for the current step, with a risk badge on each hunk. Mechanical hunks are collapsed with their proof ("moved, verified identical"), and the user can expand them.
 

@@ -166,11 +166,20 @@ details.warnings ul {
   gap: var(--space-5);
 }
 
-.intent-columns[hidden] {
-  display: none;
+.intent-line p {
+  margin: 0 0 var(--space-2);
 }
 
-.intent-column h3 {
+.intent-label {
+  font-weight: 600;
+}
+
+.intent-label.agrees {
+  color: var(--color-success);
+}
+
+.intent-column h3,
+.intent-details h3 {
   margin-bottom: var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
@@ -200,6 +209,25 @@ details.warnings ul {
   background: var(--color-surface-subtle);
   font-size: var(--text-xs);
   line-height: 22px;
+}
+
+.intent-details {
+  margin-top: var(--space-2);
+}
+
+.intent-details summary {
+  width: fit-content;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.intent-details h3 {
+  margin-top: var(--space-3);
+}
+
+.intent-details p {
+  margin: 0;
 }
 
 .behavior-changes {

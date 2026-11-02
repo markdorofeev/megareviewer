@@ -52,4 +52,4 @@ The diff view was designed for a world where code was expensive and every line w
   - Jira tickets mentioned in the description, commits or branch name;
   - the code itself, inferred from what the change actually does.
 
-  Stated intent (description, tickets) and intent inferred from the code are shown side by side. A mismatch between them is a finding in itself: the change does something nobody asked for, or misses something that was asked.
+  Stated intent (description, tickets) and intent inferred from the code are compared. A mismatch between them is a finding in itself: the change does something nobody asked for, or misses something that was asked. So the two are shown side by side only when they disagree. When they agree, one line says the change does what was asked, and the full list of behavior changes sits behind a toggle. Always showing both was the first version. It said the same intent twice and made the intent panel the biggest thing on the page.

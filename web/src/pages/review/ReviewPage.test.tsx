@@ -282,8 +282,13 @@ describe("header", () => {
   });
 });
 
+const withIntent = (change: Partial<NonNullable<typeof analysis.intent>>): AnalysisView => {
+  if (analysis.intent === null) throw new Error("the fixture has no intent");
+  return { ...fixture, analysis: { ...analysis, intent: { ...analysis.intent, ...change } } };
+};
+
 describe("intent panel", () => {
-  it("shows stated and inferred intent with their sources", async () => {
+  it("shows stated and inferred intent side by side when they disagree", async () => {
     renderReview();
     await loaded();
     const intent = screen.getByRole("region", { name: "Intent" });
@@ -299,19 +304,57 @@ describe("intent panel", () => {
     expect(
       within(intent).getByRole("list", { name: "Tickets mentioned but not fetched" }).textContent,
     ).toBe("SHOP-139 · not fetched");
-    expect(within(intent).getAllByRole("listitem").length).toBeGreaterThan(4);
+    expect(within(intent).getByRole("heading", { name: "Inferred from the code" })).toBeTruthy();
+    const details = intent.querySelector("details");
+    expect(details?.open).toBe(false);
+    expect(within(intent).getByText(/^Details/).textContent).toBe(
+      `Details (${analysis.intent?.inferred.behaviorChanges.length})`,
+    );
+    expect(within(intent).queryByRole("heading", { name: "Asked" })).toBeNull();
+  });
+
+  it("is one line when the code does what was asked, with the stated intent in the details", async () => {
+    renderReview({ view: withIntent({ mismatches: [] }) });
+    await loaded();
+    const intent = screen.getByRole("region", { name: "Intent" });
+    expect(within(intent).getByText("✓ Does what was asked:")).toBeTruthy();
+    expect(within(intent).getByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
+    expect(within(intent).queryByRole("heading", { name: "Inferred from the code" })).toBeNull();
+    expect(within(intent).getByRole("list", { name: "Sources" })).toBeTruthy();
+
+    await userEvent.click(within(intent).getByText(/^Details/));
+    expect(intent.querySelector("details")?.open).toBe(true);
+    expect(within(intent).getByRole("heading", { name: "Asked" })).toBeTruthy();
+    expect(within(intent).getByText(analysis.intent?.stated?.summary ?? "")).toBeTruthy();
+  });
+
+  it("is one line from the code when nothing was stated and nothing disagrees", async () => {
+    renderReview({ view: withIntent({ stated: null, mismatches: [] }) });
+    await loaded();
+    const intent = screen.getByRole("region", { name: "Intent" });
+    expect(within(intent).getByText("From the code:")).toBeTruthy();
+    expect(
+      within(intent).getByText("No stated intent: the PR has no description or linked tickets."),
+    ).toBeTruthy();
+    expect(within(intent).queryByText("✓ Does what was asked:")).toBeNull();
+    expect(within(intent).queryByRole("heading", { name: "Asked" })).toBeNull();
+  });
+
+  it("leaves the details out when there's nothing in them", async () => {
+    renderReview({
+      view: withIntent({
+        stated: null,
+        mismatches: [],
+        inferred: { summary: "Renames a variable.", behaviorChanges: [] },
+      }),
+    });
+    await loaded();
+    const intent = screen.getByRole("region", { name: "Intent" });
+    expect(intent.querySelector("details")).toBeNull();
   });
 
   it("says when nothing was stated", async () => {
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...analysis,
-          intent: analysis.intent === null ? null : { ...analysis.intent, stated: null },
-        },
-      },
-    });
+    renderReview({ view: withIntent({ stated: null }) });
     await loaded();
     expect(
       screen.getByText("No stated intent: the PR has no description or linked tickets."),
