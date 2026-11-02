@@ -491,6 +491,7 @@ const analysis: Analysis = {
     decisions: "done",
     tour: "done",
   },
+  filesFetched: null,
   pullRequest,
   files,
   tickets: [ticket],

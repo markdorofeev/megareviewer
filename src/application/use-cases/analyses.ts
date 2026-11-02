@@ -61,6 +61,7 @@ const newAnalysis = (
     decisions: "pending",
     tour: "pending",
   },
+  filesFetched: null,
   pullRequest,
   files: [],
   tickets: [],

@@ -200,6 +200,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.tour?.steps.map((step) => step.id)).toEqual(["s1", "s2", "s3"]);
     expect(analysis.tour?.fallback).toBe(false);
     expect(analysis.warnings).toEqual([]);
+    expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
     expect(analysis.usage.map((usage) => usage.pass)).toEqual([
       "intent",
       "risk",
@@ -211,6 +212,9 @@ describe("the analysis pipeline", () => {
       event.type === "updated" ? [`${event.stage}:${event.status}`] : [event.type],
     );
     expect(updates).toEqual([
+      "collect:running",
+      // Files fetched: none cached, then the one batch.
+      "collect:running",
       "collect:running",
       "collect:done",
       "prep:running",

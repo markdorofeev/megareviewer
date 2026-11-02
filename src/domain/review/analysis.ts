@@ -62,12 +62,20 @@ export type AnalysisError = z.infer<typeof AnalysisError>;
 export const AnalysisStatus = z.enum(["running", "complete", "failed"]);
 export type AnalysisStatus = z.infer<typeof AnalysisStatus>;
 
+/** How far Collect is through fetching the PR's files, counting those already cached. */
+export const FilesFetched = z
+  .object({ done: z.number().int().nonnegative(), total: z.number().int().nonnegative() })
+  .readonly();
+export type FilesFetched = z.infer<typeof FilesFetched>;
+
 export const Analysis = z
   .object({
     id: AnalysisId,
     key: AnalysisKey,
     status: AnalysisStatus,
     stages: z.record(StageName, StageStatus).readonly(),
+    /** null until Collect starts fetching. Defaults for analyses stored before it existed. */
+    filesFetched: FilesFetched.nullable().default(null),
     pullRequest: PullRequest.nullable(),
     files: z.array(FileChange).readonly(),
     tickets: z.array(Ticket).readonly(),

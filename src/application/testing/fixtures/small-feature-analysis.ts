@@ -199,6 +199,7 @@ export const smallFeatureAnalysis: Analysis = {
     decisions: "done",
     tour: "done",
   },
+  filesFetched: { done: 5, total: 5 },
   pullRequest,
   files: smallFeatureFiles,
   tickets: smallFeature.tickets,

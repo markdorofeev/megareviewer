@@ -108,6 +108,26 @@ describe("ReviewPage states", () => {
     expect(mainHeading()).toBe("The receipt endpoint");
   });
 
+  it("says how many files Collect has while it runs", async () => {
+    const { setView } = renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysisInProgress(analysis, 0),
+          pullRequest: analysis.pullRequest,
+          filesFetched: { done: 12, total: 42 },
+        },
+      },
+    });
+    await loaded();
+    const progress = screen.getByRole("list", { name: "Analysis progress" });
+    expect(progress.textContent).toContain("Collect: running · 12 of 42 files");
+
+    setView({ ...fixture, analysis: analysisInProgress(analysis, 1) });
+    await waitFor(() => expect(progress.textContent).toContain("Collect: done"));
+    expect(progress.textContent).not.toContain("files");
+  });
+
   it("shows each section of a running analysis as soon as its data exists", async () => {
     const { setView } = renderReview({
       view: { ...fixture, analysis: analysisInProgress(analysis, 2) },

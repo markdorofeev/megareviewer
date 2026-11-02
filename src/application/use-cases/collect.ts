@@ -1,5 +1,10 @@
 import { type FileChange, parseUnifiedDiff } from "../../domain/diff/index.ts";
-import { extractTicketKeys, type PullRequest, type Ticket } from "../../domain/review/index.ts";
+import {
+  extractTicketKeys,
+  type FilesFetched,
+  type PullRequest,
+  type Ticket,
+} from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { GitHost } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
@@ -29,10 +34,14 @@ export interface Collected {
   readonly warnings: readonly string[];
 }
 
+/** Told how many of the PR's files are in hand: once for the cached ones, then per batch. */
+export type OnFilesFetched = (progress: FilesFetched) => Promise<void>;
+
 export const collect = async (
   deps: AppDeps,
   host: GitHost,
   pullRequest: PullRequest,
+  onFilesFetched: OnFilesFetched = async () => {},
 ): Promise<Result<Collected, UseCaseError>> => {
   const parsed = parseUnifiedDiff(pullRequest.diff);
   if (!parsed.ok) {
@@ -69,6 +78,8 @@ export const collect = async (
     missing.slice(i * FILES_PER_BATCH, (i + 1) * FILES_PER_BATCH),
   );
   const fetched = new Map<number, string | null>();
+  let done = fetches.length - missing.length;
+  await onFilesFetched({ done, total: fetches.length });
   const failures = await mapLimit(batches, BATCH_CONCURRENCY, async (batch) => {
     const contents = await host.getFiles(repo, batch);
     if (!contents.ok) return contents.error;
@@ -80,6 +91,8 @@ export const collect = async (
         await deps.fileCache.put(repo, file, content);
       }
     }
+    done += batch.length;
+    await onFilesFetched({ done, total: fetches.length });
     return null;
   });
   const failure = failures.find((error) => error !== null) ?? null;

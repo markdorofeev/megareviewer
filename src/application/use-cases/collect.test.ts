@@ -119,6 +119,21 @@ describe("collect", () => {
     expect(fetchedPaths(host)).toEqual(firstBatch);
   });
 
+  it("reports how many files are in hand: the cached ones first, then after each batch", async () => {
+    const { host, deps, fileCache } = setup();
+    for (const path of paths) await fileCache.put(repo, { sha: BASE, path }, `cached ${path}`);
+    await fileCache.put(repo, { sha: BASE, path: ".gitattributes" }, null);
+    const reported: { done: number; total: number }[] = [];
+
+    await collect(deps, host, pullRequest, async (progress) => {
+      reported.push(progress);
+    });
+
+    expect(reported).toHaveLength(3);
+    expect(reported[0]).toEqual({ done: 13, total: 25 });
+    expect(reported.at(-1)).toEqual({ done: 25, total: 25 });
+  });
+
   it("doesn't cache a file over 1 MB, which it treats as unavailable", async () => {
     const { host, deps, fileCache } = setup();
     host.setFiles(repo, HEAD, { "src/f0.ts": "x".repeat(1024 * 1024 + 1) });

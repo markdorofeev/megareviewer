@@ -2,6 +2,7 @@ import type { HunkId } from "../../domain/diff/index.ts";
 import type {
   Analysis,
   AnalysisError,
+  FilesFetched,
   PullRequest,
   StageName,
   StageStatus,
@@ -37,6 +38,11 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
     }));
     deps.events.emit(analysis.id, { type: "updated", stage, status });
   };
+  /** Collect is still running, but further along: announced so the page shows the count. */
+  const setFilesFetched = async (filesFetched: FilesFetched) => {
+    await save({ filesFetched });
+    deps.events.emit(analysis.id, { type: "updated", stage: "collect", status: "running" });
+  };
   const finish = async (error: AnalysisError | null) => {
     await save({ status: error === null ? "complete" : "failed", error });
     deps.events.emit(analysis.id, { type: "done" });
@@ -47,6 +53,7 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
     },
     save,
     setStage,
+    setFilesFetched,
     finish,
     fail: async (stage: StageName, failure: UseCaseError) => {
       await setStage(stage, "failed");
@@ -93,7 +100,7 @@ const stages = async (
   const { model, logger } = deps;
 
   await tracker.setStage("collect", "running");
-  const collected = await collect(deps, host, pullRequest);
+  const collected = await collect(deps, host, pullRequest, tracker.setFilesFetched);
   if (!collected.ok) return tracker.fail("collect", collected.error);
   const { files, tickets, missingTicketKeys } = collected.value;
   await tracker.setStage("collect", "done", (analysis) => ({

@@ -5,6 +5,7 @@ export {
   AnalysisKey,
   AnalysisStatus,
   analysisId,
+  FilesFetched,
   ModelPass,
   ModelUsage,
   PipelineVersion,

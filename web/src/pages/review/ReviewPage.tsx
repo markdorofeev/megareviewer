@@ -322,7 +322,7 @@ const Review = ({
         onPublish={() => void openPublish()}
       />
 
-      {!complete && <ProgressStrip stages={analysis.stages} />}
+      {!complete && <ProgressStrip stages={analysis.stages} filesFetched={analysis.filesFetched} />}
       {analysis.error !== null && (
         <div className="banner danger failed-banner" role="alert">
           <p>
