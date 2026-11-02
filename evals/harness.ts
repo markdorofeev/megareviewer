@@ -4,6 +4,7 @@ import {
   FakeGitHost,
   FakeTicketSource,
   InMemoryAnalysisStore,
+  InMemoryFileCache,
   type PullRequestFixture,
 } from "../src/application/testing/index.ts";
 import { createUseCases } from "../src/application/use-cases/index.ts";
@@ -46,6 +47,7 @@ export const analyzeCase = async (
       model: options.model,
       modelConfigured: true,
       store,
+      fileCache: new InMemoryFileCache(),
       parser: options.parser,
       events,
       clock: systemClock,

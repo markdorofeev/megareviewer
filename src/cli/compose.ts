@@ -177,6 +177,7 @@ export const compose = async (
           model: modelConfigured ? claude : unconfiguredModel(claude.version),
           modelConfigured,
           store,
+          fileCache: store,
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),
           clock,
           logger,

@@ -13,6 +13,7 @@ import {
   bitbucketBugfix,
   describeAnalysisModelContract,
   describeAnalysisStoreContract,
+  describeFileCacheContract,
   describeGitHostContract,
   describeTicketSourceContract,
   FakeAnalysisModel,
@@ -21,6 +22,7 @@ import {
   FakeTicketSource,
   FixedClock,
   InMemoryAnalysisStore,
+  InMemoryFileCache,
   RecordingLogger,
   smallFeature,
   smallFeatureInput,
@@ -89,6 +91,7 @@ describeTicketSourceContract("fake", {
 });
 
 describeAnalysisStoreContract("in-memory", () => new InMemoryAnalysisStore());
+describeFileCacheContract("in-memory", () => new InMemoryFileCache());
 
 describeAnalysisModelContract("fake", () => new FakeAnalysisModel());
 

@@ -181,8 +181,11 @@ SQLite at `~/.megareviewer/db.sqlite`:
 | `decision_reviews` | analysis, decision ID, status (pending / approved / rejected), comment |
 | `published_comments` | analysis, comment key (a decision or the summary), host comment ID, published time |
 | `publications` | analysis, review URL, published time |
+| `file_contents` | host, repo, commit SHA, path, content (or none, when the file isn't at that commit), fetched time |
 
 The pipeline version changes whenever prompts or schemas change, which invalidates cached analyses.
+
+`file_contents` keeps every file fetched from a host. A file at a commit never changes, so an analysis that failed partway, or another analysis of the same commits, doesn't fetch it again. Rows older than 30 days are dropped when megareviewer starts. A file over 1 MB isn't kept, because the analysis doesn't use it.
 
 ## Local server security
 

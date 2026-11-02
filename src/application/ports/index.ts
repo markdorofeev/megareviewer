@@ -18,6 +18,7 @@ export type {
   SymbolReference,
   Token,
 } from "./code-parser.ts";
+export type { FileCache } from "./file-cache.ts";
 export type { FileAt, GitHost, PublishOptions } from "./git-host.ts";
 export type { LogFields, Logger } from "./logger.ts";
 export type { TicketLookup, TicketSource } from "./ticket-source.ts";

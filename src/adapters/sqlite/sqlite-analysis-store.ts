@@ -1,7 +1,13 @@
 import { chmodSync, closeSync, openSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { AnalysisStore, Clock, Logger } from "../../application/ports/index.ts";
+import type {
+  AnalysisStore,
+  Clock,
+  FileAt,
+  FileCache,
+  Logger,
+} from "../../application/ports/index.ts";
 import {
   Analysis,
   type AnalysisId,
@@ -9,6 +15,7 @@ import {
   CommentKey,
   DecisionVerdict,
   PublicationReceipt,
+  type RepoRef,
 } from "../../domain/review/index.ts";
 import { MIGRATIONS, migrate } from "./migrations.ts";
 
@@ -19,7 +26,11 @@ export interface SqliteAnalysisStoreOptions {
   readonly logger: Logger;
 }
 
-export type SqliteAnalysisStore = AnalysisStore & { close(): void };
+/** Fetched files are kept this long, so the cache doesn't grow without bound. */
+export const FILE_CACHE_DAYS = 30;
+
+/** The analyses, review state and fetched files, in one database. */
+export type SqliteAnalysisStore = AnalysisStore & FileCache & { close(): void };
 
 const PayloadRow = z.object({ id: z.string(), payload: z.string() });
 const VerdictRow = z.object({
@@ -30,6 +41,7 @@ const VerdictRow = z.object({
 });
 const PostedCommentRow = z.object({ comment_key: z.string(), host_comment_id: z.string() });
 const ReceiptRow = z.object({ receipt: z.string() });
+const FileRow = z.object({ content: z.string().nullable() });
 
 const parseJson = (text: string): unknown => {
   try {
@@ -107,6 +119,22 @@ export const openSqliteAnalysisStore = (
      ON CONFLICT (analysis_id, comment_key) DO UPDATE SET
        host_comment_id = excluded.host_comment_id, posted_at = excluded.posted_at`,
   );
+  const selectFile = db.prepare(
+    `SELECT content FROM file_contents
+     WHERE host = ? AND owner = ? AND repo = ? AND sha = ? AND path = ?`,
+  );
+  const upsertFile = db.prepare(
+    `INSERT INTO file_contents (host, owner, repo, sha, path, content, fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (host, owner, repo, sha, path) DO UPDATE SET
+       content = excluded.content, fetched_at = excluded.fetched_at`,
+  );
+  const pruned = db
+    .prepare("DELETE FROM file_contents WHERE fetched_at < ?")
+    .run(new Date(Date.parse(clock.now()) - FILE_CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString());
+  if (Number(pruned.changes) > 0) {
+    logger.debug("Dropped old cached files", { count: Number(pruned.changes) });
+  }
   const selectPublication = db.prepare("SELECT receipt FROM publications WHERE analysis_id = ?");
   const upsertPublication = db.prepare(
     `INSERT INTO publications (analysis_id, url, published_at, receipt)
@@ -229,6 +257,15 @@ export const openSqliteAnalysisStore = (
 
     async recordPublication(id: AnalysisId, receipt: PublicationReceipt) {
       upsertPublication.run(id, receipt.url, receipt.publishedAt, JSON.stringify(receipt));
+    },
+
+    async get(repo: RepoRef, { sha, path }: FileAt) {
+      const row = selectFile.get(repo.host, repo.owner, repo.repo, sha, path);
+      return row === undefined ? null : { content: FileRow.parse(row).content };
+    },
+
+    async put(repo: RepoRef, { sha, path }: FileAt, content: string | null) {
+      upsertFile.run(repo.host, repo.owner, repo.repo, sha, path, content, clock.now());
     },
 
     close() {

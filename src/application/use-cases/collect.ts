@@ -60,13 +60,34 @@ export const collect = async (
           : [{ side: "head" as const, sha: pullRequest.headSha, path: file.path }]),
       ]),
   ];
-  const batches = Array.from({ length: Math.ceil(fetches.length / FILES_PER_BATCH) }, (_, i) =>
-    fetches.slice(i * FILES_PER_BATCH, (i + 1) * FILES_PER_BATCH),
+  // A file at a commit never changes, so what an earlier attempt fetched is still good.
+  const cached = await Promise.all(fetches.map((fetch) => deps.fileCache.get(repo, fetch)));
+  const missing = fetches
+    .map((fetch, index) => ({ ...fetch, index }))
+    .filter(({ index }) => cached[index] === null);
+  const batches = Array.from({ length: Math.ceil(missing.length / FILES_PER_BATCH) }, (_, i) =>
+    missing.slice(i * FILES_PER_BATCH, (i + 1) * FILES_PER_BATCH),
   );
-  const results = await mapLimit(batches, BATCH_CONCURRENCY, async (batch) => ({
-    batch,
-    contents: await host.getFiles(repo, batch),
-  }));
+  const fetched = new Map<number, string | null>();
+  const failures = await mapLimit(batches, BATCH_CONCURRENCY, async (batch) => {
+    const contents = await host.getFiles(repo, batch);
+    if (!contents.ok) return contents.error;
+    // Cached batch by batch, so a later failure keeps what this one fetched.
+    for (const [i, file] of batch.entries()) {
+      const content = contents.value[i] ?? null;
+      fetched.set(file.index, content);
+      if (content === null || fitsSize(content) !== null) {
+        await deps.fileCache.put(repo, file, content);
+      }
+    }
+    return null;
+  });
+  const failure = failures.find((error) => error !== null) ?? null;
+  if (failure !== null) {
+    return err(
+      appError("host-error", `Couldn't fetch the pull request's files: ${failure.message}`),
+    );
+  }
 
   let gitattributes: string | null = null;
   const baseContents = new Map<string, string | null>();
@@ -75,20 +96,10 @@ export const collect = async (
     if (file.status === "added") baseContents.set(file.path, null);
     if (file.status === "deleted") headContents.set(file.path, null);
   }
-  for (const { batch, contents } of results) {
-    if (!contents.ok) {
-      return err(
-        appError(
-          "host-error",
-          `Couldn't fetch the pull request's files: ${contents.error.message}`,
-        ),
-      );
-    }
-    for (const [i, { side, path }] of batch.entries()) {
-      const content = fitsSize(contents.value[i] ?? null);
-      if (side === "attributes") gitattributes = content;
-      else (side === "base" ? baseContents : headContents).set(path, content);
-    }
+  for (const [index, { side, path }] of fetches.entries()) {
+    const content = fitsSize(cached[index]?.content ?? fetched.get(index) ?? null);
+    if (side === "attributes") gitattributes = content;
+    else (side === "base" ? baseContents : headContents).set(path, content);
   }
 
   return ok({

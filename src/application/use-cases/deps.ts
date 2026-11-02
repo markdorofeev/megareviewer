@@ -5,6 +5,7 @@ import type {
   AnalysisStore,
   Clock,
   CodeParser,
+  FileCache,
   GitHost,
   Logger,
   TicketSource,
@@ -17,6 +18,7 @@ export interface AppDeps {
   readonly model: AnalysisModel;
   readonly modelConfigured: boolean;
   readonly store: AnalysisStore;
+  readonly fileCache: FileCache;
   readonly parser: CodeParser;
   readonly events: AnalysisEvents;
   readonly clock: Clock;

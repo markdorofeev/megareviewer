@@ -42,6 +42,16 @@ export const MIGRATIONS: readonly string[] = [
     receipt TEXT NOT NULL           -- PublicationReceipt as JSON
   );
   `,
+  `
+  CREATE TABLE file_contents (
+    host TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
+    sha TEXT NOT NULL, path TEXT NOT NULL,
+    content TEXT,                   -- NULL: the file isn't at this commit
+    fetched_at TEXT NOT NULL,
+    PRIMARY KEY (host, owner, repo, sha, path)
+  );
+  CREATE INDEX file_contents_fetched_at ON file_contents (fetched_at);
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

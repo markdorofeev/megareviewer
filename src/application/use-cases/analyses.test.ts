@@ -22,6 +22,7 @@ import {
   FakeTicketSource,
   FixedClock,
   InMemoryAnalysisStore,
+  InMemoryFileCache,
   type PullRequestFixture,
   RecordingLogger,
   refactorMove,
@@ -52,6 +53,7 @@ const setup = (
     tickets?: FakeTicketSource;
     parser?: CodeParser;
     onlyGithub?: boolean;
+    fileCache?: InMemoryFileCache;
   } = {},
 ) => {
   const clock = new FixedClock("2026-10-21T09:00:00Z");
@@ -62,6 +64,7 @@ const setup = (
     new FakeTicketSource({ tickets: allFixtures.flatMap((fixture) => fixture.tickets) });
   const model = options.model ?? new FakeAnalysisModel();
   const store = new RecordingStore();
+  const fileCache = options.fileCache ?? new InMemoryFileCache();
   const parser = options.parser ?? new FakeCodeParser();
   const logger = new RecordingLogger();
 
@@ -88,6 +91,7 @@ const setup = (
       model,
       modelConfigured: true,
       store,
+      fileCache,
       parser,
       events,
       clock,
@@ -123,6 +127,7 @@ const setup = (
     tickets,
     model,
     store,
+    fileCache,
     logger,
     emitted,
     useCases,

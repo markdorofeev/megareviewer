@@ -28,6 +28,7 @@ describe("migrate", () => {
     expect(tableNames(db)).toEqual([
       "analyses",
       "decision_reviews",
+      "file_contents",
       "publications",
       "published_comments",
     ]);
@@ -46,23 +47,25 @@ describe("migrate", () => {
       ('a_0123456789abcdef', 'github', 'acme', 'shop', 1, 'sha', 'v1', 'complete', '{}', 't', 't')`);
     const later = [...MIGRATIONS, "ALTER TABLE analyses ADD COLUMN reviewed_by TEXT"];
 
-    expect(migrate(db, later)).toEqual([2]);
+    expect(migrate(db, later)).toEqual(
+      Array.from({ length: later.length - 1 }, (_, index) => index + 2),
+    );
     expect(migrate(db, later)).toEqual([]);
-    expect(schemaVersion(db)).toBe(2);
+    expect(schemaVersion(db)).toBe(later.length);
     expect(db.prepare("SELECT id, reviewed_by FROM analyses").all()).toEqual([
       { id: "a_0123456789abcdef", reviewed_by: null },
     ]);
   });
 
   it("rolls back a failed migration and stays at the last good version", () => {
-    const db = databaseAt(1);
+    const db = databaseAt(MIGRATIONS.length);
     const broken = [
       ...MIGRATIONS,
       "CREATE TABLE notes (id TEXT); INSERT INTO no_such_table VALUES (1)",
     ];
 
     expect(() => migrate(db, broken)).toThrow(/no_such_table/);
-    expect(schemaVersion(db)).toBe(1);
+    expect(schemaVersion(db)).toBe(MIGRATIONS.length);
     expect(tableNames(db)).not.toContain("notes");
   });
 

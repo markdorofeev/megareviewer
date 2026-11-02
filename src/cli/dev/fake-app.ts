@@ -10,6 +10,7 @@ import {
   FakeGitHost,
   FakeTicketSource,
   InMemoryAnalysisStore,
+  InMemoryFileCache,
   type PullRequestFixture,
   smallFeature,
 } from "../../application/testing/index.ts";
@@ -152,6 +153,7 @@ export const createFakeApp = async (options: {
       model: failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url),
       modelConfigured: true,
       store: new InMemoryAnalysisStore(),
+      fileCache: new InMemoryFileCache(),
       parser: options.parser,
       clock,
       logger: options.logger,

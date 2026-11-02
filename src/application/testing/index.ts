@@ -1,5 +1,6 @@
 export { describeAnalysisModelContract } from "./contracts/analysis-model-contract.ts";
 export { describeAnalysisStoreContract } from "./contracts/analysis-store-contract.ts";
+export { describeFileCacheContract } from "./contracts/file-cache-contract.ts";
 export {
   describeGitHostContract,
   type GitHostContractSetup,
@@ -21,4 +22,5 @@ export { FixedClock } from "./fixed-clock.ts";
 export { createFixtureFetch, type RecordedExchange } from "./fixture-fetch.ts";
 export * from "./fixtures/index.ts";
 export { InMemoryAnalysisStore } from "./in-memory-analysis-store.ts";
+export { InMemoryFileCache } from "./in-memory-file-cache.ts";
 export { type LogEntry, RecordingLogger } from "./recording-logger.ts";

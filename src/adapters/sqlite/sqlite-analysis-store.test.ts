@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
   describeAnalysisStoreContract,
+  describeFileCacheContract,
   FixedClock,
   RecordingLogger,
   smallFeatureAnalysis,
@@ -26,8 +27,12 @@ const tempPath = (): string => {
 };
 
 const open: SqliteAnalysisStore[] = [];
-const openStore = (path: string, logger = new RecordingLogger()): SqliteAnalysisStore => {
-  const store = openSqliteAnalysisStore({ path, clock: new FixedClock(), logger });
+const openStore = (
+  path: string,
+  logger = new RecordingLogger(),
+  clock = new FixedClock(),
+): SqliteAnalysisStore => {
+  const store = openSqliteAnalysisStore({ path, clock, logger });
   open.push(store);
   return store;
 };
@@ -66,6 +71,35 @@ const receipt: PublicationReceipt = {
 
 describeAnalysisStoreContract("sqlite-memory", () => openStore(":memory:"));
 describeAnalysisStoreContract("sqlite-file", () => openStore(tempPath()));
+describeFileCacheContract("sqlite-memory", () => openStore(":memory:"));
+describeFileCacheContract("sqlite-file", () => openStore(tempPath()));
+
+describe("the file cache", () => {
+  const repo = { host: "github", owner: "acme", repo: "shop" } as const;
+  const file = { sha: "a".repeat(40), path: "a.ts" };
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("keeps files across reopening", async () => {
+    const path = tempPath();
+    await openStore(path).put(repo, file, "kept");
+    expect(await openStore(path).get(repo, file)).toEqual({ content: "kept" });
+  });
+
+  it("drops files fetched more than 30 days before it opens", async () => {
+    const path = tempPath();
+    const clock = new FixedClock();
+    const store = openStore(path, new RecordingLogger(), clock);
+    await store.put(repo, file, "old");
+    clock.advance(10 * DAY);
+    await store.put(repo, { ...file, path: "b.ts" }, "newer");
+    store.close();
+
+    clock.advance(21 * DAY);
+    const reopened = openStore(path, new RecordingLogger(), clock);
+    expect(await reopened.get(repo, file)).toBeNull();
+    expect(await reopened.get(repo, { ...file, path: "b.ts" })).toEqual({ content: "newer" });
+  });
+});
 
 describe("openSqliteAnalysisStore", () => {
   it("keeps data across reopening without re-running migrations", async () => {
