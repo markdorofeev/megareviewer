@@ -1,6 +1,6 @@
 # Stage 21: Risk-weighted review page
 
-**Status:** Not started
+**Status:** Done (pushed to main without a PR)
 **Depends on:** 18
 **Unblocks:** 22
 **Owns:** `web/src/diff/`, `web/src/pages/review/TourNav.tsx`, `web/src/pages/review/MainArea.tsx`, `web/dev/fixtures/`
@@ -35,8 +35,8 @@ Colors come from the existing `--risk-*` tokens. Contrast stays AA in both theme
 
 ## Definition of done
 
-- [ ] Tasks above, with component tests.
-- [ ] Screenshot of light and dark in the PR.
+- [x] Tasks above, with component tests.
+- [x] Checked in the browser against fake mode without the model (`fake-main --no-ai`).
 
 ## Open issues
 
@@ -44,4 +44,8 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+- **No new dev fixture.** Fake mode got `--no-ai` instead, which runs the real pipeline without the model on the fake host's fixtures, so the page shows what the code actually builds. The mock fixture stays the model-on analysis the component tests use.
+- **Sidebar counts.** Each step shows its contract hunks; the bar under it shows changed lines by risk class, mechanical ones in place included. The totals count hunks, plus one per file-level proof.
+- **Contract only** filters the step and file views, never a decision or mismatch in focus. It's stored per analysis as `contract-only:<id>`.
+- **App config is contract,** found in the browser: `config/app.yaml` read as logic. Stage 18's rules gained an app config rule.
+- **Step titles are plain text.** Backticks showed literally, because model text is rendered as text.

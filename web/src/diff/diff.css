@@ -26,8 +26,26 @@
   scroll-margin-top: var(--space-4);
 }
 
+/* Contract hunks are where attention goes: a bar, a tinted header, and the reason in view. */
 .hunk-card.risk-contract {
   border-left: 3px solid var(--risk-contract-bg);
+}
+
+.hunk-card.risk-contract .hunk-header {
+  background: var(--color-danger-subtle);
+}
+
+.hunk-contract-reason {
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+/* Mechanical hunks among the changes to review: one quiet row each. */
+.collapsed-hunk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
 }
 
 .hunk-card.highlighted {

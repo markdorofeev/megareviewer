@@ -34,7 +34,7 @@ Every required hunk is in exactly one step; mechanical hunks are in none. `valid
 
 ### Titles and explanations
 
-No prose is invented. A step's title is its longest call chain of symbols from the hints, up to three: `` `login()` → `verifySession()` → `loadKey()` ``, with "and N more" for the step's units not on the chain. A step without a chain is titled by its directory (`src/adapters/github`). The explanation lists the step's files and test files: "4 files in src/api and src/auth, tested in session.test.ts."
+No prose is invented. A step's title is its longest call chain of symbols from the hints, up to three, as plain text: `login → verifySession → loadKey`, with "and N more" for the step's units not on the chain. A step without a chain is titled by its directory (`src/adapters/github`). The explanation lists the step's files and test files: "4 files in src/api and src/auth, tested in session.test.ts."
 
 ### Limits
 

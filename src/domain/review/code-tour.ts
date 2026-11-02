@@ -201,7 +201,7 @@ export const codeTour = (
       }
     };
     for (const unit of group) walk(unit, [], new Set([unit]));
-    const chain = best.map((symbol) => `\`${symbol}\``).join(" → ");
+    const chain = best.join(" → ");
     const rest = group.length - (best.length + 1);
     return rest > 0 ? `${chain} and ${rest} more` : chain;
   };

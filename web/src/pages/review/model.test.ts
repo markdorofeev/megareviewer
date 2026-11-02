@@ -7,7 +7,11 @@ import {
   inReadingOrder,
   mechanicalCount,
   readingOrder,
+  riskMix,
+  riskTotals,
   tourSteps,
+  trailingProofs,
+  withMechanicalInPlace,
 } from "./model.ts";
 import { formatCost, formatTokens } from "./UsageFooter.tsx";
 
@@ -87,8 +91,8 @@ describe("reading order", () => {
 
 describe("mechanicalCount", () => {
   it("counts mechanical hunks and file-level proofs, as the mechanical group lists them", () => {
-    expect(mechanicalCount(analysis)).toBe(6);
-    expect(mechanicalCount({ ...analysis, proofs: [] })).toBe(0);
+    expect(mechanicalCount(analysis.proofs)).toBe(6);
+    expect(mechanicalCount([])).toBe(0);
   });
 });
 
@@ -98,5 +102,66 @@ describe("usage formatting", () => {
     expect(formatTokens(182_400)).toBe("182k");
     expect(formatTokens(2_350_000)).toBe("2.4M");
     expect(formatCost(0.9349)).toBe("$0.93");
+  });
+});
+
+describe("withMechanicalInPlace", () => {
+  const index = hunkIndex(analysis);
+
+  it("puts a file's later mechanical hunk after the step's last hunk from that file", () => {
+    expect(withMechanicalInPlace([h.receiptRoute, h.retryAndCache], index)).toEqual([
+      h.receiptRoute,
+      h.formatMoneyRemoved,
+      h.retryAndCache,
+    ]);
+  });
+
+  it("puts an earlier mechanical hunk before the step's first hunk from that file", () => {
+    const proved: Analysis = {
+      ...analysis,
+      proofs: [
+        ...analysis.proofs,
+        { path: "src/routes/orders.ts", hunkId: h.routeImports, kind: "whitespace", detail: "w" },
+      ],
+    };
+    expect(withMechanicalInPlace([h.receiptRoute], hunkIndex(proved))).toEqual([
+      h.routeImports,
+      h.receiptRoute,
+      h.formatMoneyRemoved,
+    ]);
+  });
+
+  it("adds nothing for files without mechanical hunks, and places each hunk once", () => {
+    expect(withMechanicalInPlace([h.dependency], index)).toEqual([h.dependency]);
+    expect(withMechanicalInPlace([h.routeImports, h.receiptRoute], index)).toEqual([
+      h.routeImports,
+      h.receiptRoute,
+      h.formatMoneyRemoved,
+    ]);
+  });
+});
+
+describe("risk counts", () => {
+  const index = hunkIndex(analysis);
+
+  it("adds up a step's changed lines by risk class", () => {
+    const mix = riskMix([h.dependency, h.receiptRoute, h.formatMoneyRemoved], index);
+    expect(mix.contract).toBeGreaterThan(0);
+    expect(mix.mechanical).toBeGreaterThan(0);
+    expect(riskMix([h.retryAndCache], index)).toMatchObject({ contract: 0, mechanical: 0 });
+  });
+
+  it("counts every hunk and file-level proof once across the pull request", () => {
+    const totals = riskTotals(analysis, index);
+    const hunks = analysis.files.flatMap((file) => file.hunks).length;
+    const fileLevel = analysis.proofs.filter((proof) => proof.hunkId === null).length;
+    expect(totals.contract + totals.logic + totals.mechanical).toBe(hunks + fileLevel);
+    expect(totals.mechanical).toBe(mechanicalCount(analysis.proofs));
+  });
+
+  it("leaves mechanical hunks of files with other changes out of the last entry", () => {
+    const trailing = trailingProofs(analysis, index);
+    expect(trailing.some((proof) => proof.hunkId === h.formatMoneyRemoved)).toBe(false);
+    expect(trailing).toHaveLength(analysis.proofs.length - 1);
   });
 });

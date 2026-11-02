@@ -140,6 +140,8 @@ export const createFakeApp = async (options: {
   readonly version: string;
   readonly staticDir: string | null;
   readonly sessionToken?: string;
+  /** Run the fake model passes, as `--ai` does. On unless false. */
+  readonly modelEnabled?: boolean;
 }): Promise<FakeApp> => {
   const clock = systemClock;
   const github = new FakeGitHost({ host: "github", fixtures: fakeFixtures, clock });
@@ -151,7 +153,7 @@ export const createFakeApp = async (options: {
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
       model: failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url),
-      modelEnabled: true,
+      modelEnabled: options.modelEnabled ?? true,
       store: new InMemoryAnalysisStore(),
       fileCache: new InMemoryFileCache(),
       parser: options.parser,

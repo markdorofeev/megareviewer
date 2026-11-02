@@ -139,7 +139,7 @@ describe("ReviewPage states", () => {
     expect(screen.getByText("Working out the intent…")).toBeTruthy();
     expect(mainHeading()).toBe("Changes by file");
     expect(within(mainArea()).getAllByRole("region", { name: /, lines / })).toHaveLength(5);
-    expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 6" })).toBeTruthy();
+    expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
     expect(screen.getByText("Building the tour…")).toBeTruthy();
 
     setView({ ...fixture, analysis: analysisInProgress(analysis, 4) });
@@ -441,9 +441,54 @@ describe("tour", () => {
   it("ends with the mechanical changes", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(within(tour()).getByRole("button", { name: "Mechanical changes (6)" }));
-    expect(screen.getByRole("heading", { name: "Mechanical changes 6" })).toBeTruthy();
+    await userEvent.click(
+      within(tour()).getByRole("button", { name: "Generated and mechanical (5)" }),
+    );
+    expect(screen.getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Next →" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("shows a mechanical hunk collapsed in its file's step, expanding to its card", async () => {
+    renderReview();
+    await loaded();
+    const row = within(mainArea()).getByRole("button", {
+      name: /^src\/routes\/orders\.ts, .*moved/,
+    });
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    const regions = within(mainArea()).getAllByRole("region").length;
+
+    await userEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(within(mainArea()).getAllByRole("region")).toHaveLength(regions + 1);
+  });
+
+  it("shows the risk totals and each step's contract hunks", async () => {
+    renderReview();
+    await loaded();
+    expect(within(tour()).getByText(/^\d+ contract$/)).toBeTruthy();
+    expect(
+      within(tour()).getByRole("button", { name: /The new dependency/ }).textContent,
+    ).toContain("1 contract");
+  });
+
+  it("shows only contract hunks when asked, remembers it, and shows the rest again", async () => {
+    renderReview();
+    await loaded();
+    const all = within(mainArea()).getAllByRole("region").length;
+    const toggle = within(tour()).getByRole("checkbox", { name: "Contract changes only" });
+
+    await userEvent.click(toggle);
+    const shown = within(mainArea()).queryAllByRole("region");
+    expect(shown.length).toBeLessThan(all);
+    expect(shown.every((card) => card.classList.contains("risk-contract"))).toBe(true);
+    expect(window.localStorage.getItem(`megareviewer:contract-only:${id}`)).toBe("true");
+
+    await userEvent.click(within(tour()).getByRole("button", { name: /The new dependency/ }));
+    expect(within(mainArea()).getAllByRole("region")).toHaveLength(1);
+
+    await userEvent.click(toggle);
+    await userEvent.click(within(tour()).getByRole("button", { name: /The receipt endpoint/ }));
+    expect(within(mainArea()).getAllByRole("region")).toHaveLength(all);
   });
 
   it("says when the model's tour failed and the call-graph tour replaced it", async () => {

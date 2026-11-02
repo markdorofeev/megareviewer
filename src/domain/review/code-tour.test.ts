@@ -67,7 +67,7 @@ describe("codeTour", () => {
     expect(tour.steps).toEqual([
       {
         id: "s1",
-        title: "`verifySession`",
+        title: "verifySession",
         explanation: "3 files in src/api and src/auth, tested in session.test.ts.",
         hunkIds: [h(1), h(2), h(3)],
       },
@@ -82,13 +82,13 @@ describe("codeTour", () => {
       calls(h(3), h(4), "d"),
       calls(h(4), h(5), "e"),
     ];
-    expect(tourOf(files, hints).steps[0]?.title).toBe("`b` → `c` → `d` and 1 more");
+    expect(tourOf(files, hints).steps[0]?.title).toBe("b → c → d and 1 more");
   });
 
   it("names a pair of units by the first symbol between them", () => {
     const files = [file("src/a.ts", h(1)), file("src/b.ts", h(2))];
     const hints = [calls(h(1), h(2), "zeta"), calls(h(1), h(2), "alpha")];
-    expect(tourOf(files, hints).steps[0]?.title).toBe("`alpha`");
+    expect(tourOf(files, hints).steps[0]?.title).toBe("alpha");
   });
 
   it("makes a step per call chain, the one with contract hunks first", () => {
@@ -102,8 +102,8 @@ describe("codeTour", () => {
     const tour = tourOf(files, hints, contract(h(4)));
 
     expect(shape(tour)).toEqual([
-      ["`two`", [h(3), h(4)]],
-      ["`one`", [h(1), h(2)]],
+      ["two", [h(3), h(4)]],
+      ["one", [h(1), h(2)]],
     ]);
   });
 

@@ -22,16 +22,20 @@ import {
   type MainView,
   mechanicalCount,
   readingOrder,
+  riskMix,
+  riskTotals,
   sameView,
   type TourEntry,
   tourSteps,
+  trailingProofs,
+  withMechanicalInPlace,
 } from "./model.ts";
 import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { ShortcutsDialog } from "./ShortcutsDialog.tsx";
 import { type ShortcutAction, useShortcuts } from "./shortcuts.ts";
-import { parseStrings, useStoredState } from "./storage.ts";
+import { parseBoolean, parseStrings, useStoredState } from "./storage.ts";
 import { TourNav } from "./TourNav.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useVerdicts } from "./useVerdicts.ts";
@@ -112,7 +116,27 @@ const Review = ({
   const index = useMemo(() => hunkIndex(analysis), [analysis]);
   const steps = useMemo(() => tourSteps(analysis, index), [analysis, index]);
   const order = useMemo(() => readingOrder(analysis, steps), [analysis, steps]);
-  const mechanical = useMemo(() => mechanicalCount(analysis), [analysis]);
+  const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
+  const mechanical = mechanicalCount(trailing);
+  const totals = useMemo(() => riskTotals(analysis, index), [analysis, index]);
+  const contractHunks = useMemo(
+    () =>
+      new Set(
+        analysis.risk.flatMap((risk) => (risk.riskClass === "contract" ? [risk.hunkId] : [])),
+      ),
+    [analysis.risk],
+  );
+  const { mixes, contractCounts } = useMemo(
+    () => ({
+      mixes: new Map(
+        steps.map((step) => [step.id, riskMix(withMechanicalInPlace(step.hunkIds, index), index)]),
+      ),
+      contractCounts: new Map(
+        steps.map((step) => [step.id, step.hunkIds.filter((id) => contractHunks.has(id)).length]),
+      ),
+    }),
+    [steps, index, contractHunks],
+  );
   const tourReady = analysis.tour !== null;
   const entries = useMemo(
     (): readonly TourEntry[] => [
@@ -147,6 +171,11 @@ const Review = ({
   const entryIndex = entries.findIndex((entry) => sameView(entry, mainView));
 
   const [visitedList, setVisited] = useStoredState(`visited:${analysisId}`, NONE, parseStrings);
+  const [contractOnly, setContractOnly] = useStoredState(
+    `contract-only:${analysisId}`,
+    false,
+    parseBoolean,
+  );
   const visited = useMemo(() => new Set(visitedList), [visitedList]);
   const mainKey = entryKey(mainView);
   useEffect(() => {
@@ -191,16 +220,24 @@ const Review = ({
       if (step !== undefined) {
         return {
           heading: { kind: "step", step, number: number + 1, of: steps.length },
-          ids: step.hunkIds,
+          ids: withMechanicalInPlace(step.hunkIds, index),
         };
       }
     }
     if (mainView.kind === "files") {
-      return { heading: { kind: "files" }, ids: hunksInPathOrder(analysis, index) };
+      return {
+        heading: { kind: "files" },
+        ids: withMechanicalInPlace(hunksInPathOrder(analysis, index), index),
+      };
     }
     return { heading: { kind: "mechanical" }, ids: [] };
   }, [analysis, focus, index, mainView, order, steps]);
-  const items = useMemo(() => index.items(shown.ids), [index, shown.ids]);
+  // "Contract changes only" narrows the tour, never a decision or mismatch the reviewer opened.
+  const filtered = contractOnly && focus === null;
+  const items = useMemo(
+    () => index.items(filtered ? shown.ids.filter((id) => contractHunks.has(id)) : shown.ids),
+    [index, shown.ids, filtered, contractHunks],
+  );
 
   // j starts from a new view's first hunk. A view the reviewer picked scrolls to its top; one that
   // changes by itself, like the tour arriving, doesn't move the page.
@@ -367,6 +404,11 @@ const Review = ({
             <TourNav
               steps={steps}
               mechanicalCount={mechanical}
+              mixes={mixes}
+              contractCounts={contractCounts}
+              totals={totals}
+              contractOnly={contractOnly}
+              onContractOnly={(value) => setContractOnly(() => value)}
               current={focus === null ? mainView : null}
               visited={visited}
               onSelect={goTo}
@@ -436,6 +478,8 @@ const Review = ({
             highlightedHunkIds={shown.highlighted}
             focusedHunkId={focusedHunkId}
             mechanicalCount={mechanical}
+            trailingProofs={trailing}
+            contractOnly={filtered}
             onFocusHunk={setFocusedHunkId}
             onBack={() => changeFocus(() => null)}
             onPrevious={previousEntry === undefined ? null : () => goTo(previousEntry)}

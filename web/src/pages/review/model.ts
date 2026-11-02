@@ -1,4 +1,9 @@
-import type { FileChange, Hunk, HunkId } from "../../../../src/domain/diff/index.ts";
+import type {
+  FileChange,
+  Hunk,
+  HunkId,
+  MechanicalProof,
+} from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
   type DecisionId,
@@ -37,15 +42,20 @@ export const hunkIndex = (analysis: Analysis) => {
   for (const file of analysis.files)
     for (const hunk of file.hunks) hunks.set(hunk.id, { hunk, file });
   const risk = new Map(analysis.risk.map((assessment) => [assessment.hunkId, assessment]));
-  const mechanical = new Set(
-    analysis.proofs.flatMap((proof) => (proof.hunkId === null ? [] : [proof.hunkId])),
-  );
+  const proofs = new Map<HunkId, MechanicalProof[]>();
+  for (const proof of analysis.proofs) {
+    if (proof.hunkId !== null)
+      proofs.set(proof.hunkId, [...(proofs.get(proof.hunkId) ?? []), proof]);
+  }
+  const mechanical = new Set(proofs.keys());
   const riskOf = (hunkId: HunkId): RiskAssessment =>
     risk.get(hunkId) ?? { hunkId, riskClass: "logic", reason: UNCLASSIFIED, source: "fallback" };
   const items = (ids: readonly HunkId[]): HunkItem[] =>
     ids.flatMap((id) => {
       const found = hunks.get(id);
-      return found === undefined ? [] : [{ ...found, risk: riskOf(id) }];
+      return found === undefined
+        ? []
+        : [{ ...found, risk: riskOf(id), proofs: proofs.get(id) ?? [] }];
     });
   return { hunks, mechanical, items };
 };
@@ -100,10 +110,10 @@ export const inReadingOrder = (
   );
 
 /** One row per mechanical hunk, plus one per file-level proof, as the mechanical group shows. */
-export const mechanicalCount = (analysis: Analysis): number => {
+export const mechanicalCount = (proofs: readonly MechanicalProof[]): number => {
   const hunks = new Set<HunkId>();
   let fileLevel = 0;
-  for (const proof of analysis.proofs) {
+  for (const proof of proofs) {
     if (proof.hunkId === null) fileLevel += 1;
     else hunks.add(proof.hunkId);
   }
@@ -114,3 +124,75 @@ export const entryKey = (entry: MainView): string =>
   entry.kind === "step" ? entry.stepId : entry.kind;
 
 export const sameView = (a: MainView, b: MainView): boolean => entryKey(a) === entryKey(b);
+
+/**
+ * A step's hunks with the mechanical hunks of its files put back in place, so a whitespace fix
+ * next to a logic change reads in context. Each mechanical hunk goes right before the step's
+ * next hunk from its file, or after the last one when it comes later in the file.
+ */
+export const withMechanicalInPlace = (ids: readonly HunkId[], index: HunkIndex): HunkId[] => {
+  const result: HunkId[] = [];
+  const placed = new Set<HunkId>(ids);
+  const fileOf = (id: HunkId) => index.hunks.get(id)?.file;
+  const mechanicalBefore = (file: FileChange, id: HunkId | null): HunkId[] => {
+    const at = id === null ? file.hunks.length : file.hunks.findIndex((hunk) => hunk.id === id);
+    return file.hunks
+      .slice(0, at)
+      .map((hunk) => hunk.id)
+      .filter((hunkId) => index.mechanical.has(hunkId) && !placed.has(hunkId));
+  };
+  const lastOfFile = new Map<FileChange, number>();
+  for (const id of ids) {
+    const file = fileOf(id);
+    if (file !== undefined) {
+      const before = mechanicalBefore(file, id);
+      for (const hunkId of before) placed.add(hunkId);
+      result.push(...before);
+    }
+    result.push(id);
+    if (file !== undefined) lastOfFile.set(file, result.length);
+  }
+  // Trailing mechanical hunks, inserted from the end so earlier positions don't move.
+  for (const [file, position] of [...lastOfFile].sort((a, b) => b[1] - a[1])) {
+    const after = mechanicalBefore(file, null);
+    for (const hunkId of after) placed.add(hunkId);
+    result.splice(position, 0, ...after);
+  }
+  return result;
+};
+
+/** Changed lines by risk class, for a step's bar in the sidebar. */
+export type RiskMix = Readonly<Record<RiskAssessment["riskClass"], number>>;
+
+const changedLines = (hunk: Hunk): number =>
+  hunk.lines.filter((line) => line.kind !== "context").length;
+
+export const riskMix = (ids: readonly HunkId[], index: HunkIndex): RiskMix => {
+  const mix = { contract: 0, logic: 0, mechanical: 0 };
+  for (const item of index.items(ids)) {
+    const riskClass = index.mechanical.has(item.hunk.id) ? "mechanical" : item.risk.riskClass;
+    mix[riskClass] += changedLines(item.hunk);
+  }
+  return mix;
+};
+
+/** Hunks by risk class across the pull request: the totals above the tour. */
+export const riskTotals = (analysis: Analysis, index: HunkIndex): RiskMix => {
+  const totals = { contract: 0, logic: 0, mechanical: 0 };
+  for (const item of index.items([...index.hunks.keys()])) {
+    totals[index.mechanical.has(item.hunk.id) ? "mechanical" : item.risk.riskClass] += 1;
+  }
+  totals.mechanical += analysis.proofs.filter((proof) => proof.hunkId === null).length;
+  return totals;
+};
+
+/**
+ * Proofs the last tour entry shows: file-level ones, and those in files with nothing else to
+ * review. A mechanical hunk in a file with other changes shows in place in that file's step.
+ */
+export const trailingProofs = (analysis: Analysis, index: HunkIndex): MechanicalProof[] => {
+  const reviewed = new Set(
+    [...index.hunks].flatMap(([id, { file }]) => (index.mechanical.has(id) ? [] : [file.path])),
+  );
+  return analysis.proofs.filter((proof) => proof.hunkId === null || !reviewed.has(proof.path));
+};

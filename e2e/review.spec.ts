@@ -97,7 +97,7 @@ test("the tour moves with the keyboard and marks visited steps", async ({ page }
 
 test("mechanical changes are collapsed until expanded", async ({ page }) => {
   await openReview(page, PR.refactorMove, "Tidy up utilities");
-  await tourEntry(page, /Mechanical changes/).click();
+  await tourEntry(page, /Generated and mechanical/).click();
   const group = page.getByRole("region", { name: /Mechanical changes/ });
   const toggles = group.getByRole("button", { expanded: false });
   await expect(toggles.first()).toBeVisible();

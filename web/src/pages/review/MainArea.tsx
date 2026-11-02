@@ -1,5 +1,5 @@
 import { type Ref, useId } from "react";
-import type { HunkId } from "../../../../src/domain/diff/index.ts";
+import type { HunkId, MechanicalProof } from "../../../../src/domain/diff/index.ts";
 import type { Analysis, TourStep } from "../../../../src/domain/review/index.ts";
 import { DiffView, FileNotices, type HunkItem, MechanicalGroup } from "../../diff/index.ts";
 import type { MainView } from "./model.ts";
@@ -24,6 +24,8 @@ export const MainArea = ({
   highlightedHunkIds,
   focusedHunkId,
   mechanicalCount,
+  trailingProofs,
+  contractOnly,
   onFocusHunk,
   onBack,
   onPrevious,
@@ -37,6 +39,10 @@ export const MainArea = ({
   readonly highlightedHunkIds?: ReadonlySet<HunkId>;
   readonly focusedHunkId: HunkId | null;
   readonly mechanicalCount: number;
+  /** The proofs of the last tour entry: files with nothing else to review. */
+  readonly trailingProofs: readonly MechanicalProof[];
+  /** Only contract hunks are in `items`. */
+  readonly contractOnly: boolean;
   readonly onFocusHunk: (id: HunkId) => void;
   readonly onBack: () => void;
   readonly onPrevious: (() => void) | null;
@@ -92,6 +98,12 @@ export const MainArea = ({
         </>
       )}
 
+      {contractOnly && items.length === 0 && view.kind !== "mechanical" && (
+        <p className="muted">
+          No contract changes here. Turn off “Contract changes only” to see the rest.
+        </p>
+      )}
+
       <DiffView
         items={items}
         highlightedHunkIds={highlightedHunkIds}
@@ -104,7 +116,7 @@ export const MainArea = ({
           {view.kind === "mechanical" && mechanicalCount === 0 && (
             <p className="muted">No mechanical changes in this pull request.</p>
           )}
-          <MechanicalGroup files={analysis.files} proofs={analysis.proofs} risk={analysis.risk} />
+          <MechanicalGroup files={analysis.files} proofs={trailingProofs} risk={analysis.risk} />
           <FileNotices files={analysis.files} />
         </>
       )}

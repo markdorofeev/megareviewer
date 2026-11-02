@@ -52,6 +52,17 @@ const SCHEMA_DIRECTORIES = new Set(["migrations", "migrate"]);
 const CI_BASENAMES = new Set([".gitlab-ci.yml", "bitbucket-pipelines.yml", "Jenkinsfile"]);
 const INFRASTRUCTURE_EXTENSIONS = new Set([".tf", ".tfvars"]);
 const CONFIG_BASENAMES = new Set([".npmrc", "CODEOWNERS", ".gitattributes"]);
+const APP_CONFIG_EXTENSIONS = new Set([
+  ".yaml",
+  ".yml",
+  ".json",
+  ".toml",
+  ".ini",
+  ".properties",
+  ".conf",
+  ".cfg",
+]);
+const APP_CONFIG_DIRECTORIES = new Set(["config", "configs", "conf", "settings"]);
 const SECURITY_WORDS = new Set([
   "admin",
   "auth",
@@ -121,6 +132,16 @@ const PATH_RULES: readonly PathRule[] = [
       name.startsWith(".yarnrc") ||
       /^tsconfig.*\.json$/.test(name)
       ? `changes repository config (${name})`
+      : null;
+  },
+  (path) => {
+    const name = basename(path);
+    const inConfig = directories(path).some((directory) =>
+      APP_CONFIG_DIRECTORIES.has(directory.toLowerCase()),
+    );
+    return APP_CONFIG_EXTENSIONS.has(extension(path)) &&
+      (inConfig || /^(config|settings|application)\./i.test(name))
+      ? `changes app config (${name})`
       : null;
   },
   (path) =>

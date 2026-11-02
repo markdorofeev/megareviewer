@@ -103,6 +103,9 @@ export const HunkCard = memo(function HunkCard({
             ✓ {proof.detail}
           </span>
         ))}
+        {risk?.riskClass === "contract" && (
+          <span className="hunk-contract-reason model-text">{risk.reason}</span>
+        )}
         {risk !== null && <RiskBadge risk={risk} />}
       </header>
       <div

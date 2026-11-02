@@ -40,6 +40,7 @@ const TEXT_PAIRS: readonly (readonly [string, string])[] = [
   ...SURFACES.flatMap((surface) => TEXT_ON_SURFACES.map((text) => [surface, text] as const)),
   ["color-accent-bg", "color-on-accent"],
   ["color-danger-subtle", "color-text"],
+  ["color-danger-subtle", "color-danger"],
   ["color-warning-subtle", "color-text"],
   ["risk-contract-bg", "risk-contract-text"],
   ["risk-logic-bg", "risk-logic-text"],

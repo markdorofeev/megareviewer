@@ -158,6 +158,14 @@ const [h1, h2, h3] = smallFeatureHunks;
 if (h1 === undefined || h2 === undefined || h3 === undefined) {
   throw new Error("small-feature has six hunks");
 }
+/** small-feature's first three hunks are in config/app.yaml, which a contract rule matches. */
+const configRule = (hunkId: HunkId) => ({
+  hunkId,
+  riskClass: "contract" as const,
+  reason: "changes app config (app.yaml)",
+  source: "rule" as const,
+});
+const configHunks = new Set(smallFeatureFiles[0]?.hunks.map((hunk) => hunk.id));
 /** Well-formed, but not a hunk of any fixture. */
 const unknownHunk = HunkId.parse("h_ffffffffffffffff");
 const logic = (hunkId: HunkId) => ({ hunkId, riskClass: "logic" as const, reason: "Logic" });
@@ -191,12 +199,11 @@ describe("the analysis pipeline", () => {
     expect(analysis.callGraph.map((hint) => hint.symbol)).toContain("renderReceipt");
     expect(analysis.intent?.inferred.summary).toBe("Changes 3 file(s).");
     expect(analysis.risk).toEqual(
-      smallFeatureHunks.map((hunkId) => ({
-        hunkId,
-        riskClass: "logic",
-        reason: "Ordinary code change",
-        source: "model",
-      })),
+      smallFeatureHunks.map((hunkId) =>
+        configHunks.has(hunkId)
+          ? configRule(hunkId)
+          : { hunkId, riskClass: "logic", reason: "Ordinary code change", source: "model" },
+      ),
     );
     expect(analysis.decisions.map((decision) => decision.id)).toEqual(["d1", "d2", "d3"]);
     expect(analysis.tour?.steps.map((step) => step.id)).toEqual(["s1", "s2", "s3"]);
@@ -576,15 +583,12 @@ describe("the analysis pipeline", () => {
         `${h3} has no risk class. Classify every hunk sent in full exactly once.`,
       ]);
       expect(analysis.status).toBe("complete");
+      // The model's fallback for h2 and h3 is logic; the config rule raises all three.
       expect(analysis.risk).toEqual([
-        { ...logic(h1), source: "model" },
+        configRule(h1),
         ...smallFeatureHunks.slice(3).map((id) => ({ ...logic(id), source: "model" })),
-        ...[h2, h3].map((hunkId) => ({
-          hunkId,
-          riskClass: "logic",
-          reason: "Not classified by the model",
-          source: "fallback",
-        })),
+        configRule(h2),
+        configRule(h3),
       ]);
       expect(analysis.warnings).toEqual([
         "The model didn't classify 2 hunks, so they're shown as logic",
@@ -606,11 +610,16 @@ describe("the analysis pipeline", () => {
 
     it("repairs the first answer when the retry fails", async () => {
       const model = new FakeAnalysisModel();
-      model.script("risk", ok(smallFeatureHunks.slice(1).map(logic)), err(modelError("network")));
+      const last = smallFeatureHunks.at(-1);
+      model.script(
+        "risk",
+        ok(smallFeatureHunks.slice(0, -1).map(logic)),
+        err(modelError("network")),
+      );
       const { analyze, logger } = setup({ model });
       const analysis = await analyze();
       expect(analysis.status).toBe("complete");
-      expect(analysis.risk.find((risk) => risk.hunkId === h1)?.source).toBe("fallback");
+      expect(analysis.risk.find((risk) => risk.hunkId === last)?.source).toBe("fallback");
       expect(logger.entries.map((entry) => entry.message)).toContain(
         "A model pass retry failed; repairing the first answer",
       );
