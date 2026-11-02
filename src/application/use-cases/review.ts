@@ -4,8 +4,11 @@ import {
   buildPublication,
   type DecisionId,
   type DecisionVerdict,
+  type HunkComment,
+  hunkHasLine,
   type Publication,
   type PublicationReceipt,
+  type PublicationVerdict,
   type Verdict,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
@@ -33,6 +36,15 @@ const isAuthorOf = async (host: GitHost | undefined, analysis: Analysis): Promis
   const user = await host.currentUser();
   return user.ok && user.value.id === analysis.pullRequest.author.id;
 };
+
+/** What the reviewer adds when publishing, beyond decision verdicts. */
+export interface ReviewInput {
+  readonly hunkComments: readonly HunkComment[];
+  /** The reviewer's verdict, or null for the one the decisions imply. */
+  readonly verdict: PublicationVerdict | null;
+}
+
+const NO_REVIEW_INPUT: ReviewInput = { hunkComments: [], verdict: null };
 
 /** Reading the analysis, recording verdicts, and publishing the review. */
 export const createReviewUseCases = (deps: AppDeps) => {
@@ -67,18 +79,44 @@ export const createReviewUseCases = (deps: AppDeps) => {
     return stale;
   };
 
-  const publicationFor = async (analysis: Analysis, summary: string): Promise<Publication> =>
-    buildPublication({
-      analysis,
-      verdicts: await deps.store.getVerdicts(analysis.id),
-      summary,
-      isAuthor: await isAuthorOf(deps.hosts[analysis.key.ref.repo.host], analysis),
+  const publicationFor = async (
+    analysis: Analysis,
+    summary: string,
+    review: ReviewInput,
+  ): Promise<Result<Publication, UseCaseError>> => {
+    const hunks = new Map(
+      analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
+    );
+    // A comment on a line the diff doesn't show would land on the wrong line, or fail on the host.
+    const misplaced = review.hunkComments.find((comment) => {
+      const hunk = hunks.get(comment.hunkId);
+      return hunk === undefined || !hunkHasLine(hunk, comment.side, comment.line);
     });
+    if (misplaced !== undefined) {
+      return err(
+        appError(
+          "bad-request",
+          `A comment is on ${misplaced.side} line ${misplaced.line} of hunk ${misplaced.hunkId}, which the diff doesn't show`,
+        ),
+      );
+    }
+    return ok(
+      buildPublication({
+        analysis,
+        verdicts: await deps.store.getVerdicts(analysis.id),
+        summary,
+        isAuthor: await isAuthorOf(deps.hosts[analysis.key.ref.repo.host], analysis),
+        hunkComments: review.hunkComments,
+        verdict: review.verdict,
+      }),
+    );
+  };
 
   const publish = async (
     analysis: Analysis,
     summary: string,
     allowStale: boolean,
+    review: ReviewInput,
   ): Promise<Result<PublicationReceipt, UseCaseError>> => {
     const { id, key } = analysis;
     // One publication per analysis.
@@ -95,7 +133,9 @@ export const createReviewUseCases = (deps: AppDeps) => {
       );
     }
 
-    const publication = await publicationFor(analysis, summary);
+    const built = await publicationFor(analysis, summary, review);
+    if (!built.ok) return built;
+    const publication = built.value;
     const alreadyPosted = await deps.store.getPostedComments(id);
     const published = await host.value.publish(key.ref, publication, {
       headSha: key.headSha,
@@ -151,21 +191,23 @@ export const createReviewUseCases = (deps: AppDeps) => {
     async previewPublication(
       id: AnalysisId,
       summary: string,
+      review: ReviewInput = NO_REVIEW_INPUT,
     ): Promise<Result<Publication, UseCaseError>> {
       const analysis = await getComplete(id);
-      return analysis.ok ? ok(await publicationFor(analysis.value, summary)) : analysis;
+      return analysis.ok ? publicationFor(analysis.value, summary, review) : analysis;
     },
 
     async publishReview(
       id: AnalysisId,
       summary: string,
       allowStale: boolean,
+      review: ReviewInput = NO_REVIEW_INPUT,
     ): Promise<Result<PublicationReceipt, UseCaseError>> {
       const analysis = await getComplete(id);
       if (!analysis.ok) return analysis;
       const running = publishing.get(id);
       if (running !== undefined) return running;
-      const attempt = publish(analysis.value, summary, allowStale).finally(() =>
+      const attempt = publish(analysis.value, summary, allowStale, review).finally(() =>
         publishing.delete(id),
       );
       publishing.set(id, attempt);

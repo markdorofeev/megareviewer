@@ -13,12 +13,19 @@ import type {
   UseCaseError,
   UseCases,
 } from "../../application/use-cases/index.ts";
+import type { HunkComment, PublicationVerdict } from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type Assert<T extends true> = T;
 /** The application repeats the contract's error codes; this stops compiling when they drift. */
 export type ErrorCodesMatch = Assert<Same<AppErrorCode, ErrorCode>>;
+
+/** The review fields of a preview or publish request, with what's left out filled in. */
+const reviewInput = (body: {
+  readonly hunkComments?: readonly HunkComment[] | undefined;
+  readonly verdict?: PublicationVerdict | null | undefined;
+}) => ({ hunkComments: body.hunkComments ?? [], verdict: body.verdict ?? null });
 
 export const errorResponse = (c: Context, error: UseCaseError): Response => {
   const body: ErrorResponse = { error };
@@ -88,8 +95,10 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     retryAnalysis: ({ params }) => useCases.retryAnalysis(params.id),
     putVerdict: ({ params, body }) =>
       useCases.recordVerdict(params.id, params.decisionId, body.verdict, body.comment),
-    previewPublication: ({ params, body }) => useCases.previewPublication(params.id, body.summary),
-    publish: ({ params, body }) => useCases.publishReview(params.id, body.summary, body.allowStale),
+    previewPublication: ({ params, body }) =>
+      useCases.previewPublication(params.id, body.summary, reviewInput(body)),
+    publish: ({ params, body }) =>
+      useCases.publishReview(params.id, body.summary, body.allowStale, reviewInput(body)),
   };
   register(app, routes.getStatus, handlers.getStatus);
   register(app, routes.listPullRequests, handlers.listPullRequests);

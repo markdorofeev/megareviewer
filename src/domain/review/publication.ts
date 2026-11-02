@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { HunkId } from "../diff/index.ts";
+import { type Hunk, HunkId } from "../diff/index.ts";
 import type { Analysis } from "./analysis.ts";
 import type { DecisionId, DecisionVerdict, Verdict } from "./decision.ts";
 import { HttpUrl, Timestamp } from "./primitives.ts";
@@ -7,11 +7,35 @@ import { HttpUrl, Timestamp } from "./primitives.ts";
 export const PublicationVerdict = z.enum(["approve", "request_changes", "comment"]);
 export type PublicationVerdict = z.infer<typeof PublicationVerdict>;
 
-/** "summary", or "decision:<DecisionId>" for a decision's inline comment. */
+/**
+ * "summary", "decision:<DecisionId>" for a decision's inline comment, or
+ * "hunk:<HunkId>:<side>:<line>" for a comment the reviewer wrote on a line of a hunk.
+ */
 export const CommentKey = z
   .string()
-  .regex(/^(summary|decision:d[1-9][0-9]*)$/)
+  .regex(
+    /^(summary|decision:d[1-9][0-9]*|hunk:h_[0-9a-f]{16}(-[2-9]|-[1-9][0-9]+)?:(new|old):[1-9][0-9]*)$/,
+  )
   .brand<"CommentKey">();
+
+/** A comment the reviewer wrote on one line of a hunk: new is a head-side line, old a base one. */
+export const HunkComment = z
+  .object({
+    hunkId: HunkId,
+    side: z.enum(["new", "old"]),
+    line: z.number().int().positive(),
+    body: z.string(),
+  })
+  .readonly();
+export type HunkComment = z.infer<typeof HunkComment>;
+
+/** Whether a hunk shows the line a comment is on, on that side. */
+export const hunkHasLine = (hunk: Hunk, side: HunkComment["side"], line: number): boolean =>
+  hunk.lines.some((diffLine) =>
+    side === "new"
+      ? diffLine.kind !== "del" && diffLine.newLine === line
+      : diffLine.kind !== "add" && diffLine.oldLine === line,
+  );
 export type CommentKey = z.infer<typeof CommentKey>;
 
 export const PublicationComment = z
@@ -50,8 +74,10 @@ const FOOTER = "_Reviewed with megareviewer_";
 
 /**
  * What publishing sends: the verdict, one inline comment per decision the reviewer rejected or
- * commented on, and a summary listing every decision. Pure, so the preview and the published
- * review are the same thing.
+ * commented on and per comment written on a hunk, and a summary listing every decision. Pure, so
+ * the preview and the published review are the same thing. The reviewer's own verdict, when
+ * given, replaces the one the decisions imply: without the model there are no decisions to imply
+ * one.
  */
 export const buildPublication = (input: {
   readonly analysis: Analysis;
@@ -59,6 +85,9 @@ export const buildPublication = (input: {
   readonly summary: string;
   /** Hosts don't let authors approve or reject their own PRs. */
   readonly isAuthor: boolean;
+  /** Comments on hunk lines; empty ones are left out, and the caller checks the lines exist. */
+  readonly hunkComments?: readonly HunkComment[];
+  readonly verdict?: PublicationVerdict | null;
 }): Publication => {
   const { analysis, isAuthor } = input;
   const verdictOf = new Map(input.verdicts.map((verdict) => [verdict.decisionId, verdict]));
@@ -92,6 +121,22 @@ export const buildPublication = (input: {
     anchored.add(decision.id);
   }
 
+  const hunkOf = new Map(
+    analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
+  );
+  const written = (input.hunkComments ?? []).filter((comment) => comment.body.trim() !== "");
+  for (const comment of written) {
+    const hunk = hunkOf.get(comment.hunkId);
+    if (hunk === undefined) continue;
+    comments.push({
+      key: CommentKey.parse(`hunk:${comment.hunkId}:${comment.side}:${comment.line}`),
+      path: hunk.path,
+      line: comment.line,
+      side: comment.side,
+      body: comment.body.trim(),
+    });
+  }
+
   const decisionLines = reviewed.map(({ decision, verdict, comment }) => {
     const label = { approved: "✅ ", rejected: "❌ ", pending: "⏳ Not reviewed: " }[verdict];
     // An anchored comment is already inline; a rejection repeats it so the summary reads alone.
@@ -101,12 +146,14 @@ export const buildPublication = (input: {
   const summary = [
     input.summary.trim(),
     decisionLines.length > 0 ? `**Decisions**\n${decisionLines.join("\n")}` : "",
+    onCode(comments),
     FOOTER,
   ]
     .filter((part) => part !== "")
     .join("\n\n");
 
-  return { verdict: publicationVerdict(reviewed, isAuthor), summary, comments };
+  const verdict = isAuthor ? "comment" : (input.verdict ?? publicationVerdict(reviewed, isAuthor));
+  return { verdict, summary, comments };
 };
 
 const publicationVerdict = (
@@ -150,6 +197,12 @@ const hunkAnchors = (analysis: Analysis): ReadonlyMap<HunkId, Anchor> => {
     }
   }
   return anchors;
+};
+
+/** "2 comments on the code.", counting the comments posted on hunk lines; "" for none. */
+const onCode = (comments: readonly PublicationComment[]): string => {
+  const count = comments.filter((comment) => comment.key.startsWith("hunk:")).length;
+  return count === 0 ? "" : `${count} ${count === 1 ? "comment" : "comments"} on the code.`;
 };
 
 const oneLine = (text: string): string => text.replace(/\s*\n\s*/g, " ");

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type {
   AnalysisId,
+  HunkComment,
   Publication,
   PublicationReceipt,
   PublicationVerdict,
@@ -24,6 +25,8 @@ export const PublishDialog = ({
   analysisId,
   isAuthor,
   pendingCount,
+  hunkComments,
+  chooseVerdict,
   onClose,
   onPublished,
 }: {
@@ -31,12 +34,18 @@ export const PublishDialog = ({
   readonly isAuthor: boolean;
   /** Decisions without a verdict; they're listed as not reviewed. */
   readonly pendingCount: number;
+  /** Comments the reviewer wrote on hunk lines. */
+  readonly hunkComments: readonly HunkComment[];
+  /** No decisions to imply a verdict, so the reviewer picks one. */
+  readonly chooseVerdict: boolean;
   readonly onClose: () => void;
   readonly onPublished: (receipt: PublicationReceipt) => void;
 }) => {
   const { client } = useApi();
   const id = useId();
   const [summary, setSummary] = useState("");
+  const [chosen, setChosen] = useState<PublicationVerdict>("comment");
+  const verdict = chooseVerdict && !isAuthor ? chosen : null;
   const [preview, setPreview] = useState<Publication | null>(null);
   const [previewError, setPreviewError] = useState<ApiError | null>(null);
   const [confirmStale, setConfirmStale] = useState(false);
@@ -48,12 +57,14 @@ export const PublishDialog = ({
     let current = true;
     const timer = setTimeout(
       () =>
-        void client.previewPublication(analysisId, { summary }).then((result) => {
-          if (!current) return;
-          loaded.current = true;
-          setPreview(result.ok ? result.value : null);
-          setPreviewError(result.ok ? null : result.error);
-        }),
+        void client
+          .previewPublication(analysisId, { summary, hunkComments, verdict })
+          .then((result) => {
+            if (!current) return;
+            loaded.current = true;
+            setPreview(result.ok ? result.value : null);
+            setPreviewError(result.ok ? null : result.error);
+          }),
       // The first preview loads at once; later ones wait for typing to pause.
       loaded.current ? PREVIEW_DELAY_MS : 0,
     );
@@ -61,12 +72,17 @@ export const PublishDialog = ({
       current = false;
       clearTimeout(timer);
     };
-  }, [analysisId, client, summary]);
+  }, [analysisId, client, summary, hunkComments, verdict]);
 
   const send = async (stale: boolean) => {
     setAllowStale(stale);
     setConfirmStale(false);
-    const result = await publish.run(analysisId, { summary, allowStale: stale });
+    const result = await publish.run(analysisId, {
+      summary,
+      allowStale: stale,
+      hunkComments,
+      verdict,
+    });
     if (result.ok) {
       onPublished(result.value);
     } else if (result.error.code === "stale-analysis") {
@@ -87,6 +103,23 @@ export const PublishDialog = ({
         value={summary}
         onChange={(event) => setSummary(event.target.value)}
       />
+
+      {chooseVerdict && !isAuthor && (
+        <fieldset className="verdict-choice">
+          <legend>Verdict</legend>
+          {(["approve", "request_changes", "comment"] as const).map((option) => (
+            <label key={option}>
+              <input
+                type="radio"
+                name={`${id}-verdict`}
+                checked={chosen === option}
+                onChange={() => setChosen(option)}
+              />
+              {VERDICT_NAMES[option]}
+            </label>
+          ))}
+        </fieldset>
+      )}
 
       <section className="preview" aria-labelledby={`${id}-preview`} aria-busy={preview === null}>
         <h3 id={`${id}-preview`}>What will be posted</h3>

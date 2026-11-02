@@ -176,7 +176,9 @@ PR content is untrusted. A description or code comment can contain text aimed at
 - **Left:** tour steps and the decision checklist. Each decision can be approved, rejected or commented on.
 - **Main:** the diff for the current step, with a risk badge on each hunk. Mechanical hunks are collapsed with their proof ("moved, verified identical"), and the user can expand them.
 
-**Publish.** Sends the review to the PR's host with a verdict (approve or request changes). Rejected decisions and comments become inline comments on their hunks. The user confirms before anything is posted.
+**Publish.** Sends the review to the PR's host with a verdict (approve or request changes). Rejected decisions and comments become inline comments on their hunks, and comments the reviewer wrote on hunk lines go on those lines. Without decisions, the reviewer picks the verdict. The user confirms before anything is posted.
+
+Comments on hunk lines are drafts in the browser's local storage until they're sent with the publish request, which checks that each is on a line the diff shows. A `hunk_comments` table with its own routes was the plan; the drafts belong to one reviewer in one browser, like visited steps, and the posted-comment records already make publishing safe to retry.
 
 ## Storage
 

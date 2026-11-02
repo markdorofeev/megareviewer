@@ -243,6 +243,8 @@ export const createMockApi = (
           verdicts: [...verdicts.values()],
           summary: request.data.summary,
           isAuthor: fixtureAnalysisView.isAuthor,
+          hunkComments: request.data.hunkComments ?? [],
+          verdict: request.data.verdict ?? null,
         }),
       );
     },
@@ -259,6 +261,8 @@ export const createMockApi = (
           verdicts: [...verdicts.values()],
           summary: request.data.summary,
           isAuthor: fixtureAnalysisView.isAuthor,
+          hunkComments: request.data.hunkComments ?? [],
+          verdict: request.data.verdict ?? null,
         });
         const keys = ["summary", ...published.comments.map((comment) => comment.key)];
         publication = {

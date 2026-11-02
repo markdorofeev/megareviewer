@@ -34,7 +34,11 @@ export const SHORTCUTS: readonly {
   { keys: ["t"], action: "find-file", description: "Go to a file" },
   { keys: ["a"], action: "approve", description: "Approve the selected decision" },
   { keys: ["r"], action: "reject", description: "Reject the selected decision" },
-  { keys: ["c"], action: "comment", description: "Comment on the selected decision" },
+  {
+    keys: ["c"],
+    action: "comment",
+    description: "Comment on the selected decision, or on the focused hunk",
+  },
   {
     keys: ["Escape"],
     action: "escape",

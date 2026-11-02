@@ -794,6 +794,65 @@ describe("without the model", () => {
   });
 });
 
+describe("comments on hunks", () => {
+  const withoutDecisions: AnalysisView = {
+    ...fixture,
+    analysis: { ...analysis, decisions: [], stages: { ...analysis.stages, decisions: "skipped" } },
+  };
+
+  it("writes a comment from a line number, keeps it, and publishes it with the chosen verdict", async () => {
+    const { requests, unmount } = renderReview({ view: withoutDecisions });
+    await loaded();
+    const [number] = within(mainArea()).getAllByRole("button", { name: /^Comment on line \d+$/ });
+    if (number === undefined) throw new Error("no commentable line");
+    const line = Number(number.textContent);
+    await userEvent.click(number);
+    await userEvent.type(
+      within(mainArea()).getByRole("textbox", { name: `Comment on line ${line}` }),
+      "Why this?",
+    );
+    expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toContain("Why this?");
+
+    unmount();
+    const again = renderReview({ view: withoutDecisions });
+    await loaded();
+    const field = within(mainArea()).getByRole<HTMLTextAreaElement>("textbox", {
+      name: `Comment on line ${line}`,
+    });
+    expect(field.value).toBe("Why this?");
+
+    await userEvent.click(screen.getByRole("button", { name: "Publish…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Publish the review" });
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Request changes" }));
+    expect(await within(dialog).findByText("Request changes", { selector: "strong" })).toBeTruthy();
+    expect(within(dialog).getByText("Why this?")).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    // The view here is fixed, so it never turns published; the request is what matters.
+    await waitFor(() =>
+      expect(
+        again.requests.find((request) => request.url === `${viewPath}/publication`)?.body,
+      ).toMatchObject({
+        verdict: "request_changes",
+        hunkComments: [{ side: "new", line, body: "Why this?" }],
+      }),
+    );
+    expect(requests.some((request) => request.url === `${viewPath}/publication`)).toBe(false);
+  });
+
+  it("removes a comment that's emptied, and c opens one on the focused hunk", async () => {
+    renderReview({ view: withoutDecisions });
+    await loaded();
+    await userEvent.keyboard("jc");
+    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on (old )?line \d+$/ });
+    expect(document.activeElement).toBe(field);
+    await userEvent.type(field, "x");
+    await userEvent.clear(field);
+    await userEvent.tab();
+    expect(within(mainArea()).queryByRole("textbox", { name: /^Comment on/ })).toBeNull();
+    expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");
+  });
+});
+
 describe("publishing", () => {
   const openDialog = async () => {
     await userEvent.click(screen.getByRole("button", { name: "Publish…" }));
@@ -848,6 +907,8 @@ describe("publishing", () => {
     expect(requests.find((request) => request.url === `${viewPath}/publication`)?.body).toEqual({
       summary: "",
       allowStale: false,
+      hunkComments: [],
+      verdict: null,
     });
     expect(approve(RETRIES).hasAttribute("disabled")).toBe(true);
   });
@@ -873,8 +934,8 @@ describe("publishing", () => {
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
     const publishes = requests.filter((request) => request.url === `${viewPath}/publication`);
     expect(publishes.map((request) => request.body)).toEqual([
-      { summary: "", allowStale: false },
-      { summary: "", allowStale: true },
+      { summary: "", allowStale: false, hunkComments: [], verdict: null },
+      { summary: "", allowStale: true, hunkComments: [], verdict: null },
     ]);
   });
 

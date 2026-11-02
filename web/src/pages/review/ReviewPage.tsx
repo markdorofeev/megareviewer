@@ -5,11 +5,13 @@ import type { HunkId } from "../../../../src/domain/diff/index.ts";
 import {
   type AnalysisId,
   type DecisionId,
+  HunkComment,
   pullRequestUrl,
 } from "../../../../src/domain/review/index.ts";
 import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from "../../api/index.ts";
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
+import { commentPlace, type LineComment, type LinePlace } from "../../diff/index.ts";
 import { DecisionList } from "./DecisionList.tsx";
 import { FileFinder } from "./FileFinder.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
@@ -46,6 +48,10 @@ import { UsageFooter } from "./UsageFooter.tsx";
 import { useVerdicts } from "./useVerdicts.ts";
 
 const NONE: readonly string[] = [];
+const NO_COMMENTS: readonly HunkComment[] = [];
+const parseHunkComments = (stored: unknown): readonly HunkComment[] | undefined =>
+  HunkComment.array().safeParse(stored).data;
+
 /** Reviewed marks kept across analyses, most recent last; older ones are forgotten. */
 const MAX_REVIEWED = 5_000;
 
@@ -222,6 +228,36 @@ const Review = ({
         return value ? [...without, id].slice(-MAX_REVIEWED) : without;
       }),
     [setReviewedList],
+  );
+
+  // Comments on hunk lines are drafts in this browser until they're published with the review.
+  const [hunkComments, setHunkComments] = useStoredState(
+    `hunk-comments:${analysisId}`,
+    NO_COMMENTS,
+    parseHunkComments,
+  );
+  const [openComment, setOpenComment] = useState<{ hunkId: HunkId; place: LinePlace } | null>(null);
+  const commentsOf = useCallback(
+    (id: HunkId) => hunkComments.filter((comment) => comment.hunkId === id),
+    [hunkComments],
+  );
+  const writeComment = useCallback(
+    (hunkId: HunkId, comment: LineComment) =>
+      setHunkComments((previous) => {
+        const same = (other: HunkComment) =>
+          other.hunkId === hunkId && other.side === comment.side && other.line === comment.line;
+        const written = { hunkId, ...comment };
+        if (!previous.some(same)) return comment.body === "" ? previous : [...previous, written];
+        return comment.body === ""
+          ? previous.filter((other) => !same(other))
+          : previous.map((other) => (same(other) ? written : other));
+      }),
+    [setHunkComments],
+  );
+  const openCommentOn = useCallback(
+    (hunkId: HunkId, place: LinePlace | null) =>
+      setOpenComment(place === null ? null : { hunkId, place }),
+    [],
   );
 
   const verdicts = useVerdicts(analysisId, view.verdicts);
@@ -412,9 +448,19 @@ const Review = ({
       case "find-file":
         setFinding(true);
         return;
-      case "comment":
-        commentField.current?.focus();
+      case "comment": {
+        if (selectedDecision !== null) {
+          commentField.current?.focus();
+          return;
+        }
+        // Without a decision selected, comment on the focused hunk's first changed line.
+        const focused = focusedHunkId === null ? undefined : index.hunks.get(focusedHunkId);
+        const line = focused?.hunk.lines.find((one) => one.kind !== "context");
+        if (readOnly || focused === undefined || line === undefined) return;
+        const place = commentPlace(line);
+        if (place !== null) setOpenComment({ hunkId: focused.hunk.id, place });
         return;
+      }
       case "escape":
         if (focus !== null) changeFocus(() => null);
         else goBack();
@@ -594,6 +640,10 @@ const Review = ({
             onFollow={follow}
             reviewedHunkIds={reviewedHunks}
             onReviewed={setHunkReviewed}
+            commentsOf={commentsOf}
+            openComment={openComment}
+            onOpenComment={openCommentOn}
+            onComment={readOnly ? undefined : writeComment}
             onFocusHunk={setFocusedHunkId}
             onBack={() => changeFocus(() => null)}
             onPrevious={previousEntry === undefined ? null : () => goTo(previousEntry)}
@@ -617,6 +667,8 @@ const Review = ({
           analysisId={analysisId}
           isAuthor={isAuthor}
           pendingCount={pendingCount}
+          hunkComments={hunkComments}
+          chooseVerdict={analysis.decisions.length === 0}
           onClose={() => setPublishing(false)}
           onPublished={() => {
             setPublishing(false);

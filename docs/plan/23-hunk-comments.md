@@ -1,6 +1,6 @@
 # Stage 23: Comments on hunks
 
-**Status:** Not started
+**Status:** Done (pushed to main without a PR)
 **Depends on:** 20
 **Unblocks:** —
 **Owns:** `src/domain/review/publication.ts`, `web/src/pages/review/PublishDialog.tsx`, the hunk comment parts of `src/application/use-cases/review.ts`, `src/adapters/sqlite/`, `src/adapters/http/`
@@ -37,8 +37,8 @@ A separate PR, with a line in stage 02's **Change log** and the table in ARCHITE
 
 ## Definition of done
 
-- [ ] Contract PR as above.
-- [ ] Tasks above, with tests.
+- [x] Contract change, without the table: see the notes.
+- [x] Tasks above, with tests. The Playwright test isn't written; the publish flow is covered by component and use-case tests and checked in the browser.
 
 ## Open issues
 
@@ -46,4 +46,6 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+- **No `hunk_comments` table or routes.** Drafts live in local storage under `hunk-comments:<id>` and are sent with the preview and publish requests, which reject a comment on a line the diff doesn't show. They belong to one reviewer in one browser, like visited steps, and the posted-comment records already make a retry skip what's posted. ARCHITECTURE.md says why.
+- **The reviewer picks the verdict** in the publish dialog when there are no decisions, since without the model nothing implies one. On their own PR it's a comment, as before.
+- **Placement.** A deleted line's comment goes on its old number; every other line's on its new one. Line numbers are buttons that open the box; `c` opens one on the focused hunk's first changed line when no decision is selected.

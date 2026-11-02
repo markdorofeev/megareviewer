@@ -6,6 +6,8 @@ import {
   FileNotices,
   type HunkItem,
   type HunkLink,
+  type LineComment,
+  type LinePlace,
   MechanicalGroup,
 } from "../../diff/index.ts";
 import type { MainView } from "./model.ts";
@@ -36,6 +38,10 @@ export const MainArea = ({
   onFollow,
   reviewedHunkIds,
   onReviewed,
+  commentsOf,
+  openComment,
+  onOpenComment,
+  onComment,
   onFocusHunk,
   onBack,
   onPrevious,
@@ -57,6 +63,11 @@ export const MainArea = ({
   readonly onFollow: (id: HunkId) => void;
   readonly reviewedHunkIds: ReadonlySet<string>;
   readonly onReviewed: (id: HunkId, reviewed: boolean) => void;
+  readonly commentsOf: (id: HunkId) => readonly LineComment[];
+  readonly openComment: { readonly hunkId: HunkId; readonly place: LinePlace } | null;
+  readonly onOpenComment: (id: HunkId, place: LinePlace | null) => void;
+  /** Without it, comments are read-only: the review is published. */
+  readonly onComment?: (id: HunkId, comment: LineComment) => void;
   readonly onFocusHunk: (id: HunkId) => void;
   readonly onBack: () => void;
   readonly onPrevious: (() => void) | null;
@@ -127,6 +138,10 @@ export const MainArea = ({
         onFollow={onFollow}
         reviewedHunkIds={reviewedHunkIds}
         onReviewed={onReviewed}
+        commentsOf={commentsOf}
+        openComment={openComment}
+        onOpenComment={onOpenComment}
+        onComment={onComment}
       />
 
       {showMechanical && (

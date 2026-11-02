@@ -1,5 +1,5 @@
 import "./diff.css";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import type { FileChange, Hunk, HunkId, MechanicalProof } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { type CharRange, intraLineChanges } from "./intra-line.ts";
@@ -45,6 +45,29 @@ export interface HunkLink {
   readonly hunkId: HunkId;
 }
 
+/** Where a comment on a hunk goes: a head-side ("new") or base-side ("old") line. */
+export interface LinePlace {
+  readonly side: "new" | "old";
+  readonly line: number;
+}
+
+/** A comment the reviewer is writing on one line of this hunk. */
+export interface LineComment extends LinePlace {
+  readonly body: string;
+}
+
+/** Comments go on a deleted line's old number, and on any other line's new one. */
+export const commentPlace = (line: DisplayLine["line"]): LinePlace | null =>
+  line.kind === "del"
+    ? line.oldLine === null
+      ? null
+      : { side: "old", line: line.oldLine }
+    : line.newLine === null
+      ? null
+      : { side: "new", line: line.newLine };
+
+const samePlace = (a: LinePlace, b: LinePlace) => a.side === b.side && a.line === b.line;
+
 /** One hunk: a header with its file, place and risk, and its lines. */
 export const HunkCard = memo(function HunkCard({
   hunk,
@@ -59,6 +82,10 @@ export const HunkCard = memo(function HunkCard({
   onFollow,
   reviewed,
   onReviewed,
+  comments = [],
+  openComment = null,
+  onOpenComment,
+  onComment,
 }: {
   readonly hunk: Hunk;
   readonly file: FileChange;
@@ -77,6 +104,12 @@ export const HunkCard = memo(function HunkCard({
   /** Whether the reviewer has read this hunk; without `onReviewed` there's no checkbox. */
   readonly reviewed?: boolean;
   readonly onReviewed?: (id: HunkId, reviewed: boolean) => void;
+  /** The reviewer's comments on this hunk's lines; without `onComment` they're read-only. */
+  readonly comments?: readonly LineComment[];
+  /** The line whose comment box is open and focused, if it's in this hunk. */
+  readonly openComment?: LinePlace | null;
+  readonly onOpenComment?: (id: HunkId, place: LinePlace | null) => void;
+  readonly onComment?: (id: HunkId, comment: LineComment) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
   const [showAll, setShowAll] = useState(false);
@@ -163,15 +196,40 @@ export const HunkCard = memo(function HunkCard({
             </tr>
           </thead>
           <tbody>
-            {shown.map((line, i) => (
-              <Line
+            {shown.map((line, i) => {
+              const place = commentPlace(line.line);
+              const comment =
+                place === null ? undefined : comments.find((one) => samePlace(one, place));
+              const open = place !== null && openComment !== null && samePlace(openComment, place);
+              return (
                 // biome-ignore lint/suspicious/noArrayIndexKey: lines don't move within a hunk.
-                key={i}
-                line={line}
-                tokens={tokens?.[i] ?? null}
-                changed={changes.get(i) ?? null}
-              />
-            ))}
+                <Fragment key={i}>
+                  <Line
+                    line={line}
+                    tokens={tokens?.[i] ?? null}
+                    changed={changes.get(i) ?? null}
+                    onNumber={
+                      place === null || onOpenComment === undefined || onComment === undefined
+                        ? undefined
+                        : () => onOpenComment(hunk.id, place)
+                    }
+                  />
+                  {place !== null && (comment !== undefined || open) && (
+                    <CommentRow
+                      place={place}
+                      body={comment?.body ?? ""}
+                      focus={open}
+                      onChange={
+                        onComment === undefined
+                          ? undefined
+                          : (body) => onComment(hunk.id, { ...place, body })
+                      }
+                      onDone={() => onOpenComment?.(hunk.id, null)}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -184,20 +242,87 @@ export const HunkCard = memo(function HunkCard({
   );
 });
 
+/** The comment box under a line: a draft saved as it's typed, removed when emptied. */
+const CommentRow = ({
+  place,
+  body,
+  focus,
+  onChange,
+  onDone,
+}: {
+  readonly place: LinePlace;
+  readonly body: string;
+  readonly focus: boolean;
+  readonly onChange?: (body: string) => void;
+  readonly onDone: () => void;
+}) => {
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (focus) field.current?.focus();
+  }, [focus]);
+  const label = `Comment on ${place.side === "old" ? "old " : ""}line ${place.line}`;
+  return (
+    <tr className="line-comment">
+      <td colSpan={4}>
+        {onChange === undefined ? (
+          <p className="posted-text">
+            <span className="visually-hidden">{label}: </span>
+            {body}
+          </p>
+        ) : (
+          <textarea
+            ref={field}
+            className="input"
+            rows={2}
+            aria-label={label}
+            placeholder="What should change here?"
+            value={body}
+            onChange={(event) => onChange(event.target.value)}
+            onBlur={onDone}
+            onKeyDown={(event) => {
+              // Esc leaves the box without leaving the page's view.
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                field.current?.blur();
+              }
+            }}
+          />
+        )}
+      </td>
+    </tr>
+  );
+};
+
 const Line = memo(function Line({
   line: { line, text, carriageReturn },
   tokens,
   changed,
+  onNumber,
 }: {
   readonly line: DisplayLine;
   readonly tokens: readonly CodeToken[] | null;
   readonly changed: readonly CharRange[] | null;
+  /** Opens a comment on this line, from its line number. */
+  readonly onNumber?: () => void;
 }) {
   const Changed = line.kind === "del" ? "del" : "ins";
+  const number = (value: number | null, side: "old" | "new") =>
+    value !== null && onNumber !== undefined && (side === "old") === (line.kind === "del") ? (
+      <button
+        type="button"
+        className="line-number-button"
+        aria-label={`Comment on ${side === "old" ? "old " : ""}line ${value}`}
+        onClick={onNumber}
+      >
+        {value}
+      </button>
+    ) : (
+      value
+    );
   return (
     <tr className={`diff-line line-${line.kind}`}>
-      <td className="line-number">{line.oldLine}</td>
-      <td className="line-number">{line.newLine}</td>
+      <td className="line-number">{number(line.oldLine, "old")}</td>
+      <td className="line-number">{number(line.newLine, "new")}</td>
       <td className="line-marker">{MARKERS[line.kind]}</td>
       <td className="line-code">
         {segmentLine(tokens ?? plainTokens(text), changed ?? []).map((segment, i) => {

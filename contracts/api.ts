@@ -6,8 +6,10 @@ import {
   DecisionVerdict,
   HostKind,
   HostUser,
+  HunkComment,
   Publication,
   PublicationReceipt,
+  PublicationVerdict,
   PullRequestSummary,
   StageName,
   StageStatus,
@@ -71,7 +73,15 @@ export type AnalysisView = z.infer<typeof AnalysisView>;
 export const PutVerdictRequest = z.object({ verdict: Verdict, comment: z.string() }).readonly();
 export type PutVerdictRequest = z.infer<typeof PutVerdictRequest>;
 
-export const PublicationPreviewRequest = z.object({ summary: z.string() }).readonly();
+/** Comments on hunk lines and the reviewer's own verdict; without them, the decisions decide. */
+const ReviewFields = {
+  hunkComments: z.array(HunkComment).readonly().optional(),
+  verdict: PublicationVerdict.nullable().optional(),
+};
+
+export const PublicationPreviewRequest = z
+  .object({ summary: z.string(), ...ReviewFields })
+  .readonly();
 export type PublicationPreviewRequest = z.infer<typeof PublicationPreviewRequest>;
 
 export const PublishRequest = z
@@ -79,6 +89,7 @@ export const PublishRequest = z
     summary: z.string(),
     /** Publish even though the PR has new commits since the analysis. */
     allowStale: z.boolean(),
+    ...ReviewFields,
   })
   .readonly();
 export type PublishRequest = z.infer<typeof PublishRequest>;

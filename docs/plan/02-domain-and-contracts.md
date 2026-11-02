@@ -374,6 +374,7 @@ Record every change to these contracts after the stage is done: date, PR, what c
 - 2026-11-02, on main (no PR, 4b84610): `RiskAssessment.source` gained `"rule"`, for risk from stage 18's contract rules, so the page can tell a rule's reason from the model's. Nothing reads `source` besides the type. Affects stage 20 (stores rule risk) and stage 21 (shows the reason).
 - 2026-11-02, on main (no PR): `Tour.fallback: boolean` became `Tour.builtBy: "model" | "code"`, because stage 19 builds tours with code that aren't a fallback. Stage 20 replaced the file-order fallback with the code tour and removed `fallbackTour`. Stored analyses with the old field no longer parse and are analyzed again. Affects stage 20 (picks the tour), the review page's fallback banner, and the evals' fallback count.
 - 2026-11-02, on main (no PR): `StageStatus` gained `"skipped"`, for a model pass that didn't run because the model is off. `AppDeps.modelConfigured` became `modelEnabled`, and the status response's `model.configured` became `model.enabled`: whether the passes run, not whether credentials exist. Affects the picker's setup list and the header's readiness.
+- 2026-11-02, on main (no PR): `CommentKey` accepts `hunk:<HunkId>:<side>:<line>`, and a `HunkComment` type (hunk ID, side, line, body) joined the domain. The publication preview and publish requests take optional `hunkComments` and `verdict` (the reviewer's own; null leaves it to the decisions). `buildPublication` takes both. Affects stage 23 and anything that builds publications (the mock API).
 
 ## Open issues
 

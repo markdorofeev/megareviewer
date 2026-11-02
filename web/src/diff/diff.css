@@ -385,3 +385,30 @@
   color: var(--risk-logic-text);
   font-size: var(--text-sm);
 }
+
+/* A comment the reviewer writes on a line of a hunk, under that line. */
+.line-comment td {
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+}
+
+.line-comment textarea {
+  width: 100%;
+  font-family: var(--font-ui);
+}
+
+.line-number-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.line-number-button:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}

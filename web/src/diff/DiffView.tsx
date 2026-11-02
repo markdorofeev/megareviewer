@@ -1,7 +1,7 @@
 import type { FileChange, Hunk, HunkId, MechanicalProof } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { CollapsedHunk } from "./CollapsedHunk.tsx";
-import { HunkCard, type HunkLink } from "./HunkCard.tsx";
+import { HunkCard, type HunkLink, type LineComment, type LinePlace } from "./HunkCard.tsx";
 
 export interface HunkItem {
   readonly hunk: Hunk;
@@ -24,6 +24,10 @@ export const DiffView = ({
   onFollow,
   reviewedHunkIds,
   onReviewed,
+  commentsOf,
+  openComment = null,
+  onOpenComment,
+  onComment,
 }: {
   readonly items: readonly HunkItem[];
   /** Hunks to mark, e.g. those of the selected decision. */
@@ -34,6 +38,10 @@ export const DiffView = ({
   readonly onFollow?: (id: HunkId) => void;
   readonly reviewedHunkIds?: ReadonlySet<string>;
   readonly onReviewed?: (id: HunkId, reviewed: boolean) => void;
+  readonly commentsOf?: (id: HunkId) => readonly LineComment[];
+  readonly openComment?: { readonly hunkId: HunkId; readonly place: LinePlace } | null;
+  readonly onOpenComment?: (id: HunkId, place: LinePlace | null) => void;
+  readonly onComment?: (id: HunkId, comment: LineComment) => void;
 }) => (
   <div className="diff-view">
     {items.map(({ hunk, file, risk, proofs = [] }) =>
@@ -60,6 +68,10 @@ export const DiffView = ({
           onFollow={onFollow}
           reviewed={reviewedHunkIds?.has(hunk.id)}
           onReviewed={onReviewed}
+          comments={commentsOf?.(hunk.id)}
+          openComment={openComment?.hunkId === hunk.id ? openComment.place : null}
+          onOpenComment={onOpenComment}
+          onComment={onComment}
         />
       ),
     )}

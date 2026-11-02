@@ -7,6 +7,7 @@ import {
   type Decision,
   DecisionId,
   type DecisionVerdict,
+  hunkHasLine,
   type Verdict,
 } from "./index.ts";
 
@@ -183,5 +184,71 @@ describe("buildPublication", () => {
         "_Reviewed with megareviewer_",
       );
     });
+  });
+});
+
+describe("comments on hunks", () => {
+  const withoutDecisions = withDecisions([]);
+  const file = smallFeatureAnalysis.files[1];
+  const target = file?.hunks[0];
+  if (file === undefined || target === undefined) throw new Error("small-feature has hunks");
+  const added = target.lines.find((line) => line.kind === "add")?.newLine ?? 1;
+  const deleted = target.lines.find((line) => line.kind === "del")?.oldLine ?? 1;
+
+  const withComments = (
+    comments: readonly { side: "new" | "old"; line: number; body: string }[],
+    verdict: "approve" | "request_changes" | "comment" | null = null,
+    isAuthor = false,
+  ) =>
+    buildPublication({
+      analysis: withoutDecisions,
+      verdicts: [],
+      summary: "",
+      isAuthor,
+      hunkComments: comments.map((comment) => ({ hunkId: target.id, ...comment })),
+      verdict,
+    });
+
+  it("posts each comment on its line and side, and counts them in the summary", () => {
+    const publication = withComments([
+      { side: "new", line: added, body: "  Why this?  " },
+      { side: "old", line: deleted, body: "This was the only check." },
+    ]);
+    expect(
+      publication.comments.map((comment) => [comment.key, comment.side, comment.body]),
+    ).toEqual([
+      [`hunk:${target.id}:new:${added}`, "new", "Why this?"],
+      [`hunk:${target.id}:old:${deleted}`, "old", "This was the only check."],
+    ]);
+    expect(publication.comments.every((comment) => comment.path === file.path)).toBe(true);
+    expect(publication.summary).toContain("2 comments on the code.");
+  });
+
+  it("leaves out empty comments and comments on unknown hunks", () => {
+    const publication = buildPublication({
+      analysis: withoutDecisions,
+      verdicts: [],
+      summary: "",
+      isAuthor: false,
+      hunkComments: [
+        { hunkId: target.id, side: "new", line: added, body: "   " },
+        { hunkId: HunkId.parse("h_ffffffffffffffff"), side: "new", line: 1, body: "x" },
+      ],
+    });
+    expect(publication.comments).toEqual([]);
+    expect(publication.summary).not.toContain("on the code");
+  });
+
+  it("uses the reviewer's verdict, except on their own PR", () => {
+    expect(withComments([], "approve").verdict).toBe("approve");
+    expect(withComments([], "request_changes").verdict).toBe("request_changes");
+    expect(withComments([], null).verdict).toBe("comment");
+    expect(withComments([], "approve", true).verdict).toBe("comment");
+  });
+
+  it("knows which lines a hunk shows on each side", () => {
+    expect(hunkHasLine(target, "new", added)).toBe(true);
+    expect(hunkHasLine(target, "old", deleted)).toBe(true);
+    expect(hunkHasLine(target, "new", 9_999)).toBe(false);
   });
 });

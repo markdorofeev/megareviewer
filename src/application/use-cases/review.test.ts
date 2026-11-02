@@ -213,6 +213,52 @@ describe("publishing", () => {
     expect(await store.getPublication(id)).toEqual(receipt.ok && receipt.value);
   });
 
+  it("publishes comments on hunk lines and the reviewer's own verdict, and retries without repeats", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    const hunk = smallFeatureAnalysis.files[1]?.hunks[0];
+    const line = hunk?.lines.find((diffLine) => diffLine.kind === "add")?.newLine;
+    if (hunk === undefined || line == null) throw new Error("small-feature has an added line");
+    const review = {
+      hunkComments: [{ hunkId: hunk.id, side: "new" as const, line, body: "Why 600?" }],
+      verdict: "request_changes" as const,
+    };
+    const preview = await useCases.previewPublication(id, "", review);
+    expect(preview.ok && preview.value.verdict).toBe("request_changes");
+    expect(preview.ok && preview.value.comments).toEqual([
+      {
+        key: CommentKey.parse(`hunk:${hunk.id}:new:${line}`),
+        path: hunk.path,
+        line,
+        side: "new",
+        body: "Why 600?",
+      },
+    ]);
+
+    github.failPublishAtPost(2, network);
+    expect((await useCases.publishReview(id, "", false, review)).ok).toBe(false);
+    expect((await useCases.publishReview(id, "", false, review)).ok).toBe(true);
+    expect(github.publishAttempts.map((attempt) => attempt.postedKeys)).toEqual([
+      ["summary"],
+      [`hunk:${hunk.id}:new:${line}`],
+    ]);
+  });
+
+  it("refuses a comment on a line the diff doesn't show", async () => {
+    const { useCases, seeded } = setup();
+    await seeded;
+    const hunk = smallFeatureAnalysis.files[1]?.hunks[0];
+    if (hunk === undefined) throw new Error("small-feature has hunks");
+    const review = {
+      hunkComments: [{ hunkId: hunk.id, side: "old" as const, line: 9_999, body: "x" }],
+      verdict: null,
+    };
+    const preview = await useCases.previewPublication(id, "", review);
+    expect(preview.ok).toBe(false);
+    expect(!preview.ok && preview.error.code).toBe("bad-request");
+    expect((await useCases.publishReview(id, "", false, review)).ok).toBe(false);
+  });
+
   it("only comments when the reviewer wrote the PR", async () => {
     const { useCases, seeded } = setup({ githubUser: smallFeature.pullRequest.author });
     await seeded;
