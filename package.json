@@ -13,11 +13,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/markd6v/megareviewer.git"
+    "url": "git+https://github.com/markdorofeev/megareviewer.git"
   },
-  "homepage": "https://github.com/markd6v/megareviewer#readme",
+  "homepage": "https://github.com/markdorofeev/megareviewer#readme",
   "bugs": {
-    "url": "https://github.com/markd6v/megareviewer/issues"
+    "url": "https://github.com/markdorofeev/megareviewer/issues"
   },
   "type": "module",
   "bin": {
