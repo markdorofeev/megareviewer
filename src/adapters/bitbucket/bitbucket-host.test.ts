@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createFixtureFetch,
   describeGitHostContract,
@@ -297,6 +297,60 @@ describe("createBitbucketHost", () => {
           retryAfterSeconds: null,
         },
       });
+    });
+
+    it("fails with network when the connection drops mid-body", async () => {
+      const dropped = new ReadableStream({
+        start(controller) {
+          controller.error(new TypeError("terminated", { cause: new Error("other side closed") }));
+        },
+      });
+      const host = createBitbucketHost({
+        username: "e",
+        password: "t",
+        workspace: null,
+        clock: new FixedClock(),
+        logger: new RecordingLogger(),
+        fetch: async () => new Response(dropped, { status: 200, headers: jsonHeaders }),
+      });
+      expect(await host.getPullRequest(pr)).toEqual({
+        ok: false,
+        error: {
+          kind: "network",
+          message: "Can't reach Bitbucket: other side closed",
+          retryAfterSeconds: null,
+        },
+      });
+    });
+
+    it("fails with network when Bitbucket doesn't answer in time", async () => {
+      vi.useFakeTimers();
+      try {
+        const host = createBitbucketHost({
+          username: "e",
+          password: "t",
+          workspace: null,
+          clock: new FixedClock(),
+          logger: new RecordingLogger(),
+          requestTimeoutMs: 5000,
+          fetch: (_input, init) =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+            }),
+        });
+        const result = host.getPullRequest(pr);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(await result).toEqual({
+          ok: false,
+          error: {
+            kind: "network",
+            message: "Bitbucket didn't answer within 5 seconds",
+            retryAfterSeconds: null,
+          },
+        });
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("rethrows what isn't a network failure, because it's a bug", async () => {

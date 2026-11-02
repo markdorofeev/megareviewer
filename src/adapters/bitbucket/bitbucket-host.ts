@@ -38,6 +38,8 @@ export interface BitbucketHostOptions {
   readonly clock: Clock;
   readonly logger: Logger;
   readonly fetch?: typeof fetch;
+  /** How long a call may take before it fails as a network error. */
+  readonly requestTimeoutMs?: number;
 }
 
 /** Repositories scanned for PRs to review: Bitbucket has no cross-repo reviewer search. */
@@ -84,6 +86,7 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
     password: options.password,
     logger,
     fetch: options.fetch ?? globalThis.fetch,
+    requestTimeoutMs: options.requestTimeoutMs,
   });
 
   let cachedUser: HostUser | null = null;

@@ -105,6 +105,9 @@ export const networkError = (error: TypeError): HostError => {
   return hostError("network", `Can't reach Bitbucket: ${cause}`);
 };
 
+export const timedOut = (timeoutMs: number): HostError =>
+  hostError("network", `Bitbucket didn't answer within ${timeoutMs / 1000} seconds`);
+
 export const invalidResponse = (what: string, error: z.ZodError | string): HostError =>
   hostError(
     "invalid-response",

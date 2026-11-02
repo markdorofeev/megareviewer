@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig as loadAnthropicConfig } from "@anthropic-ai/sdk/core/credentials";
 import type { Hono } from "hono";
@@ -19,6 +20,7 @@ import type {
   Logger,
   TicketSource,
 } from "../application/ports/index.ts";
+import { retryingGitHost } from "../application/retries/index.ts";
 import { type AppDeps, createUseCases, type UseCases } from "../application/use-cases/index.ts";
 import type { HostKind } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
@@ -59,12 +61,15 @@ export const createHosts = (
 ): Partial<Record<HostKind, GitHost>> => {
   const { github, bitbucket } = config;
   const { clock, logger } = options;
+  const retrying = (host: GitHost) => retryingGitHost(host, { sleep, logger });
   return {
     ...(github !== null && {
-      github: createGitHubHost({ token: github.token, version: options.version, clock, logger }),
+      github: retrying(
+        createGitHubHost({ token: github.token, version: options.version, clock, logger }),
+      ),
     }),
     ...(bitbucket !== null && {
-      bitbucket: createBitbucketHost({ ...bitbucket, clock, logger }),
+      bitbucket: retrying(createBitbucketHost({ ...bitbucket, clock, logger })),
     }),
   };
 };

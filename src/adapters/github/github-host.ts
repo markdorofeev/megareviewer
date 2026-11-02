@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Clock, GitHost, Logger } from "../../application/ports/index.ts";
 import type { CommentKey, HostError, HostUser } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import { fromOctokitError, invalidResponse } from "./errors.ts";
+import { fromOctokitError, invalidResponse, timedOut } from "./errors.ts";
 import { byUpdatedAtDesc, toHostUser, toPullRequest, toSummaries } from "./map.ts";
 import { matchComments, planReview, SUMMARY } from "./publish.ts";
 import {
@@ -24,6 +24,8 @@ export interface GitHubHostOptions {
   readonly clock: Clock;
   readonly logger: Logger;
   readonly fetch?: typeof fetch;
+  /** How long a read may take before it fails as a network error. */
+  readonly requestTimeoutMs?: number;
 }
 
 const DIFF = "application/vnd.github.diff";
@@ -31,9 +33,17 @@ const RAW = "application/vnd.github.raw";
 /** GitHub's cap on `GET /pulls/{n}/commits`. */
 const MAX_COMMITS = 250;
 const SEARCH_PAGE_SIZE = 50;
+/** A stalled read is abandoned after this, so it can be retried. */
+export const REQUEST_TIMEOUT_MS = 60_000;
+
+/** Octokit's per-request options: the signal that enforces the deadline. */
+interface RequestOptions {
+  readonly signal?: AbortSignal;
+}
 
 export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
   const { clock, logger } = options;
+  const timeoutMs = options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
   const octokit = new Octokit({
     auth: options.token,
     userAgent: `megareviewer/${options.version}`,
@@ -48,17 +58,27 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
     },
   });
 
-  /** Sends a request and parses what it returns. Octokit's errors become HostErrors. */
+  /**
+   * Sends a request and parses what it returns. Octokit's errors become HostErrors. A read that
+   * takes longer than the timeout fails as a network error; `deadline: false` is for a post,
+   * where giving up wouldn't stop GitHub from completing it.
+   */
   const read = async <T>(
     what: string,
     schema: z.ZodType<T>,
-    send: () => Promise<unknown>,
+    send: (request: RequestOptions) => Promise<unknown>,
+    { deadline = true }: { deadline?: boolean } = {},
   ): Promise<Result<T, HostError>> => {
+    const controller = deadline ? new AbortController() : null;
+    const timer = controller === null ? null : setTimeout(() => controller.abort(), timeoutMs);
     let data: unknown;
     try {
-      data = await send();
+      data = await send(controller === null ? {} : { signal: controller.signal });
     } catch (error) {
+      if (controller?.signal.aborted) return err(timedOut(timeoutMs));
       return err(fromOctokitError(error, clock.now()));
+    } finally {
+      if (timer !== null) clearTimeout(timer);
     }
     const parsed = schema.safeParse(data);
     return parsed.success ? ok(parsed.data) : err(invalidResponse(what, parsed.error));
@@ -71,8 +91,8 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
 
     async currentUser() {
       if (cachedUser !== null) return ok(cachedUser);
-      const user = await read("the current user", GitHubUser, async () => {
-        return (await octokit.request("GET /user")).data;
+      const user = await read("the current user", GitHubUser, async (request) => {
+        return (await octokit.request("GET /user", { request })).data;
       });
       if (!user.ok) return user;
       cachedUser = toHostUser(user.value);
@@ -82,12 +102,13 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
     async getPullRequest(ref) {
       const { owner, repo } = ref.repo;
       const pull_number = ref.number;
-      const pullRequest = await read("the pull request", GitHubPullRequest, async () => {
+      const pullRequest = await read("the pull request", GitHubPullRequest, async (request) => {
         return (
           await octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
             owner,
             repo,
             pull_number,
+            request,
           })
         ).data;
       });
@@ -97,31 +118,34 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
       // from a newer push than headSha. It's the same three-dot diff GitHub shows on the PR.
       const basehead = `${pullRequest.value.base.sha}...${pullRequest.value.head.sha}`;
       const [diff, comparison, commits] = await Promise.all([
-        read("the diff", GitHubText, async () => {
+        read("the diff", GitHubText, async (request) => {
           return (
             await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
               owner,
               repo,
               basehead,
               headers: { accept: DIFF },
+              request,
             })
           ).data;
         }),
-        read("the merge base", GitHubComparison, async () => {
+        read("the merge base", GitHubComparison, async (request) => {
           return (
             await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
               owner,
               repo,
               basehead,
+              request,
             })
           ).data;
         }),
-        read("the commits", z.array(GitHubCommit), () =>
-          octokit.paginate("GET /repos/{owner}/{repo}/pulls/{pull_number}/commits", {
+        read("the commits", z.array(GitHubCommit), (request) =>
+          octokit.paginate(octokit.rest.pulls.listCommits, {
             owner,
             repo,
             pull_number,
             per_page: 100,
+            request,
           }),
         ),
       ]);
@@ -146,13 +170,14 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
     async getFile(repo, sha, path) {
       // Octokit would encode the slashes of a {path} parameter, so the path goes in as is.
       const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-      const content = await read(`${path} at ${sha}`, GitHubText, async () => {
+      const content = await read(`${path} at ${sha}`, GitHubText, async (request) => {
         return (
           await octokit.request(`GET /repos/{owner}/{repo}/contents/${encodedPath}`, {
             owner: repo.owner,
             repo: repo.repo,
             ref: sha,
             headers: { accept: RAW },
+            request,
           })
         ).data;
       });
@@ -162,11 +187,12 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
 
     async listPullRequests() {
       const search = (qualifier: string) =>
-        read("the pull request search", GitHubSearchResult, async () => {
+        read("the pull request search", GitHubSearchResult, async (request) => {
           return (
             await octokit.request("GET /search/issues", {
               q: `is:pr is:open archived:false ${qualifier}`,
               per_page: SEARCH_PAGE_SIZE,
+              request,
             })
           ).data;
         });
@@ -204,17 +230,22 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
 
       const { owner, repo } = ref.repo;
       const pull_number = ref.number;
-      const review = await read("the new review", GitHubReview, async () => {
-        return (
-          await octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
-            owner,
-            repo,
-            pull_number,
-            ...plan.request,
-            comments: [...plan.request.comments],
-          })
-        ).data;
-      });
+      const review = await read(
+        "the new review",
+        GitHubReview,
+        async () => {
+          return (
+            await octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
+              owner,
+              repo,
+              pull_number,
+              ...plan.request,
+              comments: [...plan.request.comments],
+            })
+          ).data;
+        },
+        { deadline: false },
+      );
       if (!review.ok) return review;
       const reviewId = String(review.value.id);
 
@@ -222,11 +253,15 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
       const hostComments =
         plan.comments.length === 0
           ? ok([])
-          : await read("the review's comments", z.array(GitHubReviewComment), () =>
-              octokit.paginate(
-                "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/comments",
-                { owner, repo, pull_number, review_id: review.value.id, per_page: 100 },
-              ),
+          : await read("the review's comments", z.array(GitHubReviewComment), (request) =>
+              octokit.paginate(octokit.rest.pulls.listCommentsForReview, {
+                owner,
+                repo,
+                pull_number,
+                review_id: review.value.id,
+                per_page: 100,
+                request,
+              }),
             );
       if (!hostComments.ok) {
         logger.warn("Couldn't read the review's comments back; recording the review's ID", {

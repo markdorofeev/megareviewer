@@ -105,6 +105,9 @@ export const fromOctokitError = (error: unknown, now: string): HostError => {
   return fromErrorResponse(response, now);
 };
 
+export const timedOut = (timeoutMs: number): HostError =>
+  hostError("network", `GitHub didn't answer within ${timeoutMs / 1000} seconds`);
+
 export const invalidResponse = (what: string, error: z.ZodError): HostError =>
   hostError(
     "invalid-response",

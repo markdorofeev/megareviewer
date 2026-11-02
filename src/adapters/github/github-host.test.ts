@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createFixtureFetch,
   describeGitHostContract,
@@ -227,6 +227,35 @@ describe("createGitHubHost", () => {
         retryAfterSeconds: null,
       });
     });
+
+    it("fails with network when GitHub doesn't answer in time", async () => {
+      vi.useFakeTimers();
+      try {
+        const host = createGitHubHost({
+          token: "t",
+          version: "test",
+          clock: new FixedClock(),
+          logger: new RecordingLogger(),
+          requestTimeoutMs: 5000,
+          fetch: (_input, init) =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+            }),
+        });
+        const result = host.getPullRequest(pr);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(await result).toEqual({
+          ok: false,
+          error: {
+            kind: "network",
+            message: "GitHub didn't answer within 5 seconds",
+            retryAfterSeconds: null,
+          },
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("currentUser", () => {
@@ -342,6 +371,31 @@ describe("createGitHubHost", () => {
         posted,
       };
     };
+
+    it("waits for a slow review post instead of abandoning it, since GitHub may still post it", async () => {
+      vi.useFakeTimers();
+      try {
+        const answer = createFixtureFetch([exchange("POST", REVIEWS_URL, 200, review(7))]);
+        const host = createGitHubHost({
+          token: "t",
+          version: "test",
+          clock: new FixedClock(),
+          logger: new RecordingLogger(),
+          requestTimeoutMs: 5000,
+          fetch: async (input, init) => {
+            await new Promise((resolve) => setTimeout(resolve, 10_000));
+            return answer(input, init);
+          },
+        });
+        const recorded = options(["decision:d1", "decision:d2", "decision:d3"]);
+        const result = host.publish(pr, publication, recorded);
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect((await result).ok).toBe(true);
+        expect(recorded.posted).toEqual([["summary", "7"]]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
 
     it("calls nothing when everything is already posted", async () => {
       const recorded = options(["summary", "decision:d1", "decision:d2", "decision:d3"]);

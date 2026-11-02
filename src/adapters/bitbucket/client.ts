@@ -2,7 +2,13 @@ import type { z } from "zod";
 import type { Logger } from "../../application/ports/index.ts";
 import type { HostError } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import { type CallKind, fromErrorResponse, invalidResponse, networkError } from "./errors.ts";
+import {
+  type CallKind,
+  fromErrorResponse,
+  invalidResponse,
+  networkError,
+  timedOut,
+} from "./errors.ts";
 import { BitbucketPage } from "./schemas.ts";
 
 export const API = "https://api.bitbucket.org/2.0";
@@ -12,12 +18,15 @@ const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 5;
 /** Pages followed per list before giving up and logging, so a huge list can't stall a call. */
 export const MAX_PAGES = 10;
+/** A call, request and body together, is abandoned after this, so a stalled one can be retried. */
+export const REQUEST_TIMEOUT_MS = 60_000;
 
 export interface ClientOptions {
   readonly username: string;
   readonly password: string;
   readonly logger: Logger;
   readonly fetch: typeof fetch;
+  readonly requestTimeoutMs?: number;
 }
 
 export interface JsonRequest {
@@ -42,6 +51,7 @@ export interface BitbucketClient {
 
 export const createBitbucketClient = (options: ClientOptions): BitbucketClient => {
   const { logger } = options;
+  const timeoutMs = options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
   const authorization = `Basic ${Buffer.from(`${options.username}:${options.password}`).toString("base64")}`;
 
   /**
@@ -51,7 +61,8 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
   const send = async (
     url: string,
     accept: string,
-    request: JsonRequest = {},
+    request: JsonRequest,
+    signal: AbortSignal,
   ): Promise<Result<Response, HostError>> => {
     let target = url;
     for (let hop = 0; ; hop += 1) {
@@ -62,6 +73,7 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
         response = await options.fetch(target, {
           method: request.method ?? "GET",
           redirect: "manual",
+          signal,
           headers: {
             accept,
             ...(toApi ? { authorization } : {}),
@@ -87,17 +99,34 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
     }
   };
 
-  /** Sends, and turns a non-2xx answer into a HostError. */
-  const receive = async (
+  /**
+   * Sends, turns a non-2xx answer into a HostError, and reads a 2xx one with `read`, all within
+   * the timeout. A connection that drops mid-body is a network error too.
+   */
+  const call = async <T>(
     url: string,
     accept: string,
-    request: JsonRequest = {},
-  ): Promise<Result<Response, HostError>> => {
-    const response = await send(url, accept, request);
-    if (!response.ok || response.value.ok) return response;
-    const { status, headers } = response.value;
-    const body = await response.value.text();
-    return err(fromErrorResponse({ status, headers, body }, request.call ?? "read"));
+    request: JsonRequest,
+    read: (response: Response) => Promise<Result<T, HostError>>,
+  ): Promise<Result<T, HostError>> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await send(url, accept, request, controller.signal);
+      if (!response.ok) return response;
+      if (!response.value.ok) {
+        const { status, headers } = response.value;
+        const body = await response.value.text();
+        return err(fromErrorResponse({ status, headers, body }, request.call ?? "read"));
+      }
+      return await read(response.value);
+    } catch (error) {
+      if (controller.signal.aborted) return err(timedOut(timeoutMs));
+      if (error instanceof TypeError) return err(networkError(error));
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   const json = async <T>(
@@ -105,19 +134,18 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
     schema: z.ZodType<T>,
     url: string,
     request: JsonRequest = {},
-  ): Promise<Result<T, HostError>> => {
-    const response = await receive(url, "application/json", request);
-    if (!response.ok) return response;
-    const text = await response.value.text();
-    let data: unknown;
-    try {
-      data = text === "" ? null : JSON.parse(text);
-    } catch {
-      return err(invalidResponse(what, "the body isn't JSON"));
-    }
-    const parsed = schema.safeParse(data);
-    return parsed.success ? ok(parsed.data) : err(invalidResponse(what, parsed.error));
-  };
+  ): Promise<Result<T, HostError>> =>
+    call(url, "application/json", request, async (response) => {
+      const text = await response.text();
+      let data: unknown;
+      try {
+        data = text === "" ? null : JSON.parse(text);
+      } catch {
+        return err(invalidResponse(what, "the body isn't JSON"));
+      }
+      const parsed = schema.safeParse(data);
+      return parsed.success ? ok(parsed.data) : err(invalidResponse(what, parsed.error));
+    });
 
   const pages = async <T>(
     what: string,
@@ -144,11 +172,10 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
     json,
     pages,
 
-    async text(url, accept) {
-      const response = await receive(url, accept);
-      if (!response.ok) return response;
+    text: (url, accept) =>
       // Bitbucket sends files and diffs in the repository's encoding, with no charset.
-      return ok(new TextDecoder().decode(await response.value.arrayBuffer()));
-    },
+      call(url, accept, {}, async (response) =>
+        ok(new TextDecoder().decode(await response.arrayBuffer())),
+      ),
   };
 };
