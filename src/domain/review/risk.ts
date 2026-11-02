@@ -9,8 +9,11 @@ export const RiskAssessment = z
     hunkId: HunkId,
     riskClass: RiskClass,
     reason: z.string(),
-    /** proof: a mechanical proof; model: the risk pass; fallback: the model didn't classify it. */
-    source: z.enum(["proof", "model", "fallback"]),
+    /**
+     * proof: a mechanical proof; rule: the contract rules; model: the risk pass; fallback: the
+     * model didn't classify it.
+     */
+    source: z.enum(["proof", "rule", "model", "fallback"]),
   })
   .readonly();
 export type RiskAssessment = z.infer<typeof RiskAssessment>;

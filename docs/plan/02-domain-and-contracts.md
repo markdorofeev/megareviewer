@@ -371,6 +371,7 @@ Record every change to these contracts after the stage is done: date, PR, what c
 
 - 2026-10-21, on main (no PR): `CodeParser.syntaxNodes` closes each inner node with an end marker `{ type: "", text: "" }` and lists non-whitespace text no node covers as `{ type: "", text }`. Plain pre-order didn't keep the "equal lists mean equal trees" promise: dedenting a Python statement out of an `if` gave the same list. Only the doc comment changed; the types didn't. Affects stage 04 (implements it) and stage 10 (passes the lists to `findFormattingProofs` unchanged).
 - 2026-10-21, on branch stage/10-use-cases (no PR): added `FakeCodeParser` to `src/application/testing/`. There was no fake for the `CodeParser` port, and the pipeline needs one. Syntax nodes are the source's tokens, so a reformat gives equal lists; symbols are found by regex; `failAlways(method)` scripts parse errors. No port changed. Affects stages 10, 11 and 16, which run the pipeline on fakes.
+- 2026-11-02, on branch stage/18-rule-based-risk (no PR yet): `RiskAssessment.source` gained `"rule"`, for risk from stage 18's contract rules, so the page can tell a rule's reason from the model's. Nothing reads `source` besides the type. Affects stage 20 (stores rule risk) and stage 21 (shows the reason).
 
 ## Open issues
 
