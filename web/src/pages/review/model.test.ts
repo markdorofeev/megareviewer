@@ -187,7 +187,7 @@ describe("hunkLinks", () => {
     const unknown = { ...analysis.callGraph[0], toHunkId: h.dependency, fromHunkId: h.dependency };
     expect(
       hunkLinks(
-        [unknown].map((hint) => ({ ...hint, symbol: "x" })),
+        [unknown].map((hint) => ({ ...hint, symbol: "x", line: 1 })),
         hunkIndex({ ...analysis, files: [] }),
       ).size,
     ).toBe(0);
@@ -195,6 +195,7 @@ describe("hunkLinks", () => {
       fromHunkId: h.receiptRoute,
       toHunkId: h.retryAndCache,
       symbol: `s${i}`,
+      line: 20,
     }));
     expect(hunkLinks(many, index).get(h.receiptRoute)).toHaveLength(6);
   });

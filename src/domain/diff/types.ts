@@ -80,12 +80,16 @@ export const MechanicalProof = z
   .readonly();
 export type MechanicalProof = z.infer<typeof MechanicalProof>;
 
-/** The code in `fromHunkId` references `symbol`, which `toHunkId` defines or changes. */
+/**
+ * The code in `fromHunkId` references `symbol`, which `toHunkId` defines or changes. `line` is the
+ * new-side line of the first such reference in `fromHunkId`.
+ */
 export const CallGraphHint = z
   .object({
     fromHunkId: HunkId,
     toHunkId: HunkId,
     symbol: z.string().min(1),
+    line: z.number().int().positive(),
   })
   .readonly();
 export type CallGraphHint = z.infer<typeof CallGraphHint>;

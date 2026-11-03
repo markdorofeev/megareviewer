@@ -140,15 +140,25 @@ export const smallFeatureInput: AnalysisInput = {
   tickets: smallFeature.tickets,
   files: smallFeatureFiles.map(inputFile),
   callGraph: [
-    { fromHunkId: importHunk.id, toHunkId: receiptServiceHunk.id, symbol: "renderReceipt" },
-    { fromHunkId: receiptRouteHunk.id, toHunkId: receiptServiceHunk.id, symbol: "renderReceipt" },
+    {
+      fromHunkId: importHunk.id,
+      toHunkId: receiptServiceHunk.id,
+      symbol: "renderReceipt",
+      line: 4,
+    },
+    {
+      fromHunkId: receiptRouteHunk.id,
+      toHunkId: receiptServiceHunk.id,
+      symbol: "renderReceipt",
+      line: 39,
+    },
   ],
 };
 
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "2+fake-model/1",
+  pipelineVersion: "3+fake-model/1",
 };
 
 export const smallFeatureIntent: Intent = {

@@ -32,6 +32,7 @@ const calls = (from: HunkId, to: HunkId, symbol: string): CallGraphHint => ({
   fromHunkId: from,
   toHunkId: to,
   symbol,
+  line: 1,
 });
 
 const contract = (...ids: HunkId[]): RiskAssessment[] =>

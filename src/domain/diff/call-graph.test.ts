@@ -54,7 +54,7 @@ describe("buildCallGraphHints", () => {
       ]),
     );
     expect(hints).toEqual([
-      { fromHunkId: callingHunk.id, toHunkId: definingHunk.id, symbol: "slugify" },
+      { fromHunkId: callingHunk.id, toHunkId: definingHunk.id, symbol: "slugify", line: 11 },
     ]);
   });
 
@@ -117,12 +117,12 @@ describe("buildCallGraphHints", () => {
       ]),
     );
     expect(hints).toEqual([
-      { fromHunkId: a.id, toHunkId: b.id, symbol: "parse" },
-      { fromHunkId: b.id, toHunkId: a.id, symbol: "parse" },
+      { fromHunkId: a.id, toHunkId: b.id, symbol: "parse", line: 1 },
+      { fromHunkId: b.id, toHunkId: a.id, symbol: "parse", line: 1 },
     ]);
   });
 
-  it("gives one hint per symbol and hunk, however often it's referenced", () => {
+  it("gives one hint per symbol and hunk, on the first reference's line", () => {
     const hints = buildCallGraphHints(
       [file("src/text.ts", definingHunk), file("src/page.ts", callingHunk)],
       new Map([
@@ -132,14 +132,15 @@ describe("buildCallGraphHints", () => {
           symbols(
             [],
             [
-              ["slugify", 10],
               ["slugify", 11],
+              ["slugify", 10],
+              ["slugify", 12],
             ],
           ),
         ],
       ]),
     );
-    expect(hints).toHaveLength(1);
+    expect(hints.map((hint) => hint.line)).toEqual([10]);
   });
 
   it("keeps at most 10 hints per hunk, same file first, then by symbol name", () => {

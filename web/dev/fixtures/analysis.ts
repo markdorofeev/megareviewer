@@ -498,8 +498,18 @@ const analysis: Analysis = {
   missingTicketKeys: ["SHOP-139"],
   proofs,
   callGraph: [
-    { fromHunkId: h.receiptRoute, toHunkId: h.retryAndCache, symbol: "cachedReceipt" },
-    { fromHunkId: h.receiptFormatting, toHunkId: h.formatMoneyAdded, symbol: "formatMoney" },
+    {
+      fromHunkId: h.receiptRoute,
+      toHunkId: h.retryAndCache,
+      symbol: "cachedReceipt",
+      line: 20,
+    },
+    {
+      fromHunkId: h.receiptFormatting,
+      toHunkId: h.formatMoneyAdded,
+      symbol: "formatMoney",
+      line: 12,
+    },
   ],
   intent: {
     stated: {

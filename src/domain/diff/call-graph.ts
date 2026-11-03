@@ -23,8 +23,9 @@ interface Located {
  * Hints for the tour: a hunk that references a symbol points to each other hunk that changes it.
  * A hunk changes a symbol when its added lines overlap the definition; it references one when a
  * reference falls on its added or context lines. Symbols match by name only, so two symbols with
- * one name link both ways: these order the tour, they aren't facts. At most 10 hints per hunk,
- * same file first, then by symbol name.
+ * one name link both ways: these order the tour, they aren't facts. One hint per symbol and
+ * hunk, on its first reference's line. At most 10 hints per hunk, same file first, then by symbol
+ * name.
  */
 export const buildCallGraphHints = (
   files: readonly FileChange[],
@@ -48,15 +49,15 @@ export const buildCallGraphHints = (
 
   return hunks.flatMap((from): CallGraphHint[] => {
     const lines = new Set(newLines(from.hunk, ["add", "context"]));
-    const names = new Set(
-      (symbolsByPath.get(from.path)?.references ?? [])
-        .filter((reference) => lines.has(reference.line))
-        .map((reference) => reference.name),
-    );
-    const candidates = [...names].flatMap((symbol) =>
+    const firstLine = new Map<string, number>();
+    for (const { name, line } of symbolsByPath.get(from.path)?.references ?? []) {
+      const first = firstLine.get(name);
+      if (lines.has(line) && (first === undefined || line < first)) firstLine.set(name, line);
+    }
+    const candidates = [...firstLine].flatMap(([symbol, line]) =>
       (changedBy.get(symbol) ?? [])
         .filter((to) => to.hunk.id !== from.hunk.id)
-        .map((to) => ({ to, symbol, sameFile: to.path === from.path })),
+        .map((to) => ({ to, symbol, line, sameFile: to.path === from.path })),
     );
     return candidates
       .sort(
@@ -66,7 +67,12 @@ export const buildCallGraphHints = (
           a.to.order - b.to.order,
       )
       .slice(0, MAX_HINTS_PER_HUNK)
-      .map(({ to, symbol }) => ({ fromHunkId: from.hunk.id, toHunkId: to.hunk.id, symbol }));
+      .map(({ to, symbol, line }) => ({
+        fromHunkId: from.hunk.id,
+        toHunkId: to.hunk.id,
+        symbol,
+        line,
+      }));
   });
 };
 
