@@ -243,7 +243,9 @@ test.describe("without the model", () => {
     // The call tree shows the same mark.
     await page.getByRole("button", { name: "Call tree" }).click();
     const tree = page.getByRole("navigation", { name: "Call tree" });
-    await expect(tree.getByRole("button", { name: /^renderReceipt \(logic\) reviewed$/ })).toBeVisible();
+    await expect(
+      tree.getByRole("button", { name: /^renderReceipt \(logic\) reviewed$/ }),
+    ).toBeVisible();
 
     // ⌘K with ! lists the contract changes; Enter goes to the first.
     await page.keyboard.press("ControlOrMeta+k");
