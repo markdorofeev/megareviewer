@@ -1,12 +1,12 @@
 import "./diff.css";
-import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { FileChange, Hunk, HunkId, MechanicalProof } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { type CharRange, intraLineChanges } from "./intra-line.ts";
 import { type DisplayLine, displayLines, hunkLocation, hunkRanges } from "./lines.ts";
 import { RiskBadge } from "./RiskBadge.tsx";
 import { type CodeToken, plainTokens, segmentLine } from "./tokens.ts";
-import { useHighlighter } from "./useHighlighter.ts";
+import { useHighlighter, useNearViewport } from "./useHighlighter.ts";
 
 declare module "react" {
   interface CSSProperties {
@@ -86,6 +86,8 @@ export const HunkCard = memo(function HunkCard({
   openComment = null,
   onOpenComment,
   onComment,
+  afterHeader,
+  belowLine,
 }: {
   readonly hunk: Hunk;
   readonly file: FileChange;
@@ -98,7 +100,7 @@ export const HunkCard = memo(function HunkCard({
   readonly onFocus?: (id: HunkId) => void;
   /** Shows this many lines at first, with a button for the rest. */
   readonly lineLimit?: number;
-  /** Hunks this one calls or is called by, which `onFollow` goes to. */
+  /** Hunks that call this one, which `onFollow` goes to; calls show in the code, by `belowLine`. */
   readonly links?: readonly HunkLink[];
   readonly onFollow?: (id: HunkId) => void;
   /** Whether the reviewer has read this hunk; without `onReviewed` there's no checkbox. */
@@ -110,6 +112,10 @@ export const HunkCard = memo(function HunkCard({
   readonly openComment?: LinePlace | null;
   readonly onOpenComment?: (id: HunkId, place: LinePlace | null) => void;
   readonly onComment?: (id: HunkId, comment: LineComment) => void;
+  /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
+  readonly afterHeader?: ReactNode;
+  /** Shown under the line with this new-side number, e.g. the calls it makes. */
+  readonly belowLine?: ReadonlyMap<number, ReactNode>;
 }) {
   const ref = useRef<HTMLElement>(null);
   const [showAll, setShowAll] = useState(false);
@@ -118,7 +124,9 @@ export const HunkCard = memo(function HunkCard({
     () => intraLineChanges(lines.map(({ line, text }) => ({ kind: line.kind, text }))),
     [lines],
   );
-  const tokens = useHighlighter(hunk, file);
+  // Far from the viewport a card isn't highlighted yet, so a long PR opens fast.
+  const near = useNearViewport(ref);
+  const tokens = useHighlighter(hunk, file, near);
   const shown =
     lineLimit === undefined || showAll || lines.length <= lineLimit
       ? lines
@@ -131,6 +139,7 @@ export const HunkCard = memo(function HunkCard({
     card.scrollIntoView({ block: "start" });
   }, [focused]);
 
+  const callers = links.filter((link) => link.direction === "called-by");
   const classes = ["hunk-card", highlighted && "highlighted", risk && `risk-${risk.riskClass}`];
   return (
     <section
@@ -168,19 +177,18 @@ export const HunkCard = memo(function HunkCard({
           </label>
         )}
       </header>
-      {links.length > 0 && onFollow !== undefined && (
-        <ul className="hunk-links" aria-label="Call graph">
-          {links.map((link) => (
-            <li key={`${link.direction}:${link.symbol}:${link.hunkId}`}>
+      {callers.length > 0 && onFollow !== undefined && (
+        <ul className="hunk-links" aria-label="Called by">
+          {callers.map((link) => (
+            <li key={`${link.symbol}:${link.hunkId}`}>
               <button type="button" className="hunk-link" onClick={() => onFollow(link.hunkId)}>
-                {link.direction === "calls"
-                  ? `calls ${link.symbol} ↓`
-                  : `called by ${link.symbol} ↑`}
+                called by {link.symbol} ↑
               </button>
             </li>
           ))}
         </ul>
       )}
+      {afterHeader}
       <div
         className="hunk-body"
         // Off screen, the lines are as tall as they will be, so the scrollbar doesn't jump.
@@ -201,6 +209,10 @@ export const HunkCard = memo(function HunkCard({
               const comment =
                 place === null ? undefined : comments.find((one) => samePlace(one, place));
               const open = place !== null && openComment !== null && samePlace(openComment, place);
+              const below =
+                line.line.kind === "del" || line.line.newLine === null
+                  ? undefined
+                  : belowLine?.get(line.line.newLine);
               return (
                 // biome-ignore lint/suspicious/noArrayIndexKey: lines don't move within a hunk.
                 <Fragment key={i}>
@@ -226,6 +238,11 @@ export const HunkCard = memo(function HunkCard({
                       }
                       onDone={() => onOpenComment?.(hunk.id, null)}
                     />
+                  )}
+                  {below !== undefined && (
+                    <tr className="line-below">
+                      <td colSpan={4}>{below}</td>
+                    </tr>
                   )}
                 </Fragment>
               );

@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { Analysis } from "../../../../src/domain/review/index.ts";
+import { type Analysis, DecisionId } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks } from "../../../dev/fixtures/index.ts";
 import {
-  entryOf,
+  BAR_MAX_PX,
+  BAR_MIN_PX,
+  barHeight,
+  callsByLine,
+  decisionPlaces,
+  firstCall,
   hunkIndex,
   hunkLinks,
   hunksInPathOrder,
-  inReadingOrder,
+  mapSections,
   mechanicalCount,
-  readingOrder,
   reviewOrder,
-  riskMix,
   riskTotals,
   tourSteps,
   trailingProofs,
@@ -77,18 +80,89 @@ describe("reading order", () => {
       h.retryAndCache,
     ]);
   });
+});
 
-  it("sorts a decision's hunks by the tour, then by file", () => {
-    const order = readingOrder(analysis, analysis.tour?.steps ?? []);
-    expect(inReadingOrder([h.dependency, h.receiptFormatting, h.receiptRoute], order)).toEqual([
-      h.receiptRoute,
-      h.receiptFormatting,
-      h.dependency,
+describe("mapSections and reviewOrder", () => {
+  const index = hunkIndex(analysis);
+  const steps = tourSteps(analysis, index);
+
+  it("is the tour's steps, with mechanical hunks in place", () => {
+    const sections = mapSections(analysis, steps, index);
+    expect(sections.map((section) => section.kind)).toEqual(["step", "step", "step", "step"]);
+    expect(sections[0]?.hunkIds).toEqual([h.receiptRoute, h.routeImports, h.formatMoneyRemoved]);
+  });
+
+  it("is every change by path before the tour exists", () => {
+    const early: Analysis = { ...analysis, tour: null };
+    const sections = mapSections(early, tourSteps(early, index), index);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]?.kind).toBe("files");
+    expect(sections[0]?.hunkIds).toContain(h.formatMoneyRemoved);
+  });
+
+  it("lists the hunks to review in the map's order, without mechanical ones", () => {
+    expect(reviewOrder(mapSections(analysis, steps, index), index)).toEqual(
+      steps.flatMap((step) => step.hunkIds),
+    );
+  });
+});
+
+describe("decisionPlaces", () => {
+  const index = hunkIndex(analysis);
+  const order = mapSections(analysis, tourSteps(analysis, index), index).flatMap(
+    (section) => section.hunkIds,
+  );
+  const decision = (id: string, hunkIds: readonly (typeof h)[keyof typeof h][]) => ({
+    ...analysis.decisions[0],
+    id: DecisionId.parse(id),
+    title: id,
+    category: "other" as const,
+    whyItMatters: "w",
+    hunkIds,
+  });
+
+  it("puts each card on the decision's first hunk in the page's order, and links the others", () => {
+    const d5 = decision("d5", [h.dependency, h.receiptFormatting]);
+    const places = decisionPlaces([d5], order, index);
+    expect(places.cards.get(h.receiptFormatting)).toEqual([d5]);
+    expect(places.mentions.get(h.dependency)).toEqual([d5]);
+    expect(places.cardHunk.get(d5.id)).toBe(h.receiptFormatting);
+    expect(places.unplaced).toEqual([]);
+  });
+
+  it("never puts a card on a mechanical hunk, and keeps decisions on none apart", () => {
+    const moved = decision("d1", [h.formatMoneyRemoved, h.retryAndCache]);
+    const nowhere = decision("d2", [h.formatMoneyAdded]);
+    const places = decisionPlaces([moved, nowhere], order, index);
+    expect(places.cards.get(h.retryAndCache)).toEqual([moved]);
+    expect(places.mentions.get(h.formatMoneyRemoved)).toBeUndefined();
+    expect(places.unplaced).toEqual([nowhere]);
+  });
+});
+
+describe("callsByLine and firstCall", () => {
+  const index = hunkIndex(analysis);
+
+  it("puts each call on its line, and drops calls to unknown hunks", () => {
+    const calls = callsByLine(analysis.callGraph, index);
+    expect(calls.get(h.receiptRoute)?.get(20)).toEqual([
+      { symbol: "cachedReceipt", toHunkId: h.retryAndCache, line: 20 },
     ]);
-    expect(inReadingOrder([h.formatMoneyAdded, h.receiptRoute, h.receiptRoute], order)).toEqual([
-      h.receiptRoute,
-      h.formatMoneyAdded,
-    ]);
+    expect(callsByLine(analysis.callGraph, hunkIndex({ ...analysis, files: [] })).size).toBe(0);
+  });
+
+  it("finds the first call by line", () => {
+    const later = { symbol: "b", toHunkId: h.dependency, line: 9 };
+    const earlier = { symbol: "a", toHunkId: h.retryAndCache, line: 3 };
+    expect(
+      firstCall(
+        new Map([
+          [9, [later]],
+          [3, [earlier]],
+        ]),
+      ),
+    ).toBe(earlier);
+    expect(firstCall(undefined)).toBeNull();
   });
 });
 
@@ -147,11 +221,18 @@ describe("withMechanicalInPlace", () => {
 describe("risk counts", () => {
   const index = hunkIndex(analysis);
 
-  it("adds up a step's changed lines by risk class", () => {
-    const mix = riskMix([h.dependency, h.receiptRoute, h.formatMoneyRemoved], index);
-    expect(mix.contract).toBeGreaterThan(0);
-    expect(mix.mechanical).toBeGreaterThan(0);
-    expect(riskMix([h.retryAndCache], index)).toMatchObject({ contract: 0, mechanical: 0 });
+  it("sizes a hunk's bar by its lines, within a minimum and a cap", () => {
+    const lines = (count: number) => ({ lines: Array.from({ length: count }, () => line) });
+    const line = {
+      kind: "add" as const,
+      text: "",
+      oldLine: null,
+      newLine: 1,
+      noNewlineAtEnd: false,
+    };
+    expect(barHeight(lines(1))).toBe(BAR_MIN_PX);
+    expect(barHeight(lines(12))).toBe(12);
+    expect(barHeight(lines(500))).toBe(BAR_MAX_PX);
   });
 
   it("counts every hunk and file-level proof once across the pull request", () => {
@@ -162,7 +243,7 @@ describe("risk counts", () => {
     expect(totals.mechanical).toBe(mechanicalCount(analysis.proofs));
   });
 
-  it("leaves mechanical hunks of files with other changes out of the last entry", () => {
+  it("leaves mechanical hunks of files with other changes out of the mechanical group", () => {
     const trailing = trailingProofs(analysis, index);
     expect(trailing.some((proof) => proof.hunkId === h.formatMoneyRemoved)).toBe(false);
     expect(trailing).toHaveLength(analysis.proofs.length - 1);
@@ -198,22 +279,5 @@ describe("hunkLinks", () => {
       line: 20,
     }));
     expect(hunkLinks(many, index).get(h.receiptRoute)).toHaveLength(6);
-  });
-});
-
-describe("entryOf and reviewOrder", () => {
-  const index = hunkIndex(analysis);
-  const steps = tourSteps(analysis, index);
-
-  it("finds the step that shows a hunk, mechanical ones in place included", () => {
-    expect(entryOf(h.retryAndCache, steps, index)).toEqual({ kind: "step", stepId: "s2" });
-    expect(entryOf(h.formatMoneyRemoved, steps, index)).toEqual({ kind: "step", stepId: "s1" });
-    expect(entryOf(h.formatMoneyAdded, steps, index)).toEqual({ kind: "mechanical" });
-  });
-
-  it("lists the hunks to review in tour order", () => {
-    expect(reviewOrder(steps).map((item) => item.hunkId)).toEqual(
-      steps.flatMap((step) => step.hunkIds),
-    );
   });
 });

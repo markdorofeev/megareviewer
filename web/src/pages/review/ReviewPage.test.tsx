@@ -1,8 +1,9 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisView } from "../../../../contracts/index.ts";
+import type { HunkId } from "../../../../src/domain/diff/index.ts";
 import {
   AnalysisId,
   DecisionId,
@@ -78,17 +79,42 @@ const mainArea = () => {
   if (main === null) throw new Error("no main area");
   return main;
 };
-const mainHeading = () => within(mainArea()).getAllByRole("heading", { level: 2 })[0]?.textContent;
-const tour = () => screen.getByRole("navigation", { name: "Tour" });
-const decisions = () => screen.getByRole("region", { name: "Decisions" });
+/** The step headings in the map, in order. */
+const stepHeadings = () =>
+  [...mainArea().querySelectorAll(".step-heading h2")].map((heading) => heading.textContent);
+/** A hunk's place in the map: its card, or its collapsed row. */
+const placeOf = (hunkId: HunkId) => {
+  const place = document.getElementById(`hunk-${hunkId}`);
+  if (place === null) throw new Error(`no hunk ${hunkId} in the map`);
+  return place;
+};
+const cardOf = (hunkId: HunkId) => {
+  const card = placeOf(hunkId).querySelector<HTMLElement>(":scope > .hunk-card");
+  if (card === null) throw new Error(`no card for ${hunkId}`);
+  return card;
+};
+const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
+const rail = () => screen.getByRole("complementary", { name: "Map" });
+const tree = () => screen.getByRole("navigation", { name: "Call tree" });
+const decisionCard = (title: RegExp) => screen.getByRole("article", { name: title });
 const approve = (title: RegExp) =>
   screen.getByRole("button", { name: new RegExp(`^Approve: ${title.source}`) });
 const reject = (title: RegExp) =>
   screen.getByRole("button", { name: new RegExp(`^Reject: ${title.source}`) });
 const OWNERSHIP = /Looks up the order by ID/;
+const ENDPOINT = /Adds a public endpoint/;
 const RETRIES = /Retries the tax service/;
+const DAYJS = /Adds dependency dayjs/;
 const putRequests = (requests: readonly RecordedRequest[]) =>
   requests.filter((request) => request.method === "PUT");
+const scrolledTo = () =>
+  vi
+    .mocked(Element.prototype.scrollIntoView)
+    .mock.contexts.map((element) => (element as Element).id);
+
+const ROUTE = /^src\/routes\/orders\.ts, lines 10–24$/;
+const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
+const RECEIPTS = /^src\/services\/receipts\.ts, lines 26–/;
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -97,6 +123,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
 });
 
@@ -106,7 +133,7 @@ describe("ReviewPage states", () => {
     expect(screen.getByLabelText("Loading the analysis")).toBeTruthy();
     await loaded();
     expect(screen.queryByLabelText("Loading the analysis")).toBeNull();
-    expect(mainHeading()).toBe("The receipt endpoint");
+    expect(stepHeadings()[0]).toBe("1 The receipt endpoint");
   });
 
   it("says how many files Collect has while it runs", async () => {
@@ -129,7 +156,7 @@ describe("ReviewPage states", () => {
     expect(progress.textContent).not.toContain("files");
   });
 
-  it("shows each section of a running analysis as soon as its data exists", async () => {
+  it("shows each part of a running analysis as soon as its data exists", async () => {
     const { setView } = renderReview({
       view: { ...fixture, analysis: analysisInProgress(analysis, 2) },
     });
@@ -138,13 +165,12 @@ describe("ReviewPage states", () => {
     expect(progress.textContent).toContain("Prepare: done");
     expect(progress.textContent).toContain("Intent: running");
     expect(screen.getByText("Working out the intent…")).toBeTruthy();
-    expect(mainHeading()).toBe("Changes by file");
+    expect(stepHeadings()).toEqual(["Changes by file"]);
     expect(within(mainArea()).getAllByRole("region", { name: /, lines / })).toHaveLength(5);
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
-    expect(screen.getByText("Building the tour…")).toBeTruthy();
 
     setView({ ...fixture, analysis: analysisInProgress(analysis, 4) });
-    expect(await screen.findByRole("region", { name: "Intent" })).toBeTruthy();
+    expect(await screen.findByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
     expect(screen.getByText("Finding the decisions the code makes…")).toBeTruthy();
 
     setView({ ...fixture, analysis: analysisInProgress(analysis, 5) });
@@ -155,7 +181,7 @@ describe("ReviewPage states", () => {
     expect(screen.getByRole("button", { name: "Publish…" }).hasAttribute("disabled")).toBe(true);
 
     setView(fixture);
-    await waitFor(() => expect(mainHeading()).toBe("The receipt endpoint"));
+    await waitFor(() => expect(stepHeadings()[0]).toBe("1 The receipt endpoint"));
     expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull();
   });
 
@@ -171,7 +197,7 @@ describe("ReviewPage states", () => {
     expect(screen.getByRole("alert").textContent).toContain(
       "The analysis failed at the risk stage: The model gave up",
     );
-    expect(screen.getByRole("region", { name: "Intent" })).toBeTruthy();
+    expect(screen.getByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
     expect(
       screen.getByText("There's no guided tour, so the changes are shown by file."),
     ).toBeTruthy();
@@ -287,12 +313,49 @@ const withIntent = (change: Partial<NonNullable<typeof analysis.intent>>): Analy
   if (analysis.intent === null) throw new Error("the fixture has no intent");
   return { ...fixture, analysis: { ...analysis, intent: { ...analysis.intent, ...change } } };
 };
+const firstMismatch = analysis.intent?.mismatches[0];
+if (firstMismatch === undefined) throw new Error("the fixture has no mismatch");
+const openDetails = async () => {
+  await userEvent.click(screen.getByRole("button", { name: "Details" }));
+  return screen.getByRole("dialog", { name: "Intent" });
+};
 
-describe("intent panel", () => {
-  it("shows stated and inferred intent side by side when they disagree", async () => {
+describe("intent", () => {
+  it("is one line in the header, with the first mismatch named in a chip", async () => {
     renderReview();
     await loaded();
-    const intent = screen.getByRole("region", { name: "Intent" });
+    expect(screen.getByText("From the code:")).toBeTruthy();
+    expect(screen.getByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
+    const chip = screen.getByRole("button", { name: /^SHOP-142 says only the customer/ });
+    expect(chip.textContent).toContain("1 of 1");
+    expect(screen.queryByRole("heading", { name: "Inferred from the code" })).toBeNull();
+  });
+
+  it("goes to a mismatch's hunks from the chip, and names the next one", async () => {
+    const second = {
+      ...firstMismatch,
+      description: "Caches receipts forever.",
+      hunkIds: [h.retryAndCache],
+    };
+    renderReview({ view: withIntent({ mismatches: [firstMismatch, second] }) });
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: /^SHOP-142/ }));
+    expect(focusedLabel()).toMatch(ROUTE);
+    expect(cardOf(h.receiptRoute).classList.contains("highlighted")).toBe(true);
+    const next = screen.getByRole("button", { name: /^Caches receipts forever\./ });
+    expect(next.textContent).toContain("2 of 2");
+
+    await userEvent.click(next);
+    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(cardOf(h.receiptRoute).classList.contains("highlighted")).toBe(false);
+    await userEvent.keyboard("{Escape}");
+    expect(cardOf(h.retryAndCache).classList.contains("highlighted")).toBe(false);
+  });
+
+  it("shows stated and inferred intent side by side in the details when they disagree", async () => {
+    renderReview();
+    await loaded();
+    const intent = await openDetails();
     const sources = within(intent).getByRole("list", { name: "Sources" });
     expect(
       within(sources)
@@ -306,42 +369,39 @@ describe("intent panel", () => {
       within(intent).getByRole("list", { name: "Tickets mentioned but not fetched" }).textContent,
     ).toBe("SHOP-139 · not fetched");
     expect(within(intent).getByRole("heading", { name: "Inferred from the code" })).toBeTruthy();
-    const details = intent.querySelector("details");
-    expect(details?.open).toBe(false);
     expect(within(intent).getByText(/^Details/).textContent).toBe(
       `Details (${analysis.intent?.inferred.behaviorChanges.length})`,
     );
-    expect(within(intent).queryByRole("heading", { name: "Asked" })).toBeNull();
+
+    await userEvent.click(within(intent).getByRole("button", { name: /Contradicts/ }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(focusedLabel()).toMatch(ROUTE);
   });
 
-  it("is one line when the code does what was asked, with the stated intent in the details", async () => {
+  it("says the code does what was asked when they agree, with what was asked in the details", async () => {
     renderReview({ view: withIntent({ mismatches: [] }) });
     await loaded();
-    const intent = screen.getByRole("region", { name: "Intent" });
-    expect(within(intent).getByText("✓ Does what was asked:")).toBeTruthy();
-    expect(within(intent).getByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
+    expect(screen.getByText("✓ Does what was asked:")).toBeTruthy();
+    expect(document.querySelector(".mismatch-chip")).toBeNull();
+    const intent = await openDetails();
     expect(within(intent).queryByRole("heading", { name: "Inferred from the code" })).toBeNull();
-    expect(within(intent).getByRole("list", { name: "Sources" })).toBeTruthy();
-
     await userEvent.click(within(intent).getByText(/^Details/));
-    expect(intent.querySelector("details")?.open).toBe(true);
     expect(within(intent).getByRole("heading", { name: "Asked" })).toBeTruthy();
     expect(within(intent).getByText(analysis.intent?.stated?.summary ?? "")).toBeTruthy();
   });
 
-  it("is one line from the code when nothing was stated and nothing disagrees", async () => {
+  it("is from the code when nothing was stated, and the details say so", async () => {
     renderReview({ view: withIntent({ stated: null, mismatches: [] }) });
     await loaded();
-    const intent = screen.getByRole("region", { name: "Intent" });
-    expect(within(intent).getByText("From the code:")).toBeTruthy();
+    expect(screen.getByText("From the code:")).toBeTruthy();
+    const intent = await openDetails();
     expect(
       within(intent).getByText("No stated intent: the PR has no description or linked tickets."),
     ).toBeTruthy();
-    expect(within(intent).queryByText("✓ Does what was asked:")).toBeNull();
     expect(within(intent).queryByRole("heading", { name: "Asked" })).toBeNull();
   });
 
-  it("leaves the details out when there's nothing in them", async () => {
+  it("leaves the details' toggle out when there's nothing behind it", async () => {
     renderReview({
       view: withIntent({
         stated: null,
@@ -350,146 +410,63 @@ describe("intent panel", () => {
       }),
     });
     await loaded();
-    const intent = screen.getByRole("region", { name: "Intent" });
-    expect(intent.querySelector("details")).toBeNull();
-  });
-
-  it("says when nothing was stated", async () => {
-    renderReview({ view: withIntent({ stated: null }) });
-    await loaded();
-    expect(
-      screen.getByText("No stated intent: the PR has no description or linked tickets."),
-    ).toBeTruthy();
-  });
-
-  it("shows a mismatch's hunks when it's clicked, and goes back to the tour", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: /Contradicts/ }));
-    expect(mainHeading()).toMatch(/^SHOP-142 says only the customer/);
-    const cards = within(mainArea()).getAllByRole("region");
-    expect(cards).toHaveLength(1);
-    expect(cards[0]?.classList.contains("highlighted")).toBe(true);
-    expect(within(tour()).queryByRole("button", { current: "step" })).toBeNull();
-
-    await userEvent.click(screen.getByRole("button", { name: /Back to tour/ }));
-    expect(mainHeading()).toBe("The receipt endpoint");
-  });
-
-  it("remembers being collapsed for this analysis", async () => {
-    const first = renderReview();
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Hide" }));
-    expect(screen.getByText("Inferred from the code").closest("[hidden]")).not.toBeNull();
-    first.unmount();
-
-    renderReview();
-    await loaded();
-    expect(screen.getByRole("button", { name: "Show" }).getAttribute("aria-expanded")).toBe(
-      "false",
-    );
-  });
-
-  it("still works when storage throws", async () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("blocked");
-    });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("blocked");
-    });
-    renderReview();
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Hide" }));
-    expect(screen.getByRole("button", { name: "Show" })).toBeTruthy();
+    expect((await openDetails()).querySelector("details")).toBeNull();
   });
 });
 
-describe("tour", () => {
-  it("moves through the steps with Prev and Next, marking each visited", async () => {
+describe("map", () => {
+  it("shows every step in one scroll, in tour order, then the mechanical changes", async () => {
     renderReview();
     await loaded();
-    expect(within(mainArea()).getByText("Step 1 of 4")).toBeTruthy();
-    expect(within(tour()).getByRole("button", { current: "step" }).textContent).toContain(
-      "The receipt endpoint",
-    );
-    expect(screen.getByRole("button", { name: "← Prev" }).hasAttribute("disabled")).toBe(true);
-
-    await userEvent.click(screen.getByRole("button", { name: "Next →" }));
-    expect(mainHeading()).toBe("Retrying the tax service and caching receipts");
-    expect(within(mainArea()).getAllByRole("region")).toHaveLength(1);
-    const visited = within(tour())
-      .getAllByRole("button")
-      .filter((entry) => entry.textContent?.includes("(visited)"));
-    expect(visited).toHaveLength(2);
-  });
-
-  it("remembers visited steps for this analysis", async () => {
-    const first = renderReview();
-    await loaded();
-    await userEvent.click(within(tour()).getByRole("button", { name: /The new dependency/ }));
-    first.unmount();
-
-    renderReview();
-    await loaded();
+    expect(stepHeadings()).toEqual([
+      "1 The receipt endpoint",
+      "2 Retrying the tax service and caching receipts",
+      "3 Dates and prices on the receipt",
+      "4 The new dependency",
+    ]);
+    expect(screen.getByText(analysis.tour?.steps[0]?.explanation ?? "")).toBeTruthy();
+    expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
     expect(
-      within(tour()).getByRole("button", { name: /The new dependency/ }).textContent,
-    ).toContain("(visited)");
-    expect(
-      within(tour()).getByRole("button", { name: /Dates and prices/ }).textContent,
-    ).not.toContain("(visited)");
-  });
-
-  it("ends with the mechanical changes", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.click(
-      within(tour()).getByRole("button", { name: "Generated and mechanical (5)" }),
-    );
-    expect(screen.getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Next →" }).hasAttribute("disabled")).toBe(true);
+      within(mainArea())
+        .getAllByRole("region", { name: /, lines / })
+        .map((card) => card.getAttribute("aria-label")),
+    ).toHaveLength(5);
   });
 
   it("shows a mechanical hunk collapsed in its file's step, expanding to its card", async () => {
     renderReview();
     await loaded();
-    const row = within(mainArea()).getByRole("button", {
-      name: /^src\/routes\/orders\.ts, .*moved/,
-    });
+    const row = within(placeOf(h.formatMoneyRemoved)).getByRole("button", { name: /moved/ });
     expect(row.getAttribute("aria-expanded")).toBe("false");
-    const regions = within(mainArea()).getAllByRole("region").length;
-
     await userEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("true");
-    expect(within(mainArea()).getAllByRole("region")).toHaveLength(regions + 1);
-  });
-
-  it("shows the risk totals and each step's contract hunks", async () => {
-    renderReview();
-    await loaded();
-    expect(within(tour()).getByText(/^\d+ contract$/)).toBeTruthy();
-    expect(
-      within(tour()).getByRole("button", { name: /The new dependency/ }).textContent,
-    ).toContain("1 contract");
+    expect(within(placeOf(h.formatMoneyRemoved)).getByRole("region")).toBeTruthy();
   });
 
   it("shows only contract hunks when asked, remembers it, and shows the rest again", async () => {
+    const first = renderReview();
+    await loaded();
+    expect(within(rail()).getByText("2 contract")).toBeTruthy();
+    const toggle = within(rail()).getByRole("checkbox", { name: "Contract changes only" });
+    await userEvent.click(toggle);
+    const shown = within(mainArea()).getAllByRole("region", { name: /, lines / });
+    expect(shown.map((card) => card.getAttribute("aria-label")?.split(",")[0])).toEqual([
+      "src/routes/orders.ts",
+      "package.json",
+    ]);
+    expect(stepHeadings()).toEqual(["1 The receipt endpoint", "4 The new dependency"]);
+    expect(window.localStorage.getItem(`megareviewer:contract-only:${id}`)).toBe("true");
+    first.unmount();
+
     renderReview();
     await loaded();
-    const all = within(mainArea()).getAllByRole("region").length;
-    const toggle = within(tour()).getByRole("checkbox", { name: "Contract changes only" });
-
-    await userEvent.click(toggle);
-    const shown = within(mainArea()).queryAllByRole("region");
-    expect(shown.length).toBeLessThan(all);
-    expect(shown.every((card) => card.classList.contains("risk-contract"))).toBe(true);
-    expect(window.localStorage.getItem(`megareviewer:contract-only:${id}`)).toBe("true");
-
-    await userEvent.click(within(tour()).getByRole("button", { name: /The new dependency/ }));
-    expect(within(mainArea()).getAllByRole("region")).toHaveLength(1);
-
-    await userEvent.click(toggle);
-    await userEvent.click(within(tour()).getByRole("button", { name: /The receipt endpoint/ }));
-    expect(within(mainArea()).getAllByRole("region")).toHaveLength(all);
+    expect(stepHeadings()).toHaveLength(2);
+    // Going to a hunk that isn't shown shows everything again.
+    await userEvent.click(
+      within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
+    );
+    expect(stepHeadings()).toHaveLength(4);
+    expect(focusedLabel()).toMatch(RECEIPTS);
   });
 
   it("says when the model's tour failed and the call-graph tour replaced it", async () => {
@@ -507,16 +484,156 @@ describe("tour", () => {
       screen.getByText("The model's tour wasn't usable, so this one follows the call graph."),
     ).toBeTruthy();
   });
+
+  it("still works when storage throws", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    renderReview();
+    await loaded();
+    await userEvent.click(within(rail()).getByRole("checkbox", { name: "Contract changes only" }));
+    expect(stepHeadings()).toHaveLength(2);
+  });
+});
+
+/** IntersectionObserver for tests: records what it observes, and reports what a test says. */
+class FakeObserver {
+  static all: FakeObserver[] = [];
+  readonly observed = new Set<Element>();
+  readonly callback: IntersectionObserverCallback;
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+    FakeObserver.all.push(this);
+  }
+  observe(element: Element) {
+    this.observed.add(element);
+  }
+  unobserve(element: Element) {
+    this.observed.delete(element);
+  }
+  disconnect() {
+    this.observed.clear();
+  }
+  /** Reports these elements entering (or leaving) the viewport to every observer watching them. */
+  static report(elements: readonly Element[], isIntersecting = true) {
+    for (const observer of FakeObserver.all) {
+      const entries = elements
+        .filter((element) => observer.observed.has(element))
+        .map((target) => ({ target, isIntersecting }) as IntersectionObserverEntry);
+      if (entries.length > 0)
+        observer.callback(entries, observer as unknown as IntersectionObserver);
+    }
+  }
+}
+
+describe("risk map", () => {
+  const bar = (name: RegExp) => within(rail()).getByRole("button", { name });
+
+  it("has a bar per hunk, sized by its lines and marked for its decisions", async () => {
+    renderReview();
+    await loaded();
+    const route = bar(/^src\/routes\/orders\.ts, lines 10–24, contract$/);
+    expect(route.style.height).toBe("15px");
+    expect(bar(/^src\/routes\/orders\.ts, lines 1–8, logic$/).style.height).toBe("9px");
+    expect([...route.querySelectorAll(".rail-mark")].map((mark) => mark.textContent)).toEqual([
+      "Decision: Adds a public endpoint GET /orders/:id/receipt",
+      "Decision: Looks up the order by ID without checking that it belongs to the user",
+    ]);
+    expect(bar(/^package\.json, .*, contract$/).textContent).toBe(
+      "Decision: Adds dependency dayjs 1.11.13 to format dates",
+    );
+    expect(within(rail()).getByRole("button", { name: "Proved mechanical (5)" })).toBeTruthy();
+  });
+
+  it("marks a contract rule's reason", async () => {
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          risk: analysis.risk.map((risk) =>
+            risk.hunkId === h.dependency
+              ? { ...risk, reason: "Changes dependencies.", source: "rule" as const }
+              : risk,
+          ),
+        },
+      },
+    });
+    await loaded();
+    expect(bar(/^package\.json/).querySelector(".mark-rule")?.textContent).toBe(
+      "Rule: Changes dependencies.",
+    );
+  });
+
+  it("scrolls to a hunk or a step from the rail", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(bar(/^src\/services\/receipts\.ts, lines 26/));
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.retryAndCache}`);
+    expect(focusedLabel()).toMatch(RECEIPTS);
+    await userEvent.click(within(rail()).getByRole("button", { name: /^4 The new dependency/ }));
+    expect(scrolledTo().at(-1)).toBe("step-s4");
+    await userEvent.click(within(rail()).getByRole("button", { name: "Proved mechanical (5)" }));
+    expect(scrolledTo().at(-1)).toBe("mechanical-changes");
+  });
+
+  it("dims and ticks reviewed hunks, and outlines the hunks in view", async () => {
+    vi.stubGlobal("IntersectionObserver", FakeObserver);
+    FakeObserver.all = [];
+    renderReview();
+    await loaded();
+    await userEvent.click(
+      within(cardOf(h.routeImports)).getByRole("checkbox", { name: "Reviewed" }),
+    );
+    const imports = bar(/^src\/routes\/orders\.ts, lines 1–8, logic, reviewed$/);
+    expect(imports.classList.contains("reviewed")).toBe(true);
+    expect(imports.textContent).toContain("✓");
+
+    act(() => FakeObserver.report([placeOf(h.receiptRoute), placeOf(h.routeImports)]));
+    const inView = () =>
+      within(rail())
+        .getAllByRole("button")
+        .filter((button) => button.getAttribute("aria-current") === "location")
+        .map((button) => button.getAttribute("aria-label")?.split(", ")[1]);
+    expect(inView()).toEqual(["lines 10–24", "lines 1–8"]);
+    act(() => FakeObserver.report([placeOf(h.receiptRoute)], false));
+    expect(inView()).toEqual(["lines 1–8"]);
+  });
 });
 
 describe("decisions", () => {
-  it("counts reviewed decisions and saves a verdict at once", async () => {
+  it("sit on the first hunk they rest on, and the others link back to them", async () => {
+    renderReview();
+    await loaded();
+    expect(
+      within(cardOf(h.receiptRoute))
+        .getAllByRole("article")
+        .map(
+          (card) => card.getAttribute("aria-labelledby") && card.querySelector("h3")?.textContent,
+        ),
+    ).toEqual([
+      "Adds a public endpoint GET /orders/:id/receipt",
+      "Looks up the order by ID without checking that it belongs to the user",
+    ]);
+    expect(within(cardOf(h.receiptFormatting)).getByRole("article", { name: DAYJS })).toBeTruthy();
+    const back = within(cardOf(h.dependency)).getByRole("button", { name: DAYJS });
+    expect(within(cardOf(h.dependency)).queryByRole("article")).toBeNull();
+
+    await userEvent.click(back);
+    expect(scrolledTo().at(-1)).toBe("decision-d5");
+    expect(decisionCard(DAYJS).classList.contains("selected")).toBe(true);
+    expect(cardOf(h.dependency).classList.contains("highlighted")).toBe(true);
+    expect(cardOf(h.receiptFormatting).classList.contains("highlighted")).toBe(true);
+  });
+
+  it("save a verdict at once, given on the card", async () => {
     const { requests } = renderReview();
     await loaded();
-    expect(within(decisions()).getByText("0 of 5 reviewed")).toBeTruthy();
     await userEvent.click(reject(OWNERSHIP));
     expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
-    expect(within(decisions()).getByText("1 of 5 reviewed")).toBeTruthy();
     await waitFor(() => expect(putRequests(requests)).toHaveLength(1));
     expect(putRequests(requests)[0]).toMatchObject({
       url: `${viewPath}/verdicts/d2`,
@@ -524,7 +641,7 @@ describe("decisions", () => {
     });
   });
 
-  it("returns a verdict to pending when its active button is clicked again", async () => {
+  it("return a verdict to pending when its active button is clicked again", async () => {
     const { requests } = renderReview();
     await loaded();
     await userEvent.click(approve(RETRIES));
@@ -535,7 +652,7 @@ describe("decisions", () => {
     );
   });
 
-  it("rolls a verdict back and says why when saving fails", async () => {
+  it("roll a verdict back and say why when saving fails", async () => {
     let fail = () => {};
     renderReview({
       respond: (request) =>
@@ -549,16 +666,16 @@ describe("decisions", () => {
     await userEvent.click(approve(RETRIES));
     expect(approve(RETRIES).getAttribute("aria-pressed")).toBe("true");
     fail();
-    const alert = await within(screen.getByRole("complementary")).findByRole("alert");
+    const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(
       "Couldn't save your verdict on “Retries the tax service 3 times with no backoff”. Database locked.",
     );
     expect(approve(RETRIES).getAttribute("aria-pressed")).toBe("false");
     await userEvent.click(within(alert).getByRole("button", { name: "Dismiss" }));
-    expect(within(screen.getByRole("complementary")).queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("autosaves a comment once typing pauses", async () => {
+  it("autosave a comment once typing pauses", async () => {
     const { requests } = renderReview();
     await loaded();
     const field = screen.getByLabelText(
@@ -566,29 +683,12 @@ describe("decisions", () => {
     );
     await userEvent.type(field, "Add backoff");
     expect(putRequests(requests)).toHaveLength(0);
-    expect(await within(decisions()).findByText("Saved")).toBeTruthy();
+    expect(await within(decisionCard(RETRIES)).findByText("Saved")).toBeTruthy();
     expect(putRequests(requests)).toHaveLength(1);
     expect(putRequests(requests)[0]?.body).toEqual({ verdict: "pending", comment: "Add backoff" });
   });
 
-  it("shows a decision's hunks highlighted in focus, and goes back to the tour", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: /^Adds dependency dayjs/ }));
-    expect(within(mainArea()).getByText("Decision")).toBeTruthy();
-    expect(mainHeading()).toBe("Adds dependency dayjs 1.11.13 to format dates");
-    const cards = within(mainArea()).getAllByRole("region");
-    expect(cards.map((card) => card.getAttribute("aria-label")?.split(",")[0])).toEqual([
-      "src/services/receipts.ts",
-      "package.json",
-    ]);
-    expect(cards.every((card) => card.classList.contains("highlighted"))).toBe(true);
-
-    await userEvent.click(screen.getByRole("button", { name: /Back to tour/ }));
-    expect(mainHeading()).toBe("The receipt endpoint");
-  });
-
-  it("is read-only once the review is published", async () => {
+  it("are read-only once the review is published", async () => {
     const receipt: PublicationReceipt = {
       url: "https://github.com/acme/shop/pull/128#pullrequestreview-9",
       publishedAt: "2026-10-22T10:00:00Z",
@@ -621,44 +721,322 @@ describe("decisions", () => {
   });
 });
 
-describe("keyboard shortcuts", () => {
-  it("move through hunks and steps", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.keyboard("j");
-    expect(document.activeElement?.getAttribute("aria-label")).toMatch(
-      /^src\/routes\/orders.ts, lines 1[0-9]/,
-    );
-    await userEvent.keyboard("j");
-    expect(document.activeElement?.getAttribute("aria-label")).toMatch(
-      /^src\/routes\/orders.ts, lines 1–/,
-    );
-    await userEvent.keyboard("k");
-    expect(document.activeElement?.getAttribute("aria-label")).toMatch(
-      /^src\/routes\/orders.ts, lines 1[0-9]/,
-    );
+/** The fixture with a longer call chain: route → cache → formatting → money, and a call back. */
+const chained: AnalysisView = {
+  ...fixture,
+  analysis: {
+    ...analysis,
+    callGraph: [
+      ...analysis.callGraph,
+      { fromHunkId: h.retryAndCache, toHunkId: h.receiptRoute, symbol: "orders", line: 45 },
+      {
+        fromHunkId: h.retryAndCache,
+        toHunkId: h.receiptFormatting,
+        symbol: "renderReceipt",
+        line: 47,
+      },
+    ],
+  },
+};
+const chip = (within_: HTMLElement, symbol: string) =>
+  within(within_).getByRole("button", { name: new RegExp(`^${symbol} `) });
 
-    await userEvent.keyboard("n");
-    expect(mainHeading()).toBe("Retrying the tax service and caching receipts");
-    await userEvent.keyboard("p");
-    expect(mainHeading()).toBe("The receipt endpoint");
-    await userEvent.keyboard("p");
-    expect(mainHeading()).toBe("The receipt endpoint");
+describe("inline calls", () => {
+  it("open under the line that calls, nest, and stop at a hunk already open above", async () => {
+    renderReview({ view: chained });
+    await loaded();
+    const route = cardOf(h.receiptRoute);
+    const cached = chip(route, "cachedReceipt");
+    expect(cached.textContent).toBe("▸cachedReceipt src/services/receipts.ts logic");
+    expect(within(route).queryByRole("button", { name: /^calls / })).toBeNull();
+
+    await userEvent.click(cached);
+    expect(cached.getAttribute("aria-expanded")).toBe("true");
+    const opened = route.querySelector<HTMLElement>(".inline-call");
+    if (opened === null) throw new Error("no inline call");
+    expect(within(opened).getAllByRole("region")[0]?.getAttribute("aria-label")).toMatch(RECEIPTS);
+    // The route is open above, so its call back doesn't open it again.
+    expect(within(opened).getByText("open above")).toBeTruthy();
+    expect(within(opened).queryByRole("button", { name: /^orders / })).toBeNull();
+
+    await userEvent.click(chip(opened, "renderReceipt"));
+    const second = opened.querySelector<HTMLElement>(".inline-call");
+    if (second === null) throw new Error("no second level");
+    expect(within(second).getAllByRole("region")[0]?.getAttribute("aria-label")).toMatch(
+      /^src\/services\/receipts\.ts, lines 1–/,
+    );
+    // A mechanical hunk opens collapsed, with its proof.
+    await userEvent.click(chip(second, "formatMoney"));
+    expect(
+      within(second).getByRole("button", { name: /moved from src\/routes\/orders\.ts/ }),
+    ).toBeTruthy();
+
+    await userEvent.click(cached);
+    expect(route.querySelector(".inline-call")).toBeNull();
   });
 
-  it("give verdicts and comments on the selected decision, and Esc leaves it", async () => {
+  it("share the reviewed mark with the hunk's own place", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(chip(cardOf(h.receiptRoute), "cachedReceipt"));
+    const opened = cardOf(h.receiptRoute).querySelector<HTMLElement>(".inline-call");
+    if (opened === null) throw new Error("no inline call");
+    await userEvent.click(within(opened).getByRole("checkbox", { name: "Reviewed" }));
+    expect(
+      within(cardOf(h.retryAndCache)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" })
+        .checked,
+    ).toBe(true);
+    expect(screen.getByText("1 of 5 hunks reviewed")).toBeTruthy();
+  });
+
+  it("o opens and closes the focused hunk's first call", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.keyboard("j");
+    expect(focusedLabel()).toMatch(ROUTE);
+    await userEvent.keyboard("o");
+    expect(cardOf(h.receiptRoute).querySelector(".inline-call")).not.toBeNull();
+    await userEvent.keyboard("o");
+    expect(cardOf(h.receiptRoute).querySelector(".inline-call")).toBeNull();
+  });
+});
+
+const openTree = async () => {
+  await userEvent.click(screen.getByRole("button", { name: "Call tree" }));
+  return tree();
+};
+const treeRows = () =>
+  [...tree().querySelectorAll(".tree-row")].map(
+    (row) =>
+      `${row.querySelector(".tree-label")?.textContent}${row.querySelector(".tree-note")?.textContent ?? ""}`,
+  );
+const selected = () =>
+  within(tree()).getByRole("button", { current: true }).querySelector(".tree-label")?.textContent;
+const shownHunk = () =>
+  screen
+    .getByRole("region", { name: "Selected hunk" })
+    .querySelector(".hunk-card")
+    ?.getAttribute("aria-label");
+
+describe("call tree", () => {
+  it("lists the hunks from the entry points, then those off a call path, then the proofs", async () => {
+    renderReview({ view: chained });
+    await loaded();
+    await openTree();
+    expect(treeRows()).toEqual([
+      "src/routes/orders.ts:10",
+      "cachedReceipt",
+      "ordersabove",
+      "renderReceipt",
+      // Off a call path, by file.
+      "lines 1–8",
+      "lines 11–18",
+    ]);
+    expect(within(tree()).getByRole("heading", { name: "Not on a call path" })).toBeTruthy();
+    expect(
+      within(tree()).getByText("src/routes/orders.ts", { selector: ".tree-path" }),
+    ).toBeTruthy();
+    expect(within(tree()).getByRole("heading", { name: "Proved mechanical" })).toBeTruthy();
+    expect(within(tree()).getAllByText(/lockfile/)).toHaveLength(2);
+  });
+
+  it("shows the selected hunk with the path to it, its callers, and its calls as links", async () => {
+    renderReview({ view: chained });
+    await loaded();
+    await openTree();
+    expect(selected()).toBe("src/routes/orders.ts:10");
+    expect(shownHunk()).toMatch(ROUTE);
+    // The route's decisions show with it.
+    expect(screen.getByRole("article", { name: OWNERSHIP })).toBeTruthy();
+
+    await userEvent.click(
+      within(screen.getByRole("region", { name: "Selected hunk" })).getByRole("button", {
+        name: /^cachedReceipt /,
+      }),
+    );
+    expect(selected()).toBe("cachedReceipt");
+    expect(shownHunk()).toMatch(RECEIPTS);
+    const path = screen.getByRole("navigation", { name: "Call path" });
+    expect(path.textContent).toBe("src/routes/orders.ts:10cachedReceipt");
+    expect(screen.getByText(/^Called from/).textContent).toBe(
+      "Called from src/routes/orders.ts:10",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Next hunk in the tree →" }));
+    expect(selected()).toBe("renderReceipt");
+    await userEvent.click(
+      within(
+        path.isConnected ? screen.getByRole("navigation", { name: "Call path" }) : path,
+      ).getByRole("button", { name: "src/routes/orders.ts:10" }),
+    );
+    expect(selected()).toBe("src/routes/orders.ts:10");
+  });
+
+  it("follows the tree with j and k, calls with →, and goes back with ←", async () => {
+    renderReview({ view: chained });
+    await loaded();
+    await openTree();
+    await userEvent.keyboard("j");
+    expect(selected()).toBe("cachedReceipt");
+    await userEvent.keyboard("j");
+    expect(selected()).toBe("renderReceipt");
+    await userEvent.keyboard("k");
+    expect(selected()).toBe("cachedReceipt");
+    // cachedReceipt's first call, by line, is back to the route.
+    await userEvent.keyboard("{ArrowRight}");
+    expect(selected()).toBe("src/routes/orders.ts:10");
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(selected()).toBe("cachedReceipt");
+    // With no call followed, ← goes to the parent in the tree.
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(selected()).toBe("src/routes/orders.ts:10");
+  });
+
+  it("x marks the selected hunk reviewed and moves on, ticking it in the tree", async () => {
+    renderReview();
+    await loaded();
+    await openTree();
+    await userEvent.keyboard("x");
+    expect(selected()).toBe("cachedReceipt");
+    expect(within(tree()).getAllByRole("img", { name: "reviewed" })).toHaveLength(1);
+  });
+});
+
+describe("layouts", () => {
+  it("switch with v, keeping the hunk the reviewer is on", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.keyboard("jj");
+    expect(focusedLabel()).toMatch(IMPORTS);
+    await userEvent.keyboard("v");
+    expect(screen.getByRole("button", { name: "Call tree" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(shownHunk()).toMatch(IMPORTS);
+
+    await userEvent.click(within(tree()).getByRole("button", { name: /^cachedReceipt,/ }));
+    await userEvent.keyboard("v");
+    expect(screen.getByRole("button", { name: "Map" }).getAttribute("aria-pressed")).toBe("true");
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.retryAndCache}`);
+    expect(focusedLabel()).toMatch(RECEIPTS);
+  });
+
+  it("remember the choice for every PR, and share the reviewed marks", async () => {
+    const first = renderReview();
+    await loaded();
+    await openTree();
+    await userEvent.click(
+      within(screen.getByRole("region", { name: "Selected hunk" })).getByRole("checkbox", {
+        name: "Reviewed",
+      }),
+    );
+    expect(window.localStorage.getItem("megareviewer:review-layout")).toBe('"tree"');
+    first.unmount();
+
+    renderReview();
+    await loaded();
+    expect(tree()).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Map" }));
+    expect(
+      within(cardOf(h.receiptRoute)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" })
+        .checked,
+    ).toBe(true);
+  });
+});
+
+describe("jump palette", () => {
+  const palette = () => screen.getByRole("dialog", { name: "Jump to" });
+
+  it("opens with ⌘K, Ctrl+K and t, and Esc closes it", async () => {
+    renderReview();
+    await loaded();
+    for (const keys of ["{Meta>}k{/Meta}", "{Control>}k{/Control}", "t"]) {
+      await userEvent.keyboard(keys);
+      expect(palette()).toBeTruthy();
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).toBeNull();
+    }
+  });
+
+  it("filters as it's typed; arrows move and Enter goes to a decision's card", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.keyboard("t");
+    await userEvent.keyboard("receipt");
+    const groups = within(palette())
+      .getAllByRole("region")
+      .map((group) => group.getAttribute("aria-label"));
+    expect(groups).toEqual(["Decisions", "Mismatches", "Symbols", "Steps", "Files"]);
+    await userEvent.clear(within(palette()).getByRole("searchbox", { name: "Jump to" }));
+    await userEvent.keyboard("!dayjs");
+    expect(within(palette()).getAllByRole("region")).toHaveLength(1);
+    await userEvent.keyboard("{ArrowDown}{ArrowUp}{Enter}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(scrolledTo().at(-1)).toBe("decision-d5");
+    expect(decisionCard(DAYJS).classList.contains("selected")).toBe(true);
+  });
+
+  it("jumps to a contract hunk by its reason, and to a symbol's hunk", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.keyboard("t");
+    await userEvent.keyboard("!runtime dependency");
+    await userEvent.keyboard("{Enter}");
+    expect(focusedLabel()).toMatch(/^package\.json/);
+    await userEvent.keyboard("t");
+    await userEvent.keyboard("@cached");
+    await userEvent.click(within(palette()).getByRole("button", { name: /^cachedReceipt/ }));
+    expect(focusedLabel()).toMatch(RECEIPTS);
+  });
+
+  it("selects a decision's hunk in the call tree", async () => {
+    renderReview();
+    await loaded();
+    await openTree();
+    await userEvent.keyboard("j");
+    await userEvent.keyboard("t");
+    await userEvent.keyboard("!belongs");
+    await userEvent.keyboard("{Enter}");
+    expect(selected()).toBe("src/routes/orders.ts:10");
+    expect(decisionCard(OWNERSHIP).classList.contains("selected")).toBe(true);
+  });
+});
+
+describe("keyboard shortcuts", () => {
+  it("move through hunks with j and k, and between steps with n and p", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.keyboard("j");
+    expect(focusedLabel()).toMatch(ROUTE);
+    await userEvent.keyboard("j");
+    expect(focusedLabel()).toMatch(IMPORTS);
+    await userEvent.keyboard("k");
+    expect(focusedLabel()).toMatch(ROUTE);
+
+    await userEvent.keyboard("n");
+    expect(scrolledTo().at(-1)).toBe("step-s2");
+    await userEvent.keyboard("j");
+    expect(focusedLabel()).toMatch(RECEIPTS);
+    await userEvent.keyboard("p");
+    expect(scrolledTo().at(-1)).toBe("step-s1");
+    await userEvent.keyboard("p");
+    expect(scrolledTo().at(-1)).toBe("step-s1");
+  });
+
+  it("give verdicts and comments on the decision of the hunk the reviewer is on", async () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("a");
-    expect(within(decisions()).getByText("0 of 5 reviewed")).toBeTruthy();
+    expect(approve(ENDPOINT).getAttribute("aria-pressed")).toBe("false");
 
-    await userEvent.click(screen.getByRole("button", { name: /^Looks up the order by ID/ }));
+    await userEvent.keyboard("j");
+    await userEvent.keyboard("r");
+    expect(reject(ENDPOINT).getAttribute("aria-pressed")).toBe("true");
+
+    await userEvent.click(approve(OWNERSHIP));
+    expect(decisionCard(OWNERSHIP).classList.contains("selected")).toBe(true);
     await userEvent.keyboard("r");
     expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
-    await userEvent.keyboard("a");
-    expect(approve(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
-    await userEvent.keyboard("a");
-    expect(approve(OWNERSHIP).getAttribute("aria-pressed")).toBe("false");
 
     await userEvent.keyboard("c");
     const field = screen.getByLabelText(
@@ -668,64 +1046,57 @@ describe("keyboard shortcuts", () => {
     // Typed into the field, these are text, not shortcuts.
     await userEvent.keyboard("ran");
     expect((field as HTMLTextAreaElement).value).toBe("ran");
-    expect(approve(OWNERSHIP).getAttribute("aria-pressed")).toBe("false");
-    expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("false");
-    expect(within(mainArea()).getByText("Decision")).toBeTruthy();
-
-    field.blur();
-    await userEvent.keyboard("{Escape}");
-    expect(mainHeading()).toBe("The receipt endpoint");
+    expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("show the shortcut list, and Esc closes it", async () => {
+  it("are listed for each layout, and none fire while the list is open", async () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("?");
     const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
-    expect(within(dialog).getAllByRole("term")).toHaveLength(13);
-    // Page shortcuts are off while a dialog is open.
-    await userEvent.keyboard("n");
-    expect(mainHeading()).toBe("The receipt endpoint");
+    const keysOf = (name: string) =>
+      within(within(dialog).getByRole("region", { name }))
+        .getAllByRole("term")
+        .map((term) => term.textContent);
+    expect(keysOf("Map")).toEqual(["j", "k", "n", "p", "o"]);
+    expect(keysOf("Call tree")).toEqual(["j", "k", "→", "←"]);
+    expect(keysOf("Both layouts")).toContain("⌘Kt");
+    await userEvent.keyboard("j");
+    expect(focusedLabel()).not.toMatch(ROUTE);
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
 
 describe("navigation", () => {
-  it("follows a call-graph link to its hunk in another step, and Esc goes back", async () => {
+  it("follows a called-by link to the caller, and Esc goes back", async () => {
     renderReview();
     await loaded();
+    await userEvent.keyboard("n");
+    await userEvent.keyboard("j");
     await userEvent.click(
-      within(mainArea()).getByRole("button", { name: "calls cachedReceipt ↓" }),
+      within(cardOf(h.retryAndCache)).getByRole("button", { name: "called by cachedReceipt ↑" }),
     );
-    expect(mainHeading()).toBe("Retrying the tax service and caching receipts");
-    expect(document.activeElement?.getAttribute("aria-label")).toMatch(
-      /^src\/services\/receipts\.ts/,
-    );
-    expect(
-      within(mainArea()).getByRole("button", { name: "called by cachedReceipt ↑" }),
-    ).toBeTruthy();
-
+    expect(focusedLabel()).toMatch(ROUTE);
     await userEvent.keyboard("{Escape}");
-    expect(mainHeading()).toBe("The receipt endpoint");
+    expect(focusedLabel()).toMatch(RECEIPTS);
   });
 
   it("marks hunks reviewed, counts them, and remembers them by hunk", async () => {
     const { unmount } = renderReview();
     await loaded();
-    const [first] = within(mainArea()).getAllByRole("region");
-    if (first === undefined) throw new Error("no hunk");
-    await userEvent.click(within(first).getByRole("checkbox", { name: "Reviewed" }));
-    expect(within(tour()).getByText(/^1 of \d+ hunks reviewed$/)).toBeTruthy();
+    await userEvent.click(
+      within(cardOf(h.receiptRoute)).getByRole("checkbox", { name: "Reviewed" }),
+    );
+    expect(screen.getByText("1 of 5 hunks reviewed")).toBeTruthy();
     expect(window.localStorage.getItem("megareviewer:reviewed-hunks")).toContain(h.receiptRoute);
 
     unmount();
     renderReview();
     await loaded();
-    const [again] = within(mainArea()).getAllByRole("region");
-    if (again === undefined) throw new Error("no hunk");
     expect(
-      within(again).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" }).checked,
+      within(cardOf(h.receiptRoute)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" })
+        .checked,
     ).toBe(true);
   });
 
@@ -733,27 +1104,15 @@ describe("navigation", () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("jxx");
+    expect(screen.getByText("2 of 5 hunks reviewed")).toBeTruthy();
     expect(
-      within(tour()).getByRole("button", { name: /The receipt endpoint/ }).textContent,
-    ).toContain("(reviewed)");
+      within(rail()).getByRole("button", { name: /^1 The receipt endpoint/ }).textContent,
+    ).toContain("✓");
     await userEvent.keyboard("]");
-    expect(mainHeading()).toBe("Retrying the tax service and caching receipts");
-    expect(document.activeElement?.getAttribute("aria-label")).toMatch(
-      /^src\/services\/receipts\.ts/,
-    );
+    expect(focusedLabel()).toMatch(RECEIPTS);
     // "[[" types one "[" in user-event's key syntax.
     await userEvent.keyboard("[[");
-    expect(mainHeading()).toBe("Retrying the tax service and caching receipts");
-  });
-
-  it("t finds a file and jumps to its first hunk", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.keyboard("t");
-    expect(screen.getByRole("dialog", { name: "Go to file" })).toBeTruthy();
-    await userEvent.keyboard("receipts{Enter}");
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(mainHeading()).toBe("Dates and prices on the receipt");
+    expect(focusedLabel()).toMatch(RECEIPTS);
   });
 });
 
@@ -764,33 +1123,42 @@ describe("without the model", () => {
       ...analysis,
       intent: null,
       decisions: [],
+      risk: analysis.risk.map((risk) =>
+        risk.source === "model" ? { ...risk, source: "rule" as const } : risk,
+      ),
       stages: { ...analysis.stages, intent: "skipped", decisions: "skipped" },
       pullRequest:
         analysis.pullRequest === null
           ? null
-          : { ...analysis.pullRequest, description: "Adds receipts. <b>Not bold</b>" },
+          : {
+              ...analysis.pullRequest,
+              description: "\nAdds receipts. <b>Not bold</b>\n\nMoves formatMoney too.",
+            },
     },
   };
 
-  it("shows what was asked as text, with tickets and commits, and no decisions", async () => {
+  it("shows the title and the description's first line, rule marks only, and no decision cards", async () => {
     renderReview({ view: withoutModel });
     await loaded();
-    const asked = screen.getByRole("region", { name: "What was asked" });
-    expect(within(asked).getByText("Adds receipts. <b>Not bold</b>")).toBeTruthy();
-    expect(within(asked).getByText(/^SHOP-142 · /)).toBeTruthy();
-    expect(within(asked).getByText("Commits (3)")).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "Decisions" })).toBeNull();
+    expect(screen.getByText("Asked:")).toBeTruthy();
+    expect(screen.getByText("Adds receipts. <b>Not bold</b>")).toBeTruthy();
+    expect(screen.queryByText(/Moves formatMoney too/)).toBeNull();
+    expect(document.querySelector(".mismatch-chip")).toBeNull();
+    expect(rail().querySelectorAll(".rail-bars .mark-decision")).toHaveLength(0);
+    expect(rail().querySelectorAll(".rail-bars .mark-rule")).toHaveLength(2);
+    expect(screen.queryByRole("article")).toBeNull();
   });
 
-  it("cuts the description to its first lines after the first visit", async () => {
-    const { unmount } = renderReview({ view: withoutModel });
-    await loaded();
-    expect(screen.queryByRole("button", { name: "Show all" })).toBeNull();
-    unmount();
+  it("shows what was asked in full, as text, in the details", async () => {
     renderReview({ view: withoutModel });
     await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Show all" }));
-    expect(screen.getByRole("button", { name: "Show less" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Details" }));
+    const asked = screen.getByRole("dialog", { name: "What was asked" });
+    expect(
+      within(asked).getByText(/^Adds receipts\. <b>Not bold<\/b>\s+Moves formatMoney too\.$/),
+    ).toBeTruthy();
+    expect(within(asked).getByText(/^SHOP-142 · /)).toBeTruthy();
+    expect(within(asked).getByText("Commits (3)")).toBeTruthy();
   });
 });
 

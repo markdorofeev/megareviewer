@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, type RefObject, useContext, useEffect, useState } from "react";
 import type { FileChange, Hunk } from "../../../src/domain/diff/index.ts";
 import {
   createShikiHighlighter,
@@ -50,14 +50,59 @@ const highlightHunk = (highlighter: Highlighter, hunk: Hunk, language: string): 
   return entry;
 };
 
+/** How close to the viewport, in pixels, a card starts highlighting. */
+const NEAR_MARGIN = "1200px 0px";
+
+// One observer for every card: a page with hundreds of hunks would otherwise make hundreds.
+let observer: IntersectionObserver | null = null;
+const onNear = new Map<Element, () => void>();
+
+const observe = (element: Element, near: () => void): (() => void) => {
+  observer ??= new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        onNear.get(entry.target)?.();
+        onNear.delete(entry.target);
+        observer?.unobserve(entry.target);
+      }
+    },
+    { rootMargin: NEAR_MARGIN },
+  );
+  onNear.set(element, near);
+  observer.observe(element);
+  return () => {
+    onNear.delete(element);
+    observer?.unobserve(element);
+  };
+};
+
+/**
+ * Whether the element has come near the viewport. Once it has, it stays true. Without
+ * IntersectionObserver (tests), everything is near.
+ */
+export const useNearViewport = (ref: RefObject<Element | null>): boolean => {
+  const [near, setNear] = useState(() => typeof IntersectionObserver === "undefined");
+  useEffect(() => {
+    const element = ref.current;
+    if (near || element === null) return;
+    return observe(element, () => setNear(true));
+  }, [ref, near]);
+  return near;
+};
+
 /**
  * Highlighted tokens for each of a hunk's lines, or null until they're ready (show plain text
- * until then) and for files in languages that can't be highlighted.
+ * until then), while `enabled` is false, and for files in languages that can't be highlighted.
  */
-export const useHighlighter = (hunk: Hunk, file: Pick<FileChange, "path" | "language">) => {
+export const useHighlighter = (
+  hunk: Hunk,
+  file: Pick<FileChange, "path" | "language">,
+  enabled = true,
+) => {
   const highlighter = useContext(HighlighterContext);
   const language = languageOf(file);
-  const entry = language === null ? null : highlightHunk(highlighter, hunk, language);
+  const entry = language === null || !enabled ? null : highlightHunk(highlighter, hunk, language);
   const [ready, setReady] = useState<{ readonly entry: Entry; readonly tokens: LineTokens }>();
 
   useEffect(() => {

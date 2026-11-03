@@ -412,3 +412,9 @@
   color: var(--color-accent);
   text-decoration: underline;
 }
+
+/* Under a line, e.g. the calls it makes. */
+.line-below td {
+  padding: 0;
+  background: var(--color-surface);
+}

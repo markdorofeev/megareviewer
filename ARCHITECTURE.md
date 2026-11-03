@@ -170,15 +170,21 @@ PR content is untrusted. A description or code comment can contain text aimed at
 
 **PR picker.** Lists PRs waiting for the user's review and their own open PRs from every configured host, or accepts a pasted PR URL.
 
-**Review page.**
+**Review page.** It opens on the code. The header holds the PR and its intent in one line: the model's summary with `--ai`, or the description's first line without it. A red chip names a mismatch between what was asked and what the code does, and goes to the code it rests on; "Details" opens the full intent in a dialog. The reviewer picks one of two layouts with a switch (`v`), kept per browser:
 
-- **Top:** intent panel, with `--ai`. One line when the code does what was asked; stated and inferred intent side by side, with the mismatches, when it doesn't. Behavior changes are behind a toggle.
-- **Left:** tour steps and the decision checklist. Each decision can be approved, rejected or commented on.
-- **Main:** the diff for the current step, with a risk badge on each hunk. Mechanical hunks are collapsed with their proof ("moved, verified identical"), and the user can expand them.
+- **Map**, the default: every hunk in one scroll, step after step in tour order, then the proved-mechanical changes. A rail beside it has a bar per hunk, sized by its length, colored by risk and marked for each decision and contract rule on it; the hunks in view are outlined, reviewed ones dimmed, and a click scrolls there. A call in the code has a chip under its line that opens the called hunk in place, indented, so the reviewer reads down the call stack without leaving the page.
+- **Call tree:** the changed hunks as a tree from the entry points, one hunk at a time, with the path that leads to it, its callers, and its calls as links. Hunks no call links sit under "Not on a call path", so none is left out.
+
+In both, each decision is a card under the first hunk it rests on, with approve, reject and comment there, and its other hunks link to it. Mechanical hunks are collapsed with their proof ("moved, verified identical"), and the user can expand them. A jump palette (`⌘K`) searches decisions, mismatches, contract changes, symbols, steps and files.
+
+The page opens on the code because the intro in front of it, an intent panel and two sidebars, was what reviewers skipped. Two alternatives were rejected:
+
+- A path of questions, one per concern, which put the intent and a question before every piece of code.
+- One tour step at a time beside sidebars for the tour and the decisions. It split the reader's attention across three panels. It was the first version.
 
 **Publish.** Sends the review to the PR's host with a verdict (approve or request changes). Rejected decisions and comments become inline comments on their hunks, and comments the reviewer wrote on hunk lines go on those lines. Without decisions, the reviewer picks the verdict. The user confirms before anything is posted.
 
-Comments on hunk lines are drafts in the browser's local storage until they're sent with the publish request, which checks that each is on a line the diff shows. A `hunk_comments` table with its own routes was the plan; the drafts belong to one reviewer in one browser, like visited steps, and the posted-comment records already make publishing safe to retry.
+Comments on hunk lines are drafts in the browser's local storage until they're sent with the publish request, which checks that each is on a line the diff shows. A `hunk_comments` table with its own routes was the plan; the drafts belong to one reviewer in one browser, like reviewed marks, and the posted-comment records already make publishing safe to retry.
 
 ## Storage
 

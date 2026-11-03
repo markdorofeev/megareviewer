@@ -7,6 +7,7 @@ import type {
 } from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
+  type Decision,
   type DecisionId,
   type RiskAssessment,
   type TourStep,
@@ -14,20 +15,11 @@ import {
 } from "../../../../src/domain/review/index.ts";
 import type { HunkItem, HunkLink } from "../../diff/index.ts";
 
-/** What the main area shows. */
-export type MainView =
-  | { readonly kind: "step"; readonly stepId: TourStepId }
-  | { readonly kind: "mechanical" }
-  /** Before the tour exists: every hunk in path order, so reading can start early. */
-  | { readonly kind: "files" };
+/** The page's two layouts: one scroll beside a risk map, or a call tree. */
+export type Layout = "map" | "tree";
 
-/** A decision or a mismatch shown on its own, on top of the tour. */
-export type Focus =
-  | { readonly kind: "decision"; readonly decisionId: DecisionId }
-  | { readonly kind: "mismatch"; readonly index: number };
-
-/** The tour's entries in the sidebar, in order: its steps, then the mechanical changes. */
-export type TourEntry = MainView & { readonly kind: "step" | "mechanical" };
+export const parseLayout = (stored: unknown): Layout | undefined =>
+  stored === "map" || stored === "tree" ? stored : undefined;
 
 const byPath = (a: FileChange, b: FileChange): number =>
   a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
@@ -90,25 +82,115 @@ export const tourSteps = (analysis: Analysis, index: HunkIndex): readonly TourSt
   ];
 };
 
-/** Every hunk in tour order, then the rest in file order: the order a decision's hunks show in. */
-export const readingOrder = (
+/**
+ * A part of the map's one scroll: a tour step with the mechanical hunks of its files in place,
+ * or, before the tour exists, every change in path order.
+ */
+export type MapSection =
+  | {
+      readonly kind: "step";
+      readonly step: TourStep;
+      readonly number: number;
+      readonly hunkIds: readonly HunkId[];
+    }
+  | { readonly kind: "files"; readonly hunkIds: readonly HunkId[] };
+
+export const mapSections = (
   analysis: Analysis,
   steps: readonly TourStep[],
-): ReadonlyMap<HunkId, number> => {
-  const ids = new Set([
-    ...steps.flatMap((step) => step.hunkIds),
-    ...analysis.files.flatMap((file) => file.hunks.map((hunk) => hunk.id)),
-  ]);
-  return new Map([...ids].map((id, rank) => [id, rank]));
+  index: HunkIndex,
+): readonly MapSection[] =>
+  analysis.tour === null
+    ? [
+        {
+          kind: "files",
+          hunkIds: withMechanicalInPlace(hunksInPathOrder(analysis, index), index),
+        },
+      ]
+    : steps.map((step, at) => ({
+        kind: "step",
+        step,
+        number: at + 1,
+        hunkIds: withMechanicalInPlace(step.hunkIds, index),
+      }));
+
+export const sectionKey = (section: MapSection): string =>
+  section.kind === "step" ? section.step.id : "files";
+
+/** Where the decisions show: each as a card on one hunk, linked from its other hunks. */
+export interface DecisionPlaces {
+  /** The decisions whose card sits on this hunk. */
+  readonly cards: ReadonlyMap<HunkId, readonly Decision[]>;
+  /** The decisions resting on this hunk whose card sits on another. */
+  readonly mentions: ReadonlyMap<HunkId, readonly Decision[]>;
+  readonly cardHunk: ReadonlyMap<DecisionId, HunkId>;
+  /** Decisions resting on no hunk the page can show a card on. They show before the code. */
+  readonly unplaced: readonly Decision[];
+}
+
+/**
+ * A decision's card goes under the header of the first hunk it rests on in `order`, the page's
+ * order. Mechanical hunks show collapsed, so they never hold a card.
+ */
+export const decisionPlaces = (
+  decisions: readonly Decision[],
+  order: readonly HunkId[],
+  index: HunkIndex,
+): DecisionPlaces => {
+  const rank = new Map(order.map((id, at) => [id, at]));
+  const cards = new Map<HunkId, Decision[]>();
+  const mentions = new Map<HunkId, Decision[]>();
+  const cardHunk = new Map<DecisionId, HunkId>();
+  const unplaced: Decision[] = [];
+  const add = (map: Map<HunkId, Decision[]>, id: HunkId, decision: Decision) =>
+    map.set(id, [...(map.get(id) ?? []), decision]);
+  for (const decision of decisions) {
+    const [first, ...rest] = [...new Set(decision.hunkIds)]
+      .filter((id) => rank.has(id) && !index.mechanical.has(id))
+      .sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
+    if (first === undefined) {
+      unplaced.push(decision);
+      continue;
+    }
+    add(cards, first, decision);
+    cardHunk.set(decision.id, first);
+    for (const id of rest) add(mentions, id, decision);
+  }
+  return { cards, mentions, cardHunk, unplaced };
 };
 
-export const inReadingOrder = (
-  ids: readonly HunkId[],
-  order: ReadonlyMap<HunkId, number>,
-): HunkId[] =>
-  [...new Set(ids)].sort(
-    (a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER),
-  );
+/** A call the code makes on one of its lines, to the hunk that changes what it calls. */
+export interface Call {
+  readonly symbol: string;
+  readonly toHunkId: HunkId;
+  readonly line: number;
+}
+
+/** Each hunk's calls by the new-side line they're on. Hints to hunks the page doesn't know drop. */
+export const callsByLine = (
+  callGraph: readonly CallGraphHint[],
+  index: HunkIndex,
+): ReadonlyMap<HunkId, ReadonlyMap<number, readonly Call[]>> => {
+  const calls = new Map<HunkId, Map<number, Call[]>>();
+  for (const { fromHunkId, toHunkId, symbol, line } of callGraph) {
+    if (!index.hunks.has(fromHunkId) || !index.hunks.has(toHunkId)) continue;
+    const lines = calls.get(fromHunkId) ?? new Map<number, Call[]>();
+    lines.set(line, [...(lines.get(line) ?? []), { symbol, toHunkId, line }]);
+    calls.set(fromHunkId, lines);
+  }
+  return calls;
+};
+
+/** The hunk's first call in the code, for the `o` shortcut. */
+export const firstCall = (lines: ReadonlyMap<number, readonly Call[]> | undefined): Call | null =>
+  [...(lines?.entries() ?? [])].sort(([a], [b]) => a - b)[0]?.[1][0] ?? null;
+
+/** Bar heights on the risk map, in pixels: one per line, within these bounds. */
+export const BAR_MIN_PX = 4;
+export const BAR_MAX_PX = 40;
+
+export const barHeight = (hunk: Pick<Hunk, "lines">): number =>
+  Math.min(BAR_MAX_PX, Math.max(BAR_MIN_PX, hunk.lines.length));
 
 /** One row per mechanical hunk, plus one per file-level proof, as the mechanical group shows. */
 export const mechanicalCount = (proofs: readonly MechanicalProof[]): number => {
@@ -120,11 +202,6 @@ export const mechanicalCount = (proofs: readonly MechanicalProof[]): number => {
   }
   return hunks.size + fileLevel;
 };
-
-export const entryKey = (entry: MainView): string =>
-  entry.kind === "step" ? entry.stepId : entry.kind;
-
-export const sameView = (a: MainView, b: MainView): boolean => entryKey(a) === entryKey(b);
 
 /**
  * A step's hunks with the mechanical hunks of its files put back in place, so a whitespace fix
@@ -162,22 +239,10 @@ export const withMechanicalInPlace = (ids: readonly HunkId[], index: HunkIndex):
   return result;
 };
 
-/** Changed lines by risk class, for a step's bar in the sidebar. */
+/** Hunks by risk class. */
 export type RiskMix = Readonly<Record<RiskAssessment["riskClass"], number>>;
 
-const changedLines = (hunk: Hunk): number =>
-  hunk.lines.filter((line) => line.kind !== "context").length;
-
-export const riskMix = (ids: readonly HunkId[], index: HunkIndex): RiskMix => {
-  const mix = { contract: 0, logic: 0, mechanical: 0 };
-  for (const item of index.items(ids)) {
-    const riskClass = index.mechanical.has(item.hunk.id) ? "mechanical" : item.risk.riskClass;
-    mix[riskClass] += changedLines(item.hunk);
-  }
-  return mix;
-};
-
-/** Hunks by risk class across the pull request: the totals above the tour. */
+/** Hunks by risk class across the pull request: the totals above the map. */
 export const riskTotals = (analysis: Analysis, index: HunkIndex): RiskMix => {
   const totals = { contract: 0, logic: 0, mechanical: 0 };
   for (const item of index.items([...index.hunks.keys()])) {
@@ -188,8 +253,8 @@ export const riskTotals = (analysis: Analysis, index: HunkIndex): RiskMix => {
 };
 
 /**
- * Proofs the last tour entry shows: file-level ones, and those in files with nothing else to
- * review. A mechanical hunk in a file with other changes shows in place in that file's step.
+ * Proofs the mechanical group at the end shows: file-level ones, and those in files with nothing
+ * else to review. A mechanical hunk in a file with other changes shows in place in that file's step.
  */
 export const trailingProofs = (analysis: Analysis, index: HunkIndex): MechanicalProof[] => {
   const reviewed = new Set(
@@ -198,7 +263,7 @@ export const trailingProofs = (analysis: Analysis, index: HunkIndex): Mechanical
   return analysis.proofs.filter((proof) => proof.hunkId === null || !reviewed.has(proof.path));
 };
 
-/** Links a hunk card shows in each direction, at most. */
+/** Links a hunk shows in each direction, at most. */
 const MAX_LINKS = 6;
 
 /**
@@ -230,18 +295,6 @@ export const hunkLinks = (
   return links;
 };
 
-/** The tour entry that shows a hunk: the first step holding it in place, else the last entry. */
-export const entryOf = (
-  hunkId: HunkId,
-  steps: readonly TourStep[],
-  index: HunkIndex,
-): TourEntry => {
-  const step = steps.find((one) => withMechanicalInPlace(one.hunkIds, index).includes(hunkId));
-  return step === undefined ? { kind: "mechanical" } : { kind: "step", stepId: step.id };
-};
-
-/** Every hunk to review, in tour order: where "next unreviewed" looks. */
-export const reviewOrder = (
-  steps: readonly TourStep[],
-): readonly { readonly stepId: TourStepId; readonly hunkId: HunkId }[] =>
-  steps.flatMap((step) => step.hunkIds.map((hunkId) => ({ stepId: step.id, hunkId })));
+/** Every hunk to review, in the map's order: what the reviewed count counts. */
+export const reviewOrder = (sections: readonly MapSection[], index: HunkIndex): readonly HunkId[] =>
+  sections.flatMap((section) => section.hunkIds).filter((id) => !index.mechanical.has(id));

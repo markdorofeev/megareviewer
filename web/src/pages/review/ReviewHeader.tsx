@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
 import { pullRequestUrl } from "../../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage } from "../../api/index.ts";
@@ -5,15 +6,24 @@ import { type ApiError, errorMessage } from "../../api/index.ts";
 /** Up to this many warnings show in full; more collapse to a count. */
 const SHOWN_WARNINGS = 2;
 
-/** The PR, whether the analysis is still current, and the way to publish the review. */
+/**
+ * The PR and its intent in a line, the page's tools, whether the analysis is still current, and
+ * the way to publish the review.
+ */
 export const ReviewHeader = ({
   view,
+  intent,
+  tools,
   reanalyzing,
   reanalyzeError,
   onReanalyze,
   onPublish,
 }: {
   readonly view: AnalysisView;
+  /** The intent line, under the title. */
+  readonly intent: ReactNode;
+  /** Layout, jump and progress, before publishing. */
+  readonly tools: ReactNode;
   readonly reanalyzing: boolean;
   readonly reanalyzeError: ApiError | null;
   readonly onReanalyze: () => void;
@@ -26,7 +36,6 @@ export const ReviewHeader = ({
   return (
     <header className="review-header">
       <div className="review-title">
-        <h1 className="model-text">{pullRequest?.title ?? "Collecting the pull request…"}</h1>
         <p className="pr-meta">
           <a href={pullRequest?.url ?? pullRequestUrl(ref)} target="_blank" rel="noreferrer">
             {ref.repo.owner}/{ref.repo.repo} #{ref.number}
@@ -41,8 +50,11 @@ export const ReviewHeader = ({
             </>
           )}
         </p>
+        <h1 className="model-text">{pullRequest?.title ?? "Collecting the pull request…"}</h1>
+        {intent}
       </div>
       <div className="review-actions">
+        {tools}
         {publication !== null ? (
           <p className="published" role="status">
             <span aria-hidden="true">✓</span>{" "}
