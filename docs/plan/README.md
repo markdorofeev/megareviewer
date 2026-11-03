@@ -91,6 +91,16 @@ The layout stays the guided tour. Without the model:
 
 Once stage 18 is done, stages 19 and 21 run in parallel; 21 works on the dev fixtures until 20 lands. Each of 18, 19 and 20 changes a stage 02 contract; that change goes in its own PR as described below.
 
+## Third slice: code-first review page
+
+The review page still opens on an intent panel and two sidebars, and shows one tour step at a time. This slice opens it on the code and moves the explaining into navigation: a risk map beside one scroll of code, or a call tree, chosen by a toggle. Its design is on the [Review page redesign](https://claude.ai/artifact/YQfPAHQvsmm59w47wNyceE) canvas.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 24 | [Code-first review page](24-code-first-review.md) | 22, 23 | `web/src/pages/review/`, `web/src/diff/`, `src/domain/diff/call-graph.ts` |
+
+It's one stage because both layouts share the hunk cards, decisions and shortcuts it moves. The `CallGraphHint` change goes in its own PR first.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
