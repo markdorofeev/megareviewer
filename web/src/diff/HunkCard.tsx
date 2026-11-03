@@ -157,8 +157,8 @@ export const HunkCard = memo(function HunkCard({
         {hunk.sectionHeading !== null && (
           <code className="hunk-heading">{hunk.sectionHeading}</code>
         )}
-        <span className="hunk-ranges">
-          {hunkLocation(hunk)} <span className="count-added">+{counts.added}</span>{" "}
+        <span className="hunk-counts">
+          <span className="count-added">+{counts.added}</span>{" "}
           <span className="count-deleted">−{counts.deleted}</span>
         </span>
         {proofs.map((proof) => (

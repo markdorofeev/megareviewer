@@ -115,7 +115,7 @@
 }
 
 .hunk-heading,
-.hunk-ranges {
+.hunk-counts {
   min-width: 0;
   overflow: hidden;
   color: var(--color-text-muted);
