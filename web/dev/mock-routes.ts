@@ -18,7 +18,12 @@ import {
   parsePullRequestUrl,
   StageName,
 } from "../../src/domain/review/index.ts";
-import { fixtureAnalysisView, fixturePullRequests, fixtureStatus } from "./fixtures/index.ts";
+import {
+  fixtureAnalysisView,
+  fixturePullRequests,
+  fixtureStatus,
+  largeAnalysisView,
+} from "./fixtures/index.ts";
 import { analysisFailed, analysisInProgress } from "./progress.ts";
 
 /** The session token the mock accepts; open the UI with `?token=mock`. */
@@ -29,6 +34,9 @@ export const MOCK_STAGE_MS = 600;
 
 /** Starting an analysis for a PR with this number fails it at the risk stage; a retry succeeds. */
 export const MOCK_FAILING_PR_NUMBER = 500;
+
+/** Starting an analysis for a PR with this number analyzes a PR with 240 hunks. */
+export const MOCK_LARGE_PR_NUMBER = 900;
 
 const FAILING_STAGE: StageName = "risk";
 const FAILURE_MESSAGE = "The model's response didn't match the risk schema twice in a row";
@@ -105,7 +113,8 @@ export const createMockApi = (
 ): MockApi => {
   const stageMs = options.stageMs ?? MOCK_STAGE_MS;
   const now = options.now ?? (() => new Date().toISOString());
-  const fixture = fixtureAnalysisView.analysis;
+  let fixtureView = fixtureAnalysisView;
+  let fixture = fixtureView.analysis;
 
   let stagesDone = StageName.options.length;
   let failAt: StageName | null = null;
@@ -120,7 +129,7 @@ export const createMockApi = (
       ? analysisFailed(fixture, failAt, FAILURE_MESSAGE)
       : analysisInProgress(fixture, stagesDone);
   const view = (): AnalysisView => ({
-    ...fixtureAnalysisView,
+    ...fixtureView,
     analysis: analysis(),
     verdicts: [...verdicts.values()],
     publication,
@@ -197,6 +206,11 @@ export const createMockApi = (
         const name = host === "github" ? "GitHub" : "Bitbucket";
         return failure("host-not-configured", `${name} isn't configured`);
       }
+      if (timer === null) {
+        fixtureView =
+          ref.value.number === MOCK_LARGE_PR_NUMBER ? largeAnalysisView : fixtureAnalysisView;
+        fixture = fixtureView.analysis;
+      }
       simulate(ref.value.number === MOCK_FAILING_PR_NUMBER ? FAILING_STAGE : null);
       const response: AnalysisIdResponse = { analysisId: fixture.id };
       return success(response);
@@ -242,7 +256,7 @@ export const createMockApi = (
           analysis: fixture,
           verdicts: [...verdicts.values()],
           summary: request.data.summary,
-          isAuthor: fixtureAnalysisView.isAuthor,
+          isAuthor: fixtureView.isAuthor,
           hunkComments: request.data.hunkComments ?? [],
           verdict: request.data.verdict ?? null,
         }),
@@ -260,7 +274,7 @@ export const createMockApi = (
           analysis: fixture,
           verdicts: [...verdicts.values()],
           summary: request.data.summary,
-          isAuthor: fixtureAnalysisView.isAuthor,
+          isAuthor: fixtureView.isAuthor,
           hunkComments: request.data.hunkComments ?? [],
           verdict: request.data.verdict ?? null,
         });

@@ -7,10 +7,11 @@ import {
   TOKEN_HEADER,
 } from "../../contracts/index.ts";
 import { DecisionVerdict, Publication, PublicationReceipt } from "../../src/domain/review/index.ts";
-import { fixtureAnalysisView } from "./fixtures/index.ts";
+import { fixtureAnalysisView, largeAnalysisView } from "./fixtures/index.ts";
 import {
   createMockApi,
   MOCK_FAILING_PR_NUMBER,
+  MOCK_LARGE_PR_NUMBER,
   MOCK_STAGE_MS,
   MOCK_TOKEN,
   type MockApi,
@@ -182,6 +183,17 @@ describe("mock API", () => {
 
   it("can't retry an analysis that didn't fail", () => {
     expect(errorCode(api.handle(request("POST", `/api/analyses/${id}/retry`)))).toBe("bad-request");
+  });
+
+  it("analyzes a PR with 240 hunks for its own number", () => {
+    const url = `https://github.com/acme/shop/pull/${MOCK_LARGE_PR_NUMBER}`;
+    const started = api.handle(request("POST", "/api/analyses", { url }));
+    const { analysisId } = AnalysisIdResponse.parse(started.body);
+    expect(analysisId).toBe(largeAnalysisView.analysis.id);
+    vi.advanceTimersByTime(MOCK_STAGE_MS * 6);
+    const view = AnalysisView.parse(api.handle(request("GET", `/api/analyses/${analysisId}`)).body);
+    expect(view.analysis.files.flatMap((file) => file.hunks)).toHaveLength(240);
+    expect(errorCode(api.handle(request("GET", `/api/analyses/${id}`)))).toBe("not-found");
   });
 
   it("fails the analysis of the failing PR at the risk stage, and retries it", () => {

@@ -5,7 +5,12 @@ import {
   validateRiskCoverage,
   validateTour,
 } from "../../../src/domain/review/index.ts";
-import { fixtureAnalysisView, fixturePullRequests, fixtureStatus } from "./index.ts";
+import {
+  fixtureAnalysisView,
+  fixturePullRequests,
+  fixtureStatus,
+  largeAnalysisView,
+} from "./index.ts";
 
 describe("mock fixtures", () => {
   it("match the HTTP API contract", () => {
@@ -90,5 +95,26 @@ describe("the fixture analysis", () => {
       "decisions",
       "tour",
     ]);
+  });
+});
+
+describe("the large fixture analysis", () => {
+  const { analysis } = largeAnalysisView;
+  const hunks = analysis.files.flatMap((file) => file.hunks);
+  const hunkIds = new Set(hunks.map((hunk) => hunk.id));
+
+  it("matches the HTTP API contract, with 240 hunks the tour and risk cover", () => {
+    expect(AnalysisView.parse(largeAnalysisView)).toEqual(largeAnalysisView);
+    expect(hunks).toHaveLength(240);
+    expect(validateRiskCoverage(analysis.risk, hunkIds)).toEqual([]);
+    expect(analysis.tour && validateTour(analysis.tour, hunkIds)).toEqual([]);
+  });
+
+  it("puts every call on a line its calling hunk shows", () => {
+    for (const hint of analysis.callGraph) {
+      const from = hunks.find((hunk) => hunk.id === hint.fromHunkId);
+      const line = from?.lines.find((one) => one.newLine === hint.line);
+      expect(line?.text).toContain(`${hint.symbol}(input)`);
+    }
   });
 });

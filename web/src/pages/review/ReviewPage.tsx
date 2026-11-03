@@ -121,6 +121,17 @@ const ReviewSkeleton = () => (
 
 const NO_DECISIONS: readonly Decision[] = [];
 
+// A number per analysis object, so a hunk's signature changes when the analysis does.
+const epochs = new WeakMap<object, number>();
+let lastEpoch = 0;
+const epochOf = (analysis: object): number => {
+  const known = epochs.get(analysis);
+  if (known !== undefined) return known;
+  lastEpoch += 1;
+  epochs.set(analysis, lastEpoch);
+  return lastEpoch;
+};
+
 const Review = ({
   view,
   refetch,
@@ -241,9 +252,15 @@ const Review = ({
     parseHunkComments,
   );
   const [openComment, setOpenComment] = useState<{ hunkId: HunkId; place: LinePlace } | null>(null);
+  const commentsByHunk = useMemo(() => {
+    const byHunk = new Map<HunkId, HunkComment[]>();
+    for (const comment of hunkComments)
+      byHunk.set(comment.hunkId, [...(byHunk.get(comment.hunkId) ?? []), comment]);
+    return byHunk;
+  }, [hunkComments]);
   const commentsOf = useCallback(
-    (id: HunkId) => hunkComments.filter((comment) => comment.hunkId === id),
-    [hunkComments],
+    (id: HunkId): readonly HunkComment[] => commentsByHunk.get(id) ?? NO_COMMENTS,
+    [commentsByHunk],
   );
   const writeComment = useCallback(
     (hunkId: HunkId, comment: LineComment) =>
@@ -541,16 +558,49 @@ const Review = ({
       <div className="hunk-decisions">
         {cards.map(card)}
         {mentions.map((decision) => (
-          <DecisionMention key={decision.id} decision={decision} onGo={goToDecision} />
+          <DecisionMention key={decision.id} decision={decision} onGo={stable.goToDecision} />
         ))}
       </div>
     );
+  };
+  // Map cards render again only when their signature changes, so their handlers call the latest.
+  const latest = useRef({ follow, goToDecision });
+  latest.current = { follow, goToDecision };
+  const stable = useMemo(
+    () => ({
+      follow: (id: HunkId) => latest.current.follow(id),
+      goToDecision: (id: DecisionId) => latest.current.goToDecision(id),
+    }),
+    [],
+  );
+  const signatureOf = (id: HunkId): string => {
+    const parts: unknown[] = [
+      epochOf(analysis),
+      readOnly,
+      reviewedHunks.has(id),
+      highlight.has(id),
+      openComment?.hunkId === id ? `${openComment.place.side}${openComment.place.line}` : "",
+      ...(commentsByHunk.get(id) ?? []).map(
+        (comment) => `${comment.side}${comment.line}${comment.body}`,
+      ),
+    ];
+    for (const decision of places.cards.get(id) ?? NO_DECISIONS) {
+      const draft = verdicts.draftOf(decision.id);
+      parts.push(decision.id, draft.verdict, draft.comment, verdicts.statusOf(decision.id));
+      parts.push(selectedDecision === decision.id);
+    }
+    // Hunks opened from this one's calls show their own marks.
+    const opened = [...openCalls].filter(
+      (key) => key.startsWith(`${id}@`) || key.startsWith(`${id}>`),
+    );
+    if (opened.length > 0) parts.push(...opened, ...reviewedList, ...highlight);
+    return parts.join("\u0000");
   };
   const deps: HunkDeps = {
     index,
     calls,
     linksOf,
-    onFollow: follow,
+    onFollow: stable.follow,
     reviewedHunks,
     onReviewed: setHunkReviewed,
     highlighted: highlight,
@@ -714,6 +764,7 @@ const Review = ({
             trailingProofs={trailing}
             mechanicalCount={mechanical}
             scrollRequest={scrollRequest}
+            signatureOf={signatureOf}
           />
           <RiskRail
             sections={sections}

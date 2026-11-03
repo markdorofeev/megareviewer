@@ -1,10 +1,13 @@
-import { type ReactNode, useId, useMemo } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef } from "react";
 import type { HunkId, MechanicalProof } from "../../../../src/domain/diff/index.ts";
 import { hunkLocation } from "../../diff/index.ts";
 import type { CallTree, CallTreeRow } from "./call-tree.ts";
 import { CallLabel, type HunkDeps, HunkView } from "./HunkView.tsx";
 
 const NO_LINKS = () => [];
+
+/** Deeper rows indent no further, so a long chain stays readable. */
+const MAX_INDENT = 12;
 
 /**
  * The changed hunks as a tree from the entry points, one hunk at a time: the tree on the left, the
@@ -31,7 +34,18 @@ export const TreeLayout = ({
   readonly proofs: readonly MechanicalProof[];
 }) => {
   const id = useId();
+  const nav = useRef<HTMLElement>(null);
   const { index } = deps;
+  // Keeps the selected row in sight when the tree is longer than the window.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the selection changes.
+  useEffect(() => {
+    const box = nav.current;
+    const row = box?.querySelector<HTMLElement>(".tree-row.selected");
+    if (box === null || box === undefined || row === null || row === undefined) return;
+    if (row.offsetTop < box.scrollTop || row.offsetTop > box.scrollTop + box.clientHeight - 40) {
+      box.scrollTop = Math.max(0, row.offsetTop - box.clientHeight / 3);
+    }
+  }, [selected]);
   const placedRow = useMemo(
     () =>
       new Map(
@@ -100,7 +114,9 @@ export const TreeLayout = ({
         <button
           type="button"
           className={`tree-row${hunkId === selected && !reference ? " selected" : ""}${reference ? " reference" : ""}`}
-          style={{ paddingLeft: `calc(${treeRow.depth} * var(--space-4) + var(--space-2))` }}
+          style={{
+            paddingLeft: `calc(${Math.min(treeRow.depth, MAX_INDENT)} * var(--space-4) + var(--space-2))`,
+          }}
           aria-current={hunkId === selected && !reference ? "true" : undefined}
           title={reference ? "Placed above in the tree" : undefined}
           onClick={() => onSelect(hunkId)}
@@ -123,7 +139,7 @@ export const TreeLayout = ({
 
   return (
     <div className="tree-layout">
-      <nav className="call-tree" aria-labelledby={`${id}-title`}>
+      <nav ref={nav} className="call-tree" aria-labelledby={`${id}-title`}>
         <h2 id={`${id}-title`}>Call tree</h2>
         {tree.rows.length === 0 ? (
           <p className="muted">No changed hunk calls another.</p>

@@ -601,6 +601,14 @@ describe("risk map", () => {
     expect(inView()).toEqual(["lines 10–24", "lines 1–8"]);
     act(() => FakeObserver.report([placeOf(h.receiptRoute)], false));
     expect(inView()).toEqual(["lines 1–8"]);
+
+    // Filtering replaces the places on the page, and the new ones are watched.
+    const filter = within(rail()).getByRole("checkbox", { name: "Contract changes only" });
+    await userEvent.click(filter);
+    await userEvent.click(filter);
+    expect(inView()).toEqual([]);
+    act(() => FakeObserver.report([placeOf(h.retryAndCache)]));
+    expect(inView()).toEqual(["lines 26–50"]);
   });
 });
 

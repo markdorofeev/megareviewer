@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from "react";
+import { memo, type ReactNode, useEffect } from "react";
 import type { HunkId, MechanicalProof } from "../../../../src/domain/diff/index.ts";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
 import { FileNotices, MechanicalGroup } from "../../diff/index.ts";
@@ -17,6 +17,17 @@ export interface ScrollRequest {
 /** An inline call, by the chain of hunks opened to reach it and the call itself. */
 export const callKey = (chain: readonly HunkId[], call: Call): string =>
   `${chain.join(">")}@${call.line}:${call.symbol}>${call.toHunkId}`;
+
+/**
+ * Renders again only when `signature` changes, so a long PR's cards don't all redraw on every key.
+ * The signature has to cover everything the card shows, and its handlers have to stay current.
+ */
+const Stable = memo(
+  function Stable({ render }: { readonly signature: string; readonly render: () => ReactNode }) {
+    return render();
+  },
+  (previous, next) => previous.signature === next.signature,
+);
 
 /** A nesting level's calls, under the lines that make them. */
 const InlineCalls = ({
@@ -138,6 +149,7 @@ export const MapLayout = ({
   trailingProofs,
   mechanicalCount,
   scrollRequest,
+  signatureOf,
 }: {
   readonly analysis: Analysis;
   readonly sections: readonly MapSection[];
@@ -151,6 +163,8 @@ export const MapLayout = ({
   readonly trailingProofs: readonly MechanicalProof[];
   readonly mechanicalCount: number;
   readonly scrollRequest: ScrollRequest | null;
+  /** What a hunk's place shows, as a string that changes whenever that does. */
+  readonly signatureOf: (id: HunkId) => string;
 }) => {
   useEffect(() => {
     if (scrollRequest === null) return;
@@ -214,10 +228,15 @@ export const MapLayout = ({
             )}
             {ids.map((id) => (
               <div key={id} id={hunkAnchor(id)} className="map-hunk" data-hunk-id={id}>
-                <HunkView
-                  id={id}
-                  deps={deps}
-                  belowLine={belowLines([id], deps, openCalls, onToggleCall)}
+                <Stable
+                  signature={signatureOf(id)}
+                  render={() => (
+                    <HunkView
+                      id={id}
+                      deps={deps}
+                      belowLine={belowLines([id], deps, openCalls, onToggleCall)}
+                    />
+                  )}
                 />
               </div>
             ))}

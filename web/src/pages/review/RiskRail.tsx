@@ -19,6 +19,7 @@ const useInView = (ids: readonly HunkId[]): ReadonlySet<HunkId> => {
   const [inView, setInView] = useState<ReadonlySet<HunkId>>(new Set());
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
+    setInView(new Set());
     const visible = new Set<HunkId>();
     const idOf = new Map<Element, HunkId>();
     const observer = new IntersectionObserver((entries) => {
@@ -74,10 +75,13 @@ export const RiskRail = ({
   const id = useId();
   const rail = useRef<HTMLElement>(null);
   const [ids, setIds] = useState<readonly HunkId[]>([]);
-  const flat = sections.flatMap((section) => section.hunkIds);
-  const flatKey = flat.join(",");
+  // The hunks the page shows; their places change when the filter does.
+  const shown = sections
+    .flatMap((section) => section.hunkIds)
+    .filter((hunkId) => !contractOnly || index.items([hunkId])[0]?.risk.riskClass === "contract");
+  const shownKey = shown.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: the IDs change when their list does.
-  useEffect(() => setIds(flat), [flatKey]);
+  useEffect(() => setIds(shown), [shownKey]);
   const inView = useInView(ids);
 
   const report = useRef(onInView);
