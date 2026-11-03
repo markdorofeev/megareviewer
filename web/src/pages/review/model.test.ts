@@ -231,7 +231,7 @@ describe("risk counts", () => {
       noNewlineAtEnd: false,
     };
     expect(barHeight(lines(1))).toBe(BAR_MIN_PX);
-    expect(barHeight(lines(12))).toBe(12);
+    expect(barHeight(lines(30))).toBe(30);
     expect(barHeight(lines(500))).toBe(BAR_MAX_PX);
   });
 

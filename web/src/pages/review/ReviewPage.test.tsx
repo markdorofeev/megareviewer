@@ -532,19 +532,22 @@ class FakeObserver {
 describe("risk map", () => {
   const bar = (name: RegExp) => within(rail()).getByRole("button", { name });
 
-  it("has a bar per hunk, sized by its lines and marked for its decisions", async () => {
+  it("has a row per hunk: its file and lines, and a bar sized by them and marked", async () => {
     renderReview();
     await loaded();
     const route = bar(/^src\/routes\/orders\.ts, lines 10–24, contract$/);
-    expect(route.style.height).toBe("15px");
-    expect(bar(/^src\/routes\/orders\.ts, lines 1–8, logic$/).style.height).toBe("9px");
+    const height = (row: HTMLElement) => row.querySelector<HTMLElement>(".rail-bar")?.style.height;
+    expect(height(route)).toBe("15px");
+    expect(height(bar(/^src\/routes\/orders\.ts, lines 1–8, logic$/))).toBe("12px");
+    expect(route.querySelector(".rail-hunk-file")?.textContent).toBe("orders.ts 10–24");
+    expect(route.querySelector(".rail-hunk-meta")?.textContent).toBe("contract · 2 decisions");
     expect([...route.querySelectorAll(".rail-mark")].map((mark) => mark.textContent)).toEqual([
       "Decision: Adds a public endpoint GET /orders/:id/receipt",
       "Decision: Looks up the order by ID without checking that it belongs to the user",
     ]);
-    expect(bar(/^package\.json, .*, contract$/).textContent).toBe(
-      "Decision: Adds dependency dayjs 1.11.13 to format dates",
-    );
+    expect(
+      bar(/^package\.json, .*, contract$/).querySelector(".rail-marks, .rail-bar")?.textContent,
+    ).toBe("Decision: Adds dependency dayjs 1.11.13 to format dates");
     expect(within(rail()).getByRole("button", { name: "Proved mechanical (5)" })).toBeTruthy();
   });
 
@@ -589,7 +592,7 @@ describe("risk map", () => {
       within(cardOf(h.routeImports)).getByRole("checkbox", { name: "Reviewed" }),
     );
     const imports = bar(/^src\/routes\/orders\.ts, lines 1–8, logic, reviewed$/);
-    expect(imports.classList.contains("reviewed")).toBe(true);
+    expect(imports.querySelector(".rail-bar")?.classList.contains("reviewed")).toBe(true);
     expect(imports.textContent).toContain("✓");
 
     act(() => FakeObserver.report([placeOf(h.receiptRoute), placeOf(h.routeImports)]));

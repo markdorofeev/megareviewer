@@ -124,6 +124,14 @@
   white-space: nowrap;
 }
 
+.count-added {
+  color: var(--color-success);
+}
+
+.count-deleted {
+  color: var(--color-danger);
+}
+
 .hunk-heading {
   flex: 0 1 auto;
 }

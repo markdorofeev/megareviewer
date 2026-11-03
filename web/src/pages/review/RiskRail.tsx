@@ -43,9 +43,10 @@ const useInView = (ids: readonly HunkId[]): ReadonlySet<HunkId> => {
 };
 
 /**
- * The map beside the code: each step with one bar per hunk, as tall as the hunk is long within
- * bounds and colored by risk, marked for each decision on it and for a contract rule's reason.
- * Reviewed hunks are dimmed and ticked, and the hunks in view are outlined. Clicking scrolls there.
+ * The map beside the code: each step with a row per hunk, its file and lines beside a bar as tall
+ * as the hunk is long within bounds, colored by risk, and marked for each decision on it and for a
+ * contract rule's reason. Reviewed hunks are dimmed and ticked, and the hunks in view are
+ * outlined. Clicking scrolls there.
  */
 export const RiskRail = ({
   sections,
@@ -148,10 +149,13 @@ export const RiskRail = ({
                   const isReviewed = !mechanical && reviewedHunks.has(hunk.id);
                   const decisions = decisionsOn(hunk.id);
                   const rule = riskClass === "contract" && risk.source === "rule";
+                  const meta = [
+                    riskClass,
+                    decisions.length > 0 &&
+                      `${decisions.length} ${decisions.length === 1 ? "decision" : "decisions"}`,
+                  ];
                   const classes = [
-                    "rail-bar",
-                    `risk-${riskClass}`,
-                    isReviewed && "reviewed",
+                    "rail-hunk",
                     inView.has(hunk.id) && "in-view",
                     contractOnly && riskClass !== "contract" && "dimmed",
                   ];
@@ -160,12 +164,14 @@ export const RiskRail = ({
                       <button
                         type="button"
                         className={classes.filter(Boolean).join(" ")}
-                        style={{ height: barHeight(hunk) }}
                         aria-label={`${file.path}, ${hunkLocation(hunk)}, ${riskClass}${isReviewed ? ", reviewed" : ""}`}
                         aria-current={inView.has(hunk.id) ? "location" : undefined}
                         onClick={() => onGo({ kind: "hunk", hunkId: hunk.id })}
                       >
-                        <span className="rail-marks">
+                        <span
+                          className={`rail-bar risk-${riskClass}${isReviewed ? " reviewed" : ""}`}
+                          style={{ height: barHeight(hunk) }}
+                        >
                           {rule && (
                             <span className="rail-mark mark-rule" title={risk.reason}>
                               <span className="visually-hidden">Rule: {risk.reason}</span>
@@ -180,6 +186,13 @@ export const RiskRail = ({
                               <span className="visually-hidden">Decision: {decision.title}</span>
                             </span>
                           ))}
+                        </span>
+                        <span className="rail-hunk-text">
+                          <span className="rail-hunk-file">
+                            {file.path.split("/").at(-1)}{" "}
+                            {hunkLocation(hunk).replace(/^lines /, "")}
+                          </span>
+                          <span className="rail-hunk-meta">{meta.filter(Boolean).join(" · ")}</span>
                         </span>
                         {isReviewed && (
                           <span className="rail-bar-tick" aria-hidden="true">

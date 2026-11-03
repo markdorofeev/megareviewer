@@ -1,11 +1,18 @@
 import type { Analysis } from "../../../../src/domain/review/index.ts";
 
-/** The first line of the description with any text. */
-export const firstLine = (text: string): string =>
-  text
+const HEADING = /^#{1,6}\s+/;
+
+/**
+ * The description's first line of prose. Markdown headings such as "## What changed" name a part
+ * of the description rather than say what was asked, so they're skipped unless there's nothing else.
+ */
+export const firstLine = (text: string): string => {
+  const lines = text
     .split("\n")
     .map((line) => line.trim())
-    .find((line) => line !== "") ?? "";
+    .filter((line) => line !== "");
+  return lines.find((line) => !HEADING.test(line)) ?? lines[0]?.replace(HEADING, "") ?? "";
+};
 
 /**
  * The intent in one line under the title: the model's summary of what the code does, or without

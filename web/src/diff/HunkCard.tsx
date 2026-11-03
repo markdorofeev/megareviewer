@@ -3,7 +3,7 @@ import { Fragment, memo, type ReactNode, useEffect, useMemo, useRef, useState } 
 import type { FileChange, Hunk, HunkId, MechanicalProof } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { type CharRange, intraLineChanges } from "./intra-line.ts";
-import { type DisplayLine, displayLines, hunkLocation, hunkRanges } from "./lines.ts";
+import { type DisplayLine, displayLines, hunkLocation, lineCounts } from "./lines.ts";
 import { RiskBadge } from "./RiskBadge.tsx";
 import { type CodeToken, plainTokens, segmentLine } from "./tokens.ts";
 import { useHighlighter, useNearViewport } from "./useHighlighter.ts";
@@ -139,6 +139,7 @@ export const HunkCard = memo(function HunkCard({
     card.scrollIntoView({ block: "start" });
   }, [focused]);
 
+  const counts = lineCounts(hunk);
   const callers = links.filter((link) => link.direction === "called-by");
   const classes = ["hunk-card", highlighted && "highlighted", risk && `risk-${risk.riskClass}`];
   return (
@@ -156,7 +157,10 @@ export const HunkCard = memo(function HunkCard({
         {hunk.sectionHeading !== null && (
           <code className="hunk-heading">{hunk.sectionHeading}</code>
         )}
-        <span className="hunk-ranges">{hunkRanges(hunk)}</span>
+        <span className="hunk-ranges">
+          {hunkLocation(hunk)} <span className="count-added">+{counts.added}</span>{" "}
+          <span className="count-deleted">−{counts.deleted}</span>
+        </span>
         {proofs.map((proof) => (
           <span key={proof.kind} className="hunk-proof" title="Mechanical proof">
             ✓ {proof.detail}

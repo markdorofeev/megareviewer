@@ -561,54 +561,87 @@ details.warnings ul {
 .rail-bars {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 2px;
+  gap: 1px;
+}
+
+.rail-hunk {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 2px var(--space-1);
+  border: 0;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail-hunk:hover {
+  background: var(--color-surface-subtle);
+}
+
+.rail-hunk.dimmed {
+  opacity: 0.45;
 }
 
 .rail-bar {
   display: flex;
-  align-items: center;
+  flex: none;
+  flex-wrap: wrap;
+  align-content: flex-start;
   gap: 2px;
-  width: 100%;
-  padding: 0 var(--space-1);
-  border: 1px solid transparent;
-  border-radius: 2px;
-  background: var(--color-border-strong);
-  cursor: pointer;
+  width: 32px;
+  padding: 2px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 3px;
+  background: var(--color-surface-sunken);
 }
 
 .rail-bar.risk-contract {
-  background: var(--risk-contract-bg);
+  border-color: var(--risk-contract-bg);
+  background: var(--color-danger-subtle);
 }
 
 .rail-bar.risk-mechanical {
-  background: var(--color-border);
+  border-style: dashed;
+  background: none;
 }
 
-.rail-bar.reviewed,
-.rail-bar.dimmed {
-  opacity: 0.35;
+.rail-bar.reviewed {
+  opacity: 0.45;
 }
 
-.rail-bar.in-view {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent);
+.rail-hunk.in-view .rail-bar {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
-.rail-bar:hover {
-  filter: brightness(0.92);
+.rail-hunk-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: 1.35;
 }
 
-.rail-marks {
-  display: flex;
-  gap: 2px;
-  margin-right: auto;
+.rail-hunk-file {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-hunk-meta {
+  color: var(--color-text-muted);
 }
 
 .rail-mark {
   display: inline-block;
   width: 7px;
   height: 7px;
-  border: 1px solid var(--color-surface);
   border-radius: 50%;
 }
 
@@ -621,8 +654,8 @@ details.warnings ul {
 }
 
 .rail-bar-tick {
-  font-size: 10px;
-  line-height: 1;
+  align-self: center;
+  font-size: var(--text-xs);
 }
 
 .rail-legend {
@@ -641,18 +674,21 @@ details.warnings ul {
 
 .legend-swatch {
   display: inline-block;
-  width: 10px;
+  width: 12px;
   height: 10px;
+  border: 1px solid var(--color-border-strong);
   border-radius: 2px;
-  background: var(--color-border-strong);
+  background: var(--color-surface-sunken);
 }
 
 .legend-swatch.risk-contract {
-  background: var(--risk-contract-bg);
+  border-color: var(--risk-contract-bg);
+  background: var(--color-danger-subtle);
 }
 
 .legend-swatch.risk-mechanical {
-  background: var(--color-border);
+  border-style: dashed;
+  background: none;
 }
 
 /* Decisions next to their code */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayLines, hunkLocation, hunkRanges, lineCounts } from "./lines.ts";
+import { displayLines, hunkLocation, lineCounts } from "./lines.ts";
 import { firstHunk, modifiedFile } from "./testing.ts";
 
 describe("displayLines", () => {
@@ -39,7 +39,6 @@ describe("hunk labels", () => {
 
   it("names the new lines, or the old ones when nothing is left", () => {
     const changed = firstHunk(modifiedFile("a.ts", ["@@ -8,2 +10,3 @@", " a", "+b", " c"]));
-    expect(hunkRanges(changed)).toBe("−8,2 +10,3");
     expect(hunkLocation(changed)).toBe("lines 10–12");
 
     const single = firstHunk(modifiedFile("a.ts", ["@@ -8 +8 @@", "-a", "+b"]));

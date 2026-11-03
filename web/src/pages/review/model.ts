@@ -186,8 +186,8 @@ export const firstCall = (lines: ReadonlyMap<number, readonly Call[]> | undefine
   [...(lines?.entries() ?? [])].sort(([a], [b]) => a - b)[0]?.[1][0] ?? null;
 
 /** Bar heights on the risk map, in pixels: one per line, within these bounds. */
-export const BAR_MIN_PX = 4;
-export const BAR_MAX_PX = 40;
+export const BAR_MIN_PX = 12;
+export const BAR_MAX_PX = 60;
 
 export const barHeight = (hunk: Pick<Hunk, "lines">): number =>
   Math.min(BAR_MAX_PX, Math.max(BAR_MIN_PX, hunk.lines.length));

@@ -31,10 +31,6 @@ export const lineCounts = (
 const span = (start: number, count: number): string =>
   count <= 1 ? `${start}` : `${start}–${start + count - 1}`;
 
-/** The hunk header's ranges, as in `@@ -8,15 +10,26 @@`. */
-export const hunkRanges = (hunk: Hunk): string =>
-  `−${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines}`;
-
 /** Where the hunk is, for its accessible name: new lines, or old ones when nothing is left. */
 export const hunkLocation = (hunk: Hunk): string =>
   hunk.newLines > 0

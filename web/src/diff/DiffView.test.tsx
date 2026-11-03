@@ -70,10 +70,10 @@ describe("DiffView", () => {
     ]);
   });
 
-  it("shows the file, its status, the section heading and the ranges in the header", () => {
+  it("shows the file, its status, the section heading, its lines and their counts in the header", () => {
     renderWith(<DiffView items={items} />);
     expect(header(screen.getByRole("region", { name: firstName }))).toBe(
-      "src/routes/orders.tsmodifiedexport const ordersRouter = Router();−12,3 +12,3Changes the response shape.contractChanges the response shape.",
+      "src/routes/orders.tsmodifiedexport const ordersRouter = Router();lines 12–14 +1 −1Changes the response shape.contractChanges the response shape.",
     );
   });
 

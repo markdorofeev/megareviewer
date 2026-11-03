@@ -87,7 +87,7 @@ test("the map moves through the hunks and the steps with the keyboard", async ({
   await page.keyboard.press("n");
   await page.keyboard.press("j");
   await expect(focused).toHaveAttribute("aria-label", /^src\/routes\/orders\.ts/);
-  await expect(rail(page).locator(".rail-bar.in-view").first()).toBeVisible();
+  await expect(rail(page).locator(".rail-hunk.in-view").first()).toBeVisible();
 });
 
 test("mechanical changes are collapsed until expanded", async ({ page }) => {
