@@ -922,7 +922,7 @@ describe("layouts", () => {
     );
     expect(shownHunk()).toMatch(IMPORTS);
 
-    await userEvent.click(within(tree()).getByRole("button", { name: /^cachedReceipt,/ }));
+    await userEvent.click(within(tree()).getByRole("button", { name: /^cachedReceipt \(/ }));
     await userEvent.keyboard("v");
     expect(screen.getByRole("button", { name: "Map" }).getAttribute("aria-pressed")).toBe("true");
     expect(scrolledTo().at(-1)).toBe(`hunk-${h.retryAndCache}`);

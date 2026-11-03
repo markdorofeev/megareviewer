@@ -40,8 +40,7 @@ const writeComment = async (page: Page, textbox: Locator, text: string) => {
 const allSaved = (page: Page, count: number) =>
   expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toHaveCount(count);
 
-const tourEntry = (page: Page, name: RegExp) =>
-  page.getByRole("navigation", { name: "Tour" }).getByRole("button", { name });
+const rail = (page: Page) => page.getByRole("complementary", { name: "Map" });
 
 test("the token bootstraps the session and leaves the URL", async ({ page, browser, server }) => {
   await openPicker(page);
@@ -61,7 +60,8 @@ test("the token bootstraps the session and leaves the URL", async ({ page, brows
 test("analyzes a PR from its URL", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
-  await expect(page.getByRole("heading", { name: "Intent" })).toBeVisible();
+  await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
 });
 
 test("analyzes a PR picked from the list", async ({ page }) => {
@@ -73,18 +73,8 @@ test("analyzes a PR picked from the list", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Publish…" })).toBeEnabled();
 });
 
-test("the tour moves with the keyboard and marks visited steps", async ({ page }) => {
+test("the map moves through the hunks and the steps with the keyboard", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  const first = tourEntry(page, /config\/app\.yaml/);
-  const second = tourEntry(page, /src\/routes\/orders\.ts/);
-  await expect(first).toHaveAttribute("aria-current", "step");
-
-  await page.keyboard.press("n");
-  await expect(second).toHaveAttribute("aria-current", "step");
-  await expect(first).toHaveAccessibleName(/\(visited\)/);
-  await page.keyboard.press("p");
-  await expect(first).toHaveAttribute("aria-current", "step");
-
   // config/app.yaml has three hunks; j and k move the focus between their cards.
   const focused = page.locator(".hunk-card:focus");
   await page.keyboard.press("j");
@@ -93,11 +83,18 @@ test("the tour moves with the keyboard and marks visited steps", async ({ page }
   await expect(focused).toHaveAttribute("aria-label", /^config\/app\.yaml, lines 19–25$/);
   await page.keyboard.press("k");
   await expect(focused).toHaveAttribute("aria-label", /^config\/app\.yaml, lines 10–16$/);
+
+  await page.keyboard.press("n");
+  await page.keyboard.press("j");
+  await expect(focused).toHaveAttribute("aria-label", /^src\/routes\/orders\.ts/);
+  await expect(rail(page).locator(".rail-bar.in-view").first()).toBeVisible();
 });
 
 test("mechanical changes are collapsed until expanded", async ({ page }) => {
   await openReview(page, PR.refactorMove, "Tidy up utilities");
-  await tourEntry(page, /Generated and mechanical/).click();
+  await rail(page)
+    .getByRole("button", { name: /^Proved mechanical/ })
+    .click();
   const group = page.getByRole("region", { name: /Mechanical changes/ });
   const toggles = group.getByRole("button", { expanded: false });
   await expect(toggles.first()).toBeVisible();
@@ -221,4 +218,51 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
   await dialog.getByRole("button", { name: "Publish anyway" }).click();
   await expect(dialog).toBeHidden();
   expect(await publishAttempts(server)).toHaveLength(1);
+});
+
+test.describe("without the model", () => {
+  test.use({ ai: false });
+
+  test("reviews along the calls in both layouts, jumps with ⌘K and publishes", async ({
+    page,
+    server,
+  }) => {
+    await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+    await expect(page.getByText("Asked:")).toBeVisible();
+    await expect(page.getByRole("article")).toHaveCount(0);
+
+    // In the map, the receipt route's call opens the receipt service in place.
+    const route = page.getByRole("region", { name: /^src\/routes\/orders\.ts, lines 29–/ });
+    const call = route.getByRole("button", { name: /^renderReceipt src\/services\/receipts\.ts/ });
+    await call.click();
+    await expect(call).toHaveAttribute("aria-expanded", "true");
+    const opened = route.locator(".inline-call");
+    await opened.getByRole("checkbox", { name: "Reviewed" }).check();
+    await expect(page.getByText(/^1 of \d+ hunks reviewed$/)).toBeVisible();
+
+    // The call tree shows the same mark.
+    await page.getByRole("button", { name: "Call tree" }).click();
+    const tree = page.getByRole("navigation", { name: "Call tree" });
+    await expect(tree.getByRole("button", { name: /^renderReceipt \(logic\) reviewed$/ })).toBeVisible();
+
+    // ⌘K with ! lists the contract changes; Enter goes to the first.
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: "Jump to" });
+    await palette.getByRole("searchbox", { name: "Jump to" }).fill("!");
+    await expect(palette.getByRole("region", { name: "Contract changes" })).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(palette).toBeHidden();
+    await expect(
+      page.getByRole("region", { name: "Selected hunk" }).locator(".hunk-card.risk-contract"),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Publish…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Publish the review" });
+    await dialog.getByRole("radio", { name: "Approve" }).check();
+    await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    const [attempt] = await publishAttempts(server);
+    expect(attempt?.outcome).toBe("published");
+    expect(attempt?.publication.verdict).toBe("approve");
+  });
 });

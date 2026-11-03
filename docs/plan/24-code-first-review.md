@@ -1,6 +1,6 @@
 # Stage 24: Code-first review page
 
-**Status:** In progress (on main)
+**Status:** Done (pushed to main without a PR)
 **Depends on:** 22, 23
 **Unblocks:** —
 **Owns:** `web/src/pages/review/`, `web/src/diff/`, `web/dev/fixtures/`, `src/domain/diff/call-graph.ts`, `src/application/use-cases/pipeline-version.ts`, the "Review page" part of ARCHITECTURE.md "UI"
@@ -138,16 +138,16 @@ A separate PR, with a line in stage 02's **Change log**.
 
 ## Definition of done
 
-- [ ] Contract change PR, with the stage 02 change log line.
-- [ ] Tasks above, with unit and component tests.
-- [ ] Playwright, against the fake host:
+- [x] Contract change PR, with the stage 02 change log line.
+- [x] Tasks above, with unit and component tests.
+- [x] Playwright, against the fake host:
   - open a PR without the model;
   - in the map, open a call inline and mark it reviewed;
   - switch to the call tree and see the mark;
   - jump to a contract hunk with `⌘K`;
   - publish.
-- [ ] Checked in the browser on the dev fixtures and on a PR with at least 200 hunks, in both layouts.
-- [ ] ARCHITECTURE.md "Review page" rewritten.
+- [x] Checked in the browser on the dev fixtures and on a PR with at least 200 hunks, in both layouts.
+- [x] ARCHITECTURE.md "Review page" rewritten.
 
 ## Open issues
 
@@ -155,4 +155,11 @@ A separate PR, with a line in stage 02's **Change log**.
 
 ## Notes for later stages
 
-_None yet._
+- **No PRs.** Like stages 20 to 23, this went to main as commits: the contract change (`CallGraphHint.line`, pipeline version 3) is its own commit, with its line in stage 02's change log.
+- **Map cards redraw only when their signature changes.** `signatureOf` in `ReviewPage.tsx` lists what a hunk's place in the map shows: its reviewed mark, highlight, comments, the decisions on it and the calls opened from it. Anything new a card shows has to go into the signature, and its handlers have to call the latest state, as `stable.follow` does, or the card goes stale. Without it, a key took 300 to 500 ms on a 240-hunk PR in development; with it, about 60.
+- **A decision's card sits on its first non-mechanical hunk** in the map's order, because mechanical hunks show collapsed. A decision that rests only on mechanical hunks, or on none the page knows, shows as a card before the first step.
+- **Rail bars** are one pixel per line of the hunk, between 4 and 40.
+- **Gone with the sidebars:** visited steps, the intent panel's collapsed state and the "cut the description after the first visit" behavior. The intent panel and the stated intent now only show in the Details dialog, where there's nothing to collapse.
+- **The palette** shows results as buttons, not a listbox: arrows and Enter work in the search field, and Tab reaches the results.
+- **The model's input is unchanged.** Hints reach the model without their line, so the prompts and the evals didn't change.
+- **Outside this stage's paths:** `web/dev/mock-routes.ts` serves a 240-hunk analysis without the model (`web/dev/fixtures/large.ts`) for PR number 900 (`MOCK_LARGE_PR_NUMBER`), for checking a long PR in the browser. `e2e/fake-server.ts` takes an `ai` option: `test.use({ ai: false })` runs fake mode with `--no-ai`. Without Playwright's own browser installed, `PLAYWRIGHT_CHANNEL=chrome pnpm e2e` uses the installed Chrome.

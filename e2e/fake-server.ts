@@ -16,14 +16,23 @@ export interface FakeServer {
   readonly request: APIRequestContext;
 }
 
-/** Starts stage 12's fake mode on a free port, serving the built UI. */
-const start = async (): Promise<{ child: ChildProcess; url: string }> => {
+/** Starts stage 12's fake mode on a free port, serving the built UI, with the model or without. */
+const start = async (ai: boolean): Promise<{ child: ChildProcess; url: string }> => {
   if (!existsSync(`${root}/dist/web/index.html`)) {
     throw new Error("No built UI in dist/web. Run `pnpm build` first.");
   }
   const child = spawn(
     process.execPath,
-    ["src/cli/dev/fake-main.ts", "--port", "0", "--token", TOKEN, "--static", "dist/web"],
+    [
+      "src/cli/dev/fake-main.ts",
+      "--port",
+      "0",
+      "--token",
+      TOKEN,
+      "--static",
+      "dist/web",
+      ...(ai ? [] : ["--no-ai"]),
+    ],
     { cwd: root, stdio: ["ignore", "pipe", "pipe"] },
   );
   let output = "";
@@ -44,9 +53,11 @@ const start = async (): Promise<{ child: ChildProcess; url: string }> => {
   return { child, url };
 };
 
-export const test = base.extend<{ server: FakeServer }>({
-  server: async ({ playwright }, use) => {
-    const { child, url } = await start();
+export const test = base.extend<{ ai: boolean; server: FakeServer }>({
+  /** Whether the model passes run; `test.use({ ai: false })` runs without them, as without --ai. */
+  ai: [true, { option: true }],
+  server: async ({ playwright, ai }, use) => {
+    const { child, url } = await start(ai);
     const request = await playwright.request.newContext({
       baseURL: url,
       extraHTTPHeaders: { [TOKEN_HEADER]: TOKEN },

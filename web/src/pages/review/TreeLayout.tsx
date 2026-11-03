@@ -124,8 +124,8 @@ export const TreeLayout = ({
           <span className={`risk-dot risk-${riskClass}`} aria-hidden="true" />
           <span className="tree-label">
             {treeRow.symbol === null ? whereIs(hunkId) : treeRow.symbol}
-          </span>
-          <span className="visually-hidden">, {riskClass}</span>
+          </span>{" "}
+          <span className="visually-hidden">({riskClass})</span>
           {reference && <span className="tree-note">above</span>}
           {reviewed && !reference && (
             <span className="tree-tick" role="img" aria-label="reviewed">
