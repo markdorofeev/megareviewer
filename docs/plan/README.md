@@ -101,6 +101,14 @@ The review page still opens on an intent panel and two sidebars, and shows one t
 
 It's one stage because both layouts share the hunk cards, decisions and shortcuts it moves. The `CallGraphHint` change goes in its own PR first.
 
+## Fourth slice: navigation by flows
+
+Without the model, the tour's steps are whatever the call graph happens to connect, so their titles say nothing and one step can hold most of the PR. This slice makes each step a flow: an entry point (a route, a page, a command) and the changed code it runs. Later stages replace the call tree with an overview of how the changed files connect, and show a call chip only where it helps.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 25 | [Tour by flows](25-flows.md) | 24 | `src/domain/review/code-tour.ts`, `entry-points.ts`, `src/domain/diff/call-graph.ts`, step headings in `web/src/pages/review/` |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
