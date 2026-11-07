@@ -26,9 +26,22 @@ describe("statusIndicator", () => {
     );
   });
 
-  it("reports a host whose user lookup failed", () => {
+  it("names a host whose user lookup failed, with its reason", () => {
+    const failing = { configured: true, user: null, error: "Bitbucket refused the request." };
+    expect(statusIndicator(withHosts({ bitbucket: failing }), null)).toEqual({
+      tone: "warning",
+      label: "Bitbucket problem",
+      detail: "Bitbucket: Bitbucket refused the request.\nmegareviewer 0.0.0-mock",
+    });
+  });
+
+  it("names both hosts when both fail", () => {
     const failing = { configured: true, user: null, error: "401" };
-    expect(statusIndicator(withHosts({ github: failing }), null).label).toBe("Host problem");
+    expect(statusIndicator(withHosts({ github: failing, bitbucket: failing }), null)).toEqual({
+      tone: "warning",
+      label: "GitHub and Bitbucket problems",
+      detail: "GitHub: 401\nBitbucket: 401\nmegareviewer 0.0.0-mock",
+    });
   });
 
   it("is connecting until the status arrives, and disconnected on an error", () => {

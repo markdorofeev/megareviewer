@@ -103,6 +103,8 @@ describe("classifyByRules", () => {
     ["lib/JWTToken.go", "auth or security path"],
     ["app/permissions_controller.rb", "auth or security path"],
     ["src/middleware/require-admin.ts", "auth or security path"],
+    ["delphi_code/infrastructure/keychain.py", "auth or security path"],
+    ["src/KeyringStore.ts", "auth or security path"],
   ])("marks %s as contract: %s", (path, reason) => {
     expect(reasonOf(path)).toBe(reason);
   });
@@ -121,6 +123,7 @@ describe("classifyByRules", () => {
     "src/tokenizer.ts",
     "src/sessionless/index.ts",
     "src/catalog/oauthorize-later.ts",
+    "src/keychainless.ts",
   ])("leaves %s as logic", (path) => {
     expect(reasonOf(path)).toBeNull();
   });
@@ -139,6 +142,12 @@ describe("classifyByRules", () => {
     ["+requests.get(url, verify=False)", "adds verify=False"],
     ["+cfg := &tls.Config{InsecureSkipVerify: true}", "adds InsecureSkipVerify"],
     ["+  git commit --no-verify -m wip", "adds --no-verify"],
+    ["+import subprocess", "adds subprocess"],
+    ["+    found = subprocess.run(['security', 'find-generic-password'])", "adds subprocess"],
+    ["+from subprocess import Popen", "adds subprocess"],
+    ["+os.system(command)", "adds os.system()"],
+    ["+pipe = os.popen(command)", "adds os.popen()"],
+    ["+run(command, shell=True)", "adds shell=True"],
   ])("marks an added %s as contract", (line, reason) => {
     expect(reasonOf("src/app.ts", lines(line))).toBe(reason);
   });
@@ -152,6 +161,9 @@ describe("classifyByRules", () => {
     "+requests.get(url, verify=True)",
     "+cfg := &tls.Config{InsecureSkipVerify: false}",
     "+const noVerify = flags['--no-verifyx'];",
+    "+import subprocessing",
+    "+chaos.system(x)",
+    "+run(command, shell=False)",
   ])("leaves an added %s as logic", (line) => {
     expect(reasonOf("src/app.ts", lines(line))).toBeNull();
   });

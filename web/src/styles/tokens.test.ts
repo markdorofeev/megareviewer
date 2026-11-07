@@ -39,6 +39,9 @@ const TEXT_ON_SURFACES = [
 const TEXT_PAIRS: readonly (readonly [string, string])[] = [
   ...SURFACES.flatMap((surface) => TEXT_ON_SURFACES.map((text) => [surface, text] as const)),
   ["color-accent-bg", "color-on-accent"],
+  ["color-accent-subtle", "color-text"],
+  ["color-accent-subtle", "color-text-muted"],
+  ["color-accent-subtle", "color-accent"],
   ["color-danger-subtle", "color-text"],
   ["color-danger-subtle", "color-danger"],
   ["color-warning-subtle", "color-text"],
@@ -55,6 +58,23 @@ const CONTROL_PAIRS: readonly (readonly [string, string])[] = [
   ["color-surface", "color-focus"],
 ];
 
+const stylesheets = import.meta.glob<string>("../**/*.css", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+
+/** Every rule that sets both a background token and a text token, as [selector, background, text]. */
+const rulePairs = Object.values(stylesheets).flatMap((sheet) =>
+  [...sheet.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap(([, selector = "", body = ""]) => {
+    const background = body.match(/(?:^|[\s;])background(?:-color)?:\s*var\(--([\w-]+)\)\s*;/)?.[1];
+    const text = body.match(/(?:^|[\s;])color:\s*var\(--([\w-]+)\)\s*;/)?.[1];
+    return background === undefined || text === undefined
+      ? []
+      : [[selector.replace(/\/\*.*?\*\//gs, "").trim(), background, text] as const];
+  }),
+);
+
 describe.each([
   ["light", light],
   ["dark", dark],
@@ -64,6 +84,14 @@ describe.each([
     if (value === undefined) throw new Error(`no token --${name}`);
     return value;
   };
+
+  it("finds the rules that set a background and a text color", () => {
+    expect(rulePairs.length).toBeGreaterThan(10);
+  });
+
+  it.each(rulePairs)("%s: %s with %s text meets AA (4.5:1)", (_selector, background, text) => {
+    expect(contrast(color(background), color(text))).toBeGreaterThanOrEqual(4.5);
+  });
 
   it.each(TEXT_PAIRS)("%s with %s text meets AA (4.5:1)", (background, text) => {
     expect(contrast(color(background), color(text))).toBeGreaterThanOrEqual(4.5);

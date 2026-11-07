@@ -11,6 +11,7 @@ const PAIRS = [
   ["diff-deleted-bg", "color-text", "deleted line"],
   ["diff-deleted-word-bg", "color-text", "deleted word"],
   ["color-accent-bg", "color-on-accent", "primary button"],
+  ["color-accent-subtle", "color-accent", "selected"],
 ] as const;
 
 /** Every color token in use, for checking both themes by eye: /dev/styles. */

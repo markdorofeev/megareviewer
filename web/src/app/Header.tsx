@@ -19,8 +19,17 @@ export const statusIndicator = (
   if (!github.configured && !bitbucket.configured) {
     return { tone: "warning", label: "Setup needed", detail: version };
   }
-  if (github.error !== null || bitbucket.error !== null) {
-    return { tone: "warning", label: "Host problem", detail: version };
+  const failing = [
+    { name: "GitHub", error: github.error },
+    { name: "Bitbucket", error: bitbucket.error },
+  ].flatMap(({ name, error }) => (error === null ? [] : [{ name, error }]));
+  if (failing.length > 0) {
+    const names = failing.map(({ name }) => name).join(" and ");
+    return {
+      tone: "warning",
+      label: failing.length === 1 ? `${names} problem` : `${names} problems`,
+      detail: [...failing.map(({ name, error }) => `${name}: ${error}`), version].join("\n"),
+    };
   }
   return { tone: "ok", label: "Ready", detail: version };
 };

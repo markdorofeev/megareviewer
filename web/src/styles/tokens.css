@@ -14,6 +14,7 @@
   --color-border-strong: #818b98;
   --color-accent: #0860ca;
   --color-accent-bg: #0860ca;
+  --color-accent-subtle: #ddf4ff;
   --color-on-accent: #ffffff;
   --color-focus: #0860ca;
   --color-success: #17742f;
@@ -73,6 +74,7 @@
     --color-border-strong: #656c76;
     --color-accent: #4493f8;
     --color-accent-bg: #1f6feb;
+    --color-accent-subtle: #121d2f;
     --color-on-accent: #ffffff;
     --color-focus: #4493f8;
     --color-success: #3fb950;

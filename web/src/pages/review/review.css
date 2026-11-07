@@ -107,7 +107,7 @@
 .layout-toggle .button[aria-pressed="true"] {
   position: relative;
   border-color: var(--color-accent);
-  background: var(--color-accent-bg);
+  background: var(--color-accent-subtle);
   color: var(--color-accent);
   font-weight: 600;
 }
@@ -1030,7 +1030,7 @@ details.warnings ul {
 
 .palette-item.active,
 .palette-item:hover {
-  background: var(--color-accent-bg);
+  background: var(--color-accent-subtle);
 }
 
 .palette-label {
