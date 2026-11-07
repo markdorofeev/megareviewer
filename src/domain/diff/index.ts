@@ -1,4 +1,4 @@
-export { buildCallGraphHints, type FileSymbols } from "./call-graph.ts";
+export { buildCallGraphHints, changedDefinitionNames, type FileSymbols } from "./call-graph.ts";
 export { findFormattingProofs } from "./formatting.ts";
 export { hunkId } from "./hunk-id.ts";
 export type { SymbolImport } from "./imports.ts";

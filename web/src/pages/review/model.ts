@@ -78,6 +78,8 @@ export const tourSteps = (analysis: Analysis, index: HunkIndex): readonly TourSt
       title: "Changes the tour left out",
       explanation: "The tour didn't include these changes, so they're shown here in file order.",
       hunkIds: missed,
+      kind: "supporting",
+      via: [],
     },
   ];
 };

@@ -226,6 +226,7 @@ export const runTour = async (
     readonly files: readonly FileChange[];
     readonly required: ReadonlySet<HunkId>;
     readonly callGraph: readonly CallGraphHint[];
+    readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
     /** Every hunk's final risk, for the call-graph tour's order. */
     readonly assessments: readonly RiskAssessment[];
   },
@@ -239,7 +240,13 @@ export const runTour = async (
     logger,
   );
   const fallback = (reason: string) => ({
-    tour: codeTour(context.files, required, context.callGraph, context.assessments),
+    tour: codeTour({
+      files: context.files,
+      required,
+      callGraph: context.callGraph,
+      risk: context.assessments,
+      definitions: context.definitions,
+    }),
     usage,
     warnings: [`${reason}, so the tour follows the call graph instead`],
   });
@@ -254,6 +261,8 @@ export const runTour = async (
       steps: outcome.value.value.steps.map((step, index) => ({
         ...step,
         id: TourStepId.parse(`s${index + 1}`),
+        kind: "flow" as const,
+        via: [],
       })),
       builtBy: "model",
     },

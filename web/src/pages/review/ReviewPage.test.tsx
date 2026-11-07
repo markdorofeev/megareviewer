@@ -739,12 +739,19 @@ const chained: AnalysisView = {
     ...analysis,
     callGraph: [
       ...analysis.callGraph,
-      { fromHunkId: h.retryAndCache, toHunkId: h.receiptRoute, symbol: "orders", line: 45 },
+      {
+        fromHunkId: h.retryAndCache,
+        toHunkId: h.receiptRoute,
+        symbol: "orders",
+        line: 45,
+        use: "call",
+      },
       {
         fromHunkId: h.retryAndCache,
         toHunkId: h.receiptFormatting,
         symbol: "renderReceipt",
         line: 47,
+        use: "call",
       },
     ],
   },
@@ -753,6 +760,32 @@ const chip = (within_: HTMLElement, symbol: string) =>
   within(within_).getByRole("button", { name: new RegExp(`^${symbol} `) });
 
 describe("inline calls", () => {
+  it("leave out type uses, which only group code", async () => {
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          callGraph: [
+            ...analysis.callGraph,
+            {
+              fromHunkId: h.receiptRoute,
+              toHunkId: h.receiptFormatting,
+              symbol: "Receipt",
+              line: 12,
+              use: "type",
+            },
+          ],
+        },
+      },
+    });
+    await loaded();
+    expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: /^Receipt / })).toBeNull();
+    expect(within(cardOf(h.receiptFormatting)).queryByRole("button", { name: /^called by / })).toBe(
+      null,
+    );
+  });
+
   it("open under the line that calls, nest, and stop at a hunk already open above", async () => {
     renderReview({ view: chained });
     await loaded();

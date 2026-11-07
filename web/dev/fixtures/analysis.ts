@@ -503,12 +503,14 @@ const analysis: Analysis = {
       toHunkId: h.retryAndCache,
       symbol: "cachedReceipt",
       line: 20,
+      use: "call",
     },
     {
       fromHunkId: h.receiptFormatting,
       toHunkId: h.formatMoneyAdded,
       symbol: "formatMoney",
       line: 12,
+      use: "call",
     },
   ],
   intent: {
@@ -604,6 +606,8 @@ const analysis: Analysis = {
         explanation:
           "Start at the new route: it looks up the order, renders its receipt and sends it as plain text.",
         hunkIds: [h.receiptRoute, h.routeImports],
+        kind: "flow",
+        via: [],
       },
       {
         id: TourStepId.parse("s2"),
@@ -611,6 +615,8 @@ const analysis: Analysis = {
         explanation:
           "The route calls cachedReceipt, which renders each receipt once. Rendering now retries the tax service.",
         hunkIds: [h.retryAndCache],
+        kind: "flow",
+        via: [],
       },
       {
         id: TourStepId.parse("s3"),
@@ -618,12 +624,16 @@ const analysis: Analysis = {
         explanation:
           "Receipt lines now format prices with the shared formatMoney and dates with dayjs.",
         hunkIds: [h.receiptFormatting],
+        kind: "flow",
+        via: [],
       },
       {
         id: TourStepId.parse("s4"),
         title: "The new dependency",
         explanation: "dayjs is added for the date format above.",
         hunkIds: [h.dependency],
+        kind: "flow",
+        via: [],
       },
     ],
     builtBy: "model",

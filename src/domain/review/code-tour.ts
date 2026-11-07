@@ -119,12 +119,22 @@ const explain = (units: readonly Unit[]): string => {
  * in the group calls), callers before callees. Units with no links are grouped by directory.
  * Steps with contract hunks come first. Every required hunk is in exactly one step.
  */
-export const codeTour = (
-  files: readonly FileChange[],
-  requiredHunkIds: ReadonlySet<HunkId>,
-  callGraph: readonly CallGraphHint[],
-  risk: readonly RiskAssessment[],
-): Tour => {
+export interface CodeTourInput {
+  readonly files: readonly FileChange[];
+  /** Hunks without a mechanical proof: every one is in exactly one step. */
+  readonly required: ReadonlySet<HunkId>;
+  readonly callGraph: readonly CallGraphHint[];
+  readonly risk: readonly RiskAssessment[];
+  /** Each hunk's changed definitions, innermost, by name. */
+  readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
+}
+
+export const codeTour = ({
+  files,
+  required: requiredHunkIds,
+  callGraph,
+  risk,
+}: CodeTourInput): Tour => {
   const contract = new Set(
     risk.flatMap((assessment) => (assessment.riskClass === "contract" ? [assessment.hunkId] : [])),
   );
@@ -134,7 +144,7 @@ export const codeTour = (
   // Edges between units, each with the symbol it was found by (the first by name).
   const callees = new Map<Unit, Map<Unit, string>>(units.map((unit) => [unit, new Map()]));
   const callers = new Map<Unit, Set<Unit>>(units.map((unit) => [unit, new Set()]));
-  for (const hint of callGraph) {
+  for (const hint of callGraph.filter((one) => one.use === "call")) {
     const from = unitOf.get(hint.fromHunkId);
     const to = unitOf.get(hint.toHunkId);
     if (from === undefined || to === undefined || from === to) continue;
@@ -226,6 +236,8 @@ export const codeTour = (
           title: step.title,
           explanation: explain(step.units),
           hunkIds: step.units.flatMap((unit) => unit.hunkIds),
+          kind: "flow",
+          via: [],
         }),
       ),
     builtBy: "code",

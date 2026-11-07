@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { hunk } from "../../application/testing/index.ts";
-import { buildCallGraphHints, type FileChange, type FileSymbols, type Hunk } from "./index.ts";
+import {
+  buildCallGraphHints,
+  changedDefinitionNames,
+  type FileChange,
+  type FileSymbols,
+  type Hunk,
+} from "./index.ts";
 
 const LANGUAGES: Readonly<Record<string, string>> = {
   ts: "typescript",
@@ -70,7 +76,13 @@ describe("buildCallGraphHints", () => {
       ]),
     );
     expect(hints).toEqual([
-      { fromHunkId: callingHunk.id, toHunkId: definingHunk.id, symbol: "slugify", line: 11 },
+      {
+        fromHunkId: callingHunk.id,
+        toHunkId: definingHunk.id,
+        symbol: "slugify",
+        line: 11,
+        use: "call",
+      },
     ]);
   });
 
@@ -245,15 +257,13 @@ const links = (
 ): boolean => {
   const caller = hunk(from, "@@ -1,0 +1,1 @@", ["+use();"]);
   const callee = hunk(to, "@@ -1,0 +1,1 @@", ["+define();"]);
-  return (
-    buildCallGraphHints(
-      [file(from, caller), file(to, callee)],
-      new Map([
-        [from, symbols([], [["target", 1, kind]], imports)],
-        [to, symbols([["target", 1, 1]])],
-      ]),
-    ).length > 0
-  );
+  return buildCallGraphHints(
+    [file(from, caller), file(to, callee)],
+    new Map([
+      [from, symbols([], [["target", 1, kind]], imports)],
+      [to, symbols([["target", 1, 1]])],
+    ]),
+  ).some((hint) => hint.use === "call");
 };
 
 const named = (module: string, ...names: string[]) => [{ module, names }];
@@ -360,8 +370,36 @@ describe("which definitions a reference reaches", () => {
     );
   });
 
-  it("never links a type annotation", () => {
+  it("doesn't follow a type annotation as a call, but records it as a type use", () => {
     expect(links("web/page.ts", "web/text.ts", named("./text.ts", "target"), "type")).toBe(false);
+    const caller = hunk("web/page.ts", "@@ -1,0 +1,2 @@", ["+let a: Target;", "+build(a);"]);
+    const callee = hunk("web/text.ts", "@@ -1,0 +1,1 @@", ["+define();"]);
+    const hintsFor = (references: [string, number, Kind][]) =>
+      buildCallGraphHints(
+        [file("web/page.ts", caller), file("web/text.ts", callee)],
+        new Map([
+          ["web/page.ts", symbols([], references, named("./text.ts", "Target", "build"))],
+          [
+            "web/text.ts",
+            symbols([
+              ["Target", 1, 1],
+              ["build", 1, 1],
+            ]),
+          ],
+        ]),
+      ).map(({ symbol, line, use }) => [symbol, line, use]);
+    expect(hintsFor([["Target", 1, "type"]])).toEqual([["Target", 1, "type"]]);
+    // A symbol the hunk also calls is a call.
+    expect(
+      hintsFor([
+        ["Target", 1, "type"],
+        ["Target", 2, "name"],
+        ["build", 2, "name"],
+      ]),
+    ).toEqual([
+      ["Target", 2, "call"],
+      ["build", 2, "call"],
+    ]);
   });
 
   it("doesn't link files without a language", () => {
@@ -436,7 +474,9 @@ describe("which definitions a reference reaches", () => {
         ],
       ]),
     );
-    expect(hints).toEqual([{ fromHunkId: load.id, toHunkId: github.id, symbol: "auth", line: 5 }]);
+    expect(hints).toEqual([
+      { fromHunkId: load.id, toHunkId: github.id, symbol: "auth", line: 5, use: "call" },
+    ]);
   });
 
   it("links a method to the same-named one it delegates to, not to itself", () => {
@@ -459,6 +499,35 @@ describe("which definitions a reference reaches", () => {
         ["src/store.ts", symbols([["save", 1, 1]])],
       ]),
     );
-    expect(hints).toEqual([{ fromHunkId: own.id, toHunkId: other.id, symbol: "save", line: 3 }]);
+    expect(hints).toEqual([
+      { fromHunkId: own.id, toHunkId: other.id, symbol: "save", line: 3, use: "call" },
+    ]);
+  });
+});
+
+describe("changedDefinitionNames", () => {
+  it("names the innermost definitions each hunk adds lines to", () => {
+    const method = hunk("src/store.ts", "@@ -4,0 +4,1 @@", ["+change();"]);
+    const field = hunk("src/store.ts", "@@ -1,0 +2,1 @@", ["+  a = 1;"]);
+    const outside = hunk("src/store.ts", "@@ -20,0 +20,1 @@", ["+// end"]);
+    const names = changedDefinitionNames(
+      [file("src/store.ts", field, method, outside)],
+      new Map([
+        [
+          "src/store.ts",
+          symbols([
+            ["Store", 1, 10],
+            ["save", 3, 5],
+          ]),
+        ],
+      ]),
+    );
+    expect(names).toEqual(
+      new Map([
+        [field.id, ["Store"]],
+        [method.id, ["save"]],
+        [outside.id, []],
+      ]),
+    );
   });
 });

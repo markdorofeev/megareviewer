@@ -7,7 +7,7 @@ import {
   sharesPackage,
 } from "./imports.ts";
 import { isTestFile } from "./test-files.ts";
-import type { CallGraphHint, FileChange, Hunk } from "./types.ts";
+import type { CallGraphHint, FileChange, Hunk, HunkId } from "./types.ts";
 
 /** What hints need from `CodeParser.symbols`, for the head version of a file. */
 export interface FileSymbols {
@@ -45,8 +45,8 @@ interface Change {
  * Hints for the tour and the call chips: a hunk that uses a symbol points to each hunk that
  * changes it. A hunk changes the innermost definitions its added lines fall in, so adding a
  * method changes the method, not every use of its class. It uses a symbol when a reference falls
- * on its added or context lines; references in type positions don't count, because a type
- * annotation isn't something the reader follows.
+ * on its added or context lines. A use in a type position is a hint with `use: "type"`: it groups
+ * code, but a type annotation isn't a call for the reader to follow.
  *
  * A reference reaches a definition only in its own file or in a file its imports reach, and
  * never across languages or from production code into tests. For languages whose imports aren't
@@ -55,8 +55,8 @@ interface Change {
  * file share the name, a reference in that file reaches the one in its own class, if any.
  *
  * A definition changed by several hunks gets one hint, to the first. One hint per symbol and
- * hunk, on its first reference's line. At most 10 hints per hunk, same file first, then by symbol
- * name.
+ * hunk, on its first reference's line. At most 10 calls and 10 type uses per hunk, same file
+ * first, then by symbol name. Calls come before type uses.
  */
 export const buildCallGraphHints = (
   files: readonly FileChange[],
@@ -96,15 +96,15 @@ export const buildCallGraphHints = (
 
   return hunks.flatMap((from): CallGraphHint[] => {
     const lines = new Set(newLines(from.hunk, ["add", "context"]));
-    // The first line each symbol is used on, per hunk it reaches.
-    const firstUse = new Map<Located, Map<string, number>>();
+    // The first line each symbol is used on, per use and hunk it reaches.
+    const firstUse = { call: new Map<Located, Map<string, number>>(), type: new Map() };
     const own = symbolsByPath.get(from.file.path);
     for (const { name, line, kind } of own?.references ?? []) {
-      if (kind === "type" || !lines.has(line)) continue;
+      if (!lines.has(line)) continue;
       // A method that calls a same-named one on another object delegates; it doesn't recurse.
       const reached = (changedBy.get(name) ?? []).filter(
         ({ at, definition }) =>
-          visible(from.file, kind, name, at.file) &&
+          visible(from.file, kind === "member" ? "member" : "name", name, at.file) &&
           !(at.file.path === from.file.path && enclosesLine(definition, line)),
       );
       const local = reached.filter(
@@ -112,38 +112,61 @@ export const buildCallGraphHints = (
           at.file.path === from.file.path &&
           enclosesLine(containerOf(definition, own?.definitions ?? []), line),
       );
+      const byUse = firstUse[kind === "type" ? "type" : "call"];
       for (const { at: to } of local.length > 0 ? local : reached) {
         if (to.hunk.id === from.hunk.id) continue;
-        const uses = firstUse.get(to) ?? new Map<string, number>();
+        const uses = byUse.get(to) ?? new Map<string, number>();
         const first = uses.get(name);
         if (first === undefined || line < first) uses.set(name, line);
-        firstUse.set(to, uses);
+        byUse.set(to, uses);
       }
     }
-    const candidates = [...firstUse].flatMap(([to, uses]) =>
-      [...uses].map(([symbol, line]) => ({
-        to,
-        symbol,
-        line,
-        sameFile: to.file.path === from.file.path,
-      })),
-    );
-    return candidates
-      .sort(
-        (a, b) =>
-          Number(b.sameFile) - Number(a.sameFile) ||
-          compare(a.symbol, b.symbol) ||
-          a.to.order - b.to.order,
-      )
-      .slice(0, MAX_HINTS_PER_HUNK)
-      .map(({ to, symbol, line }) => ({
-        fromHunkId: from.hunk.id,
-        toHunkId: to.hunk.id,
-        symbol,
-        line,
-      }));
+    const hints = (use: "call" | "type"): CallGraphHint[] =>
+      [...firstUse[use]]
+        .flatMap(([to, uses]) =>
+          [...uses]
+            // A symbol the hunk calls is a call, even where it's also named as a type.
+            .filter(([symbol]) => use === "call" || !firstUse.call.get(to)?.has(symbol))
+            .map(([symbol, line]) => ({
+              to,
+              symbol,
+              line,
+              sameFile: to.file.path === from.file.path,
+            })),
+        )
+        .sort(
+          (a, b) =>
+            Number(b.sameFile) - Number(a.sameFile) ||
+            compare(a.symbol, b.symbol) ||
+            a.to.order - b.to.order,
+        )
+        .slice(0, MAX_HINTS_PER_HUNK)
+        .map(({ to, symbol, line }) => ({
+          fromHunkId: from.hunk.id,
+          toHunkId: to.hunk.id,
+          symbol,
+          line,
+          use,
+        }));
+    return [...hints("call"), ...hints("type")];
   });
 };
+
+/** Each hunk's changed definitions, innermost, by name: what the tour reads entry points from. */
+export const changedDefinitionNames = (
+  files: readonly FileChange[],
+  symbolsByPath: ReadonlyMap<string, FileSymbols>,
+): ReadonlyMap<HunkId, readonly string[]> =>
+  new Map(
+    files.flatMap((file) =>
+      file.hunks.map((hunk) => [
+        hunk.id,
+        [...changedDefinitions(hunk, symbolsByPath.get(file.path))].map(
+          (definition) => definition.name,
+        ),
+      ]),
+    ),
+  );
 
 /** The innermost definitions the hunk's added lines fall in. */
 const changedDefinitions = (hunk: Hunk, symbols: FileSymbols | undefined): Set<Definition> => {

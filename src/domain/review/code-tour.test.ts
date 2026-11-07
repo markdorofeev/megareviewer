@@ -33,6 +33,7 @@ const calls = (from: HunkId, to: HunkId, symbol: string): CallGraphHint => ({
   toHunkId: to,
   symbol,
   line: 1,
+  use: "call",
 });
 
 const contract = (...ids: HunkId[]): RiskAssessment[] =>
@@ -47,7 +48,7 @@ const tourOf = (
   risk: readonly RiskAssessment[] = [],
   required = all(files),
 ) => {
-  const tour = codeTour(files, required, hints, risk);
+  const tour = codeTour({ files, required, callGraph: hints, risk, definitions: new Map() });
   expect(validateTour(tour, required)).toEqual([]);
   expect(Tour.parse(tour)).toEqual(tour);
   return tour;
@@ -71,6 +72,8 @@ describe("codeTour", () => {
         title: "verifySession",
         explanation: "3 files in src/api and src/auth, tested in session.test.ts.",
         hunkIds: [h(1), h(2), h(3)],
+        kind: "flow",
+        via: [],
       },
     ]);
   });
@@ -167,6 +170,8 @@ describe("codeTour", () => {
         title: "Repository root",
         explanation: "2 files in the repository root.",
         hunkIds: [h(1), h(2)],
+        kind: "flow",
+        via: [],
       },
     ]);
   });
@@ -205,6 +210,8 @@ describe("codeTour", () => {
         title: "src",
         explanation: "2 files in src, tested in b.test.ts.",
         hunkIds: [h(1), h(2)],
+        kind: "flow",
+        via: [],
       },
     ]);
   });
@@ -243,7 +250,15 @@ describe("codeTour", () => {
   });
 
   it("is empty when nothing is required", () => {
-    expect(codeTour([file("a.ts", h(1))], new Set(), [], [])).toEqual({
+    expect(
+      codeTour({
+        files: [file("a.ts", h(1))],
+        required: new Set(),
+        callGraph: [],
+        risk: [],
+        definitions: new Map(),
+      }),
+    ).toEqual({
       steps: [],
       builtBy: "code",
     });

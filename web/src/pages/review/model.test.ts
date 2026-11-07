@@ -265,7 +265,12 @@ describe("hunkLinks", () => {
   });
 
   it("drops hints to unknown hunks and keeps at most six links each way", () => {
-    const unknown = { ...analysis.callGraph[0], toHunkId: h.dependency, fromHunkId: h.dependency };
+    const unknown = {
+      ...analysis.callGraph[0],
+      toHunkId: h.dependency,
+      fromHunkId: h.dependency,
+      use: "call" as const,
+    };
     expect(
       hunkLinks(
         [unknown].map((hint) => ({ ...hint, symbol: "x", line: 1 })),
@@ -277,6 +282,7 @@ describe("hunkLinks", () => {
       toHunkId: h.retryAndCache,
       symbol: `s${i}`,
       line: 20,
+      use: "call" as const,
     }));
     expect(hunkLinks(many, index).get(h.receiptRoute)).toHaveLength(6);
   });

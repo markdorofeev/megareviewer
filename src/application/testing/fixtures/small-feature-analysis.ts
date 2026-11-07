@@ -145,12 +145,14 @@ export const smallFeatureInput: AnalysisInput = {
       toHunkId: receiptServiceHunk.id,
       symbol: "renderReceipt",
       line: 4,
+      use: "call",
     },
     {
       fromHunkId: receiptRouteHunk.id,
       toHunkId: receiptServiceHunk.id,
       symbol: "renderReceipt",
       line: 39,
+      use: "call",
     },
   ],
 };
@@ -158,7 +160,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "5+fake-model/1",
+  pipelineVersion: "6+fake-model/1",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -292,18 +294,24 @@ export const smallFeatureAnalysis: Analysis = {
         title: "The new endpoint",
         explanation: "Requests for a receipt load the user's order and hand it to the renderer.",
         hunkIds: [receiptRouteHunk.id, importHunk.id],
+        kind: "flow",
+        via: [],
       },
       {
         id: s("s2"),
         title: "Rendering and caching receipts",
         explanation: "The receipt is plain text, cached per order for an hour.",
         hunkIds: [receiptServiceHunk.id],
+        kind: "flow",
+        via: [],
       },
       {
         id: s("s3"),
         title: "Configuration",
         explanation: "New receipt settings, and an unrelated rate limit change.",
         hunkIds: [cacheTtlHunk.id, receiptsConfigHunk.id, rateLimitHunk.id],
+        kind: "flow",
+        via: [],
       },
     ],
     builtBy: "model",

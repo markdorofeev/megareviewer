@@ -90,7 +90,7 @@ const pullRequest: PullRequest = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "5+no-model",
+  pipelineVersion: "6+no-model",
 };
 
 const risk: RiskAssessment[] = files.flatMap((file, at) =>
@@ -130,6 +130,7 @@ const analysis: Analysis = {
       symbol: `step${at + 1}_${index}`,
       // The first body line, after the context line and the new signature.
       line: hunk.newStart + 2,
+      use: "call" as const,
     })),
   ),
   intent: null,
@@ -151,6 +152,8 @@ const analysis: Analysis = {
       hunkIds: files
         .filter((_, at) => at % MODULES === module)
         .flatMap((file) => file.hunks.map((hunk) => hunk.id)),
+      kind: "flow" as const,
+      via: [],
     })),
     builtBy: "code",
   },

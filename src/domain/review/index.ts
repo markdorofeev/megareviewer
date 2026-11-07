@@ -12,7 +12,7 @@ export {
   StageName,
   StageStatus,
 } from "./analysis.ts";
-export { codeTour } from "./code-tour.ts";
+export { type CodeTourInput, codeTour } from "./code-tour.ts";
 export {
   Decision,
   DecisionCategory,

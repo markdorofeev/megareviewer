@@ -14,6 +14,10 @@ export const TourStep = z
     title: z.string().min(1),
     explanation: z.string(),
     hunkIds: z.array(HunkId).readonly(),
+    /** flow: an entry point and the code it runs; supporting: changes no flow runs, by kind. */
+    kind: z.enum(["flow", "supporting"]),
+    /** Hunks of earlier steps this step passes through, in reading order. */
+    via: z.array(HunkId).readonly(),
   })
   .readonly();
 export type TourStep = z.infer<typeof TourStep>;

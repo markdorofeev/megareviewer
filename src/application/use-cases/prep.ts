@@ -1,6 +1,7 @@
 import {
   buildCallGraphHints,
   type CallGraphHint,
+  changedDefinitionNames,
   type FileSymbols,
   findFormattingProofs,
   findMechanicalProofs,
@@ -15,6 +16,8 @@ export interface Prepared {
   /** At most one per hunk. */
   readonly proofs: readonly MechanicalProof[];
   readonly callGraph: readonly CallGraphHint[];
+  /** Each hunk's changed definitions, for the tour's entry points. Not stored. */
+  readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
   readonly warnings: readonly string[];
   /** Hunks without a proof: the ones the model passes must cover. */
   readonly required: ReadonlySet<HunkId>;
@@ -68,6 +71,7 @@ export const prep = async (parser: CodeParser, collected: Collected): Promise<Pr
   return {
     proofs,
     callGraph: buildCallGraphHints(files, symbolsByPath),
+    definitions: changedDefinitionNames(files, symbolsByPath),
     warnings: lockfileWarnings(files),
     required: new Set(
       files

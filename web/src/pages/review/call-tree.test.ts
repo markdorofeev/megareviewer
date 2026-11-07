@@ -10,6 +10,7 @@ const call = (from: HunkId, to: HunkId, symbol: string, line = 1): CallGraphHint
   toHunkId: to,
   symbol,
   line,
+  use: "call",
 });
 
 const pathOf = (hunkId: HunkId) => (hunkId === d || hunkId === e ? "src/other.ts" : "src/a.ts");

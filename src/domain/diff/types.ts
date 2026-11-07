@@ -82,7 +82,8 @@ export type MechanicalProof = z.infer<typeof MechanicalProof>;
 
 /**
  * The code in `fromHunkId` references `symbol`, which `toHunkId` defines or changes. `line` is the
- * new-side line of the first such reference in `fromHunkId`.
+ * new-side line of the first such reference in `fromHunkId`. `use` says whether the code calls or
+ * builds it, or only names it as a type; type uses group code but aren't followed as calls.
  */
 export const CallGraphHint = z
   .object({
@@ -90,6 +91,7 @@ export const CallGraphHint = z
     toHunkId: HunkId,
     symbol: z.string().min(1),
     line: z.number().int().positive(),
+    use: z.enum(["call", "type"]),
   })
   .readonly();
 export type CallGraphHint = z.infer<typeof CallGraphHint>;

@@ -51,7 +51,8 @@ export const buildAnalysisInput = (input: {
         headContent: hunks.length > 0 ? (input.headContents.get(file.path) ?? null) : null,
       };
     }),
-    callGraph: prepared.callGraph,
+    // The model follows calls; type uses would only lengthen its prompt.
+    callGraph: prepared.callGraph.filter((hint) => hint.use === "call"),
   };
 };
 

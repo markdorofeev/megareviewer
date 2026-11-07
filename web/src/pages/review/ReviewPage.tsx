@@ -173,8 +173,13 @@ const Review = ({
       for (const id of new Set(decision.hunkIds)) on.set(id, [...(on.get(id) ?? []), decision]);
     return on;
   }, [analysis.decisions]);
-  const calls = useMemo(() => callsByLine(analysis.callGraph, index), [analysis.callGraph, index]);
-  const links = useMemo(() => hunkLinks(analysis.callGraph, index), [analysis.callGraph, index]);
+  // A type use groups code in the tour; the reader follows only calls.
+  const callHints = useMemo(
+    () => analysis.callGraph.filter((hint) => hint.use === "call"),
+    [analysis.callGraph],
+  );
+  const calls = useMemo(() => callsByLine(callHints, index), [callHints, index]);
+  const links = useMemo(() => hunkLinks(callHints, index), [callHints, index]);
   const linksOf = useCallback((id: HunkId) => links.get(id) ?? [], [links]);
   const tree = useMemo(() => {
     // Roots come from steps with contract hunks first, then the tour's order.
@@ -182,12 +187,8 @@ const Review = ({
     const ids = [...contract, ...steps.filter((step) => !contract.includes(step))]
       .flatMap((step) => step.hunkIds)
       .filter((id) => !index.mechanical.has(id));
-    return callTree(
-      [...new Set(ids)],
-      analysis.callGraph,
-      (id) => index.hunks.get(id)?.file.path ?? "",
-    );
-  }, [steps, contractHunks, index, analysis.callGraph]);
+    return callTree([...new Set(ids)], callHints, (id) => index.hunks.get(id)?.file.path ?? "");
+  }, [steps, contractHunks, index, callHints]);
   const inTreeOrder = useMemo(() => treeOrder(tree), [tree]);
   const placedIn = useMemo(
     () =>
