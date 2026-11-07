@@ -74,9 +74,9 @@ describe("the fixture analysis", () => {
     expect(new Set(analysis.decisions.map((decision) => decision.category)).size).toBe(5);
   });
 
-  it("has a 4-step tour covering every non-mechanical hunk once", () => {
+  it("has a 4-step tour covering every part of every non-mechanical hunk once", () => {
     expect(analysis.tour?.steps).toHaveLength(4);
-    expect(validateTour(analysis.tour ?? { steps: [] }, reviewedIds)).toEqual([]);
+    expect(validateTour(analysis.tour ?? { steps: [] }, reviewedIds, analysis.parts)).toEqual([]);
   });
 
   it("references only hunks that exist", () => {

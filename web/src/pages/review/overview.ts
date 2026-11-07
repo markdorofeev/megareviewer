@@ -1,4 +1,10 @@
-import { hunkIdOf, isTestFile, type PartId } from "../../../../src/domain/diff/index.ts";
+import {
+  hunkIdOf,
+  isTestFile,
+  type PartId,
+  partsByHunk,
+  piecesOf,
+} from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
   entryOf,
@@ -104,6 +110,9 @@ export const uniqueLabels = (paths: readonly string[]): ReadonlyMap<string, stri
   return labels;
 };
 
+const ROUTES = "\u0000routes";
+const routeKey = (route: Route): string => `${route.method} ${route.path}`;
+
 const routesLabel = (routes: readonly Route[]): string => {
   const [only] = routes;
   return routes.length === 1 && only !== undefined
@@ -120,29 +129,36 @@ const entryLabels = (
   analysis: OverviewInput,
   steps: readonly TourStep[],
 ): ReadonlyMap<string, readonly string[]> => {
+  const byHunk = partsByHunk(analysis.parts);
   const located = new Map(
-    analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, { file, hunk }] as const)),
+    analysis.files.flatMap((file) =>
+      piecesOf(file, byHunk).map(({ id, hunk }) => [id, { file, hunk }] as const),
+    ),
   );
   const labels = new Map<string, string[]>();
   const add = (path: string, label: string) => {
     const known = labels.get(path) ?? [];
     if (!known.includes(label)) labels.set(path, [...known, label]);
   };
+  // A file's routes are one label, though each may start a flow of its own: where the first was.
+  const routesOf = new Map<string, Route[]>();
   for (const step of steps) {
     const byFile = new Map<string, PartId[]>();
     for (const id of step.entries) {
-      const path = located.get(hunkIdOf(id))?.file.path;
+      const path = located.get(id)?.file.path;
       if (path !== undefined) byFile.set(path, [...(byFile.get(path) ?? []), id]);
     }
     for (const [path, ids] of byFile) {
       const routes = ids.flatMap((id) => {
-        const found = located.get(hunkIdOf(id));
+        const found = located.get(id);
         const entry = found === undefined ? null : entryOf(found.file, found.hunk, []);
         return entry?.kind === "route" ? entry.routes : [];
       });
-      const unique = [...new Map(routes.map((r) => [`${r.method} ${r.path}`, r])).values()];
-      if (unique.length > 0) add(path, routesLabel(unique));
-      if (unique.length === ids.length && routes.length > 0) continue;
+      if (routes.length > 0) {
+        add(path, ROUTES);
+        routesOf.set(path, [...(routesOf.get(path) ?? []), ...routes]);
+      }
+      if (new Set(routes.map(routeKey)).size === ids.length && routes.length > 0) continue;
       for (const part of step.title.split("; ")) {
         if (part.startsWith("Page: ")) add(path, part);
         const command = /^Command: (\S+) in (.+)$/.exec(part);
@@ -150,7 +166,12 @@ const entryLabels = (
       }
     }
   }
-  return labels;
+  return new Map(
+    [...labels].map(([path, names]) => {
+      const routes = [...new Map((routesOf.get(path) ?? []).map((r) => [routeKey(r), r])).values()];
+      return [path, names.map((name) => (name === ROUTES ? routesLabel(routes) : name))];
+    }),
+  );
 };
 
 /** Strongly connected components with more than one node, by Tarjan's algorithm. */
@@ -207,7 +228,7 @@ interface Link {
 /** What the overview reads of an analysis. */
 export type OverviewInput = Pick<
   Analysis,
-  "files" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated"
+  "files" | "parts" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated"
 >;
 
 export const fileOverview = (
@@ -232,9 +253,9 @@ export const fileOverview = (
   const fileFacts = new Map(
     files.map((file) => {
       const lines = file.hunks.flatMap((hunk) => hunk.lines);
-      const toReview = file.hunks
-        .map((hunk) => hunk.id)
-        .filter((id) => !mechanical.has(id))
+      const toReview = piecesOf(file, partsByHunk(analysis.parts))
+        .map((piece) => piece.id)
+        .filter((id) => !mechanical.has(hunkIdOf(id)))
         .sort((a, b) => rankOf(a) - rankOf(b));
       const risk = file.hunks
         .map(

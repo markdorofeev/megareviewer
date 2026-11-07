@@ -3,11 +3,11 @@ import type { PartId } from "../../../../src/domain/diff/index.ts";
 import type { Decision } from "../../../../src/domain/review/index.ts";
 import { hunkLocation } from "../../diff/index.ts";
 import { hunkAnchor } from "./HunkView.tsx";
-import { barHeight, type HunkIndex, type MapSection, type RiskMix, sectionKey } from "./model.ts";
+import { barHeight, type MapSection, type PartIndex, type RiskMix, sectionKey } from "./model.ts";
 
 /** Where a click on the rail goes. */
 export type RailTarget =
-  | { readonly kind: "hunk"; readonly hunkId: PartId }
+  | { readonly kind: "hunk"; readonly partId: PartId }
   | { readonly kind: "section"; readonly key: string }
   | { readonly kind: "mechanical" };
 
@@ -53,7 +53,7 @@ export const RiskRail = ({
   index,
   decisionsOn,
   totals,
-  reviewedHunks,
+  reviewed,
   contractOnly,
   onContractOnly,
   mechanicalCount,
@@ -61,11 +61,11 @@ export const RiskRail = ({
   onInView,
 }: {
   readonly sections: readonly MapSection[];
-  readonly index: HunkIndex;
+  readonly index: PartIndex;
   /** Every decision resting on the hunk. */
   readonly decisionsOn: (id: PartId) => readonly Decision[];
   readonly totals: RiskMix;
-  readonly reviewedHunks: ReadonlySet<string>;
+  readonly reviewed: ReadonlySet<PartId>;
   readonly contractOnly: boolean;
   readonly onContractOnly: (contractOnly: boolean) => void;
   readonly mechanicalCount: number;
@@ -122,7 +122,7 @@ export const RiskRail = ({
         {sections.map((section) => {
           const key = sectionKey(section);
           const toReview = section.partIds.filter((hunkId) => !index.mechanical.has(hunkId));
-          const done = toReview.length > 0 && toReview.every((hunkId) => reviewedHunks.has(hunkId));
+          const done = toReview.length > 0 && toReview.every((id) => reviewed.has(id));
           return (
             <li key={key}>
               <button
@@ -150,11 +150,11 @@ export const RiskRail = ({
                 )}
               </button>
               <ul className="rail-bars">
-                {index.items(section.partIds).map(({ hunk, file, risk }) => {
-                  const mechanical = index.mechanical.has(hunk.id);
+                {index.items(section.partIds).map(({ id: partId, hunk, file, risk }) => {
+                  const mechanical = index.mechanical.has(partId);
                   const riskClass = mechanical ? "mechanical" : risk.riskClass;
-                  const isReviewed = !mechanical && reviewedHunks.has(hunk.id);
-                  const decisions = decisionsOn(hunk.id);
+                  const isReviewed = !mechanical && reviewed.has(partId);
+                  const decisions = decisionsOn(partId);
                   const rule = riskClass === "contract" && risk.source === "rule";
                   const meta = [
                     riskClass,
@@ -163,17 +163,17 @@ export const RiskRail = ({
                   ];
                   const classes = [
                     "rail-hunk",
-                    inView.has(hunk.id) && "in-view",
+                    inView.has(partId) && "in-view",
                     contractOnly && riskClass !== "contract" && "dimmed",
                   ];
                   return (
-                    <li key={hunk.id}>
+                    <li key={partId}>
                       <button
                         type="button"
                         className={classes.filter(Boolean).join(" ")}
                         aria-label={`${file.path}, ${hunkLocation(hunk)}, ${riskClass}${isReviewed ? ", reviewed" : ""}`}
-                        aria-current={inView.has(hunk.id) ? "location" : undefined}
-                        onClick={() => onGo({ kind: "hunk", hunkId: hunk.id })}
+                        aria-current={inView.has(partId) ? "location" : undefined}
+                        onClick={() => onGo({ kind: "hunk", partId })}
                       >
                         <span
                           className={`rail-bar risk-${riskClass}${isReviewed ? " reviewed" : ""}`}

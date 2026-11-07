@@ -21,12 +21,13 @@ interface Entry {
 }
 
 // Hunk IDs name their content, so a card expanded again, or a refetched view, highlights from here.
+// A part of a split hunk keeps its hunk's ID, so where its lines start and end tells it apart.
 const caches = new WeakMap<Highlighter, Map<string, Entry>>();
 
 const highlightHunk = (highlighter: Highlighter, hunk: Hunk, language: string): Entry => {
   const cache = caches.get(highlighter) ?? new Map<string, Entry>();
   caches.set(highlighter, cache);
-  const key = `${language}\0${hunk.id}`;
+  const key = `${language}\0${hunk.id}\0${hunk.oldStart},${hunk.newStart},${hunk.lines.length}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 

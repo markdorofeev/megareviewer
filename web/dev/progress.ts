@@ -1,3 +1,4 @@
+import { hunkIdOf, renameHints } from "../../src/domain/diff/index.ts";
 import { type Analysis, StageName, type StageStatus } from "../../src/domain/review/index.ts";
 
 const STAGES = StageName.options;
@@ -29,7 +30,13 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
     missingTicketKeys: done("collect") ? analysis.missingTicketKeys : [],
     files: done("prep") ? analysis.files : [],
     proofs: done("prep") ? analysis.proofs : [],
-    callGraph: done("prep") ? analysis.callGraph : [],
+    // Parts come with the tour; until then every hunk is whole.
+    parts: done("tour") ? analysis.parts : [],
+    callGraph: done("tour")
+      ? analysis.callGraph
+      : done("prep")
+        ? renameHints(analysis.callGraph, hunkIdOf)
+        : [],
     intent: done("intent") ? analysis.intent : null,
     risk: done("risk")
       ? analysis.risk

@@ -35,12 +35,17 @@ import {
 import {
   callerFiles,
   callsByLine,
+  commentsInParts,
   decisionPlaces,
-  hunkIndex,
   type Layout,
   mapSections,
+  markReviewed,
   mechanicalCount,
   parseLayout,
+  partHeaders,
+  partIndex,
+  reviewedHunkCount,
+  reviewedParts,
   reviewOrder,
   riskTotals,
   sectionKey,
@@ -161,7 +166,7 @@ const Review = ({
   const complete = analysis.status === "complete";
   const readOnly = publication !== null || !complete;
 
-  const index = useMemo(() => hunkIndex(analysis), [analysis]);
+  const index = useMemo(() => partIndex(analysis), [analysis]);
   const steps = useMemo(() => tourSteps(analysis, index), [analysis, index]);
   const sections = useMemo(() => mapSections(analysis, steps, index), [analysis, steps, index]);
   const order = useMemo(() => sections.flatMap((section) => section.partIds), [sections]);
@@ -183,9 +188,10 @@ const Review = ({
   const restingOn = useMemo(() => {
     const on = new Map<PartId, Decision[]>();
     for (const decision of analysis.decisions)
-      for (const id of new Set(decision.hunkIds)) on.set(id, [...(on.get(id) ?? []), decision]);
+      for (const id of new Set(decision.hunkIds.flatMap(index.partsOf)))
+        on.set(id, [...(on.get(id) ?? []), decision]);
     return on;
-  }, [analysis.decisions]);
+  }, [analysis.decisions, index]);
   // A type use groups code in the tour; the reader follows only calls.
   const callHints = useMemo(
     () => analysis.callGraph.filter((hint) => hint.use === "call"),
@@ -212,7 +218,7 @@ const Review = ({
         sections.map((section) => section.partIds.filter((id) => !contractOnly || isContract(id))),
         calls,
         (id, line) =>
-          index.hunks.get(id)?.hunk.lines.find((one) => one.kind !== "del" && one.newLine === line)
+          index.parts.get(id)?.hunk.lines.find((one) => one.kind !== "del" && one.newLine === line)
             ?.text,
       ),
     [sections, calls, index, contractOnly, isContract],
@@ -255,19 +261,18 @@ const Review = ({
     commentField.current = field;
   }, []);
 
-  // Kept by hunk ID, not by analysis: a hunk a new push didn't change stays reviewed.
+  // Kept by part ID, not by analysis: a part a new push didn't change stays reviewed.
   const [reviewedList, setReviewedList] = useStoredState("reviewed-hunks", NONE, parseStrings);
-  const reviewedHunks = useMemo(() => new Set(reviewedList), [reviewedList]);
+  const reviewed = useMemo(() => reviewedParts(reviewedList, index), [reviewedList, index]);
   const toReview = useMemo(() => reviewOrder(sections, index), [sections, index]);
-  const reviewedCount = toReview.filter((id) => reviewedHunks.has(id)).length;
-  const setHunkReviewed = useCallback(
+  const reviewedCount = reviewedHunkCount(toReview, reviewed);
+  const setReviewed = useCallback(
     (id: PartId, value: boolean) =>
-      setReviewedList((previous) => {
-        const without = previous.filter((other) => other !== id);
-        return value ? [...without, id].slice(-MAX_REVIEWED) : without;
-      }),
-    [setReviewedList],
+      setReviewedList((previous) => markReviewed(previous, id, value, index).slice(-MAX_REVIEWED)),
+    [setReviewedList, index],
   );
+  const headers = useMemo(() => partHeaders(sections, index), [sections, index]);
+  const partHeaderOf = useCallback((id: PartId) => headers.get(id) ?? null, [headers]);
 
   // Comments on hunk lines are drafts in this browser until they're published with the review.
   const [hunkComments, setHunkComments] = useStoredState(
@@ -275,16 +280,12 @@ const Review = ({
     NO_COMMENTS,
     parseHunkComments,
   );
-  const [openComment, setOpenComment] = useState<{ hunkId: PartId; place: LinePlace } | null>(null);
-  const commentsByHunk = useMemo(() => {
-    const byHunk = new Map<PartId, HunkComment[]>();
-    for (const comment of hunkComments)
-      byHunk.set(comment.hunkId, [...(byHunk.get(comment.hunkId) ?? []), comment]);
-    return byHunk;
-  }, [hunkComments]);
+  const [openComment, setOpenComment] = useState<{ partId: PartId; place: LinePlace } | null>(null);
+  // A comment shows in the part that holds its line.
+  const commentsByPart = useMemo(() => commentsInParts(hunkComments, index), [hunkComments, index]);
   const commentsOf = useCallback(
-    (id: PartId): readonly HunkComment[] => commentsByHunk.get(hunkIdOf(id)) ?? NO_COMMENTS,
-    [commentsByHunk],
+    (id: PartId): readonly HunkComment[] => commentsByPart.get(id) ?? NO_COMMENTS,
+    [commentsByPart],
   );
   const writeComment = useCallback(
     (id: PartId, comment: LineComment) =>
@@ -301,8 +302,8 @@ const Review = ({
     [setHunkComments],
   );
   const openCommentOn = useCallback(
-    (hunkId: PartId, place: LinePlace | null) =>
-      setOpenComment(place === null ? null : { hunkId, place }),
+    (partId: PartId, place: LinePlace | null) =>
+      setOpenComment(place === null ? null : { partId, place }),
     [],
   );
 
@@ -342,7 +343,7 @@ const Review = ({
   /** Shows a hunk: scrolls to it in the map, focuses its file in the overview. */
   const showHunk = (id: PartId, inLayout: Layout = layout) => {
     if (inLayout === "overview") {
-      const path = index.hunks.get(id)?.file.path;
+      const path = index.parts.get(id)?.file.path;
       if (path !== undefined) focusInOverview(path);
       return;
     }
@@ -352,7 +353,7 @@ const Review = ({
   const goToDecision = (id: DecisionId) => {
     const decision = analysis.decisions.find((one) => one.id === id);
     const cardHunk = places.cardHunk.get(id);
-    setHighlight(new Set(decision?.hunkIds ?? []));
+    setHighlight(new Set((decision?.hunkIds ?? []).flatMap(index.partsOf)));
     if (layout === "overview") {
       if (cardHunk !== undefined) showHunk(cardHunk);
     } else {
@@ -365,7 +366,7 @@ const Review = ({
     const mismatch = analysis.intent?.mismatches[at];
     if (mismatch === undefined) return;
     const ids = mismatch.hunkIds
-      .filter((id) => index.hunks.has(id))
+      .flatMap(index.partsOf)
       .sort((a, b) => order.indexOf(a) - order.indexOf(b));
     setHighlight(new Set(ids));
     setMismatchAt(at + 1);
@@ -459,7 +460,7 @@ const Review = ({
     const at = current === null ? (direction === 1 ? -1 : list.length) : list.indexOf(current);
     for (let i = at + direction; i >= 0 && i < list.length; i += direction) {
       const id = list[i];
-      if (id !== undefined && !reviewedHunks.has(id)) return showHunk(id);
+      if (id !== undefined && !reviewed.has(id)) return showHunk(id);
     }
   };
 
@@ -508,7 +509,7 @@ const Review = ({
         return;
       case "toggle-reviewed":
         if (current !== null && !index.mechanical.has(current)) {
-          setHunkReviewed(current, !reviewedHunks.has(current));
+          setReviewed(current, !reviewed.has(current));
           moveHunk(1);
         }
         return;
@@ -527,11 +528,11 @@ const Review = ({
           return;
         }
         // Without a decision selected, comment on the hunk's first changed line.
-        const found = current === null ? undefined : index.hunks.get(current);
+        const found = current === null ? undefined : index.parts.get(current);
         const line = found?.hunk.lines.find((one) => one.kind !== "context");
         if (readOnly || found === undefined || line === undefined) return;
         const place = commentPlace(line);
-        if (place !== null) setOpenComment({ hunkId: found.hunk.id, place });
+        if (place !== null && current !== null) setOpenComment({ partId: current, place });
         return;
       }
       case "escape": {
@@ -618,13 +619,11 @@ const Review = ({
     const parts: unknown[] = [
       epochOf(analysis),
       readOnly,
-      reviewedHunks.has(id),
+      reviewed.has(id),
       highlight.has(id),
       marksSignature(plan.get(id)),
-      openComment?.hunkId === id ? `${openComment.place.side}${openComment.place.line}` : "",
-      ...(commentsByHunk.get(id) ?? []).map(
-        (comment) => `${comment.side}${comment.line}${comment.body}`,
-      ),
+      openComment?.partId === id ? `${openComment.place.side}${openComment.place.line}` : "",
+      ...commentsOf(id).map((comment) => `${comment.side}${comment.line}${comment.body}`),
     ];
     for (const decision of places.cards.get(id) ?? NO_DECISIONS) {
       const draft = verdicts.draftOf(decision.id);
@@ -645,8 +644,9 @@ const Review = ({
     callersOf,
     stepOf,
     onFollow: stable.follow,
-    reviewedHunks,
-    onReviewed: setHunkReviewed,
+    reviewed,
+    onReviewed: setReviewed,
+    partHeaderOf,
     highlighted: highlight,
     commentsOf,
     openComment,
@@ -684,7 +684,7 @@ const Review = ({
         return goToMismatch(target.index);
       case "hunk":
         setHighlight(new Set());
-        return showHunk(target.hunkId);
+        return showHunk(target.partId);
       case "step":
         return goToSection(target.stepId);
       case "mechanical":
@@ -694,7 +694,7 @@ const Review = ({
     }
   };
   const goFromRail = (target: RailTarget) => {
-    if (target.kind === "hunk") return showHunk(target.hunkId);
+    if (target.kind === "hunk") return showHunk(target.partId);
     if (target.kind === "section") return goToSection(target.key);
     goToMechanical();
   };
@@ -740,8 +740,8 @@ const Review = ({
               Jump to… <kbd>⌘K</kbd>
             </button>
             <p className="review-progress" aria-live="polite">
-              {reviewedCount} of {toReview.length} {toReview.length === 1 ? "hunk" : "hunks"}{" "}
-              reviewed
+              {reviewedCount.done} of {reviewedCount.total}{" "}
+              {reviewedCount.total === 1 ? "hunk" : "hunks"} reviewed
             </p>
           </>
         }
@@ -816,7 +816,7 @@ const Review = ({
             index={index}
             decisionsOn={(id) => restingOn.get(id) ?? NO_DECISIONS}
             totals={totals}
-            reviewedHunks={reviewedHunks}
+            reviewed={reviewed}
             contractOnly={contractOnly}
             onContractOnly={(value) => setContractOnly(() => value)}
             mechanicalCount={mechanical}
@@ -828,7 +828,7 @@ const Review = ({
         <div className="review-body overview-body">
           <Overview
             overview={overview}
-            reviewedHunks={reviewedHunks}
+            reviewed={reviewed}
             focusKey={overviewFocus}
             onOpen={openNode}
             expandedGroups={expandedGroups}

@@ -4,6 +4,7 @@ import {
   type FileChange,
   HunkId,
   type MechanicalProof,
+  PartId,
 } from "../../../../src/domain/diff/index.ts";
 import {
   type RiskAssessment,
@@ -70,6 +71,7 @@ const input = (files: readonly FileChange[], more: Partial<OverviewInput> = {}):
   files,
   proofs: [],
   risk: [],
+  parts: [],
   callGraph: [],
   fileLinks: [],
   generated: [],
@@ -242,6 +244,42 @@ describe("fileOverview", () => {
     const [a] = overview.rows[0] ?? [];
     expect([a?.added, a?.deleted, a?.risk, a?.partIds]).toEqual([6, 0, "contract", [h(2), h(1)]]);
     expect(a?.flows).toEqual(["Second hunk first"]);
+  });
+
+  it("counts a file's routes once when each starts a flow of its own, as parts of one hunk", () => {
+    const two = file("api/routes.py", [1], '@router.get("/a")', 2);
+    const [whole] = two.hunks;
+    if (whole === undefined) throw new Error("no hunk");
+    const hunk = {
+      ...whole,
+      lines: whole.lines.map((line, at) =>
+        at === 1 ? { ...line, text: '@router.put("/b")' } : line,
+      ),
+    };
+    const routes = { ...two, hunks: [hunk] };
+    const part = (n: number) => PartId.parse(`${hunk.id}.${n}`);
+    const parts = [1, 2].map((n) => ({
+      id: part(n),
+      hunkId: hunk.id,
+      start: n - 1,
+      end: n,
+      definitions: [],
+    }));
+    const steps = [1, 2].map(
+      (n): TourStep => ({
+        id: TourStepId.parse(`s${n}`),
+        title: `Route ${n}`,
+        explanation: "",
+        partIds: [part(n)],
+        kind: "flow",
+        via: [],
+        entries: [part(n)],
+      }),
+    );
+    const overview = fileOverview(input([routes], { parts }), steps);
+    const [node] = [...overview.rows.flat(), ...overview.strip];
+    expect(node?.entries).toEqual(["2 routes"]);
+    expect(node?.partIds).toEqual([part(1), part(2)]);
   });
 
   it("labels entries: routes by count, a page and a command by the flow's title", () => {

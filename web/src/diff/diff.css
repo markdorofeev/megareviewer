@@ -129,6 +129,7 @@
 }
 
 .hunk-heading,
+.hunk-part,
 .hunk-counts {
   min-width: 0;
   overflow: hidden;
@@ -146,8 +147,41 @@
   color: var(--color-danger);
 }
 
-.hunk-heading {
+.hunk-heading,
+.hunk-part {
   flex: 0 1 auto;
+}
+
+.hunk-part code {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+
+/* A part of a split hunk: a quiet row above or below its lines, to the hunk's neighboring part. */
+.part-fold {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.part-fold.next {
+  border-top: 1px solid var(--color-border);
+  border-bottom: 0;
+}
+
+.part-fold:hover:not(:disabled) {
+  color: var(--color-accent);
+}
+
+.part-fold code {
+  font-family: var(--font-mono);
 }
 
 .hunk-proof {

@@ -7,6 +7,7 @@ import {
   type Hunk,
   type HunkId,
   type MechanicalProof,
+  type PartId,
   parseUnifiedDiff,
 } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment, RiskClass } from "../../../src/domain/review/index.ts";
@@ -296,8 +297,8 @@ const Case = ({ title, children }: { readonly title: string; readonly children: 
 );
 
 export default function DiffPlayground() {
-  const [focused, setFocused] = useState<HunkId | null>(null);
-  const [highlighted, setHighlighted] = useState<ReadonlySet<HunkId>>(
+  const [focused, setFocused] = useState<PartId | null>(null);
+  const [highlighted, setHighlighted] = useState<ReadonlySet<PartId>>(
     () => new Set([hunkAt("src/routes/orders.ts", 0).id, hunkAt("src/auth/credentials.ts", 0).id]),
   );
   const index = items.findIndex((entry) => entry.hunk.id === focused);

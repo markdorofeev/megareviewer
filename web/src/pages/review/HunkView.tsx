@@ -7,13 +7,14 @@ import {
   type LineComment,
   type LineMark,
   type LinePlace,
+  type PartHeader,
 } from "../../diff/index.ts";
 import type { ChipPlan } from "./chips.ts";
-import type { Call, HunkIndex } from "./model.ts";
+import type { Call, PartIndex } from "./model.ts";
 
-/** What a hunk on the page needs. */
+/** What a part on the page needs. */
 export interface HunkDeps {
-  readonly index: HunkIndex;
+  readonly index: PartIndex;
   readonly calls: ReadonlyMap<PartId, ReadonlyMap<number, readonly Call[]>>;
   /** Which of a hunk's calls are chips and which are mentions, at its own place in the map. */
   readonly plan: ChipPlan;
@@ -21,11 +22,13 @@ export interface HunkDeps {
   /** The step a hunk is read in, as "step 2: Title", for peeks. */
   readonly stepOf: (id: PartId) => string | null;
   readonly onFollow: (id: PartId) => void;
-  readonly reviewedHunks: ReadonlySet<string>;
+  readonly reviewed: ReadonlySet<PartId>;
   readonly onReviewed: (id: PartId, reviewed: boolean) => void;
+  /** A split part's header and neighbors; null for a hunk that isn't split. */
+  readonly partHeaderOf: (id: PartId) => PartHeader | null;
   readonly highlighted: ReadonlySet<PartId>;
   readonly commentsOf: (id: PartId) => readonly LineComment[];
-  readonly openComment: { readonly hunkId: PartId; readonly place: LinePlace } | null;
+  readonly openComment: { readonly partId: PartId; readonly place: LinePlace } | null;
   readonly onOpenComment: (id: PartId, place: LinePlace | null) => void;
   /** Without it, comments are read-only: the review is published. */
   readonly onComment?: (id: PartId, comment: LineComment) => void;
@@ -72,6 +75,8 @@ export const HunkView = ({
   }
   return (
     <HunkCard
+      id={id}
+      part={deps.partHeaderOf(id)}
       hunk={hunk}
       file={file}
       risk={risk}
@@ -80,10 +85,10 @@ export const HunkView = ({
       onFocus={nested ? undefined : deps.onFocusHunk}
       callers={nested ? undefined : deps.callersOf(id)}
       onFollow={deps.onFollow}
-      reviewed={deps.reviewedHunks.has(id)}
+      reviewed={deps.reviewed.has(id)}
       onReviewed={deps.onReviewed}
       comments={deps.commentsOf(id)}
-      openComment={!nested && deps.openComment?.hunkId === id ? deps.openComment.place : null}
+      openComment={!nested && deps.openComment?.partId === id ? deps.openComment.place : null}
       onOpenComment={nested ? undefined : deps.onOpenComment}
       onComment={nested ? undefined : deps.onComment}
       afterHeader={nested ? undefined : deps.decisionsOn(id)}
@@ -94,7 +99,7 @@ export const HunkView = ({
 };
 
 /** A call's name, the called hunk's file and its risk class. */
-export const CallLabel = ({ call, index }: { readonly call: Call; readonly index: HunkIndex }) => {
+export const CallLabel = ({ call, index }: { readonly call: Call; readonly index: PartIndex }) => {
   const target = index.items([call.toPartId])[0];
   const riskClass = index.mechanical.has(call.toPartId)
     ? "mechanical"

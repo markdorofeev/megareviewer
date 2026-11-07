@@ -130,7 +130,7 @@ const AmbiguousChip = ({
         <ul className="call-choices" aria-label={`Where ${mark.symbol} goes`}>
           {mark.calls.map((call) => {
             const above = chain.includes(call.toPartId);
-            const found = deps.index.hunks.get(call.toPartId);
+            const found = deps.index.parts.get(call.toPartId);
             return (
               <li key={call.toPartId}>
                 <button
@@ -315,7 +315,7 @@ const PassesThrough = ({
   readonly deps: HunkDeps;
 }) => {
   const known = via.flatMap((id) => {
-    const found = deps.index.hunks.get(id);
+    const found = deps.index.parts.get(id);
     return found === undefined ? [] : [{ id, ...found }];
   });
   if (known.length === 0) return null;

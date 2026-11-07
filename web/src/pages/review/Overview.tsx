@@ -1,4 +1,6 @@
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { PartId } from "../../../../src/domain/diff/index.ts";
+import { reviewedHunkCount } from "./model.ts";
 import type { FileOverview, OverviewEdge, OverviewNode } from "./overview.ts";
 
 // Sizes in pixels. Nodes are HTML buttons, for focus and text that fits; the edges are an inline
@@ -162,9 +164,10 @@ const describeEdge = (edge: OverviewEdge, labelOf: (key: string) => string): str
   return `${labelOf(edge.from)} ${uses} ${labelOf(edge.to)}${symbols}`;
 };
 
-const reviewedState = (node: OverviewNode, reviewed: ReadonlySet<string>) => {
-  const done = node.partIds.filter((id) => reviewed.has(id)).length;
-  return { done, total: node.partIds.length, all: done === node.partIds.length };
+/** Hunks reviewed: a split hunk counts once all its parts are. */
+const reviewedState = (node: OverviewNode, reviewed: ReadonlySet<PartId>) => {
+  const { done, total } = reviewedHunkCount(node.partIds, reviewed);
+  return { done, total, all: done === total };
 };
 
 const NodeButton = ({
@@ -177,7 +180,7 @@ const NodeButton = ({
 }: {
   readonly node: OverviewNode;
   readonly box?: Box;
-  readonly reviewed: ReadonlySet<string>;
+  readonly reviewed: ReadonlySet<PartId>;
   readonly active: boolean;
   readonly onOpen: (node: OverviewNode) => void;
   readonly onFocus: (node: OverviewNode | null) => void;
@@ -247,7 +250,7 @@ type Hovered =
  */
 export const Overview = ({
   overview,
-  reviewedHunks,
+  reviewed,
   focusKey,
   onOpen,
   onCollapse,
@@ -255,7 +258,7 @@ export const Overview = ({
   onFocusNode,
 }: {
   readonly overview: FileOverview;
-  readonly reviewedHunks: ReadonlySet<string>;
+  readonly reviewed: ReadonlySet<PartId>;
   /** A file to focus, at its place: its node, or one it's a badge on. A counter tells requests apart. */
   readonly focusKey: { readonly key: string; readonly n: number } | null;
   readonly onOpen: (node: OverviewNode) => void;
@@ -339,7 +342,7 @@ export const Overview = ({
   };
   const nodeProps = (node: OverviewNode) => ({
     node,
-    reviewed: reviewedHunks,
+    reviewed,
     active: hoveredNode === node.key,
     onOpen,
     onFocus: onNodeFocus,

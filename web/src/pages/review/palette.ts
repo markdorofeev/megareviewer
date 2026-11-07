@@ -7,7 +7,7 @@ import type {
 } from "../../../../src/domain/review/index.ts";
 import { hunkLocation } from "../../diff/index.ts";
 import { CATEGORY_NAMES } from "./DecisionCard.tsx";
-import type { HunkIndex } from "./model.ts";
+import type { PartIndex } from "./model.ts";
 
 export type PaletteGroup = "decisions" | "mismatches" | "contract" | "symbols" | "steps" | "files";
 
@@ -24,7 +24,7 @@ export const PALETTE_GROUPS: readonly { readonly group: PaletteGroup; readonly t
 export type PaletteTarget =
   | { readonly kind: "decision"; readonly decisionId: DecisionId }
   | { readonly kind: "mismatch"; readonly index: number }
-  | { readonly kind: "hunk"; readonly hunkId: PartId }
+  | { readonly kind: "hunk"; readonly partId: PartId }
   | { readonly kind: "step"; readonly stepId: TourStepId }
   | { readonly kind: "mechanical" };
 
@@ -50,22 +50,22 @@ const MAX_PER_GROUP = 8;
 export const paletteItems = (
   analysis: Analysis,
   steps: readonly TourStep[],
-  index: HunkIndex,
+  index: PartIndex,
 ): PaletteItem[] => {
   const where = (id: PartId): string => {
-    const found = index.hunks.get(id);
+    const found = index.parts.get(id);
     return found === undefined ? "" : `${found.file.path}, ${hunkLocation(found.hunk)}`;
   };
   const symbols = new Map<string, PaletteItem>();
   for (const hint of analysis.callGraph) {
     const key = `symbol:${hint.symbol}:${hint.toPartId}`;
-    if (symbols.has(key) || !index.hunks.has(hint.toPartId)) continue;
+    if (symbols.has(key) || !index.parts.has(hint.toPartId)) continue;
     symbols.set(key, {
       key,
       group: "symbols",
       label: hint.symbol,
       detail: where(hint.toPartId),
-      target: { kind: "hunk", hunkId: hint.toPartId },
+      target: { kind: "hunk", partId: hint.toPartId },
     });
   }
   return [
@@ -87,19 +87,21 @@ export const paletteItems = (
         target: { kind: "mismatch", index: at },
       }),
     ),
-    ...analysis.risk.flatMap((risk): PaletteItem[] =>
-      risk.riskClass === "contract" && index.hunks.has(risk.hunkId)
-        ? [
+    ...analysis.risk.flatMap((risk): PaletteItem[] => {
+      // A split hunk's contract change goes to its first part.
+      const [first] = risk.riskClass === "contract" ? index.partsOf(risk.hunkId) : [];
+      return first === undefined
+        ? []
+        : [
             {
               key: `contract:${risk.hunkId}`,
               group: "contract",
               label: risk.reason,
-              detail: where(risk.hunkId),
-              target: { kind: "hunk", hunkId: risk.hunkId },
+              detail: where(first),
+              target: { kind: "hunk", partId: first },
             },
-          ]
-        : [],
-    ),
+          ];
+    }),
     ...symbols.values(),
     ...steps.map(
       (step, at): PaletteItem => ({
@@ -113,14 +115,15 @@ export const paletteItems = (
     ...[...analysis.files]
       .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
       .map((file): PaletteItem => {
-        const first = file.hunks.find((hunk) => !index.mechanical.has(hunk.id)) ?? file.hunks[0];
+        const hunk = file.hunks.find((one) => !index.mechanical.has(one.id)) ?? file.hunks[0];
+        const first = hunk === undefined ? undefined : index.partsOf(hunk.id)[0];
         return {
           key: `file:${file.path}`,
           group: "files",
           label: file.path,
           detail: file.status,
           // A file with no hunks, like a pure rename, shows with the mechanical changes.
-          target: first === undefined ? { kind: "mechanical" } : { kind: "hunk", hunkId: first.id },
+          target: first === undefined ? { kind: "mechanical" } : { kind: "hunk", partId: first },
         };
       }),
   ];

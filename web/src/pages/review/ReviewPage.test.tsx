@@ -3,7 +3,12 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisView } from "../../../../contracts/index.ts";
-import type { HunkId } from "../../../../src/domain/diff/index.ts";
+import {
+  type HunkId,
+  hunkIdOf,
+  type PartId,
+  renameHints,
+} from "../../../../src/domain/diff/index.ts";
 import {
   AnalysisId,
   DecisionId,
@@ -13,6 +18,7 @@ import {
 import {
   fixtureAnalysisView,
   fixtureHunks,
+  fixtureParts,
   largeAnalysisView,
 } from "../../../dev/fixtures/index.ts";
 import { mockFetch } from "../../../dev/mock-fetch.ts";
@@ -27,6 +33,9 @@ const fixture = fixtureAnalysisView;
 const analysis = fixture.analysis;
 const id = analysis.id;
 const h = fixtureHunks;
+const p = fixtureParts;
+/** The analysis with the retry and cache hunk whole, for tours that place hunks. */
+const unsplit = { ...analysis, parts: [], callGraph: renameHints(analysis.callGraph, hunkIdOf) };
 const otherId = AnalysisId.parse("a_00000000000000ff");
 const viewPath = `/api/analyses/${id}`;
 
@@ -88,12 +97,12 @@ const mainArea = () => {
 const stepHeadings = () =>
   [...mainArea().querySelectorAll(".step-heading h2")].map((heading) => heading.textContent);
 /** A hunk's place in the map: its card, or its collapsed row. */
-const placeOf = (hunkId: HunkId) => {
+const placeOf = (hunkId: PartId) => {
   const place = document.getElementById(`hunk-${hunkId}`);
   if (place === null) throw new Error(`no hunk ${hunkId} in the map`);
   return place;
 };
-const cardOf = (hunkId: HunkId) => {
+const cardOf = (hunkId: PartId) => {
   const card = placeOf(hunkId).querySelector<HTMLElement>(":scope > .hunk-card");
   if (card === null) throw new Error(`no card for ${hunkId}`);
   return card;
@@ -120,6 +129,9 @@ const scrolledTo = () =>
 const ROUTE = /^src\/routes\/orders\.ts, lines 10–24$/;
 const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
 const RECEIPTS = /^src\/services\/receipts\.ts, lines 26–/;
+/** The retry and cache hunk's two parts. */
+const RETRY = /^src\/services\/receipts\.ts, lines 26–39$/;
+const CACHE = /^src\/services\/receipts\.ts, lines 40–50$/;
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -351,10 +363,12 @@ describe("intent", () => {
     expect(next.textContent).toContain("2 of 2");
 
     await userEvent.click(next);
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    // The split hunk's first part on the page.
+    expect(focusedLabel()).toMatch(CACHE);
     expect(cardOf(h.receiptRoute).classList.contains("highlighted")).toBe(false);
+    expect(cardOf(p.retry).classList.contains("highlighted")).toBe(true);
     await userEvent.keyboard("{Escape}");
-    expect(cardOf(h.retryAndCache).classList.contains("highlighted")).toBe(false);
+    expect(cardOf(p.cache).classList.contains("highlighted")).toBe(false);
   });
 
   it("shows stated and inferred intent side by side in the details when they disagree", async () => {
@@ -425,7 +439,7 @@ describe("map", () => {
     await loaded();
     expect(stepHeadings()).toEqual([
       "1 The receipt endpoint",
-      "2 Retrying the tax service and caching receipts",
+      "2 Retrying the tax service",
       "3 Dates and prices on the receipt",
       "4 The new dependency",
     ]);
@@ -435,7 +449,15 @@ describe("map", () => {
       within(mainArea())
         .getAllByRole("region", { name: /, lines / })
         .map((card) => card.getAttribute("aria-label")),
-    ).toHaveLength(5);
+    ).toEqual([
+      "src/routes/orders.ts, lines 10–24",
+      "src/routes/orders.ts, lines 1–8",
+      // The retry and cache hunk is two parts, each read in its own step.
+      "src/services/receipts.ts, lines 40–50",
+      "src/services/receipts.ts, lines 26–39",
+      expect.stringMatching(/^src\/services\/receipts\.ts, lines 1–/),
+      expect.stringMatching(/^package\.json/),
+    ]);
   });
 
   it("shows a mechanical hunk collapsed in its file's step, expanding to its card", async () => {
@@ -489,7 +511,7 @@ describe("map", () => {
       view: {
         ...fixture,
         analysis: {
-          ...analysis,
+          ...unsplit,
           tour: {
             steps: [
               step("s1", "GET /orders/:id/receipt", [
@@ -633,8 +655,8 @@ describe("risk map", () => {
     renderReview();
     await loaded();
     await userEvent.click(bar(/^src\/services\/receipts\.ts, lines 26/));
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.retryAndCache}`);
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(scrolledTo().at(-1)).toBe(`hunk-${p.retry}`);
+    expect(focusedLabel()).toMatch(RETRY);
     await userEvent.click(within(rail()).getByRole("button", { name: /^4 The new dependency/ }));
     expect(scrolledTo().at(-1)).toBe("step-s4");
     await userEvent.click(within(rail()).getByRole("button", { name: "Proved mechanical (5)" }));
@@ -668,8 +690,8 @@ describe("risk map", () => {
     await userEvent.click(filter);
     await userEvent.click(filter);
     expect(inView()).toEqual([]);
-    act(() => FakeObserver.report([placeOf(h.retryAndCache)]));
-    expect(inView()).toEqual(["lines 26–50"]);
+    act(() => FakeObserver.report([placeOf(p.retry)]));
+    expect(inView()).toEqual(["lines 26–39"]);
   });
 });
 
@@ -798,14 +820,14 @@ const chained: AnalysisView = {
     callGraph: [
       ...analysis.callGraph,
       {
-        fromPartId: h.retryAndCache,
+        fromPartId: p.cache,
         toPartId: h.receiptRoute,
         symbol: "orders",
         line: 45,
         use: "call",
       },
       {
-        fromPartId: h.retryAndCache,
+        fromPartId: p.cache,
         toPartId: h.receiptFormatting,
         symbol: "renderReceipt",
         line: 47,
@@ -823,7 +845,7 @@ const repeated: AnalysisView = {
       ...analysis.callGraph,
       {
         fromPartId: h.routeImports,
-        toPartId: h.retryAndCache,
+        toPartId: p.cache,
         symbol: "cachedReceipt",
         line: 5,
         use: "call",
@@ -838,7 +860,7 @@ const ambiguous: AnalysisView = {
     ...analysis,
     callGraph: [
       ...analysis.callGraph,
-      ...[h.retryAndCache, h.receiptFormatting].map((toPartId) => ({
+      ...[p.cache, h.receiptFormatting].map((toPartId) => ({
         fromPartId: h.receiptRoute,
         toPartId,
         symbol: "findOrderById",
@@ -888,7 +910,7 @@ describe("inline calls", () => {
     expect(cached.getAttribute("aria-expanded")).toBe("true");
     const opened = route.querySelector<HTMLElement>(".inline-call");
     if (opened === null) throw new Error("no inline call");
-    expect(within(opened).getAllByRole("region")[0]?.getAttribute("aria-label")).toMatch(RECEIPTS);
+    expect(within(opened).getAllByRole("region")[0]?.getAttribute("aria-label")).toMatch(CACHE);
     // The route is open above, so its call back doesn't open it again.
     expect(within(opened).getByText("open above")).toBeTruthy();
     expect(within(opened).queryByRole("button", { name: /^orders / })).toBeNull();
@@ -917,10 +939,10 @@ describe("inline calls", () => {
     if (opened === null) throw new Error("no inline call");
     await userEvent.click(within(opened).getByRole("checkbox", { name: "Reviewed" }));
     expect(
-      within(cardOf(h.retryAndCache)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" })
-        .checked,
+      within(cardOf(p.cache)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" }).checked,
     ).toBe(true);
-    expect(screen.getByText("1 of 5 hunks reviewed")).toBeTruthy();
+    // Its hunk's other part isn't reviewed yet, so the hunk doesn't count.
+    expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
   });
 
   it("chip only the first call to a hunk in a step, and underline the later ones", async () => {
@@ -932,7 +954,7 @@ describe("inline calls", () => {
     const mention = within(imports).getByRole("button", { name: "cachedReceipt" });
     expect(mention.classList.contains("call-mention")).toBe(true);
     // Both calls come from orders.ts, so the callee lists the file once.
-    expect(cardOf(h.retryAndCache).querySelector(".hunk-callers")?.textContent).toBe(
+    expect(cardOf(p.cache).querySelector(".hunk-callers")?.textContent).toBe(
       "Called from orders.ts ↑",
     );
   });
@@ -948,7 +970,7 @@ describe("inline calls", () => {
       return shown;
     });
     expect(peek.textContent).toContain("src/services/receipts.ts");
-    expect(peek.textContent).toContain("step 2: Retrying the tax service and caching receipts");
+    expect(peek.textContent).toContain("step 1: The receipt endpoint");
     // The peek starts at the line that defines the symbol.
     expect(peek.querySelector(".peek-line")?.textContent).toBe(
       "+ export const cachedReceipt = async (order: Order): Promise<string> => {",
@@ -958,7 +980,7 @@ describe("inline calls", () => {
     expect(document.querySelector(".peek")).toBeNull();
 
     await userEvent.click(mention);
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(focusedLabel()).toMatch(CACHE);
     await userEvent.keyboard("{Escape}");
     expect(focusedLabel()).toMatch(IMPORTS);
   });
@@ -983,7 +1005,7 @@ describe("inline calls", () => {
     const choices = within(route).getByRole("list", { name: "Where findOrderById goes" });
     const [first, second] = within(choices).getAllByRole("button");
     expect(first?.textContent).toMatch(
-      /^findOrderById src\/services\/receipts\.ts logic lines 26–/,
+      /^findOrderById src\/services\/receipts\.ts logic lines 40–50/,
     );
     first?.focus();
     await userEvent.keyboard("{ArrowDown}");
@@ -1003,7 +1025,7 @@ describe("inline calls", () => {
     await loaded();
     cardOf(h.routeImports).focus();
     await userEvent.keyboard("o");
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(focusedLabel()).toMatch(CACHE);
   });
 
   it("o opens and closes the focused hunk's first call", async () => {
@@ -1060,7 +1082,7 @@ describe("overview", () => {
     await openOverview();
     await userEvent.click(nodeOf("src/services/receipts.ts"));
     expect(pressed("Map")).toBe(true);
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.retryAndCache}`);
+    expect(scrolledTo().at(-1)).toBe(`hunk-${p.cache}`);
     await userEvent.keyboard("{Escape}");
     expect(pressed("Overview")).toBe(true);
     expect(focusedKey()).toBe("src/services/receipts.ts");
@@ -1174,8 +1196,8 @@ describe("layouts", () => {
     await userEvent.keyboard("{ArrowDown}");
     await userEvent.keyboard("v");
     expect(pressed("Map")).toBe(true);
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.retryAndCache}`);
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(scrolledTo().at(-1)).toBe(`hunk-${p.cache}`);
+    expect(focusedLabel()).toMatch(CACHE);
   });
 
   it("remember the choice for every PR, and read a stored call tree as the overview", async () => {
@@ -1235,7 +1257,7 @@ describe("jump palette", () => {
     await userEvent.keyboard("t");
     await userEvent.keyboard("@cached");
     await userEvent.click(within(palette()).getByRole("button", { name: /^cachedReceipt/ }));
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(focusedLabel()).toMatch(CACHE);
   });
 
   it("selects a decision's file in the overview, and Enter opens its code", async () => {
@@ -1317,20 +1339,73 @@ describe("keyboard shortcuts", () => {
   });
 });
 
+describe("parts of a split hunk", () => {
+  it("say what they change, where the rest of the hunk is, and link to each other", async () => {
+    renderReview();
+    await loaded();
+    const cache = cardOf(p.cache);
+    expect(cache.querySelector(".hunk-part")?.textContent).toBe(
+      "receiptCache and cachedReceipt · part 2 of 2 · rest of this hunk in step 2",
+    );
+    expect(cache.querySelector(".part-fold.next")).toBeNull();
+    const up = within(cache).getByRole("button", { name: /part 1 of 2/ });
+    expect(up.textContent).toBe("↑ loadTaxLines and TAX_ATTEMPTS · part 1 of 2 · step 2");
+    await userEvent.click(up);
+    expect(focusedLabel()).toMatch(RETRY);
+    const down = within(cardOf(p.retry)).getByRole("button", { name: /part 2 of 2/ });
+    expect(down.textContent).toBe("↓ receiptCache and cachedReceipt · part 2 of 2 · step 1");
+  });
+
+  it("read a reviewed mark stored on their hunk as a mark on each, until one changes", async () => {
+    window.localStorage.setItem("megareviewer:reviewed-hunks", JSON.stringify([h.retryAndCache]));
+    renderReview();
+    await loaded();
+    const checkbox = (id: typeof p.cache) =>
+      within(cardOf(id)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" });
+    expect([checkbox(p.cache).checked, checkbox(p.retry).checked]).toEqual([true, true]);
+    expect(screen.getByText("1 of 5 hunks reviewed")).toBeTruthy();
+
+    await userEvent.click(checkbox(p.cache));
+    expect([checkbox(p.cache).checked, checkbox(p.retry).checked]).toEqual([false, true]);
+    expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "")).toEqual([
+      p.retry,
+    ]);
+  });
+
+  it("put a decision's card on the first part on the page, and link the other to it", async () => {
+    renderReview();
+    await loaded();
+    expect(within(cardOf(p.cache)).getByRole("article", { name: RETRIES })).toBeTruthy();
+    expect(within(cardOf(p.retry)).queryByRole("article", { name: RETRIES })).toBeNull();
+    expect(cardOf(p.retry).querySelector(".decision-mention")?.textContent).toMatch(RETRIES);
+  });
+
+  it("show a comment in the part that holds its line", async () => {
+    window.localStorage.setItem(
+      `megareviewer:hunk-comments:${id}`,
+      JSON.stringify([{ hunkId: h.retryAndCache, side: "new", line: 45, body: "Evict these." }]),
+    );
+    renderReview();
+    await loaded();
+    expect(
+      within(cardOf(p.cache)).getByRole("textbox", { name: "Comment on line 45" }),
+    ).toBeTruthy();
+    expect(within(cardOf(p.retry)).queryByRole("textbox")).toBeNull();
+  });
+});
+
 describe("navigation", () => {
   it("follows a caller's file to its first calling hunk, and Esc goes back", async () => {
     renderReview();
     await loaded();
-    await userEvent.keyboard("n");
-    await userEvent.keyboard("j");
-    const callers = cardOf(h.retryAndCache).querySelector<HTMLElement>(".hunk-callers");
+    cardOf(p.cache).focus();
+    const callers = cardOf(p.cache).querySelector<HTMLElement>(".hunk-callers");
     expect(callers?.textContent).toBe("Called from orders.ts ↑");
-    await userEvent.click(
-      within(cardOf(h.retryAndCache)).getByRole("button", { name: "orders.ts ↑" }),
-    );
+    await userEvent.click(within(cardOf(p.cache)).getByRole("button", { name: "orders.ts ↑" }));
     expect(focusedLabel()).toMatch(ROUTE);
     await userEvent.keyboard("{Escape}");
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(focusedLabel()).toMatch(CACHE);
   });
 
   it("marks hunks reviewed, counts them, and remembers them by hunk", async () => {
@@ -1356,14 +1431,20 @@ describe("navigation", () => {
     await loaded();
     await userEvent.keyboard("jxx");
     expect(screen.getByText("2 of 5 hunks reviewed")).toBeTruthy();
-    expect(
-      within(rail()).getByRole("button", { name: /^1 The receipt endpoint/ }).textContent,
-    ).toContain("✓");
+    const firstStep = () => within(rail()).getByRole("button", { name: /^1 The receipt endpoint/ });
+    expect(firstStep().textContent).not.toContain("✓");
     await userEvent.keyboard("]");
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(focusedLabel()).toMatch(CACHE);
     // "[[" types one "[" in user-event's key syntax.
     await userEvent.keyboard("[[");
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(focusedLabel()).toMatch(CACHE);
+    // The step's last part is reviewed, but its hunk counts once its other part is too.
+    await userEvent.keyboard("x");
+    expect(firstStep().textContent).toContain("✓");
+    expect(screen.getByText("2 of 5 hunks reviewed")).toBeTruthy();
+    expect(focusedLabel()).toMatch(RETRY);
+    await userEvent.keyboard("x");
+    expect(screen.getByText("3 of 5 hunks reviewed")).toBeTruthy();
   });
 });
 

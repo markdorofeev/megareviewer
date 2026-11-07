@@ -9,6 +9,8 @@ export {
   type LineComment,
   type LineMark,
   type LinePlace,
+  type PartHeader,
+  type PartNeighbor,
   shortPaths,
 } from "./HunkCard.tsx";
 export type { Highlighter } from "./highlight.ts";

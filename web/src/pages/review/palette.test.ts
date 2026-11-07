@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
-import { fixtureAnalysisView, fixtureHunks } from "../../../dev/fixtures/index.ts";
-import { hunkIndex, tourSteps } from "./model.ts";
+import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
+import { partIndex, tourSteps } from "./model.ts";
 import { paletteItems, searchPalette } from "./palette.ts";
 
 const analysis = fixtureAnalysisView.analysis;
 const h = fixtureHunks;
-const index = hunkIndex(analysis);
+const index = partIndex(analysis);
 const items = paletteItems(analysis, tourSteps(analysis, index), index);
 
 const search = (query: string) =>
@@ -35,7 +35,7 @@ describe("the jump palette", () => {
     expect(search("ORDERS")).toEqual(expect.arrayContaining([["files", ["src/routes/orders.ts"]]]));
     expect(search("tax retr")).toEqual([
       ["decisions", ["Retries the tax service 3 times with no backoff"]],
-      ["steps", ["Retrying the tax service and caching receipts"]],
+      ["steps", ["Retrying the tax service"]],
     ]);
     expect(search("nothing matches this")).toEqual([]);
   });
@@ -54,9 +54,9 @@ describe("the jump palette", () => {
 
   it("goes to each item's place", () => {
     const target = (label: string) => items.find((item) => item.label === label)?.target;
-    expect(target("cachedReceipt")).toEqual({ kind: "hunk", hunkId: h.retryAndCache });
+    expect(target("cachedReceipt")).toEqual({ kind: "hunk", partId: fixtureParts.cache });
     expect(target("src/lib/dates.ts")).toEqual({ kind: "mechanical" });
-    expect(target("src/routes/orders.ts")).toEqual({ kind: "hunk", hunkId: h.routeImports });
+    expect(target("src/routes/orders.ts")).toEqual({ kind: "hunk", partId: h.routeImports });
     expect(target("The receipt endpoint")).toEqual({ kind: "step", stepId: "s1" });
   });
 

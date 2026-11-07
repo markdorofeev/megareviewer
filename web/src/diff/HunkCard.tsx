@@ -1,12 +1,6 @@
 import "./diff.css";
 import { Fragment, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  FileChange,
-  Hunk,
-  HunkId,
-  MechanicalProof,
-  PartId,
-} from "../../../src/domain/diff/index.ts";
+import type { FileChange, Hunk, MechanicalProof, PartId } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { type CharRange, intraLineChanges } from "./intra-line.ts";
 import { type DisplayLine, displayLines, hunkLocation, lineCounts } from "./lines.ts";
@@ -116,6 +110,72 @@ const Callers = ({
   );
 };
 
+/** A part of a split hunk: what it changes, which part it is, and where the rest of its hunk is. */
+export interface PartHeader {
+  readonly definitions: readonly string[];
+  readonly n: number;
+  readonly of: number;
+  /** The steps the hunk's other parts are in, by number, when they're not all in this one. */
+  readonly elsewhere: readonly number[];
+  readonly previous: PartNeighbor | null;
+  readonly next: PartNeighbor | null;
+}
+
+/** A neighboring part of the same hunk, which a fold row links to. */
+export interface PartNeighbor {
+  readonly id: PartId;
+  readonly n: number;
+  readonly definitions: readonly string[];
+  /** The step it's read in, by number; null when no step shows it. */
+  readonly step: number | null;
+}
+
+const listed = (items: readonly string[]): string =>
+  items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+
+const Names = ({ names }: { readonly names: readonly string[] }) =>
+  names.length === 0 ? null : (
+    <>
+      {joined(names.map((name) => <code key={name}>{name}</code>))}
+      {" · "}
+    </>
+  );
+
+/** "save_token · part 4 of 10 · rest of this hunk in steps 1 and 3". */
+const PartLabel = ({ part }: { readonly part: PartHeader }) => (
+  <span className="hunk-part">
+    <Names names={part.definitions} />
+    part {part.n} of {part.of}
+    {part.elsewhere.length > 0 &&
+      ` · rest of this hunk in ${part.elsewhere.length === 1 ? "step" : "steps"} ${listed(part.elsewhere.map(String))}`}
+  </span>
+);
+
+/** A row above or below a part's lines that goes to the neighboring part of its hunk. */
+const PartFold = ({
+  neighbor,
+  of,
+  direction,
+  onFollow,
+}: {
+  readonly neighbor: PartNeighbor;
+  readonly of: number;
+  readonly direction: "previous" | "next";
+  readonly onFollow?: (id: PartId) => void;
+}) => (
+  <button
+    type="button"
+    className={`part-fold ${direction}`}
+    disabled={onFollow === undefined}
+    onClick={() => onFollow?.(neighbor.id)}
+  >
+    <span aria-hidden="true">{direction === "previous" ? "↑" : "↓"}</span>{" "}
+    <Names names={neighbor.definitions} />
+    part {neighbor.n} of {of}
+    {neighbor.step === null ? "" : ` · step ${neighbor.step}`}
+  </button>
+);
+
 /** Where a comment on a hunk goes: a head-side ("new") or base-side ("old") line. */
 export interface LinePlace {
   readonly side: "new" | "old";
@@ -139,8 +199,10 @@ export const commentPlace = (line: DisplayLine["line"]): LinePlace | null =>
 
 const samePlace = (a: LinePlace, b: LinePlace) => a.side === b.side && a.line === b.line;
 
-/** One hunk: a header with its file, place and risk, and its lines. */
+/** One hunk, or one part of a split hunk: a header with its file, place and risk, and its lines. */
 export const HunkCard = memo(function HunkCard({
+  id: givenId,
+  part,
   hunk,
   file,
   risk,
@@ -161,6 +223,10 @@ export const HunkCard = memo(function HunkCard({
   belowLine,
   inLine,
 }: {
+  /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
+  readonly id?: PartId;
+  /** Set for a part of a split hunk, whose lines `hunk` holds. */
+  readonly part?: PartHeader | null;
   readonly hunk: Hunk;
   readonly file: FileChange;
   readonly risk: RiskAssessment | null;
@@ -169,7 +235,7 @@ export const HunkCard = memo(function HunkCard({
   readonly highlighted?: boolean;
   /** Scrolls the card into view and focuses it. */
   readonly focused?: boolean;
-  readonly onFocus?: (id: HunkId) => void;
+  readonly onFocus?: (id: PartId) => void;
   /** Shows this many lines at first, with a button for the rest. */
   readonly lineLimit?: number;
   /** Files whose code calls this hunk, which `onFollow` goes to; calls show by `belowLine`. */
@@ -177,13 +243,13 @@ export const HunkCard = memo(function HunkCard({
   readonly onFollow?: (id: PartId) => void;
   /** Whether the reviewer has read this hunk; without `onReviewed` there's no checkbox. */
   readonly reviewed?: boolean;
-  readonly onReviewed?: (id: HunkId, reviewed: boolean) => void;
+  readonly onReviewed?: (id: PartId, reviewed: boolean) => void;
   /** The reviewer's comments on this hunk's lines; without `onComment` they're read-only. */
   readonly comments?: readonly LineComment[];
   /** The line whose comment box is open and focused, if it's in this hunk. */
   readonly openComment?: LinePlace | null;
-  readonly onOpenComment?: (id: HunkId, place: LinePlace | null) => void;
-  readonly onComment?: (id: HunkId, comment: LineComment) => void;
+  readonly onOpenComment?: (id: PartId, place: LinePlace | null) => void;
+  readonly onComment?: (id: PartId, comment: LineComment) => void;
   /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
   readonly afterHeader?: ReactNode;
   /** Shown under the line with this new-side number, e.g. the calls it makes. */
@@ -191,6 +257,7 @@ export const HunkCard = memo(function HunkCard({
   /** Parts of the line with this new-side number to show differently, e.g. a call's symbol. */
   readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
 }) {
+  const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
   const [showAll, setShowAll] = useState(false);
   const lines = useMemo(() => displayLines(hunk.lines), [hunk]);
@@ -222,13 +289,17 @@ export const HunkCard = memo(function HunkCard({
       aria-label={`${file.path}, ${hunkLocation(hunk)}`}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a card is focused to select its hunk.
       tabIndex={0}
-      onFocus={() => onFocus?.(hunk.id)}
+      onFocus={() => onFocus?.(id)}
     >
       <header className="hunk-header">
         <FilePath file={file} />
         <FileStatusBadge status={file.status} />
-        {hunk.sectionHeading !== null && (
-          <code className="hunk-heading">{hunk.sectionHeading}</code>
+        {part != null ? (
+          <PartLabel part={part} />
+        ) : (
+          hunk.sectionHeading !== null && (
+            <code className="hunk-heading">{hunk.sectionHeading}</code>
+          )
         )}
         <span className="hunk-counts">
           <span className="count-added">+{counts.added}</span>{" "}
@@ -248,7 +319,7 @@ export const HunkCard = memo(function HunkCard({
             <input
               type="checkbox"
               checked={reviewed === true}
-              onChange={(event) => onReviewed(hunk.id, event.target.checked)}
+              onChange={(event) => onReviewed(id, event.target.checked)}
             />
             Reviewed
           </label>
@@ -258,6 +329,9 @@ export const HunkCard = memo(function HunkCard({
         <Callers callers={callers} onFollow={onFollow} />
       )}
       {afterHeader}
+      {part?.previous != null && (
+        <PartFold neighbor={part.previous} of={part.of} direction="previous" onFollow={onFollow} />
+      )}
       <div
         className="hunk-body"
         // Off screen, the lines are as tall as they will be, so the scrollbar doesn't jump.
@@ -291,7 +365,7 @@ export const HunkCard = memo(function HunkCard({
                     onNumber={
                       place === null || onOpenComment === undefined || onComment === undefined
                         ? undefined
-                        : () => onOpenComment(hunk.id, place)
+                        : () => onOpenComment(id, place)
                     }
                   />
                   {place !== null && (comment !== undefined || open) && (
@@ -302,9 +376,9 @@ export const HunkCard = memo(function HunkCard({
                       onChange={
                         onComment === undefined
                           ? undefined
-                          : (body) => onComment(hunk.id, { ...place, body })
+                          : (body) => onComment(id, { ...place, body })
                       }
-                      onDone={() => onOpenComment?.(hunk.id, null)}
+                      onDone={() => onOpenComment?.(id, null)}
                     />
                   )}
                   {below !== undefined && (
@@ -322,6 +396,9 @@ export const HunkCard = memo(function HunkCard({
         <button type="button" className="button show-all" onClick={() => setShowAll(true)}>
           Show all {lines.length} lines
         </button>
+      )}
+      {part?.next != null && (
+        <PartFold neighbor={part.next} of={part.of} direction="next" onFollow={onFollow} />
       )}
     </section>
   );

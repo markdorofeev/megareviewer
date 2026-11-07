@@ -37,17 +37,17 @@ export const DiffView = ({
 }: {
   readonly items: readonly HunkItem[];
   /** Hunks to mark, e.g. those of the selected decision. */
-  readonly highlightedHunkIds?: ReadonlySet<HunkId>;
-  readonly focusedHunkId?: HunkId | null;
-  readonly onFocusHunk?: (id: HunkId) => void;
-  readonly callersOf?: (id: HunkId) => readonly CallerFile[];
+  readonly highlightedHunkIds?: ReadonlySet<PartId>;
+  readonly focusedHunkId?: PartId | null;
+  readonly onFocusHunk?: (id: PartId) => void;
+  readonly callersOf?: (id: PartId) => readonly CallerFile[];
   readonly onFollow?: (id: PartId) => void;
   readonly reviewedHunkIds?: ReadonlySet<string>;
-  readonly onReviewed?: (id: HunkId, reviewed: boolean) => void;
-  readonly commentsOf?: (id: HunkId) => readonly LineComment[];
+  readonly onReviewed?: (id: PartId, reviewed: boolean) => void;
+  readonly commentsOf?: (id: PartId) => readonly LineComment[];
   readonly openComment?: { readonly hunkId: HunkId; readonly place: LinePlace } | null;
-  readonly onOpenComment?: (id: HunkId, place: LinePlace | null) => void;
-  readonly onComment?: (id: HunkId, comment: LineComment) => void;
+  readonly onOpenComment?: (id: PartId, place: LinePlace | null) => void;
+  readonly onComment?: (id: PartId, comment: LineComment) => void;
 }) => (
   <div className="diff-view">
     {items.map(({ hunk, file, risk, proofs = [] }) =>

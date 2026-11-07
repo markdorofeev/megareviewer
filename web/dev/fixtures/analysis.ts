@@ -5,6 +5,8 @@ import {
   findFormattingProofs,
   findMechanicalProofs,
   type HunkId,
+  type HunkPart,
+  PartId,
   parseUnifiedDiff,
 } from "../../../src/domain/diff/index.ts";
 import {
@@ -22,7 +24,8 @@ import {
 // One complete analysis of a realistic PR: an endpoint that leaks other users' receipts, a retry
 // and a cache worth discussing, a new dependency, and one of each mechanical change. The diff is
 // parsed and proved by the real domain code, so hunk IDs and proofs are what the server would
-// produce.
+// produce. The hunk that adds the retry and the cache is split: the cache is read with the
+// endpoint that calls it, the retry in a step of its own.
 
 interface FileDiff {
   readonly header: readonly string[];
@@ -358,6 +361,29 @@ export const fixtureHunks = {
 
 const h = fixtureHunks;
 
+/** The retry and cache hunk's two parts: its first 17 lines retry, the rest cache. */
+const parts: readonly HunkPart[] = [
+  {
+    id: PartId.parse(`${h.retryAndCache}.1`),
+    hunkId: h.retryAndCache,
+    start: 0,
+    end: 17,
+    definitions: ["loadTaxLines", "TAX_ATTEMPTS"],
+  },
+  {
+    id: PartId.parse(`${h.retryAndCache}.2`),
+    hunkId: h.retryAndCache,
+    start: 17,
+    end: 28,
+    definitions: ["receiptCache", "cachedReceipt"],
+  },
+];
+
+export const fixtureParts = {
+  retry: PartId.parse(`${h.retryAndCache}.1`),
+  cache: PartId.parse(`${h.retryAndCache}.2`),
+} as const;
+
 const ticket: Ticket = {
   key: "SHOP-142",
   url: "https://acme.atlassian.net/browse/SHOP-142",
@@ -497,11 +523,11 @@ const analysis: Analysis = {
   tickets: [ticket],
   missingTicketKeys: ["SHOP-139"],
   proofs,
-  parts: [],
+  parts,
   callGraph: [
     {
       fromPartId: h.receiptRoute,
-      toPartId: h.retryAndCache,
+      toPartId: fixtureParts.cache,
       symbol: "cachedReceipt",
       line: 20,
       use: "call",
@@ -611,18 +637,17 @@ const analysis: Analysis = {
         id: TourStepId.parse("s1"),
         title: "The receipt endpoint",
         explanation:
-          "Start at the new route: it looks up the order, renders its receipt and sends it as plain text.",
-        partIds: [h.receiptRoute, h.routeImports],
+          "Start at the new route: it looks up the order, gets its receipt from cachedReceipt, which renders each receipt once, and sends it as plain text.",
+        partIds: [h.receiptRoute, h.routeImports, fixtureParts.cache],
         kind: "flow",
         via: [],
         entries: [],
       },
       {
         id: TourStepId.parse("s2"),
-        title: "Retrying the tax service and caching receipts",
-        explanation:
-          "The route calls cachedReceipt, which renders each receipt once. Rendering now retries the tax service.",
-        partIds: [h.retryAndCache],
+        title: "Retrying the tax service",
+        explanation: "Rendering a receipt now retries the tax service up to 3 times.",
+        partIds: [fixtureParts.retry],
         kind: "flow",
         via: [],
         entries: [],

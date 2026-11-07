@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { partHunk } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment, RiskClass } from "../../../src/domain/review/index.ts";
 import { DiffView, type HunkItem } from "./DiffView.tsx";
 import { HunkCard, shortPaths } from "./HunkCard.tsx";
@@ -169,6 +170,48 @@ describe("DiffView", () => {
     const token = container.querySelector<HTMLElement>(".token.bold");
     expect(token?.style.getPropertyValue("--token-light")).toBe("#0a3069");
     expect(token?.style.getPropertyValue("--token-dark")).toBe("#a5d6ff");
+  });
+
+  it("highlights each part of a split hunk from its own lines", async () => {
+    const highlighter: Highlighter = {
+      highlight: async (code) =>
+        code
+          .split("\n")
+          .map((line): CodeToken[] => [
+            { text: line, light: null, dark: null, italic: false, bold: true },
+          ]),
+    };
+    const file = modifiedFile("src/a.ts", [
+      "@@ -1,2 +1,2 @@",
+      "-const a = 1;",
+      "+const a = 2;",
+      "-const b = 1;",
+      "+const b = 2;",
+    ]);
+    const hunk = firstHunk(file);
+    const risk: RiskAssessment = {
+      hunkId: hunk.id,
+      riskClass: "logic",
+      reason: "",
+      source: "model",
+    };
+    const parts = [partHunk(hunk, { start: 0, end: 2 }), partHunk(hunk, { start: 2, end: 4 })];
+    const { container } = renderWith(
+      <>
+        {parts.map((part) => (
+          <HunkCard key={part.newStart} hunk={part} file={file} risk={risk} />
+        ))}
+      </>,
+      highlighter,
+    );
+    const cards = [...container.querySelectorAll(".hunk-card")];
+    await vi.waitFor(() =>
+      expect(cards.every((card) => card.querySelector(".token.bold") !== null)).toBe(true),
+    );
+    expect(cards.map((card) => card.querySelector(".diff-table tbody")?.textContent)).toEqual([
+      expect.stringMatching(/const a = 1;.*const a = 2;/),
+      expect.stringMatching(/const b = 1;.*const b = 2;/),
+    ]);
   });
 
   it("leaves files in unknown languages plain without asking the highlighter", () => {
