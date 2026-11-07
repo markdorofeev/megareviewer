@@ -1,4 +1,10 @@
-import type { FileChange, Hunk, MechanicalProof } from "../../domain/diff/index.ts";
+import {
+  type FileChange,
+  type Hunk,
+  hunkIdOf,
+  type MechanicalProof,
+  renameHints,
+} from "../../domain/diff/index.ts";
 import type { ModelError, PullRequest, Ticket } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { AnalysisInput, AnalysisInputFile, AnalysisModel } from "../ports/index.ts";
@@ -51,8 +57,11 @@ export const buildAnalysisInput = (input: {
         headContent: hunks.length > 0 ? (input.headContents.get(file.path) ?? null) : null,
       };
     }),
-    // The model follows calls; type uses would only lengthen its prompt.
-    callGraph: prepared.callGraph.filter((hint) => hint.use === "call"),
+    // The model follows calls; type uses would only lengthen its prompt. It sees whole hunks.
+    callGraph: renameHints(
+      prepared.callGraph.filter((hint) => hint.use === "call"),
+      hunkIdOf,
+    ),
   };
 };
 

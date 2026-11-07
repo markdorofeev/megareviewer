@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HunkId, parseUnifiedDiff } from "../../domain/diff/index.ts";
+import { HunkId, type PartId, parseUnifiedDiff } from "../../domain/diff/index.ts";
 import {
   type Analysis,
   AnalysisId,
@@ -985,6 +985,28 @@ describe("without the model", () => {
     expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
     expect(emitted.at(-1)?.event).toEqual({ type: "done" });
   });
+
+  it.each(allFixtures)(
+    "reads every part of $name in exactly one step, with hints between its parts",
+    async (fixture) => {
+      const { analyze } = setup({ modelEnabled: false });
+      const analysis = await analyze(fixture);
+      const known = new Set<PartId>(
+        analysis.files.flatMap((file) =>
+          file.hunks.flatMap((hunk) => {
+            const parts = analysis.parts.filter((part) => part.hunkId === hunk.id);
+            return parts.length > 0 ? parts.map((part) => part.id) : [hunk.id];
+          }),
+        ),
+      );
+      expect(
+        validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis), analysis.parts),
+      ).toEqual([]);
+      for (const hint of analysis.callGraph) {
+        expect([known.has(hint.fromPartId), known.has(hint.toPartId)]).toEqual([true, true]);
+      }
+    },
+  );
 
   it("marks rule matches contract", async () => {
     const { analyze } = setup({ modelEnabled: false });

@@ -6,6 +6,7 @@ import {
   type FileChange,
   type FileSymbols,
   type Hunk,
+  splitByDefinition,
 } from "./index.ts";
 
 const LANGUAGES: Readonly<Record<string, string>> = {
@@ -529,5 +530,57 @@ describe("changedDefinitionNames", () => {
         [outside.id, []],
       ]),
     );
+  });
+});
+
+describe("hints and definitions on parts", () => {
+  // Two routes in one hunk, each calling its own service function in a later hunk.
+  const routes = hunk("app.py", "@@ -1,0 +1,4 @@", [
+    "+def read():",
+    "+    return load()",
+    "+def write():",
+    "+    return store()",
+  ]);
+  const service = hunk("app.py", "@@ -1,0 +10,4 @@", [
+    "+def load():",
+    "+    pass",
+    "+def store():",
+    "+    pass",
+  ]);
+  const appSymbols = symbols(
+    [
+      ["read", 1, 2],
+      ["write", 3, 4],
+      ["load", 10, 11],
+      ["store", 12, 13],
+    ],
+    [
+      ["load", 2],
+      ["store", 4],
+    ],
+  );
+  const byPath = new Map([["app.py", appSymbols]]);
+  const files = [file("app.py", routes, service)];
+  const parts = [routes, service].flatMap((one) =>
+    splitByDefinition(one, { head: appSymbols.definitions, base: [] }),
+  );
+  const [read, write, load, store] = parts.map((part) => part.id);
+
+  it("points each part at the parts it calls", () => {
+    expect(
+      buildCallGraphHints(files, byPath, parts).map((hint) => [hint.fromPartId, hint.toPartId]),
+    ).toEqual([
+      [read, load],
+      [write, store],
+    ]);
+  });
+
+  it("names each part's changed definitions", () => {
+    expect([...changedDefinitionNames(files, byPath, parts)]).toEqual([
+      [read, ["read"]],
+      [write, ["write"]],
+      [load, ["load"]],
+      [store, ["store"]],
+    ]);
   });
 });

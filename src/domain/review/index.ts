@@ -38,6 +38,7 @@ export {
   StatedIntent,
   Ticket,
 } from "./intent.ts";
+export { type JoinedParts, joinParts } from "./join-parts.ts";
 export { HttpUrl, Sha, Timestamp } from "./primitives.ts";
 export {
   buildPublication,

@@ -2,10 +2,14 @@ import {
   type CallGraphHint,
   type FileChange,
   type HunkId,
+  type HunkPart,
+  hunkIdOf,
   isTestFile,
   type PartId,
+  partsByHunk,
+  piecesOf,
 } from "../diff/index.ts";
-import { type Entry, entryLabel, entryOf } from "./entry-points.ts";
+import { type Entry, entryLabel, entryOf, routeReceivers } from "./entry-points.ts";
 import type { RiskAssessment } from "./risk.ts";
 import { type Tour, type TourStep, TourStepId } from "./tour.ts";
 
@@ -13,9 +17,11 @@ export interface CodeTourInput {
   readonly files: readonly FileChange[];
   /** Hunks without a mechanical proof: every one is in exactly one step. */
   readonly required: ReadonlySet<HunkId>;
+  /** Split hunks' parts, which the tour places one by one. Any other hunk is one part. */
+  readonly parts?: readonly HunkPart[];
   readonly callGraph: readonly CallGraphHint[];
   readonly risk: readonly RiskAssessment[];
-  /** Each hunk's changed definitions, innermost, by name. */
+  /** Each part's changed definitions, innermost, by name. */
   readonly definitions: ReadonlyMap<PartId, readonly string[]>;
   /** Paths whose first lines say a tool wrote them. They're grouped, never hidden. */
   readonly generated?: ReadonlySet<string>;
@@ -106,19 +112,23 @@ type StepDraft = Omit<TourStep, "id">;
 export const codeTour = (input: CodeTourInput): Tour => {
   const { files, required, callGraph, risk, definitions } = input;
   const generated = input.generated ?? new Set<string>();
+  const byHunk = partsByHunk(input.parts ?? []);
   const located = files.flatMap((file) =>
-    file.hunks.filter((hunk) => required.has(hunk.id)).map((hunk) => ({ file, hunk })),
+    piecesOf(file, byHunk)
+      .filter(({ hunk }) => required.has(hunk.id))
+      .map(({ id, hunk }) => ({ file, id, hunk })),
   );
-  const ids: PartId[] = located.map(({ hunk }) => hunk.id);
+  const ids: PartId[] = located.map(({ id }) => id);
   const order = new Map(ids.map((id, at) => [id, at]));
-  const fileOf = new Map<PartId, FileChange>(located.map(({ file, hunk }) => [hunk.id, file]));
+  const fileOf = new Map<PartId, FileChange>(located.map(({ file, id }) => [id, file]));
   const pathOf = (id: PartId): string => fileOf.get(id)?.path ?? "";
   const isTest = (id: PartId) => isTestFile(pathOf(id));
   const isCode = (id: PartId) => !isTest(id) && !isDoc(pathOf(id));
   const isSchemaLike = (id: PartId) => generated.has(pathOf(id)) || isSchema(pathOf(id));
-  const contract = new Set<PartId>(
+  const contractHunks = new Set(
     risk.flatMap((assessment) => (assessment.riskClass === "contract" ? [assessment.hunkId] : [])),
   );
+  const contract = new Set<PartId>(ids.filter((id) => contractHunks.has(hunkIdOf(id))));
 
   // Calls in the order they're made, and type uses, between required hunks.
   const edges = () => new Map<PartId, PartId[]>(ids.map((id) => [id, []]));
@@ -146,10 +156,10 @@ export const codeTour = (input: CodeTourInput): Tour => {
 
   // Entries. Entry hunks that change the same definition, like two hunks of one main, share a flow.
   const entryOfHunk = new Map<PartId, Entry>();
-  for (const { file, hunk } of located) {
-    if (!isCode(hunk.id)) continue;
-    const entry = entryOf(file, hunk, definitions.get(hunk.id) ?? []);
-    if (entry !== null) entryOfHunk.set(hunk.id, entry);
+  for (const { file, id, hunk } of located) {
+    if (!isCode(id)) continue;
+    const entry = entryOf(file, hunk, definitions.get(id) ?? []);
+    if (entry !== null) entryOfHunk.set(id, entry);
   }
   const entryGroups = new Map<string, PartId[]>();
   for (const [id, entry] of entryOfHunk) {
@@ -158,19 +168,51 @@ export const codeTour = (input: CodeTourInput): Tour => {
     entryGroups.set(key, [...(entryGroups.get(key) ?? []), id]);
   }
 
-  // Wiring: nothing calls it, and it calls only entries.
-  const wiring = new Map<PartId, PartId>();
-  for (const id of ids.filter(isCode)) {
-    const [first, ...rest] = codeCallees(id);
-    if (
-      first !== undefined &&
-      !entryOfHunk.has(id) &&
-      codeCallers(id).length === 0 &&
-      [first, ...rest].every((callee) => entryOfHunk.has(callee))
-    ) {
-      wiring.set(id, first);
+  // Wiring registers entries: a router the routes are declared on, or an app that adds a router.
+  // It isn't an entry; it's used only as the router of entries' routes or by other wiring, or
+  // nothing calls it; and it calls only entries and other wiring. It's linked to an entry.
+  const textOf = new Map(located.map(({ id, hunk }) => [id, hunk.lines]));
+  const onRouteLine = new Set<string>();
+  for (const { fromPartId: from, toPartId: to, line, symbol } of callGraph) {
+    const text = textOf.get(from)?.find((one) => one.kind !== "del" && one.newLine === line)?.text;
+    if (text !== undefined && routeReceivers(text).includes(symbol))
+      onRouteLine.add(`${from}>${to}`);
+  }
+  const wiring = new Set(
+    ids.filter((id) => isCode(id) && !entryOfHunk.has(id) && linked(id).length > 0),
+  );
+  function linked(id: PartId): PartId[] {
+    return [...codeCallers(id), ...codeCallees(id)];
+  }
+  for (let dropped = true; dropped; ) {
+    dropped = false;
+    for (const id of wiring) {
+      const fits =
+        codeCallers(id).every(
+          (caller) => wiring.has(caller) || onRouteLine.has(`${caller}>${id}`),
+        ) && codeCallees(id).every((callee) => wiring.has(callee) || entryOfHunk.has(callee));
+      if (!fits) {
+        wiring.delete(id);
+        dropped = true;
+      }
     }
   }
+  /** The entries a wiring part registers, through other wiring too. */
+  const registers = (id: PartId): PartId[] => {
+    const seen = new Set<PartId>([id]);
+    const found: PartId[] = [];
+    const visit = (at: PartId) => {
+      for (const other of linked(at)) {
+        if (seen.has(other)) continue;
+        seen.add(other);
+        if (entryOfHunk.has(other)) found.push(other);
+        else if (wiring.has(other)) visit(other);
+      }
+    };
+    visit(id);
+    return found;
+  };
+  for (const id of wiring) if (registers(id).length === 0) wiring.delete(id);
   const roots = ids.filter(
     (id) =>
       isCode(id) &&
@@ -221,9 +263,23 @@ export const codeTour = (input: CodeTourInput): Tour => {
       else own(flow, id);
     }
   }
-  for (const [id, entry] of wiring) {
-    const flow = owner.get(entry);
+  // Wiring is read first in the first flow of an entry it registers, before the wiring it adds.
+  const flowAt = new Map(flows.map((flow, at) => [flow, at]));
+  const placed = [...wiring].sort(
+    (a, b) =>
+      Number(codeCallers(a).some((one) => wiring.has(one))) -
+        Number(codeCallers(b).some((one) => wiring.has(one))) ||
+      (order.get(a) ?? 0) - (order.get(b) ?? 0),
+  );
+  const firstFlow = (id: PartId) =>
+    registers(id)
+      .flatMap((entry) => owner.get(entry) ?? [])
+      .sort((a, b) => (flowAt.get(a) ?? 0) - (flowAt.get(b) ?? 0))[0];
+  for (const id of placed.reverse()) {
+    const flow = firstFlow(id);
     if (flow === undefined) continue;
+    const before = owner.get(id);
+    if (before !== undefined) before.hunks.splice(before.hunks.indexOf(id), 1);
     flow.hunks.unshift(id);
     owner.set(id, flow);
   }

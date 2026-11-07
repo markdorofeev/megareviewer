@@ -63,6 +63,19 @@ const ROUTE_PATTERNS: readonly ((line: string) => Route[])[] = [
   },
 ];
 
+/**
+ * The objects a line declares routes on: `router` in `@router.put("/p")` or `router.get("/p", …)`.
+ * Empty when the line declares no route.
+ */
+export const routeReceivers = (line: string): string[] =>
+  ROUTE_PATTERNS.some((pattern) => pattern(line).length > 0)
+    ? [
+        ...line.matchAll(
+          new RegExp(String.raw`([\w$]+)\s*\.\s*(?:${METHODS}|route|Handle|HandleFunc)\(`, "gi"),
+        ),
+      ].flatMap(([, receiver]) => receiver ?? [])
+    : [];
+
 const PAGE_DIRECTORIES = new Set(["routes", "pages", "app", "screens", "views"]);
 
 const isPageFile = (path: string): boolean =>

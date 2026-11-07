@@ -1,4 +1,10 @@
-import type { CallGraphHint, FileChange, HunkId, PartId } from "../../domain/diff/index.ts";
+import type {
+  CallGraphHint,
+  FileChange,
+  HunkId,
+  HunkPart,
+  PartId,
+} from "../../domain/diff/index.ts";
 import {
   type CoverageProblem,
   codeTour,
@@ -8,6 +14,7 @@ import {
   type ModelError,
   type ModelPass,
   type ModelUsage,
+  partsOfHunks,
   type RiskAssessment,
   type Tour,
   TourStepId,
@@ -215,7 +222,10 @@ export const runDecisions = async (
   };
 };
 
-/** Never fails: a tour the model can't build is replaced by the one from the call graph. */
+/**
+ * Never fails: a tour the model can't build is replaced by the one from the call graph. The tour
+ * names candidate parts, for the caller to join back.
+ */
 export const runTour = async (
   model: AnalysisModel,
   input: AnalysisInput,
@@ -225,8 +235,10 @@ export const runTour = async (
     readonly decisions: readonly Decision[];
     readonly files: readonly FileChange[];
     readonly required: ReadonlySet<HunkId>;
+    /** The candidate parts: the model's tour lists hunks, and each reads as all of its parts. */
+    readonly parts: readonly HunkPart[];
     readonly callGraph: readonly CallGraphHint[];
-    readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
+    readonly definitions: ReadonlyMap<PartId, readonly string[]>;
     readonly generated: ReadonlySet<string>;
     /** Every hunk's final risk, for the call-graph tour's order. */
     readonly assessments: readonly RiskAssessment[];
@@ -251,6 +263,7 @@ export const runTour = async (
     tour: codeTour({
       files: context.files,
       required,
+      parts: context.parts,
       callGraph: context.callGraph,
       risk: context.assessments,
       definitions: context.definitions,
@@ -265,12 +278,13 @@ export const runTour = async (
   if (outcome.value.problems.length > 0) {
     return fallback("The guided tour didn't cover every hunk exactly once");
   }
+  const partsOf = partsOfHunks(required, context.parts);
   return {
     tour: {
       steps: outcome.value.value.steps.map(({ hunkIds, ...step }, index) => ({
         ...step,
         id: TourStepId.parse(`s${index + 1}`),
-        partIds: hunkIds,
+        partIds: hunkIds.flatMap((id) => partsOf.get(id) ?? [id]),
         kind: "flow" as const,
         via: [],
         entries: [],

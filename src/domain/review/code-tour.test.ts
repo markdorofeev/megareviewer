@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { type CallGraphHint, type FileChange, type Hunk, HunkId } from "../diff/index.ts";
+import {
+  type CallGraphHint,
+  type FileChange,
+  type Hunk,
+  HunkId,
+  type HunkPart,
+  PartId,
+} from "../diff/index.ts";
 import {
   type CodeTourInput,
   codeTour,
+  joinParts,
   looksGenerated,
   type RiskAssessment,
   Tour,
@@ -70,7 +78,7 @@ const tourOf = (files: readonly FileChange[], options: Partial<CodeTourInput> = 
     definitions: new Map(),
     ...options,
   });
-  expect(validateTour(tour, required)).toEqual([]);
+  expect(validateTour(tour, required, options.parts)).toEqual([]);
   expect(Tour.parse(tour)).toEqual(tour);
   // `via` only names hunks earlier steps read.
   tour.steps.forEach((step, at) => {
@@ -413,6 +421,97 @@ describe("codeTour", () => {
         required: new Set(ids.filter(() => next(4) !== 0).map(h)),
       });
     }
+  });
+});
+
+describe("codeTour with parts", () => {
+  // Shaped like delphi-code #2: one hunk adds a router and three routes on it, an app adds the
+  // router, and the service and store each change one function per route.
+  const p = (n: number, part: number): PartId => PartId.parse(`${h(n)}.${part}`);
+  const partsOf = (n: number, ...lines: [number, number, string][]): HunkPart[] =>
+    lines.map(([start, end, name], at) => ({
+      id: p(n, at + 1),
+      hunkId: h(n),
+      start,
+      end,
+      definitions: [name],
+    }));
+  const files = [
+    one(
+      1,
+      "api/routes.py",
+      "changes = APIRouter()",
+      route("get", "/items"),
+      "def list_items(): return list_all()",
+      '@changes.put("/items/{id}")',
+      "def save_item(): return save()",
+      '@changes.delete("/items/{id}")',
+      "def forget_item(): return forget()",
+    ),
+    one(2, "api/app.py", "app.include_router(routes.changes)"),
+    one(3, "app/service.py", "def list_all(): ...", "def save(): write()", "def forget(): erase()"),
+    one(4, "app/store.py", "def write(): ...", "def erase(): ..."),
+  ];
+  const parts = [
+    ...partsOf(
+      1,
+      [0, 1, "changes"],
+      [1, 3, "list_items"],
+      [3, 5, "save_item"],
+      [5, 7, "forget_item"],
+    ),
+    ...partsOf(3, [0, 1, "list_all"], [1, 2, "save"], [2, 3, "forget"]),
+    ...partsOf(4, [0, 1, "write"], [1, 2, "erase"]),
+  ];
+  const call = (from: PartId, to: PartId, line: number, symbol = "f"): CallGraphHint => ({
+    fromPartId: from,
+    toPartId: to,
+    symbol,
+    line,
+    use: "call",
+  });
+  const callGraph = [
+    call(p(1, 2), p(3, 1), 12),
+    call(p(1, 3), p(1, 1), 13, "changes"),
+    call(p(1, 3), p(3, 2), 14),
+    call(p(1, 4), p(1, 1), 15, "changes"),
+    call(p(1, 4), p(3, 3), 16),
+    call(h(2), p(1, 1), 20, "changes"),
+    call(p(3, 2), p(4, 1), 31),
+    call(p(3, 3), p(4, 2), 32),
+  ];
+  const tour = tourOf(files, { parts, callGraph });
+
+  it("reads each route of a split hunk in its own flow, the router first in the first it registers", () => {
+    expect(tour.steps.map((step) => [step.title, step.partIds])).toEqual([
+      ["GET /items", [p(1, 2), p(3, 1)]],
+      ["PUT /items/{id}", [h(2), p(1, 1), p(1, 3), p(3, 2), p(4, 1)]],
+      ["DELETE /items/{id}", [p(1, 4), p(3, 3), p(4, 2)]],
+    ]);
+    expect(tour.steps.map((step) => step.entries)).toEqual([[p(1, 2)], [p(1, 3)], [p(1, 4)]]);
+    expect(tour.steps[2]?.via).toEqual([p(1, 1)]);
+  });
+
+  it("joins back nothing when every part reads apart from its neighbors", () => {
+    const joined = joinParts(tour, parts, callGraph);
+    expect(joined.parts).toEqual(parts);
+    expect(joined.tour).toEqual(tour);
+    expect(validateTour(joined.tour, all(files), joined.parts)).toEqual([]);
+  });
+
+  it("doesn't take a part named on a route line, other than the router, for wiring", () => {
+    const withModel = [
+      ...callGraph,
+      call(p(1, 2), p(3, 3), 11, "ItemsResponse"),
+      call(p(1, 3), p(3, 3), 13, "ItemsResponse"),
+    ];
+    const titles = tourOf(files, { parts, callGraph: withModel }).steps.map((step) => [
+      step.title,
+      step.partIds[0],
+    ]);
+    // forget is called from GET's route line, but it's no router: it stays code GET reads.
+    expect(titles[0]).toEqual(["GET /items", p(1, 2)]);
+    expect(tourOf(files, { parts, callGraph: withModel }).steps[0]?.partIds).toContain(p(3, 3));
   });
 });
 

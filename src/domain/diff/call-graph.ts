@@ -6,8 +6,9 @@ import {
   type SymbolImport,
   sharesPackage,
 } from "./imports.ts";
+import { type Piece, partsByHunk, piecesOf } from "./parts.ts";
 import { isTestFile } from "./test-files.ts";
-import type { CallGraphHint, FileChange, Hunk, HunkId } from "./types.ts";
+import type { CallGraphHint, FileChange, Hunk, HunkPart, PartId } from "./types.ts";
 
 /** What hints need from `CodeParser.symbols`, for the head version of a file. */
 export interface FileSymbols {
@@ -30,22 +31,23 @@ type Definition = FileSymbols["definitions"][number];
 
 interface Located {
   readonly file: FileChange;
-  readonly hunk: Hunk;
+  readonly piece: Piece;
   /** Position in the diff, for a stable order. */
   readonly order: number;
 }
 
-/** A hunk that changes a definition. */
+/** A piece that changes a definition. */
 interface Change {
   readonly at: Located;
   readonly definition: Definition;
 }
 
 /**
- * Hints for the tour and the call chips: a hunk that uses a symbol points to each hunk that
- * changes it. A hunk changes the innermost definitions its added lines fall in, so adding a
- * method changes the method, not every use of its class. It uses a symbol when a reference falls
- * on its added or context lines. A use in a type position is a hint with `use: "type"`: it groups
+ * Hints for the tour and the call chips: a part that uses a symbol points to each part that
+ * changes it. Hunks split into `parts` are read part by part; any other hunk is one part. A part
+ * changes the innermost definitions its added lines fall in, so adding a method changes the
+ * method, not every use of its class. It uses a symbol when a reference falls on its added or
+ * context lines. A use in a type position is a hint with `use: "type"`: it groups
  * code, but a type annotation isn't a call for the reader to follow.
  *
  * A reference reaches a definition only in its own file or in a file its imports reach, and
@@ -61,14 +63,16 @@ interface Change {
 export const buildCallGraphHints = (
   files: readonly FileChange[],
   symbolsByPath: ReadonlyMap<string, FileSymbols>,
+  parts: readonly HunkPart[] = [],
 ): CallGraphHint[] => {
+  const byHunk = partsByHunk(parts);
   const hunks = files
-    .flatMap((file) => file.hunks.map((hunk) => ({ file, hunk })))
+    .flatMap((file) => piecesOf(file, byHunk).map((piece) => ({ file, piece })))
     .map((entry, order): Located => ({ ...entry, order }));
 
   const changedBy = new Map<string, Change[]>();
   for (const at of hunks) {
-    for (const definition of changedDefinitions(at.hunk, symbolsByPath.get(at.file.path))) {
+    for (const definition of changedDefinitions(at.piece.hunk, symbolsByPath.get(at.file.path))) {
       const changes = changedBy.get(definition.name) ?? [];
       // Hunks are in diff order, so the first change to a definition is the one kept.
       if (!changes.some((change) => change.definition === definition)) {
@@ -95,7 +99,7 @@ export const buildCallGraphHints = (
         (reaches.get(from.path) ?? []).some((reach) => reachesBy(reach, kind, name, to.path))));
 
   return hunks.flatMap((from): CallGraphHint[] => {
-    const lines = new Set(newLines(from.hunk, ["add", "context"]));
+    const lines = new Set(newLines(from.piece.hunk, ["add", "context"]));
     // The first line each symbol is used on, per use and hunk it reaches.
     const firstUse = { call: new Map<Located, Map<string, number>>(), type: new Map() };
     const own = symbolsByPath.get(from.file.path);
@@ -114,7 +118,7 @@ export const buildCallGraphHints = (
       );
       const byUse = firstUse[kind === "type" ? "type" : "call"];
       for (const { at: to } of local.length > 0 ? local : reached) {
-        if (to.hunk.id === from.hunk.id) continue;
+        if (to.piece.id === from.piece.id) continue;
         const uses = byUse.get(to) ?? new Map<string, number>();
         const first = uses.get(name);
         if (first === undefined || line < first) uses.set(name, line);
@@ -142,8 +146,8 @@ export const buildCallGraphHints = (
         )
         .slice(0, MAX_HINTS_PER_HUNK)
         .map(({ to, symbol, line }) => ({
-          fromPartId: from.hunk.id,
-          toPartId: to.hunk.id,
+          fromPartId: from.piece.id,
+          toPartId: to.piece.id,
           symbol,
           line,
           use,
@@ -152,21 +156,24 @@ export const buildCallGraphHints = (
   });
 };
 
-/** Each hunk's changed definitions, innermost, by name: what the tour reads entry points from. */
+/** Each part's changed definitions, innermost, by name: what the tour reads entry points from. */
 export const changedDefinitionNames = (
   files: readonly FileChange[],
   symbolsByPath: ReadonlyMap<string, FileSymbols>,
-): ReadonlyMap<HunkId, readonly string[]> =>
-  new Map(
+  parts: readonly HunkPart[] = [],
+): ReadonlyMap<PartId, readonly string[]> => {
+  const byHunk = partsByHunk(parts);
+  return new Map(
     files.flatMap((file) =>
-      file.hunks.map((hunk) => [
-        hunk.id,
+      piecesOf(file, byHunk).map(({ id, hunk }) => [
+        id,
         [...changedDefinitions(hunk, symbolsByPath.get(file.path))].map(
           (definition) => definition.name,
         ),
       ]),
     ),
   );
+};
 
 /** The innermost definitions the hunk's added lines fall in. */
 const changedDefinitions = (hunk: Hunk, symbols: FileSymbols | undefined): Set<Definition> => {

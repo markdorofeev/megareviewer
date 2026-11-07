@@ -2,14 +2,18 @@ import {
   buildCallGraphHints,
   type CallGraphHint,
   changedDefinitionNames,
+  type FileDefinitions,
   type FileLink,
   type FileSymbols,
   fileLinks,
   findFormattingProofs,
   findMechanicalProofs,
   type HunkId,
+  type HunkPart,
   lockfileWarnings,
   type MechanicalProof,
+  type PartId,
+  splitHunks,
 } from "../../domain/diff/index.ts";
 import { looksGenerated } from "../../domain/review/index.ts";
 import type { CodeParser, Token } from "../ports/index.ts";
@@ -18,10 +22,16 @@ import type { Collected } from "./collect.ts";
 export interface Prepared {
   /** At most one per hunk. */
   readonly proofs: readonly MechanicalProof[];
+  /**
+   * Every hunk's candidate parts, one per definition it changes, for the tour to place. The tour
+   * joins back the ones it places together.
+   */
+  readonly parts: readonly HunkPart[];
+  /** Hints between parts: the candidates, or a hunk that isn't split. */
   readonly callGraph: readonly CallGraphHint[];
   readonly fileLinks: readonly FileLink[];
-  /** Each hunk's changed definitions, for the tour's entry points. Not stored. */
-  readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
+  /** Each part's changed definitions, for the tour's entry points. Not stored. */
+  readonly definitions: ReadonlyMap<PartId, readonly string[]>;
   /** Paths whose first lines say a tool wrote them, for the tour's grouping and the overview. */
   readonly generated: ReadonlySet<string>;
   readonly warnings: readonly string[];
@@ -29,7 +39,7 @@ export interface Prepared {
   readonly required: ReadonlySet<HunkId>;
 }
 
-/** The deterministic step: mechanical proofs and call-graph hints, no model. */
+/** The deterministic step: mechanical proofs, parts and call-graph hints, no model. */
 export const prep = async (parser: CodeParser, collected: Collected): Promise<Prepared> => {
   const { files, baseContents, headContents } = collected;
   const diffProofs = findMechanicalProofs(files, {
@@ -66,19 +76,30 @@ export const prep = async (parser: CodeParser, collected: Collected): Promise<Pr
   const proofs = [...diffProofs, ...formattingProofs];
 
   const symbolsByPath = new Map<string, FileSymbols>();
+  const definitionsByPath = new Map<string, FileDefinitions>();
   for (const file of files) {
+    if (file.language === null) continue;
     const head = headContents.get(file.path);
-    if (file.language === null || head == null) continue;
-    const symbols = await parser.symbols(head, file.language);
-    if (symbols.ok) symbolsByPath.set(file.path, symbols.value);
+    const headSymbols = head == null ? null : await parser.symbols(head, file.language);
+    if (headSymbols?.ok) symbolsByPath.set(file.path, headSymbols.value);
+    // Deleted lines are cut by the definitions around them in the base file.
+    const base = file.status === "added" ? null : baseContents.get(file.oldPath ?? file.path);
+    const baseSymbols = base == null ? null : await parser.symbols(base, file.language);
+    definitionsByPath.set(file.path, {
+      head: headSymbols?.ok ? headSymbols.value.definitions : [],
+      base: baseSymbols?.ok ? baseSymbols.value.definitions : [],
+    });
   }
 
   const provedHunks = new Set(proofs.flatMap((proof) => proof.hunkId ?? []));
+  // A proof is about a whole hunk, so a proved hunk is never split.
+  const parts = splitHunks(files, definitionsByPath, provedHunks);
   return {
     proofs,
-    callGraph: buildCallGraphHints(files, symbolsByPath),
+    parts,
+    callGraph: buildCallGraphHints(files, symbolsByPath, parts),
     fileLinks: fileLinks(files, symbolsByPath),
-    definitions: changedDefinitionNames(files, symbolsByPath),
+    definitions: changedDefinitionNames(files, symbolsByPath, parts),
     generated: new Set(
       files.flatMap((file) =>
         looksGenerated(headContents.get(file.path) ?? "") ? [file.path] : [],

@@ -7,6 +7,8 @@ import {
   type CallGraphHint,
   type FileChange,
   type FileLink,
+  type HunkPart,
+  hunkIdOf,
   isTestFile,
   type MechanicalProof,
   type PartId,
@@ -15,6 +17,7 @@ import {
 import {
   classifyByRules,
   codeTour,
+  joinParts,
   PullRequest,
   type RiskAssessment,
   type Tour,
@@ -37,6 +40,10 @@ export interface Measured {
   readonly fileLinks: readonly FileLink[];
   readonly generated: readonly string[];
   readonly proofs: readonly MechanicalProof[];
+  /** Split hunks' parts, after the tour joined back the ones it reads together. */
+  readonly parts: readonly HunkPart[];
+  /** How many candidate parts prep cut, before joining back. */
+  readonly candidates: number;
   readonly tour: Tour;
   /** Files the PR changes that aren't in the cache, so they weren't parsed. */
   readonly missing: readonly string[];
@@ -84,15 +91,21 @@ export const measure = async (
     ...proofRisk,
     ...classifyByRules(files, new Set(proofRisk.map((one) => one.hunkId))),
   ];
-  const tour = codeTour({ files, risk, ...prepared });
+  const joined = joinParts(
+    codeTour({ files, risk, ...prepared }),
+    prepared.parts,
+    prepared.callGraph,
+  );
   return {
     files,
     risk,
-    callGraph: prepared.callGraph,
+    callGraph: joined.callGraph,
     fileLinks: prepared.fileLinks,
     generated: [...prepared.generated].sort(),
     proofs: prepared.proofs,
-    tour,
+    parts: joined.parts,
+    candidates: prepared.parts.length,
+    tour: joined.tour,
     missing: [...new Set(missing)],
   };
 };
@@ -113,7 +126,7 @@ export const counts = (measured: Measured) => {
   const textOf = (id: PartId, line: number) =>
     files
       .flatMap((file) => file.hunks)
-      .find((hunk) => hunk.id === id)
+      .find((hunk) => hunk.id === hunkIdOf(id))
       ?.lines.find((one) => one.kind !== "del" && one.newLine === line)?.text;
   const plan = chipPlan(
     tour.steps.map((step) => step.partIds),
@@ -122,13 +135,17 @@ export const counts = (measured: Measured) => {
   );
   const callerFiles = new Map<PartId, Set<string>>();
   for (const { fromPartId, toPartId } of calls) {
-    const path = pathOf.get(fromPartId);
+    const path = pathOf.get(hunkIdOf(fromPartId));
     if (path !== undefined)
       callerFiles.set(toPartId, (callerFiles.get(toPartId) ?? new Set()).add(path));
   }
   const lines = [...byLine.values()].flatMap((onLines) => [...onLines.values()]);
+  const split = new Set(measured.parts.map((part) => part.hunkId)).size;
   return {
     hunks: pathOf.size,
+    splitHunks: split,
+    parts: pathOf.size - split + measured.parts.length,
+    candidateParts: measured.candidates,
     fileLinks: measured.fileLinks.length,
     callHints: calls.length,
     typeHints: callGraph.length - calls.length,

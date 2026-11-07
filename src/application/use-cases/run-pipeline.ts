@@ -1,10 +1,11 @@
-import type { HunkId } from "../../domain/diff/index.ts";
+import { type HunkId, hunkIdOf, renameHints } from "../../domain/diff/index.ts";
 import {
   type Analysis,
   type AnalysisError,
   classifyByRules,
   codeTour,
   type FilesFetched,
+  joinParts,
   type PullRequest,
   raiseByRules,
   type StageName,
@@ -118,7 +119,7 @@ const stages = async (
 
   await tracker.setStage("prep", "running");
   const prepared = await prep(deps.parser, collected.value);
-  const { proofs, callGraph, required, definitions, generated } = prepared;
+  const { proofs, parts, callGraph, required, definitions, generated } = prepared;
   const proofRisk = proofs.flatMap((proof) =>
     proof.hunkId === null
       ? []
@@ -132,9 +133,10 @@ const stages = async (
         ],
   );
   const ruleRisk = classifyByRules(files, new Set(proofRisk.map((risk) => risk.hunkId)));
+  // Until the tour places the parts, every hunk is whole.
   const prepPatch = {
     proofs,
-    callGraph,
+    callGraph: renameHints(callGraph, hunkIdOf),
     fileLinks: prepared.fileLinks,
     generated: [...generated].sort(),
   };
@@ -142,10 +144,11 @@ const stages = async (
   // Without the model, risk comes from proofs and rules and the tour from the call graph.
   if (!deps.modelEnabled) {
     const risk = [...proofRisk, ...ruleRisk];
+    const tour = codeTour({ files, required, parts, callGraph, risk, definitions, generated });
     await tracker.setStage("prep", "done", (analysis) => ({
       ...prepPatch,
       risk,
-      tour: codeTour({ files, required, callGraph, risk, definitions, generated }),
+      ...joinParts(tour, parts, callGraph),
       ...adding(prepared)(analysis),
     }));
     for (const stage of MODEL_STAGES) await tracker.setStage(stage, "skipped");
@@ -228,6 +231,7 @@ const stages = async (
       decisions: decisions.value,
       files,
       required,
+      parts,
       callGraph,
       definitions,
       generated,
@@ -236,7 +240,7 @@ const stages = async (
     logger,
   );
   await tracker.setStage("tour", "done", (analysis) => ({
-    tour: tour.tour,
+    ...joinParts(tour.tour, parts, callGraph),
     ...adding(tour)(analysis),
   }));
 

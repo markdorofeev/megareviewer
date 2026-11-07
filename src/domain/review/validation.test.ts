@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HunkId } from "../diff/index.ts";
+import { HunkId, type HunkPart, PartId } from "../diff/index.ts";
 import { validateHunkReferences, validateRiskCoverage, validateTour } from "./index.ts";
 
 const h = (n: number): HunkId => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
@@ -63,6 +63,44 @@ describe("validateTour", () => {
       "missing",
       "missing",
     ]);
+  });
+});
+
+describe("validateTour with parts", () => {
+  const required = new Set([h(1), h(2)]);
+  const part = (n: number): PartId => PartId.parse(`${h(1)}.${n}`);
+  const parts: HunkPart[] = [1, 2].map((n) => ({
+    id: part(n),
+    hunkId: h(1),
+    start: n - 1,
+    end: n,
+    definitions: [],
+  }));
+  const tour = (...steps: (PartId[] | { partIds: PartId[]; via: PartId[] })[]) => ({
+    steps: steps.map((step) => (Array.isArray(step) ? { partIds: step } : step)),
+  });
+
+  it.each([
+    ["every part once", tour([part(1), h(2)], [part(2)]), []],
+    ["a missing part", tour([part(1), h(2)]), [{ kind: "missing", id: part(2) }]],
+    [
+      "a part in two steps",
+      tour([part(1), part(2)], [part(2), h(2)]),
+      [{ kind: "duplicate", id: part(2) }],
+    ],
+    ["a step naming a split hunk, as the model's do", tour([h(1)], [h(2)]), []],
+    [
+      "a split hunk and one of its parts",
+      tour([h(1)], [part(1), h(2)]),
+      [{ kind: "duplicate", id: part(1) }],
+    ],
+    [
+      "a step passing through a part no earlier step reads",
+      tour({ partIds: [part(1), h(2)], via: [part(2)] }, { partIds: [part(2)], via: [part(1)] }),
+      [{ kind: "via", id: part(2) }],
+    ],
+  ])("reports %s", (_, candidate, problems) => {
+    expect(validateTour(candidate, required, parts)).toEqual(problems);
   });
 });
 
