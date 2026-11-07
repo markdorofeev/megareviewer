@@ -1,6 +1,6 @@
 {
   "name": "megareviewer",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Guided code review for GitHub and Bitbucket Cloud pull requests: intent first, changes sorted by risk, decisions to approve.",
   "keywords": [
     "code-review",
