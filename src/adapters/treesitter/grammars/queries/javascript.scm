@@ -21,6 +21,7 @@
 (class_heritage (identifier) @reference.name)
 (member_expression object: (identifier) @reference.name)
 (member_expression property: (property_identifier) @reference.member)
+(arguments (identifier) @reference.name)
 
 ; Imports
 

@@ -1,21 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { type CallGraphHint, type FileChange, type Hunk, HunkId } from "../diff/index.ts";
-import { codeTour, type RiskAssessment, Tour, validateTour } from "./index.ts";
+import {
+  type CodeTourInput,
+  codeTour,
+  looksGenerated,
+  type RiskAssessment,
+  Tour,
+  validateTour,
+} from "./index.ts";
 
 const h = (n: number): HunkId => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
 
-const hunk = (id: HunkId, path: string): Hunk => ({
-  id,
+/** Hunk n of `path`, adding `lines` at line n * 10. */
+const hunk = (n: number, path: string, ...lines: string[]): Hunk => ({
+  id: h(n),
   path,
-  oldStart: 1,
-  oldLines: 1,
-  newStart: 1,
-  newLines: 1,
+  oldStart: n * 10,
+  oldLines: 0,
+  newStart: n * 10,
+  newLines: Math.max(lines.length, 1),
   sectionHeading: null,
-  lines: [{ kind: "add", oldLine: null, newLine: 1, text: "x", noNewlineAtEnd: false }],
+  lines: (lines.length > 0 ? lines : ["x"]).map((text, at) => ({
+    kind: "add",
+    oldLine: null,
+    newLine: n * 10 + at,
+    text,
+    noNewlineAtEnd: false,
+  })),
 });
 
-const file = (path: string, ...ids: HunkId[]): FileChange => ({
+const file = (path: string, ...hunks: Hunk[]): FileChange => ({
   path,
   oldPath: null,
   status: "modified",
@@ -23,242 +37,270 @@ const file = (path: string, ...ids: HunkId[]): FileChange => ({
   oldMode: null,
   newMode: null,
   language: null,
-  hunks: ids.map((id) => hunk(id, path)),
-  additions: ids.length,
+  hunks,
+  additions: 0,
   deletions: 0,
 });
 
-const calls = (from: HunkId, to: HunkId, symbol: string): CallGraphHint => ({
-  fromHunkId: from,
-  toHunkId: to,
-  symbol,
-  line: 1,
-  use: "call",
+/** A file with one hunk n of plain code. */
+const one = (n: number, path: string, ...lines: string[]): FileChange =>
+  file(path, hunk(n, path, ...lines));
+
+const hint = (from: number, to: number, use: "call" | "type" = "call"): CallGraphHint => ({
+  fromHunkId: h(from),
+  toHunkId: h(to),
+  symbol: `s${to}`,
+  line: from * 10,
+  use,
 });
 
-const contract = (...ids: HunkId[]): RiskAssessment[] =>
-  ids.map((hunkId) => ({ hunkId, riskClass: "contract", reason: "r", source: "rule" }));
+const contract = (...ns: number[]): RiskAssessment[] =>
+  ns.map((n) => ({ hunkId: h(n), riskClass: "contract", reason: "r", source: "rule" }));
 
 const all = (files: readonly FileChange[]) =>
   new Set(files.flatMap((f) => f.hunks.map((one) => one.id)));
 
-const tourOf = (
-  files: readonly FileChange[],
-  hints: readonly CallGraphHint[] = [],
-  risk: readonly RiskAssessment[] = [],
-  required = all(files),
-) => {
-  const tour = codeTour({ files, required, callGraph: hints, risk, definitions: new Map() });
+const tourOf = (files: readonly FileChange[], options: Partial<CodeTourInput> = {}) => {
+  const required = options.required ?? all(files);
+  const tour = codeTour({
+    files,
+    required,
+    callGraph: [],
+    risk: [],
+    definitions: new Map(),
+    ...options,
+  });
   expect(validateTour(tour, required)).toEqual([]);
   expect(Tour.parse(tour)).toEqual(tour);
+  // `via` only names hunks earlier steps read.
+  tour.steps.forEach((step, at) => {
+    const earlier = new Set(tour.steps.slice(0, at).flatMap((s) => s.hunkIds));
+    for (const id of step.via) expect(earlier.has(id)).toBe(true);
+  });
   return tour;
 };
 
-const shape = (tour: Tour) => tour.steps.map((step) => [step.title, step.hunkIds]);
+/** Each step as its title and hunk numbers. */
+const shape = (tour: Tour) =>
+  tour.steps.map((step) => [
+    step.title,
+    step.hunkIds.map((id) => Number.parseInt(id.slice(2), 16)),
+  ]);
+
+const route = (verb: string, path: string) => `@router.${verb}("${path}")`;
 
 describe("codeTour", () => {
-  it("reads a caller, its callee and the callee's test as one step", () => {
+  it("reads a route's flow from the entry down, callers before callees", () => {
     const files = [
-      file("src/auth/session.ts", h(2)),
-      file("src/auth/session.test.ts", h(3)),
-      file("src/api/routes.ts", h(1)),
+      one(1, "api/routes.py", route("put", "/token")),
+      one(2, "app/service.py"),
+      one(3, "app/store.py"),
     ];
-    const tour = tourOf(files, [calls(h(1), h(2), "verifySession")]);
+    const tour = tourOf(files, { callGraph: [hint(1, 2), hint(2, 3)] });
+    expect(shape(tour)).toEqual([["PUT /token", [1, 2, 3]]]);
+    expect(tour.steps[0]?.kind).toBe("flow");
+    expect(tour.steps[0]?.explanation).toBe("Reads routes.py, service.py and store.py.");
+  });
 
-    expect(tour.builtBy).toBe("code");
-    expect(tour.steps).toEqual([
-      {
-        id: "s1",
-        title: "verifySession",
-        explanation: "3 files in src/api and src/auth, tested in session.test.ts.",
-        hunkIds: [h(1), h(2), h(3)],
-        kind: "flow",
-        via: [],
-      },
+  it("reads the code that registers an entry first in its flow", () => {
+    const files = [
+      one(1, "api/app.py"),
+      one(2, "api/routes.py", route("get", "/a")),
+      one(3, "app/service.py"),
+    ];
+    expect(shape(tourOf(files, { callGraph: [hint(1, 2), hint(2, 3)] }))).toEqual([
+      ["GET /a", [1, 2, 3]],
     ]);
   });
 
-  it("titles a step by its longest chain, up to three symbols", () => {
-    const files = ["a", "b", "c", "d", "e"].map((name, i) => file(`src/${name}.ts`, h(i + 1)));
-    const hints = [
-      calls(h(1), h(2), "b"),
-      calls(h(2), h(3), "c"),
-      calls(h(3), h(4), "d"),
-      calls(h(4), h(5), "e"),
-    ];
-    expect(tourOf(files, hints).steps[0]?.title).toBe("b → c → d and 1 more");
-  });
-
-  it("names a pair of units by the first symbol between them", () => {
-    const files = [file("src/a.ts", h(1)), file("src/b.ts", h(2))];
-    const hints = [calls(h(1), h(2), "zeta"), calls(h(1), h(2), "alpha")];
-    expect(tourOf(files, hints).steps[0]?.title).toBe("alpha");
-  });
-
-  it("makes a step per call chain, the one with contract hunks first", () => {
+  it("reads shared code in the first flow and points to it from the next", () => {
     const files = [
-      file("src/a/caller.ts", h(1)),
-      file("src/a/callee.ts", h(2)),
-      file("src/z/caller.ts", h(3)),
-      file("src/z/callee.ts", h(4)),
+      one(1, "api/a.py", route("get", "/a")),
+      one(2, "api/b.py", route("get", "/b")),
+      one(3, "app/shared.py"),
     ];
-    const hints = [calls(h(1), h(2), "one"), calls(h(3), h(4), "two")];
-    const tour = tourOf(files, hints, contract(h(4)));
-
+    const tour = tourOf(files, { callGraph: [hint(1, 3), hint(2, 3)] });
     expect(shape(tour)).toEqual([
-      ["two", [h(3), h(4)]],
-      ["one", [h(1), h(2)]],
+      ["GET /a", [1, 3]],
+      ["GET /b", [2]],
+    ]);
+    expect(tour.steps[1]?.via).toEqual([h(3)]);
+    expect(tour.steps[1]?.explanation).toBe("Reads b.py; passes through step 1.");
+  });
+
+  it("makes one flow of entry hunks that change the same definition", () => {
+    const files = [file("tools/cli.py", hunk(1, "tools/cli.py"), hunk(2, "tools/cli.py"))];
+    const definitions = new Map([
+      [h(1), ["main"]],
+      [h(2), ["main"]],
+    ]);
+    expect(shape(tourOf(files, { definitions }))).toEqual([["Command: main in cli.py", [1, 2]]]);
+  });
+
+  it("orders flows that reach contract code first, then routes, pages, commands and roots", () => {
+    const files = [
+      one(1, "tools/cli.py"),
+      one(2, "web/routes/Setup.tsx"),
+      one(3, "api/routes.py", route("get", "/a")),
+      one(4, "app/a.py"),
+      one(5, "app/b.py"),
+      one(6, "app/c.py"),
+    ];
+    const definitions = new Map([
+      [h(1), ["main"]],
+      [h(2), ["Setup"]],
+      [h(4), ["helper"]],
+    ]);
+    const callGraph = [hint(4, 5), hint(1, 6)];
+    expect(shape(tourOf(files, { definitions, callGraph })).map(([title]) => title)).toEqual([
+      "GET /a",
+      "Page: Setup",
+      "Command: main in cli.py",
+      "helper in a.py",
+    ]);
+    expect(
+      shape(tourOf(files, { definitions, callGraph, risk: contract(5) })).map(([title]) => title),
+    ).toEqual(["helper in a.py", "GET /a", "Page: Setup", "Command: main in cli.py"]);
+  });
+
+  it("titles a root without definitions by its path", () => {
+    const files = [one(1, "app/a.py"), one(2, "app/b.py")];
+    expect(shape(tourOf(files, { callGraph: [hint(1, 2)] }))).toEqual([["app/a.py", [1, 2]]]);
+  });
+
+  it("joins a root whose code another flow already read to that flow", () => {
+    // A host class, reached through its base class, calls code the route's flow reads.
+    const files = [
+      one(1, "api/routes.py", route("get", "/a")),
+      one(2, "app/hosts.py"),
+      one(3, "app/keychain.py"),
+      one(4, "app/github.py"),
+    ];
+    const callGraph = [hint(1, 2), hint(2, 3), hint(4, 3)];
+    expect(shape(tourOf(files, { callGraph }))).toEqual([["GET /a", [1, 2, 3, 4]]]);
+  });
+
+  it("attaches a type to the flow that uses it, and an import to its file's flow", () => {
+    const files = [
+      file("api/routes.py", hunk(1, "api/routes.py"), hunk(2, "api/routes.py", route("get", "/a"))),
+      one(3, "api/models.py"),
+      one(4, "app/service.py"),
+    ];
+    const callGraph = [hint(2, 4), hint(2, 3, "type")];
+    expect(shape(tourOf(files, { callGraph }))).toEqual([["GET /a", [1, 2, 4, 3]]]);
+  });
+
+  it("attaches tests through their calls, their file, their fakes and their subject", () => {
+    const files = [
+      one(1, "api/routes.py", route("get", "/a")),
+      one(2, "app/keychain.py"),
+      file("tests/test_api.py", hunk(3, "tests/test_api.py"), hunk(4, "tests/test_api.py")),
+      one(5, "tests/fake_keychain.py"),
+      one(6, "app/view.test.ts"),
+      one(7, "app/view.ts"),
+      one(8, "web/routes/Page.tsx"),
+    ];
+    const definitions = new Map([[h(8), ["Page"]]]);
+    const callGraph = [hint(1, 2), hint(3, 1), hint(8, 7)];
+    expect(shape(tourOf(files, { callGraph, definitions }))).toEqual([
+      ["GET /a", [1, 2, 3, 4, 5]],
+      ["Page: Page", [8, 7, 6]],
     ]);
   });
 
-  it("starts a group at its entry points and reads callers before callees", () => {
-    const files = [file("src/c.ts", h(3)), file("src/b.ts", h(2)), file("src/a.ts", h(1))];
-    // c calls b, b calls a: c is the entry point even though a sorts first.
-    const hints = [calls(h(3), h(2), "b"), calls(h(2), h(1), "a")];
-    expect(tourOf(files, hints).steps[0]?.hunkIds).toEqual([h(3), h(2), h(1)]);
-  });
-
-  it("walks the riskier callee first", () => {
-    const files = [file("src/main.ts", h(1)), file("src/a.ts", h(2)), file("src/b.ts", h(3))];
-    const hints = [calls(h(1), h(2), "a"), calls(h(1), h(3), "b")];
-    expect(tourOf(files, hints, contract(h(3))).steps[0]?.hunkIds).toEqual([h(1), h(3), h(2)]);
-  });
-
-  it("reads a cycle once, from its riskiest unit", () => {
-    const files = [file("src/a.ts", h(1)), file("src/b.ts", h(2)), file("src/c.ts", h(3))];
-    const hints = [calls(h(1), h(2), "b"), calls(h(2), h(3), "c"), calls(h(3), h(1), "a")];
-    expect(tourOf(files, hints, contract(h(2))).steps[0]?.hunkIds).toEqual([h(2), h(3), h(1)]);
-  });
-
-  it("enters a cycle with a tail before the tail", () => {
-    const files = [file("src/a.ts", h(1)), file("src/b.ts", h(2)), file("src/w.ts", h(3))];
-    const hints = [calls(h(1), h(2), "b"), calls(h(2), h(1), "a"), calls(h(2), h(3), "w")];
-    expect(tourOf(files, hints).steps[0]?.hunkIds).toEqual([h(1), h(2), h(3)]);
-  });
-
-  it("ignores hints within one unit", () => {
-    const files = [file("src/a.ts", h(1), h(2)), file("src/a.test.ts", h(3))];
-    const hints = [calls(h(1), h(2), "x"), calls(h(3), h(1), "a")];
-    expect(shape(tourOf(files, hints))).toEqual([["src/a.ts", [h(1), h(2), h(3)]]]);
-  });
-
-  it("ignores hints to mechanical hunks", () => {
-    const files = [file("src/a.ts", h(1)), file("src/b.ts", h(2))];
-    const tour = tourOf(files, [calls(h(1), h(2), "b")], [], new Set([h(1)]));
-    expect(shape(tour)).toEqual([["src/a.ts", [h(1)]]]);
-  });
-
-  it("groups unlinked files by area, a lone file by its path", () => {
+  it("joins a doc to the code in its directory, and lists the rest as docs", () => {
     const files = [
-      file("src/adapters/github/a.ts", h(1)),
-      file("src/adapters/github/deep/b.ts", h(2)),
-      file("web/src/diff/c.tsx", h(3)),
-      file("README.md", h(4)),
+      one(1, "api/routes.py", route("get", "/a")),
+      one(2, "api/README.md"),
+      one(3, "docs/guide.md"),
     ];
     expect(shape(tourOf(files))).toEqual([
-      ["README.md", [h(4)]],
-      ["src/adapters/github", [h(1), h(2)]],
-      ["web/src/diff/c.tsx", [h(3)]],
+      ["GET /a", [1, 2]],
+      ["Docs", [3]],
     ]);
   });
 
-  it("titles a group at the repository root as such", () => {
-    const files = [file("a.ts", h(1)), file("b.ts", h(2))];
-    expect(tourOf(files).steps).toEqual([
-      {
-        id: "s1",
-        title: "Repository root",
-        explanation: "2 files in the repository root.",
-        hunkIds: [h(1), h(2)],
-        kind: "flow",
-        via: [],
-      },
-    ]);
-  });
-
-  it("puts steps with contract hunks first, most contract hunks first", () => {
-    const files = [file("a/x.ts", h(1)), file("b/x.ts", h(2), h(3)), file("c/x.ts", h(4))];
-    const tour = tourOf(files, [], contract(h(4), h(2), h(3)));
-    expect(tour.steps.map((step) => step.title)).toEqual(["b/x.ts", "c/x.ts", "a/x.ts"]);
-  });
-
-  it.each([
-    ["src/foo.ts", "src/foo.test.ts"],
-    ["src/foo.tsx", "src/foo.spec.tsx"],
-    ["src/foo.ts", "src/__tests__/foo.ts"],
-    ["pkg/foo.go", "pkg/foo_test.go"],
-    ["app/foo.py", "tests/test_foo.py"],
-    ["app/foo.py", "app/test_foo.py"],
-    ["src/main/java/Foo.java", "src/test/java/FooTest.java"],
-    ["lib/foo.rb", "spec/lib/foo_spec.rb"],
-  ])("pairs %s with its test %s", (subject, test) => {
-    const files = [file(test, h(2)), file(subject, h(1))];
-    expect(tourOf(files).steps.map((step) => step.hunkIds)).toEqual([[h(1), h(2)]]);
-  });
-
-  it("pairs a test with the subject closest to it", () => {
-    const files = [file("a/foo.ts", h(1)), file("b/c/foo.ts", h(2)), file("b/c/foo.test.ts", h(3))];
-    const tour = tourOf(files);
-    expect(tour.steps.find((step) => step.hunkIds.includes(h(3)))?.hunkIds).toEqual([h(2), h(3)]);
-  });
-
-  it("keeps a test whose subject isn't in the pull request on its own", () => {
-    const files = [file("src/a.ts", h(1)), file("src/b.test.ts", h(2))];
-    expect(tourOf(files).steps).toEqual([
-      {
-        id: "s1",
-        title: "src",
-        explanation: "2 files in src, tested in b.test.ts.",
-        hunkIds: [h(1), h(2)],
-        kind: "flow",
-        via: [],
-      },
-    ]);
-  });
-
-  it("keeps a test of a subject with only mechanical hunks on its own", () => {
-    const files = [file("src/a.ts", h(1)), file("src/a.test.ts", h(2)), file("src/z.ts", h(3))];
-    const tour = tourOf(files, [], [], new Set([h(2), h(3)]));
-    expect(tour.steps.flatMap((step) => step.hunkIds)).toEqual([h(2), h(3)]);
-  });
-
-  it("joins a doc to the one code file in its directory", () => {
+  it("puts what no flow runs into supporting steps, contract ones first", () => {
     const files = [
-      file("src/a/README.md", h(1)),
-      file("src/a/x.ts", h(2)),
-      file("src/b/README.md", h(3)),
-      file("src/b/y.ts", h(4)),
-      file("src/b/z.ts", h(5)),
-      file("src/c/y.ts", h(6)),
+      one(1, "web/openapi.json"),
+      one(2, "web/src/api/schema.d.ts"),
+      one(3, "README.md"),
+      one(4, "tests/test_misc.py"),
+      one(5, "web/src/picker/Guide.tsx"),
+      one(6, "scripts/build.sh"),
     ];
-    const hints = [calls(h(2), h(6), "y"), calls(h(4), h(6), "y")];
-    const tour = tourOf(files, hints);
-    // src/a/README.md travels with x.ts; src/b/README.md has two neighbours, so it stays apart.
-    expect(tour.steps[0]?.hunkIds).toEqual([h(2), h(1), h(6), h(4)]);
-    expect(tour.steps.slice(1).map((step) => step.hunkIds)).toEqual([[h(3), h(5)]]);
+    const tour = tourOf(files, {
+      generated: new Set(["web/src/api/schema.d.ts"]),
+      risk: contract(5),
+    });
+    expect(shape(tour)).toEqual([
+      ["Other changes in web/src/picker", [5]],
+      ["API schema", [1, 2]],
+      ["Docs", [3]],
+      ["Tests", [4]],
+      ["Other changes in scripts", [6]],
+    ]);
+    expect(tour.steps.every((step) => step.kind === "supporting")).toBe(true);
+    expect(tour.steps[1]?.explanation).toBe(
+      "2 files: openapi.json and schema.d.ts. No flow runs them.",
+    );
+    expect(tour.steps[0]?.explanation).toBe("1 file: Guide.tsx. No flow runs it.");
   });
 
-  it("lists at most three directories and test files", () => {
-    const files = ["a", "b", "c", "d", "e"].flatMap((dir, i) => [
-      file(`${dir}/x.ts`, h(i * 2 + 1)),
-      file(`${dir}/x.test.ts`, h(i * 2 + 2)),
+  it("keeps a generated file a flow only names as a type with the API schema", () => {
+    const files = [one(1, "web/routes/Page.tsx"), one(2, "web/api/schema.d.ts")];
+    const tour = tourOf(files, {
+      definitions: new Map([[h(1), ["Page"]]]),
+      callGraph: [hint(1, 2, "type")],
+      generated: new Set(["web/api/schema.d.ts"]),
+    });
+    expect(shape(tour)).toEqual([
+      ["Page: Page", [1]],
+      ["API schema", [2]],
     ]);
-    const hints = ["b", "c", "d", "e"].map((_, i) => calls(h(1), h(i * 2 + 3), "x"));
-    expect(tourOf(files, hints).steps[0]?.explanation).toBe(
-      "10 files in a, b, c and 2 more, tested in x.test.ts, x.test.ts, x.test.ts and 2 more.",
+  });
+
+  it("titles changes at the repository root as such", () => {
+    expect(shape(tourOf([one(1, "build.sh")]))).toEqual([
+      ["Other changes in the repository root", [1]],
+    ]);
+  });
+
+  it("reads a file's hunks together and in file order, and tests last", () => {
+    const files = [
+      file(
+        "api/routes.py",
+        hunk(1, "api/routes.py"),
+        hunk(2, "api/routes.py", route("get", "/a")),
+        hunk(3, "api/routes.py"),
+      ),
+      one(4, "app/service.py"),
+      one(5, "tests/test_routes.py"),
+    ];
+    const callGraph = [hint(2, 4), hint(4, 3), hint(5, 2)];
+    expect(shape(tourOf(files, { callGraph }))).toEqual([["GET /a", [1, 2, 3, 4, 5]]]);
+  });
+
+  it("ignores hints to hunks that aren't required", () => {
+    const files = [one(1, "api/routes.py", route("get", "/a")), one(2, "app/lock.json")];
+    expect(shape(tourOf(files, { callGraph: [hint(1, 2)], required: new Set([h(1)]) }))).toEqual([
+      ["GET /a", [1]],
+    ]);
+  });
+
+  it("lists at most three files in an explanation", () => {
+    const files = [
+      one(1, "api/routes.py", route("get", "/a")),
+      ...[2, 3, 4, 5].map((n) => one(n, `app/m${n}.py`)),
+    ];
+    const callGraph = [hint(1, 2), hint(2, 3), hint(3, 4), hint(4, 5)];
+    expect(tourOf(files, { callGraph }).steps[0]?.explanation).toBe(
+      "Reads routes.py, m2.py, m3.py and 2 more.",
     );
   });
 
   it("is empty when nothing is required", () => {
-    expect(
-      codeTour({
-        files: [file("a.ts", h(1))],
-        required: new Set(),
-        callGraph: [],
-        risk: [],
-        definitions: new Map(),
-      }),
-    ).toEqual({
+    expect(tourOf([one(1, "a.ts")], { required: new Set() })).toEqual({
       steps: [],
       builtBy: "code",
     });
@@ -271,20 +313,45 @@ describe("codeTour", () => {
       seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
       return (seed >>> 16) % max;
     };
-    const names = ["a.ts", "a.test.ts", "b.ts", "README.md", "test_b.py", "b.py"];
-    for (let run = 0; run < 200; run += 1) {
-      const files = Array.from({ length: 1 + next(8) }, (_, f) =>
-        file(
-          `d${next(3)}/${f}${names[next(names.length)] ?? "x.ts"}`,
-          ...Array.from({ length: 1 + next(3) }, (_, i) => h(f * 10 + i + 1)),
-        ),
+    const names = ["a.ts", "a.test.ts", "b.py", "README.md", "test_b.py", "openapi.json"];
+    const lines = ["x", route("get", "/a"), 'app.post("/b", h)', "y"];
+    for (let run = 0; run < 300; run += 1) {
+      const files = Array.from({ length: 1 + next(8) }, (_, f) => {
+        const path = `d${next(3)}/${f}${names[next(names.length)] ?? "x.ts"}`;
+        return file(
+          path,
+          ...Array.from({ length: 1 + next(3) }, (_, i) =>
+            hunk(f * 10 + i + 1, path, lines[next(lines.length)] ?? "x"),
+          ),
+        );
+      });
+      const ids = [...all(files)].map((id) => Number.parseInt(id.slice(2), 16));
+      const pick = () => ids[next(ids.length)] ?? 1;
+      const callGraph = Array.from({ length: next(14) }, () =>
+        hint(pick(), pick(), next(3) === 0 ? "type" : "call"),
       );
-      const ids = [...all(files)];
-      const hints = Array.from({ length: next(12) }, () =>
-        calls(ids[next(ids.length)] ?? h(1), ids[next(ids.length)] ?? h(1), `s${next(4)}`),
-      );
-      const required = new Set(ids.filter(() => next(4) !== 0));
-      tourOf(files, hints, contract(...ids.filter(() => next(5) === 0)), required);
+      const definitions = new Map(ids.map((n) => [h(n), next(4) === 0 ? ["main"] : []]));
+      tourOf(files, {
+        callGraph,
+        definitions,
+        risk: contract(...ids.filter(() => next(5) === 0)),
+        required: new Set(ids.filter(() => next(4) !== 0).map(h)),
+      });
     }
+  });
+});
+
+describe("looksGenerated", () => {
+  it.each([
+    "/**\n * This file was auto-generated by openapi-typescript.\n */",
+    "// Code generated by protoc-gen-go. DO NOT EDIT.",
+    "# @generated by a tool",
+  ])("says yes to %j", (content) => {
+    expect(looksGenerated(content)).toBe(true);
+  });
+
+  it("reads only the first five lines", () => {
+    expect(looksGenerated("a\nb\nc\nd\ne\n// @generated")).toBe(false);
+    expect(looksGenerated("export const a = 1;")).toBe(false);
   });
 });

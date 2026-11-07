@@ -227,6 +227,7 @@ export const runTour = async (
     readonly required: ReadonlySet<HunkId>;
     readonly callGraph: readonly CallGraphHint[];
     readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
+    readonly generated: ReadonlySet<string>;
     /** Every hunk's final risk, for the call-graph tour's order. */
     readonly assessments: readonly RiskAssessment[];
   },
@@ -246,6 +247,7 @@ export const runTour = async (
       callGraph: context.callGraph,
       risk: context.assessments,
       definitions: context.definitions,
+      generated: context.generated,
     }),
     usage,
     warnings: [`${reason}, so the tour follows the call graph instead`],

@@ -12,7 +12,7 @@ export {
   StageName,
   StageStatus,
 } from "./analysis.ts";
-export { type CodeTourInput, codeTour } from "./code-tour.ts";
+export { type CodeTourInput, codeTour, looksGenerated } from "./code-tour.ts";
 export {
   Decision,
   DecisionCategory,
@@ -20,6 +20,7 @@ export {
   DecisionVerdict,
   Verdict,
 } from "./decision.ts";
+export { type Entry, entryLabel, entryOf, type Route } from "./entry-points.ts";
 export {
   HostError,
   HostErrorKind,

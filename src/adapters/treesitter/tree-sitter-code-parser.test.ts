@@ -60,9 +60,11 @@ function process(input: Key): void {}
       ["Value", 2, "type"],
       ["Request", 3, "name"],
       ["cache", 3, "member"],
+      ["key", 3, "name"],
       ["load", 3, "name"],
       ["read", 3, "member"],
       ["Key", 10, "type"],
+      ["input", 10, "name"],
       ["process", 10, "name"],
       ["Key", 11, "type"],
     ],
@@ -101,6 +103,7 @@ export const view = () => <Header />;
       ["Base", 1, "name"],
       ["Request", 3, "name"],
       ["body", 3, "member"],
+      ["key", 3, "name"],
       ["load", 3, "name"],
       ["Header", 6, "name"],
     ],
@@ -124,10 +127,12 @@ def helper():
       ["helper", "function", 8, 9],
     ],
     [
+      ["Base", 3, "name"],
       ["Key", 5, "type"],
       ["Value", 5, "type"],
       ["Request", 6, "name"],
       ["body", 6, "member"],
+      ["key", 6, "name"],
       ["load", 6, "name"],
     ],
   ],
@@ -347,6 +352,36 @@ class A {}
   ])("finds %s imports", async (language, source, imports) => {
     expect((await symbolsOf(source, language)).imports).toEqual(imports);
   });
+
+  it.each([
+    [
+      "python",
+      "@router.get('/a', response_model=Out)\ndef a(d = Depends(lookup)): ...\n",
+      [
+        ["Out", 1, "name"],
+        ["get", 1, "member"],
+        ["router", 1, "name"],
+        ["Depends", 2, "name"],
+        ["lookup", 2, "name"],
+      ],
+    ],
+    [
+      "typescript",
+      'app.get("/a", handler);\n',
+      [
+        ["app", 1, "name"],
+        ["get", 1, "member"],
+        ["handler", 1, "name"],
+      ],
+    ],
+  ])(
+    "counts a %s identifier passed as an argument as a use by name",
+    async (language, source, refs) => {
+      expect((await symbolsOf(source, language)).references).toEqual(
+        refs.map(([name, line, kind]) => ({ name, line, kind })),
+      );
+    },
+  );
 
   it.each([
     ["java", "class A { void f() { load(x); } }\n", [["load", 1, "name"]]],

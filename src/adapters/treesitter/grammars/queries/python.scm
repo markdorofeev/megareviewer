@@ -13,6 +13,8 @@
 (call function: (identifier) @reference.name)
 (attribute object: (identifier) @reference.name)
 (attribute attribute: (identifier) @reference.member)
+(argument_list (identifier) @reference.name)
+(keyword_argument value: (identifier) @reference.name)
 (type (identifier) @reference.type)
 (type (generic_type (identifier) @reference.type))
 

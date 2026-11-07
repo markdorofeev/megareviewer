@@ -9,6 +9,7 @@ import {
   lockfileWarnings,
   type MechanicalProof,
 } from "../../domain/diff/index.ts";
+import { looksGenerated } from "../../domain/review/index.ts";
 import type { CodeParser, Token } from "../ports/index.ts";
 import type { Collected } from "./collect.ts";
 
@@ -18,6 +19,8 @@ export interface Prepared {
   readonly callGraph: readonly CallGraphHint[];
   /** Each hunk's changed definitions, for the tour's entry points. Not stored. */
   readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
+  /** Paths whose first lines say a tool wrote them, for the tour's grouping. Not stored. */
+  readonly generated: ReadonlySet<string>;
   readonly warnings: readonly string[];
   /** Hunks without a proof: the ones the model passes must cover. */
   readonly required: ReadonlySet<HunkId>;
@@ -72,6 +75,11 @@ export const prep = async (parser: CodeParser, collected: Collected): Promise<Pr
     proofs,
     callGraph: buildCallGraphHints(files, symbolsByPath),
     definitions: changedDefinitionNames(files, symbolsByPath),
+    generated: new Set(
+      files.flatMap((file) =>
+        looksGenerated(headContents.get(file.path) ?? "") ? [file.path] : [],
+      ),
+    ),
     warnings: lockfileWarnings(files),
     required: new Set(
       files

@@ -118,7 +118,7 @@ const stages = async (
 
   await tracker.setStage("prep", "running");
   const prepared = await prep(deps.parser, collected.value);
-  const { proofs, callGraph, required, definitions } = prepared;
+  const { proofs, callGraph, required, definitions, generated } = prepared;
   const proofRisk = proofs.flatMap((proof) =>
     proof.hunkId === null
       ? []
@@ -140,7 +140,7 @@ const stages = async (
     await tracker.setStage("prep", "done", (analysis) => ({
       ...prepPatch,
       risk,
-      tour: codeTour({ files, required, callGraph, risk, definitions }),
+      tour: codeTour({ files, required, callGraph, risk, definitions, generated }),
       ...adding(prepared)(analysis),
     }));
     for (const stage of MODEL_STAGES) await tracker.setStage(stage, "skipped");
@@ -225,6 +225,7 @@ const stages = async (
       required,
       callGraph,
       definitions,
+      generated,
       assessments: risk.value.assessments,
     },
     logger,
