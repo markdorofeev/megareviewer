@@ -9,11 +9,15 @@ import {
   type Analysis,
   type Decision,
   type DecisionId,
+  isTestFile,
   type RiskAssessment,
   type TourStep,
   TourStepId,
 } from "../../../../src/domain/review/index.ts";
-import type { HunkItem, HunkLink } from "../../diff/index.ts";
+import type { CallerFile, HunkItem } from "../../diff/index.ts";
+import type { Call } from "./chips.ts";
+
+export type { Call } from "./chips.ts";
 
 /** The page's two layouts: one scroll beside a risk map, or a call tree. */
 export type Layout = "map" | "tree";
@@ -161,13 +165,6 @@ export const decisionPlaces = (
   return { cards, mentions, cardHunk, unplaced };
 };
 
-/** A call the code makes on one of its lines, to the hunk that changes what it calls. */
-export interface Call {
-  readonly symbol: string;
-  readonly toHunkId: HunkId;
-  readonly line: number;
-}
-
 /** Each hunk's calls by the new-side line they're on. Hints to hunks the page doesn't know drop. */
 export const callsByLine = (
   callGraph: readonly CallGraphHint[],
@@ -265,6 +262,13 @@ export const trailingProofs = (analysis: Analysis, index: HunkIndex): Mechanical
   return analysis.proofs.filter((proof) => proof.hunkId === null || !reviewed.has(proof.path));
 };
 
+/** Another hunk this one is linked to by the call graph, as the call tree shows it. */
+export interface HunkLink {
+  readonly direction: "calls" | "called-by";
+  readonly symbol: string;
+  readonly hunkId: HunkId;
+}
+
 /** Links a hunk shows in each direction, at most. */
 const MAX_LINKS = 6;
 
@@ -295,6 +299,39 @@ export const hunkLinks = (
     add(hint.toHunkId, { direction: "called-by", symbol: hint.symbol, hunkId: hint.fromHunkId });
   }
   return links;
+};
+
+/**
+ * Each hunk's callers by file: one per file, going to that file's first hunk in `order` (the
+ * map's) that calls it. Production files come first, then tests, each in the order of that hunk.
+ * Hints to or from hunks the page doesn't know are dropped.
+ */
+export const callerFiles = (
+  callGraph: readonly CallGraphHint[],
+  index: HunkIndex,
+  order: readonly HunkId[],
+): ReadonlyMap<HunkId, readonly CallerFile[]> => {
+  const rank = new Map(order.map((id, at) => [id, at]));
+  const rankOf = (id: HunkId) => rank.get(id) ?? order.length;
+  const byCallee = new Map<HunkId, Map<string, HunkId>>();
+  for (const { fromHunkId, toHunkId } of callGraph) {
+    const caller = index.hunks.get(fromHunkId);
+    if (caller === undefined || !index.hunks.has(toHunkId) || fromHunkId === toHunkId) continue;
+    const files = byCallee.get(toHunkId) ?? new Map<string, HunkId>();
+    const known = files.get(caller.file.path);
+    if (known === undefined || rankOf(fromHunkId) < rankOf(known)) {
+      files.set(caller.file.path, fromHunkId);
+    }
+    byCallee.set(toHunkId, files);
+  }
+  return new Map(
+    [...byCallee].map(([callee, files]) => [
+      callee,
+      [...files]
+        .map(([path, hunkId]) => ({ path, hunkId, test: isTestFile(path) }))
+        .sort((a, b) => Number(a.test) - Number(b.test) || rankOf(a.hunkId) - rankOf(b.hunkId)),
+    ]),
+  );
 };
 
 /** Every hunk to review, in the map's order: what the reviewed count counts. */

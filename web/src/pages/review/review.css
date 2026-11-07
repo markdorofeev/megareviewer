@@ -856,6 +856,101 @@ details.warnings ul {
   color: var(--color-danger);
 }
 
+/* One symbol that reaches several hunks: one chip, and the list of them. */
+.call-choices {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.call-choice {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.call-choice:hover:not(:disabled),
+.call-choice[aria-pressed="true"] {
+  background: var(--color-surface-subtle);
+}
+
+.call-choice:disabled {
+  border-style: dashed;
+  cursor: default;
+}
+
+/* A later call to code already shown in this step: underlined in place, with a peek. */
+.call-mention {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline dotted 1.5px;
+  text-decoration-color: var(--color-text-muted);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.call-mention.risk-contract {
+  text-decoration-color: var(--color-danger);
+}
+
+.call-mention:hover,
+.call-mention:focus-visible {
+  text-decoration-style: solid;
+}
+
+.peek {
+  position: fixed;
+  z-index: 20;
+  display: grid;
+  gap: var(--space-2);
+  max-width: min(720px, calc(100vw - 32px));
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.16);
+  font-size: var(--text-xs);
+  pointer-events: none;
+}
+
+.peek-head {
+  margin: 0;
+}
+
+.peek-code {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  line-height: 18px;
+  white-space: pre;
+}
+
+.peek-line {
+  display: block;
+}
+
+.peek-line.line-add {
+  background: var(--diff-added-bg);
+}
+
+.peek-line.line-del {
+  background: var(--diff-deleted-bg);
+}
+
 /* An opened call: indented, one rule per level. */
 .inline-call {
   margin: var(--space-2) var(--space-2) var(--space-2) 0;

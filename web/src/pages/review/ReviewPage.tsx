@@ -12,8 +12,14 @@ import {
 import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from "../../api/index.ts";
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
-import { commentPlace, type LineComment, type LinePlace } from "../../diff/index.ts";
+import {
+  type CallerFile,
+  commentPlace,
+  type LineComment,
+  type LinePlace,
+} from "../../diff/index.ts";
 import { callTree, treeOrder } from "./call-tree.ts";
+import { type CallMark, chipPlan } from "./chips.ts";
 import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
@@ -28,6 +34,7 @@ import {
   stepAnchor,
 } from "./MapLayout.tsx";
 import {
+  callerFiles,
   callsByLine,
   decisionPlaces,
   firstCall,
@@ -120,6 +127,13 @@ const ReviewSkeleton = () => (
 );
 
 const NO_DECISIONS: readonly Decision[] = [];
+const NO_CALLERS: readonly CallerFile[] = [];
+
+/** What a hunk's marks show, for its signature. */
+const marksSignature = (lines: ReadonlyMap<number, readonly CallMark[]> | undefined): string =>
+  [...(lines ?? [])]
+    .map(([line, marks]) => `${line}${marks.map((mark) => mark.kind[0] + mark.symbol).join()}`)
+    .join(";");
 
 // A number per analysis object, so a hunk's signature changes when the analysis does.
 const epochs = new WeakMap<object, number>();
@@ -206,6 +220,32 @@ const Review = ({
     false,
     parseBoolean,
   );
+  // Chips count within what the map shows, so a hidden hunk's chip doesn't make a mention.
+  const plan = useMemo(
+    () =>
+      chipPlan(
+        sections.map((section) =>
+          section.hunkIds.filter((id) => !contractOnly || contractHunks.has(id)),
+        ),
+        calls,
+        (id, line) =>
+          index.hunks.get(id)?.hunk.lines.find((one) => one.kind !== "del" && one.newLine === line)
+            ?.text,
+      ),
+    [sections, calls, index, contractOnly, contractHunks],
+  );
+  const callers = useMemo(() => callerFiles(callHints, index, order), [callHints, index, order]);
+  const callersOf = useCallback((id: HunkId) => callers.get(id) ?? NO_CALLERS, [callers]);
+  const stepOf = useMemo(() => {
+    const places = new Map<HunkId, string>();
+    for (const section of sections) {
+      if (section.kind !== "step") continue;
+      for (const id of section.hunkIds) {
+        if (!places.has(id)) places.set(id, `step ${section.number}: ${section.step.title}`);
+      }
+    }
+    return (id: HunkId) => places.get(id) ?? null;
+  }, [sections]);
   const [focusedHunkId, setFocusedHunkId] = useState<HunkId | null>(null);
   const [treeHunk, setTreeHunk] = useState<HunkId | null>(null);
   const [treeFocus, setTreeFocus] = useState(false);
@@ -449,8 +489,14 @@ const Review = ({
       case "previous-step":
         return moveStep(-1);
       case "open-call": {
-        const call = current === null ? null : firstCall(calls.get(current));
-        if (current !== null && call !== null) toggleCall(callKey([current], call));
+        // The first chip opens in place; with only mentions, the first goes to its hunk.
+        const marks = [...(current === null ? [] : (plan.get(current) ?? []))]
+          .sort(([a], [b]) => a - b)
+          .flatMap(([, onLine]) => onLine);
+        const chip = marks.find((mark) => mark.kind === "chip")?.calls[0];
+        if (current !== null && chip !== undefined) return toggleCall(callKey([current], chip));
+        const mention = marks[0]?.calls[0];
+        if (mention !== undefined) follow(mention.toHunkId);
         return;
       }
       case "first-call": {
@@ -580,6 +626,7 @@ const Review = ({
       readOnly,
       reviewedHunks.has(id),
       highlight.has(id),
+      marksSignature(plan.get(id)),
       openComment?.hunkId === id ? `${openComment.place.side}${openComment.place.line}` : "",
       ...(commentsByHunk.get(id) ?? []).map(
         (comment) => `${comment.side}${comment.line}${comment.body}`,
@@ -600,7 +647,10 @@ const Review = ({
   const deps: HunkDeps = {
     index,
     calls,
+    plan,
     linksOf,
+    callersOf,
+    stepOf,
     onFollow: stable.follow,
     reviewedHunks,
     onReviewed: setHunkReviewed,

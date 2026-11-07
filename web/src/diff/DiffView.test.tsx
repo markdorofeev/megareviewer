@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RiskAssessment, RiskClass } from "../../../src/domain/review/index.ts";
 import { DiffView, type HunkItem } from "./DiffView.tsx";
+import { HunkCard, shortPaths } from "./HunkCard.tsx";
 import type { Highlighter } from "./highlight.ts";
 import { firstHunk, modifiedFile, parseFiles } from "./testing.ts";
 import type { CodeToken } from "./tokens.ts";
@@ -245,5 +246,73 @@ describe("DiffView", () => {
     expect(header(screen.getByRole("region"))).toMatch(
       /^src\/token\.ts →renamed to src\/credentials\.tsrenamed/,
     );
+  });
+});
+
+describe("callers", () => {
+  const callers = [
+    { path: "src/services/orders.ts", hunkId: second, test: false },
+    { path: "lib/orders.ts", hunkId: second, test: false },
+    { path: "tests/test_orders.py", hunkId: first, test: true },
+    { path: "tests/fakes.py", hunkId: first, test: true },
+  ];
+
+  it("lists each calling file, counts tests until they're opened, and follows a link", async () => {
+    const onFollow = vi.fn();
+    renderWith(<DiffView items={[firstItem]} callersOf={() => callers} onFollow={onFollow} />);
+    const line = screen.getByText("Called from").parentElement;
+    expect(line?.textContent).toBe("Called from services/orders.ts ↑, lib/orders.ts ↑ and 2 tests");
+    await userEvent.click(screen.getByRole("button", { name: "2 tests" }));
+    expect(line?.textContent).toBe(
+      "Called from services/orders.ts ↑, lib/orders.ts ↑, test_orders.py ↑ and fakes.py ↑",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "test_orders.py ↑" }));
+    expect(onFollow).toHaveBeenCalledWith(first);
+  });
+
+  it("names only the tests when no production code calls", () => {
+    renderWith(
+      <DiffView
+        items={[firstItem]}
+        callersOf={() => callers.filter((caller) => caller.test)}
+        onFollow={() => {}}
+      />,
+    );
+    expect(screen.getByText("Called from").parentElement?.textContent).toBe("Called from 2 tests");
+  });
+});
+
+describe("shortPaths", () => {
+  it("keeps as many directories as it takes to tell paths apart", () => {
+    expect(
+      shortPaths([
+        "a/routes/hosting.py",
+        "a/domain/hosting.py",
+        "web/setup.tsx",
+        "x/a/b.ts",
+        "y/a/b.ts",
+      ]),
+    ).toEqual(["routes/hosting.py", "domain/hosting.py", "setup.tsx", "x/a/b.ts", "y/a/b.ts"]);
+    expect(shortPaths(["same.ts", "same.ts"])).toEqual(["same.ts", "same.ts"]);
+  });
+});
+
+describe("marks in a line", () => {
+  it("wraps the marked characters, across tokens, and leaves the rest", () => {
+    const { container } = renderWith(
+      <HunkCard
+        hunk={firstItem.hunk}
+        file={orders}
+        risk={null}
+        inLine={
+          new Map([
+            [13, [{ start: 2, end: 10, render: (code) => <mark data-testid="mark">{code}</mark> }]],
+          ])
+        }
+      />,
+    );
+    expect(screen.getByTestId("mark").textContent).toBe("res.json");
+    const added = container.querySelector(".line-add .line-code");
+    expect(added?.textContent).toBe("  res.json({ items: orders.map(toResponse) });");
   });
 });

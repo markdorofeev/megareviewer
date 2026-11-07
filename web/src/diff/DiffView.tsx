@@ -1,7 +1,7 @@
 import type { FileChange, Hunk, HunkId, MechanicalProof } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { CollapsedHunk } from "./CollapsedHunk.tsx";
-import { HunkCard, type HunkLink, type LineComment, type LinePlace } from "./HunkCard.tsx";
+import { type CallerFile, HunkCard, type LineComment, type LinePlace } from "./HunkCard.tsx";
 
 export interface HunkItem {
   readonly hunk: Hunk;
@@ -20,7 +20,7 @@ export const DiffView = ({
   highlightedHunkIds,
   focusedHunkId = null,
   onFocusHunk,
-  linksOf,
+  callersOf,
   onFollow,
   reviewedHunkIds,
   onReviewed,
@@ -34,7 +34,7 @@ export const DiffView = ({
   readonly highlightedHunkIds?: ReadonlySet<HunkId>;
   readonly focusedHunkId?: HunkId | null;
   readonly onFocusHunk?: (id: HunkId) => void;
-  readonly linksOf?: (id: HunkId) => readonly HunkLink[];
+  readonly callersOf?: (id: HunkId) => readonly CallerFile[];
   readonly onFollow?: (id: HunkId) => void;
   readonly reviewedHunkIds?: ReadonlySet<string>;
   readonly onReviewed?: (id: HunkId, reviewed: boolean) => void;
@@ -64,7 +64,7 @@ export const DiffView = ({
           highlighted={highlightedHunkIds?.has(hunk.id) ?? false}
           focused={focusedHunkId === hunk.id}
           onFocus={onFocusHunk}
-          links={linksOf?.(hunk.id)}
+          callers={callersOf?.(hunk.id)}
           onFollow={onFollow}
           reviewed={reviewedHunkIds?.has(hunk.id)}
           onReviewed={onReviewed}

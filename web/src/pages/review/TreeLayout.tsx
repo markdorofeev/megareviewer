@@ -73,7 +73,7 @@ export const TreeLayout = ({
       ? []
       : deps.linksOf(selected).filter((link) => link.direction === "called-by");
   const next = selected === null ? order[0] : order[order.indexOf(selected) + 1];
-  const treeDeps = useMemo(() => ({ ...deps, linksOf: NO_LINKS }), [deps]);
+  const treeDeps = useMemo(() => ({ ...deps, linksOf: NO_LINKS, callersOf: NO_LINKS }), [deps]);
 
   const calls = selected === null ? undefined : deps.calls.get(selected);
   const belowLine =

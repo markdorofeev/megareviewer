@@ -13,6 +13,14 @@ const shape = (segments: ReturnType<typeof segmentLine>) =>
   segments.map(({ text, light, changed }) => [text, light, changed]);
 
 describe("segmentLine", () => {
+  it("cuts at marked ranges without marking them changed", () => {
+    expect(shape(segmentLine([token("x = save(t)")], [], [{ start: 4, end: 8 }]))).toEqual([
+      ["x = ", null, false],
+      ["save", null, false],
+      ["(t)", null, false],
+    ]);
+  });
+
   it("returns the tokens unchanged without ranges", () => {
     expect(shape(segmentLine([token("const", "#f00"), token(" a")], []))).toEqual([
       ["const", "#f00", false],

@@ -808,6 +808,40 @@ const chained: AnalysisView = {
     ],
   },
 };
+/** The imports call cachedReceipt again, after the route in the same step. */
+const repeated: AnalysisView = {
+  ...fixture,
+  analysis: {
+    ...analysis,
+    callGraph: [
+      ...analysis.callGraph,
+      {
+        fromHunkId: h.routeImports,
+        toHunkId: h.retryAndCache,
+        symbol: "cachedReceipt",
+        line: 5,
+        use: "call",
+      },
+    ],
+  },
+};
+/** findOrderById reaches two hunks from one line of the route. */
+const ambiguous: AnalysisView = {
+  ...fixture,
+  analysis: {
+    ...analysis,
+    callGraph: [
+      ...analysis.callGraph,
+      ...[h.retryAndCache, h.receiptFormatting].map((toHunkId) => ({
+        fromHunkId: h.receiptRoute,
+        toHunkId,
+        symbol: "findOrderById",
+        line: 15,
+        use: "call" as const,
+      })),
+    ],
+  },
+};
 const chip = (within_: HTMLElement, symbol: string) =>
   within(within_).getByRole("button", { name: new RegExp(`^${symbol} `) });
 
@@ -833,9 +867,7 @@ describe("inline calls", () => {
     });
     await loaded();
     expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: /^Receipt / })).toBeNull();
-    expect(within(cardOf(h.receiptFormatting)).queryByRole("button", { name: /^called by / })).toBe(
-      null,
-    );
+    expect(cardOf(h.receiptFormatting).querySelector(".hunk-callers")).toBeNull();
   });
 
   it("open under the line that calls, nest, and stop at a hunk already open above", async () => {
@@ -883,6 +915,89 @@ describe("inline calls", () => {
         .checked,
     ).toBe(true);
     expect(screen.getByText("1 of 5 hunks reviewed")).toBeTruthy();
+  });
+
+  it("chip only the first call to a hunk in a step, and underline the later ones", async () => {
+    renderReview({ view: repeated });
+    await loaded();
+    expect(chip(cardOf(h.receiptRoute), "cachedReceipt")).toBeTruthy();
+    const imports = cardOf(h.routeImports);
+    expect(within(imports).queryByRole("button", { name: /^cachedReceipt / })).toBeNull();
+    const mention = within(imports).getByRole("button", { name: "cachedReceipt" });
+    expect(mention.classList.contains("call-mention")).toBe(true);
+    // Both calls come from orders.ts, so the callee lists the file once.
+    expect(cardOf(h.retryAndCache).querySelector(".hunk-callers")?.textContent).toBe(
+      "Called from orders.ts ↑",
+    );
+  });
+
+  it("peek at a mention's code on focus, close on Esc, and go there on click", async () => {
+    renderReview({ view: repeated });
+    await loaded();
+    const mention = within(cardOf(h.routeImports)).getByRole("button", { name: "cachedReceipt" });
+    mention.focus();
+    const peek = await waitFor(() => {
+      const shown = document.querySelector<HTMLElement>(".peek");
+      if (shown === null) throw new Error("no peek");
+      return shown;
+    });
+    expect(peek.textContent).toContain("src/services/receipts.ts");
+    expect(peek.textContent).toContain("step 2: Retrying the tax service and caching receipts");
+    // The peek starts at the line that defines the symbol.
+    expect(peek.querySelector(".peek-line")?.textContent).toBe(
+      "+ export const cachedReceipt = async (order: Order): Promise<string> => {",
+    );
+    expect(mention.getAttribute("aria-describedby")).toBe(peek.id);
+    await userEvent.keyboard("{Escape}");
+    expect(document.querySelector(".peek")).toBeNull();
+
+    await userEvent.click(mention);
+    expect(focusedLabel()).toMatch(RECEIPTS);
+    await userEvent.keyboard("{Escape}");
+    expect(focusedLabel()).toMatch(IMPORTS);
+  });
+
+  it("peek at a mention's code after resting on it, and close on leaving it", async () => {
+    renderReview({ view: repeated });
+    await loaded();
+    const mention = within(cardOf(h.routeImports)).getByRole("button", { name: "cachedReceipt" });
+    await userEvent.hover(mention);
+    expect(document.querySelector(".peek")).toBeNull();
+    await waitFor(() => expect(document.querySelector(".peek")).not.toBeNull());
+    await userEvent.unhover(mention);
+    expect(document.querySelector(".peek")).toBeNull();
+  });
+
+  it("make one chip of a symbol that reaches several hunks, and open the one picked", async () => {
+    renderReview({ view: ambiguous });
+    await loaded();
+    const route = cardOf(h.receiptRoute);
+    const merged = within(route).getByRole("button", { name: /^findOrderById → 2 places/ });
+    await userEvent.click(merged);
+    const choices = within(route).getByRole("list", { name: "Where findOrderById goes" });
+    const [first, second] = within(choices).getAllByRole("button");
+    expect(first?.textContent).toMatch(
+      /^findOrderById src\/services\/receipts\.ts logic lines 26–/,
+    );
+    first?.focus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(second);
+    await userEvent.keyboard("{Enter}");
+    expect(within(route).queryByRole("list", { name: "Where findOrderById goes" })).toBeNull();
+    const opened = route.querySelector<HTMLElement>(".inline-call");
+    expect(
+      within(opened ?? route)
+        .getAllByRole("region")[0]
+        ?.getAttribute("aria-label"),
+    ).toMatch(/^src\/services\/receipts\.ts, lines 1–/);
+  });
+
+  it("o goes to the first mention's hunk when a hunk has no chip", async () => {
+    renderReview({ view: repeated });
+    await loaded();
+    cardOf(h.routeImports).focus();
+    await userEvent.keyboard("o");
+    expect(focusedLabel()).toMatch(RECEIPTS);
   });
 
   it("o opens and closes the focused hunk's first call", async () => {
@@ -1165,13 +1280,15 @@ describe("keyboard shortcuts", () => {
 });
 
 describe("navigation", () => {
-  it("follows a called-by link to the caller, and Esc goes back", async () => {
+  it("follows a caller's file to its first calling hunk, and Esc goes back", async () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("n");
     await userEvent.keyboard("j");
+    const callers = cardOf(h.retryAndCache).querySelector<HTMLElement>(".hunk-callers");
+    expect(callers?.textContent).toBe("Called from orders.ts ↑");
     await userEvent.click(
-      within(cardOf(h.retryAndCache)).getByRole("button", { name: "called by cachedReceipt ↑" }),
+      within(cardOf(h.retryAndCache)).getByRole("button", { name: "orders.ts ↑" }),
     );
     expect(focusedLabel()).toMatch(ROUTE);
     await userEvent.keyboard("{Escape}");

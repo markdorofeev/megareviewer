@@ -109,10 +109,10 @@ The "Called by" list under a hunk's header becomes one line: "Called from `appli
 
 ## Definition of done
 
-- [ ] Tasks above, with unit and component tests.
-- [ ] On delphi-code #2, `pnpm measure` gives 24 chips, 24 mentions and at most 4 caller-file links per hunk, or the differences are written in **Notes for later stages**.
-- [ ] Checked in the browser on delphi-code #2 and on the 240-hunk dev fixture: a key still redraws in about 60 ms.
-- [ ] ARCHITECTURE.md "Review page", Map bullet, says when a call gets a chip, and why: chips on every call repeated what the reader had seen.
+- [x] Tasks above, with unit and component tests.
+- [x] On delphi-code #2, `pnpm measure` gives 24 chips, 24 mentions and at most 4 caller-file links per hunk, or the differences are written in **Notes for later stages**.
+- [x] Checked in the browser on delphi-code #2 and on the 240-hunk dev fixture: a key still redraws in about 60 ms.
+- [x] ARCHITECTURE.md "Review page", Map bullet, says when a call gets a chip, and why: chips on every call repeated what the reader had seen.
 
 ## Open issues
 
@@ -120,4 +120,12 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+Where the code differs from or adds to this doc:
+
+- **Measured on delphi-code #2** with `pnpm measure a_fb9d3348ca0b6120`: 54 call hints, 24 chips (3 of them merged ambiguous calls: `forget_saved_token`, `clone_credentials`, `_account_name`), 24 mentions, and at most 4 caller files per hunk. The live page shows the same: at most 3 production links on a hunk, the rest counted as tests.
+- **The peek follows the symbol on scroll** instead of closing. Focusing a mention can scroll its line sideways inside the card, and closing on any scroll shut the peek as soon as it opened. It closes once the symbol leaves the window.
+- **Chips count within what the map shows:** with "Contract changes only" on, a call whose first chip is in a hidden hunk is a chip again.
+- **`chips.ts` imports only domain types,** so `scripts/measure-pr.ts` counts chips with the page's own rules. `Call` moved there from `model.ts`, which re-exports it.
+- **`HunkCard` takes `callers` (`CallerFile[]`) instead of `links`,** and `inLine`, marks over parts of a line, which `segmentLine` cuts at without marking them changed. `DiffView`'s `linksOf` became `callersOf`. `HunkLink` moved to the review page's `model.ts`, where only the call tree uses it.
+- **Labels of caller files** are their names, with as many parent directories as it takes to tell two apart (`shortPaths`), so stage 27 can reuse it for node labels.
+- **Key latency** on the 240-hunk dev fixture, measured with the browser pane hidden: `j` takes 20 to 35 ms after the first.

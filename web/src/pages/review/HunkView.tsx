@@ -1,19 +1,27 @@
 import type { ReactNode } from "react";
 import type { HunkId } from "../../../../src/domain/diff/index.ts";
 import {
+  type CallerFile,
   CollapsedHunk,
   HunkCard,
-  type HunkLink,
   type LineComment,
+  type LineMark,
   type LinePlace,
 } from "../../diff/index.ts";
-import type { Call, HunkIndex } from "./model.ts";
+import type { ChipPlan } from "./chips.ts";
+import type { Call, HunkIndex, HunkLink } from "./model.ts";
 
 /** What a hunk on the page needs, the same in both layouts. */
 export interface HunkDeps {
   readonly index: HunkIndex;
   readonly calls: ReadonlyMap<HunkId, ReadonlyMap<number, readonly Call[]>>;
+  /** Which of a hunk's calls are chips and which are mentions, at its own place in the map. */
+  readonly plan: ChipPlan;
+  /** The call graph's links, for the call tree. */
   readonly linksOf: (id: HunkId) => readonly HunkLink[];
+  readonly callersOf: (id: HunkId) => readonly CallerFile[];
+  /** The step a hunk is read in, as "step 2: Title", for peeks. */
+  readonly stepOf: (id: HunkId) => string | null;
   readonly onFollow: (id: HunkId) => void;
   readonly reviewedHunks: ReadonlySet<string>;
   readonly onReviewed: (id: HunkId, reviewed: boolean) => void;
@@ -38,12 +46,14 @@ export const HunkView = ({
   id,
   deps,
   belowLine,
+  inLine,
   focused = false,
   nested = false,
 }: {
   readonly id: HunkId;
   readonly deps: HunkDeps;
   readonly belowLine?: ReadonlyMap<number, ReactNode>;
+  readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
   readonly focused?: boolean;
   readonly nested?: boolean;
 }) => {
@@ -70,7 +80,7 @@ export const HunkView = ({
       highlighted={deps.highlighted.has(id)}
       focused={focused}
       onFocus={nested ? undefined : deps.onFocusHunk}
-      links={nested ? undefined : deps.linksOf(id)}
+      callers={nested ? undefined : deps.callersOf(id)}
       onFollow={deps.onFollow}
       reviewed={deps.reviewedHunks.has(id)}
       onReviewed={deps.onReviewed}
@@ -80,6 +90,7 @@ export const HunkView = ({
       onComment={nested ? undefined : deps.onComment}
       afterHeader={nested ? undefined : deps.decisionsOn(id)}
       belowLine={belowLine}
+      inLine={inLine}
     />
   );
 };
