@@ -134,7 +134,7 @@ The model passes run only with `--ai`. Without it, the analysis is complete afte
   - pure renames (rename headers in the diff with no content change);
   - moved code (removed and added blocks match after normalization);
   - formatting-only changes (tree-sitter syntax trees are identical before and after).
-- Build call-graph hints with tree-sitter: which changed symbols are defined, and which changed code references them.
+- Build call-graph hints with tree-sitter: which changed symbols are defined, and which changed code calls or uses them. A use links to a definition only in its own file or in a file its imports reach, never across languages or from code into tests, and a type annotation isn't a use. Matching names across the whole PR was the first version: on a real PR it linked Python and TypeScript files that shared a class name, pointed production code at test fakes, and joined most of the PR into one tour step. A missing link hides no code, so the hints err toward fewer.
 
 - Classify every remaining hunk as *contract* or *logic* with rules: dependency manifests, schemas and migrations, CI and infrastructure, repository config, auth and security paths, risky calls in added lines, and removed or skipped tests. A rule can only raise a hunk to *contract*; one no rule matches is *logic*.
 - Build the tour from the call-graph hints. Each changed file joins with its tests and docs; files that call each other form a step, read from the entry point, callers before callees; files with no links are grouped by directory. Steps with contract hunks come first. The tour has no step cap: unlike the model's, it can't group by concept, and merging unrelated code to meet a cap would hide the story.

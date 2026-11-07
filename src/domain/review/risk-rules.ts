@@ -1,4 +1,7 @@
-import type { FileChange, Hunk, HunkId } from "../diff/index.ts";
+import { type FileChange, type Hunk, type HunkId, isTestFile } from "../diff/index.ts";
+
+export { isTestFile };
+
 import type { RiskAssessment } from "./risk.ts";
 
 const NO_RULE = "No contract rule matched.";
@@ -15,20 +18,6 @@ const extension = (path: string): string => {
 /** "src/auth/verifySession.ts" → src, auth, verify, session, ts. */
 const pathWords = (path: string): string[] =>
   (path.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+/g) ?? []).map((word) => word.toLowerCase());
-
-const TEST_DIRECTORIES = new Set(["__tests__", "test", "tests", "spec"]);
-
-/** A test file by name or directory, in the common conventions of each language. */
-export const isTestFile = (path: string): boolean => {
-  const name = basename(path);
-  return (
-    /\.(test|spec)\.[^.]+$/i.test(name) ||
-    /_(test|spec)\.[^.]+$/i.test(name) ||
-    /^test_.*\.py$/i.test(name) ||
-    /Tests?\.(java|kt)$/.test(name) ||
-    directories(path).some((directory) => TEST_DIRECTORIES.has(directory.toLowerCase()))
-  );
-};
 
 const MANIFESTS = new Set([
   "package.json",

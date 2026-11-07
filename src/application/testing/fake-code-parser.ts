@@ -2,7 +2,9 @@ import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type {
   CodeParser,
   CodeParserError,
+  CodeSymbols,
   SymbolDefinition,
+  SymbolImport,
   SymbolReference,
   Token,
 } from "../ports/index.ts";
@@ -20,6 +22,8 @@ const TOKEN = /[A-Za-z_$][\w$]*|\d+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\
 const IDENTIFIER = /[A-Za-z_$][\w$]*/g;
 const DEFINITION =
   /^(?:export\s+)?(?:async\s+)?(function|class|interface|type|const|let|def)\s+([A-Za-z_$][\w$]*)/;
+const IMPORT =
+  /^import\s+(?:\{([^}]*)\}|([\w$]+))\s+from\s+["']([^"']+)["']|^from\s+(\S+)\s+import\s+(.+)$/;
 const KINDS: Readonly<Record<string, SymbolDefinition["kind"]>> = {
   function: "function",
   def: "function",
@@ -34,7 +38,8 @@ const KINDS: Readonly<Record<string, SymbolDefinition["kind"]>> = {
  * A stand-in for tree-sitter that's good enough for pipeline tests. Syntax nodes are the
  * source's tokens, so reformatting keeps them equal and any other change doesn't. A definition
  * starts at an unindented `function`, `class`, `const`… line and runs until the next one;
- * every other identifier is a reference.
+ * every other identifier is a reference by name. `import { a } from "m"`, `import a from "m"`
+ * and `from m import a` lines are imports, and their identifiers aren't references.
  */
 export class FakeCodeParser implements CodeParser {
   /** Sources passed to each method, in call order. */
@@ -58,12 +63,7 @@ export class FakeCodeParser implements CodeParser {
     return ok([...source.matchAll(TOKEN)].map((match) => ({ type: "token", text: match[0] })));
   }
 
-  async symbols(
-    source: string,
-    language: string,
-  ): Promise<
-    Result<{ definitions: SymbolDefinition[]; references: SymbolReference[] }, CodeParserError>
-  > {
+  async symbols(source: string, language: string): Promise<Result<CodeSymbols, CodeParserError>> {
     const failure = this.fail("symbols", source, language);
     if (failure !== null) return failure;
     const lines = source.split("\n");
@@ -81,13 +81,27 @@ export class FakeCodeParser implements CodeParser {
       }),
     );
     const defined = new Map(starts.map(({ name, line }) => [line, name]));
+    const imports = lines.flatMap((text): SymbolImport[] => {
+      const match = IMPORT.exec(text.trim());
+      if (match === null) return [];
+      const [, braced, single, from, pythonModule, pythonNames] = match;
+      const listed = (list: string) =>
+        list.split(",").map((name) => name.trim().split(/\s+/)[0] ?? "");
+      if (pythonModule !== undefined) {
+        const names = listed(pythonNames ?? "");
+        return [{ module: pythonModule, names: names.includes("*") ? null : names }];
+      }
+      return [{ module: from ?? "", names: single !== undefined ? null : listed(braced ?? "") }];
+    });
     const references = lines.flatMap((text, index): SymbolReference[] =>
-      [...text.matchAll(IDENTIFIER)]
-        .map((match) => match[0])
-        .filter((name) => name !== defined.get(index + 1) && !(name in KINDS))
-        .map((name) => ({ name, line: index + 1 })),
+      IMPORT.test(text.trim())
+        ? []
+        : [...text.matchAll(IDENTIFIER)]
+            .map((match) => match[0])
+            .filter((name) => name !== defined.get(index + 1) && !(name in KINDS))
+            .map((name) => ({ name, line: index + 1, kind: "name" as const })),
     );
-    return ok({ definitions, references });
+    return ok({ definitions, references, imports });
   }
 
   private fail(

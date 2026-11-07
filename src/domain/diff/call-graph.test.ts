@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { hunk } from "../../application/testing/index.ts";
 import { buildCallGraphHints, type FileChange, type FileSymbols, type Hunk } from "./index.ts";
 
+const LANGUAGES: Readonly<Record<string, string>> = {
+  ts: "typescript",
+  tsx: "tsx",
+  py: "python",
+  go: "go",
+  java: "java",
+  rs: "rust",
+};
+
 const file = (path: string, ...hunks: Hunk[]): FileChange => ({
   path,
   oldPath: null,
@@ -9,19 +18,25 @@ const file = (path: string, ...hunks: Hunk[]): FileChange => ({
   binary: false,
   oldMode: null,
   newMode: null,
-  language: "typescript",
+  language: LANGUAGES[path.slice(path.lastIndexOf(".") + 1)] ?? null,
   hunks,
   additions: 0,
   deletions: 0,
 });
 
+type Kind = FileSymbols["references"][number]["kind"];
+
 const symbols = (
   definitions: [name: string, startLine: number, endLine: number][],
-  references: [name: string, line: number][] = [],
+  references: ([name: string, line: number] | [name: string, line: number, kind: Kind])[] = [],
+  imports: FileSymbols["imports"] = [],
 ): FileSymbols => ({
   definitions: definitions.map(([name, startLine, endLine]) => ({ name, startLine, endLine })),
-  references: references.map(([name, line]) => ({ name, line })),
+  references: references.map(([name, line, kind = "name"]) => ({ name, line, kind })),
+  imports,
 });
+
+const importsSlugify = [{ module: "./text.ts", names: ["slugify"] }];
 
 // src/text.ts lines 1–3 add a new function; src/page.ts line 11 calls it.
 const definingHunk = hunk("src/text.ts", "@@ -0,0 +1,3 @@", [
@@ -49,6 +64,7 @@ describe("buildCallGraphHints", () => {
               ["read", 10],
               ["slugify", 11],
             ],
+            importsSlugify,
           ),
         ],
       ]),
@@ -77,7 +93,7 @@ describe("buildCallGraphHints", () => {
         files,
         new Map([
           ["src/text.ts", symbols([["slugify", 1, 3]])],
-          ["src/page.ts", symbols([], [["slugify", line]])],
+          ["src/page.ts", symbols([], [["slugify", line]], importsSlugify)],
         ]),
       ).length;
     expect(withReference(10)).toBe(1);
@@ -105,7 +121,7 @@ describe("buildCallGraphHints", () => {
     expect(hints).toEqual([]);
   });
 
-  it("links both ways when two files define a symbol with the same name", () => {
+  it("doesn't link a symbol to a same-named one in a file that isn't imported", () => {
     const a = hunk("src/a.ts", "@@ -0,0 +1,1 @@", ["+function parse() { return parse(); }"]);
     const b = hunk("src/b.ts", "@@ -0,0 +1,1 @@", ["+function parse() { return parse(); }"]);
     const both = symbols([["parse", 1, 1]], [["parse", 1]]);
@@ -116,10 +132,7 @@ describe("buildCallGraphHints", () => {
         ["src/b.ts", both],
       ]),
     );
-    expect(hints).toEqual([
-      { fromHunkId: a.id, toHunkId: b.id, symbol: "parse", line: 1 },
-      { fromHunkId: b.id, toHunkId: a.id, symbol: "parse", line: 1 },
-    ]);
+    expect(hints).toEqual([]);
   });
 
   it("gives one hint per symbol and hunk, on the first reference's line", () => {
@@ -136,6 +149,7 @@ describe("buildCallGraphHints", () => {
               ["slugify", 10],
               ["slugify", 12],
             ],
+            importsSlugify,
           ),
         ],
       ]),
@@ -159,6 +173,7 @@ describe("buildCallGraphHints", () => {
           symbols(
             [["zz", 50, 50]],
             [...names, "zz"].map((name): [string, number] => [name, 1]),
+            [{ module: "./other.ts", names }],
           ),
         ],
         [
@@ -191,6 +206,7 @@ describe("buildCallGraphHints", () => {
               ["beta", 1],
               ["alpha", 1],
             ],
+            [{ module: "./b.ts", names: ["alpha", "beta"] }],
           ),
         ],
         [
@@ -217,5 +233,232 @@ describe("buildCallGraphHints", () => {
         new Map(),
       ),
     ).toEqual([]);
+  });
+});
+
+/** A hunk in `from` uses `name` on its one added line, and a hunk in `to` defines it. */
+const links = (
+  from: string,
+  to: string,
+  imports: FileSymbols["imports"] = [],
+  kind: Kind = "name",
+): boolean => {
+  const caller = hunk(from, "@@ -1,0 +1,1 @@", ["+use();"]);
+  const callee = hunk(to, "@@ -1,0 +1,1 @@", ["+define();"]);
+  return (
+    buildCallGraphHints(
+      [file(from, caller), file(to, callee)],
+      new Map([
+        [from, symbols([], [["target", 1, kind]], imports)],
+        [to, symbols([["target", 1, 1]])],
+      ]),
+    ).length > 0
+  );
+};
+
+const named = (module: string, ...names: string[]) => [{ module, names }];
+const whole = (module: string) => [{ module, names: null }];
+
+describe("which definitions a reference reaches", () => {
+  it.each([
+    [
+      "a named relative import",
+      "web/page.tsx",
+      "web/lib/text.ts",
+      named("./lib/text.ts", "target"),
+    ],
+    ["an import with a .js extension", "web/page.ts", "web/text.ts", named("./text.js", "target")],
+    ["a default or namespace import", "web/page.ts", "web/text.ts", whole("./text")],
+    [
+      "an index file",
+      "web/pages/page.tsx",
+      "web/api/client.ts",
+      named("../api/index.ts", "target"),
+    ],
+    ["a directory", "web/pages/page.tsx", "web/api/client.ts", named("../api", "target")],
+    ["a path alias", "src/pages/page.ts", "src/lib/text.ts", named("@/lib/text", "target")],
+    [
+      "a Python relative import",
+      "pkg/http/routes.py",
+      "pkg/services/app.py",
+      named("..services.app", "target"),
+    ],
+    [
+      "a Python package",
+      "pkg/http/routes.py",
+      "pkg/services/__init__.py",
+      named("..services", "target"),
+    ],
+    [
+      "a Python package's module",
+      "pkg/http/routes.py",
+      "pkg/services/app.py",
+      named("..services", "target"),
+    ],
+    ["a Python wildcard import", "pkg/routes.py", "pkg/models.py", whole(".models")],
+    ["a Python absolute import", "src/pkg/a.py", "src/pkg/b.py", named("pkg.b", "target")],
+    ["a Go package in the same directory", "store/a.go", "store/b.go", []],
+    ["a Go import", "cmd/main.go", "internal/store/b.go", whole("github.com/o/r/internal/store")],
+    ["a Java class in the same package", "src/com/x/A.java", "src/com/x/B.java", []],
+    ["a Java class import", "src/com/y/A.java", "src/com/x/B.java", whole("com.x.B")],
+    ["a Java wildcard import", "src/com/y/A.java", "src/com/x/B.java", named("com.x", "*")],
+    ["a Java static import", "src/com/y/A.java", "src/com/x/B.java", whole("com.x.B.target")],
+    ["a name in a language whose imports aren't read", "src/a.rs", "src/b.rs", []],
+    ["code from its test", "tests/test_app.py", "app/core.py", named("app.core", "target")],
+  ])("links through %s", (_, from, to, imports) => {
+    expect(links(from, to, imports)).toBe(true);
+  });
+
+  it.each([
+    ["a file that isn't imported", "web/page.ts", "web/text.ts", []],
+    ["a name the import doesn't list", "web/page.ts", "web/text.ts", named("./text.ts", "other")],
+    ["a package import", "web/page.ts", "web/react.ts", named("react", "target")],
+    [
+      "an import that climbs out of the repository",
+      "page.ts",
+      "text.ts",
+      named("../text.ts", "target"),
+    ],
+    ["a Python import that climbs out of the repository", "a.py", "b.py", named("...b", "target")],
+    ["another Python module of the package", "pkg/a.py", "pkg/c.py", named(".b", "target")],
+    ["a Go package in another directory", "cmd/main.go", "store/b.go", []],
+    ["a Go package at the repository root", "cmd/main.go", "b.go", whole("github.com/o/r")],
+    ["a Java class in another package", "src/com/y/A.java", "src/com/x/B.java", []],
+    [
+      "another language with the same name",
+      "web/Form.tsx",
+      "app/forms.py",
+      named("../app/forms", "target"),
+    ],
+    ["another language whose imports aren't read", "src/a.rs", "src/b.cs", []],
+    [
+      "a test fake from production code",
+      "app/core.py",
+      "tests/fakes.py",
+      named("tests.fakes", "target"),
+    ],
+  ])("doesn't link to %s", (_, from, to, imports) => {
+    expect(links(from, to, imports)).toBe(false);
+  });
+
+  it("follows a member to any file the import reaches, whatever names it lists", () => {
+    expect(links("web/page.ts", "web/client.ts", named("./client.ts", "Client"), "member")).toBe(
+      true,
+    );
+    expect(links("web/page.ts", "web/other.ts", named("./client.ts", "Client"), "member")).toBe(
+      false,
+    );
+  });
+
+  it("follows a member through `from pkg import module` to that module only", () => {
+    const routes = named(".", "routes");
+    expect(links("pkg/app.py", "pkg/routes.py", routes, "member")).toBe(true);
+    expect(links("pkg/app.py", "pkg/other.py", routes, "member")).toBe(false);
+    expect(links("pkg/app.py", "pkg/__init__.py", routes, "member")).toBe(true);
+    expect(links("src/pkg/app.py", "src/pkg/routes.py", named("pkg", "routes"), "member")).toBe(
+      true,
+    );
+  });
+
+  it("never links a type annotation", () => {
+    expect(links("web/page.ts", "web/text.ts", named("./text.ts", "target"), "type")).toBe(false);
+  });
+
+  it("doesn't link files without a language", () => {
+    expect(links("web/page.ts", "web/text.vue", named("./text.vue", "target"))).toBe(false);
+  });
+
+  it("changes the innermost definition an added line falls in", () => {
+    // Store spans lines 1–10, and its method save spans 3–5.
+    const store = symbols([
+      ["Store", 1, 10],
+      ["save", 3, 5],
+    ]);
+    const linkedSymbols = (added: number) => {
+      const callee = hunk("src/store.ts", `@@ -${added},0 +${added},1 @@`, ["+change();"]);
+      const caller = hunk("src/page.ts", "@@ -1,0 +1,1 @@", ["+new Store().save();"]);
+      return buildCallGraphHints(
+        [file("src/page.ts", caller), file("src/store.ts", callee)],
+        new Map([
+          [
+            "src/page.ts",
+            symbols(
+              [],
+              [
+                ["Store", 1],
+                ["save", 1, "member"],
+              ],
+              named("./store.ts", "Store"),
+            ),
+          ],
+          ["src/store.ts", store],
+        ]),
+      ).map((hint) => hint.symbol);
+    };
+    expect(linkedSymbols(4)).toEqual(["save"]);
+    expect(linkedSymbols(2)).toEqual(["Store"]);
+  });
+
+  it("links a definition changed by several hunks once, to the first", () => {
+    const top = hunk("src/store.ts", "@@ -2,0 +2,1 @@", ["+  a = 1;"]);
+    const bottom = hunk("src/store.ts", "@@ -8,0 +9,1 @@", ["+  b = 2;"]);
+    const caller = hunk("src/page.ts", "@@ -1,0 +1,1 @@", ["+new Store();"]);
+    const hints = buildCallGraphHints(
+      [file("src/page.ts", caller), file("src/store.ts", top, bottom)],
+      new Map([
+        ["src/page.ts", symbols([], [["Store", 1]], named("./store.ts", "Store"))],
+        ["src/store.ts", symbols([["Store", 1, 10]])],
+      ]),
+    );
+    expect(hints.map((hint) => hint.toHunkId)).toEqual([top.id]);
+  });
+
+  it("links a call in a class to the same-named method of that class", () => {
+    // GitHub (1–10) and Bitbucket (11–20) each change their own method auth; GitHub.load calls it.
+    const github = hunk("src/hosts.py", "@@ -2,0 +2,1 @@", ["+        return token"]);
+    const bitbucket = hunk("src/hosts.py", "@@ -12,0 +12,1 @@", ["+        return token"]);
+    const load = hunk("src/hosts.py", "@@ -5,0 +5,1 @@", ["+        self.auth()"]);
+    const hints = buildCallGraphHints(
+      [file("src/hosts.py", github, load, bitbucket)],
+      new Map([
+        [
+          "src/hosts.py",
+          symbols(
+            [
+              ["GitHub", 1, 10],
+              ["auth", 2, 3],
+              ["load", 4, 6],
+              ["Bitbucket", 11, 20],
+              ["auth", 12, 13],
+            ],
+            [["auth", 5, "member"]],
+          ),
+        ],
+      ]),
+    );
+    expect(hints).toEqual([{ fromHunkId: load.id, toHunkId: github.id, symbol: "auth", line: 5 }]);
+  });
+
+  it("links a method to the same-named one it delegates to, not to itself", () => {
+    const own = hunk("src/app.ts", "@@ -2,0 +2,2 @@", ["+  save() {", "+    this.store.save();"]);
+    const other = hunk("src/store.ts", "@@ -1,0 +1,1 @@", ["+  save() {}"]);
+    const hints = buildCallGraphHints(
+      [file("src/app.ts", own), file("src/store.ts", other)],
+      new Map([
+        [
+          "src/app.ts",
+          symbols(
+            [
+              ["App", 1, 10],
+              ["save", 2, 4],
+            ],
+            [["save", 3, "member"]],
+            whole("./store.ts"),
+          ),
+        ],
+        ["src/store.ts", symbols([["save", 1, 1]])],
+      ]),
+    );
+    expect(hints).toEqual([{ fromHunkId: own.id, toHunkId: other.id, symbol: "save", line: 3 }]);
   });
 });

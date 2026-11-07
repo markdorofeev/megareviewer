@@ -14,13 +14,13 @@
 
 ; References. C# has no separate node for type names, so types are matched by position.
 
-(invocation_expression function: (identifier) @reference)
-(object_creation_expression type: (identifier) @reference)
-(member_access_expression expression: (identifier) @reference)
-(member_access_expression name: (identifier) @reference)
-(variable_declaration type: (identifier) @reference)
-(parameter type: (identifier) @reference)
-(method_declaration returns: (identifier) @reference)
-(base_list (identifier) @reference)
-(generic_name (identifier) @reference)
-(type_argument_list (identifier) @reference)
+(invocation_expression function: (identifier) @reference.name)
+(object_creation_expression type: (identifier) @reference.name)
+(member_access_expression expression: (identifier) @reference.name)
+(member_access_expression name: (identifier) @reference.member)
+(base_list (identifier) @reference.name)
+(variable_declaration type: (identifier) @reference.type)
+(parameter type: (identifier) @reference.type)
+(method_declaration returns: (identifier) @reference.type)
+(generic_name (identifier) @reference.type)
+(type_argument_list (identifier) @reference.type)

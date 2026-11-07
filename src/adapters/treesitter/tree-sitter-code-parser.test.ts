@@ -1,6 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import type { CodeParser, SymbolDefinition } from "../../application/ports/index.ts";
+import type {
+  CodeParser,
+  SymbolDefinition,
+  SymbolReference,
+} from "../../application/ports/index.ts";
 import { createTreeSitterCodeParser } from "./index.ts";
 import { LANGUAGES } from "./languages.ts";
 
@@ -24,7 +28,7 @@ const cases: [
   language: string,
   source: string,
   definitions: Definition[],
-  references: [string, number][],
+  references: [name: string, line: number, kind: SymbolReference["kind"]][],
 ][] = [
   [
     "typescript",
@@ -51,16 +55,16 @@ function process(input: Key): void {}
       ["process", "function", 11, 11],
     ],
     [
-      ["Base", 1],
-      ["Key", 2],
-      ["Value", 2],
-      ["Request", 3],
-      ["cache", 3],
-      ["load", 3],
-      ["read", 3],
-      ["Key", 10],
-      ["process", 10],
-      ["Key", 11],
+      ["Base", 1, "name"],
+      ["Key", 2, "type"],
+      ["Value", 2, "type"],
+      ["Request", 3, "name"],
+      ["cache", 3, "member"],
+      ["load", 3, "name"],
+      ["read", 3, "member"],
+      ["Key", 10, "type"],
+      ["process", 10, "name"],
+      ["Key", 11, "type"],
     ],
   ],
   [
@@ -71,12 +75,12 @@ function process(input: Key): void {}
 `,
     [["Page", "function", 1, 3]],
     [
-      ["Props", 1],
-      ["Header", 2],
-      ["Layout", 2],
-      ["Main", 2],
-      ["props", 2],
-      ["title", 2],
+      ["Props", 1, "type"],
+      ["Header", 2, "name"],
+      ["Layout", 2, "name"],
+      ["Main", 2, "member"],
+      ["props", 2, "name"],
+      ["title", 2, "member"],
     ],
   ],
   [
@@ -94,11 +98,11 @@ export const view = () => <Header />;
       ["view", "function", 6, 6],
     ],
     [
-      ["Base", 1],
-      ["Request", 3],
-      ["body", 3],
-      ["load", 3],
-      ["Header", 6],
+      ["Base", 1, "name"],
+      ["Request", 3, "name"],
+      ["body", 3, "member"],
+      ["load", 3, "name"],
+      ["Header", 6, "name"],
     ],
   ],
   [
@@ -120,11 +124,11 @@ def helper():
       ["helper", "function", 8, 9],
     ],
     [
-      ["Key", 5],
-      ["Value", 5],
-      ["Request", 6],
-      ["body", 6],
-      ["load", 6],
+      ["Key", 5, "type"],
+      ["Value", 5, "type"],
+      ["Request", 6, "name"],
+      ["body", 6, "member"],
+      ["load", 6, "name"],
     ],
   ],
   [
@@ -151,15 +155,15 @@ func load(v Value) Value { return v }
       ["load", "function", 13, 13],
     ],
     [
-      ["Cache", 5],
-      ["Key", 9],
-      ["Store", 9],
-      ["Value", 9],
-      ["Read", 10],
-      ["cache", 10],
-      ["load", 10],
-      ["s", 10],
-      ["Value", 13],
+      ["Cache", 5, "type"],
+      ["Key", 9, "type"],
+      ["Store", 9, "type"],
+      ["Value", 9, "type"],
+      ["Read", 10, "member"],
+      ["cache", 10, "member"],
+      ["load", 10, "name"],
+      ["s", 10, "name"],
+      ["Value", 13, "type"],
     ],
   ],
   [
@@ -183,12 +187,12 @@ interface Key {}
       ["Key", "type", 10, 10],
     ],
     [
-      ["Base", 1],
-      ["Key", 6],
-      ["Value", 6],
-      ["Request", 7],
-      ["load", 7],
-      ["loader", 7],
+      ["Base", 1, "type"],
+      ["Key", 6, "type"],
+      ["Value", 6, "type"],
+      ["Request", 7, "name"],
+      ["load", 7, "member"],
+      ["loader", 7, "name"],
     ],
   ],
   [
@@ -212,15 +216,15 @@ fn load(v: Value) -> Value { v }
       ["load", "function", 11, 11],
     ],
     [
-      ["Cache", 3],
-      ["Store", 5],
-      ["Key", 6],
-      ["Value", 6],
-      ["cache", 7],
-      ["load", 7],
-      ["new", 7],
-      ["read", 7],
-      ["Value", 11],
+      ["Cache", 3, "type"],
+      ["Store", 5, "type"],
+      ["Key", 6, "type"],
+      ["Value", 6, "type"],
+      ["cache", 7, "member"],
+      ["load", 7, "name"],
+      ["new", 7, "member"],
+      ["read", 7, "member"],
+      ["Value", 11, "type"],
     ],
   ],
   [
@@ -241,12 +245,12 @@ interface IStore {}
       ["IStore", "type", 8, 8],
     ],
     [
-      ["IStore", 1],
-      ["Key", 4],
-      ["Value", 4],
-      ["Load", 5],
-      ["Loader", 5],
-      ["Request", 5],
+      ["IStore", 1, "name"],
+      ["Key", 4, "type"],
+      ["Value", 4, "type"],
+      ["Load", 5, "member"],
+      ["Loader", 5, "name"],
+      ["Request", 5, "name"],
     ],
   ],
 ];
@@ -257,11 +261,108 @@ describe("createTreeSitterCodeParser", () => {
     expect(definitions).toEqual(
       defs.map(([name, kind, startLine, endLine]) => ({ name, kind, startLine, endLine })),
     );
-    expect(references).toEqual(refs.map(([name, line]) => ({ name, line })));
+    expect(references).toEqual(refs.map(([name, line, kind]) => ({ name, line, kind })));
   });
 
   it("covers every language", () => {
     expect(cases.map(([language]) => language)).toEqual(LANGUAGES.map((spec) => spec.name));
+  });
+
+  it.each([
+    [
+      "python",
+      `from ..models import A, B as C
+from . import routes
+from x import *
+import a.b
+import a.b as c
+`,
+      [
+        { module: "..models", names: ["A", "B"] },
+        { module: ".", names: ["routes"] },
+        { module: "x", names: null },
+        { module: "a.b", names: null },
+        { module: "a.b", names: null },
+      ],
+    ],
+    [
+      "typescript",
+      `import D, { a, b as c } from "./m.ts";
+import * as ns from "../n";
+import type { T } from "@/t";
+import "./side";
+export { x } from "./y";
+const z = require("./r");
+`,
+      [
+        { module: "./m.ts", names: null },
+        { module: "../n", names: null },
+        { module: "@/t", names: ["T"] },
+        { module: "./r", names: null },
+      ],
+    ],
+    ["tsx", `import { Page } from "./page";\n`, [{ module: "./page", names: ["Page"] }]],
+    [
+      "javascript",
+      `const x = require("./m");
+import { a } from "./m.js";
+require(name);
+load("./z");
+`,
+      [
+        { module: "./m", names: null },
+        { module: "./m.js", names: ["a"] },
+      ],
+    ],
+    [
+      "go",
+      `package p
+import "fmt"
+import (
+  s "github.com/o/r/store"
+  "github.com/o/r/x"
+)
+`,
+      [
+        { module: "fmt", names: null },
+        { module: "github.com/o/r/store", names: null },
+        { module: "github.com/o/r/x", names: null },
+      ],
+    ],
+    [
+      "java",
+      `import com.x.Foo;
+import com.x.*;
+import static com.x.Foo.bar;
+class A {}
+`,
+      [
+        { module: "com.x.Foo", names: null },
+        { module: "com.x", names: ["*"] },
+        { module: "com.x.Foo.bar", names: null },
+      ],
+    ],
+    ["rust", "use crate::a::b;\n", []],
+    ["c_sharp", "using System;\n", []],
+  ])("finds %s imports", async (language, source, imports) => {
+    expect((await symbolsOf(source, language)).imports).toEqual(imports);
+  });
+
+  it.each([
+    ["java", "class A { void f() { load(x); } }\n", [["load", 1, "name"]]],
+    [
+      "go",
+      "package p\nfunc f() { _ = Store{}; _ = pkg.Store{} }\n",
+      [
+        ["Store", 2, "member"],
+        ["Store", 2, "name"],
+      ],
+    ],
+    ["rust", "fn f() { let s = Store { cache: c }; }\n", [["Store", 1, "name"]]],
+  ])("counts a %s call or construction as a use by name", async (language, source, refs) => {
+    expect((await symbolsOf(source, language)).references).toEqual(
+      refs.map(([name, line, kind]) => ({ name, line, kind })),
+    );
   });
 
   it.each([

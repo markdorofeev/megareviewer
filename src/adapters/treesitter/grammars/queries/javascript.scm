@@ -16,8 +16,22 @@
 
 ; References
 
-(call_expression function: (identifier) @reference)
-(new_expression constructor: (identifier) @reference)
-(class_heritage (identifier) @reference)
-(member_expression object: (identifier) @reference)
-(member_expression property: (property_identifier) @reference)
+(call_expression function: (identifier) @reference.name)
+(new_expression constructor: (identifier) @reference.name)
+(class_heritage (identifier) @reference.name)
+(member_expression object: (identifier) @reference.name)
+(member_expression property: (property_identifier) @reference.member)
+
+; Imports
+
+(import_statement
+  (import_clause (named_imports (import_specifier name: (identifier) @import.name)))
+  source: (string (string_fragment) @import.module))
+(import_statement (import_clause (identifier)) source: (string (string_fragment) @import.module))
+(import_statement
+  (import_clause (namespace_import))
+  source: (string (string_fragment) @import.module))
+(call_expression
+  function: (identifier) @_require
+  arguments: (arguments . (string (string_fragment) @import.module) .)
+  (#eq? @_require "require"))

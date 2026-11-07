@@ -90,7 +90,7 @@ const pullRequest: PullRequest = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "4+no-model",
+  pipelineVersion: "5+no-model",
 };
 
 const risk: RiskAssessment[] = files.flatMap((file, at) =>

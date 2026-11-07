@@ -74,7 +74,7 @@ A separate PR, with a line in stage 02's **Change log**.
    - The roots are the hunks no other hunk calls, steps with contract hunks first and then tour order. In a cycle with no root, the first hunk in tour order becomes the root.
    - It walks depth first. Each hunk appears once. A later mention is a reference row that jumps to it.
    - Hunks no hint links go under "Not on a call path", grouped by file.
-   - Every hunk to review is in the tree exactly once. Hints match symbols by name, so a link can be wrong, but a hunk can never be left out.
+   - Every hunk to review is in the tree exactly once. Hints are heuristics, so a link can be wrong or missing, but a hunk can never be left out.
 
    The page shows the tree on the left: each node's symbol, or `file:line` for a root, a risk dot, and a tick once reviewed. The main area shows the selected hunk's card with:
    - a breadcrumb from its root;

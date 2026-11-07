@@ -13,11 +13,12 @@
 (const_item name: (identifier) @name) @definition.variable
 (static_item name: (identifier) @name) @definition.variable
 
-; References
+; References. Earlier patterns win, so a struct built by a literal is used, not just named.
 
-(call_expression function: (identifier) @reference)
-(call_expression function: (scoped_identifier name: (identifier) @reference))
-(field_expression value: (identifier) @reference)
-(field_expression field: (field_identifier) @reference)
-(macro_invocation macro: (identifier) @reference)
-(type_identifier) @reference
+(call_expression function: (identifier) @reference.name)
+(call_expression function: (scoped_identifier name: (identifier) @reference.member))
+(struct_expression name: (type_identifier) @reference.name)
+(field_expression value: (identifier) @reference.name)
+(field_expression field: (field_identifier) @reference.member)
+(macro_invocation macro: (identifier) @reference.name)
+(type_identifier) @reference.type

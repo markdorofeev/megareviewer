@@ -315,9 +315,25 @@ describe("FakeCodeParser", () => {
       { name: "c", kind: "variable", startLine: 6, endLine: 7 },
     ]);
     const references = result.ok ? result.value.references : [];
-    expect(references).toContainEqual({ name: "b", line: 4 });
-    expect(references).toContainEqual({ name: "a", line: 6 });
-    expect(references).not.toContainEqual({ name: "a", line: 3 });
+    expect(references).toContainEqual({ name: "b", line: 4, kind: "name" });
+    expect(references).toContainEqual({ name: "a", line: 6, kind: "name" });
+    expect(references).not.toContainEqual({ name: "a", line: 3, kind: "name" });
+    expect(references).not.toContainEqual({ name: "b", line: 1, kind: "name" });
+    expect(result.ok && result.value.imports).toEqual([{ module: "./b", names: ["b"] }]);
+  });
+
+  it("reads default and Python imports", async () => {
+    const imports = async (source: string, language: string) => {
+      const result = await parser.symbols(source, language);
+      return result.ok ? result.value.imports : [];
+    };
+    expect(await imports("import a from './a';\n", "typescript")).toEqual([
+      { module: "./a", names: null },
+    ]);
+    expect(await imports("from .models import A, B as C\nfrom x import *\n", "python")).toEqual([
+      { module: ".models", names: ["A", "B"] },
+      { module: "x", names: null },
+    ]);
   });
 
   it("fails for unknown languages and when scripted", async () => {

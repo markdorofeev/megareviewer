@@ -14,7 +14,9 @@ export type { Clock } from "./clock.ts";
 export type {
   CodeParser,
   CodeParserError,
+  CodeSymbols,
   SymbolDefinition,
+  SymbolImport,
   SymbolReference,
   Token,
 } from "./code-parser.ts";

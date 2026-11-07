@@ -9,10 +9,17 @@
 (annotation_type_declaration name: (identifier) @name) @definition.type
 (field_declaration declarator: (variable_declarator name: (identifier) @name)) @definition.variable
 
-; References
+; References. Earlier patterns win, so a constructed class is used, not just named.
 
-(method_invocation name: (identifier) @reference)
-(method_invocation object: (identifier) @reference)
-(field_access object: (identifier) @reference)
-(field_access field: (identifier) @reference)
-(type_identifier) @reference
+(object_creation_expression type: (type_identifier) @reference.name)
+(method_invocation !object name: (identifier) @reference.name)
+(method_invocation name: (identifier) @reference.member)
+(method_invocation object: (identifier) @reference.name)
+(field_access object: (identifier) @reference.name)
+(field_access field: (identifier) @reference.member)
+(type_identifier) @reference.type
+
+; Imports. A wildcard import names "*".
+
+(import_declaration (scoped_identifier) @import.module (asterisk) @import.name)
+(import_declaration (scoped_identifier) @import.module .)
