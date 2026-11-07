@@ -5,6 +5,7 @@ import {
   BAR_MAX_PX,
   BAR_MIN_PX,
   barHeight,
+  callerFiles,
   callsByLine,
   decisionPlaces,
   firstCall,
@@ -285,5 +286,54 @@ describe("hunkLinks", () => {
       use: "call" as const,
     }));
     expect(hunkLinks(many, index).get(h.receiptRoute)).toHaveLength(6);
+  });
+});
+
+describe("callerFiles", () => {
+  const index = hunkIndex(analysis);
+  const call = (fromHunkId: (typeof h)[keyof typeof h], toHunkId: (typeof h)[keyof typeof h]) => ({
+    fromHunkId,
+    toHunkId,
+    symbol: "s",
+    line: 1,
+    use: "call" as const,
+  });
+
+  it("gives one link per calling file, to its first hunk in the map's order", () => {
+    const hints = [call(h.receiptRoute, h.retryAndCache), call(h.routeImports, h.retryAndCache)];
+    expect(
+      callerFiles(hints, index, [h.routeImports, h.receiptRoute]).get(h.retryAndCache),
+    ).toEqual([{ path: "src/routes/orders.ts", hunkId: h.routeImports, test: false }]);
+    expect(
+      callerFiles(hints, index, [h.receiptRoute, h.routeImports]).get(h.retryAndCache),
+    ).toEqual([{ path: "src/routes/orders.ts", hunkId: h.receiptRoute, test: false }]);
+  });
+
+  it("puts production files first, then tests, each in the map's order", () => {
+    const withTest = {
+      ...analysis,
+      files: analysis.files.map((file) =>
+        file.path === "src/lib/money.ts" ? { ...file, path: "src/lib/money.test.ts" } : file,
+      ),
+    };
+    const hints = [
+      call(h.formatMoneyAdded, h.retryAndCache),
+      call(h.receiptRoute, h.retryAndCache),
+    ];
+    const order = [h.formatMoneyAdded, h.receiptRoute];
+    expect(
+      callerFiles(hints, hunkIndex(withTest), order)
+        .get(h.retryAndCache)
+        ?.map((caller) => [caller.path, caller.test]),
+    ).toEqual([
+      ["src/routes/orders.ts", false],
+      ["src/lib/money.test.ts", true],
+    ]);
+  });
+
+  it("drops hints to or from hunks the page doesn't know, and a hunk calling itself", () => {
+    const empty = hunkIndex({ ...analysis, files: [] });
+    expect(callerFiles([call(h.receiptRoute, h.retryAndCache)], empty, []).size).toBe(0);
+    expect(callerFiles([call(h.receiptRoute, h.receiptRoute)], index, []).size).toBe(0);
   });
 });

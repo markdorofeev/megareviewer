@@ -2,12 +2,14 @@ export { CollapsedHunk } from "./CollapsedHunk.tsx";
 export { DiffView, type HunkItem } from "./DiffView.tsx";
 export { FileNotices } from "./FileNotices.tsx";
 export {
+  type CallerFile,
   commentPlace,
   FilePath,
   HunkCard,
-  type HunkLink,
   type LineComment,
+  type LineMark,
   type LinePlace,
+  shortPaths,
 } from "./HunkCard.tsx";
 export type { Highlighter } from "./highlight.ts";
 export { hunkLocation } from "./lines.ts";

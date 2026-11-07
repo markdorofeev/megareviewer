@@ -18,17 +18,18 @@ export interface Segment extends CodeToken {
 export const plainTokens = (text: string): readonly CodeToken[] =>
   text === "" ? [] : [{ text, light: null, dark: null, italic: false, bold: false }];
 
-/** Splits tokens at the edges of the changed ranges. */
+/** Splits tokens at the edges of the changed ranges, and of `marked` ones, such as a symbol's. */
 export const segmentLine = (
   tokens: readonly CodeToken[],
   changed: readonly CharRange[],
+  marked: readonly CharRange[] = [],
 ): Segment[] => {
   const segments: Segment[] = [];
   let offset = 0;
   for (const token of tokens) {
     const end = offset + token.text.length;
     const cuts = new Set([offset, end]);
-    for (const range of changed) {
+    for (const range of [...changed, ...marked]) {
       if (range.start > offset && range.start < end) cuts.add(range.start);
       if (range.end > offset && range.end < end) cuts.add(range.end);
     }

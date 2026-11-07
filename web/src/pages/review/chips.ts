@@ -1,0 +1,94 @@
+// Pure, and importing only domain types, so scripts/measure-pr.ts can count chips the same way.
+import type { HunkId } from "../../../../src/domain/diff/index.ts";
+
+/** A call the code makes on one of its lines, to the hunk that changes what it calls. */
+export interface Call {
+  readonly symbol: string;
+  readonly toHunkId: HunkId;
+  readonly line: number;
+}
+
+/** Where a symbol stands in a line's text: characters `start` to `end`, end excluded. */
+export interface SymbolPlace {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * How one symbol on one line shows its calls: a chip under the line, or a mention, the symbol
+ * underlined in place. `calls` has one call per hunk the symbol reaches, more for an ambiguous call.
+ */
+export type CallMark =
+  | { readonly kind: "chip"; readonly symbol: string; readonly calls: readonly Call[] }
+  | {
+      readonly kind: "mention";
+      readonly symbol: string;
+      readonly calls: readonly Call[];
+      readonly at: SymbolPlace;
+    };
+
+/** Each hunk's marks by the new-side line they're on, in the order the symbols are called. */
+export type ChipPlan = ReadonlyMap<HunkId, ReadonlyMap<number, readonly CallMark[]>>;
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The symbol's first place in the text as a whole word, or null when it isn't there. */
+export const symbolPlace = (text: string, symbol: string): SymbolPlace | null => {
+  if (symbol === "") return null;
+  const match = new RegExp(`(?<![\\w$])${escapeRegExp(symbol)}(?![\\w$])`).exec(text);
+  return match === null ? null : { start: match.index, end: match.index + symbol.length };
+};
+
+/**
+ * Which calls get a chip on the map. Within each section (a tour step, or the one list of files
+ * before the tour exists), read in order, the first call to a hunk gets a chip and a later call to
+ * it is a mention. The calls on a line with one symbol are one mark, a chip when any of their hunks
+ * is new to the section. A mention whose symbol isn't on the line's text, such as a call spread
+ * over lines, stays a chip: when unsure, show more. Every call is in exactly one mark.
+ */
+export const chipPlan = (
+  sections: readonly (readonly HunkId[])[],
+  calls: ReadonlyMap<HunkId, ReadonlyMap<number, readonly Call[]>>,
+  lineText: (id: HunkId, line: number) => string | undefined,
+): ChipPlan => {
+  const plan = new Map<HunkId, Map<number, CallMark[]>>();
+  for (const section of sections) {
+    const reached = new Set<HunkId>();
+    for (const id of section) {
+      const lines = calls.get(id);
+      if (lines === undefined || plan.has(id)) continue;
+      const marks = new Map<number, CallMark[]>();
+      for (const [line, onLine] of [...lines].sort(([a], [b]) => a - b)) {
+        const bySymbol = new Map<string, Call[]>();
+        for (const call of onLine)
+          bySymbol.set(call.symbol, [...(bySymbol.get(call.symbol) ?? []), call]);
+        const lineMarks: CallMark[] = [];
+        for (const [symbol, symbolCalls] of bySymbol) {
+          const fresh = symbolCalls.some((call) => !reached.has(call.toHunkId));
+          for (const call of symbolCalls) reached.add(call.toHunkId);
+          const text = lineText(id, line);
+          const at = fresh || text === undefined ? null : symbolPlace(text, symbol);
+          lineMarks.push(
+            at === null
+              ? { kind: "chip", symbol, calls: symbolCalls }
+              : { kind: "mention", symbol, calls: symbolCalls, at },
+          );
+        }
+        marks.set(line, lineMarks);
+      }
+      plan.set(id, marks);
+    }
+  }
+  return plan;
+};
+
+/** Counts for the measuring script: chips, the ambiguous among them, and mentions. */
+export const chipCounts = (plan: ChipPlan) => {
+  const marks = [...plan.values()].flatMap((lines) => [...lines.values()].flat());
+  const chips = marks.filter((mark) => mark.kind === "chip");
+  return {
+    chips: chips.length,
+    ambiguous: chips.filter((mark) => mark.calls.length > 1).length,
+    mentions: marks.length - chips.length,
+  };
+};

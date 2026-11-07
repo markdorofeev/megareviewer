@@ -1,9 +1,11 @@
-import { memo, type ReactNode, useEffect } from "react";
+import { memo, type ReactNode, useEffect, useRef, useState } from "react";
 import type { HunkId, MechanicalProof } from "../../../../src/domain/diff/index.ts";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
-import { FileNotices, hunkLocation, MechanicalGroup } from "../../diff/index.ts";
+import { FileNotices, hunkLocation, type LineMark, MechanicalGroup } from "../../diff/index.ts";
+import type { Call, CallMark } from "./chips.ts";
 import { CallLabel, type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
-import { type Call, type MapSection, sectionKey } from "./model.ts";
+import { type MapSection, sectionKey } from "./model.ts";
+import { Mention } from "./Peek.tsx";
 
 export const stepAnchor = (key: string): string => `step-${key}`;
 export const MECHANICAL_ANCHOR = "mechanical-changes";
@@ -29,15 +31,165 @@ const Stable = memo(
   (previous, next) => previous.signature === next.signature,
 );
 
-/** A nesting level's calls, under the lines that make them. */
-const InlineCalls = ({
-  calls,
+/** One call's chip: opens the called hunk in place, unless it's already open higher up. */
+const CallChip = ({
+  call,
   chain,
   deps,
   openCalls,
   onToggleCall,
 }: {
-  readonly calls: readonly Call[];
+  readonly call: Call;
+  readonly chain: readonly HunkId[];
+  readonly deps: HunkDeps;
+  readonly openCalls: ReadonlySet<string>;
+  readonly onToggleCall: (key: string) => void;
+}) => {
+  const key = callKey(chain, call);
+  if (chain.includes(call.toHunkId)) {
+    return (
+      <li className="call">
+        <span className="call-chip above">
+          <CallLabel call={call} index={deps.index} />
+          <span className="call-note">open above</span>
+        </span>
+      </li>
+    );
+  }
+  const open = openCalls.has(key);
+  return (
+    <li className="call">
+      <button
+        type="button"
+        className="call-chip"
+        aria-expanded={open}
+        onClick={() => onToggleCall(key)}
+      >
+        <span className="call-arrow" aria-hidden="true">
+          {open ? "▾" : "▸"}
+        </span>
+        <CallLabel call={call} index={deps.index} />
+      </button>
+      {open && (
+        <div className="inline-call">
+          <NestedHunk
+            id={call.toHunkId}
+            chain={[...chain, call.toHunkId]}
+            deps={deps}
+            openCalls={openCalls}
+            onToggleCall={onToggleCall}
+          />
+        </div>
+      )}
+    </li>
+  );
+};
+
+/**
+ * One symbol that reaches several hunks: one chip, listing them. Picking one opens it in place,
+ * as a chip does; the ones open show under the chip.
+ */
+const AmbiguousChip = ({
+  mark,
+  chain,
+  deps,
+  openCalls,
+  onToggleCall,
+}: {
+  readonly mark: CallMark;
+  readonly chain: readonly HunkId[];
+  readonly deps: HunkDeps;
+  readonly openCalls: ReadonlySet<string>;
+  readonly onToggleCall: (key: string) => void;
+}) => {
+  const [listing, setListing] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const opened = mark.calls.filter(
+    (call) => !chain.includes(call.toHunkId) && openCalls.has(callKey(chain, call)),
+  );
+  const moveFocus = (from: HTMLElement, step: 1 | -1) => {
+    const choices = [...(from.closest("ul")?.querySelectorAll<HTMLElement>(".call-choice") ?? [])];
+    choices[(choices.indexOf(from) + step + choices.length) % choices.length]?.focus();
+  };
+  return (
+    <li className="call">
+      <button
+        ref={toggle}
+        type="button"
+        className="call-chip ambiguous"
+        aria-expanded={listing}
+        onClick={() => setListing((previous) => !previous)}
+      >
+        <span className="call-arrow" aria-hidden="true">
+          {listing ? "▾" : "▸"}
+        </span>
+        <code className="call-symbol">{mark.symbol}</code>{" "}
+        <span className="call-file">→ {mark.calls.length} places</span>
+      </button>
+      {listing && (
+        <ul className="call-choices" aria-label={`Where ${mark.symbol} goes`}>
+          {mark.calls.map((call) => {
+            const above = chain.includes(call.toHunkId);
+            const found = deps.index.hunks.get(call.toHunkId);
+            return (
+              <li key={call.toHunkId}>
+                <button
+                  type="button"
+                  className="call-choice"
+                  disabled={above}
+                  aria-pressed={openCalls.has(callKey(chain, call))}
+                  onClick={() => {
+                    onToggleCall(callKey(chain, call));
+                    setListing(false);
+                    toggle.current?.focus();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      moveFocus(event.currentTarget, event.key === "ArrowDown" ? 1 : -1);
+                    } else if (event.key === "Escape") {
+                      event.stopPropagation();
+                      setListing(false);
+                      toggle.current?.focus();
+                    }
+                  }}
+                >
+                  <CallLabel call={call} index={deps.index} />
+                  {found !== undefined && (
+                    <span className="call-note"> {hunkLocation(found.hunk)}</span>
+                  )}
+                  {above && <span className="call-note"> open above</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {opened.map((call) => (
+        <div key={call.toHunkId} className="inline-call">
+          <NestedHunk
+            id={call.toHunkId}
+            chain={[...chain, call.toHunkId]}
+            deps={deps}
+            openCalls={openCalls}
+            onToggleCall={onToggleCall}
+          />
+        </div>
+      ))}
+    </li>
+  );
+};
+
+/** A line's chips, under it. */
+const InlineCalls = ({
+  marks,
+  chain,
+  deps,
+  openCalls,
+  onToggleCall,
+}: {
+  readonly marks: readonly CallMark[];
   /** The hunks open from the top, ending with the one making these calls. */
   readonly chain: readonly HunkId[];
   readonly deps: HunkDeps;
@@ -45,48 +197,40 @@ const InlineCalls = ({
   readonly onToggleCall: (key: string) => void;
 }) => (
   <ul className="calls">
-    {calls.map((call) => {
-      const key = callKey(chain, call);
-      if (chain.includes(call.toHunkId)) {
-        return (
-          <li key={key} className="call">
-            <span className="call-chip above">
-              <CallLabel call={call} index={deps.index} />
-              <span className="call-note">open above</span>
-            </span>
-          </li>
-        );
-      }
-      const open = openCalls.has(key);
-      return (
-        <li key={key} className="call">
-          <button
-            type="button"
-            className="call-chip"
-            aria-expanded={open}
-            onClick={() => onToggleCall(key)}
-          >
-            <span className="call-arrow" aria-hidden="true">
-              {open ? "▾" : "▸"}
-            </span>
-            <CallLabel call={call} index={deps.index} />
-          </button>
-          {open && (
-            <div className="inline-call">
-              <NestedHunk
-                id={call.toHunkId}
-                chain={[...chain, call.toHunkId]}
-                deps={deps}
-                openCalls={openCalls}
-                onToggleCall={onToggleCall}
-              />
-            </div>
-          )}
-        </li>
+    {marks.map((mark) => {
+      const [only, ...more] = mark.calls;
+      if (only === undefined) return null;
+      const props = { chain, deps, openCalls, onToggleCall };
+      return more.length > 0 ? (
+        <AmbiguousChip key={`${mark.symbol}*`} mark={mark} {...props} />
+      ) : (
+        <CallChip key={`${mark.symbol}>${only.toHunkId}`} call={only} {...props} />
       );
     })}
   </ul>
 );
+
+/** Every call on a line as a chip, one per symbol: how an opened card shows its calls. */
+const everyCallAChip = (calls: readonly Call[]): CallMark[] => {
+  const bySymbol = new Map<string, Call[]>();
+  for (const call of calls) bySymbol.set(call.symbol, [...(bySymbol.get(call.symbol) ?? []), call]);
+  return [...bySymbol].map(([symbol, symbolCalls]) => ({
+    kind: "chip",
+    symbol,
+    calls: symbolCalls,
+  }));
+};
+
+/** A hunk's marks by line: from the chip plan at its own place, every call a chip when opened. */
+const marksOf = (chain: readonly HunkId[], deps: HunkDeps) => {
+  const id = chain.at(-1);
+  if (id === undefined) return undefined;
+  if (chain.length === 1) return deps.plan.get(id);
+  const lines = deps.calls.get(id);
+  return lines === undefined
+    ? undefined
+    : new Map([...lines].map(([line, calls]) => [line, everyCallAChip(calls)]));
+};
 
 const belowLines = (
   chain: readonly HunkId[],
@@ -94,23 +238,52 @@ const belowLines = (
   openCalls: ReadonlySet<string>,
   onToggleCall: (key: string) => void,
 ): ReadonlyMap<number, ReactNode> | undefined => {
-  const id = chain.at(-1);
-  const lines = id === undefined ? undefined : deps.calls.get(id);
+  const lines = marksOf(chain, deps);
   if (lines === undefined) return undefined;
   return new Map(
-    [...lines].map(([line, calls]) => [
-      line,
-      <InlineCalls
-        key={line}
-        calls={calls}
-        chain={chain}
-        deps={deps}
-        openCalls={openCalls}
-        onToggleCall={onToggleCall}
-      />,
-    ]),
+    [...lines].flatMap(([line, marks]) => {
+      const chips = marks.filter((mark) => mark.kind === "chip");
+      return chips.length === 0
+        ? []
+        : [
+            [
+              line,
+              <InlineCalls
+                key={line}
+                marks={chips}
+                chain={chain}
+                deps={deps}
+                openCalls={openCalls}
+                onToggleCall={onToggleCall}
+              />,
+            ] as const,
+          ];
+    }),
   );
 };
+
+/** Mentions underlined where their symbol stands. */
+const mentionsIn = (id: HunkId, deps: HunkDeps): ReadonlyMap<number, readonly LineMark[]> =>
+  new Map(
+    [...(deps.plan.get(id) ?? [])].flatMap(([line, marks]) => {
+      const inLine = marks.flatMap((mark): LineMark[] =>
+        mark.kind === "mention"
+          ? [
+              {
+                start: mark.at.start,
+                end: mark.at.end,
+                render: (code) => (
+                  <Mention mark={mark} deps={deps}>
+                    {code}
+                  </Mention>
+                ),
+              },
+            ]
+          : [],
+      );
+      return inLine.length === 0 ? [] : [[line, inLine] as const];
+    }),
+  );
 
 const NestedHunk = ({
   id,
@@ -269,6 +442,7 @@ export const MapLayout = ({
                       id={id}
                       deps={deps}
                       belowLine={belowLines([id], deps, openCalls, onToggleCall)}
+                      inLine={mentionsIn(id, deps)}
                     />
                   )}
                 />

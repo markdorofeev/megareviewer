@@ -5,7 +5,7 @@ import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { type CharRange, intraLineChanges } from "./intra-line.ts";
 import { type DisplayLine, displayLines, hunkLocation, lineCounts } from "./lines.ts";
 import { RiskBadge } from "./RiskBadge.tsx";
-import { type CodeToken, plainTokens, segmentLine } from "./tokens.ts";
+import { type CodeToken, plainTokens, type Segment, segmentLine } from "./tokens.ts";
 import { useHighlighter, useNearViewport } from "./useHighlighter.ts";
 
 declare module "react" {
@@ -38,12 +38,77 @@ export const FilePath = ({ file }: { readonly file: Pick<FileChange, "path" | "o
   </span>
 );
 
-/** Another hunk this one is linked to by the call graph. */
-export interface HunkLink {
-  readonly direction: "calls" | "called-by";
-  readonly symbol: string;
+/** A file whose code calls this hunk, and its first hunk that does. */
+export interface CallerFile {
+  readonly path: string;
   readonly hunkId: HunkId;
+  readonly test: boolean;
 }
+
+/** Part of a line shown by the caller, such as an underlined call: characters `start` to `end`. */
+export interface LineMark {
+  readonly start: number;
+  readonly end: number;
+  readonly render: (code: ReactNode) => ReactNode;
+}
+
+/** Each path's shortest tail of directories that no other path in the list shares. */
+export const shortPaths = (paths: readonly string[]): string[] => {
+  const parts = paths.map((path) => path.split("/"));
+  return parts.map((segments) => {
+    for (let take = 1; take < segments.length; take++) {
+      const tail = segments.slice(-take).join("/");
+      const shared = parts.filter((other) => other.slice(-take).join("/") === tail).length;
+      if (shared <= 1) return tail;
+    }
+    return segments.join("/");
+  });
+};
+
+const joined = (items: readonly ReactNode[]): ReactNode[] =>
+  items.flatMap((item, at) => [at === 0 ? "" : at === items.length - 1 ? " and " : ", ", item]);
+
+/** "Called from a.py, b.py and 2 tests": a link per file, tests counted until they're opened. */
+const Callers = ({
+  callers,
+  onFollow,
+}: {
+  readonly callers: readonly CallerFile[];
+  readonly onFollow: (id: HunkId) => void;
+}) => {
+  const [showTests, setShowTests] = useState(false);
+  const names = shortPaths(callers.map((caller) => caller.path));
+  const link = (caller: CallerFile, at: number) => (
+    <button
+      key={caller.path}
+      type="button"
+      className="hunk-link"
+      title={caller.path}
+      onClick={() => onFollow(caller.hunkId)}
+    >
+      {names[at]} ↑
+    </button>
+  );
+  const code = callers.flatMap((caller, at) => (caller.test ? [] : [link(caller, at)]));
+  const tests = callers.flatMap((caller, at) => (caller.test ? [link(caller, at)] : []));
+  const testCount = (
+    <button
+      key="tests"
+      type="button"
+      className="link-button"
+      aria-expanded={false}
+      onClick={() => setShowTests(true)}
+    >
+      {tests.length === 1 ? "1 test" : `${tests.length} tests`}
+    </button>
+  );
+  const shown = [...code, ...(tests.length === 0 ? [] : showTests ? tests : [testCount])];
+  return (
+    <p className="hunk-callers">
+      <span className="hunk-callers-label">Called from</span> {joined(shown)}
+    </p>
+  );
+};
 
 /** Where a comment on a hunk goes: a head-side ("new") or base-side ("old") line. */
 export interface LinePlace {
@@ -78,7 +143,7 @@ export const HunkCard = memo(function HunkCard({
   focused = false,
   onFocus,
   lineLimit,
-  links = [],
+  callers = [],
   onFollow,
   reviewed,
   onReviewed,
@@ -88,6 +153,7 @@ export const HunkCard = memo(function HunkCard({
   onComment,
   afterHeader,
   belowLine,
+  inLine,
 }: {
   readonly hunk: Hunk;
   readonly file: FileChange;
@@ -100,8 +166,8 @@ export const HunkCard = memo(function HunkCard({
   readonly onFocus?: (id: HunkId) => void;
   /** Shows this many lines at first, with a button for the rest. */
   readonly lineLimit?: number;
-  /** Hunks that call this one, which `onFollow` goes to; calls show in the code, by `belowLine`. */
-  readonly links?: readonly HunkLink[];
+  /** Files whose code calls this hunk, which `onFollow` goes to; calls show by `belowLine`. */
+  readonly callers?: readonly CallerFile[];
   readonly onFollow?: (id: HunkId) => void;
   /** Whether the reviewer has read this hunk; without `onReviewed` there's no checkbox. */
   readonly reviewed?: boolean;
@@ -116,6 +182,8 @@ export const HunkCard = memo(function HunkCard({
   readonly afterHeader?: ReactNode;
   /** Shown under the line with this new-side number, e.g. the calls it makes. */
   readonly belowLine?: ReadonlyMap<number, ReactNode>;
+  /** Parts of the line with this new-side number to show differently, e.g. a call's symbol. */
+  readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
 }) {
   const ref = useRef<HTMLElement>(null);
   const [showAll, setShowAll] = useState(false);
@@ -140,7 +208,6 @@ export const HunkCard = memo(function HunkCard({
   }, [focused]);
 
   const counts = lineCounts(hunk);
-  const callers = links.filter((link) => link.direction === "called-by");
   const classes = ["hunk-card", highlighted && "highlighted", risk && `risk-${risk.riskClass}`];
   return (
     <section
@@ -182,15 +249,7 @@ export const HunkCard = memo(function HunkCard({
         )}
       </header>
       {callers.length > 0 && onFollow !== undefined && (
-        <ul className="hunk-links" aria-label="Called by">
-          {callers.map((link) => (
-            <li key={`${link.symbol}:${link.hunkId}`}>
-              <button type="button" className="hunk-link" onClick={() => onFollow(link.hunkId)}>
-                called by {link.symbol} ↑
-              </button>
-            </li>
-          ))}
-        </ul>
+        <Callers callers={callers} onFollow={onFollow} />
       )}
       {afterHeader}
       <div
@@ -213,10 +272,8 @@ export const HunkCard = memo(function HunkCard({
               const comment =
                 place === null ? undefined : comments.find((one) => samePlace(one, place));
               const open = place !== null && openComment !== null && samePlace(openComment, place);
-              const below =
-                line.line.kind === "del" || line.line.newLine === null
-                  ? undefined
-                  : belowLine?.get(line.line.newLine);
+              const newLine = line.line.kind === "del" ? null : line.line.newLine;
+              const below = newLine === null ? undefined : belowLine?.get(newLine);
               return (
                 // biome-ignore lint/suspicious/noArrayIndexKey: lines don't move within a hunk.
                 <Fragment key={i}>
@@ -224,6 +281,7 @@ export const HunkCard = memo(function HunkCard({
                     line={line}
                     tokens={tokens?.[i] ?? null}
                     changed={changes.get(i) ?? null}
+                    marks={newLine === null ? undefined : inLine?.get(newLine)}
                     onNumber={
                       place === null || onOpenComment === undefined || onComment === undefined
                         ? undefined
@@ -318,11 +376,13 @@ const Line = memo(function Line({
   line: { line, text, carriageReturn },
   tokens,
   changed,
+  marks = [],
   onNumber,
 }: {
   readonly line: DisplayLine;
   readonly tokens: readonly CodeToken[] | null;
   readonly changed: readonly CharRange[] | null;
+  readonly marks?: readonly LineMark[];
   /** Opens a comment on this line, from its line number. */
   readonly onNumber?: () => void;
 }) {
@@ -346,30 +406,7 @@ const Line = memo(function Line({
       <td className="line-number">{number(line.newLine, "new")}</td>
       <td className="line-marker">{MARKERS[line.kind]}</td>
       <td className="line-code">
-        {segmentLine(tokens ?? plainTokens(text), changed ?? []).map((segment, i) => {
-          const className = [
-            "token",
-            segment.italic && "italic",
-            segment.bold && "bold",
-            segment.changed && "changed",
-          ]
-            .filter(Boolean)
-            .join(" ");
-          const style =
-            segment.light === null && segment.dark === null
-              ? undefined
-              : {
-                  "--token-light": segment.light ?? undefined,
-                  "--token-dark": segment.dark ?? undefined,
-                };
-          const Element = segment.changed ? Changed : "span";
-          return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a line's segments are rebuilt together.
-            <Element key={i} className={className} style={style}>
-              {segment.text}
-            </Element>
-          );
-        })}
+        {markedCode(segmentLine(tokens ?? plainTokens(text), changed ?? [], marks), marks, Changed)}
         {carriageReturn && (
           <span className="line-note" title="This line ends in CRLF">
             CRLF
@@ -380,3 +417,60 @@ const Line = memo(function Line({
     </tr>
   );
 });
+
+/** A line's segments as elements, the ones inside a mark wrapped by its `render`. */
+const markedCode = (
+  segments: readonly Segment[],
+  marks: readonly LineMark[],
+  Changed: "del" | "ins",
+): ReactNode[] => {
+  const nodes: ReactNode[] = [];
+  let group: { mark: LineMark; code: ReactNode[] } | null = null;
+  const flush = () => {
+    if (group !== null) {
+      nodes.push(
+        <Fragment key={`mark-${group.mark.start}`}>{group.mark.render(group.code)}</Fragment>,
+      );
+    }
+    group = null;
+  };
+  let offset = 0;
+  segments.forEach((segment, i) => {
+    const start = offset;
+    offset += segment.text.length;
+    const className = [
+      "token",
+      segment.italic && "italic",
+      segment.bold && "bold",
+      segment.changed && "changed",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const style =
+      segment.light === null && segment.dark === null
+        ? undefined
+        : {
+            "--token-light": segment.light ?? undefined,
+            "--token-dark": segment.dark ?? undefined,
+          };
+    const Element = segment.changed ? Changed : "span";
+    const element = (
+      // biome-ignore lint/suspicious/noArrayIndexKey: a line's segments are rebuilt together.
+      <Element key={i} className={className} style={style}>
+        {segment.text}
+      </Element>
+    );
+    const mark = marks.find((one) => start >= one.start && start < one.end);
+    if (mark === undefined) {
+      flush();
+      nodes.push(element);
+    } else if (group?.mark === mark) {
+      group.code.push(element);
+    } else {
+      flush();
+      group = { mark, code: [element] };
+    }
+  });
+  flush();
+  return nodes;
+};
