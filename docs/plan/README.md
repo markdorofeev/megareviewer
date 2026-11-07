@@ -103,11 +103,30 @@ It's one stage because both layouts share the hunk cards, decisions and shortcut
 
 ## Fourth slice: navigation by flows
 
-Without the model, the tour's steps are whatever the call graph happens to connect, so their titles say nothing and one step can hold most of the PR. This slice makes each step a flow: an entry point (a route, a page, a command) and the changed code it runs. Later stages replace the call tree with an overview of how the changed files connect, and show a call chip only where it helps.
+Without the model, the tour's steps are whatever the call graph happens to connect, so their titles say nothing and one step can hold most of the PR. This slice makes each step a flow: an entry point (a route, a page, a command) and the changed code it runs. The stages after it fix what reviewers still struggle with: too many chips, a call tree nobody uses, and hunks too coarse to place in one flow.
 
 | # | Stage | Depends on | Owns |
 |---|---|---|---|
 | 25 | [Tour by flows](25-flows.md) | 24 | `src/domain/review/code-tour.ts`, `entry-points.ts`, `src/domain/diff/call-graph.ts`, step headings in `web/src/pages/review/` |
+| 26 | [Fewer chips on the map](26-chip-rules.md) | 25 | `scripts/measure-pr.ts`, chips, mentions and callers in `web/src/pages/review/` and `web/src/diff/HunkCard.tsx` |
+| 27 | [Overview of the changed files](27-overview.md) | 25, 26 | `src/domain/diff/file-links.ts`, the overview replacing the call tree in `web/src/pages/review/` |
+| 28 | [Hunks split by definition](28-hunk-parts.md) | 26, 27 | `src/domain/diff/parts.ts`, `call-graph.ts`, `src/domain/review/code-tour.ts`, `validation.ts`, partial cards and reviewed state in `web/` |
+| 29 | [Links from requests to routes](29-request-links.md) | 27, 28 | `src/domain/diff/requests.ts`, `call-graph.ts`, `code-tour.ts`, request chips and edges |
+| 30 | [Unchanged callers from a local checkout](30-unchanged-callers.md) | 27, 28 | `LocalCheckout` port, `src/adapters/git/`, callers on cards and in the overview |
+| 31 | [Flows as the model's tour](31-model-tour-from-flows.md) | 28 | The tour pass in `src/adapters/claude/`, `runTour`, `evals/` tour scoring |
+
+The order is by value to a reviewer:
+
+1. **26, chips,** because the map is the default layout and every reviewer reads it on every PR: on delphi-code #2, 29 of its 54 chips repeat a call shown earlier in the same flow. It's also the smallest stage, with no contract change.
+2. **27, overview,** because the second layout is unusable today (13 of the call tree's 42 rows are "above" repeats), and nothing on the page shows how the changed files connect.
+3. **28, parts,** because it fixes the tour's worst step on delphi-code #2 (three routes in one flow holding 32 of 48 hunks). It's the largest and riskiest change, so it waits until 26 keeps the extra chips in check.
+4. **29, requests to routes,** because it joins a full-stack PR's two halves, which 27 shows as unconnected. It needs 28, so a request links to one route instead of a hunk of three.
+5. **30, unchanged callers,** because it's the only stage that shows code outside the diff, where regressions live. It comes after 29 because it needs a local checkout, which helps only reviewers who run megareviewer in one.
+6. **31, the model's tour from flows,** last, because it helps only `--ai` users, and costs eval runs.
+
+After 28, stage 31 can run beside 29 or 30. Stages 29 and 30 both change `call-graph.ts`, so one waits for the other. `PIPELINE_VERSION` numbers in the stage docs assume this order; a stage run out of order takes the next free number.
+
+Each stage measures itself on [delphi-code #2](https://github.com/markdorofeev/delphi-code/pull/2) with `pnpm measure`, which stage 26 adds: it runs today's prep and tour on the diff and files cached in `~/.megareviewer/db.sqlite`.
 
 ## How to pick up a stage
 
