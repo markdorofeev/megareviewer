@@ -8,6 +8,7 @@ import {
   AnalysisId,
   DecisionId,
   type PublicationReceipt,
+  TourStepId,
 } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks } from "../../../dev/fixtures/index.ts";
 import { mockFetch } from "../../../dev/mock-fetch.ts";
@@ -467,6 +468,57 @@ describe("map", () => {
     );
     expect(stepHeadings()).toHaveLength(4);
     expect(focusedLabel()).toMatch(RECEIPTS);
+  });
+
+  it("links a flow to the code of earlier steps it passes through, and quiets supporting steps", async () => {
+    const step = (id: string, title: string, hunkIds: HunkId[], extra: object = {}) => ({
+      id: TourStepId.parse(id),
+      title,
+      explanation: "",
+      hunkIds,
+      kind: "flow" as const,
+      via: [],
+      ...extra,
+    });
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          tour: {
+            steps: [
+              step("s1", "GET /orders/:id/receipt", [
+                h.routeImports,
+                h.receiptRoute,
+                h.retryAndCache,
+              ]),
+              step("s2", "Command: main in cli.ts", [h.receiptFormatting], {
+                via: [h.retryAndCache],
+              }),
+              step("s3", "Other changes in src/routes", [h.formatMoneyRemoved], {
+                kind: "supporting",
+              }),
+            ],
+            builtBy: "code",
+          },
+        },
+      },
+    });
+    await loaded();
+    const second = screen.getByRole("region", { name: "2 Command: main in cli.ts" });
+    const through = within(second).getByRole("list", { name: "Passes through" });
+    await userEvent.click(within(through).getByRole("button", { name: /^receipts\.ts lines 26/ }));
+    expect(focusedLabel()).toMatch(RECEIPTS);
+    const supporting = screen.getByRole("region", { name: "3 Other changes in src/routes" });
+    expect(supporting.querySelector(".step-heading.supporting")).not.toBeNull();
+    expect(
+      within(screen.getByRole("region", { name: "1 GET /orders/:id/receipt" })).queryByRole(
+        "list",
+        {
+          name: "Passes through",
+        },
+      ),
+    ).toBeNull();
   });
 
   it("says when the model's tour failed and the call-graph tour replaced it", async () => {

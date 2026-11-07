@@ -127,13 +127,20 @@ export const RiskRail = ({
             <li key={key}>
               <button
                 type="button"
-                className="rail-step"
+                className={
+                  section.kind === "step" && section.step.kind === "supporting"
+                    ? "rail-step supporting"
+                    : "rail-step"
+                }
                 onClick={() => onGo({ kind: "section", key })}
               >
                 {section.kind === "step" && (
                   <span className="rail-step-number">{section.number}</span>
                 )}{" "}
-                <span className="rail-step-title model-text">
+                <span
+                  className="rail-step-title model-text"
+                  title={section.kind === "step" ? section.step.title : undefined}
+                >
                   {section.kind === "step" ? section.step.title : "Changes by file"}
                 </span>
                 {done && (

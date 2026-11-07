@@ -1,6 +1,6 @@
 # Stage 25: Tour by flows
 
-**Status:** In progress (on main)
+**Status:** Done (pushed to main without a PR)
 **Depends on:** 24, and hints that follow imports (c5c0d9d)
 **Unblocks:** an overview diagram to replace the call tree, and chip rules on the map
 **Owns:** `src/domain/review/code-tour.ts`, `src/domain/review/entry-points.ts` (new), `src/domain/diff/call-graph.ts`, the tour's step headings in `web/src/pages/review/` (`MapLayout.tsx`, `RiskRail.tsx`, `model.ts`, `palette.ts`)
@@ -123,11 +123,11 @@ The call tree doesn't change.
 
 ## Definition of done
 
-- [ ] Contract change: `CallGraphHint.use`, `TourStep.kind` and `via`, changed definitions in the pipeline, and a change log line in stage 02.
-- [ ] `entryOf` and the new `codeTour`, with the tests above; 90% branch coverage holds.
-- [ ] The map shows flow headings, `via` links and supporting steps.
-- [ ] On delphi-code #2, measured from the local cache as in commit c5c0d9d, the tour matches the target above, or the differences are written in **Notes for later stages**.
-- [ ] ARCHITECTURE.md's tour bullet in "2. Deterministic prep" describes flows, and says why grouping by what's connected was replaced.
+- [x] Contract change: `CallGraphHint.use`, `TourStep.kind` and `via`, changed definitions in the pipeline, and a change log line in stage 02.
+- [x] `entryOf` and the new `codeTour`, with the tests above; 90% branch coverage holds.
+- [x] The map shows flow headings, `via` links and supporting steps.
+- [x] On delphi-code #2, measured from the local cache as in commit c5c0d9d, the tour matches the target above, or the differences are written in **Notes for later stages**.
+- [x] ARCHITECTURE.md's tour bullet in "2. Deterministic prep" describes flows, and says why grouping by what's connected was replaced.
 
 ## Open issues
 
@@ -135,4 +135,14 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+Where the code differs from or adds to this doc:
+
+- **No entry-kind tag on headings.** Titles already say `Page:` and `Command:`, and a route starts with its verb, so a tag would repeat them.
+- **Flow order counts contract code a flow reaches through earlier flows.** On delphi-code #2 with today's rules, `main` in `hosts.py` reaches the keychain code, which is contract, so the command flow comes before the page. The target table has the page second; it was written before the keychain rule.
+- **Arguments are uses now.** The Python and TypeScript/JavaScript queries count an identifier passed as an argument, so `response_model=X`, `Depends(f)` and `app.get("/x", handler)` link. A Python base class (`class A(Base)`) is a use, as `extends` is in TypeScript. This was under **Not in this stage**; the models attach through it on delphi-code #2.
+- **Generated files** are found in prep, from the first five lines of each head file (`looksGenerated`: `@generated`, `auto-generated`, `code generated`, `do not edit`), and passed to `codeTour` as `generated`, without storing it. A schema or generated file that a flow only names as a type stays under API schema; one a flow calls is read in the flow.
+- **Test helpers** follow the tests that use them: a fake that only tests call joins their flow.
+- **Reading order in a flow** is the walk, with each file's hunks together in file order at the file's first place, and tests last.
+- **A root joins another flow** when at least half of the code it reaches is read already.
+- **Route receivers** are `app`, `router`, `server`, `mux`, `r`, `e`, `g`, `fastify` and names ending in `Router` or `App`. `api` isn't one: frontends call their HTTP client that, and `api.get("/users")` isn't a route.
+- **Supporting steps** are titled `API schema`, `Docs`, `Tests`, and `Other changes in <area>` (one per area, `the repository root` at the top).

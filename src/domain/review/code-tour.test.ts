@@ -306,6 +306,73 @@ describe("codeTour", () => {
     });
   });
 
+  it("reads a pull request shaped like delphi-code #2 as three flows and supporting steps", () => {
+    const hosts = "app/infrastructure/hosts.py";
+    const files = [
+      one(1, "app/http_api/app.py"),
+      one(
+        2,
+        "app/http_api/routes/hosting.py",
+        route("get", "/api/account-connections"),
+        route("put", "/api/account-connections/{domain}/token"),
+        route("delete", "/api/account-connections/{domain}/token"),
+      ),
+      one(3, "app/http_api/request_models.py"),
+      one(4, "app/services/application.py"),
+      one(5, "app/services/remote.py"),
+      file(hosts, hunk(6, hosts), hunk(7, hosts), hunk(8, hosts)),
+      one(9, "app/infrastructure/keychain.py"),
+      one(10, "tests/test_http_api.py"),
+      one(11, "tests/fakes.py"),
+      one(12, "tests/fake_keychain.py"),
+      one(13, "web/src/routes/setup.tsx"),
+      one(14, "web/src/setup/ConnectionsSection.tsx"),
+      one(15, "web/src/api/schema.d.ts"),
+      one(16, "web/openapi.json"),
+      one(17, "web/src/routes/setup.test.tsx"),
+      one(18, "CONTRIBUTING.md"),
+      one(19, "web/src/picker/CredentialsGuide.tsx"),
+    ];
+    const callGraph = [
+      hint(1, 2),
+      hint(2, 4),
+      hint(2, 3, "type"),
+      hint(4, 5),
+      hint(5, 6),
+      hint(6, 9),
+      // The Bitbucket host, reached through its base class.
+      hint(7, 9),
+      // main in hosts.py.
+      hint(8, 6),
+      hint(10, 2),
+      hint(10, 11),
+      hint(13, 14),
+      hint(14, 15, "type"),
+    ];
+    const tour = tourOf(files, {
+      callGraph,
+      definitions: new Map([
+        [h(7), ["Bitbucket"]],
+        [h(8), ["main"]],
+        [h(13), ["SetupPage"]],
+      ]),
+      generated: new Set(["web/src/api/schema.d.ts"]),
+      risk: contract(9, 16, 19),
+    });
+    expect(shape(tour)).toEqual([
+      [
+        "/api/account-connections: GET, PUT /{domain}/token, DELETE /{domain}/token",
+        [1, 2, 4, 5, 6, 7, 9, 3, 10, 11, 12],
+      ],
+      ["Command: main in hosts.py", [8]],
+      ["Page: SetupPage", [13, 14, 17]],
+      ["API schema", [15, 16]],
+      ["Other changes in web/src/picker", [19]],
+      ["Docs", [18]],
+    ]);
+    expect(tour.steps[1]?.via).toEqual([h(6), h(9)]);
+  });
+
   it("covers every required hunk exactly once, over random pull requests", () => {
     // A small seeded generator, so a failure reproduces.
     let seed = 7;

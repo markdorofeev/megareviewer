@@ -1,7 +1,7 @@
 import { memo, type ReactNode, useEffect } from "react";
 import type { HunkId, MechanicalProof } from "../../../../src/domain/diff/index.ts";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
-import { FileNotices, MechanicalGroup } from "../../diff/index.ts";
+import { FileNotices, hunkLocation, MechanicalGroup } from "../../diff/index.ts";
 import { CallLabel, type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
 import { type Call, type MapSection, sectionKey } from "./model.ts";
 
@@ -133,6 +133,35 @@ const NestedHunk = ({
   />
 );
 
+/** Links to the code of earlier steps a flow runs, which the page shows there, not again here. */
+const PassesThrough = ({
+  via,
+  deps,
+}: {
+  readonly via: readonly HunkId[];
+  readonly deps: HunkDeps;
+}) => {
+  const known = via.flatMap((id) => {
+    const found = deps.index.hunks.get(id);
+    return found === undefined ? [] : [{ id, ...found }];
+  });
+  if (known.length === 0) return null;
+  return (
+    <div className="step-via">
+      <span className="step-via-label">Passes through</span>
+      <ul className="hunk-links" aria-label="Passes through">
+        {known.map(({ id, file, hunk }) => (
+          <li key={id}>
+            <button type="button" className="hunk-link" onClick={() => deps.onFollow(id)}>
+              {file.path.slice(file.path.lastIndexOf("/") + 1)} {hunkLocation(hunk)} ↑
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
 /**
  * Every hunk in one scroll, step after step in tour order, then the mechanical changes. A call in
  * the code opens the hunk it calls in place; the hunk also stays at its own place.
@@ -210,11 +239,16 @@ export const MapLayout = ({
             tabIndex={-1}
           >
             {section.kind === "step" ? (
-              <header className="step-heading">
+              <header
+                className={
+                  section.step.kind === "supporting" ? "step-heading supporting" : "step-heading"
+                }
+              >
                 <h2 id={`${stepAnchor(key)}-title`} className="model-text">
                   <span className="step-number">{section.number}</span> {section.step.title}
                 </h2>
                 <p className="model-text">{section.step.explanation}</p>
+                <PassesThrough via={section.step.via} deps={deps} />
               </header>
             ) : (
               <header className="step-heading">

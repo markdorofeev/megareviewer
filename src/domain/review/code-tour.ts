@@ -242,7 +242,12 @@ export const codeTour = (input: CodeTourInput): Tour => {
       );
     }
     if (isTest(id)) {
-      const linked = [...(callees.get(id) ?? []), ...(typeUses.get(id) ?? [])];
+      // A test follows the code it calls; a test helper, like a fake, the tests that use it.
+      const linked = [
+        ...(callees.get(id) ?? []),
+        ...(typeUses.get(id) ?? []),
+        ...[...(callers.get(id) ?? []), ...(usedAsType.get(id) ?? [])].filter(isTest),
+      ];
       return (
         mostCommon(linked.map((to) => owner.get(to))) ??
         flowWithMostOf(path, isTest) ??
