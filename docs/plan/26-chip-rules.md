@@ -1,6 +1,6 @@
 # Stage 26: Fewer chips on the map
 
-**Status:** In progress (branch stage/26-chip-rules)
+**Status:** Done ([markdorofeev/megareviewer#1](https://github.com/markdorofeev/megareviewer/pull/1))
 **Depends on:** 25
 **Unblocks:** 28, which multiplies calls by splitting hunks
 **Owns:** `scripts/measure-pr.ts` (new) and its `measure` script in `package.json`, `web/src/pages/review/MapLayout.tsx`, `HunkView.tsx`, `model.ts` (`callsByLine`, `hunkLinks`, `firstCall`), `chips.ts` and `Peek.tsx` (new), `review.css`, the links in `web/src/diff/HunkCard.tsx`
