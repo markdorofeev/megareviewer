@@ -1,6 +1,6 @@
 # Stage 27: Overview of the changed files
 
-**Status:** In progress (branch stage/27-overview)
+**Status:** Done (on main, no PR)
 **Depends on:** 25; after 26, because both change `ReviewPage.tsx`
 **Unblocks:** 29 and 30, which add edges and nodes to it
 **Owns:** `src/domain/diff/file-links.ts` (new), `web/src/pages/review/overview.ts` and `Overview.tsx` (new), `TreeLayout.tsx` and `call-tree.ts` (removed), the layout switch, shortcuts and palette in `web/src/pages/review/`, the "Review page" part of ARCHITECTURE.md "UI"
