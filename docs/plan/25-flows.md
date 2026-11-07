@@ -1,6 +1,6 @@
 # Stage 25: Tour by flows
 
-**Status:** Not started
+**Status:** In progress (on main)
 **Depends on:** 24, and hints that follow imports (c5c0d9d)
 **Unblocks:** an overview diagram to replace the call tree, and chip rules on the map
 **Owns:** `src/domain/review/code-tour.ts`, `src/domain/review/entry-points.ts` (new), `src/domain/diff/call-graph.ts`, the tour's step headings in `web/src/pages/review/` (`MapLayout.tsx`, `RiskRail.tsx`, `model.ts`, `palette.ts`)
