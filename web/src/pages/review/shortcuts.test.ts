@@ -38,17 +38,21 @@ describe("shortcutFor", () => {
     expect(press("ArrowRight")).toBeNull();
   });
 
-  it("follows calls with the arrows in the tree, which has no steps or inline calls", () => {
-    expect(press("ArrowRight", "tree")).toBe("first-call");
-    expect(press("ArrowLeft", "tree")).toBe("back-to-caller");
-    expect(press("j", "tree")).toBe("next-hunk");
-    expect(press("n", "tree")).toBeNull();
-    expect(press("o", "tree")).toBeNull();
+  it("leaves the overview's arrows and Enter to the focused file, and hunk keys to the map", () => {
+    for (const key of ["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown", "Enter"]) {
+      expect(press(key, "overview")).toBeNull();
+    }
+    for (const key of ["j", "n", "o", "x", "]", "a", "c", "Escape"]) {
+      expect(press(key, "overview")).toBeNull();
+    }
+    expect(press("v", "overview")).toBe("toggle-layout");
+    expect(press("t", "overview")).toBe("jump");
+    expect(press("?", "overview")).toBe("help");
   });
 
   it("opens the palette with ⌘K and Ctrl+K", () => {
     expect(press("k", "map", document.body, { metaKey: true })).toBe("jump");
-    expect(press("K", "tree", document.body, { ctrlKey: true })).toBe("jump");
+    expect(press("K", "overview", document.body, { ctrlKey: true })).toBe("jump");
     expect(press("k", "map", document.body, { metaKey: true, shiftKey: true })).toBeNull();
   });
 

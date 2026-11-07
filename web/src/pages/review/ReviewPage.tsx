@@ -18,7 +18,6 @@ import {
   type LineComment,
   type LinePlace,
 } from "../../diff/index.ts";
-import { callTree, treeOrder } from "./call-tree.ts";
 import { type CallMark, chipPlan } from "./chips.ts";
 import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
@@ -37,9 +36,7 @@ import {
   callerFiles,
   callsByLine,
   decisionPlaces,
-  firstCall,
   hunkIndex,
-  hunkLinks,
   type Layout,
   mapSections,
   mechanicalCount,
@@ -50,6 +47,8 @@ import {
   tourSteps,
   trailingProofs,
 } from "./model.ts";
+import { Overview } from "./Overview.tsx";
+import { fileOverview, type OverviewNode } from "./overview.ts";
 import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { type PaletteTarget, paletteItems } from "./palette.ts";
@@ -59,7 +58,6 @@ import { ShortcutsDialog } from "./ShortcutsDialog.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
 import { type ShortcutAction, useShortcuts } from "./shortcuts.ts";
 import { parseBoolean, parseStrings, useStoredState } from "./storage.ts";
-import { TreeLayout } from "./TreeLayout.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useVerdicts } from "./useVerdicts.ts";
 
@@ -193,25 +191,11 @@ const Review = ({
     [analysis.callGraph],
   );
   const calls = useMemo(() => callsByLine(callHints, index), [callHints, index]);
-  const links = useMemo(() => hunkLinks(callHints, index), [callHints, index]);
-  const linksOf = useCallback((id: HunkId) => links.get(id) ?? [], [links]);
-  const tree = useMemo(() => {
-    // Roots come from steps with contract hunks first, then the tour's order.
-    const contract = steps.filter((step) => step.hunkIds.some((id) => contractHunks.has(id)));
-    const ids = [...contract, ...steps.filter((step) => !contract.includes(step))]
-      .flatMap((step) => step.hunkIds)
-      .filter((id) => !index.mechanical.has(id));
-    return callTree([...new Set(ids)], callHints, (id) => index.hunks.get(id)?.file.path ?? "");
-  }, [steps, contractHunks, index, callHints]);
-  const inTreeOrder = useMemo(() => treeOrder(tree), [tree]);
-  const placedIn = useMemo(
-    () =>
-      new Map(
-        tree.rows.flatMap((row) =>
-          row.kind === "hunk" ? [[row.hunkId, row.parent] as const] : [],
-        ),
-      ),
-    [tree],
+  // Groups of files the reviewer opened in the overview, when it groups them by directory.
+  const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([]);
+  const overview = useMemo(
+    () => fileOverview(analysis, steps, new Set(expandedGroups)),
+    [analysis, steps, expandedGroups],
   );
 
   const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);
@@ -247,11 +231,11 @@ const Review = ({
     return (id: HunkId) => places.get(id) ?? null;
   }, [sections]);
   const [focusedHunkId, setFocusedHunkId] = useState<HunkId | null>(null);
-  const [treeHunk, setTreeHunk] = useState<HunkId | null>(null);
-  const [treeFocus, setTreeFocus] = useState(false);
-  const treeSelected = treeHunk ?? inTreeOrder[0] ?? null;
-  // Where each call followed in the tree came from, for ← to go back.
-  const [treeTrail, setTreeTrail] = useState<readonly HunkId[]>([]);
+  // The file the overview asks to focus, and the node last focused there.
+  const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
+  const overviewAt = useRef<string | null>(null);
+  // The overview node the map was opened from, for Esc to go back to.
+  const [openedFrom, setOpenedFrom] = useState<string | null>(null);
   // Where each "called by" link followed in the map came from, for Esc to go back.
   const [trail, setTrail] = useState<readonly HunkId[]>([]);
   const [selectedDecision, setSelectedDecision] = useState<DecisionId | null>(null);
@@ -329,7 +313,7 @@ const Review = ({
   const shownInMap = (id: HunkId) => !contractOnly || contractHunks.has(id);
   /** The hunk the reviewer is on: the focused one in the map if it's in view, else the first in view. */
   const currentHunk = (): HunkId | null => {
-    if (layout === "tree") return treeSelected;
+    if (layout === "overview") return null;
     const visible = inView.current;
     if (focusedHunkId !== null && (visible.length === 0 || visible.includes(focusedHunkId)))
       return focusedHunkId;
@@ -347,14 +331,21 @@ const Review = ({
     },
     [places],
   );
-  const selectInTree = (id: HunkId, from?: HunkId) => {
-    setTreeHunk(id);
-    setTreeFocus(true);
-    setTreeTrail((previous) => (from === undefined ? [] : [...previous, from]));
+  /** Focuses a file's place in the overview: its node, its group, or a node it's a badge on. */
+  const focusInOverview = (path: string) => {
+    const place = overview.placeOf.get(path);
+    if (place === undefined) return;
+    // A file in a closed group opens the group, so its own node takes the focus.
+    if (place.startsWith("group:")) setExpandedGroups((previous) => [...previous, place]);
+    setOverviewFocus((previous) => ({ key: path, n: (previous?.n ?? 0) + 1 }));
   };
-  /** Shows a hunk: scrolls to it in the map, selects it in the tree. */
+  /** Shows a hunk: scrolls to it in the map, focuses its file in the overview. */
   const showHunk = (id: HunkId, inLayout: Layout = layout) => {
-    if (inLayout === "tree") return selectInTree(id);
+    if (inLayout === "overview") {
+      const path = index.hunks.get(id)?.file.path;
+      if (path !== undefined) focusInOverview(path);
+      return;
+    }
     if (!shownInMap(id)) setContractOnly(() => false);
     scrollTo(order.includes(id) ? hunkAnchor(id) : MECHANICAL_ANCHOR);
   };
@@ -362,8 +353,8 @@ const Review = ({
     const decision = analysis.decisions.find((one) => one.id === id);
     const cardHunk = places.cardHunk.get(id);
     setHighlight(new Set(decision?.hunkIds ?? []));
-    if (layout === "tree") {
-      if (cardHunk !== undefined) selectInTree(cardHunk);
+    if (layout === "overview") {
+      if (cardHunk !== undefined) showHunk(cardHunk);
     } else {
       if (cardHunk !== undefined && !shownInMap(cardHunk)) setContractOnly(() => false);
       scrollTo(decisionAnchor(id));
@@ -384,9 +375,9 @@ const Review = ({
   const goToSection = (key: string) => {
     const section = sections.find((one) => sectionKey(one) === key);
     if (section === undefined) return;
-    if (layout === "tree") {
+    if (layout === "overview") {
       const first = section.hunkIds.find((id) => !index.mechanical.has(id));
-      if (first !== undefined) selectInTree(first);
+      if (first !== undefined) showHunk(first);
       return;
     }
     if (contractOnly && !section.hunkIds.some((id) => contractHunks.has(id)))
@@ -405,25 +396,36 @@ const Review = ({
     showHunk(id);
   };
 
-  const switchLayout = () => {
+  const openOverview = () => {
     const current = currentHunk();
-    if (layout === "map") {
-      if (current !== null) selectInTree(current);
-      setLayout(() => "tree");
-    } else {
-      setLayout(() => "map");
-      if (current !== null) showHunk(current, "map");
+    setLayout(() => "overview");
+    setOpenedFrom(null);
+    if (current !== null) showHunk(current, "overview");
+  };
+  /** Opens a node's code in the map, or a group in place. */
+  const openNode = (node: OverviewNode) => {
+    if (node.kind === "group") {
+      setExpandedGroups((previous) => [...previous, node.key]);
+      return;
     }
+    const [first] = node.hunkIds;
+    if (first === undefined) return;
+    setLayout(() => "map");
+    setOpenedFrom(node.key);
+    setFocusedHunkId(first);
+    showHunk(first, "map");
+  };
+  const switchLayout = () => {
+    if (layout === "map") return openOverview();
+    const node = [...overview.rows.flat(), ...overview.strip].find(
+      (one) => one.key === overviewAt.current,
+    );
+    if (node !== undefined && node.kind === "file") return openNode(node);
+    setLayout(() => "map");
   };
 
   const mapItems = order.filter(shownInMap);
   const moveHunk = (step: 1 | -1) => {
-    if (layout === "tree") {
-      const at = treeSelected === null ? -1 : inTreeOrder.indexOf(treeSelected);
-      const next = inTreeOrder[Math.min(Math.max(at + step, 0), inTreeOrder.length - 1)];
-      if (next !== undefined) selectInTree(next);
-      return;
-    }
     if (mapItems.length === 0) return;
     const at = focusedHunkId === null ? -1 : mapItems.indexOf(focusedHunkId);
     const from = startAt ?? inView.current.find(shownInMap) ?? null;
@@ -453,7 +455,7 @@ const Review = ({
   };
   /** The next or previous hunk to review that isn't marked reviewed. */
   const goToUnreviewed = (direction: 1 | -1) => {
-    const list = layout === "tree" ? inTreeOrder : toReview.filter(shownInMap);
+    const list = toReview.filter(shownInMap);
     const current = currentHunk();
     const at = current === null ? (direction === 1 ? -1 : list.length) : list.indexOf(current);
     for (let i = at + direction; i >= 0 && i < list.length; i += direction) {
@@ -499,19 +501,6 @@ const Review = ({
         if (mention !== undefined) follow(mention.toHunkId);
         return;
       }
-      case "first-call": {
-        const call = current === null ? null : firstCall(calls.get(current));
-        if (current !== null && call !== null) selectInTree(call.toHunkId, current);
-        return;
-      }
-      case "back-to-caller": {
-        const caller = treeTrail.at(-1) ?? (current === null ? null : placedIn.get(current));
-        if (caller === undefined || caller === null) return;
-        setTreeHunk(caller);
-        setTreeFocus(true);
-        setTreeTrail((previous) => previous.slice(0, -1));
-        return;
-      }
       case "approve":
         if (selectedDecision !== null) toggleVerdict(selectedDecision, "approved");
         return;
@@ -549,9 +538,15 @@ const Review = ({
       case "escape": {
         if (highlight.size > 0) return setHighlight(new Set());
         const last = trail.at(-1);
-        if (layout === "map" && last !== undefined) {
+        if (layout !== "map") return;
+        if (last !== undefined) {
           setTrail((previous) => previous.slice(0, -1));
           showHunk(last);
+        } else if (openedFrom !== null) {
+          // Back to the overview, on the file the map was opened from.
+          setLayout(() => "overview");
+          setOverviewFocus((previous) => ({ key: openedFrom, n: (previous?.n ?? 0) + 1 }));
+          setOpenedFrom(null);
         }
         return;
       }
@@ -648,7 +643,6 @@ const Review = ({
     index,
     calls,
     plan,
-    linksOf,
     callersOf,
     stepOf,
     onFollow: stable.follow,
@@ -695,7 +689,8 @@ const Review = ({
       case "step":
         return goToSection(target.stepId);
       case "mechanical":
-        if (layout === "map") goToMechanical();
+        if (layout !== "map") setLayout(() => "map");
+        goToMechanical();
         return;
     }
   };
@@ -736,10 +731,10 @@ const Review = ({
               <button
                 type="button"
                 className="button"
-                aria-pressed={layout === "tree"}
-                onClick={() => layout !== "tree" && switchLayout()}
+                aria-pressed={layout === "overview"}
+                onClick={() => layout !== "overview" && switchLayout()}
               >
-                Call tree
+                Overview
               </button>
             </fieldset>
             <button type="button" className="button jump-button" onClick={() => setJumping(true)}>
@@ -831,16 +826,19 @@ const Review = ({
           />
         </div>
       ) : (
-        <div className="review-body tree">
-          {places.unplaced.length > 0 && before}
-          <TreeLayout
-            tree={tree}
-            order={inTreeOrder}
-            deps={deps}
-            selected={treeSelected}
-            focus={treeFocus}
-            onSelect={(id, from) => selectInTree(id, from)}
-            proofs={analysis.proofs}
+        <div className="review-body overview-body">
+          <Overview
+            overview={overview}
+            reviewedHunks={reviewedHunks}
+            focusKey={overviewFocus}
+            onOpen={openNode}
+            expandedGroups={expandedGroups}
+            onCollapse={(key) =>
+              setExpandedGroups((previous) => previous.filter((other) => other !== key))
+            }
+            onFocusNode={(key) => {
+              overviewAt.current = key;
+            }}
           />
         </div>
       )}

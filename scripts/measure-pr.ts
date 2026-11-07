@@ -6,8 +6,10 @@ import { prep } from "../src/application/use-cases/prep.ts";
 import {
   type CallGraphHint,
   type FileChange,
+  type FileLink,
   type HunkId,
   isTestFile,
+  type MechanicalProof,
   parseUnifiedDiff,
 } from "../src/domain/diff/index.ts";
 import {
@@ -18,6 +20,7 @@ import {
   type Tour,
 } from "../src/domain/review/index.ts";
 import { type Call, chipCounts, chipPlan } from "../web/src/pages/review/chips.ts";
+import { type FileOverview, fileOverview } from "../web/src/pages/review/overview.ts";
 
 // Every stage of the flows slice measures itself on one real PR. This runs today's prep, rule
 // risk and code tour on a PR whose diff and files are cached in ~/.megareviewer/db.sqlite, the way
@@ -31,6 +34,9 @@ export interface Measured {
   readonly files: readonly FileChange[];
   readonly risk: readonly RiskAssessment[];
   readonly callGraph: readonly CallGraphHint[];
+  readonly fileLinks: readonly FileLink[];
+  readonly generated: readonly string[];
+  readonly proofs: readonly MechanicalProof[];
   readonly tour: Tour;
   /** Files the PR changes that aren't in the cache, so they weren't parsed. */
   readonly missing: readonly string[];
@@ -79,11 +85,21 @@ export const measure = async (
     ...classifyByRules(files, new Set(proofRisk.map((one) => one.hunkId))),
   ];
   const tour = codeTour({ files, risk, ...prepared });
-  return { files, risk, callGraph: prepared.callGraph, tour, missing: [...new Set(missing)] };
+  return {
+    files,
+    risk,
+    callGraph: prepared.callGraph,
+    fileLinks: prepared.fileLinks,
+    generated: [...prepared.generated].sort(),
+    proofs: prepared.proofs,
+    tour,
+    missing: [...new Set(missing)],
+  };
 };
 
 /** The counts this slice tracks, from a measured PR. */
-export const counts = ({ files, callGraph, tour }: Measured) => {
+export const counts = (measured: Measured) => {
+  const { files, callGraph, tour } = measured;
   const pathOf = new Map(files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, file.path])));
   const calls = callGraph.filter((hint) => hint.use === "call");
   const byLine = new Map<HunkId, Map<number, Call[]>>();
@@ -111,6 +127,7 @@ export const counts = ({ files, callGraph, tour }: Measured) => {
   const lines = [...byLine.values()].flatMap((onLines) => [...onLines.values()]);
   return {
     hunks: pathOf.size,
+    fileLinks: measured.fileLinks.length,
     callHints: calls.length,
     typeHints: callGraph.length - calls.length,
     linesWithSeveralCalls: lines.filter((onLine) => onLine.length > 1).length,
@@ -124,6 +141,28 @@ export const counts = ({ files, callGraph, tour }: Measured) => {
     ),
   };
 };
+
+export const overviewOf = (measured: Measured): FileOverview =>
+  fileOverview(measured, measured.tour.steps);
+
+/** The overview's rows and strip, one line each, with entries, flags and badges. */
+export const overviewLines = ({ rows, strip }: FileOverview): string[] => {
+  const name = (node: FileOverview["rows"][number][number]) => {
+    const notes = [
+      ...node.entries,
+      ...(node.risk === "contract" ? ["contract"] : []),
+      ...(node.generated ? ["generated"] : []),
+    ];
+    const badges = node.badges.length > 0 ? ` [${node.badges.map(basename).join(", ")}]` : "";
+    return `${node.label}${notes.length > 0 ? ` (${notes.join(", ")})` : ""}${badges}`;
+  };
+  return [
+    ...rows.map((row, at) => `  ${at + 1}. ${row.map(name).join("; ")}`),
+    `  Not linked: ${strip.map(name).join("; ")}`,
+  ];
+};
+
+const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 
 export const report = (measured: Measured): string => {
   const riskOf = new Map(measured.risk.map((one) => [one.hunkId, one.riskClass]));
@@ -141,6 +180,7 @@ export const report = (measured: Measured): string => {
     const hunks = step.hunkIds.length === 1 ? "1 hunk" : `${step.hunkIds.length} hunks`;
     out.push(`  ${at + 1}. [${step.kind}] ${step.title}  (${hunks}${via})`);
   });
+  out.push("", "Overview", ...overviewLines(overviewOf(measured)));
   out.push("", "Counts");
   for (const [name, value] of Object.entries(counts(measured))) out.push(`  ${name}: ${value}`);
   if (measured.missing.length > 0) {

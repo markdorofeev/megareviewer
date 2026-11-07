@@ -10,7 +10,11 @@ import {
   type PublicationReceipt,
   TourStepId,
 } from "../../../../src/domain/review/index.ts";
-import { fixtureAnalysisView, fixtureHunks } from "../../../dev/fixtures/index.ts";
+import {
+  fixtureAnalysisView,
+  fixtureHunks,
+  largeAnalysisView,
+} from "../../../dev/fixtures/index.ts";
 import { mockFetch } from "../../../dev/mock-fetch.ts";
 import { createMockApi } from "../../../dev/mock-routes.ts";
 import { analysisFailed, analysisInProgress } from "../../../dev/progress.ts";
@@ -96,7 +100,7 @@ const cardOf = (hunkId: HunkId) => {
 };
 const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
 const rail = () => screen.getByRole("complementary", { name: "Map" });
-const tree = () => screen.getByRole("navigation", { name: "Call tree" });
+const overviewBox = () => screen.getByRole("region", { name: "Overview of the changed files" });
 const decisionCard = (title: RegExp) => screen.getByRole("article", { name: title });
 const approve = (title: RegExp) =>
   screen.getByRole("button", { name: new RegExp(`^Approve: ${title.source}`) });
@@ -1014,146 +1018,178 @@ describe("inline calls", () => {
   });
 });
 
-const openTree = async () => {
-  await userEvent.click(screen.getByRole("button", { name: "Call tree" }));
-  return tree();
+const openOverview = async () => {
+  await userEvent.click(screen.getByRole("button", { name: "Overview" }));
+  return overviewBox();
 };
-const treeRows = () =>
-  [...tree().querySelectorAll(".tree-row")].map(
-    (row) =>
-      `${row.querySelector(".tree-label")?.textContent}${row.querySelector(".tree-note")?.textContent ?? ""}`,
-  );
-const selected = () =>
-  within(tree()).getByRole("button", { current: true }).querySelector(".tree-label")?.textContent;
-const shownHunk = () =>
-  screen
-    .getByRole("region", { name: "Selected hunk" })
-    .querySelector(".hunk-card")
-    ?.getAttribute("aria-label");
+/** The diagram's file nodes by row, as their labels. */
+const overviewRows = () => {
+  const rows = new Map<string, string[]>();
+  for (const node of overviewBox().querySelectorAll<HTMLElement>(
+    ".overview-diagram .overview-node",
+  )) {
+    const label = node.querySelector(".overview-label")?.textContent ?? "";
+    rows.set(node.style.top, [...(rows.get(node.style.top) ?? []), label]);
+  }
+  return [...rows.values()];
+};
+const nodeOf = (path: string) => {
+  const node = overviewBox().querySelector<HTMLElement>(`[data-key="${path}"]`);
+  if (node === null) throw new Error(`no node for ${path}`);
+  return node;
+};
+const focusedKey = () => (document.activeElement as HTMLElement | null)?.dataset.key;
+const pressed = (name: string) =>
+  screen.getByRole("button", { name }).getAttribute("aria-pressed") === "true";
 
-describe("call tree", () => {
-  it("lists the hunks from the entry points, then those off a call path, then the proofs", async () => {
-    renderReview({ view: chained });
-    await loaded();
-    await openTree();
-    expect(treeRows()).toEqual([
-      "src/routes/orders.ts:10",
-      "cachedReceipt",
-      "ordersabove",
-      "renderReceipt",
-      // Off a call path, by file.
-      "lines 1–8",
-      "lines 11–18",
-    ]);
-    expect(within(tree()).getByRole("heading", { name: "Not on a call path" })).toBeTruthy();
-    expect(
-      within(tree()).getByText("src/routes/orders.ts", { selector: ".tree-path" }),
-    ).toBeTruthy();
-    expect(within(tree()).getByRole("heading", { name: "Proved mechanical" })).toBeTruthy();
-    expect(within(tree()).getAllByText(/lockfile/)).toHaveLength(2);
-  });
-
-  it("shows the selected hunk with the path to it, its callers, and its calls as links", async () => {
-    renderReview({ view: chained });
-    await loaded();
-    await openTree();
-    expect(selected()).toBe("src/routes/orders.ts:10");
-    expect(shownHunk()).toMatch(ROUTE);
-    // The route's decisions show with it.
-    expect(screen.getByRole("article", { name: OWNERSHIP })).toBeTruthy();
-
-    await userEvent.click(
-      within(screen.getByRole("region", { name: "Selected hunk" })).getByRole("button", {
-        name: /^cachedReceipt /,
-      }),
-    );
-    expect(selected()).toBe("cachedReceipt");
-    expect(shownHunk()).toMatch(RECEIPTS);
-    const path = screen.getByRole("navigation", { name: "Call path" });
-    expect(path.textContent).toBe("src/routes/orders.ts:10cachedReceipt");
-    expect(screen.getByText(/^Called from/).textContent).toBe(
-      "Called from src/routes/orders.ts:10",
-    );
-
-    await userEvent.click(screen.getByRole("button", { name: "Next hunk in the tree →" }));
-    expect(selected()).toBe("renderReceipt");
-    await userEvent.click(
-      within(
-        path.isConnected ? screen.getByRole("navigation", { name: "Call path" }) : path,
-      ).getByRole("button", { name: "src/routes/orders.ts:10" }),
-    );
-    expect(selected()).toBe("src/routes/orders.ts:10");
-  });
-
-  it("follows the tree with j and k, calls with →, and goes back with ←", async () => {
-    renderReview({ view: chained });
-    await loaded();
-    await openTree();
-    await userEvent.keyboard("j");
-    expect(selected()).toBe("cachedReceipt");
-    await userEvent.keyboard("j");
-    expect(selected()).toBe("renderReceipt");
-    await userEvent.keyboard("k");
-    expect(selected()).toBe("cachedReceipt");
-    // cachedReceipt's first call, by line, is back to the route.
-    await userEvent.keyboard("{ArrowRight}");
-    expect(selected()).toBe("src/routes/orders.ts:10");
-    await userEvent.keyboard("{ArrowLeft}");
-    expect(selected()).toBe("cachedReceipt");
-    // With no call followed, ← goes to the parent in the tree.
-    await userEvent.keyboard("{ArrowLeft}");
-    expect(selected()).toBe("src/routes/orders.ts:10");
-  });
-
-  it("x marks the selected hunk reviewed and moves on, ticking it in the tree", async () => {
+describe("overview", () => {
+  it("draws the changed files from the entry down, with unlinked ones in the strip", async () => {
     renderReview();
     await loaded();
-    await openTree();
-    await userEvent.keyboard("x");
-    expect(selected()).toBe("cachedReceipt");
-    expect(within(tree()).getAllByRole("img", { name: "reviewed" })).toHaveLength(1);
+    await openOverview();
+    expect(overviewRows()).toEqual([["orders.ts"], ["receipts.ts"]]);
+    const strip = within(overviewBox()).getByRole("region", { name: "Not linked" });
+    expect(within(strip).getByRole("button", { name: /^package\.json, contract/ })).toBeTruthy();
+    // Proved-mechanical files aren't in it: the map lists them with their proofs.
+    expect(overviewBox().querySelector('[data-key="pnpm-lock.yaml"]')).toBeNull();
+  });
+
+  it("opens a file's first hunk in the map on a click, and Esc goes back to its node", async () => {
+    renderReview();
+    await loaded();
+    await openOverview();
+    await userEvent.click(nodeOf("src/services/receipts.ts"));
+    expect(pressed("Map")).toBe(true);
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.retryAndCache}`);
+    await userEvent.keyboard("{Escape}");
+    expect(pressed("Overview")).toBe(true);
+    expect(focusedKey()).toBe("src/services/receipts.ts");
+  });
+
+  it("moves between files with the arrows, and Enter opens one", async () => {
+    renderReview();
+    await loaded();
+    await openOverview();
+    nodeOf("src/routes/orders.ts").focus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(focusedKey()).toBe("src/services/receipts.ts");
+    await userEvent.keyboard("{ArrowDown}");
+    expect(focusedKey()).toBe("package.json");
+    await userEvent.keyboard("{ArrowUp}{ArrowUp}");
+    expect(focusedKey()).toBe("src/routes/orders.ts");
+    // A focused file names its flows and what it reaches, for the keyboard.
+    expect(
+      screen.getByText(
+        "src/routes/orders.ts · read in The receipt endpoint · reaches receipts.ts (cachedReceipt).",
+      ),
+    ).toBeTruthy();
+    await userEvent.keyboard("{Enter}");
+    expect(pressed("Map")).toBe(true);
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptRoute}`);
+  });
+
+  it("ticks a file when all its hunks are reviewed, and counts them otherwise", async () => {
+    window.localStorage.setItem(
+      "megareviewer:reviewed-hunks",
+      JSON.stringify([h.retryAndCache, h.receiptFormatting, h.receiptRoute]),
+    );
+    renderReview();
+    await loaded();
+    await openOverview();
+    expect(
+      within(nodeOf("src/services/receipts.ts")).getByRole("img", { name: "reviewed" }),
+    ).toBeTruthy();
+    expect(nodeOf("src/routes/orders.ts").getAttribute("aria-label")).toMatch(
+      /1 of 2 hunks reviewed$/,
+    );
+    expect(within(nodeOf("src/routes/orders.ts")).getByText("1/2")).toBeTruthy();
+  });
+
+  it("names what an edge carries", async () => {
+    renderReview();
+    await loaded();
+    await openOverview();
+    const edge = overviewBox().querySelector(".overview-edge");
+    expect(edge?.classList.contains("call")).toBe(true);
+    expect(edge?.querySelector("title")?.textContent).toBe(
+      "orders.ts imports, calls receipts.ts: cachedReceipt",
+    );
+  });
+  it("names what an edge carries on hover, and lights the hovered file's edges", async () => {
+    renderReview();
+    await loaded();
+    await openOverview();
+    const edge = overviewBox().querySelector(".overview-edge");
+    if (edge === null) throw new Error("no edge");
+    await userEvent.hover(edge);
+    expect(overviewBox().querySelector(".overview-detail")?.textContent).toBe(
+      "orders.ts imports, calls receipts.ts: cachedReceipt",
+    );
+    await userEvent.unhover(edge);
+    await userEvent.hover(nodeOf("src/services/receipts.ts"));
+    expect(edge.classList.contains("lit")).toBe(true);
+    await userEvent.unhover(nodeOf("src/services/receipts.ts"));
+    expect(screen.getByText(/^Hover or focus a file/)).toBeTruthy();
+  });
+
+  it("groups a large PR's files by directory, and opens a group in place", async () => {
+    renderReview({ view: largeAnalysisView });
+    await screen.findByRole("heading", {
+      level: 1,
+      name: largeAnalysisView.analysis.pullRequest?.title,
+    });
+    await openOverview();
+    expect(overviewRows()).toEqual([
+      ["src/module0/"],
+      ["src/module1/"],
+      ["src/module2/"],
+      ["src/module3/"],
+      ["src/module4/"],
+      ["src/module5/"],
+    ]);
+    await userEvent.click(nodeOf("group:src/module1"));
+    expect(overviewBox().querySelector('[data-key="group:src/module1"]')).toBeNull();
+    expect(nodeOf("src/module1/part7.ts")).toBeTruthy();
+    // A file in a closed group, picked in the palette, opens its group.
+    await userEvent.keyboard("t");
+    await userEvent.keyboard("/module3/part9");
+    await userEvent.keyboard("{Enter}");
+    expect(focusedKey()).toBe("src/module3/part9.ts");
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse src/module1/" }));
+    expect(nodeOf("group:src/module1")).toBeTruthy();
   });
 });
 
 describe("layouts", () => {
-  it("switch with v, keeping the hunk the reviewer is on", async () => {
+  it("switch with v, keeping the file the reviewer is on", async () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("jj");
     expect(focusedLabel()).toMatch(IMPORTS);
     await userEvent.keyboard("v");
-    expect(screen.getByRole("button", { name: "Call tree" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
-    expect(shownHunk()).toMatch(IMPORTS);
+    expect(pressed("Overview")).toBe(true);
+    expect(focusedKey()).toBe("src/routes/orders.ts");
 
-    await userEvent.click(within(tree()).getByRole("button", { name: /^cachedReceipt \(/ }));
+    await userEvent.keyboard("{ArrowDown}");
     await userEvent.keyboard("v");
-    expect(screen.getByRole("button", { name: "Map" }).getAttribute("aria-pressed")).toBe("true");
+    expect(pressed("Map")).toBe(true);
     expect(scrolledTo().at(-1)).toBe(`hunk-${h.retryAndCache}`);
     expect(focusedLabel()).toMatch(RECEIPTS);
   });
 
-  it("remember the choice for every PR, and share the reviewed marks", async () => {
+  it("remember the choice for every PR, and read a stored call tree as the overview", async () => {
     const first = renderReview();
     await loaded();
-    await openTree();
-    await userEvent.click(
-      within(screen.getByRole("region", { name: "Selected hunk" })).getByRole("checkbox", {
-        name: "Reviewed",
-      }),
-    );
-    expect(window.localStorage.getItem("megareviewer:review-layout")).toBe('"tree"');
+    await openOverview();
+    expect(window.localStorage.getItem("megareviewer:review-layout")).toBe('"overview"');
     first.unmount();
 
+    window.localStorage.setItem("megareviewer:review-layout", '"tree"');
     renderReview();
     await loaded();
-    expect(tree()).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Map" }));
-    expect(
-      within(cardOf(h.receiptRoute)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" })
-        .checked,
-    ).toBe(true);
+    expect(overviewBox()).toBeTruthy();
+    expect(pressed("Overview")).toBe(true);
   });
 });
 
@@ -1202,16 +1238,16 @@ describe("jump palette", () => {
     expect(focusedLabel()).toMatch(RECEIPTS);
   });
 
-  it("selects a decision's hunk in the call tree", async () => {
+  it("selects a decision's file in the overview, and Enter opens its code", async () => {
     renderReview();
     await loaded();
-    await openTree();
-    await userEvent.keyboard("j");
+    await openOverview();
     await userEvent.keyboard("t");
     await userEvent.keyboard("!belongs");
     await userEvent.keyboard("{Enter}");
-    expect(selected()).toBe("src/routes/orders.ts:10");
-    expect(decisionCard(OWNERSHIP).classList.contains("selected")).toBe(true);
+    expect(focusedKey()).toBe("src/routes/orders.ts");
+    await userEvent.keyboard("{Enter}");
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptRoute}`);
   });
 });
 
@@ -1271,9 +1307,9 @@ describe("keyboard shortcuts", () => {
       within(within(dialog).getByRole("region", { name }))
         .getAllByRole("term")
         .map((term) => term.textContent);
-    expect(keysOf("Map")).toEqual(["j", "k", "n", "p", "o"]);
-    expect(keysOf("Call tree")).toEqual(["j", "k", "→", "←"]);
-    expect(keysOf("Both layouts")).toContain("⌘Kt");
+    expect(keysOf("Map")).toEqual(["j", "k", "n", "p", "o", "x", "]", "[", "a", "r", "c", "Esc"]);
+    expect(keysOf("Overview")).toEqual(["←→↑↓", "Enter"]);
+    expect(keysOf("Both layouts")).toEqual(["⌘Kt", "v", "?"]);
     await userEvent.keyboard("j");
     expect(focusedLabel()).not.toMatch(ROUTE);
     await userEvent.keyboard("{Escape}");

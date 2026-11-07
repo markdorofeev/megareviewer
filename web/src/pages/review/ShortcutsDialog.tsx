@@ -6,12 +6,14 @@ const KEY_NAMES: Readonly<Record<string, string>> = {
   Escape: "Esc",
   ArrowRight: "→",
   ArrowLeft: "←",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
 };
 
 const GROUPS: readonly { readonly title: string; readonly layouts: readonly Layout[] }[] = [
   { title: "Map", layouts: ["map"] },
-  { title: "Call tree", layouts: ["tree"] },
-  { title: "Both layouts", layouts: ["map", "tree"] },
+  { title: "Overview", layouts: ["overview"] },
+  { title: "Both layouts", layouts: ["map", "overview"] },
 ];
 
 export const ShortcutsDialog = ({ onClose }: { readonly onClose: () => void }) => (

@@ -9,16 +9,14 @@ import {
   type LinePlace,
 } from "../../diff/index.ts";
 import type { ChipPlan } from "./chips.ts";
-import type { Call, HunkIndex, HunkLink } from "./model.ts";
+import type { Call, HunkIndex } from "./model.ts";
 
-/** What a hunk on the page needs, the same in both layouts. */
+/** What a hunk on the page needs. */
 export interface HunkDeps {
   readonly index: HunkIndex;
   readonly calls: ReadonlyMap<HunkId, ReadonlyMap<number, readonly Call[]>>;
   /** Which of a hunk's calls are chips and which are mentions, at its own place in the map. */
   readonly plan: ChipPlan;
-  /** The call graph's links, for the call tree. */
-  readonly linksOf: (id: HunkId) => readonly HunkLink[];
   readonly callersOf: (id: HunkId) => readonly CallerFile[];
   /** The step a hunk is read in, as "step 2: Title", for peeks. */
   readonly stepOf: (id: HunkId) => string | null;

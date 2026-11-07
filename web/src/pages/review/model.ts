@@ -19,11 +19,12 @@ import type { Call } from "./chips.ts";
 
 export type { Call } from "./chips.ts";
 
-/** The page's two layouts: one scroll beside a risk map, or a call tree. */
-export type Layout = "map" | "tree";
+/** The page's two layouts: one scroll beside a risk map, or an overview of the changed files. */
+export type Layout = "map" | "overview";
 
+/** The call tree the overview replaced is stored as `tree`, and opens the overview. */
 export const parseLayout = (stored: unknown): Layout | undefined =>
-  stored === "map" || stored === "tree" ? stored : undefined;
+  stored === "map" ? "map" : stored === "overview" || stored === "tree" ? "overview" : undefined;
 
 const byPath = (a: FileChange, b: FileChange): number =>
   a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
@@ -181,10 +182,6 @@ export const callsByLine = (
   return calls;
 };
 
-/** The hunk's first call in the code, for the `o` shortcut. */
-export const firstCall = (lines: ReadonlyMap<number, readonly Call[]> | undefined): Call | null =>
-  [...(lines?.entries() ?? [])].sort(([a], [b]) => a - b)[0]?.[1][0] ?? null;
-
 /** Bar heights on the risk map, in pixels: one per line, within these bounds. */
 export const BAR_MIN_PX = 12;
 export const BAR_MAX_PX = 60;
@@ -261,45 +258,6 @@ export const trailingProofs = (analysis: Analysis, index: HunkIndex): Mechanical
     [...index.hunks].flatMap(([id, { file }]) => (index.mechanical.has(id) ? [] : [file.path])),
   );
   return analysis.proofs.filter((proof) => proof.hunkId === null || !reviewed.has(proof.path));
-};
-
-/** Another hunk this one is linked to by the call graph, as the call tree shows it. */
-export interface HunkLink {
-  readonly direction: "calls" | "called-by";
-  readonly symbol: string;
-  readonly hunkId: HunkId;
-}
-
-/** Links a hunk shows in each direction, at most. */
-const MAX_LINKS = 6;
-
-/**
- * Each hunk's call-graph links: the hunks it calls, then those that call it, once per symbol and
- * hunk. Hints to hunks the page doesn't know are dropped.
- */
-export const hunkLinks = (
-  callGraph: readonly CallGraphHint[],
-  index: HunkIndex,
-): ReadonlyMap<HunkId, readonly HunkLink[]> => {
-  const links = new Map<HunkId, HunkLink[]>();
-  const add = (from: HunkId, link: HunkLink) => {
-    const list = links.get(from) ?? [];
-    const same = (other: HunkLink) =>
-      other.direction === link.direction &&
-      other.symbol === link.symbol &&
-      other.hunkId === link.hunkId;
-    const inDirection = list.filter((other) => other.direction === link.direction).length;
-    if (!list.some(same) && inDirection < MAX_LINKS) links.set(from, [...list, link]);
-  };
-  for (const hint of callGraph) {
-    if (!index.hunks.has(hint.fromHunkId) || !index.hunks.has(hint.toHunkId)) continue;
-    add(hint.fromHunkId, { direction: "calls", symbol: hint.symbol, hunkId: hint.toHunkId });
-  }
-  for (const hint of callGraph) {
-    if (!index.hunks.has(hint.fromHunkId) || !index.hunks.has(hint.toHunkId)) continue;
-    add(hint.toHunkId, { direction: "called-by", symbol: hint.symbol, hunkId: hint.fromHunkId });
-  }
-  return links;
 };
 
 /**

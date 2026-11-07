@@ -406,7 +406,7 @@ details.warnings ul {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
-.review-body.tree {
+.review-body.overview-body {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -581,8 +581,7 @@ details.warnings ul {
 }
 
 .rail-tick,
-.rail-bar-tick,
-.tree-tick {
+.rail-bar-tick {
   color: var(--color-success);
 }
 
@@ -959,142 +958,207 @@ details.warnings ul {
   white-space: normal;
 }
 
-/* Call tree */
+/* Overview: the changed files as a layered diagram */
 
-.tree-layout {
+.overview {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: var(--space-5);
-  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
-.call-tree {
-  position: sticky;
-  top: 0;
-  max-height: 100vh;
-  overflow-y: auto;
-  padding: var(--space-1);
-  overscroll-behavior: contain;
+.overview-legend,
+.overview-detail,
+.overview-expanded {
+  margin: 0;
+  font-size: var(--text-sm);
 }
 
-.call-tree h2 {
-  margin-bottom: var(--space-2);
+.overview-expanded {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.call-tree h3 {
-  margin: var(--space-4) 0 var(--space-2);
+.overview-detail {
+  min-height: calc(var(--text-sm) * var(--line-height));
+  color: var(--color-text-muted);
+}
+
+.overview-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background: var(--color-surface-subtle);
+}
+
+.overview-diagram {
+  position: relative;
+  margin: 0 auto;
+}
+
+.overview-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.overview-edge-line {
+  fill: none;
+  stroke: var(--color-border-strong);
+  stroke-width: 1.5;
+}
+
+.overview-edge.import .overview-edge-line {
+  stroke-dasharray: 6 4;
+}
+
+.overview-edge.type .overview-edge-line {
+  stroke-dasharray: 1.5 3;
+  stroke-linecap: round;
+}
+
+.overview-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 10;
+}
+
+.overview-edge.lit .overview-edge-line {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+.overview-edge.dim {
+  opacity: 0.3;
+}
+
+.overview-arrow {
+  fill: var(--color-border-strong);
+}
+
+.overview-node {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2);
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-2);
+  background: var(--risk-logic-bg);
+  color: var(--risk-logic-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.overview-diagram .overview-node {
+  position: absolute;
+}
+
+.overview-node.risk-contract {
+  border-color: var(--risk-contract-bg);
+  background: var(--risk-contract-bg);
+  color: var(--risk-contract-text);
+}
+
+.overview-node.risk-mechanical {
+  background: var(--risk-mechanical-bg);
+  color: var(--risk-mechanical-text);
+}
+
+.overview-node.generated {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.overview-node.group {
+  box-shadow:
+    3px 3px 0 -1px var(--color-surface-subtle),
+    3px 3px 0 0 var(--color-border-strong);
+}
+
+.overview-node:hover,
+.overview-node.active {
+  border-color: var(--color-accent);
+}
+
+.overview-node:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.overview-node-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.overview-label {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-tick,
+.overview-count {
+  margin-left: auto;
+  flex: none;
+}
+
+.overview-tick {
+  color: var(--color-success);
+  font-weight: 700;
+}
+
+.overview-node.risk-contract .overview-tick {
+  color: inherit;
+}
+
+.overview-count,
+.overview-meta {
+  opacity: 0.8;
+}
+
+.overview-meta,
+.overview-badges {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-badges {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.overview-badge {
+  flex: none;
+  padding: 0 var(--space-1);
+  border: 1px solid currentcolor;
+  border-radius: var(--radius-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.overview-strip h3 {
+  margin: 0 0 var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.tree-rows,
-.tree-proofs {
-  display: grid;
-  gap: 1px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tree-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding-block: 2px;
-  padding-right: var(--space-2);
-  border: 1px solid transparent;
-  border-radius: var(--radius-1);
-  background: none;
-  color: var(--color-text);
-  font: inherit;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-align: left;
-  cursor: pointer;
-}
-
-.tree-row:hover {
-  background: var(--color-surface-subtle);
-}
-
-.tree-row.selected {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  font-weight: 600;
-}
-
-.tree-row.reference,
-.tree-note {
-  color: var(--color-text-muted);
-}
-
-.tree-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tree-note {
-  font-family: var(--font-ui);
-}
-
-.tree-tick {
-  margin-left: auto;
-}
-
-.tree-path {
-  margin: var(--space-2) 0 var(--space-1);
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
-.tree-proofs {
-  gap: var(--space-1);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-.risk-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-border-strong);
-}
-
-.risk-dot.risk-contract {
-  background: var(--risk-contract-bg);
-}
-
-.risk-dot.risk-mechanical {
-  background: var(--color-border);
-}
-
-.breadcrumb ol {
+.overview-strip-nodes {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--text-sm);
-}
-
-.breadcrumb li + li::before {
-  content: "›";
-  margin-right: var(--space-1);
-  color: var(--color-text-muted);
-}
-
-.called-from {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  gap: var(--space-2);
 }
 
 /* Jump palette */

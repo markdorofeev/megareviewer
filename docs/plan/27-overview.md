@@ -122,11 +122,11 @@ ARCHITECTURE.md "Review page": the call tree bullet becomes the overview, with w
 
 ## Definition of done
 
-- [ ] Contract change commit, with the stage 02 change log line.
-- [ ] Tasks above, with unit and component tests. The Playwright test that switched to the call tree opens the overview, clicks a node and marks a hunk reviewed.
-- [ ] On delphi-code #2, the overview matches the target above, or the differences are in **Notes for later stages**. `pnpm measure` prints the rows.
-- [ ] Checked in the browser on delphi-code #2 and on the 240-hunk dev fixture.
-- [ ] ARCHITECTURE.md "Review page" describes the overview.
+- [x] Contract change commit, with the stage 02 change log line.
+- [x] Tasks above, with unit and component tests. The Playwright test that switched to the call tree opens the overview, clicks a node and marks a hunk reviewed.
+- [x] On delphi-code #2, the overview matches the target above, or the differences are in **Notes for later stages**. `pnpm measure` prints the rows.
+- [x] Checked in the browser on delphi-code #2 and on the 240-hunk dev fixture.
+- [x] ARCHITECTURE.md "Review page" describes the overview.
 
 ## Open issues
 
@@ -134,4 +134,17 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+Where the code differs from or adds to this doc:
+
+- **Measured on delphi-code #2** with `pnpm measure a_9de40bf391076589`: the rows and the strip match the target. Imports give 25 links between changed files, not 26. Badges differ in two ways. Through `fakes.py`, `test_picker.py` and `test_sources.py` are also badges on `application.py` and `domain/hosting_services.py`, as the badge rule says. No test links to `keychain.py` (`test_picker.py` uses `fake_keychain.py`, which links to nothing), so it has no badge.
+- **A test helper needs a helper's name** (fake, mock, stub, fixture, `testing`, test utils or helpers) as well as only tests linking to it. Without the name, a changed function whose callers are all outside the PR, linked only from its test, became a badge instead of a node.
+- **A Python import links to the module it names,** not to every changed file in its package: `from pkg import mod` and `from pkg.mod import f` both link to `pkg/mod.py`. `fileLinks` follows the hints' other rules: one language family, never from code into tests.
+- **Nodes are HTML buttons over an SVG of the edges,** not all SVG, so focus, Tab order and text that fits come from the browser. Both are drawn from one layout.
+- **Rows are ordered down by callers, up by callees and down again.** Two passes by callers alone give the same order twice.
+- **Entry labels:** routes are read again from the entry hunks' added lines ("3 routes", or the one route); a page or command comes from the flow's title, because definitions aren't stored. The model's tour has no entries, so with `--ai` the nodes carry no entry labels; stage 31 can fix that.
+- **Edges that close a cycle** run up the right side of the diagram, out of the caller's side and into the callee's.
+- **Strip items carry badges too:** a file only its own tests link to sits in the strip with them.
+- **Hunk keys are map-only now:** `x`, `]`, `[`, `a`, `r`, `c` and Esc work in the map; in the overview, arrows and Enter belong to the focused file, and `v`, `t`/`⌘K` and `?` work in both. `firstCall`, `hunkLinks` and `HunkDeps.linksOf` went with the tree.
+- **A focused file's detail line names its edges with their symbols,** since edges can't take keyboard focus; hovering an edge says the same.
+- **`uniqueLabels` repeats stage 26's `shortPaths`.** That one lives in `HunkCard.tsx`, which `pnpm measure` can't load, and `overview.ts` imports only domain code so the script prints rows with the page's own rules.
+- **Checked in the browser** on delphi-code #2 analyzed again at pipeline 7 (`a_8d999949e90abaf4`), and on the 240-hunk fixture: six directory groups in a chain, with the edge from `module5` back to `module0` up the side; an opened group's ten files scroll sideways inside the box.

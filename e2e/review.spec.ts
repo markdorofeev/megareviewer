@@ -223,7 +223,7 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
 test.describe("without the model", () => {
   test.use({ ai: false });
 
-  test("reviews along the calls in both layouts, jumps with ⌘K and publishes", async ({
+  test("reviews along the calls, opens a file from the overview, jumps with ⌘K and publishes", async ({
     page,
     server,
   }) => {
@@ -240,12 +240,23 @@ test.describe("without the model", () => {
     await opened.getByRole("checkbox", { name: "Reviewed" }).check();
     await expect(page.getByText(/^1 of \d+ hunks reviewed$/)).toBeVisible();
 
-    // The call tree shows the same mark.
-    await page.getByRole("button", { name: "Call tree" }).click();
-    const tree = page.getByRole("navigation", { name: "Call tree" });
+    // The overview ticks the receipt service's file; a click on the route's file opens its code.
+    await page.getByRole("button", { name: "Overview", exact: true }).click();
+    const overview = page.getByRole("region", { name: "Overview of the changed files" });
     await expect(
-      tree.getByRole("button", { name: /^renderReceipt \(logic\) reviewed$/ }),
+      overview.getByRole("button", { name: /^receipts\.ts, .*, reviewed$/ }),
     ).toBeVisible();
+    await overview.getByRole("button", { name: /^orders\.ts, / }).click();
+    await expect(page.getByRole("button", { name: "Map", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.locator(".hunk-card:focus")).toHaveAttribute(
+      "aria-label",
+      /^src\/routes\/orders\.ts/,
+    );
+    await page.keyboard.press("x");
+    await expect(page.getByText(/^2 of \d+ hunks reviewed$/)).toBeVisible();
 
     // ⌘K with ! lists the contract changes; Enter goes to the first.
     await page.keyboard.press("ControlOrMeta+k");
@@ -254,9 +265,7 @@ test.describe("without the model", () => {
     await expect(palette.getByRole("region", { name: "Contract changes" })).toBeVisible();
     await page.keyboard.press("Enter");
     await expect(palette).toBeHidden();
-    await expect(
-      page.getByRole("region", { name: "Selected hunk" }).locator(".hunk-card.risk-contract"),
-    ).toBeVisible();
+    await expect(page.locator(".hunk-card.risk-contract:focus")).toHaveCount(1);
 
     await page.getByRole("button", { name: "Publish…" }).click();
     const dialog = page.getByRole("dialog", { name: "Publish the review" });

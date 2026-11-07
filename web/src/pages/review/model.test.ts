@@ -8,12 +8,11 @@ import {
   callerFiles,
   callsByLine,
   decisionPlaces,
-  firstCall,
   hunkIndex,
-  hunkLinks,
   hunksInPathOrder,
   mapSections,
   mechanicalCount,
+  parseLayout,
   reviewOrder,
   riskTotals,
   tourSteps,
@@ -141,7 +140,7 @@ describe("decisionPlaces", () => {
   });
 });
 
-describe("callsByLine and firstCall", () => {
+describe("callsByLine", () => {
   const index = hunkIndex(analysis);
 
   it("puts each call on its line, and drops calls to unknown hunks", () => {
@@ -151,19 +150,14 @@ describe("callsByLine and firstCall", () => {
     ]);
     expect(callsByLine(analysis.callGraph, hunkIndex({ ...analysis, files: [] })).size).toBe(0);
   });
+});
 
-  it("finds the first call by line", () => {
-    const later = { symbol: "b", toHunkId: h.dependency, line: 9 };
-    const earlier = { symbol: "a", toHunkId: h.retryAndCache, line: 3 };
-    expect(
-      firstCall(
-        new Map([
-          [9, [later]],
-          [3, [earlier]],
-        ]),
-      ),
-    ).toBe(earlier);
-    expect(firstCall(undefined)).toBeNull();
+describe("parseLayout", () => {
+  it("reads a stored call tree as the overview that replaced it", () => {
+    expect(parseLayout("tree")).toBe("overview");
+    expect(parseLayout("overview")).toBe("overview");
+    expect(parseLayout("map")).toBe("map");
+    expect(parseLayout("graph")).toBeUndefined();
   });
 });
 
@@ -248,44 +242,6 @@ describe("risk counts", () => {
     const trailing = trailingProofs(analysis, index);
     expect(trailing.some((proof) => proof.hunkId === h.formatMoneyRemoved)).toBe(false);
     expect(trailing).toHaveLength(analysis.proofs.length - 1);
-  });
-});
-
-describe("hunkLinks", () => {
-  const index = hunkIndex(analysis);
-
-  it("links a caller down to its callee and the callee back up, once per symbol", () => {
-    const hints = [...analysis.callGraph, ...analysis.callGraph];
-    const links = hunkLinks(hints, index);
-    expect(links.get(h.receiptRoute)).toEqual([
-      { direction: "calls", symbol: "cachedReceipt", hunkId: h.retryAndCache },
-    ]);
-    expect(links.get(h.retryAndCache)).toEqual([
-      { direction: "called-by", symbol: "cachedReceipt", hunkId: h.receiptRoute },
-    ]);
-  });
-
-  it("drops hints to unknown hunks and keeps at most six links each way", () => {
-    const unknown = {
-      ...analysis.callGraph[0],
-      toHunkId: h.dependency,
-      fromHunkId: h.dependency,
-      use: "call" as const,
-    };
-    expect(
-      hunkLinks(
-        [unknown].map((hint) => ({ ...hint, symbol: "x", line: 1 })),
-        hunkIndex({ ...analysis, files: [] }),
-      ).size,
-    ).toBe(0);
-    const many = Array.from({ length: 9 }, (_, i) => ({
-      fromHunkId: h.receiptRoute,
-      toHunkId: h.retryAndCache,
-      symbol: `s${i}`,
-      line: 20,
-      use: "call" as const,
-    }));
-    expect(hunkLinks(many, index).get(h.receiptRoute)).toHaveLength(6);
   });
 });
 
