@@ -1,4 +1,4 @@
-import { type HunkId, isTestFile } from "../../../../src/domain/diff/index.ts";
+import { hunkIdOf, isTestFile, type PartId } from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
   entryOf,
@@ -32,7 +32,7 @@ export interface OverviewNode {
   /** The titles of the flows that read it. */
   readonly flows: readonly string[];
   /** Its hunks to review, in tour order: a click opens the first. */
-  readonly hunkIds: readonly HunkId[];
+  readonly partIds: readonly PartId[];
   /** Test files and test helpers that link to it, directly or through a helper. */
   readonly badges: readonly string[];
   /** The row it sits in, from 0; -1 in the strip. */
@@ -129,14 +129,14 @@ const entryLabels = (
     if (!known.includes(label)) labels.set(path, [...known, label]);
   };
   for (const step of steps) {
-    const byFile = new Map<string, HunkId[]>();
+    const byFile = new Map<string, PartId[]>();
     for (const id of step.entries) {
-      const path = located.get(id)?.file.path;
+      const path = located.get(hunkIdOf(id))?.file.path;
       if (path !== undefined) byFile.set(path, [...(byFile.get(path) ?? []), id]);
     }
     for (const [path, ids] of byFile) {
       const routes = ids.flatMap((id) => {
-        const found = located.get(id);
+        const found = located.get(hunkIdOf(id));
         const entry = found === undefined ? null : entryOf(found.file, found.hunk, []);
         return entry?.kind === "route" ? entry.routes : [];
       });
@@ -217,9 +217,9 @@ export const fileOverview = (
 ): FileOverview => {
   const mechanical = new Set(analysis.proofs.flatMap((proof) => proof.hunkId ?? []));
   const riskOf = new Map(analysis.risk.map((one) => [one.hunkId, one.riskClass]));
-  const tourOrder = [...new Set(steps.flatMap((step) => step.hunkIds))];
+  const tourOrder = [...new Set(steps.flatMap((step) => step.partIds))];
   const rank = new Map(tourOrder.map((id, at) => [id, at]));
-  const rankOf = (id: HunkId) => rank.get(id) ?? tourOrder.length;
+  const rankOf = (id: PartId) => rank.get(id) ?? tourOrder.length;
   const generated = new Set(analysis.generated);
 
   // The files with a hunk to review, and what the nodes show of each.
@@ -247,7 +247,7 @@ export const fileOverview = (
         {
           added: lines.filter((line) => line.kind === "add").length,
           deleted: lines.filter((line) => line.kind === "del").length,
-          hunkIds: toReview,
+          partIds: toReview,
           risk,
           rank: toReview.reduce((least, id) => Math.min(least, rankOf(id)), Infinity),
         },
@@ -271,8 +271,8 @@ export const fileOverview = (
   };
   for (const { from, to } of analysis.fileLinks) link(from, to, "import");
   for (const hint of analysis.callGraph) {
-    const from = pathOfHunk.get(hint.fromHunkId);
-    const to = pathOfHunk.get(hint.toHunkId);
+    const from = pathOfHunk.get(hunkIdOf(hint.fromPartId));
+    const to = pathOfHunk.get(hunkIdOf(hint.toPartId));
     if (from !== undefined && to !== undefined) link(from, to, hint.use, hint.symbol);
   }
   const linkedFrom = (path: string) => [...(links.get(path)?.keys() ?? [])];
@@ -431,7 +431,7 @@ export const fileOverview = (
   const flowsOf = new Map<string, string[]>();
   for (const step of steps) {
     if (step.kind !== "flow") continue;
-    for (const path of new Set(step.hunkIds.flatMap((id) => pathOfHunk.get(id) ?? []))) {
+    for (const path of new Set(step.partIds.flatMap((id) => pathOfHunk.get(hunkIdOf(id)) ?? []))) {
       flowsOf.set(path, [...(flowsOf.get(path) ?? []), step.title]);
     }
   }
@@ -453,7 +453,7 @@ export const fileOverview = (
       generated: inIt.every((path) => generated.has(path)),
       entries: unique(inIt.flatMap((path) => entries.get(path) ?? [])),
       flows: unique(inIt.flatMap((path) => flowsOf.get(path) ?? [])),
-      hunkIds: facts.flatMap((one) => one.hunkIds).sort((a, b) => rankOf(a) - rankOf(b)),
+      partIds: facts.flatMap((one) => one.partIds).sort((a, b) => rankOf(a) - rankOf(b)),
       badges: unique(inIt.flatMap((path) => testsOn.get(path) ?? [])).sort(byRank),
       row,
     };

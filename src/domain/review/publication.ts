@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { type Hunk, HunkId } from "../diff/index.ts";
+import { type Hunk, HunkId, hunkIdOf } from "../diff/index.ts";
 import type { Analysis } from "./analysis.ts";
 import type { DecisionId, DecisionVerdict, Verdict } from "./decision.ts";
 import { HttpUrl, Timestamp } from "./primitives.ts";
@@ -181,7 +181,7 @@ const hunkAnchors = (analysis: Analysis): ReadonlyMap<HunkId, Anchor> => {
   const hunks = analysis.files.flatMap((file) => file.hunks);
   const order = [
     ...new Set([
-      ...(analysis.tour?.steps.flatMap((step) => step.hunkIds) ?? []),
+      ...(analysis.tour?.steps.flatMap((step) => step.partIds.map(hunkIdOf)) ?? []),
       ...hunks.map((hunk) => hunk.id),
     ]),
   ];

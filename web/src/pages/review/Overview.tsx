@@ -163,8 +163,8 @@ const describeEdge = (edge: OverviewEdge, labelOf: (key: string) => string): str
 };
 
 const reviewedState = (node: OverviewNode, reviewed: ReadonlySet<string>) => {
-  const done = node.hunkIds.filter((id) => reviewed.has(id)).length;
-  return { done, total: node.hunkIds.length, all: done === node.hunkIds.length };
+  const done = node.partIds.filter((id) => reviewed.has(id)).length;
+  return { done, total: node.partIds.length, all: done === node.partIds.length };
 };
 
 const NodeButton = ({

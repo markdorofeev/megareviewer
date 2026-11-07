@@ -78,10 +78,12 @@ export type DecisionDraft = z.infer<typeof DecisionDraft>;
 
 /**
  * The model writes steps without `kind`, `via` and `entries`: its steps are all flows that repeat
- * nothing, and it doesn't say where they start.
+ * nothing, and it doesn't say where they start. It sees whole hunks, so its steps list hunks; the
+ * server expands each to its parts.
  */
 export const TourStepDraft = TourStep.unwrap()
-  .omit({ id: true, kind: true, via: true, entries: true })
+  .omit({ id: true, kind: true, via: true, entries: true, partIds: true })
+  .extend({ hunkIds: z.array(HunkId).readonly() })
   .readonly();
 export type TourStepDraft = z.infer<typeof TourStepDraft>;
 

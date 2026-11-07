@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AnalysisView, PullRequestListResponse, StatusResponse } from "../../../contracts/index.ts";
+import { hunkIdOf } from "../../../src/domain/diff/index.ts";
 import {
   validateHunkReferences,
   validateRiskCoverage,
@@ -82,7 +83,7 @@ describe("the fixture analysis", () => {
     const referenced = [
       ...analysis.decisions.flatMap((decision) => decision.hunkIds),
       ...(analysis.intent?.mismatches.flatMap((mismatch) => mismatch.hunkIds) ?? []),
-      ...analysis.callGraph.flatMap((hint) => [hint.fromHunkId, hint.toHunkId]),
+      ...analysis.callGraph.flatMap((hint) => [hunkIdOf(hint.fromPartId), hunkIdOf(hint.toPartId)]),
     ];
     expect(validateHunkReferences(hunkIds, referenced)).toEqual([]);
   });
@@ -112,7 +113,7 @@ describe("the large fixture analysis", () => {
 
   it("puts every call on a line its calling hunk shows", () => {
     for (const hint of analysis.callGraph) {
-      const from = hunks.find((hunk) => hunk.id === hint.fromHunkId);
+      const from = hunks.find((hunk) => hunk.id === hint.fromPartId);
       const line = from?.lines.find((one) => one.newLine === hint.line);
       expect(line?.text).toContain(`${hint.symbol}(input)`);
     }

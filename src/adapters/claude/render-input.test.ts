@@ -40,7 +40,7 @@ describe("renderInput", () => {
     expect(text).toContain(`title: ${smallFeatureInput.pullRequest.title}`);
     expect(text).toContain('<ticket key="SHOP-123"');
     const [hint] = smallFeatureInput.callGraph;
-    expect(text).toContain(`${hint?.fromHunkId} → ${hint?.toHunkId} (${hint?.symbol})`);
+    expect(text).toContain(`${hint?.fromPartId} → ${hint?.toPartId} (${hint?.symbol})`);
   });
 
   it("renders a hunk with its ID, file, heading and numbered lines", () => {

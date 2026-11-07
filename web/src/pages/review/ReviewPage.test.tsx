@@ -475,11 +475,11 @@ describe("map", () => {
   });
 
   it("links a flow to the code of earlier steps it passes through, and quiets supporting steps", async () => {
-    const step = (id: string, title: string, hunkIds: HunkId[], extra: object = {}) => ({
+    const step = (id: string, title: string, partIds: HunkId[], extra: object = {}) => ({
       id: TourStepId.parse(id),
       title,
       explanation: "",
-      hunkIds,
+      partIds,
       kind: "flow" as const,
       via: [],
       entries: [],
@@ -798,15 +798,15 @@ const chained: AnalysisView = {
     callGraph: [
       ...analysis.callGraph,
       {
-        fromHunkId: h.retryAndCache,
-        toHunkId: h.receiptRoute,
+        fromPartId: h.retryAndCache,
+        toPartId: h.receiptRoute,
         symbol: "orders",
         line: 45,
         use: "call",
       },
       {
-        fromHunkId: h.retryAndCache,
-        toHunkId: h.receiptFormatting,
+        fromPartId: h.retryAndCache,
+        toPartId: h.receiptFormatting,
         symbol: "renderReceipt",
         line: 47,
         use: "call",
@@ -822,8 +822,8 @@ const repeated: AnalysisView = {
     callGraph: [
       ...analysis.callGraph,
       {
-        fromHunkId: h.routeImports,
-        toHunkId: h.retryAndCache,
+        fromPartId: h.routeImports,
+        toPartId: h.retryAndCache,
         symbol: "cachedReceipt",
         line: 5,
         use: "call",
@@ -838,9 +838,9 @@ const ambiguous: AnalysisView = {
     ...analysis,
     callGraph: [
       ...analysis.callGraph,
-      ...[h.retryAndCache, h.receiptFormatting].map((toHunkId) => ({
-        fromHunkId: h.receiptRoute,
-        toHunkId,
+      ...[h.retryAndCache, h.receiptFormatting].map((toPartId) => ({
+        fromPartId: h.receiptRoute,
+        toPartId,
         symbol: "findOrderById",
         line: 15,
         use: "call" as const,
@@ -861,8 +861,8 @@ describe("inline calls", () => {
           callGraph: [
             ...analysis.callGraph,
             {
-              fromHunkId: h.receiptRoute,
-              toHunkId: h.receiptFormatting,
+              fromPartId: h.receiptRoute,
+              toPartId: h.receiptFormatting,
               symbol: "Receipt",
               line: 12,
               use: "type",

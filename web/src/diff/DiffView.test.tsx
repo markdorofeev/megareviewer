@@ -251,10 +251,10 @@ describe("DiffView", () => {
 
 describe("callers", () => {
   const callers = [
-    { path: "src/services/orders.ts", hunkId: second, test: false },
-    { path: "lib/orders.ts", hunkId: second, test: false },
-    { path: "tests/test_orders.py", hunkId: first, test: true },
-    { path: "tests/fakes.py", hunkId: first, test: true },
+    { path: "src/services/orders.ts", partId: second, test: false },
+    { path: "lib/orders.ts", partId: second, test: false },
+    { path: "tests/test_orders.py", partId: first, test: true },
+    { path: "tests/fakes.py", partId: first, test: true },
   ];
 
   it("lists each calling file, counts tests until they're opened, and follows a link", async () => {

@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Hunk, HunkId } from "../../../../src/domain/diff/index.ts";
+import type { Hunk, PartId } from "../../../../src/domain/diff/index.ts";
 import { hunkLocation } from "../../diff/index.ts";
 import type { CallMark } from "./chips.ts";
 import type { HunkDeps } from "./HunkView.tsx";
@@ -85,11 +85,11 @@ export const Mention = ({
   );
 
   if (first === undefined) return children;
-  const riskOf = (hunkId: HunkId) =>
+  const riskOf = (hunkId: PartId) =>
     deps.index.mechanical.has(hunkId)
       ? "mechanical"
       : (deps.index.items([hunkId])[0]?.risk.riskClass ?? "logic");
-  const riskClass = riskOf(first.toHunkId);
+  const riskClass = riskOf(first.toPartId);
   return (
     <>
       <button
@@ -112,7 +112,7 @@ export const Mention = ({
         }}
         onClick={() => {
           close();
-          deps.onFollow(first.toHunkId);
+          deps.onFollow(first.toPartId);
         }}
       >
         {children}
@@ -121,7 +121,7 @@ export const Mention = ({
         createPortal(
           <div id={id} role="tooltip" className="peek" style={{ top: place.top, left: place.left }}>
             {mark.calls.map((call) => (
-              <PeekOf key={call.toHunkId} hunkId={call.toHunkId} symbol={mark.symbol} deps={deps} />
+              <PeekOf key={call.toPartId} hunkId={call.toPartId} symbol={mark.symbol} deps={deps} />
             ))}
           </div>,
           document.body,
@@ -135,7 +135,7 @@ const PeekOf = ({
   symbol,
   deps,
 }: {
-  readonly hunkId: HunkId;
+  readonly hunkId: PartId;
   readonly symbol: string;
   readonly deps: HunkDeps;
 }) => {

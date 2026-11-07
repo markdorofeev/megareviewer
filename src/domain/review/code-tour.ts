@@ -1,4 +1,10 @@
-import { type CallGraphHint, type FileChange, type HunkId, isTestFile } from "../diff/index.ts";
+import {
+  type CallGraphHint,
+  type FileChange,
+  type HunkId,
+  isTestFile,
+  type PartId,
+} from "../diff/index.ts";
 import { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 import type { RiskAssessment } from "./risk.ts";
 import { type Tour, type TourStep, TourStepId } from "./tour.ts";
@@ -10,7 +16,7 @@ export interface CodeTourInput {
   readonly callGraph: readonly CallGraphHint[];
   readonly risk: readonly RiskAssessment[];
   /** Each hunk's changed definitions, innermost, by name. */
-  readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
+  readonly definitions: ReadonlyMap<PartId, readonly string[]>;
   /** Paths whose first lines say a tool wrote them. They're grouped, never hidden. */
   readonly generated?: ReadonlySet<string>;
 }
@@ -71,14 +77,14 @@ const KIND_RANK: Readonly<Record<FlowKind, number>> = { route: 0, page: 1, comma
 
 interface Start {
   /** Where the walk starts: the entry hunks, or a root. */
-  readonly starts: readonly HunkId[];
+  readonly starts: readonly PartId[];
   readonly entries: readonly Entry[];
   readonly kind: FlowKind;
 }
 
 interface Flow extends Start {
-  readonly hunks: HunkId[];
-  readonly via: HunkId[];
+  readonly hunks: PartId[];
+  readonly via: PartId[];
 }
 
 type StepDraft = Omit<TourStep, "id">;
@@ -103,33 +109,33 @@ export const codeTour = (input: CodeTourInput): Tour => {
   const located = files.flatMap((file) =>
     file.hunks.filter((hunk) => required.has(hunk.id)).map((hunk) => ({ file, hunk })),
   );
-  const ids = located.map(({ hunk }) => hunk.id);
+  const ids: PartId[] = located.map(({ hunk }) => hunk.id);
   const order = new Map(ids.map((id, at) => [id, at]));
-  const fileOf = new Map(located.map(({ file, hunk }) => [hunk.id, file]));
-  const pathOf = (id: HunkId): string => fileOf.get(id)?.path ?? "";
-  const isTest = (id: HunkId) => isTestFile(pathOf(id));
-  const isCode = (id: HunkId) => !isTest(id) && !isDoc(pathOf(id));
-  const isSchemaLike = (id: HunkId) => generated.has(pathOf(id)) || isSchema(pathOf(id));
-  const contract = new Set(
+  const fileOf = new Map<PartId, FileChange>(located.map(({ file, hunk }) => [hunk.id, file]));
+  const pathOf = (id: PartId): string => fileOf.get(id)?.path ?? "";
+  const isTest = (id: PartId) => isTestFile(pathOf(id));
+  const isCode = (id: PartId) => !isTest(id) && !isDoc(pathOf(id));
+  const isSchemaLike = (id: PartId) => generated.has(pathOf(id)) || isSchema(pathOf(id));
+  const contract = new Set<PartId>(
     risk.flatMap((assessment) => (assessment.riskClass === "contract" ? [assessment.hunkId] : [])),
   );
 
   // Calls in the order they're made, and type uses, between required hunks.
-  const edges = () => new Map<HunkId, HunkId[]>(ids.map((id) => [id, []]));
+  const edges = () => new Map<PartId, PartId[]>(ids.map((id) => [id, []]));
   const [callees, callers, typeUses, usedAsType] = [edges(), edges(), edges(), edges()];
-  for (const { fromHunkId: from, toHunkId: to, use } of [...callGraph].sort(
+  for (const { fromPartId: from, toPartId: to, use } of [...callGraph].sort(
     (a, b) => a.line - b.line,
   )) {
-    if (from === to || !required.has(from) || !required.has(to)) continue;
+    if (from === to || !order.has(from) || !order.has(to)) continue;
     const [out, back] = use === "call" ? [callees, callers] : [typeUses, usedAsType];
     if (!out.get(from)?.includes(to)) out.get(from)?.push(to);
     if (!back.get(to)?.includes(from)) back.get(to)?.push(from);
   }
-  const codeCallees = (id: HunkId) => (callees.get(id) ?? []).filter(isCode);
-  const codeCallers = (id: HunkId) => (callers.get(id) ?? []).filter(isCode);
-  const reach = (starts: readonly HunkId[]): HunkId[] => {
-    const seen: HunkId[] = [];
-    const visit = (id: HunkId) => {
+  const codeCallees = (id: PartId) => (callees.get(id) ?? []).filter(isCode);
+  const codeCallers = (id: PartId) => (callers.get(id) ?? []).filter(isCode);
+  const reach = (starts: readonly PartId[]): PartId[] => {
+    const seen: PartId[] = [];
+    const visit = (id: PartId) => {
       if (seen.includes(id)) return;
       seen.push(id);
       for (const callee of codeCallees(id)) visit(callee);
@@ -139,13 +145,13 @@ export const codeTour = (input: CodeTourInput): Tour => {
   };
 
   // Entries. Entry hunks that change the same definition, like two hunks of one main, share a flow.
-  const entryOfHunk = new Map<HunkId, Entry>();
+  const entryOfHunk = new Map<PartId, Entry>();
   for (const { file, hunk } of located) {
     if (!isCode(hunk.id)) continue;
     const entry = entryOf(file, hunk, definitions.get(hunk.id) ?? []);
     if (entry !== null) entryOfHunk.set(hunk.id, entry);
   }
-  const entryGroups = new Map<string, HunkId[]>();
+  const entryGroups = new Map<string, PartId[]>();
   for (const [id, entry] of entryOfHunk) {
     const names = [...(definitions.get(id) ?? [])].sort().join(",");
     const key = entry.kind === "route" || names === "" ? id : `${pathOf(id)}#${names}`;
@@ -153,7 +159,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
   }
 
   // Wiring: nothing calls it, and it calls only entries.
-  const wiring = new Map<HunkId, HunkId>();
+  const wiring = new Map<PartId, PartId>();
   for (const id of ids.filter(isCode)) {
     const [first, ...rest] = codeCallees(id);
     if (
@@ -190,9 +196,9 @@ export const codeTour = (input: CodeTourInput): Tour => {
       firstAt(a) - firstAt(b),
   );
 
-  const owner = new Map<HunkId, Flow>();
+  const owner = new Map<PartId, Flow>();
   const flows: Flow[] = [];
-  const own = (flow: Flow, id: HunkId) => {
+  const own = (flow: Flow, id: PartId) => {
     flow.hunks.push(id);
     owner.set(id, flow);
   };
@@ -223,7 +229,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
   }
 
   // Attach the rest, again while something joins: a test can follow a fake that just did.
-  const flowWithMostOf = (path: string, kind: (id: HunkId) => boolean) =>
+  const flowWithMostOf = (path: string, kind: (id: PartId) => boolean) =>
     mostCommon([...owner].flatMap(([id, flow]) => (pathOf(id) === path && kind(id) ? [flow] : [])));
   const flowOfSubject = (names: readonly string[]) =>
     mostCommon(
@@ -231,7 +237,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
         isCode(id) && names.includes(stem(basename(pathOf(id)))) ? [flow] : [],
       ),
     );
-  const belongsWith = (id: HunkId): Flow | undefined => {
+  const belongsWith = (id: PartId): Flow | undefined => {
     const path = pathOf(id);
     // A schema or generated file a flow only names stays with the API schema.
     if (isSchemaLike(id)) return undefined;
@@ -271,9 +277,9 @@ export const codeTour = (input: CodeTourInput): Tour => {
   }
 
   // Reading order: code as walked, with each file's hunks together in file order; tests last.
-  const byOrder = (a: HunkId, b: HunkId) => (order.get(a) ?? 0) - (order.get(b) ?? 0);
+  const byOrder = (a: PartId, b: PartId) => (order.get(a) ?? 0) - (order.get(b) ?? 0);
   for (const flow of flows) {
-    const code: HunkId[] = [];
+    const code: PartId[] = [];
     for (const id of flow.hunks.filter((one) => !isTest(one))) {
       if (code.includes(id)) continue;
       const sameFile = flow.hunks.filter((other) => !isTest(other) && pathOf(other) === pathOf(id));
@@ -283,7 +289,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
   }
 
   const stepOfFlow = new Map(flows.map((flow, at) => [flow, at + 1]));
-  const stepOf = (id: HunkId) => {
+  const stepOf = (id: PartId) => {
     const flow = owner.get(id);
     return flow === undefined ? undefined : stepOfFlow.get(flow);
   };
@@ -291,7 +297,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
     ...flows.map((flow) => ({
       title: flowTitle(flow, pathOf, definitions),
       explanation: flowExplanation(flow, pathOf, isTest, stepOf),
-      hunkIds: flow.hunks,
+      partIds: flow.hunks,
       kind: "flow" as const,
       via: flow.via,
       entries: flow.kind === "root" ? [] : flow.starts,
@@ -329,8 +335,8 @@ const mostCommon = <T>(values: readonly (T | undefined)[]): T | undefined => {
 
 const flowTitle = (
   flow: Flow,
-  pathOf: (id: HunkId) => string,
-  definitions: ReadonlyMap<HunkId, readonly string[]>,
+  pathOf: (id: PartId) => string,
+  definitions: ReadonlyMap<PartId, readonly string[]>,
 ): string => {
   if (flow.entries.length > 0) return entryLabel(flow.entries);
   const start = flow.starts[0];
@@ -341,11 +347,11 @@ const flowTitle = (
 
 const flowExplanation = (
   flow: Flow,
-  pathOf: (id: HunkId) => string,
-  isTest: (id: HunkId) => boolean,
-  stepOf: (id: HunkId) => number | undefined,
+  pathOf: (id: PartId) => string,
+  isTest: (id: PartId) => boolean,
+  stepOf: (id: PartId) => number | undefined,
 ): string => {
-  const names = (ids: readonly HunkId[]) => [...new Set(ids.map((id) => basename(pathOf(id))))];
+  const names = (ids: readonly PartId[]) => [...new Set(ids.map((id) => basename(pathOf(id))))];
   const tests = names(flow.hunks.filter(isTest));
   const earlier = [...new Set(flow.via.flatMap((id) => stepOf(id) ?? []))].sort((a, b) => a - b);
   const parts = [
@@ -364,13 +370,13 @@ const SUPPORTING_RANK: Readonly<Record<string, number>> = { "API schema": 0, Doc
 
 /** What no flow runs, by kind: API schema, docs, tests, then other changes by area. */
 const supportingSteps = (
-  left: readonly HunkId[],
-  pathOf: (id: HunkId) => string,
-  isSchemaLike: (id: HunkId) => boolean,
-  isTest: (id: HunkId) => boolean,
-  contract: ReadonlySet<HunkId>,
+  left: readonly PartId[],
+  pathOf: (id: PartId) => string,
+  isSchemaLike: (id: PartId) => boolean,
+  isTest: (id: PartId) => boolean,
+  contract: ReadonlySet<PartId>,
 ): StepDraft[] => {
-  const groups = new Map<string, HunkId[]>();
+  const groups = new Map<string, PartId[]>();
   for (const id of left) {
     const path = pathOf(id);
     const where = area(path);
@@ -383,7 +389,7 @@ const supportingSteps = (
           : `Other changes in ${where === "" ? "the repository root" : where}`;
     groups.set(title, [...(groups.get(title) ?? []), id]);
   }
-  const contractCount = (hunks: readonly HunkId[]) => hunks.filter((id) => contract.has(id)).length;
+  const contractCount = (hunks: readonly PartId[]) => hunks.filter((id) => contract.has(id)).length;
   const rank = (title: string) => SUPPORTING_RANK[title] ?? 3;
   return [...groups]
     .sort(
@@ -392,13 +398,13 @@ const supportingSteps = (
         rank(titleA) - rank(titleB) ||
         compare(titleA, titleB),
     )
-    .map(([title, hunkIds]) => {
-      const paths = [...new Set(hunkIds.map(pathOf))];
+    .map(([title, partIds]) => {
+      const paths = [...new Set(partIds.map(pathOf))];
       const count = paths.length === 1 ? "1 file" : `${paths.length} files`;
       return {
         title,
         explanation: `${count}: ${listed(paths.map(basename))}. No flow runs ${paths.length === 1 ? "it" : "them"}.`,
-        hunkIds,
+        partIds,
         kind: "supporting" as const,
         via: [],
         entries: [],

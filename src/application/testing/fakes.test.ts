@@ -231,7 +231,10 @@ describe("FakeAnalysisModel", () => {
       "Changes src/routes/orders.ts",
       "Changes src/services/receipts.ts",
     ]);
-    expect(tour.ok && validateTour(tour.value.value, required)).toEqual([]);
+    const steps = tour.ok ? tour.value.value.steps : [];
+    expect(
+      validateTour({ steps: steps.map((step) => ({ partIds: step.hunkIds })) }, required),
+    ).toEqual([]);
   });
 
   it("leaves out files whose hunks are all mechanical", async () => {

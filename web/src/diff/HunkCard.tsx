@@ -1,6 +1,12 @@
 import "./diff.css";
 import { Fragment, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { FileChange, Hunk, HunkId, MechanicalProof } from "../../../src/domain/diff/index.ts";
+import type {
+  FileChange,
+  Hunk,
+  HunkId,
+  MechanicalProof,
+  PartId,
+} from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { type CharRange, intraLineChanges } from "./intra-line.ts";
 import { type DisplayLine, displayLines, hunkLocation, lineCounts } from "./lines.ts";
@@ -38,10 +44,10 @@ export const FilePath = ({ file }: { readonly file: Pick<FileChange, "path" | "o
   </span>
 );
 
-/** A file whose code calls this hunk, and its first hunk that does. */
+/** A file whose code calls this part, and its first part that does. */
 export interface CallerFile {
   readonly path: string;
-  readonly hunkId: HunkId;
+  readonly partId: PartId;
   readonly test: boolean;
 }
 
@@ -74,7 +80,7 @@ const Callers = ({
   onFollow,
 }: {
   readonly callers: readonly CallerFile[];
-  readonly onFollow: (id: HunkId) => void;
+  readonly onFollow: (id: PartId) => void;
 }) => {
   const [showTests, setShowTests] = useState(false);
   const names = shortPaths(callers.map((caller) => caller.path));
@@ -84,7 +90,7 @@ const Callers = ({
       type="button"
       className="hunk-link"
       title={caller.path}
-      onClick={() => onFollow(caller.hunkId)}
+      onClick={() => onFollow(caller.partId)}
     >
       {names[at]} ↑
     </button>
@@ -168,7 +174,7 @@ export const HunkCard = memo(function HunkCard({
   readonly lineLimit?: number;
   /** Files whose code calls this hunk, which `onFollow` goes to; calls show by `belowLine`. */
   readonly callers?: readonly CallerFile[];
-  readonly onFollow?: (id: HunkId) => void;
+  readonly onFollow?: (id: PartId) => void;
   /** Whether the reviewer has read this hunk; without `onReviewed` there's no checkbox. */
   readonly reviewed?: boolean;
   readonly onReviewed?: (id: HunkId, reviewed: boolean) => void;

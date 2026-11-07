@@ -65,6 +65,7 @@ export { extractTicketKeys } from "./ticket-keys.ts";
 export { Tour, TourStep, TourStepId } from "./tour.ts";
 export {
   CoverageProblem,
+  partsOfHunks,
   type RiskProblem,
   type TourProblem,
   validateHunkReferences,

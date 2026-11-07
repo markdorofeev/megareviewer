@@ -1,9 +1,10 @@
-import type {
-  CallGraphHint,
-  FileChange,
-  Hunk,
-  HunkId,
-  MechanicalProof,
+import {
+  type CallGraphHint,
+  type FileChange,
+  type Hunk,
+  hunkIdOf,
+  type MechanicalProof,
+  type PartId,
 } from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
@@ -36,19 +37,23 @@ const UNCLASSIFIED = "Not classified yet.";
  * pass hasn't run) reads as logic: shown in full, never collapsed.
  */
 export const hunkIndex = (analysis: Analysis) => {
-  const hunks = new Map<HunkId, { readonly hunk: Hunk; readonly file: FileChange }>();
+  const hunks = new Map<PartId, { readonly hunk: Hunk; readonly file: FileChange }>();
   for (const file of analysis.files)
     for (const hunk of file.hunks) hunks.set(hunk.id, { hunk, file });
   const risk = new Map(analysis.risk.map((assessment) => [assessment.hunkId, assessment]));
-  const proofs = new Map<HunkId, MechanicalProof[]>();
+  const proofs = new Map<PartId, MechanicalProof[]>();
   for (const proof of analysis.proofs) {
     if (proof.hunkId !== null)
       proofs.set(proof.hunkId, [...(proofs.get(proof.hunkId) ?? []), proof]);
   }
   const mechanical = new Set(proofs.keys());
-  const riskOf = (hunkId: HunkId): RiskAssessment =>
-    risk.get(hunkId) ?? { hunkId, riskClass: "logic", reason: UNCLASSIFIED, source: "fallback" };
-  const items = (ids: readonly HunkId[]): HunkItem[] =>
+  const riskOf = (id: PartId): RiskAssessment => {
+    const hunkId = hunkIdOf(id);
+    return (
+      risk.get(hunkId) ?? { hunkId, riskClass: "logic", reason: UNCLASSIFIED, source: "fallback" }
+    );
+  };
+  const items = (ids: readonly PartId[]): HunkItem[] =>
     ids.flatMap((id) => {
       const found = hunks.get(id);
       return found === undefined
@@ -61,7 +66,7 @@ export const hunkIndex = (analysis: Analysis) => {
 export type HunkIndex = ReturnType<typeof hunkIndex>;
 
 /** Non-mechanical hunks in path order, then file order: the reading order before a tour exists. */
-export const hunksInPathOrder = (analysis: Analysis, index: HunkIndex): HunkId[] =>
+export const hunksInPathOrder = (analysis: Analysis, index: HunkIndex): PartId[] =>
   [...analysis.files]
     .sort(byPath)
     .flatMap((file) => file.hunks.map((hunk) => hunk.id))
@@ -73,7 +78,7 @@ export const hunksInPathOrder = (analysis: Analysis, index: HunkIndex): HunkId[]
  */
 export const tourSteps = (analysis: Analysis, index: HunkIndex): readonly TourStep[] => {
   const steps = analysis.tour?.steps ?? [];
-  const covered = new Set(steps.flatMap((step) => step.hunkIds));
+  const covered = new Set(steps.flatMap((step) => step.partIds));
   const missed = hunksInPathOrder(analysis, index).filter((id) => !covered.has(id));
   if (missed.length === 0) return steps;
   return [
@@ -82,7 +87,7 @@ export const tourSteps = (analysis: Analysis, index: HunkIndex): readonly TourSt
       id: TourStepId.parse(`s${steps.length + 1}`),
       title: "Changes the tour left out",
       explanation: "The tour didn't include these changes, so they're shown here in file order.",
-      hunkIds: missed,
+      partIds: missed,
       kind: "supporting",
       via: [],
       entries: [],
@@ -99,9 +104,9 @@ export type MapSection =
       readonly kind: "step";
       readonly step: TourStep;
       readonly number: number;
-      readonly hunkIds: readonly HunkId[];
+      readonly partIds: readonly PartId[];
     }
-  | { readonly kind: "files"; readonly hunkIds: readonly HunkId[] };
+  | { readonly kind: "files"; readonly partIds: readonly PartId[] };
 
 export const mapSections = (
   analysis: Analysis,
@@ -112,14 +117,14 @@ export const mapSections = (
     ? [
         {
           kind: "files",
-          hunkIds: withMechanicalInPlace(hunksInPathOrder(analysis, index), index),
+          partIds: withMechanicalInPlace(hunksInPathOrder(analysis, index), index),
         },
       ]
     : steps.map((step, at) => ({
         kind: "step",
         step,
         number: at + 1,
-        hunkIds: withMechanicalInPlace(step.hunkIds, index),
+        partIds: withMechanicalInPlace(step.partIds, index),
       }));
 
 export const sectionKey = (section: MapSection): string =>
@@ -128,10 +133,10 @@ export const sectionKey = (section: MapSection): string =>
 /** Where the decisions show: each as a card on one hunk, linked from its other hunks. */
 export interface DecisionPlaces {
   /** The decisions whose card sits on this hunk. */
-  readonly cards: ReadonlyMap<HunkId, readonly Decision[]>;
+  readonly cards: ReadonlyMap<PartId, readonly Decision[]>;
   /** The decisions resting on this hunk whose card sits on another. */
-  readonly mentions: ReadonlyMap<HunkId, readonly Decision[]>;
-  readonly cardHunk: ReadonlyMap<DecisionId, HunkId>;
+  readonly mentions: ReadonlyMap<PartId, readonly Decision[]>;
+  readonly cardHunk: ReadonlyMap<DecisionId, PartId>;
   /** Decisions resting on no hunk the page can show a card on. They show before the code. */
   readonly unplaced: readonly Decision[];
 }
@@ -142,15 +147,15 @@ export interface DecisionPlaces {
  */
 export const decisionPlaces = (
   decisions: readonly Decision[],
-  order: readonly HunkId[],
+  order: readonly PartId[],
   index: HunkIndex,
 ): DecisionPlaces => {
   const rank = new Map(order.map((id, at) => [id, at]));
-  const cards = new Map<HunkId, Decision[]>();
-  const mentions = new Map<HunkId, Decision[]>();
-  const cardHunk = new Map<DecisionId, HunkId>();
+  const cards = new Map<PartId, Decision[]>();
+  const mentions = new Map<PartId, Decision[]>();
+  const cardHunk = new Map<DecisionId, PartId>();
   const unplaced: Decision[] = [];
-  const add = (map: Map<HunkId, Decision[]>, id: HunkId, decision: Decision) =>
+  const add = (map: Map<PartId, Decision[]>, id: PartId, decision: Decision) =>
     map.set(id, [...(map.get(id) ?? []), decision]);
   for (const decision of decisions) {
     const [first, ...rest] = [...new Set(decision.hunkIds)]
@@ -171,13 +176,13 @@ export const decisionPlaces = (
 export const callsByLine = (
   callGraph: readonly CallGraphHint[],
   index: HunkIndex,
-): ReadonlyMap<HunkId, ReadonlyMap<number, readonly Call[]>> => {
-  const calls = new Map<HunkId, Map<number, Call[]>>();
-  for (const { fromHunkId, toHunkId, symbol, line } of callGraph) {
-    if (!index.hunks.has(fromHunkId) || !index.hunks.has(toHunkId)) continue;
-    const lines = calls.get(fromHunkId) ?? new Map<number, Call[]>();
-    lines.set(line, [...(lines.get(line) ?? []), { symbol, toHunkId, line }]);
-    calls.set(fromHunkId, lines);
+): ReadonlyMap<PartId, ReadonlyMap<number, readonly Call[]>> => {
+  const calls = new Map<PartId, Map<number, Call[]>>();
+  for (const { fromPartId, toPartId, symbol, line } of callGraph) {
+    if (!index.hunks.has(fromPartId) || !index.hunks.has(toPartId)) continue;
+    const lines = calls.get(fromPartId) ?? new Map<number, Call[]>();
+    lines.set(line, [...(lines.get(line) ?? []), { symbol, toPartId, line }]);
+    calls.set(fromPartId, lines);
   }
   return calls;
 };
@@ -191,7 +196,7 @@ export const barHeight = (hunk: Pick<Hunk, "lines">): number =>
 
 /** One row per mechanical hunk, plus one per file-level proof, as the mechanical group shows. */
 export const mechanicalCount = (proofs: readonly MechanicalProof[]): number => {
-  const hunks = new Set<HunkId>();
+  const hunks = new Set<PartId>();
   let fileLevel = 0;
   for (const proof of proofs) {
     if (proof.hunkId === null) fileLevel += 1;
@@ -205,11 +210,11 @@ export const mechanicalCount = (proofs: readonly MechanicalProof[]): number => {
  * next to a logic change reads in context. Each mechanical hunk goes right before the step's
  * next hunk from its file, or after the last one when it comes later in the file.
  */
-export const withMechanicalInPlace = (ids: readonly HunkId[], index: HunkIndex): HunkId[] => {
-  const result: HunkId[] = [];
-  const placed = new Set<HunkId>(ids);
-  const fileOf = (id: HunkId) => index.hunks.get(id)?.file;
-  const mechanicalBefore = (file: FileChange, id: HunkId | null): HunkId[] => {
+export const withMechanicalInPlace = (ids: readonly PartId[], index: HunkIndex): PartId[] => {
+  const result: PartId[] = [];
+  const placed = new Set<PartId>(ids);
+  const fileOf = (id: PartId) => index.hunks.get(id)?.file;
+  const mechanicalBefore = (file: FileChange, id: PartId | null): PartId[] => {
     const at = id === null ? file.hunks.length : file.hunks.findIndex((hunk) => hunk.id === id);
     return file.hunks
       .slice(0, at)
@@ -268,31 +273,31 @@ export const trailingProofs = (analysis: Analysis, index: HunkIndex): Mechanical
 export const callerFiles = (
   callGraph: readonly CallGraphHint[],
   index: HunkIndex,
-  order: readonly HunkId[],
-): ReadonlyMap<HunkId, readonly CallerFile[]> => {
+  order: readonly PartId[],
+): ReadonlyMap<PartId, readonly CallerFile[]> => {
   const rank = new Map(order.map((id, at) => [id, at]));
-  const rankOf = (id: HunkId) => rank.get(id) ?? order.length;
-  const byCallee = new Map<HunkId, Map<string, HunkId>>();
-  for (const { fromHunkId, toHunkId } of callGraph) {
-    const caller = index.hunks.get(fromHunkId);
-    if (caller === undefined || !index.hunks.has(toHunkId) || fromHunkId === toHunkId) continue;
-    const files = byCallee.get(toHunkId) ?? new Map<string, HunkId>();
+  const rankOf = (id: PartId) => rank.get(id) ?? order.length;
+  const byCallee = new Map<PartId, Map<string, PartId>>();
+  for (const { fromPartId, toPartId } of callGraph) {
+    const caller = index.hunks.get(fromPartId);
+    if (caller === undefined || !index.hunks.has(toPartId) || fromPartId === toPartId) continue;
+    const files = byCallee.get(toPartId) ?? new Map<string, PartId>();
     const known = files.get(caller.file.path);
-    if (known === undefined || rankOf(fromHunkId) < rankOf(known)) {
-      files.set(caller.file.path, fromHunkId);
+    if (known === undefined || rankOf(fromPartId) < rankOf(known)) {
+      files.set(caller.file.path, fromPartId);
     }
-    byCallee.set(toHunkId, files);
+    byCallee.set(toPartId, files);
   }
   return new Map(
     [...byCallee].map(([callee, files]) => [
       callee,
       [...files]
-        .map(([path, hunkId]) => ({ path, hunkId, test: isTestFile(path) }))
-        .sort((a, b) => Number(a.test) - Number(b.test) || rankOf(a.hunkId) - rankOf(b.hunkId)),
+        .map(([path, partId]) => ({ path, partId, test: isTestFile(path) }))
+        .sort((a, b) => Number(a.test) - Number(b.test) || rankOf(a.partId) - rankOf(b.partId)),
     ]),
   );
 };
 
 /** Every hunk to review, in the map's order: what the reviewed count counts. */
-export const reviewOrder = (sections: readonly MapSection[], index: HunkIndex): readonly HunkId[] =>
-  sections.flatMap((section) => section.hunkIds).filter((id) => !index.mechanical.has(id));
+export const reviewOrder = (sections: readonly MapSection[], index: HunkIndex): readonly PartId[] =>
+  sections.flatMap((section) => section.partIds).filter((id) => !index.mechanical.has(id));

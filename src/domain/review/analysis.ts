@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CallGraphHint, FileChange, FileLink, MechanicalProof } from "../diff/index.ts";
+import { CallGraphHint, FileChange, FileLink, HunkPart, MechanicalProof } from "../diff/index.ts";
 import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
 import { Intent, Ticket } from "./intent.ts";
@@ -83,6 +83,8 @@ export const Analysis = z
     /** Ticket keys found in the PR that Jira didn't return. */
     missingTicketKeys: z.array(z.string()).readonly(),
     proofs: z.array(MechanicalProof).readonly(),
+    /** The parts of split hunks, in diff order. A hunk with none here is one part. */
+    parts: z.array(HunkPart).readonly(),
     callGraph: z.array(CallGraphHint).readonly(),
     /** Changed files an import in another changed file reaches. */
     fileLinks: z.array(FileLink).readonly(),

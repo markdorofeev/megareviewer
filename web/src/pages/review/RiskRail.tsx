@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { HunkId } from "../../../../src/domain/diff/index.ts";
+import type { PartId } from "../../../../src/domain/diff/index.ts";
 import type { Decision } from "../../../../src/domain/review/index.ts";
 import { hunkLocation } from "../../diff/index.ts";
 import { hunkAnchor } from "./HunkView.tsx";
@@ -7,7 +7,7 @@ import { barHeight, type HunkIndex, type MapSection, type RiskMix, sectionKey } 
 
 /** Where a click on the rail goes. */
 export type RailTarget =
-  | { readonly kind: "hunk"; readonly hunkId: HunkId }
+  | { readonly kind: "hunk"; readonly hunkId: PartId }
   | { readonly kind: "section"; readonly key: string }
   | { readonly kind: "mechanical" };
 
@@ -15,13 +15,13 @@ export type RailTarget =
  * Hunks of these IDs whose place on the page is in the viewport, in the order given. Without
  * IntersectionObserver (tests), none is.
  */
-const useInView = (ids: readonly HunkId[]): ReadonlySet<HunkId> => {
-  const [inView, setInView] = useState<ReadonlySet<HunkId>>(new Set());
+const useInView = (ids: readonly PartId[]): ReadonlySet<PartId> => {
+  const [inView, setInView] = useState<ReadonlySet<PartId>>(new Set());
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
     setInView(new Set());
-    const visible = new Set<HunkId>();
-    const idOf = new Map<Element, HunkId>();
+    const visible = new Set<PartId>();
+    const idOf = new Map<Element, PartId>();
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         const id = idOf.get(entry.target);
@@ -63,7 +63,7 @@ export const RiskRail = ({
   readonly sections: readonly MapSection[];
   readonly index: HunkIndex;
   /** Every decision resting on the hunk. */
-  readonly decisionsOn: (id: HunkId) => readonly Decision[];
+  readonly decisionsOn: (id: PartId) => readonly Decision[];
   readonly totals: RiskMix;
   readonly reviewedHunks: ReadonlySet<string>;
   readonly contractOnly: boolean;
@@ -71,14 +71,14 @@ export const RiskRail = ({
   readonly mechanicalCount: number;
   readonly onGo: (target: RailTarget) => void;
   /** The hunks in view, in page order, whenever they change. */
-  readonly onInView: (ids: readonly HunkId[]) => void;
+  readonly onInView: (ids: readonly PartId[]) => void;
 }) => {
   const id = useId();
   const rail = useRef<HTMLElement>(null);
-  const [ids, setIds] = useState<readonly HunkId[]>([]);
+  const [ids, setIds] = useState<readonly PartId[]>([]);
   // The hunks the page shows; their places change when the filter does.
   const shown = sections
-    .flatMap((section) => section.hunkIds)
+    .flatMap((section) => section.partIds)
     .filter((hunkId) => !contractOnly || index.items([hunkId])[0]?.risk.riskClass === "contract");
   const shownKey = shown.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: the IDs change when their list does.
@@ -121,7 +121,7 @@ export const RiskRail = ({
       <ol className="rail-steps">
         {sections.map((section) => {
           const key = sectionKey(section);
-          const toReview = section.hunkIds.filter((hunkId) => !index.mechanical.has(hunkId));
+          const toReview = section.partIds.filter((hunkId) => !index.mechanical.has(hunkId));
           const done = toReview.length > 0 && toReview.every((hunkId) => reviewedHunks.has(hunkId));
           return (
             <li key={key}>
@@ -150,7 +150,7 @@ export const RiskRail = ({
                 )}
               </button>
               <ul className="rail-bars">
-                {index.items(section.hunkIds).map(({ hunk, file, risk }) => {
+                {index.items(section.partIds).map(({ hunk, file, risk }) => {
                   const mechanical = index.mechanical.has(hunk.id);
                   const riskClass = mechanical ? "mechanical" : risk.riskClass;
                   const isReviewed = !mechanical && reviewedHunks.has(hunk.id);

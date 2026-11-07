@@ -497,17 +497,18 @@ const analysis: Analysis = {
   tickets: [ticket],
   missingTicketKeys: ["SHOP-139"],
   proofs,
+  parts: [],
   callGraph: [
     {
-      fromHunkId: h.receiptRoute,
-      toHunkId: h.retryAndCache,
+      fromPartId: h.receiptRoute,
+      toPartId: h.retryAndCache,
       symbol: "cachedReceipt",
       line: 20,
       use: "call",
     },
     {
-      fromHunkId: h.receiptFormatting,
-      toHunkId: h.formatMoneyAdded,
+      fromPartId: h.receiptFormatting,
+      toPartId: h.formatMoneyAdded,
       symbol: "formatMoney",
       line: 12,
       use: "call",
@@ -611,7 +612,7 @@ const analysis: Analysis = {
         title: "The receipt endpoint",
         explanation:
           "Start at the new route: it looks up the order, renders its receipt and sends it as plain text.",
-        hunkIds: [h.receiptRoute, h.routeImports],
+        partIds: [h.receiptRoute, h.routeImports],
         kind: "flow",
         via: [],
         entries: [],
@@ -621,7 +622,7 @@ const analysis: Analysis = {
         title: "Retrying the tax service and caching receipts",
         explanation:
           "The route calls cachedReceipt, which renders each receipt once. Rendering now retries the tax service.",
-        hunkIds: [h.retryAndCache],
+        partIds: [h.retryAndCache],
         kind: "flow",
         via: [],
         entries: [],
@@ -631,7 +632,7 @@ const analysis: Analysis = {
         title: "Dates and prices on the receipt",
         explanation:
           "Receipt lines now format prices with the shared formatMoney and dates with dayjs.",
-        hunkIds: [h.receiptFormatting],
+        partIds: [h.receiptFormatting],
         kind: "flow",
         via: [],
         entries: [],
@@ -640,7 +641,7 @@ const analysis: Analysis = {
         id: TourStepId.parse("s4"),
         title: "The new dependency",
         explanation: "dayjs is added for the date format above.",
-        hunkIds: [h.dependency],
+        partIds: [h.dependency],
         kind: "flow",
         via: [],
         entries: [],

@@ -65,7 +65,7 @@ describe("tourSteps", () => {
     expect(result[2]).toMatchObject({
       id: "s3",
       title: "Changes the tour left out",
-      hunkIds: [h.dependency, h.receiptFormatting],
+      partIds: [h.dependency, h.receiptFormatting],
     });
   });
 });
@@ -89,7 +89,7 @@ describe("mapSections and reviewOrder", () => {
   it("is the tour's steps, with mechanical hunks in place", () => {
     const sections = mapSections(analysis, steps, index);
     expect(sections.map((section) => section.kind)).toEqual(["step", "step", "step", "step"]);
-    expect(sections[0]?.hunkIds).toEqual([h.receiptRoute, h.routeImports, h.formatMoneyRemoved]);
+    expect(sections[0]?.partIds).toEqual([h.receiptRoute, h.routeImports, h.formatMoneyRemoved]);
   });
 
   it("is every change by path before the tour exists", () => {
@@ -97,12 +97,12 @@ describe("mapSections and reviewOrder", () => {
     const sections = mapSections(early, tourSteps(early, index), index);
     expect(sections).toHaveLength(1);
     expect(sections[0]?.kind).toBe("files");
-    expect(sections[0]?.hunkIds).toContain(h.formatMoneyRemoved);
+    expect(sections[0]?.partIds).toContain(h.formatMoneyRemoved);
   });
 
   it("lists the hunks to review in the map's order, without mechanical ones", () => {
     expect(reviewOrder(mapSections(analysis, steps, index), index)).toEqual(
-      steps.flatMap((step) => step.hunkIds),
+      steps.flatMap((step) => step.partIds),
     );
   });
 });
@@ -110,7 +110,7 @@ describe("mapSections and reviewOrder", () => {
 describe("decisionPlaces", () => {
   const index = hunkIndex(analysis);
   const order = mapSections(analysis, tourSteps(analysis, index), index).flatMap(
-    (section) => section.hunkIds,
+    (section) => section.partIds,
   );
   const decision = (id: string, hunkIds: readonly (typeof h)[keyof typeof h][]) => ({
     ...analysis.decisions[0],
@@ -146,7 +146,7 @@ describe("callsByLine", () => {
   it("puts each call on its line, and drops calls to unknown hunks", () => {
     const calls = callsByLine(analysis.callGraph, index);
     expect(calls.get(h.receiptRoute)?.get(20)).toEqual([
-      { symbol: "cachedReceipt", toHunkId: h.retryAndCache, line: 20 },
+      { symbol: "cachedReceipt", toPartId: h.retryAndCache, line: 20 },
     ]);
     expect(callsByLine(analysis.callGraph, hunkIndex({ ...analysis, files: [] })).size).toBe(0);
   });
@@ -247,9 +247,9 @@ describe("risk counts", () => {
 
 describe("callerFiles", () => {
   const index = hunkIndex(analysis);
-  const call = (fromHunkId: (typeof h)[keyof typeof h], toHunkId: (typeof h)[keyof typeof h]) => ({
-    fromHunkId,
-    toHunkId,
+  const call = (fromPartId: (typeof h)[keyof typeof h], toPartId: (typeof h)[keyof typeof h]) => ({
+    fromPartId,
+    toPartId,
     symbol: "s",
     line: 1,
     use: "call" as const,
@@ -259,10 +259,10 @@ describe("callerFiles", () => {
     const hints = [call(h.receiptRoute, h.retryAndCache), call(h.routeImports, h.retryAndCache)];
     expect(
       callerFiles(hints, index, [h.routeImports, h.receiptRoute]).get(h.retryAndCache),
-    ).toEqual([{ path: "src/routes/orders.ts", hunkId: h.routeImports, test: false }]);
+    ).toEqual([{ path: "src/routes/orders.ts", partId: h.routeImports, test: false }]);
     expect(
       callerFiles(hints, index, [h.receiptRoute, h.routeImports]).get(h.retryAndCache),
-    ).toEqual([{ path: "src/routes/orders.ts", hunkId: h.receiptRoute, test: false }]);
+    ).toEqual([{ path: "src/routes/orders.ts", partId: h.receiptRoute, test: false }]);
   });
 
   it("puts production files first, then tests, each in the map's order", () => {

@@ -1,7 +1,7 @@
 import "./review.css";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
-import type { HunkId } from "../../../../src/domain/diff/index.ts";
+import { hunkIdOf, type PartId } from "../../../../src/domain/diff/index.ts";
 import {
   type AnalysisId,
   type Decision,
@@ -164,7 +164,7 @@ const Review = ({
   const index = useMemo(() => hunkIndex(analysis), [analysis]);
   const steps = useMemo(() => tourSteps(analysis, index), [analysis, index]);
   const sections = useMemo(() => mapSections(analysis, steps, index), [analysis, steps, index]);
-  const order = useMemo(() => sections.flatMap((section) => section.hunkIds), [sections]);
+  const order = useMemo(() => sections.flatMap((section) => section.partIds), [sections]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
   const mechanical = mechanicalCount(trailing);
   const totals = useMemo(() => riskTotals(analysis, index), [analysis, index]);
@@ -175,12 +175,13 @@ const Review = ({
       ),
     [analysis.risk],
   );
+  const isContract = useCallback((id: PartId) => contractHunks.has(hunkIdOf(id)), [contractHunks]);
   const places = useMemo(
     () => decisionPlaces(analysis.decisions, order, index),
     [analysis.decisions, order, index],
   );
   const restingOn = useMemo(() => {
-    const on = new Map<HunkId, Decision[]>();
+    const on = new Map<PartId, Decision[]>();
     for (const decision of analysis.decisions)
       for (const id of new Set(decision.hunkIds)) on.set(id, [...(on.get(id) ?? []), decision]);
     return on;
@@ -208,45 +209,43 @@ const Review = ({
   const plan = useMemo(
     () =>
       chipPlan(
-        sections.map((section) =>
-          section.hunkIds.filter((id) => !contractOnly || contractHunks.has(id)),
-        ),
+        sections.map((section) => section.partIds.filter((id) => !contractOnly || isContract(id))),
         calls,
         (id, line) =>
           index.hunks.get(id)?.hunk.lines.find((one) => one.kind !== "del" && one.newLine === line)
             ?.text,
       ),
-    [sections, calls, index, contractOnly, contractHunks],
+    [sections, calls, index, contractOnly, isContract],
   );
   const callers = useMemo(() => callerFiles(callHints, index, order), [callHints, index, order]);
-  const callersOf = useCallback((id: HunkId) => callers.get(id) ?? NO_CALLERS, [callers]);
+  const callersOf = useCallback((id: PartId) => callers.get(id) ?? NO_CALLERS, [callers]);
   const stepOf = useMemo(() => {
-    const places = new Map<HunkId, string>();
+    const places = new Map<PartId, string>();
     for (const section of sections) {
       if (section.kind !== "step") continue;
-      for (const id of section.hunkIds) {
+      for (const id of section.partIds) {
         if (!places.has(id)) places.set(id, `step ${section.number}: ${section.step.title}`);
       }
     }
-    return (id: HunkId) => places.get(id) ?? null;
+    return (id: PartId) => places.get(id) ?? null;
   }, [sections]);
-  const [focusedHunkId, setFocusedHunkId] = useState<HunkId | null>(null);
+  const [focusedHunkId, setFocusedHunkId] = useState<PartId | null>(null);
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
   const overviewAt = useRef<string | null>(null);
   // The overview node the map was opened from, for Esc to go back to.
   const [openedFrom, setOpenedFrom] = useState<string | null>(null);
   // Where each "called by" link followed in the map came from, for Esc to go back.
-  const [trail, setTrail] = useState<readonly HunkId[]>([]);
+  const [trail, setTrail] = useState<readonly PartId[]>([]);
   const [selectedDecision, setSelectedDecision] = useState<DecisionId | null>(null);
   // The hunks of a decision or mismatch the reviewer went to.
-  const [highlight, setHighlight] = useState<ReadonlySet<HunkId>>(new Set());
+  const [highlight, setHighlight] = useState<ReadonlySet<PartId>>(new Set());
   const [mismatchAt, setMismatchAt] = useState(0);
   const [openCalls, setOpenCalls] = useState<ReadonlySet<string>>(new Set());
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
   // After n or p, the hunk j goes to: the step's first.
-  const [startAt, setStartAt] = useState<HunkId | null>(null);
-  const inView = useRef<readonly HunkId[]>([]);
+  const [startAt, setStartAt] = useState<PartId | null>(null);
+  const inView = useRef<readonly PartId[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [jumping, setJumping] = useState(false);
@@ -262,7 +261,7 @@ const Review = ({
   const toReview = useMemo(() => reviewOrder(sections, index), [sections, index]);
   const reviewedCount = toReview.filter((id) => reviewedHunks.has(id)).length;
   const setHunkReviewed = useCallback(
-    (id: HunkId, value: boolean) =>
+    (id: PartId, value: boolean) =>
       setReviewedList((previous) => {
         const without = previous.filter((other) => other !== id);
         return value ? [...without, id].slice(-MAX_REVIEWED) : without;
@@ -276,20 +275,21 @@ const Review = ({
     NO_COMMENTS,
     parseHunkComments,
   );
-  const [openComment, setOpenComment] = useState<{ hunkId: HunkId; place: LinePlace } | null>(null);
+  const [openComment, setOpenComment] = useState<{ hunkId: PartId; place: LinePlace } | null>(null);
   const commentsByHunk = useMemo(() => {
-    const byHunk = new Map<HunkId, HunkComment[]>();
+    const byHunk = new Map<PartId, HunkComment[]>();
     for (const comment of hunkComments)
       byHunk.set(comment.hunkId, [...(byHunk.get(comment.hunkId) ?? []), comment]);
     return byHunk;
   }, [hunkComments]);
   const commentsOf = useCallback(
-    (id: HunkId): readonly HunkComment[] => commentsByHunk.get(id) ?? NO_COMMENTS,
+    (id: PartId): readonly HunkComment[] => commentsByHunk.get(hunkIdOf(id)) ?? NO_COMMENTS,
     [commentsByHunk],
   );
   const writeComment = useCallback(
-    (hunkId: HunkId, comment: LineComment) =>
+    (id: PartId, comment: LineComment) =>
       setHunkComments((previous) => {
+        const hunkId = hunkIdOf(id);
         const same = (other: HunkComment) =>
           other.hunkId === hunkId && other.side === comment.side && other.line === comment.line;
         const written = { hunkId, ...comment };
@@ -301,7 +301,7 @@ const Review = ({
     [setHunkComments],
   );
   const openCommentOn = useCallback(
-    (hunkId: HunkId, place: LinePlace | null) =>
+    (hunkId: PartId, place: LinePlace | null) =>
       setOpenComment(place === null ? null : { hunkId, place }),
     [],
   );
@@ -310,9 +310,9 @@ const Review = ({
 
   const scrollTo = (id: string) =>
     setScrollRequest((previous) => ({ id, n: (previous?.n ?? 0) + 1 }));
-  const shownInMap = (id: HunkId) => !contractOnly || contractHunks.has(id);
+  const shownInMap = (id: PartId) => !contractOnly || isContract(id);
   /** The hunk the reviewer is on: the focused one in the map if it's in view, else the first in view. */
-  const currentHunk = (): HunkId | null => {
+  const currentHunk = (): PartId | null => {
     if (layout === "overview") return null;
     const visible = inView.current;
     if (focusedHunkId !== null && (visible.length === 0 || visible.includes(focusedHunkId)))
@@ -322,7 +322,7 @@ const Review = ({
 
   /** A decision's card goes with the hunk the reviewer is on, for a, r and c. */
   const focusHunk = useCallback(
-    (id: HunkId) => {
+    (id: PartId) => {
       setFocusedHunkId(id);
       const cards = places.cards.get(id) ?? NO_DECISIONS;
       setSelectedDecision((previous) =>
@@ -340,7 +340,7 @@ const Review = ({
     setOverviewFocus((previous) => ({ key: path, n: (previous?.n ?? 0) + 1 }));
   };
   /** Shows a hunk: scrolls to it in the map, focuses its file in the overview. */
-  const showHunk = (id: HunkId, inLayout: Layout = layout) => {
+  const showHunk = (id: PartId, inLayout: Layout = layout) => {
     if (inLayout === "overview") {
       const path = index.hunks.get(id)?.file.path;
       if (path !== undefined) focusInOverview(path);
@@ -376,21 +376,20 @@ const Review = ({
     const section = sections.find((one) => sectionKey(one) === key);
     if (section === undefined) return;
     if (layout === "overview") {
-      const first = section.hunkIds.find((id) => !index.mechanical.has(id));
+      const first = section.partIds.find((id) => !index.mechanical.has(id));
       if (first !== undefined) showHunk(first);
       return;
     }
-    if (contractOnly && !section.hunkIds.some((id) => contractHunks.has(id)))
-      setContractOnly(() => false);
+    if (contractOnly && !section.partIds.some(isContract)) setContractOnly(() => false);
     setFocusedHunkId(null);
-    setStartAt(section.hunkIds.find(shownInMap) ?? null);
+    setStartAt(section.partIds.find(shownInMap) ?? null);
     scrollTo(stepAnchor(key));
   };
   const goToMechanical = () => {
     if (contractOnly) setContractOnly(() => false);
     scrollTo(MECHANICAL_ANCHOR);
   };
-  const follow = (id: HunkId) => {
+  const follow = (id: PartId) => {
     const from = currentHunk();
     if (from !== null) setTrail((previous) => [...previous, from]);
     showHunk(id);
@@ -408,7 +407,7 @@ const Review = ({
       setExpandedGroups((previous) => [...previous, node.key]);
       return;
     }
-    const [first] = node.hunkIds;
+    const [first] = node.partIds;
     if (first === undefined) return;
     setLayout(() => "map");
     setOpenedFrom(node.key);
@@ -445,10 +444,10 @@ const Review = ({
     if (target !== undefined) scrollTo(hunkAnchor(target));
   };
   const moveStep = (step: 1 | -1) => {
-    const shown = sections.filter((section) => section.hunkIds.some(shownInMap));
+    const shown = sections.filter((section) => section.partIds.some(shownInMap));
     const current = currentHunk() ?? startAt;
     const at = shown.findIndex((section) =>
-      current === null ? false : section.hunkIds.includes(current),
+      current === null ? false : section.partIds.includes(current),
     );
     const next = shown[at + step];
     if (next !== undefined) goToSection(sectionKey(next));
@@ -498,7 +497,7 @@ const Review = ({
         const chip = marks.find((mark) => mark.kind === "chip")?.calls[0];
         if (current !== null && chip !== undefined) return toggleCall(callKey([current], chip));
         const mention = marks[0]?.calls[0];
-        if (mention !== undefined) follow(mention.toHunkId);
+        if (mention !== undefined) follow(mention.toPartId);
         return;
       }
       case "approve":
@@ -592,7 +591,7 @@ const Review = ({
       onComment={verdicts.setComment}
     />
   );
-  const decisionsOn = (id: HunkId): ReactNode => {
+  const decisionsOn = (id: PartId): ReactNode => {
     const cards = places.cards.get(id) ?? NO_DECISIONS;
     const mentions = places.mentions.get(id) ?? NO_DECISIONS;
     if (cards.length === 0 && mentions.length === 0) return null;
@@ -610,12 +609,12 @@ const Review = ({
   latest.current = { follow, goToDecision };
   const stable = useMemo(
     () => ({
-      follow: (id: HunkId) => latest.current.follow(id),
+      follow: (id: PartId) => latest.current.follow(id),
       goToDecision: (id: DecisionId) => latest.current.goToDecision(id),
     }),
     [],
   );
-  const signatureOf = (id: HunkId): string => {
+  const signatureOf = (id: PartId): string => {
     const parts: unknown[] = [
       epochOf(analysis),
       readOnly,
@@ -699,7 +698,7 @@ const Review = ({
     if (target.kind === "section") return goToSection(target.key);
     goToMechanical();
   };
-  const onInView = useCallback((ids: readonly HunkId[]) => {
+  const onInView = useCallback((ids: readonly PartId[]) => {
     inView.current = ids;
   }, []);
 
@@ -803,7 +802,7 @@ const Review = ({
             sections={sections}
             deps={deps}
             contractOnly={contractOnly}
-            contractHunks={contractHunks}
+            isContract={isContract}
             openCalls={openCalls}
             onToggleCall={toggleCall}
             before={before}

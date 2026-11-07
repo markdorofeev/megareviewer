@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { HunkId } from "../../../../src/domain/diff/index.ts";
+import type { PartId } from "../../../../src/domain/diff/index.ts";
 import {
   type CallerFile,
   CollapsedHunk,
@@ -14,27 +14,27 @@ import type { Call, HunkIndex } from "./model.ts";
 /** What a hunk on the page needs. */
 export interface HunkDeps {
   readonly index: HunkIndex;
-  readonly calls: ReadonlyMap<HunkId, ReadonlyMap<number, readonly Call[]>>;
+  readonly calls: ReadonlyMap<PartId, ReadonlyMap<number, readonly Call[]>>;
   /** Which of a hunk's calls are chips and which are mentions, at its own place in the map. */
   readonly plan: ChipPlan;
-  readonly callersOf: (id: HunkId) => readonly CallerFile[];
+  readonly callersOf: (id: PartId) => readonly CallerFile[];
   /** The step a hunk is read in, as "step 2: Title", for peeks. */
-  readonly stepOf: (id: HunkId) => string | null;
-  readonly onFollow: (id: HunkId) => void;
+  readonly stepOf: (id: PartId) => string | null;
+  readonly onFollow: (id: PartId) => void;
   readonly reviewedHunks: ReadonlySet<string>;
-  readonly onReviewed: (id: HunkId, reviewed: boolean) => void;
-  readonly highlighted: ReadonlySet<HunkId>;
-  readonly commentsOf: (id: HunkId) => readonly LineComment[];
-  readonly openComment: { readonly hunkId: HunkId; readonly place: LinePlace } | null;
-  readonly onOpenComment: (id: HunkId, place: LinePlace | null) => void;
+  readonly onReviewed: (id: PartId, reviewed: boolean) => void;
+  readonly highlighted: ReadonlySet<PartId>;
+  readonly commentsOf: (id: PartId) => readonly LineComment[];
+  readonly openComment: { readonly hunkId: PartId; readonly place: LinePlace } | null;
+  readonly onOpenComment: (id: PartId, place: LinePlace | null) => void;
   /** Without it, comments are read-only: the review is published. */
-  readonly onComment?: (id: HunkId, comment: LineComment) => void;
-  readonly onFocusHunk: (id: HunkId) => void;
+  readonly onComment?: (id: PartId, comment: LineComment) => void;
+  readonly onFocusHunk: (id: PartId) => void;
   /** The decision cards and links that go under a hunk's header. */
-  readonly decisionsOn: (id: HunkId) => ReactNode;
+  readonly decisionsOn: (id: PartId) => ReactNode;
 }
 
-export const hunkAnchor = (id: HunkId): string => `hunk-${id}`;
+export const hunkAnchor = (id: PartId): string => `hunk-${id}`;
 
 /**
  * One hunk: a mechanical one collapsed with its proof, any other as its card. A nested hunk, opened
@@ -48,7 +48,7 @@ export const HunkView = ({
   focused = false,
   nested = false,
 }: {
-  readonly id: HunkId;
+  readonly id: PartId;
   readonly deps: HunkDeps;
   readonly belowLine?: ReadonlyMap<number, ReactNode>;
   readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
@@ -95,8 +95,8 @@ export const HunkView = ({
 
 /** A call's name, the called hunk's file and its risk class. */
 export const CallLabel = ({ call, index }: { readonly call: Call; readonly index: HunkIndex }) => {
-  const target = index.items([call.toHunkId])[0];
-  const riskClass = index.mechanical.has(call.toHunkId)
+  const target = index.items([call.toPartId])[0];
+  const riskClass = index.mechanical.has(call.toPartId)
     ? "mechanical"
     : (target?.risk.riskClass ?? "logic");
   return (

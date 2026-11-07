@@ -7,6 +7,19 @@ export const HunkId = z
   .brand<"HunkId">();
 export type HunkId = z.infer<typeof HunkId>;
 
+/**
+ * A hunk ID for a hunk that isn't split, or a hunk ID and ".n" for part n of a split one
+ * (h_0123456789abcdef.2). Every hunk ID is a part ID.
+ */
+export const PartId = z.union([
+  HunkId,
+  z
+    .string()
+    .regex(/^h_[0-9a-f]{16}(-[2-9]|-[1-9][0-9]+)?\.[1-9][0-9]*$/)
+    .brand<"SplitPartId">(),
+]);
+export type PartId = z.infer<typeof PartId>;
+
 export const FileStatus = z.enum(["added", "deleted", "modified", "renamed"]);
 export type FileStatus = z.infer<typeof FileStatus>;
 
@@ -81,14 +94,29 @@ export const MechanicalProof = z
 export type MechanicalProof = z.infer<typeof MechanicalProof>;
 
 /**
- * The code in `fromHunkId` references `symbol`, which `toHunkId` defines or changes. `line` is the
- * new-side line of the first such reference in `fromHunkId`. `use` says whether the code calls or
+ * The lines of a split hunk that change one definition: `lines[start]` to `lines[end - 1]` of
+ * hunk `hunkId`. `definitions` names what they change, outermost first.
+ */
+export const HunkPart = z
+  .object({
+    id: PartId,
+    hunkId: HunkId,
+    start: z.number().int().nonnegative(),
+    end: z.number().int().positive(),
+    definitions: z.array(z.string()).readonly(),
+  })
+  .readonly();
+export type HunkPart = z.infer<typeof HunkPart>;
+
+/**
+ * The code in `fromPartId` references `symbol`, which `toPartId` defines or changes. `line` is the
+ * new-side line of the first such reference in `fromPartId`. `use` says whether the code calls or
  * builds it, or only names it as a type; type uses group code but aren't followed as calls.
  */
 export const CallGraphHint = z
   .object({
-    fromHunkId: HunkId,
-    toHunkId: HunkId,
+    fromPartId: PartId,
+    toPartId: PartId,
     symbol: z.string().min(1),
     line: z.number().int().positive(),
     use: z.enum(["call", "type"]),

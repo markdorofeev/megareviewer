@@ -142,8 +142,8 @@ export const buildCallGraphHints = (
         )
         .slice(0, MAX_HINTS_PER_HUNK)
         .map(({ to, symbol, line }) => ({
-          fromHunkId: from.hunk.id,
-          toHunkId: to.hunk.id,
+          fromPartId: from.hunk.id,
+          toPartId: to.hunk.id,
           symbol,
           line,
           use,

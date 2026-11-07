@@ -22,39 +22,31 @@ describe("validateHunkReferences", () => {
 
 describe("validateTour", () => {
   const required = new Set([h(1), h(2), h(3)]);
-  const tour = (...steps: HunkId[][]) => ({ steps: steps.map((hunkIds) => ({ hunkIds })) });
+  const tour = (...steps: HunkId[][]) => ({ steps: steps.map((partIds) => ({ partIds })) });
 
   it.each([
     ["a valid tour", tour([h(1)], [h(2), h(3)]), []],
-    ["a missing hunk", tour([h(1)], [h(3)]), [{ kind: "missing", hunkId: h(2) }]],
-    [
-      "a hunk in two steps",
-      tour([h(1), h(2)], [h(2), h(3)]),
-      [{ kind: "duplicate", hunkId: h(2) }],
-    ],
-    [
-      "a hunk twice in one step",
-      tour([h(1), h(1), h(2), h(3)]),
-      [{ kind: "duplicate", hunkId: h(1) }],
-    ],
+    ["a missing hunk", tour([h(1)], [h(3)]), [{ kind: "missing", id: h(2) }]],
+    ["a hunk in two steps", tour([h(1), h(2)], [h(2), h(3)]), [{ kind: "duplicate", id: h(2) }]],
+    ["a hunk twice in one step", tour([h(1), h(1), h(2), h(3)]), [{ kind: "duplicate", id: h(1) }]],
     [
       "a hunk three times, reported once",
       tour([h(1), h(1), h(1), h(2), h(3)]),
-      [{ kind: "duplicate", hunkId: h(1) }],
+      [{ kind: "duplicate", id: h(1) }],
     ],
     [
       "an unknown or mechanical hunk, reported once",
       tour([h(1), h(9)], [h(2), h(3), h(9)]),
-      [{ kind: "unknown", hunkId: h(9) }],
+      [{ kind: "unknown", id: h(9) }],
     ],
     [
       "every problem at once, listed problems first",
       tour([h(9), h(1)], [h(1)]),
       [
-        { kind: "unknown", hunkId: h(9) },
-        { kind: "duplicate", hunkId: h(1) },
-        { kind: "missing", hunkId: h(2) },
-        { kind: "missing", hunkId: h(3) },
+        { kind: "unknown", id: h(9) },
+        { kind: "duplicate", id: h(1) },
+        { kind: "missing", id: h(2) },
+        { kind: "missing", id: h(3) },
       ],
     ],
   ])("reports %s", (_, candidate, problems) => {
@@ -80,9 +72,9 @@ describe("validateRiskCoverage", () => {
 
   it.each([
     ["full coverage", risk(h(2), h(1)), []],
-    ["a missing hunk", risk(h(1)), [{ kind: "missing", hunkId: h(2) }]],
-    ["a duplicate", risk(h(1), h(2), h(1)), [{ kind: "duplicate", hunkId: h(1) }]],
-    ["an unknown hunk", risk(h(1), h(2), h(5)), [{ kind: "unknown", hunkId: h(5) }]],
+    ["a missing hunk", risk(h(1)), [{ kind: "missing", id: h(2) }]],
+    ["a duplicate", risk(h(1), h(2), h(1)), [{ kind: "duplicate", id: h(1) }]],
+    ["an unknown hunk", risk(h(1), h(2), h(5)), [{ kind: "unknown", id: h(5) }]],
   ])("reports %s", (_, assessments, problems) => {
     expect(validateRiskCoverage(assessments, required)).toEqual(problems);
   });

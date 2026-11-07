@@ -7,9 +7,9 @@ import {
   type CallGraphHint,
   type FileChange,
   type FileLink,
-  type HunkId,
   isTestFile,
   type MechanicalProof,
+  type PartId,
   parseUnifiedDiff,
 } from "../src/domain/diff/index.ts";
 import {
@@ -100,29 +100,31 @@ export const measure = async (
 /** The counts this slice tracks, from a measured PR. */
 export const counts = (measured: Measured) => {
   const { files, callGraph, tour } = measured;
-  const pathOf = new Map(files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, file.path])));
+  const pathOf = new Map<PartId, string>(
+    files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, file.path])),
+  );
   const calls = callGraph.filter((hint) => hint.use === "call");
-  const byLine = new Map<HunkId, Map<number, Call[]>>();
-  for (const { fromHunkId, toHunkId, symbol, line } of calls) {
-    const lines = byLine.get(fromHunkId) ?? new Map<number, Call[]>();
-    lines.set(line, [...(lines.get(line) ?? []), { symbol, toHunkId, line }]);
-    byLine.set(fromHunkId, lines);
+  const byLine = new Map<PartId, Map<number, Call[]>>();
+  for (const { fromPartId, toPartId, symbol, line } of calls) {
+    const lines = byLine.get(fromPartId) ?? new Map<number, Call[]>();
+    lines.set(line, [...(lines.get(line) ?? []), { symbol, toPartId, line }]);
+    byLine.set(fromPartId, lines);
   }
-  const textOf = (id: HunkId, line: number) =>
+  const textOf = (id: PartId, line: number) =>
     files
       .flatMap((file) => file.hunks)
       .find((hunk) => hunk.id === id)
       ?.lines.find((one) => one.kind !== "del" && one.newLine === line)?.text;
   const plan = chipPlan(
-    tour.steps.map((step) => step.hunkIds),
+    tour.steps.map((step) => step.partIds),
     byLine,
     textOf,
   );
-  const callerFiles = new Map<HunkId, Set<string>>();
-  for (const { fromHunkId, toHunkId } of calls) {
-    const path = pathOf.get(fromHunkId);
+  const callerFiles = new Map<PartId, Set<string>>();
+  for (const { fromPartId, toPartId } of calls) {
+    const path = pathOf.get(fromPartId);
     if (path !== undefined)
-      callerFiles.set(toHunkId, (callerFiles.get(toHunkId) ?? new Set()).add(path));
+      callerFiles.set(toPartId, (callerFiles.get(toPartId) ?? new Set()).add(path));
   }
   const lines = [...byLine.values()].flatMap((onLines) => [...onLines.values()]);
   return {
@@ -177,7 +179,7 @@ export const report = (measured: Measured): string => {
   out.push("", "Tour");
   measured.tour.steps.forEach((step, at) => {
     const via = step.via.length > 0 ? `, ${step.via.length} via` : "";
-    const hunks = step.hunkIds.length === 1 ? "1 hunk" : `${step.hunkIds.length} hunks`;
+    const hunks = step.partIds.length === 1 ? "1 part" : `${step.partIds.length} parts`;
     out.push(`  ${at + 1}. [${step.kind}] ${step.title}  (${hunks}${via})`);
   });
   out.push("", "Overview", ...overviewLines(overviewOf(measured)));

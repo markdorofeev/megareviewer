@@ -1,4 +1,4 @@
-import type { HunkId } from "../../../../src/domain/diff/index.ts";
+import type { PartId } from "../../../../src/domain/diff/index.ts";
 import type {
   Analysis,
   DecisionId,
@@ -24,7 +24,7 @@ export const PALETTE_GROUPS: readonly { readonly group: PaletteGroup; readonly t
 export type PaletteTarget =
   | { readonly kind: "decision"; readonly decisionId: DecisionId }
   | { readonly kind: "mismatch"; readonly index: number }
-  | { readonly kind: "hunk"; readonly hunkId: HunkId }
+  | { readonly kind: "hunk"; readonly hunkId: PartId }
   | { readonly kind: "step"; readonly stepId: TourStepId }
   | { readonly kind: "mechanical" };
 
@@ -52,20 +52,20 @@ export const paletteItems = (
   steps: readonly TourStep[],
   index: HunkIndex,
 ): PaletteItem[] => {
-  const where = (id: HunkId): string => {
+  const where = (id: PartId): string => {
     const found = index.hunks.get(id);
     return found === undefined ? "" : `${found.file.path}, ${hunkLocation(found.hunk)}`;
   };
   const symbols = new Map<string, PaletteItem>();
   for (const hint of analysis.callGraph) {
-    const key = `symbol:${hint.symbol}:${hint.toHunkId}`;
-    if (symbols.has(key) || !index.hunks.has(hint.toHunkId)) continue;
+    const key = `symbol:${hint.symbol}:${hint.toPartId}`;
+    if (symbols.has(key) || !index.hunks.has(hint.toPartId)) continue;
     symbols.set(key, {
       key,
       group: "symbols",
       label: hint.symbol,
-      detail: where(hint.toHunkId),
-      target: { kind: "hunk", hunkId: hint.toHunkId },
+      detail: where(hint.toPartId),
+      target: { kind: "hunk", hunkId: hint.toPartId },
     });
   }
   return [

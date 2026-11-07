@@ -67,6 +67,7 @@ const newAnalysis = (
   tickets: [],
   missingTicketKeys: [],
   proofs: [],
+  parts: [],
   callGraph: [],
   fileLinks: [],
   generated: [],

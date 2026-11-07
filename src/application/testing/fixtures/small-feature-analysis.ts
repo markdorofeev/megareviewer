@@ -141,15 +141,15 @@ export const smallFeatureInput: AnalysisInput = {
   files: smallFeatureFiles.map(inputFile),
   callGraph: [
     {
-      fromHunkId: importHunk.id,
-      toHunkId: receiptServiceHunk.id,
+      fromPartId: importHunk.id,
+      toPartId: receiptServiceHunk.id,
       symbol: "renderReceipt",
       line: 4,
       use: "call",
     },
     {
-      fromHunkId: receiptRouteHunk.id,
-      toHunkId: receiptServiceHunk.id,
+      fromPartId: receiptRouteHunk.id,
+      toPartId: receiptServiceHunk.id,
       symbol: "renderReceipt",
       line: 39,
       use: "call",
@@ -160,7 +160,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "7+fake-model/1",
+  pipelineVersion: "8+fake-model/1",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -217,6 +217,7 @@ export const smallFeatureAnalysis: Analysis = {
   tickets: smallFeature.tickets,
   missingTicketKeys: [],
   proofs: [],
+  parts: [],
   callGraph: smallFeatureInput.callGraph,
   fileLinks: [{ from: "src/routes/orders.ts", to: "src/services/receipts.ts" }],
   generated: [],
@@ -295,7 +296,7 @@ export const smallFeatureAnalysis: Analysis = {
         id: s("s1"),
         title: "The new endpoint",
         explanation: "Requests for a receipt load the user's order and hand it to the renderer.",
-        hunkIds: [receiptRouteHunk.id, importHunk.id],
+        partIds: [receiptRouteHunk.id, importHunk.id],
         kind: "flow",
         via: [],
         entries: [],
@@ -304,7 +305,7 @@ export const smallFeatureAnalysis: Analysis = {
         id: s("s2"),
         title: "Rendering and caching receipts",
         explanation: "The receipt is plain text, cached per order for an hour.",
-        hunkIds: [receiptServiceHunk.id],
+        partIds: [receiptServiceHunk.id],
         kind: "flow",
         via: [],
         entries: [],
@@ -313,7 +314,7 @@ export const smallFeatureAnalysis: Analysis = {
         id: s("s3"),
         title: "Configuration",
         explanation: "New receipt settings, and an unrelated rate limit change.",
-        hunkIds: [cacheTtlHunk.id, receiptsConfigHunk.id, rateLimitHunk.id],
+        partIds: [cacheTtlHunk.id, receiptsConfigHunk.id, rateLimitHunk.id],
         kind: "flow",
         via: [],
         entries: [],

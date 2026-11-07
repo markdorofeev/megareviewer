@@ -1,4 +1,4 @@
-import type { CallGraphHint, FileChange, HunkId } from "../../domain/diff/index.ts";
+import type { CallGraphHint, FileChange, HunkId, PartId } from "../../domain/diff/index.ts";
 import {
   type CoverageProblem,
   codeTour,
@@ -71,7 +71,7 @@ const callChecked = async <T>(
   return { outcome: ok(firstChecked), usage };
 };
 
-type Feedback = Readonly<Record<CoverageProblem["kind"], (hunkId: HunkId) => string>>;
+type Feedback = Readonly<Record<CoverageProblem["kind"], (id: PartId) => string>>;
 
 const RISK_FEEDBACK: Feedback = {
   missing: (id) => `${id} has no risk class. Classify every hunk sent in full exactly once.`,
@@ -86,7 +86,7 @@ const TOUR_FEEDBACK: Feedback = {
 };
 
 const describeProblem = (feedback: Feedback) => (problem: CoverageProblem) =>
-  feedback[problem.kind](problem.hunkId);
+  feedback[problem.kind](problem.id);
 
 const describeUnknown = (hunkId: HunkId): string => `${hunkId} isn't a hunk of this pull request.`;
 
@@ -237,7 +237,14 @@ export const runTour = async (
   const { outcome, usage } = await callChecked(
     "tour",
     (options) => model.tour(input, context.intent, context.risk, context.decisions, options),
-    (tour) => validateTour(tour, required).map(describeProblem(TOUR_FEEDBACK)),
+    // The model sees whole hunks, and it writes no `via`.
+    (tour) =>
+      validateTour(
+        { steps: tour.steps.map((step) => ({ partIds: step.hunkIds })) },
+        required,
+      ).flatMap((problem) =>
+        problem.kind === "via" ? [] : [describeProblem(TOUR_FEEDBACK)(problem)],
+      ),
     logger,
   );
   const fallback = (reason: string) => ({
@@ -260,9 +267,10 @@ export const runTour = async (
   }
   return {
     tour: {
-      steps: outcome.value.value.steps.map((step, index) => ({
+      steps: outcome.value.value.steps.map(({ hunkIds, ...step }, index) => ({
         ...step,
         id: TourStepId.parse(`s${index + 1}`),
+        partIds: hunkIds,
         kind: "flow" as const,
         via: [],
         entries: [],

@@ -44,8 +44,8 @@ const file = (path: string, ids: readonly number[], text = "x = 1", size = 1): F
 });
 
 const call = (from: number, to: number, symbol = `f${to}`): CallGraphHint => ({
-  fromHunkId: h(from),
-  toHunkId: h(to),
+  fromPartId: h(from),
+  toPartId: h(to),
   symbol,
   line: from * 10,
   use: "call",
@@ -60,7 +60,7 @@ const step = (
   id: TourStepId.parse(`s${n}`),
   title,
   explanation: "",
-  hunkIds: hunks.map(h),
+  partIds: hunks.map(h),
   kind: entries.length > 0 || n < 90 ? "flow" : "supporting",
   via: [],
   entries: entries.map(h),
@@ -240,7 +240,7 @@ describe("fileOverview", () => {
       step(1, "Second hunk first", [2, 1, 3]),
     ]);
     const [a] = overview.rows[0] ?? [];
-    expect([a?.added, a?.deleted, a?.risk, a?.hunkIds]).toEqual([6, 0, "contract", [h(2), h(1)]]);
+    expect([a?.added, a?.deleted, a?.risk, a?.partIds]).toEqual([6, 0, "contract", [h(2), h(1)]]);
     expect(a?.flows).toEqual(["Second hunk first"]);
   });
 
@@ -340,7 +340,7 @@ describe("fileOverview", () => {
       const callGraph = Array.from({ length: count === 0 ? 0 : next(12) }, () => ({
         ...call(next(count) + 1, next(count) + 1),
         use: next(3) === 0 ? ("type" as const) : ("call" as const),
-      })).filter((hint) => hint.fromHunkId !== hint.toHunkId);
+      })).filter((hint) => hint.fromPartId !== hint.toPartId);
       const proofs = chosen.flatMap((path, at): MechanicalProof[] =>
         next(5) === 0 ? [{ hunkId: h(at + 1), path, kind: "whitespace", detail: "spaces" }] : [],
       );

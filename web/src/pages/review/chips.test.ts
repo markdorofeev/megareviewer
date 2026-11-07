@@ -1,25 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { HunkId } from "../../../../src/domain/diff/index.ts";
+import { HunkId, type PartId } from "../../../../src/domain/diff/index.ts";
 import { type Call, type CallMark, chipCounts, chipPlan, symbolPlace } from "./chips.ts";
 
 const id = (n: number) => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
-const [a, b, c, d, e] = [1, 2, 3, 4, 5].map(id) as [HunkId, HunkId, HunkId, HunkId, HunkId];
+const [a, b, c, d, e] = [1, 2, 3, 4, 5].map(id) as [PartId, PartId, PartId, PartId, PartId];
 
 type Lines = ReadonlyMap<number, readonly Call[]>;
 const callsOf = (
-  entries: readonly (readonly [HunkId, readonly (readonly [number, string, HunkId])[]])[],
-): ReadonlyMap<HunkId, Lines> =>
+  entries: readonly (readonly [PartId, readonly (readonly [number, string, PartId])[]])[],
+): ReadonlyMap<PartId, Lines> =>
   new Map(
     entries.map(([from, calls]) => {
       const lines = new Map<number, Call[]>();
-      for (const [line, symbol, toHunkId] of calls) {
-        lines.set(line, [...(lines.get(line) ?? []), { line, symbol, toHunkId }]);
+      for (const [line, symbol, toPartId] of calls) {
+        lines.set(line, [...(lines.get(line) ?? []), { line, symbol, toPartId }]);
       }
       return [from, lines];
     }),
   );
 /** Every line's text names its symbols, so mentions find them. */
-const named = (calls: ReadonlyMap<HunkId, Lines>) => (from: HunkId, line: number) =>
+const named = (calls: ReadonlyMap<PartId, Lines>) => (from: PartId, line: number) =>
   [
     ...new Set(
       calls
@@ -45,7 +45,7 @@ describe("chipPlan", () => {
       {
         kind: "mention",
         symbol: "save",
-        calls: [{ line: 20, symbol: "save", toHunkId: c }],
+        calls: [{ line: 20, symbol: "save", toPartId: c }],
         at: { start: 0, end: 4 },
       },
     ]);
@@ -128,7 +128,7 @@ describe("chipPlan", () => {
         ],
       ],
     ]);
-    const text = (_: HunkId, line: number) => (line === 11 ? "  token," : undefined);
+    const text = (_: PartId, line: number) => (line === 11 ? "  token," : undefined);
     const plan = chipPlan([[a]], calls, text);
     expect(kinds(plan.get(a)?.get(11))).toEqual(["chip save→1"]);
     expect(kinds(plan.get(a)?.get(12))).toEqual(["chip save→1"]);
@@ -167,19 +167,19 @@ describe("chipPlan", () => {
     };
     const hunks = [a, b, c, d, e];
     const pick = <T>(items: readonly T[]): T => items[random(items.length)] as T;
-    const key = (from: HunkId, call: Call) =>
-      `${from}@${call.line}:${call.symbol}>${call.toHunkId}`;
+    const key = (from: PartId, call: Call) =>
+      `${from}@${call.line}:${call.symbol}>${call.toPartId}`;
     for (let run = 0; run < 200; run++) {
       const list = Array.from({ length: random(30) }, () => ({
         from: pick(hunks),
-        call: { line: 1 + random(6), symbol: pick(["x", "y", "z"]), toHunkId: pick(hunks) },
+        call: { line: 1 + random(6), symbol: pick(["x", "y", "z"]), toPartId: pick(hunks) },
       }));
       const unique = [...new Map(list.map((one) => [key(one.from, one.call), one])).values()];
       const calls = callsOf(
         hunks.map((from) => [
           from,
           unique.flatMap((one) =>
-            one.from === from ? [[one.call.line, one.call.symbol, one.call.toHunkId] as const] : [],
+            one.from === from ? [[one.call.line, one.call.symbol, one.call.toPartId] as const] : [],
           ),
         ]),
       );

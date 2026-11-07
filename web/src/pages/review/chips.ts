@@ -1,10 +1,10 @@
 // Pure, and importing only domain types, so scripts/measure-pr.ts can count chips the same way.
-import type { HunkId } from "../../../../src/domain/diff/index.ts";
+import type { PartId } from "../../../../src/domain/diff/index.ts";
 
 /** A call the code makes on one of its lines, to the hunk that changes what it calls. */
 export interface Call {
   readonly symbol: string;
-  readonly toHunkId: HunkId;
+  readonly toPartId: PartId;
   readonly line: number;
 }
 
@@ -28,7 +28,7 @@ export type CallMark =
     };
 
 /** Each hunk's marks by the new-side line they're on, in the order the symbols are called. */
-export type ChipPlan = ReadonlyMap<HunkId, ReadonlyMap<number, readonly CallMark[]>>;
+export type ChipPlan = ReadonlyMap<PartId, ReadonlyMap<number, readonly CallMark[]>>;
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -47,13 +47,13 @@ export const symbolPlace = (text: string, symbol: string): SymbolPlace | null =>
  * over lines, stays a chip: when unsure, show more. Every call is in exactly one mark.
  */
 export const chipPlan = (
-  sections: readonly (readonly HunkId[])[],
-  calls: ReadonlyMap<HunkId, ReadonlyMap<number, readonly Call[]>>,
-  lineText: (id: HunkId, line: number) => string | undefined,
+  sections: readonly (readonly PartId[])[],
+  calls: ReadonlyMap<PartId, ReadonlyMap<number, readonly Call[]>>,
+  lineText: (id: PartId, line: number) => string | undefined,
 ): ChipPlan => {
-  const plan = new Map<HunkId, Map<number, CallMark[]>>();
+  const plan = new Map<PartId, Map<number, CallMark[]>>();
   for (const section of sections) {
-    const reached = new Set<HunkId>();
+    const reached = new Set<PartId>();
     for (const id of section) {
       const lines = calls.get(id);
       if (lines === undefined || plan.has(id)) continue;
@@ -64,8 +64,8 @@ export const chipPlan = (
           bySymbol.set(call.symbol, [...(bySymbol.get(call.symbol) ?? []), call]);
         const lineMarks: CallMark[] = [];
         for (const [symbol, symbolCalls] of bySymbol) {
-          const fresh = symbolCalls.some((call) => !reached.has(call.toHunkId));
-          for (const call of symbolCalls) reached.add(call.toHunkId);
+          const fresh = symbolCalls.some((call) => !reached.has(call.toPartId));
+          for (const call of symbolCalls) reached.add(call.toPartId);
           const text = lineText(id, line);
           const at = fresh || text === undefined ? null : symbolPlace(text, symbol);
           lineMarks.push(

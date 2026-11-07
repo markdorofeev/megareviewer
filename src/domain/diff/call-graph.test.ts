@@ -77,8 +77,8 @@ describe("buildCallGraphHints", () => {
     );
     expect(hints).toEqual([
       {
-        fromHunkId: callingHunk.id,
-        toHunkId: definingHunk.id,
+        fromPartId: callingHunk.id,
+        toPartId: definingHunk.id,
         symbol: "slugify",
         line: 11,
         use: "call",
@@ -201,7 +201,7 @@ describe("buildCallGraphHints", () => {
       ]),
     );
     expect(hints.map((h) => h.symbol)).toEqual(["zz", ...names.slice(0, 9)]);
-    expect(hints.every((h) => h.fromHunkId === caller.id)).toBe(true);
+    expect(hints.every((h) => h.fromPartId === caller.id)).toBe(true);
   });
   it("orders hints by symbol name, then by position in the diff", () => {
     const first = hunk("src/b.ts", "@@ -1,0 +1,2 @@", ["+let beta;", "+let alpha;"]);
@@ -231,7 +231,7 @@ describe("buildCallGraphHints", () => {
         ],
       ]),
     );
-    expect(hints.map((h) => [h.symbol, h.toHunkId])).toEqual([
+    expect(hints.map((h) => [h.symbol, h.toPartId])).toEqual([
       ["alpha", first.id],
       ["alpha", second.id],
       ["beta", first.id],
@@ -448,7 +448,7 @@ describe("which definitions a reference reaches", () => {
         ["src/store.ts", symbols([["Store", 1, 10]])],
       ]),
     );
-    expect(hints.map((hint) => hint.toHunkId)).toEqual([top.id]);
+    expect(hints.map((hint) => hint.toPartId)).toEqual([top.id]);
   });
 
   it("links a call in a class to the same-named method of that class", () => {
@@ -475,7 +475,7 @@ describe("which definitions a reference reaches", () => {
       ]),
     );
     expect(hints).toEqual([
-      { fromHunkId: load.id, toHunkId: github.id, symbol: "auth", line: 5, use: "call" },
+      { fromPartId: load.id, toPartId: github.id, symbol: "auth", line: 5, use: "call" },
     ]);
   });
 
@@ -500,7 +500,7 @@ describe("which definitions a reference reaches", () => {
       ]),
     );
     expect(hints).toEqual([
-      { fromHunkId: own.id, toHunkId: other.id, symbol: "save", line: 3, use: "call" },
+      { fromPartId: own.id, toPartId: other.id, symbol: "save", line: 3, use: "call" },
     ]);
   });
 });

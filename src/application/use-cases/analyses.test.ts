@@ -188,7 +188,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("7+fake-model/1");
+    expect(analysis.key.pipelineVersion).toBe("8+fake-model/1");
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
     );
@@ -728,7 +728,7 @@ describe("the analysis pipeline", () => {
             id: "s1",
             title: "All",
             explanation: "",
-            hunkIds: smallFeatureHunks,
+            partIds: smallFeatureHunks,
             kind: "flow",
             via: [],
             entries: [],
@@ -974,7 +974,7 @@ describe("without the model", () => {
       decisions: "skipped",
       tour: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("7+no-model");
+    expect(analysis.key.pipelineVersion).toBe("8+no-model");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);

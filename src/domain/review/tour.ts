@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { HunkId } from "../diff/index.ts";
+import { PartId } from "../diff/index.ts";
 
 /** "s1", "s2", … in tour order. */
 export const TourStepId = z
@@ -13,13 +13,14 @@ export const TourStep = z
     id: TourStepId,
     title: z.string().min(1),
     explanation: z.string(),
-    hunkIds: z.array(HunkId).readonly(),
+    /** The parts the step reads, in order: a hunk that isn't split is one part. */
+    partIds: z.array(PartId).readonly(),
     /** flow: an entry point and the code it runs; supporting: changes no flow runs, by kind. */
     kind: z.enum(["flow", "supporting"]),
-    /** Hunks of earlier steps this step passes through, in reading order. */
-    via: z.array(HunkId).readonly(),
-    /** The hunks a flow starts at: its routes, page or command. Empty for the others. */
-    entries: z.array(HunkId).readonly(),
+    /** Parts of earlier steps this step passes through, in reading order. */
+    via: z.array(PartId).readonly(),
+    /** The parts a flow starts at: its routes, page or command. Empty for the others. */
+    entries: z.array(PartId).readonly(),
   })
   .readonly();
 export type TourStep = z.infer<typeof TourStep>;

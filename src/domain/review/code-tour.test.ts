@@ -47,8 +47,8 @@ const one = (n: number, path: string, ...lines: string[]): FileChange =>
   file(path, hunk(n, path, ...lines));
 
 const hint = (from: number, to: number, use: "call" | "type" = "call"): CallGraphHint => ({
-  fromHunkId: h(from),
-  toHunkId: h(to),
+  fromPartId: h(from),
+  toPartId: h(to),
   symbol: `s${to}`,
   line: from * 10,
   use,
@@ -74,7 +74,7 @@ const tourOf = (files: readonly FileChange[], options: Partial<CodeTourInput> = 
   expect(Tour.parse(tour)).toEqual(tour);
   // `via` only names hunks earlier steps read.
   tour.steps.forEach((step, at) => {
-    const earlier = new Set(tour.steps.slice(0, at).flatMap((s) => s.hunkIds));
+    const earlier = new Set(tour.steps.slice(0, at).flatMap((s) => s.partIds));
     for (const id of step.via) expect(earlier.has(id)).toBe(true);
   });
   return tour;
@@ -84,7 +84,7 @@ const tourOf = (files: readonly FileChange[], options: Partial<CodeTourInput> = 
 const shape = (tour: Tour) =>
   tour.steps.map((step) => [
     step.title,
-    step.hunkIds.map((id) => Number.parseInt(id.slice(2), 16)),
+    step.partIds.map((id) => Number.parseInt(id.slice(2), 16)),
   ]);
 
 const route = (verb: string, path: string) => `@router.${verb}("${path}")`;

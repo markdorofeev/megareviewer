@@ -123,10 +123,11 @@ const analysis: Analysis = {
   tickets: [],
   missingTicketKeys: [],
   proofs: [],
+  parts: [],
   callGraph: files.slice(0, -1).flatMap((file, at) =>
     file.hunks.map((hunk, index) => ({
-      fromHunkId: hunk.id,
-      toHunkId: hunkAt(at + 1, index),
+      fromPartId: hunk.id,
+      toPartId: hunkAt(at + 1, index),
       symbol: `step${at + 1}_${index}`,
       // The first body line, after the context line and the new signature.
       line: hunk.newStart + 2,
@@ -153,7 +154,7 @@ const analysis: Analysis = {
       id: TourStepId.parse(`s${module + 1}`),
       title: `Module ${module}`,
       explanation: `The functions of src/module${module}.`,
-      hunkIds: files
+      partIds: files
         .filter((_, at) => at % MODULES === module)
         .flatMap((file) => file.hunks.map((hunk) => hunk.id)),
       kind: "flow" as const,

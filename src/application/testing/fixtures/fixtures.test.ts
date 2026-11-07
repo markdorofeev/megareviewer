@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { hunkIdOf } from "../../../domain/diff/index.ts";
 import {
   Analysis,
   extractTicketKeys,
@@ -111,7 +112,7 @@ describe("small-feature analysis", () => {
     const referenced = [
       ...decisions.flatMap((decision) => decision.hunkIds),
       ...(intent?.mismatches.flatMap((mismatch) => mismatch.hunkIds) ?? []),
-      ...callGraph.flatMap((hint) => [hint.fromHunkId, hint.toHunkId]),
+      ...callGraph.flatMap((hint) => [hunkIdOf(hint.fromPartId), hunkIdOf(hint.toPartId)]),
     ];
     expect(validateHunkReferences(hunkIds, referenced)).toEqual([]);
   });

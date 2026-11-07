@@ -1,4 +1,10 @@
-import type { FileChange, Hunk, HunkId, MechanicalProof } from "../../../src/domain/diff/index.ts";
+import type {
+  FileChange,
+  Hunk,
+  HunkId,
+  MechanicalProof,
+  PartId,
+} from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { CollapsedHunk } from "./CollapsedHunk.tsx";
 import { type CallerFile, HunkCard, type LineComment, type LinePlace } from "./HunkCard.tsx";
@@ -35,7 +41,7 @@ export const DiffView = ({
   readonly focusedHunkId?: HunkId | null;
   readonly onFocusHunk?: (id: HunkId) => void;
   readonly callersOf?: (id: HunkId) => readonly CallerFile[];
-  readonly onFollow?: (id: HunkId) => void;
+  readonly onFollow?: (id: PartId) => void;
   readonly reviewedHunkIds?: ReadonlySet<string>;
   readonly onReviewed?: (id: HunkId, reviewed: boolean) => void;
   readonly commentsOf?: (id: HunkId) => readonly LineComment[];

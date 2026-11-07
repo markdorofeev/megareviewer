@@ -126,7 +126,7 @@ export const renderInput = (input: AnalysisInput): string => {
     ...block(
       "call_graph",
       callGraph.map(
-        ({ fromHunkId, toHunkId, symbol }) => `${fromHunkId} → ${toHunkId} (${escapeText(symbol)})`,
+        ({ fromPartId, toPartId, symbol }) => `${fromPartId} → ${toPartId} (${escapeText(symbol)})`,
       ),
     ),
     "</pull_request_data>",
