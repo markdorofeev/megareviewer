@@ -132,7 +132,12 @@ const stages = async (
         ],
   );
   const ruleRisk = classifyByRules(files, new Set(proofRisk.map((risk) => risk.hunkId)));
-  const prepPatch = { proofs, callGraph };
+  const prepPatch = {
+    proofs,
+    callGraph,
+    fileLinks: prepared.fileLinks,
+    generated: [...generated].sort(),
+  };
 
   // Without the model, risk comes from proofs and rules and the tour from the call graph.
   if (!deps.modelEnabled) {

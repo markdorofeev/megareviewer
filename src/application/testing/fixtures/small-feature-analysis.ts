@@ -160,7 +160,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "6+fake-model/1",
+  pipelineVersion: "7+fake-model/1",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -218,6 +218,8 @@ export const smallFeatureAnalysis: Analysis = {
   missingTicketKeys: [],
   proofs: [],
   callGraph: smallFeatureInput.callGraph,
+  fileLinks: [{ from: "src/routes/orders.ts", to: "src/services/receipts.ts" }],
+  generated: [],
   intent: smallFeatureIntent,
   risk: [
     {
@@ -296,6 +298,7 @@ export const smallFeatureAnalysis: Analysis = {
         hunkIds: [receiptRouteHunk.id, importHunk.id],
         kind: "flow",
         via: [],
+        entries: [],
       },
       {
         id: s("s2"),
@@ -304,6 +307,7 @@ export const smallFeatureAnalysis: Analysis = {
         hunkIds: [receiptServiceHunk.id],
         kind: "flow",
         via: [],
+        entries: [],
       },
       {
         id: s("s3"),
@@ -312,6 +316,7 @@ export const smallFeatureAnalysis: Analysis = {
         hunkIds: [cacheTtlHunk.id, receiptsConfigHunk.id, rateLimitHunk.id],
         kind: "flow",
         via: [],
+        entries: [],
       },
     ],
     builtBy: "model",

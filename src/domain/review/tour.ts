@@ -18,6 +18,8 @@ export const TourStep = z
     kind: z.enum(["flow", "supporting"]),
     /** Hunks of earlier steps this step passes through, in reading order. */
     via: z.array(HunkId).readonly(),
+    /** The hunks a flow starts at: its routes, page or command. Empty for the others. */
+    entries: z.array(HunkId).readonly(),
   })
   .readonly();
 export type TourStep = z.infer<typeof TourStep>;

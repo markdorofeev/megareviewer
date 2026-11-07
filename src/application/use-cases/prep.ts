@@ -2,7 +2,9 @@ import {
   buildCallGraphHints,
   type CallGraphHint,
   changedDefinitionNames,
+  type FileLink,
   type FileSymbols,
+  fileLinks,
   findFormattingProofs,
   findMechanicalProofs,
   type HunkId,
@@ -17,9 +19,10 @@ export interface Prepared {
   /** At most one per hunk. */
   readonly proofs: readonly MechanicalProof[];
   readonly callGraph: readonly CallGraphHint[];
+  readonly fileLinks: readonly FileLink[];
   /** Each hunk's changed definitions, for the tour's entry points. Not stored. */
   readonly definitions: ReadonlyMap<HunkId, readonly string[]>;
-  /** Paths whose first lines say a tool wrote them, for the tour's grouping. Not stored. */
+  /** Paths whose first lines say a tool wrote them, for the tour's grouping and the overview. */
   readonly generated: ReadonlySet<string>;
   readonly warnings: readonly string[];
   /** Hunks without a proof: the ones the model passes must cover. */
@@ -74,6 +77,7 @@ export const prep = async (parser: CodeParser, collected: Collected): Promise<Pr
   return {
     proofs,
     callGraph: buildCallGraphHints(files, symbolsByPath),
+    fileLinks: fileLinks(files, symbolsByPath),
     definitions: changedDefinitionNames(files, symbolsByPath),
     generated: new Set(
       files.flatMap((file) =>

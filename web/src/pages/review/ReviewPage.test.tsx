@@ -478,6 +478,7 @@ describe("map", () => {
       hunkIds,
       kind: "flow" as const,
       via: [],
+      entries: [],
       ...extra,
     });
     renderReview({
@@ -494,6 +495,7 @@ describe("map", () => {
               ]),
               step("s2", "Command: main in cli.ts", [h.receiptFormatting], {
                 via: [h.retryAndCache],
+                entries: [],
               }),
               step("s3", "Other changes in src/routes", [h.formatMoneyRemoved], {
                 kind: "supporting",

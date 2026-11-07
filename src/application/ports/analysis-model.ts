@@ -76,8 +76,13 @@ export type ModelRisk = z.infer<typeof ModelRisk>;
 export const DecisionDraft = Decision.unwrap().omit({ id: true }).readonly();
 export type DecisionDraft = z.infer<typeof DecisionDraft>;
 
-/** The model writes steps without `kind` and `via`: its steps are all flows that repeat nothing. */
-export const TourStepDraft = TourStep.unwrap().omit({ id: true, kind: true, via: true }).readonly();
+/**
+ * The model writes steps without `kind`, `via` and `entries`: its steps are all flows that repeat
+ * nothing, and it doesn't say where they start.
+ */
+export const TourStepDraft = TourStep.unwrap()
+  .omit({ id: true, kind: true, via: true, entries: true })
+  .readonly();
 export type TourStepDraft = z.infer<typeof TourStepDraft>;
 
 export const TourDraft = z.object({ steps: z.array(TourStepDraft).readonly() }).readonly();

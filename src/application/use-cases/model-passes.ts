@@ -265,6 +265,7 @@ export const runTour = async (
         id: TourStepId.parse(`s${index + 1}`),
         kind: "flow" as const,
         via: [],
+        entries: [],
       })),
       builtBy: "model",
     },

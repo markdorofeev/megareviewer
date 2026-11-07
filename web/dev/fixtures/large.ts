@@ -90,7 +90,7 @@ const pullRequest: PullRequest = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "6+no-model",
+  pipelineVersion: "7+no-model",
 };
 
 const risk: RiskAssessment[] = files.flatMap((file, at) =>
@@ -133,6 +133,10 @@ const analysis: Analysis = {
       use: "call" as const,
     })),
   ),
+  fileLinks: files
+    .slice(0, -1)
+    .map((file, at) => ({ from: file.path, to: files[at + 1]?.path ?? file.path })),
+  generated: [],
   intent: null,
   risk,
   decisions: [
@@ -154,6 +158,7 @@ const analysis: Analysis = {
         .flatMap((file) => file.hunks.map((hunk) => hunk.id)),
       kind: "flow" as const,
       via: [],
+      entries: [],
     })),
     builtBy: "code",
   },

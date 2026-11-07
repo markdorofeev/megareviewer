@@ -68,6 +68,8 @@ const newAnalysis = (
   missingTicketKeys: [],
   proofs: [],
   callGraph: [],
+  fileLinks: [],
+  generated: [],
   intent: null,
   risk: [],
   decisions: [],

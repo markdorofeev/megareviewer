@@ -294,6 +294,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
       hunkIds: flow.hunks,
       kind: "flow" as const,
       via: flow.via,
+      entries: flow.kind === "root" ? [] : flow.starts,
     })),
     ...supportingSteps(
       ids.filter((id) => !owner.has(id)),
@@ -400,6 +401,7 @@ const supportingSteps = (
         hunkIds,
         kind: "supporting" as const,
         via: [],
+        entries: [],
       };
     });
 };

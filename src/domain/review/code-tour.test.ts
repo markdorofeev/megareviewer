@@ -108,9 +108,10 @@ describe("codeTour", () => {
       one(2, "api/routes.py", route("get", "/a")),
       one(3, "app/service.py"),
     ];
-    expect(shape(tourOf(files, { callGraph: [hint(1, 2), hint(2, 3)] }))).toEqual([
-      ["GET /a", [1, 2, 3]],
-    ]);
+    const tour = tourOf(files, { callGraph: [hint(1, 2), hint(2, 3)] });
+    expect(shape(tour)).toEqual([["GET /a", [1, 2, 3]]]);
+    // The flow starts at the route, not at the code that registers it.
+    expect(tour.steps[0]?.entries).toEqual([h(2)]);
   });
 
   it("reads shared code in the first flow and points to it from the next", () => {
@@ -134,7 +135,9 @@ describe("codeTour", () => {
       [h(1), ["main"]],
       [h(2), ["main"]],
     ]);
-    expect(shape(tourOf(files, { definitions }))).toEqual([["Command: main in cli.py", [1, 2]]]);
+    const tour = tourOf(files, { definitions });
+    expect(shape(tour)).toEqual([["Command: main in cli.py", [1, 2]]]);
+    expect(tour.steps[0]?.entries).toEqual([h(1), h(2)]);
   });
 
   it("orders flows that reach contract code first, then routes, pages, commands and roots", () => {
@@ -165,7 +168,10 @@ describe("codeTour", () => {
 
   it("titles a root without definitions by its path", () => {
     const files = [one(1, "app/a.py"), one(2, "app/b.py")];
-    expect(shape(tourOf(files, { callGraph: [hint(1, 2)] }))).toEqual([["app/a.py", [1, 2]]]);
+    const tour = tourOf(files, { callGraph: [hint(1, 2)] });
+    expect(shape(tour)).toEqual([["app/a.py", [1, 2]]]);
+    // A root isn't an entry point.
+    expect(tour.steps[0]?.entries).toEqual([]);
   });
 
   it("joins a root whose code another flow already read to that flow", () => {
@@ -240,7 +246,9 @@ describe("codeTour", () => {
       ["Tests", [4]],
       ["Other changes in scripts", [6]],
     ]);
-    expect(tour.steps.every((step) => step.kind === "supporting")).toBe(true);
+    expect(
+      tour.steps.every((step) => step.kind === "supporting" && step.entries.length === 0),
+    ).toBe(true);
     expect(tour.steps[1]?.explanation).toBe(
       "2 files: openapi.json and schema.d.ts. No flow runs them.",
     );

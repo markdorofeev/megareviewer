@@ -188,7 +188,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("6+fake-model/1");
+    expect(analysis.key.pipelineVersion).toBe("7+fake-model/1");
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
     );
@@ -197,6 +197,10 @@ describe("the analysis pipeline", () => {
     expect(analysis.missingTicketKeys).toEqual([]);
     expect(analysis.proofs).toEqual([]);
     expect(analysis.callGraph.map((hint) => hint.symbol)).toContain("renderReceipt");
+    expect(analysis.fileLinks).toEqual([
+      { from: "src/routes/orders.ts", to: "src/services/receipts.ts" },
+    ]);
+    expect(analysis.generated).toEqual([]);
     expect(analysis.intent?.inferred.summary).toBe("Changes 3 file(s).");
     expect(analysis.risk).toEqual(
       smallFeatureHunks.map((hunkId) =>
@@ -727,6 +731,7 @@ describe("the analysis pipeline", () => {
             hunkIds: smallFeatureHunks,
             kind: "flow",
             via: [],
+            entries: [],
           },
         ],
         builtBy: "model",
@@ -969,7 +974,7 @@ describe("without the model", () => {
       decisions: "skipped",
       tour: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("6+no-model");
+    expect(analysis.key.pipelineVersion).toBe("7+no-model");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);

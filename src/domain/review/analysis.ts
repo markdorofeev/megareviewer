@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CallGraphHint, FileChange, MechanicalProof } from "../diff/index.ts";
+import { CallGraphHint, FileChange, FileLink, MechanicalProof } from "../diff/index.ts";
 import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
 import { Intent, Ticket } from "./intent.ts";
@@ -84,6 +84,10 @@ export const Analysis = z
     missingTicketKeys: z.array(z.string()).readonly(),
     proofs: z.array(MechanicalProof).readonly(),
     callGraph: z.array(CallGraphHint).readonly(),
+    /** Changed files an import in another changed file reaches. */
+    fileLinks: z.array(FileLink).readonly(),
+    /** Paths whose first lines say a tool wrote them. Grouped and faded, never hidden. */
+    generated: z.array(z.string()).readonly(),
     intent: Intent.nullable(),
     risk: z.array(RiskAssessment).readonly(),
     decisions: z.array(Decision).readonly(),

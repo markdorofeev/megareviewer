@@ -84,6 +84,7 @@ export const tourSteps = (analysis: Analysis, index: HunkIndex): readonly TourSt
       hunkIds: missed,
       kind: "supporting",
       via: [],
+      entries: [],
     },
   ];
 };

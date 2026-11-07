@@ -513,6 +513,12 @@ const analysis: Analysis = {
       use: "call",
     },
   ],
+  fileLinks: [
+    { from: "src/routes/orders.ts", to: "src/lib/money.ts" },
+    { from: "src/routes/orders.ts", to: "src/services/receipts.ts" },
+    { from: "src/services/receipts.ts", to: "src/lib/money.ts" },
+  ],
+  generated: [],
   intent: {
     stated: {
       summary:
@@ -608,6 +614,7 @@ const analysis: Analysis = {
         hunkIds: [h.receiptRoute, h.routeImports],
         kind: "flow",
         via: [],
+        entries: [],
       },
       {
         id: TourStepId.parse("s2"),
@@ -617,6 +624,7 @@ const analysis: Analysis = {
         hunkIds: [h.retryAndCache],
         kind: "flow",
         via: [],
+        entries: [],
       },
       {
         id: TourStepId.parse("s3"),
@@ -626,6 +634,7 @@ const analysis: Analysis = {
         hunkIds: [h.receiptFormatting],
         kind: "flow",
         via: [],
+        entries: [],
       },
       {
         id: TourStepId.parse("s4"),
@@ -634,6 +643,7 @@ const analysis: Analysis = {
         hunkIds: [h.dependency],
         kind: "flow",
         via: [],
+        entries: [],
       },
     ],
     builtBy: "model",
