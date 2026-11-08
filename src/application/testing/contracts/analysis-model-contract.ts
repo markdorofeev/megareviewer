@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Intent, ModelUsage } from "../../../domain/review/index.ts";
+import { Intent, ModelUsage, validateTourTitles } from "../../../domain/review/index.ts";
 import {
   type AnalysisModel,
   DecisionDraft,
@@ -7,7 +7,12 @@ import {
   type PassOutput,
   TourDraft,
 } from "../../ports/index.ts";
-import { smallFeatureAnalysis, smallFeatureInput, smallFeatureIntent } from "../fixtures/index.ts";
+import {
+  smallFeatureAnalysis,
+  smallFeatureInput,
+  smallFeatureIntent,
+  smallFeatureSkeleton,
+} from "../fixtures/index.ts";
 
 // Later passes take the fixture analysis's earlier results rather than this model's, so each
 // pass's request is the same on every run and can be recorded once.
@@ -16,6 +21,7 @@ const risk = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =
   riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason }],
 );
 const decisions = smallFeatureAnalysis.decisions;
+const skeleton = { tour: smallFeatureSkeleton, parts: [] };
 
 const expectUsage = (output: PassOutput<unknown>, pass: ModelUsage["pass"]) => {
   expect(ModelUsage.parse(output.usage)).toEqual(output.usage);
@@ -67,11 +73,12 @@ export const describeAnalysisModelContract = (
       expectUsage(result.value, "decisions");
     });
 
-    it("returns a tour", async () => {
-      const result = await model.tour(smallFeatureInput, intent, risk, decisions);
+    it("titles the code's tour", async () => {
+      const result = await model.tour(smallFeatureInput, intent, risk, decisions, skeleton);
       if (!result.ok) throw new Error(`tour failed: ${result.error.message}`);
 
       expect(TourDraft.parse(result.value.value)).toEqual(result.value.value);
+      expect(validateTourTitles(result.value.value, smallFeatureSkeleton)).toEqual([]);
       expectUsage(result.value, "tour");
     });
   });

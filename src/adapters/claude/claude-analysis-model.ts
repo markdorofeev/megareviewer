@@ -12,7 +12,7 @@ import { err, ok, type Result } from "../../domain/shared/index.ts";
 import { fromSdkError, invalidOutput, maxTokens, refusal, tooLarge } from "./errors.ts";
 import { PassAnswer } from "./output-schema.ts";
 import { costUsd, HIGHEST_PRICE, PRICES, type TokenCounts } from "./pricing.ts";
-import { type EarlierResults, passMessage } from "./prompts/passes.ts";
+import { type EarlierResults, passMessage, renderSkeleton } from "./prompts/passes.ts";
 import { renderInput } from "./render-input.ts";
 import { countTokensRequest, MAX_TOKENS, passRequest } from "./request.ts";
 import { VERSION } from "./version.ts";
@@ -155,9 +155,13 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
         answer.pass === "decisions" ? answer.decisions : null,
       ),
 
-    tour: (input, intent, risk, decisions, passOptions) =>
-      runPass("tour", input, { intent, risk, decisions }, passOptions, (answer) =>
-        answer.pass === "tour" ? answer.tour : null,
+    tour: (input, intent, risk, decisions, skeleton, passOptions) =>
+      runPass(
+        "tour",
+        input,
+        { intent, risk, decisions, skeleton: renderSkeleton(skeleton, input) },
+        passOptions,
+        (answer) => (answer.pass === "tour" ? answer.tour : null),
       ),
   };
 };

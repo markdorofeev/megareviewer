@@ -7,6 +7,7 @@ import {
   type ModelError,
   type StageName,
   type StageStatus,
+  type Tour,
   validateRiskCoverage,
   validateTour,
 } from "../../domain/review/index.ts";
@@ -214,7 +215,7 @@ describe("the analysis pipeline", () => {
       ),
     );
     expect(analysis.decisions.map((decision) => decision.id)).toEqual(["d1", "d2", "d3"]);
-    expect(analysis.tour?.steps.map((step) => step.id)).toEqual(["s1", "s2", "s3"]);
+    expect(analysis.tour?.steps.map((step) => step.id)).toEqual(["s1", "s2"]);
     expect(analysis.tour?.builtBy).toBe("model");
     expect(analysis.warnings).toEqual([]);
     expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
@@ -701,50 +702,120 @@ describe("the analysis pipeline", () => {
   });
 
   describe("tour", () => {
-    it("falls back to file order when the tour is invalid twice", async () => {
-      const model = new FakeAnalysisModel();
-      const invalid = { steps: [{ title: "All", explanation: "", hunkIds: [h1] }] };
-      model.script("tour", ok(invalid), ok(invalid));
-      const { analyze } = setup({ model });
+    const stepsOf = (analysis: Analysis) =>
+      (analysis.tour?.steps ?? []).map(({ partIds, kind, via, entries }) => ({
+        partIds,
+        kind,
+        via,
+        entries,
+      }));
+    const titlesFor = (skeleton: Tour | undefined) => ({
+      steps: (skeleton?.steps ?? []).map((step) => ({
+        stepId: step.id,
+        title: `Behavior of ${step.id}`,
+        explanation: `What to check in ${step.id}.`,
+      })),
+      merges: [],
+    });
+
+    it("titles the code's tour: the same steps as without the model", async () => {
+      const withoutModel = await setup({ modelEnabled: false }).analyze();
+      const { analyze, model } = setup();
       const analysis = await analyze();
 
-      expect(model.callsTo("tour")).toHaveLength(2);
-      expect(analysis.status).toBe("complete");
-      expect(analysis.tour?.builtBy).toBe("code");
-      expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
-      expect(analysis.warnings).toEqual([
-        "The guided tour didn't cover every hunk exactly once, so the tour follows the call graph instead",
+      const skeleton = model.callsTo("tour")[0]?.skeleton?.tour;
+      expect(skeleton?.steps.map((step) => step.title)).toEqual(
+        withoutModel.tour?.steps.map((step) => step.title),
+      );
+      expect(stepsOf(analysis)).toEqual(stepsOf(withoutModel));
+      expect(analysis.tour?.builtBy).toBe("model");
+      expect(analysis.tour?.steps.map((step) => step.codeTitle)).toEqual(
+        withoutModel.tour?.steps.map((step) => step.title),
+      );
+      expect(analysis.warnings).toEqual([]);
+    });
+
+    it("shows the code's tour from prep on, before the model passes", async () => {
+      const { analyze, store } = setup();
+      await analyze();
+      const afterPrep = store.saves.find((analysis) => analysis.stages.prep === "done");
+      expect(afterPrep?.stages.intent).toBe("pending");
+      expect(afterPrep?.tour?.builtBy).toBe("code");
+    });
+
+    it("uses valid titles on the second try", async () => {
+      const model = new FakeAnalysisModel();
+      model.script("tour", ok({ steps: [], merges: [] }));
+      const { analyze } = setup({ model });
+      const first = await setup({ modelEnabled: false }).analyze();
+      model.script("tour", ok(titlesFor(first.tour ?? undefined)));
+      const analysis = await analyze();
+
+      expect(model.callsTo("tour")[1]?.options?.feedback).toContain(
+        "s1 has no title. Title every step of the tour exactly once.",
+      );
+      expect(analysis.tour?.builtBy).toBe("model");
+      expect(analysis.tour?.steps[0]).toMatchObject({
+        title: "Behavior of s1",
+        explanation: "What to check in s1.",
+        codeTitle: first.tour?.steps[0]?.title,
+        merged: [],
+      });
+      expect(stepsOf(analysis)).toEqual(stepsOf(first));
+    });
+
+    it("tells the model what was wrong with its titles", async () => {
+      const model = new FakeAnalysisModel();
+      const invalid = {
+        steps: [
+          { stepId: "s1", title: "x".repeat(81), explanation: " " },
+          { stepId: "s1", title: "Again", explanation: "Again." },
+          { stepId: "s9", title: "Unknown", explanation: "Unknown." },
+        ],
+        merges: [
+          { stepId: "s1", intoStepId: "s2", reason: "A flow." },
+          { stepId: "s8", intoStepId: "s7", reason: "" },
+          { stepId: "s8", intoStepId: "s1", reason: "Again." },
+          { stepId: "s2", intoStepId: "s1", reason: "Into a merged step." },
+        ],
+      };
+      model.script("tour", ok(invalid));
+      const { analyze } = setup({ model });
+      await analyze();
+
+      expect(model.callsTo("tour")[1]?.options?.feedback).toEqual([
+        "s1's title is longer than 80 characters.",
+        "s1 has a blank explanation.",
+        "s1 is titled more than once.",
+        "s9 isn't a step of the tour, so don't title it.",
+        "s2 has no title. Title every step of the tour exactly once.",
+        "s1 is a flow, and only supporting steps can be merged.",
+        "s1 is merged into s2, which is merged itself.",
+        "s8 isn't a step of the tour, so it can't be merged.",
+        "s8 is merged into s7, which isn't a step of the tour.",
+        "The merge of s8 has no reason.",
+        "s8 is merged more than once.",
+        "s2 is merged into s1, which is merged itself.",
       ]);
     });
 
-    it("uses a valid second tour", async () => {
+    it("keeps the code's titles when the titles are invalid twice", async () => {
       const model = new FakeAnalysisModel();
-      const valid = { steps: [{ title: "All", explanation: "", hunkIds: smallFeatureHunks }] };
-      model.script("tour", ok({ steps: [] }), ok(valid));
+      const invalid = { steps: [{ stepId: "s99", title: "All", explanation: "x" }], merges: [] };
+      model.script("tour", ok(invalid), ok(invalid));
       const { analyze } = setup({ model });
       const analysis = await analyze();
-      expect(model.callsTo("tour")[1]?.options?.feedback).toContain(
-        `${h1} is in no step. Put every hunk sent in full in exactly one step.`,
-      );
-      expect(analysis.tour).toEqual({
-        steps: [
-          {
-            id: "s1",
-            title: "All",
-            explanation: "",
-            partIds: smallFeatureHunks,
-            kind: "flow",
-            via: [],
-            entries: [],
-            codeTitle: null,
-            merged: [],
-          },
-        ],
-        builtBy: "model",
-      });
+      const withoutModel = await setup({ modelEnabled: false }).analyze();
+
+      expect(model.callsTo("tour")).toHaveLength(2);
+      expect(analysis.status).toBe("complete");
+      expect(analysis.tour).toEqual(withoutModel.tour);
+      expect(analysis.warnings).toEqual([
+        "The model's titles for the guided tour weren't valid, so its steps keep the code's titles",
+      ]);
     });
 
-    it("falls back to file order on a model error and still completes", async () => {
+    it("keeps the code's titles on a model error and still completes", async () => {
       const model = new FakeAnalysisModel();
       model.script("tour", err(modelError("overloaded", "Overloaded")));
       const { analyze } = setup({ model });
@@ -754,8 +825,9 @@ describe("the analysis pipeline", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.stages.tour).toBe("done");
       expect(analysis.tour?.builtBy).toBe("code");
+      expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
       expect(analysis.warnings).toEqual([
-        "The guided tour couldn't be built (Overloaded), so the tour follows the call graph instead",
+        "The guided tour couldn't be titled (Overloaded), so its steps keep the code's titles",
       ]);
     });
   });

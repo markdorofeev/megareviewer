@@ -12,6 +12,7 @@ export {
   smallFeatureInput,
   smallFeatureIntent,
   smallFeaturePublication,
+  smallFeatureSkeleton,
 } from "./small-feature-analysis.ts";
 export { bitbucketBugfix, promptInjection, refactorMove, smallFeature };
 

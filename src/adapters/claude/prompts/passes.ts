@@ -1,4 +1,5 @@
-import type { ModelRisk } from "../../../application/ports/index.ts";
+import type { AnalysisInput, ModelRisk, TourSkeleton } from "../../../application/ports/index.ts";
+import type { Hunk, HunkId, HunkPart, PartId } from "../../../domain/diff/index.ts";
 import type { Decision, Intent, ModelPass } from "../../../domain/review/index.ts";
 import { escapeText } from "../render-input.ts";
 
@@ -37,13 +38,52 @@ Order them by importance, most important first. At most 15. A small or routine c
 
   tour: `Task: tour.
 
-Order every <hunk> in the data into a guided tour, each hunk in exactly one step. Mechanical hunks are not part of the tour.
+The tour is already built: <tour_skeleton> lists its steps in reading order. A "flow" step starts at an entry point (an HTTP route, a page, a command), listed under entries, and reads the changed code that entry runs, callers before callees. "passes through" names code an earlier step already read. A "supporting" step holds changes no flow runs: an API schema, docs, tests, or other changes by area. Each step has the code's own title, which names the code ("PUT /api/items/{id}", a function name, "Tests"), and the code's explanation. A hunk ID with lines is the part of that hunk on those lines; a hunk ID alone is the whole hunk.
 
-Start where execution or the reader enters the change (an endpoint, a CLI command, a UI action, a public function), then follow the call graph to what it uses. Group hunks by concept, not by file: a step can span files, and a file can appear in several steps.
+The steps and the code in them are fixed. Write, for every step, by its id:
+- title: what the step does, as behavior a user or caller would notice, in plain language, at most 80 characters ("Save a host's token", not "PUT /api/account-connections/{domain}/token" or a function name). Don't repeat the code's title: the reviewer sees it under yours.
+- explanation: one or two sentences, at most 300 characters, on what this step changes and what the reviewer should check in it.
 
-Use as few steps as tell the story: one per concept the reviewer has to understand. A small change needs one to three steps; never use more than 7. Tests, generated files (API schemas, generated types), documentation, configuration and wiring go into the step of the code they belong to, never into a step of their own.
+merges: you may merge a supporting step into the step it belongs with, such as docs into the flow they document, or tests into the flow they test. Each merge names the supporting step (stepId), the step it joins (intoStepId) and a one-sentence reason. Merge only supporting steps, never a flow, each at most once, and never into a step you merge elsewhere. A supporting step that belongs with several steps or none stays. Most tours need no merges.`,
+};
 
-Each step has a short title naming the concept, and one sentence of at most 25 words on why it comes at this point in the tour. Don't describe what the code does: the reviewer sees the diff right below.`,
+/** A part as the model reads it: its hunk, with the lines it covers when it isn't the whole hunk. */
+const partLabel = (
+  id: PartId,
+  parts: ReadonlyMap<PartId, HunkPart>,
+  hunks: ReadonlyMap<HunkId, Hunk>,
+) => {
+  const part = parts.get(id);
+  if (part === undefined) return id;
+  const numbers = (hunks.get(part.hunkId)?.lines ?? [])
+    .slice(part.start, part.end)
+    .flatMap((line) => line.newLine ?? line.oldLine ?? []);
+  const first = numbers[0];
+  const last = numbers.at(-1);
+  return first === undefined || last === undefined
+    ? part.hunkId
+    : `${part.hunkId} lines ${first}–${last}`;
+};
+
+/** The code's tour, for the tour pass. Titles and explanations come from the PR's code. */
+export const renderSkeleton = (skeleton: TourSkeleton, input: AnalysisInput): string[] => {
+  const parts = new Map(skeleton.parts.map((part) => [part.id, part]));
+  const hunks = new Map(input.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])));
+  const labels = (partIds: readonly PartId[]) =>
+    partIds.map((id) => partLabel(id, parts, hunks)).join(", ");
+  return [
+    "<tour_skeleton>",
+    ...skeleton.tour.steps.flatMap((step) => [
+      `<step id="${step.id}" kind="${step.kind}">`,
+      `code's title: ${escapeText(step.title)}`,
+      `code's explanation: ${escapeText(step.explanation)}`,
+      ...(step.entries.length === 0 ? [] : [`entries: ${labels(step.entries)}`]),
+      `reads: ${labels(step.partIds)}`,
+      ...(step.via.length === 0 ? [] : [`passes through: ${labels(step.via)}`]),
+      "</step>",
+    ]),
+    "</tour_skeleton>",
+  ];
 };
 
 const ids = (hunkIds: readonly string[]): string =>
@@ -80,6 +120,8 @@ export interface EarlierResults {
   readonly intent: Intent;
   readonly risk?: readonly ModelRisk[];
   readonly decisions?: readonly Decision[];
+  /** The code's tour, rendered, for the tour pass. */
+  readonly skeleton?: readonly string[];
 }
 
 /**
@@ -102,6 +144,7 @@ export const passMessage = (
           ...(earlier.decisions === undefined ? [] : renderDecisions(earlier.decisions)),
           "</earlier_results>",
           "",
+          ...(earlier.skeleton === undefined ? [] : [...earlier.skeleton, ""]),
         ];
   const problems =
     feedback === undefined || feedback.length === 0

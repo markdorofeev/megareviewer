@@ -7,6 +7,7 @@ export {
   type PassOptions,
   type PassOutput,
   TourDraft,
+  type TourSkeleton,
   TourStepDraft,
 } from "./analysis-model.ts";
 export type { AnalysisStore } from "./analysis-store.ts";

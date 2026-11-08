@@ -21,6 +21,8 @@ const TAGS = [
   "intent",
   "risk",
   "decisions",
+  "tour_skeleton",
+  "step",
 ];
 // Case-sensitive: the tags are lowercase, and code is full of "<Hunk>"-like generics.
 const TAG_START = new RegExp(`<(/?)(?=(?:${TAGS.join("|")})\\b)`, "g");

@@ -7,6 +7,7 @@ import {
   smallFeatureAnalysis,
   smallFeatureInput,
   smallFeatureIntent,
+  smallFeatureSkeleton,
 } from "../../application/testing/index.ts";
 import type { ModelErrorKind, ModelPass } from "../../domain/review/index.ts";
 import { createAnthropicFetch, type FixtureAnswer } from "./fixtures/anthropic-fetch.ts";
@@ -32,6 +33,7 @@ const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass
   riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason }],
 );
 const { decisions } = smallFeatureAnalysis;
+const skeleton = { tour: smallFeatureSkeleton, parts: [] };
 
 /** Runs one pass of the small-feature fixture, answered with `answer`. */
 const runPass = (pass: ModelPass, answer: FixtureAnswer, feedback?: readonly string[]) => {
@@ -45,7 +47,7 @@ const runPass = (pass: ModelPass, answer: FixtureAnswer, feedback?: readonly str
         ? model.risk(smallFeatureInput, smallFeatureIntent, options)
         : pass === "decisions"
           ? model.decisions(smallFeatureInput, smallFeatureIntent, options)
-          : model.tour(smallFeatureInput, smallFeatureIntent, risk, decisions, options);
+          : model.tour(smallFeatureInput, smallFeatureIntent, risk, decisions, skeleton, options);
   return { ...setup, result };
 };
 
@@ -63,7 +65,7 @@ describe("ClaudeAnalysisModel", () => {
       await model.intent(smallFeatureInput);
       await model.risk(smallFeatureInput, smallFeatureIntent);
       await model.decisions(smallFeatureInput, smallFeatureIntent);
-      await model.tour(smallFeatureInput, smallFeatureIntent, risk, decisions);
+      await model.tour(smallFeatureInput, smallFeatureIntent, risk, decisions, skeleton);
       return requests;
     };
 
@@ -132,6 +134,18 @@ describe("ClaudeAnalysisModel", () => {
       const tour = instruction(3);
       expect(tour).toContain(`${risk[0]?.hunkId} ${risk[0]?.riskClass}: ${risk[0]?.reason}`);
       expect(tour).toContain(`d1 [api] ${decisions[0]?.title}`);
+      const [route, imports] = smallFeatureSkeleton.steps[0]?.partIds ?? [];
+      expect(tour).toContain(
+        [
+          '<step id="s1" kind="flow">',
+          "code's title: GET /orders/:id/receipt",
+          "code's explanation: Read by the code.",
+          `entries: ${route}`,
+          `reads: ${route}, ${imports}`,
+          "</step>",
+        ].join("\n"),
+      );
+      expect(tour).toContain('<step id="s3" kind="supporting">');
     });
 
     it("appends the feedback on the previous answer when given", async () => {

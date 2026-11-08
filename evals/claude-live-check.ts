@@ -14,14 +14,16 @@ import type {
   AnalysisModel,
   Logger,
   ModelRisk,
+  TourSkeleton,
 } from "../src/application/ports/index.ts";
 import {
   type PullRequestFixture,
   promptInjection,
   smallFeatureInput,
+  smallFeatureSkeleton,
 } from "../src/application/testing/index.ts";
 import { findMechanicalProofs, parseUnifiedDiff } from "../src/domain/diff/index.ts";
-import { DecisionId, type ModelUsage } from "../src/domain/review/index.ts";
+import { codeTour, DecisionId, type ModelUsage } from "../src/domain/review/index.ts";
 
 const print = (text: string): void => {
   process.stdout.write(`${text}\n`);
@@ -34,8 +36,13 @@ const logger: Logger = {
   error: (message, fields) => print(`error: ${message} ${JSON.stringify(fields ?? {})}`),
 };
 
-/** The analysis input stage 10 would build: hunks with a proof go as stats, the rest in full. */
-const inputFrom = (fixture: PullRequestFixture): AnalysisInput => {
+/**
+ * The analysis input stage 10 would build: hunks with a proof go as stats, the rest in full. And
+ * the code's tour of them.
+ */
+const inputFrom = (
+  fixture: PullRequestFixture,
+): { input: AnalysisInput; skeleton: TourSkeleton } => {
   const parsed = parseUnifiedDiff(fixture.pullRequest.diff);
   if (!parsed.ok) throw new Error(`${fixture.name}: ${parsed.error.message}`);
   const contents = (files: Readonly<Record<string, string>>) =>
@@ -47,7 +54,19 @@ const inputFrom = (fixture: PullRequestFixture): AnalysisInput => {
   });
   const proofOf = new Map(proofs.flatMap((proof) => (proof.hunkId ? [[proof.hunkId, proof]] : [])));
   const { pullRequest } = fixture;
-  return {
+  // The code's tour without call-graph hints or definitions: enough for the tour pass to title.
+  const skeleton = codeTour({
+    files: parsed.value,
+    required: new Set(
+      parsed.value.flatMap((file) =>
+        file.hunks.flatMap((hunk) => (proofOf.has(hunk.id) ? [] : [hunk.id])),
+      ),
+    ),
+    callGraph: [],
+    risk: [],
+    definitions: new Map(),
+  });
+  const input: AnalysisInput = {
     pullRequest: {
       title: pullRequest.title,
       description: pullRequest.description,
@@ -78,6 +97,7 @@ const inputFrom = (fixture: PullRequestFixture): AnalysisInput => {
     }),
     callGraph: [],
   };
+  return { input, skeleton: { tour: skeleton, parts: [] } };
 };
 
 /** Requests and responses of the passes, for --record. */
@@ -113,7 +133,12 @@ const report = (name: string, pass: string, usage: ModelUsage, value: unknown): 
   }
 };
 
-const check = async (model: AnalysisModel, name: string, input: AnalysisInput) => {
+const check = async (
+  model: AnalysisModel,
+  name: string,
+  input: AnalysisInput,
+  skeleton: TourSkeleton,
+) => {
   const size = await model.checkSize(input);
   if (!size.ok) throw new Error(`${name} checkSize: ${size.error.message}`);
   print(`\n${name}: ${size.value.inputTokens} input tokens`);
@@ -136,7 +161,7 @@ const check = async (model: AnalysisModel, name: string, input: AnalysisInput) =
     id: DecisionId.parse(`d${index + 1}`),
   }));
   const riskValue: readonly ModelRisk[] = risk.value.value;
-  const tour = await model.tour(input, intent.value.value, riskValue, numbered);
+  const tour = await model.tour(input, intent.value.value, riskValue, numbered, skeleton);
   if (!tour.ok) throw new Error(`${name} tour: ${tour.error.message}`);
   report(name, "tour", tour.value.usage, tour.value.value);
 
@@ -153,13 +178,17 @@ const main = async (): Promise<void> => {
   const model = createClaudeAnalysisModel({ client, logger });
   print(`model version ${model.version}`);
 
-  await check(model, "small-feature", smallFeatureInput);
+  await check(model, "small-feature", smallFeatureInput, {
+    tour: smallFeatureSkeleton,
+    parts: [],
+  });
   if (record) {
     const out = new URL("../src/adapters/claude/fixtures/small-feature.json", import.meta.url);
     await writeFile(out, `${JSON.stringify(recording, null, 2)}\n`);
     print(`\nwrote ${out.pathname}`);
   }
-  await check(model, "prompt-injection", inputFrom(promptInjection));
+  const injection = inputFrom(promptInjection);
+  await check(model, "prompt-injection", injection.input, injection.skeleton);
 
   if (failures.length > 0) throw new Error(failures.join("\n"));
   print("\nCache reads confirmed for passes 2–4. Check the prompt-injection answers by eye.");

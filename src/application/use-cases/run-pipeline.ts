@@ -1,4 +1,4 @@
-import { type HunkId, hunkIdOf, renameHints } from "../../domain/diff/index.ts";
+import type { HunkId } from "../../domain/diff/index.ts";
 import {
   type Analysis,
   type AnalysisError,
@@ -136,26 +136,29 @@ const stages = async (
         ],
   );
   const ruleRisk = classifyByRules(files, new Set(proofRisk.map((risk) => risk.hunkId)));
-  // Until the tour places the parts, every hunk is whole.
+  // The tour is the code's in both modes, ordered by the rules' risk; the model only titles it.
+  const skeleton = codeTour({
+    files,
+    required,
+    parts,
+    callGraph,
+    risk: [...proofRisk, ...ruleRisk],
+    definitions,
+    generated,
+  });
+  const joined = joinParts(skeleton, parts, callGraph, unchangedCallers);
   const prepPatch = {
     proofs,
-    callGraph: renameHints(callGraph, hunkIdOf),
-    unchangedCallers: unchangedCallers.map((callers) => ({
-      ...callers,
-      partId: hunkIdOf(callers.partId),
-    })),
+    ...joined,
     fileLinks: prepared.fileLinks,
     generated: [...generated].sort(),
   };
 
-  // Without the model, risk comes from proofs and rules and the tour from the call graph.
+  // Without the model, risk comes from proofs and rules.
   if (!deps.modelEnabled) {
-    const risk = [...proofRisk, ...ruleRisk];
-    const tour = codeTour({ files, required, parts, callGraph, risk, definitions, generated });
     await tracker.setStage("prep", "done", (analysis) => ({
       ...prepPatch,
-      risk,
-      ...joinParts(tour, parts, callGraph, unchangedCallers),
+      risk: [...proofRisk, ...ruleRisk],
       ...adding(prepared)(analysis),
     }));
     for (const stage of MODEL_STAGES) await tracker.setStage(stage, "skipped");
@@ -236,13 +239,8 @@ const stages = async (
       intent,
       risk: risk.value.forTour,
       decisions: decisions.value,
-      files,
-      required,
-      parts,
-      callGraph,
-      definitions,
-      generated,
-      assessments: risk.value.assessments,
+      skeleton,
+      view: { tour: joined.tour, parts: joined.parts },
     },
     logger,
   );

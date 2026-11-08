@@ -14,6 +14,7 @@ import type {
   PassOptions,
   PassOutput,
   TourDraft,
+  TourSkeleton,
 } from "../ports/index.ts";
 
 export interface PassValues {
@@ -30,6 +31,8 @@ export interface ModelCall {
   readonly pass: ModelPass | "checkSize";
   readonly input: AnalysisInput;
   readonly options: PassOptions | undefined;
+  /** The code's tour, for tour calls. */
+  readonly skeleton?: TourSkeleton;
 }
 
 /** Roughly what a tokenizer would count, enough to exercise size budgets. */
@@ -40,7 +43,8 @@ const filesToReview = (input: AnalysisInput) => input.files.filter((file) => fil
 
 /**
  * Returns scripted answers per pass, in order, and derives plausible ones from the input
- * when none are left: every hunk sent in full is logic, one decision and one tour step per file.
+ * when none are left: every hunk sent in full is logic, one decision per file, and the code's tour
+ * keeps its titles.
  */
 export class FakeAnalysisModel implements AnalysisModel {
   readonly version: string;
@@ -81,7 +85,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     input: AnalysisInput,
     options?: PassOptions,
   ): Promise<Result<PassOutput<Intent>, ModelError>> {
-    return this.answer("intent", input, options, () => {
+    return this.answer("intent", input, options, undefined, () => {
       const { description } = input.pullRequest;
       const sources = [
         ...(description.trim() === "" ? [] : [{ kind: "description" as const, ref: null }]),
@@ -104,7 +108,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     _intent: Intent,
     options?: PassOptions,
   ): Promise<Result<PassOutput<ModelRisk[]>, ModelError>> {
-    return this.answer("risk", input, options, () =>
+    return this.answer("risk", input, options, undefined, () =>
       input.files.flatMap((file) =>
         file.hunks.map((hunk) => ({
           hunkId: hunk.id,
@@ -120,7 +124,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     _intent: Intent,
     options?: PassOptions,
   ): Promise<Result<PassOutput<DecisionDraft[]>, ModelError>> {
-    return this.answer("decisions", input, options, () =>
+    return this.answer("decisions", input, options, undefined, () =>
       filesToReview(input).map((file) => ({
         title: `Changes ${file.path}`,
         category: "behavior" as const,
@@ -135,14 +139,16 @@ export class FakeAnalysisModel implements AnalysisModel {
     _intent: Intent,
     _risk: readonly ModelRisk[],
     _decisions: readonly Decision[],
+    skeleton: TourSkeleton,
     options?: PassOptions,
   ): Promise<Result<PassOutput<TourDraft>, ModelError>> {
-    return this.answer("tour", input, options, () => ({
-      steps: filesToReview(input).map((file) => ({
-        title: file.path,
+    return this.answer("tour", input, options, skeleton, () => ({
+      steps: skeleton.tour.steps.map((step) => ({
+        stepId: step.id,
+        title: step.title,
         explanation: "Derived by the fake model.",
-        hunkIds: file.hunks.map((hunk) => hunk.id),
       })),
+      merges: [],
     }));
   }
 
@@ -150,9 +156,10 @@ export class FakeAnalysisModel implements AnalysisModel {
     pass: P,
     input: AnalysisInput,
     options: PassOptions | undefined,
+    skeleton: TourSkeleton | undefined,
     derive: () => PassValues[P],
   ): Promise<Result<PassOutput<PassValues[P]>, ModelError>> {
-    this.calls.push({ pass, input, options });
+    this.calls.push({ pass, input, options, ...(skeleton === undefined ? {} : { skeleton }) });
     const answer = this.scripts[pass].shift() ?? ok(derive());
     if (!answer.ok) return answer;
     const usage: ModelUsage = {

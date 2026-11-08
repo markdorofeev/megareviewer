@@ -8,6 +8,7 @@ import {
   DecisionId,
   type Intent,
   type Publication,
+  type Tour,
   TourStepId,
 } from "../../../domain/review/index.ts";
 import type { AnalysisInput, AnalysisInputFile } from "../../ports/index.ts";
@@ -301,8 +302,8 @@ export const smallFeatureAnalysis: Analysis = {
         partIds: [receiptRouteHunk.id, importHunk.id],
         kind: "flow",
         via: [],
-        entries: [],
-        codeTitle: null,
+        entries: [receiptRouteHunk.id],
+        codeTitle: "GET /orders/:id/receipt",
         merged: [],
       },
       {
@@ -313,7 +314,7 @@ export const smallFeatureAnalysis: Analysis = {
         kind: "flow",
         via: [],
         entries: [],
-        codeTitle: null,
+        codeTitle: "renderReceipt",
         merged: [],
       },
       {
@@ -321,10 +322,10 @@ export const smallFeatureAnalysis: Analysis = {
         title: "Configuration",
         explanation: "New receipt settings, and an unrelated rate limit change.",
         partIds: [cacheTtlHunk.id, receiptsConfigHunk.id, rateLimitHunk.id],
-        kind: "flow",
+        kind: "supporting",
         via: [],
         entries: [],
-        codeTitle: null,
+        codeTitle: "Other changes in config",
         merged: [],
       },
     ],
@@ -368,6 +369,17 @@ export const smallFeatureAnalysis: Analysis = {
   error: null,
   createdAt: "2026-10-21T09:00:00Z",
   updatedAt: "2026-10-21T09:01:10Z",
+};
+
+/** The code's tour of the small-feature PR, which the fixture analysis's tour titles. */
+export const smallFeatureSkeleton: Tour = {
+  steps: (smallFeatureAnalysis.tour?.steps ?? []).map((step) => ({
+    ...step,
+    title: step.codeTitle ?? step.title,
+    explanation: "Read by the code.",
+    codeTitle: null,
+  })),
+  builtBy: "code",
 };
 
 /** A valid publication for the small-feature PR: a summary and one inline comment. */

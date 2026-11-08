@@ -51,8 +51,8 @@ export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisMo
     },
     risk: (input, intent, options) => model.risk(input, intent, options),
     decisions: (input, intent, options) => model.decisions(input, intent, options),
-    tour: (input, intent, risk, decisions, options) =>
-      model.tour(input, intent, risk, decisions, options),
+    tour: (input, intent, risk, decisions, skeleton, options) =>
+      model.tour(input, intent, risk, decisions, skeleton, options),
   };
 };
 

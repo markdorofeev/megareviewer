@@ -4,7 +4,7 @@ import {
   type HostError,
   type Publication,
   validateRiskCoverage,
-  validateTour,
+  validateTourTitles,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import type { AnalysisInput } from "../ports/index.ts";
@@ -31,6 +31,7 @@ import {
   smallFeatureInput,
   smallFeatureIntent,
   smallFeaturePublication,
+  smallFeatureSkeleton,
 } from "./index.ts";
 
 const unauthorized: HostError = {
@@ -225,13 +226,14 @@ describe("FakeTicketSource", () => {
 });
 
 describe("FakeAnalysisModel", () => {
+  const skeleton = { tour: smallFeatureSkeleton, parts: [] };
   const required = new Set(smallFeatureInput.files.flatMap((f) => f.hunks.map((h) => h.id)));
 
   it("derives outputs that pass validation", async () => {
     const model = new FakeAnalysisModel();
     const risk = await model.risk(smallFeatureInput, smallFeatureIntent);
     const decisions = await model.decisions(smallFeatureInput, smallFeatureIntent);
-    const tour = await model.tour(smallFeatureInput, smallFeatureIntent, [], []);
+    const tour = await model.tour(smallFeatureInput, smallFeatureIntent, [], [], skeleton);
 
     expect(risk.ok && validateRiskCoverage(risk.value.value, required)).toEqual([]);
     expect(decisions.ok && decisions.value.value.map((d) => d.title)).toEqual([
@@ -239,24 +241,16 @@ describe("FakeAnalysisModel", () => {
       "Changes src/routes/orders.ts",
       "Changes src/services/receipts.ts",
     ]);
-    const steps = tour.ok ? tour.value.value.steps : [];
-    expect(
-      validateTour({ steps: steps.map((step) => ({ partIds: step.hunkIds })) }, required),
-    ).toEqual([]);
+    expect(tour.ok && validateTourTitles(tour.value.value, smallFeatureSkeleton)).toEqual([]);
   });
 
-  it("leaves out files whose hunks are all mechanical", async () => {
-    const [first, ...rest] = smallFeatureInput.files;
-    if (first === undefined) throw new Error("fixture has no files");
-    const input: AnalysisInput = {
-      ...smallFeatureInput,
-      files: [{ ...first, mechanical: true, hunks: [] }, ...rest],
-    };
-    const tour = await new FakeAnalysisModel().tour(input, smallFeatureIntent, [], []);
-    expect(tour.ok && tour.value.value.steps.map((step) => step.title)).toEqual([
-      "src/routes/orders.ts",
-      "src/services/receipts.ts",
-    ]);
+  it("keeps the code's titles and records the tour it was given", async () => {
+    const model = new FakeAnalysisModel();
+    const tour = await model.tour(smallFeatureInput, smallFeatureIntent, [], [], skeleton);
+    expect(tour.ok && tour.value.value.steps.map((step) => step.title)).toEqual(
+      smallFeatureSkeleton.steps.map((step) => step.title),
+    );
+    expect(model.callsTo("tour")[0]?.skeleton).toBe(skeleton);
   });
 
   it("has no stated intent without a description or tickets", async () => {

@@ -1,26 +1,21 @@
-import type {
-  CallGraphHint,
-  FileChange,
-  HunkId,
-  HunkPart,
-  PartId,
-} from "../../domain/diff/index.ts";
+import type { HunkId, PartId } from "../../domain/diff/index.ts";
 import {
+  applyTourTitles,
   type CoverageProblem,
-  codeTour,
   type Decision,
   DecisionId,
   type Intent,
+  MAX_EXPLANATION,
+  MAX_TITLE,
   type ModelError,
   type ModelPass,
   type ModelUsage,
-  partsOfHunks,
   type RiskAssessment,
   type Tour,
-  TourStepId,
+  type TourTitlesProblem,
   validateHunkReferences,
   validateRiskCoverage,
-  validateTour,
+  validateTourTitles,
 } from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
 import type {
@@ -30,6 +25,7 @@ import type {
   ModelRisk,
   PassOptions,
   PassOutput,
+  TourSkeleton,
 } from "../ports/index.ts";
 import { count } from "./text.ts";
 
@@ -84,12 +80,6 @@ const RISK_FEEDBACK: Feedback = {
   missing: (id) => `${id} has no risk class. Classify every hunk sent in full exactly once.`,
   duplicate: (id) => `${id} is classified more than once.`,
   unknown: (id) => `${id} isn't a hunk sent in full, so don't classify it.`,
-};
-
-const TOUR_FEEDBACK: Feedback = {
-  missing: (id) => `${id} is in no step. Put every hunk sent in full in exactly one step.`,
-  duplicate: (id) => `${id} is in more than one step.`,
-  unknown: (id) => `${id} isn't a hunk sent in full, so leave it out of the tour.`,
 };
 
 const describeProblem = (feedback: Feedback) => (problem: CoverageProblem) =>
@@ -222,9 +212,38 @@ export const runDecisions = async (
   };
 };
 
+const TITLES_FEEDBACK: (problem: TourTitlesProblem) => string = (problem) => {
+  const { stepId } = problem;
+  switch (problem.kind) {
+    case "missing":
+      return `${stepId} has no title. Title every step of the tour exactly once.`;
+    case "duplicate":
+      return `${stepId} is titled more than once.`;
+    case "unknown":
+      return `${stepId} isn't a step of the tour, so don't title it.`;
+    case "blank":
+      return `${stepId} has a blank ${problem.field}.`;
+    case "too-long":
+      return `${stepId}'s ${problem.field} is longer than ${problem.field === "title" ? MAX_TITLE : MAX_EXPLANATION} characters.`;
+    case "merge-of-flow":
+      return `${stepId} is a flow, and only supporting steps can be merged.`;
+    case "merge-unknown":
+      return `${stepId} isn't a step of the tour, so it can't be merged.`;
+    case "merged-twice":
+      return `${stepId} is merged more than once.`;
+    case "merge-no-reason":
+      return `The merge of ${stepId} has no reason.`;
+    case "merge-into-unknown":
+      return `${stepId} is merged into ${problem.intoStepId}, which isn't a step of the tour.`;
+    case "merge-into-merged":
+      return `${stepId} is merged into ${problem.intoStepId}, which is merged itself.`;
+  }
+};
+
 /**
- * Never fails: a tour the model can't build is replaced by the one from the call graph. The tour
- * names candidate parts, for the caller to join back.
+ * Titles the code's tour. Never fails: when the model's titles are still invalid after a retry,
+ * or the pass fails, the steps keep the code's titles. `skeleton` is the tour as the code built
+ * it; `view` is the same steps as the model reads them, with the parts joined back.
  */
 export const runTour = async (
   model: AnalysisModel,
@@ -233,67 +252,29 @@ export const runTour = async (
     readonly intent: Intent;
     readonly risk: readonly ModelRisk[];
     readonly decisions: readonly Decision[];
-    readonly files: readonly FileChange[];
-    readonly required: ReadonlySet<HunkId>;
-    /** The candidate parts: the model's tour lists hunks, and each reads as all of its parts. */
-    readonly parts: readonly HunkPart[];
-    readonly callGraph: readonly CallGraphHint[];
-    readonly definitions: ReadonlyMap<PartId, readonly string[]>;
-    readonly generated: ReadonlySet<string>;
-    /** Every hunk's final risk, for the call-graph tour's order. */
-    readonly assessments: readonly RiskAssessment[];
+    readonly skeleton: Tour;
+    readonly view: TourSkeleton;
   },
   logger: Logger,
 ): Promise<{ tour: Tour; usage: readonly ModelUsage[]; warnings: readonly string[] }> => {
-  const { required } = context;
+  const { skeleton } = context;
   const { outcome, usage } = await callChecked(
     "tour",
-    (options) => model.tour(input, context.intent, context.risk, context.decisions, options),
-    // The model sees whole hunks, and it writes no `via`.
-    (tour) =>
-      validateTour(
-        { steps: tour.steps.map((step) => ({ partIds: step.hunkIds })) },
-        required,
-      ).flatMap((problem) =>
-        problem.kind === "via" ? [] : [describeProblem(TOUR_FEEDBACK)(problem)],
-      ),
+    (options) =>
+      model.tour(input, context.intent, context.risk, context.decisions, context.view, options),
+    (titles) => validateTourTitles(titles, skeleton).map(TITLES_FEEDBACK),
     logger,
   );
   const fallback = (reason: string) => ({
-    tour: codeTour({
-      files: context.files,
-      required,
-      parts: context.parts,
-      callGraph: context.callGraph,
-      risk: context.assessments,
-      definitions: context.definitions,
-      generated: context.generated,
-    }),
+    tour: skeleton,
     usage,
-    warnings: [`${reason}, so the tour follows the call graph instead`],
+    warnings: [`${reason}, so its steps keep the code's titles`],
   });
   if (!outcome.ok) {
-    return fallback(`The guided tour couldn't be built (${outcome.error.message})`);
+    return fallback(`The guided tour couldn't be titled (${outcome.error.message})`);
   }
   if (outcome.value.problems.length > 0) {
-    return fallback("The guided tour didn't cover every hunk exactly once");
+    return fallback("The model's titles for the guided tour weren't valid");
   }
-  const partsOf = partsOfHunks(required, context.parts);
-  return {
-    tour: {
-      steps: outcome.value.value.steps.map(({ hunkIds, ...step }, index) => ({
-        ...step,
-        id: TourStepId.parse(`s${index + 1}`),
-        partIds: hunkIds.flatMap((id) => partsOf.get(id) ?? [id]),
-        kind: "flow" as const,
-        via: [],
-        entries: [],
-        codeTitle: null,
-        merged: [],
-      })),
-      builtBy: "model",
-    },
-    usage,
-    warnings: [],
-  };
+  return { tour: applyTourTitles(skeleton, outcome.value.value), usage, warnings: [] };
 };

@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { type HunkId, type HunkPart, PartId } from "../diff/index.ts";
+import type { Tour } from "./tour.ts";
+import { MAX_EXPLANATION, MAX_TITLE, type TourTitles } from "./tour-titles.ts";
 
 /**
  * A hunk or part a pass must cover exactly once, but didn't: missing, listed more than once,
@@ -97,3 +99,76 @@ export const validateRiskCoverage = (
     assessments.map((assessment) => assessment.hunkId),
     requiredHunkIds,
   );
+
+/**
+ * A problem with the model's titles for the code's tour. Titles: a step without one, with more
+ * than one, or one for a step the tour doesn't have; blank or too long. Merges: of a step that
+ * isn't supporting, into a step the tour doesn't have or that is merged itself, or twice.
+ */
+export type TourTitlesProblem =
+  | { readonly kind: "missing" | "duplicate" | "unknown"; readonly stepId: string }
+  | {
+      readonly kind: "blank" | "too-long";
+      readonly stepId: string;
+      readonly field: "title" | "explanation";
+    }
+  | {
+      readonly kind: "merge-of-flow" | "merge-unknown" | "merged-twice" | "merge-no-reason";
+      readonly stepId: string;
+    }
+  | {
+      readonly kind: "merge-into-unknown" | "merge-into-merged";
+      readonly stepId: string;
+      readonly intoStepId: string;
+    };
+
+/** Every step of the code's tour has exactly one title, and every merge is of a supporting step. */
+export const validateTourTitles = (titles: TourTitles, skeleton: Tour): TourTitlesProblem[] => {
+  const problems: TourTitlesProblem[] = [];
+  const kindOf = new Map<string, Tour["steps"][number]["kind"]>(
+    skeleton.steps.map((step) => [step.id, step.kind]),
+  );
+  const titled = new Set<string>();
+  const reported = new Set<string>();
+  for (const step of titles.steps) {
+    const { stepId } = step;
+    if (!kindOf.has(stepId) || titled.has(stepId)) {
+      if (!reported.has(stepId)) {
+        problems.push({ kind: kindOf.has(stepId) ? "duplicate" : "unknown", stepId });
+      }
+      reported.add(stepId);
+      continue;
+    }
+    titled.add(stepId);
+    for (const [field, max] of [
+      ["title", MAX_TITLE],
+      ["explanation", MAX_EXPLANATION],
+    ] as const) {
+      const text = step[field].trim();
+      if (text === "") problems.push({ kind: "blank", stepId, field });
+      else if (text.length > max) problems.push({ kind: "too-long", stepId, field });
+    }
+  }
+  for (const id of kindOf.keys()) {
+    if (!titled.has(id) && !reported.has(id)) problems.push({ kind: "missing", stepId: id });
+  }
+
+  const merging = new Set(titles.merges.map((merge) => merge.stepId));
+  const merged = new Set<string>();
+  for (const { stepId, intoStepId, reason } of titles.merges) {
+    const kind = kindOf.get(stepId);
+    if (merged.has(stepId)) {
+      problems.push({ kind: "merged-twice", stepId });
+      continue;
+    }
+    merged.add(stepId);
+    if (kind === undefined) problems.push({ kind: "merge-unknown", stepId });
+    else if (kind === "flow") problems.push({ kind: "merge-of-flow", stepId });
+    if (!kindOf.has(intoStepId)) problems.push({ kind: "merge-into-unknown", stepId, intoStepId });
+    else if (merging.has(intoStepId)) {
+      problems.push({ kind: "merge-into-merged", stepId, intoStepId });
+    }
+    if (reason.trim() === "") problems.push({ kind: "merge-no-reason", stepId });
+  }
+  return problems;
+};

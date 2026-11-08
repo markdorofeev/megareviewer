@@ -21,6 +21,7 @@ import {
   smallFeatureAnalysis,
   smallFeatureInput,
   smallFeatureIntent,
+  smallFeatureSkeleton,
 } from "../application/testing/index.ts";
 import {
   anthropicConfigured,
@@ -241,7 +242,12 @@ describe("Anthropic credentials", () => {
     };
     expect(await model.checkSize(smallFeatureInput)).toEqual(failure);
     expect(await model.intent(smallFeatureInput)).toEqual(failure);
-    expect(await model.tour(smallFeatureInput, smallFeatureIntent, [], [])).toEqual(failure);
+    expect(
+      await model.tour(smallFeatureInput, smallFeatureIntent, [], [], {
+        tour: smallFeatureSkeleton,
+        parts: [],
+      }),
+    ).toEqual(failure);
   });
 });
 

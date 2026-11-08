@@ -124,7 +124,7 @@
         },
         {
           "type": "text",
-          "text": "{\"answer\":{\"pass\":\"tour\",\"tour\":{\"steps\":[{\"title\":\"The new endpoint\",\"explanation\":\"Requests for a receipt load the user's order and hand it to the renderer.\",\"hunkIds\":[\"h_5c94b39812b2e8f8\",\"h_88747b653fc82f6d\"]},{\"title\":\"Rendering and caching receipts\",\"explanation\":\"The receipt is plain text, cached per order for an hour.\",\"hunkIds\":[\"h_a2e0236601ffc778\"]},{\"title\":\"Configuration\",\"explanation\":\"New receipt settings, and an unrelated rate limit change.\",\"hunkIds\":[\"h_2e2332fa455a2146\",\"h_3822ea0f7192c70e\",\"h_fbaf18305007c20a\"]}]}}}",
+          "text": "{\"answer\":{\"pass\":\"tour\",\"tour\":{\"steps\":[{\"stepId\":\"s1\",\"title\":\"The new endpoint\",\"explanation\":\"Requests for a receipt load the user's order and hand it to the renderer.\"},{\"stepId\":\"s2\",\"title\":\"Rendering and caching receipts\",\"explanation\":\"The receipt is plain text, cached per order for an hour.\"},{\"stepId\":\"s3\",\"title\":\"Configuration\",\"explanation\":\"New receipt settings, and an unrelated rate limit change.\"}],\"merges\":[]}}}",
           "citations": null
         }
       ],

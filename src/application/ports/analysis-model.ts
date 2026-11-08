@@ -4,6 +4,7 @@ import {
   type FileStatus,
   type Hunk,
   HunkId,
+  type HunkPart,
   type MechanicalProof,
 } from "../../domain/diff/index.ts";
 import {
@@ -13,7 +14,9 @@ import {
   type ModelError,
   type ModelUsage,
   type Ticket,
-  TourStep,
+  type Tour,
+  TourStepTitle,
+  TourTitles,
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
 
@@ -77,26 +80,21 @@ export const DecisionDraft = Decision.unwrap().omit({ id: true }).readonly();
 export type DecisionDraft = z.infer<typeof DecisionDraft>;
 
 /**
- * The model writes steps without `kind`, `via` and `entries`: its steps are all flows that repeat
- * nothing, and it doesn't say where they start. It sees whole hunks, so its steps list hunks; the
- * server expands each to its parts.
+ * The tour pass titles the code's tour: a title and explanation per step, by the step's ID, and
+ * merges of supporting steps into the steps they belong with. It can't move or drop a part.
  */
-export const TourStepDraft = TourStep.unwrap()
-  .omit({
-    id: true,
-    kind: true,
-    via: true,
-    entries: true,
-    partIds: true,
-    codeTitle: true,
-    merged: true,
-  })
-  .extend({ hunkIds: z.array(HunkId).readonly() })
-  .readonly();
-export type TourStepDraft = z.infer<typeof TourStepDraft>;
+export const TourStepDraft = TourStepTitle;
+export type TourStepDraft = TourStepTitle;
 
-export const TourDraft = z.object({ steps: z.array(TourStepDraft).readonly() }).readonly();
-export type TourDraft = z.infer<typeof TourDraft>;
+export const TourDraft = TourTitles;
+export type TourDraft = TourTitles;
+
+/** The code's tour as the tour pass reads it: its steps, and the parts they name. */
+export interface TourSkeleton {
+  readonly tour: Tour;
+  /** Split hunks' parts; a part ID that isn't here is a whole hunk. */
+  readonly parts: readonly HunkPart[];
+}
 
 export interface AnalysisModel {
   /** Changes whenever prompts, schemas or the model change. Part of the cache key. */
@@ -122,6 +120,7 @@ export interface AnalysisModel {
     intent: Intent,
     risk: readonly ModelRisk[],
     decisions: readonly Decision[],
+    skeleton: TourSkeleton,
     options?: PassOptions,
   ): Promise<Result<PassOutput<TourDraft>, ModelError>>;
 }
