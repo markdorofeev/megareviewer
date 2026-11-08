@@ -138,6 +138,8 @@ const analysis: Analysis = {
     .slice(0, -1)
     .map((file, at) => ({ from: file.path, to: files[at + 1]?.path ?? file.path })),
   generated: [],
+  checkout: "none",
+  unchangedCallers: [],
   intent: null,
   risk,
   decisions: [

@@ -1,6 +1,6 @@
 # Stage 30: Unchanged callers from a local checkout
 
-**Status:** Not started
+**Status:** In progress (on main)
 **Depends on:** 27 (the overview shows them); after 28, so callers point at parts
 **Unblocks:** the rest of ARCHITECTURE.md "Later" item 1 (full repository context from the checkout)
 **Owns:** `src/application/ports/local-checkout.ts` (new), `src/adapters/git/` (new), `src/domain/diff/call-graph.ts` (callers outside the PR), `src/application/use-cases/collect.ts` and `prep.ts`, `src/cli/` (finding the checkout), the callers list in `web/src/pages/review/` and the overview's outside nodes

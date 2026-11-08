@@ -31,5 +31,7 @@ export {
   MechanicalProof,
   MechanicalProofKind,
   PartId,
+  UnchangedCallers,
+  UnchangedUse,
 } from "./types.ts";
 export { lockfileWarnings } from "./warnings.ts";

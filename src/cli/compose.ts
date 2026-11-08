@@ -182,6 +182,7 @@ export const compose = async (
           modelEnabled: options.ai,
           store,
           fileCache: store,
+          checkouts: { find: async () => null },
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),
           clock,
           logger,

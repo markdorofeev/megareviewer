@@ -127,3 +127,33 @@ export const CallGraphHint = z
   })
   .readonly();
 export type CallGraphHint = z.infer<typeof CallGraphHint>;
+
+/**
+ * A use, in a file the PR doesn't change, of a definition the PR changes: a call, or a type use.
+ * `excerpt` is at most 5 lines around it, the first being line `excerpt.start`.
+ */
+export const UnchangedUse = z
+  .object({
+    path: z.string().min(1),
+    line: LineNumber,
+    use: z.enum(["call", "type"]),
+    excerpt: z
+      .object({ start: LineNumber, lines: z.array(z.string()).max(5).readonly() })
+      .readonly(),
+  })
+  .readonly();
+export type UnchangedUse = z.infer<typeof UnchangedUse>;
+
+/**
+ * The unchanged callers of one definition the PR changes, which part `partId` changes: at most 50
+ * uses, in path and line order, and how many more there are.
+ */
+export const UnchangedCallers = z
+  .object({
+    partId: PartId,
+    symbol: z.string().min(1),
+    uses: z.array(UnchangedUse).max(50).readonly(),
+    more: z.number().int().nonnegative(),
+  })
+  .readonly();
+export type UnchangedCallers = z.infer<typeof UnchangedCallers>;

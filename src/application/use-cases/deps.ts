@@ -7,6 +7,7 @@ import type {
   CodeParser,
   FileCache,
   GitHost,
+  LocalCheckouts,
   Logger,
   TicketSource,
 } from "../ports/index.ts";
@@ -21,6 +22,8 @@ export interface AppDeps {
   readonly store: AnalysisStore;
   readonly fileCache: FileCache;
   readonly parser: CodeParser;
+  /** Where unchanged callers are read from, when a checkout of the PR's repository is found. */
+  readonly checkouts: LocalCheckouts;
   readonly events: AnalysisEvents;
   readonly clock: Clock;
   readonly logger: Logger;

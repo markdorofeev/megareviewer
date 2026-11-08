@@ -546,6 +546,8 @@ const analysis: Analysis = {
     { from: "src/services/receipts.ts", to: "src/lib/money.ts" },
   ],
   generated: [],
+  checkout: "none",
+  unchangedCallers: [],
   intent: {
     stated: {
       summary:

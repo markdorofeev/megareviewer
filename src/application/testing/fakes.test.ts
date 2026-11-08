@@ -11,14 +11,17 @@ import type { AnalysisInput } from "../ports/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
+  CHECKOUT_CONTRACT_FILES,
   describeAnalysisModelContract,
   describeAnalysisStoreContract,
   describeFileCacheContract,
   describeGitHostContract,
+  describeLocalCheckoutContract,
   describeTicketSourceContract,
   FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
+  FakeLocalCheckout,
   FakeTicketSource,
   FixedClock,
   InMemoryAnalysisStore,
@@ -92,6 +95,11 @@ describeTicketSourceContract("fake", {
 
 describeAnalysisStoreContract("in-memory", () => new InMemoryAnalysisStore());
 describeFileCacheContract("in-memory", () => new InMemoryFileCache());
+
+describeLocalCheckoutContract("fake", async () => {
+  const sha = "c".repeat(40);
+  return { checkout: new FakeLocalCheckout({ [sha]: CHECKOUT_CONTRACT_FILES }), sha };
+});
 
 describeAnalysisModelContract("fake", () => new FakeAnalysisModel());
 

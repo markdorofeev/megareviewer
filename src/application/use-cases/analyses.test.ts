@@ -19,6 +19,7 @@ import {
   FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
+  FakeLocalCheckouts,
   FakeTicketSource,
   FixedClock,
   InMemoryAnalysisStore,
@@ -56,6 +57,7 @@ const setup = (
     onlyGithub?: boolean;
     fileCache?: InMemoryFileCache;
     modelEnabled?: boolean;
+    checkouts?: FakeLocalCheckouts;
   } = {},
 ) => {
   const clock = new FixedClock("2026-10-21T09:00:00Z");
@@ -94,6 +96,7 @@ const setup = (
       modelEnabled: options.modelEnabled ?? true,
       store,
       fileCache,
+      checkouts: options.checkouts ?? new FakeLocalCheckouts(),
       parser,
       events,
       clock,
@@ -188,7 +191,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("9+fake-model/1");
+    expect(analysis.key.pipelineVersion).toBe("10+fake-model/1");
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
     );
@@ -974,7 +977,7 @@ describe("without the model", () => {
       decisions: "skipped",
       tour: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("9+no-model");
+    expect(analysis.key.pipelineVersion).toBe("10+no-model");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);

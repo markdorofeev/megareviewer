@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { CallGraphHint, FileChange, FileLink, HunkPart, MechanicalProof } from "../diff/index.ts";
+import {
+  CallGraphHint,
+  FileChange,
+  FileLink,
+  HunkPart,
+  MechanicalProof,
+  UnchangedCallers,
+} from "../diff/index.ts";
 import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
 import { Intent, Ticket } from "./intent.ts";
@@ -69,6 +76,13 @@ export const FilesFetched = z
   .readonly();
 export type FilesFetched = z.infer<typeof FilesFetched>;
 
+/**
+ * Whether the analysis read the PR's repository from a local checkout: "read", or why not. "none":
+ * no checkout of the repository was found. "missing-commit": one was, without the PR's head commit.
+ */
+export const CheckoutStatus = z.enum(["read", "none", "missing-commit"]);
+export type CheckoutStatus = z.infer<typeof CheckoutStatus>;
+
 export const Analysis = z
   .object({
     id: AnalysisId,
@@ -90,6 +104,9 @@ export const Analysis = z
     fileLinks: z.array(FileLink).readonly(),
     /** Paths whose first lines say a tool wrote them. Grouped and faded, never hidden. */
     generated: z.array(z.string()).readonly(),
+    checkout: CheckoutStatus,
+    /** Read from the checkout: uses outside the PR of the definitions it changes. */
+    unchangedCallers: z.array(UnchangedCallers).readonly(),
     intent: Intent.nullable(),
     risk: z.array(RiskAssessment).readonly(),
     decisions: z.array(Decision).readonly(),

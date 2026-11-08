@@ -2,6 +2,7 @@ import { createAnalysisEvents } from "../src/application/events/index.ts";
 import type { AnalysisModel, CodeParser, Logger } from "../src/application/ports/index.ts";
 import {
   FakeGitHost,
+  FakeLocalCheckouts,
   FakeTicketSource,
   InMemoryAnalysisStore,
   InMemoryFileCache,
@@ -48,6 +49,7 @@ export const analyzeCase = async (
       modelEnabled: true,
       store,
       fileCache: new InMemoryFileCache(),
+      checkouts: new FakeLocalCheckouts(),
       parser: options.parser,
       events,
       clock: systemClock,

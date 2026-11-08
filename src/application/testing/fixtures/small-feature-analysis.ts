@@ -160,7 +160,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "9+fake-model/1",
+  pipelineVersion: "10+fake-model/1",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -221,6 +221,8 @@ export const smallFeatureAnalysis: Analysis = {
   callGraph: smallFeatureInput.callGraph,
   fileLinks: [{ from: "src/routes/orders.ts", to: "src/services/receipts.ts" }],
   generated: [],
+  checkout: "none",
+  unchangedCallers: [],
   intent: smallFeatureIntent,
   risk: [
     {

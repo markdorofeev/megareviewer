@@ -22,5 +22,12 @@ export type {
 } from "./code-parser.ts";
 export type { FileCache } from "./file-cache.ts";
 export type { FileAt, GitHost, PublishOptions } from "./git-host.ts";
+export {
+  type CheckoutError,
+  type CheckoutFile,
+  type LocalCheckout,
+  type LocalCheckouts,
+  MAX_CHECKOUT_FILE_BYTES,
+} from "./local-checkout.ts";
 export type { LogFields, Logger } from "./logger.ts";
 export type { TicketLookup, TicketSource } from "./ticket-source.ts";
