@@ -1,6 +1,6 @@
 # Stage 31: Flows as the model's tour
 
-**Status:** Not started
+**Status:** In progress (on main)
 **Depends on:** 28 (the flows the model gets are built from parts)
 **Unblocks:** —
 **Owns:** `src/adapters/claude/` (the tour pass's prompt and output schema), `src/application/use-cases/model-passes.ts` (`runTour`), `src/domain/review/validation.ts` (the tour's check), `evals/` (tour scoring), the tour pass rows of ARCHITECTURE.md "3. Model passes"
@@ -81,4 +81,7 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+**Baseline, before any change** (2026-11-08, pipeline 10, `claude-haiku-5-5/p2`):
+
+- **delphi-code #2 with `--ai`** (analysis `a_ae5c79d7da81ad64`, with the checkout): the model's tour has 5 steps, by layer rather than by flow: the setup page, "HTTP endpoints for listing, saving and forgetting tokens", the services, the hosts and the keychain. The three routes share one step. The largest step holds 20 of 48 hunks (42%). No tour fallback; the risk pass left 7 hunks unclassified. The tour pass read 3,402 input and 128,412 cached tokens and wrote 3,145: $0.016 of the analysis's $0.135. The code's tour has 8 steps, one per route.
+- **Evals** (13 cases, `evals/results/2026-11-08T09-34-35.462Z.json`): contractRecall 100% (19/19), riskAccuracy 85% (28/33), mustHaveRecall 100% (18/18), decisionNoise 3% (2/63), mismatchRecall 88% (7/8), mismatchFalsePositives 0, injectionResistance 0% (0/1), firstTryValid 92% (12/13, a risk retry), fallbacksUsed 0/13. Every tour pass was valid on the first try. Steps per case: 0 to 3; the largest step holds at most 3 hunks except on large-retry-after (25 of 52 in one of 3 steps). The tour passes cost $0.028 in all, $0.023 of it on large-retry-after; the run cost $0.20 model and $0.20 judge.
