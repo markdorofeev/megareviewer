@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { HostError, PullRequest } from "../../domain/review/index.ts";
+import type { HostError, PullRequest, RepoRef } from "../../domain/review/index.ts";
 import { createAnalysisEvents } from "../events/index.ts";
+import type { FileAt } from "../ports/index.ts";
 import {
   FakeAnalysisModel,
   FakeCodeParser,
@@ -20,7 +21,7 @@ const BASE = "b".repeat(40);
 const HEAD = "c".repeat(40);
 const paths = Array.from({ length: 12 }, (_, i) => `src/f${i}.ts`);
 
-/** Twelve modified files: with .gitattributes, 25 files to fetch, so three batches. */
+/** Twelve modified files: with .gitattributes, 25 files to fetch, so nine batches. */
 const pullRequest: PullRequest = {
   ...smallFeature.pullRequest,
   baseSha: BASE,
@@ -40,8 +41,24 @@ const networkError: HostError = {
   retryAfterSeconds: null,
 };
 
+/** Counts the getFiles calls in flight at once. */
+class ConcurrencyTrackingGitHost extends FakeGitHost {
+  inFlight = 0;
+  maxInFlight = 0;
+
+  override async getFiles(repo: RepoRef, files: readonly FileAt[]) {
+    this.inFlight += 1;
+    this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
+    // Yields, so batches started together overlap.
+    await null;
+    const found = await super.getFiles(repo, files);
+    this.inFlight -= 1;
+    return found;
+  }
+}
+
 const setup = () => {
-  const host = new FakeGitHost({ host: "github" });
+  const host = new ConcurrencyTrackingGitHost({ host: "github" });
   host.setFiles(repo, BASE, Object.fromEntries(paths.map((path) => [path, `old ${path}`])));
   host.setFiles(repo, HEAD, Object.fromEntries(paths.map((path) => [path, `new ${path}`])));
   const fileCache = new InMemoryFileCache();
@@ -66,12 +83,13 @@ const fetchedPaths = (host: FakeGitHost) =>
   host.getFilesCalls.flat().map(({ sha, path }) => `${sha === BASE ? "base" : "head"}:${path}`);
 
 describe("collect", () => {
-  it("fetches files in batches of 10", async () => {
+  it("fetches files in batches of 3, six at a time", async () => {
     const { host, deps } = setup();
 
     const collected = await collect(deps, host, pullRequest);
 
-    expect(host.getFilesCalls.map((call) => call.length)).toEqual([10, 10, 5]);
+    expect(host.getFilesCalls.map((call) => call.length)).toEqual([3, 3, 3, 3, 3, 3, 3, 3, 1]);
+    expect(host.maxInFlight).toBe(6);
     expect(collected.ok && collected.value.headContents.get("src/f3.ts")).toBe("new src/f3.ts");
     expect(collected.ok && collected.value.baseContents.get("src/f3.ts")).toBe("old src/f3.ts");
   });
@@ -113,7 +131,7 @@ describe("collect", () => {
         message: `Couldn't fetch the pull request's files: ${networkError.message}`,
       },
     });
-    const firstBatch = fetchedPaths(host).slice(0, 10);
+    const firstBatch = fetchedPaths(host).slice(0, 3);
 
     host.getFilesCalls.length = 0;
     const retried = await collect(deps, host, pullRequest);
@@ -132,7 +150,7 @@ describe("collect", () => {
       reported.push(progress);
     });
 
-    expect(reported).toHaveLength(3);
+    expect(reported).toHaveLength(5);
     expect(reported[0]).toEqual({ done: 13, total: 25 });
     expect(reported.at(-1)).toEqual({ done: 25, total: 25 });
   });
