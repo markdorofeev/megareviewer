@@ -160,7 +160,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "10+fake-model/1",
+  pipelineVersion: "11+fake-model/1",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -302,6 +302,8 @@ export const smallFeatureAnalysis: Analysis = {
         kind: "flow",
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       },
       {
         id: s("s2"),
@@ -311,6 +313,8 @@ export const smallFeatureAnalysis: Analysis = {
         kind: "flow",
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       },
       {
         id: s("s3"),
@@ -320,6 +324,8 @@ export const smallFeatureAnalysis: Analysis = {
         kind: "flow",
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       },
     ],
     builtBy: "model",

@@ -399,6 +399,8 @@ export const codeTour = (input: CodeTourInput): Tour => {
         kind: "flow" as const,
         via: flow.via,
         entries: flow.kind === "root" ? [] : flow.starts,
+        codeTitle: null,
+        merged: [],
       };
     }),
     ...supportingSteps(
@@ -542,6 +544,8 @@ const supportingSteps = (
         kind: "supporting" as const,
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       };
     });
 };

@@ -288,6 +288,8 @@ export const runTour = async (
         kind: "flow" as const,
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       })),
       builtBy: "model",
     },

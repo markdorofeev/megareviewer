@@ -66,6 +66,8 @@ const step = (
   kind: entries.length > 0 || n < 90 ? "flow" : "supporting",
   via: [],
   entries: entries.map(h),
+  codeTitle: null,
+  merged: [],
 });
 
 const input = (files: readonly FileChange[], more: Partial<OverviewInput> = {}): OverviewInput => ({
@@ -310,6 +312,8 @@ describe("fileOverview", () => {
         kind: "flow",
         via: [],
         entries: [part(n)],
+        codeTitle: null,
+        merged: [],
       }),
     );
     const overview = fileOverview(input([routes], { parts }), steps);

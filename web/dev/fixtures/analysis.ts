@@ -682,6 +682,8 @@ const analysis: Analysis = {
         kind: "flow",
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       },
       {
         id: TourStepId.parse("s2"),
@@ -691,6 +693,8 @@ const analysis: Analysis = {
         kind: "flow",
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       },
       {
         id: TourStepId.parse("s3"),
@@ -701,6 +705,8 @@ const analysis: Analysis = {
         kind: "flow",
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       },
       {
         id: TourStepId.parse("s4"),
@@ -710,6 +716,8 @@ const analysis: Analysis = {
         kind: "flow",
         via: [],
         entries: [],
+        codeTitle: null,
+        merged: [],
       },
     ],
     builtBy: "model",

@@ -500,6 +500,8 @@ describe("map", () => {
       kind: "flow" as const,
       via: [],
       entries: [],
+      codeTitle: null,
+      merged: [],
       ...extra,
     });
     renderReview({
@@ -517,6 +519,8 @@ describe("map", () => {
               step("s2", "Command: main in cli.ts", [h.receiptFormatting], {
                 via: [h.retryAndCache],
                 entries: [],
+                codeTitle: null,
+                merged: [],
               }),
               step("s3", "Other changes in src/routes", [h.formatMoneyRemoved], {
                 kind: "supporting",
@@ -910,6 +914,8 @@ const withRequest = (): AnalysisView => {
     kind: "flow" as const,
     via,
     entries: partIds.slice(0, 1),
+    codeTitle: null,
+    merged: [],
   });
   return {
     ...fixture,

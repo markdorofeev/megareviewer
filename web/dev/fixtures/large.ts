@@ -162,6 +162,8 @@ const analysis: Analysis = {
       kind: "flow" as const,
       via: [],
       entries: [],
+      codeTitle: null,
+      merged: [],
     })),
     builtBy: "code",
   },

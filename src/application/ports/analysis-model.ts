@@ -82,7 +82,15 @@ export type DecisionDraft = z.infer<typeof DecisionDraft>;
  * server expands each to its parts.
  */
 export const TourStepDraft = TourStep.unwrap()
-  .omit({ id: true, kind: true, via: true, entries: true, partIds: true })
+  .omit({
+    id: true,
+    kind: true,
+    via: true,
+    entries: true,
+    partIds: true,
+    codeTitle: true,
+    merged: true,
+  })
   .extend({ hunkIds: z.array(HunkId).readonly() })
   .readonly();
 export type TourStepDraft = z.infer<typeof TourStepDraft>;

@@ -192,7 +192,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("10+fake-model/1");
+    expect(analysis.key.pipelineVersion).toBe("11+fake-model/1");
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
     );
@@ -736,6 +736,8 @@ describe("the analysis pipeline", () => {
             kind: "flow",
             via: [],
             entries: [],
+            codeTitle: null,
+            merged: [],
           },
         ],
         builtBy: "model",
@@ -978,7 +980,7 @@ describe("without the model", () => {
       decisions: "skipped",
       tour: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("10+no-model");
+    expect(analysis.key.pipelineVersion).toBe("11+no-model");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
@@ -1062,7 +1064,7 @@ describe("with a local checkout", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
       expect(analysis.key.pipelineVersion).toBe(
-        `10+${modelEnabled ? "fake-model/1" : "no-model"}+checkout`,
+        `11+${modelEnabled ? "fake-model/1" : "no-model"}+checkout`,
       );
       expect(analysis.unchangedCallers).toEqual([
         {
@@ -1139,7 +1141,7 @@ describe("with a local checkout", () => {
       });
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
-      expect(analysis.key.pipelineVersion).toBe("10+no-model");
+      expect(analysis.key.pipelineVersion).toBe("11+no-model");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },

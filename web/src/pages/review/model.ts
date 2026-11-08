@@ -158,6 +158,8 @@ export const tourSteps = (analysis: Analysis, index: PartIndex): readonly TourSt
       kind: "supporting",
       via: [],
       entries: [],
+      codeTitle: null,
+      merged: [],
     },
   ];
 };

@@ -21,6 +21,13 @@ export const TourStep = z
     via: z.array(PartId).readonly(),
     /** The parts a flow starts at: its routes, page or command. Empty for the others. */
     entries: z.array(PartId).readonly(),
+    /**
+     * The code's own title, when the model wrote `title`: a flow's entry label, or what a
+     * supporting step holds. Null when `title` is the code's.
+     */
+    codeTitle: z.string().nullable(),
+    /** Supporting steps the model merged into this one: their code title and the model's reason. */
+    merged: z.array(z.object({ title: z.string(), reason: z.string() }).readonly()).readonly(),
   })
   .readonly();
 export type TourStep = z.infer<typeof TourStep>;
@@ -28,7 +35,11 @@ export type TourStep = z.infer<typeof TourStep>;
 export const Tour = z
   .object({
     steps: z.array(TourStep).readonly(),
-    /** model: the tour pass; code: from the call graph, without the model or when its tour failed. */
+    /**
+     * Both are the code's steps from the call graph. model: titled by the tour pass, which may
+     * have merged supporting steps; code: the code's titles, without the model or when the pass
+     * failed.
+     */
     builtBy: z.enum(["model", "code"]),
   })
   .readonly();

@@ -24,6 +24,8 @@ const tour = (...steps: PartId[][]): Tour => ({
     kind: "flow",
     via: [],
     entries: [],
+    codeTitle: null,
+    merged: [],
   })),
   builtBy: "code",
 });
