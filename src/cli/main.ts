@@ -50,7 +50,7 @@ const printSummary = (
   const jira =
     config.jira === null ? "not configured: ticket keys aren't fetched" : config.jira.baseUrl;
   const model = composition.modelEnabled
-    ? "on: intent, decisions and the guided tour come from Claude"
+    ? "on: intent, decisions and the tour's titles come from Claude"
     : "off: start with --ai to add intent, decisions and a guided tour from Claude";
   const repos = checkout?.repos.map(repoName).join(", ") ?? "";
   const local =

@@ -1,6 +1,6 @@
 # Stage 31: Flows as the model's tour
 
-**Status:** In progress (on main)
+**Status:** Done (on main, no PR), with the evals left open (see **Open issues**)
 **Depends on:** 28 (the flows the model gets are built from parts)
 **Unblocks:** —
 **Owns:** `src/adapters/claude/` (the tour pass's prompt and output schema), `src/application/use-cases/model-passes.ts` (`runTour`), `src/domain/review/validation.ts` (the tour's check), `evals/` (tour scoring), the tour pass rows of ARCHITECTURE.md "3. Model passes"
@@ -68,18 +68,31 @@ A separate commit, with a line in stage 02's **Change log**:
 
 ## Definition of done
 
-- [ ] Baseline recorded in this doc's **Notes for later stages**, before the first change.
-- [ ] Contract change commit, with the stage 02 change log line.
-- [ ] Tasks above, with the tests.
-- [ ] Evals run before and after; the summary is in the PR description, and no non-tour score drops.
-- [ ] On delphi-code #2 with `--ai`, the steps are the code's, each route has its own step, and the titles read as behavior. The cost of the tour pass is written next to the baseline's.
-- [ ] ARCHITECTURE.md and DESIGN.md updated as in task 7.
+- [x] Baseline recorded in this doc's **Notes for later stages**, before the first change.
+- [x] Contract change commit, with the stage 02 change log line.
+- [x] Tasks above, with the tests, except task 6 (evals).
+- [ ] Evals run before and after; the summary is in the PR description, and no non-tour score drops. Run before only.
+- [x] On delphi-code #2 with `--ai`, the steps are the code's, each route has its own step, and the titles read as behavior. The cost of the tour pass is written next to the baseline's.
+- [x] ARCHITECTURE.md and DESIGN.md updated as in task 7.
 
 ## Open issues
 
-_None yet._
+- **Evals (task 6) not done, at the user's request.** The tour score still counts only fallbacks and first-try validity: nothing judges titles or merges yet, and the "after" run wasn't made. When it's picked up, the judge rates each step's title against its code and each merge against the step it joins, and the run compares with the baseline below. There were no golden labels for tour grouping to move into the code tour's tests: `evals/labels.ts` labels risk, decisions and mismatches only.
+- **The GET flow on delphi-code #2 holds 32 of 48 hunks** in the code's tour, 33 with the docs the model merged into it: listing the connections reads most of the hosts and services code, and the PUT and DELETE flows pass through it. The model's own tour had a largest step of 20 (42%), by layer. Splitting a large flow is the code's job now; "Moving parts between steps" below is the model's way, if the code can't.
 
 ## Notes for later stages
+
+**After** (analysis `a_77da97f157d587fc`, pipeline `11+claude-haiku-5-5/p3+checkout`): the steps are the code's 8, with Docs merged into the first ("The layer table documents the account connection types and keychain module that the first flow introduces"), so 7. Each route has its own step, titled "Show which Bitbucket and GitHub accounts are connected", "Verify and save a pasted token" and "Forget a saved token", with the route under each. The page is "Setup page section for account connections" and the hosts' command "Account lookups and saved tokens in the network child process". Valid on the first try. The tour pass read 6,126 input and 128,561 cached tokens and wrote 736: $0.011, against $0.016 before. The largest step holds 33 of 48 hunks (69%; see **Open issues**).
+
+Where the code differs from this doc:
+
+- **The contract change came with the pass.** `TourDraft` changed shape, so `runTour` and the adapter couldn't compile against the old one: the first commit added `TourStep.codeTitle` and `merged` alone, and the second changed the port with the pass, the prompt and the pipeline. Both are in stage 02's change log.
+- **`TourStep` gained two fields** the doc didn't name: `codeTitle`, so the page can show the code's title under the model's, and `merged` (`{ title, reason }[]`), so the reason for a merge reaches the reader. A merged step's parts go to the end of the step it joins, and the parts are joined back after merging, so a hunk split between a flow and docs merged into it reads whole again.
+- **The skeleton is built in prep** with the rules' risk, and saved with the prep stage, so the page shows the code's tour while the model passes run. The model's risk doesn't reorder it.
+- **The tour pass still gets risk and decisions,** which help it name what matters in a step. The skeleton goes after them, inside the pass's own message, so the cached PR prefix didn't change.
+- **Validation** also rejects a blank title or explanation, a merge without a reason, and a merge into a step that is merged itself. The model writes step IDs as plain strings, checked against the tour, so a wrong ID is feedback for the retry instead of a parse failure.
+- **The Claude adapter's fixture is still synthetic,** with the tour answer rewritten for the new schema; the live check (`evals/claude-live-check.ts`) passes the code's tour and can record real responses.
+- **Outside the stage's paths:** the page (`MapLayout`, `RiskRail`, `palette`, `overview`, the dev fixtures), the CLI's startup line ("the tour's titles come from Claude"), and README.md's line on `--ai`. The overview read pages' and commands' entries from `step.title`; it reads `codeTitle` first now.
 
 **Baseline, before any change** (2026-11-08, pipeline 10, `claude-haiku-5-5/p2`):
 

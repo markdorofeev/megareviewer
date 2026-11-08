@@ -2,7 +2,7 @@
 
 Turns a GitHub or Bitbucket Cloud pull request into a guided review. Changes are ordered as a tour that follows the call graph, with each test next to the code it tests. Risky changes (dependencies, schemas, auth, CI, removed tests) stand out, and mechanical ones are collapsed with proof. Your review is posted back to the PR.
 
-With `--ai`, Claude adds what the PR was asked to do next to what the code actually does, a guided tour, and the decisions the code makes for you to approve or reject.
+With `--ai`, Claude adds what the PR was asked to do next to what the code actually does, plain-language titles for the tour's steps, and the decisions the code makes for you to approve or reject.
 
 ## Run
 
