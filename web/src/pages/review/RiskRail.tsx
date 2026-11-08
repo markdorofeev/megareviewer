@@ -139,7 +139,13 @@ export const RiskRail = ({
                 )}{" "}
                 <span
                   className="rail-step-title model-text"
-                  title={section.kind === "step" ? section.step.title : undefined}
+                  title={
+                    section.kind !== "step"
+                      ? undefined
+                      : section.step.codeTitle === null
+                        ? section.step.title
+                        : `${section.step.title} · ${section.step.codeTitle}`
+                  }
                 >
                   {section.kind === "step" ? section.step.title : "Changes by file"}
                 </span>

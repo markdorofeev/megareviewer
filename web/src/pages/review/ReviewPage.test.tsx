@@ -548,7 +548,52 @@ describe("map", () => {
     ).toBeNull();
   });
 
-  it("says when the model's tour failed and the call-graph tour replaced it", async () => {
+  it("shows the model's title with the code's under it, and why a step was merged", async () => {
+    const [first, ...rest] = analysis.tour?.steps ?? [];
+    if (first === undefined) throw new Error("fixture has no steps");
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          tour: {
+            steps: [
+              { ...first, merged: [{ title: "Docs", reason: "Documents the receipt route." }] },
+              ...rest,
+            ],
+            builtBy: "model",
+          },
+        },
+      },
+    });
+    await loaded();
+    const heading = mainArea().querySelector(".step-heading");
+    expect(heading?.querySelector("h2")?.textContent).toBe("1 The receipt endpoint");
+    expect(heading?.querySelector(".step-code-title")?.textContent).toBe("GET /orders/:id/receipt");
+    expect(heading?.querySelector(".step-merged")?.textContent).toBe(
+      "Also reads Docs: Documents the receipt route.",
+    );
+  });
+
+  it("shows no code title when the title is the code's", async () => {
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          tour: {
+            steps: (analysis.tour?.steps ?? []).map((step) => ({ ...step, codeTitle: null })),
+            builtBy: "code",
+          },
+          stages: { ...analysis.stages, tour: "skipped" },
+        },
+      },
+    });
+    await loaded();
+    expect(mainArea().querySelector(".step-code-title")).toBeNull();
+  });
+
+  it("says when the model couldn't title the tour", async () => {
     renderReview({
       view: {
         ...fixture,
@@ -560,7 +605,7 @@ describe("map", () => {
     });
     await loaded();
     expect(
-      screen.getByText("The model's tour wasn't usable, so this one follows the call graph."),
+      screen.getByText("The model couldn't title the tour, so its steps keep the code's titles."),
     ).toBeTruthy();
   });
 

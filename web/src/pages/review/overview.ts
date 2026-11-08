@@ -169,7 +169,8 @@ const entryLabels = (
         routesOf.set(path, [...(routesOf.get(path) ?? []), ...routes]);
       }
       if (new Set(routes.map(routeKey)).size === ids.length && routes.length > 0) continue;
-      for (const part of step.title.split("; ")) {
+      // The code names a flow by its entries; the model's title doesn't.
+      for (const part of (step.codeTitle ?? step.title).split("; ")) {
         if (part.startsWith("Page: ")) add(path, part);
         const command = /^Command: (\S+) in (.+)$/.exec(part);
         if (command !== null && command[2] === basename(path)) add(path, `Command: ${command[1]}`);

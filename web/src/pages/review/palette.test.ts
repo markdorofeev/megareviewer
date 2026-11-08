@@ -40,6 +40,10 @@ describe("the jump palette", () => {
       ["decisions", ["Retries the tax service 3 times with no backoff"]],
       ["steps", ["Retrying the tax service"]],
     ]);
+    // A step is found by the code's title too.
+    expect(search("loadTaxLines")).toEqual(
+      expect.arrayContaining([["steps", ["Retrying the tax service"]]]),
+    );
     expect(search("nothing matches this")).toEqual([]);
   });
 

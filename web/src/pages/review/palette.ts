@@ -169,7 +169,7 @@ export const paletteItems = (
         key: `step:${step.id}`,
         group: "steps",
         label: step.title,
-        detail: `Step ${at + 1}`,
+        detail: step.codeTitle === null ? `Step ${at + 1}` : `Step ${at + 1} · ${step.codeTitle}`,
         target: { kind: "step", stepId: step.id },
       }),
     ),

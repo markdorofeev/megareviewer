@@ -441,6 +441,18 @@ details.warnings ul {
   color: var(--color-text-muted);
 }
 
+/* The code's own title, under the model's, so the reader can check one against the other. */
+.step-heading .step-code-title {
+  margin-bottom: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.step-heading .step-merged {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+}
+
 .step-number {
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;

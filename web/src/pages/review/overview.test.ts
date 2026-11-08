@@ -352,6 +352,23 @@ describe("fileOverview", () => {
     });
   });
 
+  it("reads a page's and a command's entries from the code's title when the model titled them", () => {
+    const files = [
+      file("web/routes/Setup.tsx", [4]),
+      file("tools/cli.py", [5]),
+      file("app/s.py", [6]),
+    ];
+    const titled = (n: number, codeTitle: string, hunks: readonly number[]) => ({
+      ...step(n, "What a user sees", hunks, hunks),
+      codeTitle,
+    });
+    const steps = [titled(3, "Page: Setup", [4]), titled(4, "Command: main in cli.py", [5])];
+    const overview = fileOverview(input(files, { callGraph: [call(4, 6), call(5, 6)] }), steps);
+    const entries = new Map(overview.rows.flat().map((node) => [node.label, node.entries]));
+    expect(entries.get("Setup.tsx")).toEqual(["Page: Setup"]);
+    expect(entries.get("cli.py")).toEqual(["Command: main"]);
+  });
+
   it("gives two files with one name distinct labels", () => {
     expect([
       ...uniqueLabels([

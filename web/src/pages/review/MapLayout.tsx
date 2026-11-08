@@ -388,7 +388,7 @@ export const MapLayout = ({
     <section className="main-area map" aria-label="Changes">
       {analysis.tour?.builtBy === "code" && analysis.stages.tour === "done" && (
         <p className="banner">
-          The model's tour wasn't usable, so this one follows the call graph.
+          The model couldn't title the tour, so its steps keep the code's titles.
         </p>
       )}
       {before}
@@ -419,7 +419,15 @@ export const MapLayout = ({
                 <h2 id={`${stepAnchor(key)}-title`} className="model-text">
                   <span className="step-number">{section.number}</span> {section.step.title}
                 </h2>
+                {section.step.codeTitle !== null && (
+                  <p className="step-code-title">{section.step.codeTitle}</p>
+                )}
                 <p className="model-text">{section.step.explanation}</p>
+                {section.step.merged.map((merged) => (
+                  <p key={merged.title} className="step-merged">
+                    Also reads {merged.title}: <span className="model-text">{merged.reason}</span>
+                  </p>
+                ))}
                 <PassesThrough via={section.step.via} deps={deps} />
               </header>
             ) : (
