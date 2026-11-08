@@ -91,10 +91,10 @@ A separate commit, with a line in stage 02's **Change log**:
 
 ## Definition of done
 
-- [ ] Contract change commit, with the stage 02 change log line.
-- [ ] Tasks above, with the tests.
-- [ ] On delphi-code #2, `pnpm measure` shows 3 request hints from `ConnectionsSection.tsx`, one per route part, and 2 from `test_http_api.py`. The page flow passes through the three route flows, and the overview has an edge from `ConnectionsSection.tsx` to `routes/hosting_services.py`. Differences go in **Notes for later stages**.
-- [ ] ARCHITECTURE.md "2. Deterministic prep" says requests link to routes across languages, and why they never extend a flow: a page flow that walked into the backend would read the whole PR.
+- [x] Contract change commit, with the stage 02 change log line.
+- [x] Tasks above, with the tests.
+- [x] On delphi-code #2, `pnpm measure` shows 3 request hints from `ConnectionsSection.tsx`, one per route part, and 2 from `test_http_api.py`. The page flow passes through the three route flows, and the overview has an edge from `ConnectionsSection.tsx` to `routes/hosting_services.py`. Differences go in **Notes for later stages**.
+- [x] ARCHITECTURE.md "2. Deterministic prep" says requests link to routes across languages, and why they never extend a flow: a page flow that walked into the backend would read the whole PR.
 
 ## Open issues
 
@@ -102,4 +102,15 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+Where the code differs from or adds to this doc:
+
+- **Measured on delphi-code #2** with `pnpm measure a_12601c941646fd63` (pipeline 9), which now lists request hints: 3 from `ConnectionsSection.tsx` (lines 21, 54, 104), one to each route part, and 2 from `test_http_api.py` (207 to GET, 243 to PUT). The page flow is step 4, after the three route flows, with the three route parts as its `via`, and says "sends GET /api/account-connections (step 1), PUT … (step 2) and DELETE … (step 3)". The test part with line 243 moved from GET's flow to PUT's, so PUT has 14 parts. In the overview, `routes/hosting_services.py` is now a row below `ConnectionsSection.tsx`, with `test_http_api.py` as a badge, so there are 7 rows instead of 6. Checked in the browser too: the chip opens the Python route in place, the edge is dash-dot, and the palette lists the three routes.
+- **Route reading moved** from `entry-points.ts` to `src/domain/diff/requests.ts` (`routesOn`, `routeReceivers`, `Route`), because hints are built in the diff module, which can't import the review module. `entryOf` reads routes through it, and `Route` is now exported from `src/domain/diff/`.
+- **`requestsOn(line, path)` takes the path,** not the language: test clients count only in test files, and the typed-client row skips Go, where Gin declares routes as `v1.GET("/p", h)` on any router group.
+- **Also not requests:** a call whose next argument is a function, such as an MSW handler (`http.get("/p", () => …)` in `setup.test.tsx`) or a route on an unknown receiver; a path something is added to (`"/items/" + id`); and `fetch("/p", {` with its options on later lines, whose method isn't known. A template literal's leading `${base}` is dropped, as a base prefix.
+- **Both ends must be in a language the parser knows,** so a request in a Markdown code sample links nowhere. Request hints come after calls and type uses, at most 10 per part. The symbol keeps the route's method as written, so a route taking any method shows `ALL /p`.
+- **Ordering:** a flow comes after the flows of the routes it requests even when it reaches contract code; a cycle of requests keeps its order. `via` lists only routes of earlier flows. The explanation's "passes through" counts only code the walk reached, since "sends" already names the routes.
+- **Callers:** a route part's header lists the files that request it, like callers (`Called from ConnectionsSection.tsx and 1 test` on GET).
+- **Chips** say "sends" before the method and path. A request is never a mention, since its method and path aren't on the line.
+- **The palette's Routes group** lists the routes something requests, from the request hints, with the route's file and the requesting files, code first. Palette details now give way before labels, which long details had cut to one letter.
+- **Evals weren't run:** the model's input keeps call hints only, so request hints never reach a prompt.
