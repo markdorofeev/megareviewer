@@ -188,7 +188,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("8+fake-model/1");
+    expect(analysis.key.pipelineVersion).toBe("9+fake-model/1");
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
     );
@@ -974,7 +974,7 @@ describe("without the model", () => {
       decisions: "skipped",
       tour: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("8+no-model");
+    expect(analysis.key.pipelineVersion).toBe("9+no-model");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);

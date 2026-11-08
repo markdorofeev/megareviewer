@@ -136,7 +136,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
   for (const { fromPartId: from, toPartId: to, use } of [...callGraph].sort(
     (a, b) => a.line - b.line,
   )) {
-    if (from === to || !order.has(from) || !order.has(to)) continue;
+    if (use === "request" || from === to || !order.has(from) || !order.has(to)) continue;
     const [out, back] = use === "call" ? [callees, callers] : [typeUses, usedAsType];
     if (!out.get(from)?.includes(to)) out.get(from)?.push(to);
     if (!back.get(to)?.includes(from)) back.get(to)?.push(from);

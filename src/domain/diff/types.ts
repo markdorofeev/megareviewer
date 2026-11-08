@@ -112,6 +112,10 @@ export type HunkPart = z.infer<typeof HunkPart>;
  * The code in `fromPartId` references `symbol`, which `toPartId` defines or changes. `line` is the
  * new-side line of the first such reference in `fromPartId`. `use` says whether the code calls or
  * builds it, or only names it as a type; type uses group code but aren't followed as calls.
+ *
+ * A `request` hint links a part that sends an HTTP request to the part that adds the route serving
+ * it, across languages. Its `symbol` is the method and path as the route has them
+ * (`PUT /api/items/{id}`), and its `line` is the request's.
  */
 export const CallGraphHint = z
   .object({
@@ -119,7 +123,7 @@ export const CallGraphHint = z
     toPartId: PartId,
     symbol: z.string().min(1),
     line: z.number().int().positive(),
-    use: z.enum(["call", "type"]),
+    use: z.enum(["call", "type", "request"]),
   })
   .readonly();
 export type CallGraphHint = z.infer<typeof CallGraphHint>;

@@ -294,7 +294,8 @@ export const fileOverview = (
   for (const hint of analysis.callGraph) {
     const from = pathOfHunk.get(hunkIdOf(hint.fromPartId));
     const to = pathOfHunk.get(hunkIdOf(hint.toPartId));
-    if (from !== undefined && to !== undefined) link(from, to, hint.use, hint.symbol);
+    if (from !== undefined && to !== undefined && hint.use !== "request")
+      link(from, to, hint.use, hint.symbol);
   }
   const linkedFrom = (path: string) => [...(links.get(path)?.keys() ?? [])];
   const linkersOf = (path: string) => paths.filter((other) => links.get(other)?.has(path) === true);
