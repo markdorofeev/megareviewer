@@ -1,7 +1,7 @@
 import "./review.css";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
-import { hunkIdOf, type PartId } from "../../../../src/domain/diff/index.ts";
+import { hunkIdOf, type PartId, type UnchangedCallers } from "../../../../src/domain/diff/index.ts";
 import {
   type AnalysisId,
   type Decision,
@@ -130,7 +130,38 @@ const ReviewSkeleton = () => (
 );
 
 const NO_DECISIONS: readonly Decision[] = [];
+/** Why callers outside the pull request aren't shown, when no checkout was read. */
+const CheckoutNote = ({ analysis }: { readonly analysis: AnalysisView["analysis"] }) => {
+  const { checkout, pullRequest } = analysis;
+  if (checkout === "read" || pullRequest === null) return null;
+  const { ref, headSha } = pullRequest;
+  return (
+    <p className="checkout-note muted">
+      Code outside the pull request that calls what it changes isn't shown:{" "}
+      {checkout === "missing-commit" ? (
+        <>
+          the local checkout doesn't have the head commit <code>{headSha.slice(0, 7)}</code>. Run{" "}
+          <code>git fetch</code> in it
+          {ref.repo.host === "github" && (
+            <>
+              , or <code>git fetch origin pull/{ref.number}/head</code> for a pull request from a
+              fork
+            </>
+          )}
+          , then open the pull request again.
+        </>
+      ) : (
+        <>
+          megareviewer didn't run in a checkout of {ref.repo.owner}/{ref.repo.repo}. Start it in
+          one, or pass <code>--checkout &lt;dir&gt;</code>, then open the pull request again.
+        </>
+      )}
+    </p>
+  );
+};
+
 const NO_CALLERS: readonly CallerFile[] = [];
+const NO_UNCHANGED: readonly UnchangedCallers[] = [];
 
 /** What a hunk's marks show, for its signature. */
 const marksSignature = (lines: ReadonlyMap<number, readonly CallMark[]> | undefined): string =>
@@ -225,6 +256,14 @@ const Review = ({
   );
   const callers = useMemo(() => callerFiles(callHints, index, order), [callHints, index, order]);
   const callersOf = useCallback((id: PartId) => callers.get(id) ?? NO_CALLERS, [callers]);
+  const unchanged = useMemo(() => {
+    const byPart = new Map<PartId, UnchangedCallers[]>();
+    for (const one of analysis.unchangedCallers) {
+      byPart.set(one.partId, [...(byPart.get(one.partId) ?? []), one]);
+    }
+    return byPart;
+  }, [analysis.unchangedCallers]);
+  const unchangedOf = useCallback((id: PartId) => unchanged.get(id) ?? NO_UNCHANGED, [unchanged]);
   const stepOf = useMemo(() => {
     const places = new Map<PartId, string>();
     for (const section of sections) {
@@ -642,6 +681,7 @@ const Review = ({
     calls,
     plan,
     callersOf,
+    unchangedOf,
     stepOf,
     onFollow: stable.follow,
     reviewed,
@@ -885,6 +925,7 @@ const Review = ({
               />
             )
           )}
+          <CheckoutNote analysis={analysis} />
         </Dialog>
       )}
       <p className="shortcut-hint muted">

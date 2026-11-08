@@ -1032,6 +1032,12 @@ details.warnings ul {
   stroke-linecap: round;
 }
 
+/* From a file outside the pull request: dashed and faded, like the node it leaves. */
+.overview-edge.outside .overview-edge-line {
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+
 .overview-edge-hit {
   fill: none;
   stroke: transparent;
@@ -1085,6 +1091,14 @@ details.warnings ul {
 .overview-node.generated {
   border-style: dashed;
   opacity: 0.6;
+}
+
+/* A file outside the pull request: not to review, only to know about. */
+.overview-node.outside {
+  border-style: dashed;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  opacity: 0.75;
 }
 
 .overview-node.group {

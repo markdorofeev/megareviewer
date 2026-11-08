@@ -20,9 +20,13 @@ import {
 export type EdgeUse = "import" | "call" | "type" | "request";
 
 export interface OverviewNode {
-  /** The file's path, or `group:<directory>` for a group of files. */
+  /**
+   * The file's path, `group:<directory>` for a group of files, or `outside:<path or directory/>`
+   * for files outside the pull request.
+   */
   readonly key: string;
-  readonly kind: "file" | "group";
+  /** "outside": files the pull request doesn't change that use what it changes. */
+  readonly kind: "file" | "group" | "outside";
   /** The files it stands for: one, or a group's. */
   readonly paths: readonly string[];
   /** The file's name with as many parent directories as make it unique; a group's directory. */
@@ -37,8 +41,10 @@ export interface OverviewNode {
   readonly entries: readonly string[];
   /** The titles of the flows that read it. */
   readonly flows: readonly string[];
-  /** Its hunks to review, in tour order: a click opens the first. */
+  /** Its hunks to review, in tour order: a click opens the first. Outside, the parts it uses. */
   readonly partIds: readonly PartId[];
+  /** Outside the pull request, how many uses of changed definitions it has; 0 in it. */
+  readonly uses: number;
   /** Test files and test helpers that link to it, directly or through a helper. */
   readonly badges: readonly string[];
   /** The row it sits in, from 0; -1 in the strip. */
@@ -54,6 +60,8 @@ export interface OverviewEdge {
   readonly symbols: readonly string[];
   /** It closes a cycle, so it points up instead of down. */
   readonly back: boolean;
+  /** From files outside the pull request, below the file they use. */
+  readonly outside: boolean;
 }
 
 export interface FileOverview {
@@ -69,6 +77,8 @@ export interface FileOverview {
 
 /** Above this many file nodes, files group by directory. */
 export const MAX_FILE_NODES = 40;
+/** Above this many files outside the pull request, they group by directory. */
+export const MAX_OUTSIDE_NODES = 10;
 
 const RISK_RANK: Readonly<Record<RiskClass, number>> = { mechanical: 0, logic: 1, contract: 2 };
 const USES: readonly EdgeUse[] = ["import", "call", "type", "request"];
@@ -226,12 +236,18 @@ interface Link {
  * Rows are ordered by the mean position of each node's callers, then of its callees, then of its
  * callers again, with tour order on ties. Above 40 nodes, files group by directory, three levels
  * deep, except the groups in `expanded`.
+ *
+ * Files outside the pull request that use what it changes, read from a local checkout, are faded
+ * nodes one row below the lowest file they use, which joins the diagram if nothing else linked it.
+ * Above 10 of them, they group by directory. Tests and helpers in the pull request have no node,
+ * so their outside callers show only on their cards.
  */
 /** What the overview reads of an analysis. */
 export type OverviewInput = Pick<
   Analysis,
   "files" | "parts" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated"
->;
+> &
+  Partial<Pick<Analysis, "unchangedCallers">>;
 
 export const fileOverview = (
   analysis: OverviewInput,
@@ -380,9 +396,64 @@ export const fileOverview = (
       nodeLinks.set(a, byTo);
     }
   }
-  const touched = new Set(
-    [...nodeLinks].flatMap(([from, out]) => (out.size > 0 ? [from, ...out.keys()] : [])),
+  // Files outside the pull request, by the nodes they use.
+  const outsideOf = new Map<
+    string,
+    { targets: Map<string, Link>; uses: number; partIds: Set<PartId> }
+  >();
+  for (const { partId, symbol, uses } of analysis.unchangedCallers ?? []) {
+    const path = pathOfHunk.get(hunkIdOf(partId));
+    const target = path === undefined ? undefined : nodeOf.get(path);
+    if (target === undefined) continue;
+    for (const use of uses) {
+      const known = outsideOf.get(use.path) ?? {
+        targets: new Map<string, Link>(),
+        uses: 0,
+        partIds: new Set<PartId>(),
+      };
+      const one = known.targets.get(target) ?? { uses: new Set(), symbols: new Set() };
+      one.uses.add(use.use);
+      one.symbols.add(symbol);
+      known.targets.set(target, one);
+      known.uses += 1;
+      known.partIds.add(partId);
+      outsideOf.set(use.path, known);
+    }
+  }
+  const outsidePaths = [...outsideOf.keys()].sort(
+    (a, b) => Number(isTestFile(a)) - Number(isTestFile(b)) || compare(a, b),
   );
+  const outsideMembers = new Map<string, string[]>();
+  for (const path of outsidePaths) {
+    const key =
+      outsidePaths.length > MAX_OUTSIDE_NODES ? `outside:${area(path)}/` : `outside:${path}`;
+    outsideMembers.set(key, [...(outsideMembers.get(key) ?? []), path]);
+  }
+  for (const [key, inIt] of [...outsideMembers]) {
+    const [only] = inIt;
+    if (key.endsWith("/") && inIt.length === 1 && only !== undefined) {
+      outsideMembers.delete(key);
+      outsideMembers.set(`outside:${only}`, [only]);
+    }
+  }
+  const outsideLinks = new Map<string, Map<string, Link>>();
+  for (const [key, inIt] of outsideMembers) {
+    const byTo = new Map<string, Link>();
+    for (const path of inIt) {
+      for (const [to, one] of outsideOf.get(path)?.targets ?? []) {
+        const merged = byTo.get(to) ?? { uses: new Set<EdgeUse>(), symbols: new Set<string>() };
+        for (const use of one.uses) merged.uses.add(use);
+        for (const symbol of one.symbols) merged.symbols.add(symbol);
+        byTo.set(to, merged);
+      }
+    }
+    outsideLinks.set(key, byTo);
+  }
+
+  const touched = new Set([
+    ...[...nodeLinks].flatMap(([from, out]) => (out.size > 0 ? [from, ...out.keys()] : [])),
+    ...[...outsideLinks.values()].flatMap((out) => [...out.keys()]),
+  ]);
   const inDiagram = keys.filter((key) => touched.has(key));
 
   // Break cycles at the edge into the node earliest in tour order, until there are none.
@@ -417,10 +488,17 @@ export const fileOverview = (
     return row;
   };
   const rowKeys: string[][] = [];
-  for (const key of inDiagram) {
-    const row = rowFor(key);
+  const place = (key: string, row: number) => {
     while (rowKeys.length <= row) rowKeys.push([]);
     rowKeys[row]?.push(key);
+  };
+  for (const key of inDiagram) place(key, rowFor(key));
+  // Outside files one row below the lowest file they use; for ordering, those files are above.
+  for (const [key, out] of outsideLinks) {
+    const targets = [...out.keys()];
+    callersOf.set(key, targets);
+    rowOf.set(key, Math.max(...targets.map(rowFor)) + 1);
+    place(key, rowOf.get(key) ?? 0);
   }
 
   // Fewer crossings: order each row by its neighbors' mean position, down, up and down again.
@@ -459,7 +537,32 @@ export const fileOverview = (
     }
   }
   const unique = <T>(items: readonly T[]): T[] => [...new Set(items)];
+  const outsideLabels = uniqueLabels(outsidePaths);
+  const outsideNode = (key: string, row: number): OverviewNode => {
+    const inIt = outsideMembers.get(key) ?? [];
+    const [only] = inIt;
+    return {
+      key,
+      kind: "outside",
+      paths: inIt,
+      label:
+        key.endsWith("/") || only === undefined
+          ? key.slice("outside:".length)
+          : (outsideLabels.get(only) ?? only),
+      added: 0,
+      deleted: 0,
+      risk: "logic",
+      generated: false,
+      entries: [],
+      flows: [],
+      partIds: [...new Set(inIt.flatMap((path) => [...(outsideOf.get(path)?.partIds ?? [])]))],
+      uses: inIt.reduce((sum, path) => sum + (outsideOf.get(path)?.uses ?? 0), 0),
+      badges: [],
+      row,
+    };
+  };
   const node = (key: string, row: number): OverviewNode => {
+    if (outsideMembers.has(key)) return outsideNode(key, row);
     const inIt = members.get(key) ?? [key];
     const facts = inIt.flatMap((path) => fileFacts.get(path) ?? []);
     const group = key.startsWith("group:");
@@ -478,6 +581,7 @@ export const fileOverview = (
       flows: unique(inIt.flatMap((path) => flowsOf.get(path) ?? [])),
       partIds: facts.flatMap((one) => one.partIds).sort((a, b) => rankOf(a) - rankOf(b)),
       badges: unique(inIt.flatMap((path) => testsOn.get(path) ?? [])).sort(byRank),
+      uses: 0,
       row,
     };
   };
@@ -491,15 +595,20 @@ export const fileOverview = (
     .map((key) => node(key, -1));
 
   const placeOf = new Map<string, string>();
-  for (const one of [...rows.flat(), ...strip])
+  for (const one of [...rows.flat(), ...strip]) {
+    if (one.kind === "outside") continue;
     for (const path of one.paths) placeOf.set(path, one.key);
+  }
   for (const [test, reached] of badgesOf) {
     const [first] = reached;
     const at = first === undefined ? undefined : nodeOf.get(first);
     if (at !== undefined) placeOf.set(test, at);
   }
 
-  const edges = [...nodeLinks].flatMap(([from, out]) =>
+  const edges = [
+    ...[...nodeLinks].map((entry) => [entry, false] as const),
+    ...[...outsideLinks].map((entry) => [entry, true] as const),
+  ].flatMap(([[from, out], outside]) =>
     [...out].map(
       ([to, one]): OverviewEdge => ({
         from,
@@ -507,6 +616,7 @@ export const fileOverview = (
         uses: USES.filter((use) => one.uses.has(use)),
         symbols: [...one.symbols].sort(compare),
         back: back.has(edgeKey(from, to)),
+        outside,
       }),
     ),
   );

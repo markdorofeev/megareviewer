@@ -13,6 +13,7 @@ export type PaletteGroup =
   | "decisions"
   | "mismatches"
   | "contract"
+  | "unchanged"
   | "routes"
   | "symbols"
   | "steps"
@@ -22,6 +23,7 @@ export const PALETTE_GROUPS: readonly { readonly group: PaletteGroup; readonly t
   { group: "decisions", title: "Decisions" },
   { group: "mismatches", title: "Mismatches" },
   { group: "contract", title: "Contract changes" },
+  { group: "unchanged", title: "Used unchanged" },
   { group: "routes", title: "Routes" },
   { group: "symbols", title: "Symbols" },
   { group: "steps", title: "Steps" },
@@ -141,6 +143,24 @@ export const paletteItems = (
               target: { kind: "hunk", partId: first },
             },
           ];
+    }),
+    ...analysis.unchangedCallers.flatMap(({ partId, symbol, uses, more }): PaletteItem[] => {
+      const found = index.parts.get(partId);
+      if (found === undefined) return [];
+      const files = [...new Set(uses.map((use) => use.path))];
+      const count = uses.length + more;
+      return [
+        {
+          key: `unchanged:${symbol}:${partId}`,
+          group: "unchanged",
+          label: symbol,
+          detail: `${basename(found.file.path)}, used unchanged in ${count === 1 ? "1 place" : `${count} places`}: ${files
+            .sort((a, b) => Number(isTestFile(a)) - Number(isTestFile(b)))
+            .map(basename)
+            .join(", ")}`,
+          target: { kind: "hunk", partId },
+        },
+      ];
     }),
     ...routes,
     ...symbols.values(),

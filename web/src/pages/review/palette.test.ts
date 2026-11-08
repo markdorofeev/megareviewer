@@ -23,6 +23,7 @@ describe("the jump palette", () => {
       "decisions",
       "mismatches",
       "contract",
+      "unchanged",
       "symbols",
       "steps",
       "files",
@@ -87,8 +88,30 @@ describe("the jump palette", () => {
     expect(searchPalette(paletteItems(requested, [], index), "@ orders/:id")).toEqual([]);
   });
 
+  it("lists the definitions used unchanged outside the pull request", () => {
+    expect(searchPalette(items, "email")).toEqual([
+      expect.objectContaining({
+        group: "unchanged",
+        items: [
+          expect.objectContaining({
+            label: "renderReceipt",
+            detail:
+              "receipts.ts, used unchanged in 2 places: email-receipts.ts, email-receipts.test.ts",
+            target: { kind: "hunk", partId: h.receiptFormatting },
+          }),
+        ],
+      }),
+    ]);
+  });
+
   it("has no decisions, mismatches or symbols without the model and the hints", () => {
-    const bare: Analysis = { ...analysis, decisions: [], intent: null, callGraph: [] };
+    const bare: Analysis = {
+      ...analysis,
+      decisions: [],
+      intent: null,
+      callGraph: [],
+      unchangedCallers: [],
+    };
     const groups = searchPalette(paletteItems(bare, [], index), "").map(({ group }) => group);
     expect(groups).toEqual(["contract", "files"]);
   });

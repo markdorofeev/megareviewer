@@ -546,8 +546,46 @@ const analysis: Analysis = {
     { from: "src/services/receipts.ts", to: "src/lib/money.ts" },
   ],
   generated: [],
-  checkout: "none",
-  unchangedCallers: [],
+  checkout: "read",
+  unchangedCallers: [
+    {
+      partId: h.receiptFormatting,
+      symbol: "renderReceipt",
+      uses: [
+        {
+          path: "src/jobs/email-receipts.ts",
+          line: 14,
+          use: "call",
+          excerpt: {
+            start: 12,
+            lines: [
+              "  for (const order of await completedSince(lastRun)) {",
+              "    const customer = await findCustomer(order.customerId);",
+              "    const text = await renderReceipt(order);",
+              '    await sendMail(customer.email, "Your receipt", text);',
+              "  }",
+            ],
+          },
+        },
+        {
+          path: "test/jobs/email-receipts.test.ts",
+          line: 31,
+          use: "call",
+          excerpt: {
+            start: 29,
+            lines: [
+              '  it("mails one receipt per completed order", async () => {',
+              "    const orders = [completedOrder(), completedOrder()];",
+              '    expect(await renderReceipt(orders[0])).toContain("Total");',
+              "    await emailReceipts(orders);",
+              "    expect(sent).toHaveLength(2);",
+            ],
+          },
+        },
+      ],
+      more: 0,
+    },
+  ],
   intent: {
     stated: {
       summary:

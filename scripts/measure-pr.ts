@@ -188,6 +188,7 @@ export const overviewOf = (measured: Measured): FileOverview =>
 export const overviewLines = ({ rows, strip }: FileOverview): string[] => {
   const name = (node: FileOverview["rows"][number][number]) => {
     const notes = [
+      ...(node.kind === "outside" ? ["outside"] : []),
       ...node.entries,
       ...(node.risk === "contract" ? ["contract"] : []),
       ...(node.generated ? ["generated"] : []),

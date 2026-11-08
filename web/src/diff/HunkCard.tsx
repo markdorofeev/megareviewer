@@ -1,6 +1,13 @@
 import "./diff.css";
-import { Fragment, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { FileChange, Hunk, MechanicalProof, PartId } from "../../../src/domain/diff/index.ts";
+import { Fragment, memo, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  type FileChange,
+  type Hunk,
+  isTestFile,
+  type MechanicalProof,
+  type PartId,
+  type UnchangedCallers,
+} from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { type CharRange, intraLineChanges } from "./intra-line.ts";
 import { type DisplayLine, displayLines, hunkLocation, lineCounts } from "./lines.ts";
@@ -110,6 +117,81 @@ const Callers = ({
   );
 };
 
+const places = (count: number, noun: "place" | "test"): string =>
+  `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+/**
+ * "Used unchanged in 3 places and 1 test": code outside the pull request that calls what this part
+ * changes, where a regression would show. A click lists each use with the lines around it.
+ */
+const UnchangedUses = ({
+  callers,
+  named,
+}: {
+  readonly callers: UnchangedCallers;
+  /** Name the definition, when the part changes several that have callers. */
+  readonly named: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const { uses, more } = callers;
+  const tests = uses.filter((use) => isTestFile(use.path)).length;
+  const code = uses.length - tests;
+  const counts = [
+    ...(code > 0 ? [places(code, "place")] : []),
+    ...(tests > 0 ? [places(tests, "test")] : []),
+  ];
+  const summary = `${counts.join(" and ")}${more > 0 ? `, and ${more} more` : ""}`;
+  return (
+    <div className="hunk-unchanged">
+      <p className="hunk-outside">
+        <button
+          type="button"
+          className="link-button"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => setOpen(!open)}
+        >
+          {named && (
+            <>
+              <code>{callers.symbol}</code>{" "}
+            </>
+          )}
+          {named ? "used" : "Used"} unchanged in {summary}
+        </button>
+      </p>
+      {open && (
+        <ul id={listId} className="unchanged-uses">
+          {uses.map((use) => (
+            <li key={`${use.path}:${use.line}`}>
+              <p className="unchanged-place">
+                <span className="unchanged-path">{use.path}</span>:{use.line}
+                {use.use === "type" && <span className="unchanged-kind"> type</span>}
+              </p>
+              <pre className="unchanged-excerpt">
+                {use.excerpt.lines.map((text, at) => {
+                  const line = use.excerpt.start + at;
+                  return (
+                    <span
+                      key={line}
+                      className={line === use.line ? "unchanged-line used" : "unchanged-line"}
+                    >
+                      <span className="unchanged-number">{line}</span>
+                      {text}
+                      {"\n"}
+                    </span>
+                  );
+                })}
+              </pre>
+            </li>
+          ))}
+          {more > 0 && <li className="muted">and {more} more</li>}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 /** A part of a split hunk: what it changes, which part it is, and where the rest of its hunk is. */
 export interface PartHeader {
   readonly definitions: readonly string[];
@@ -212,6 +294,7 @@ export const HunkCard = memo(function HunkCard({
   onFocus,
   lineLimit,
   callers = [],
+  unchanged = [],
   onFollow,
   reviewed,
   onReviewed,
@@ -240,6 +323,8 @@ export const HunkCard = memo(function HunkCard({
   readonly lineLimit?: number;
   /** Files whose code calls this hunk, which `onFollow` goes to; calls show by `belowLine`. */
   readonly callers?: readonly CallerFile[];
+  /** Uses outside the pull request of the definitions this part changes. */
+  readonly unchanged?: readonly UnchangedCallers[];
   readonly onFollow?: (id: PartId) => void;
   /** Whether the reviewer has read this hunk; without `onReviewed` there's no checkbox. */
   readonly reviewed?: boolean;
@@ -328,6 +413,9 @@ export const HunkCard = memo(function HunkCard({
       {callers.length > 0 && onFollow !== undefined && (
         <Callers callers={callers} onFollow={onFollow} />
       )}
+      {unchanged.map((one) => (
+        <UnchangedUses key={one.symbol} callers={one} named={unchanged.length > 1} />
+      ))}
       {afterHeader}
       {part?.previous != null && (
         <PartFold neighbor={part.previous} of={part.of} direction="previous" onFollow={onFollow} />

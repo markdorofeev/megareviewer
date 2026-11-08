@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { PartId } from "../../../../src/domain/diff/index.ts";
+import type { PartId, UnchangedCallers } from "../../../../src/domain/diff/index.ts";
 import {
   type CallerFile,
   CollapsedHunk,
@@ -19,6 +19,8 @@ export interface HunkDeps {
   /** Which of a hunk's calls are chips and which are mentions, at its own place in the map. */
   readonly plan: ChipPlan;
   readonly callersOf: (id: PartId) => readonly CallerFile[];
+  /** Uses outside the pull request of what a part changes, read from a local checkout. */
+  readonly unchangedOf: (id: PartId) => readonly UnchangedCallers[];
   /** The step a hunk is read in, as "step 2: Title", for peeks. */
   readonly stepOf: (id: PartId) => string | null;
   readonly onFollow: (id: PartId) => void;
@@ -84,6 +86,7 @@ export const HunkView = ({
       focused={focused}
       onFocus={nested ? undefined : deps.onFocusHunk}
       callers={nested ? undefined : deps.callersOf(id)}
+      unchanged={nested ? undefined : deps.unchangedOf(id)}
       onFollow={deps.onFollow}
       reviewed={deps.reviewed.has(id)}
       onReviewed={deps.onReviewed}

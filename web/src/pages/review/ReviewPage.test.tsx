@@ -1176,7 +1176,11 @@ describe("overview", () => {
     renderReview();
     await loaded();
     await openOverview();
-    expect(overviewRows()).toEqual([["orders.ts"], ["receipts.ts"]]);
+    expect(overviewRows()).toEqual([
+      ["orders.ts"],
+      ["receipts.ts"],
+      ["email-receipts.ts", "email-receipts.test.ts"],
+    ]);
     const strip = within(overviewBox()).getByRole("region", { name: "Not linked" });
     expect(within(strip).getByRole("button", { name: /^package\.json, contract/ })).toBeTruthy();
     // Proved-mechanical files aren't in it: the map lists them with their proofs.
@@ -1203,8 +1207,10 @@ describe("overview", () => {
     await userEvent.keyboard("{ArrowDown}");
     expect(focusedKey()).toBe("src/services/receipts.ts");
     await userEvent.keyboard("{ArrowDown}");
+    expect(focusedKey()).toBe("outside:src/jobs/email-receipts.ts");
+    await userEvent.keyboard("{ArrowDown}");
     expect(focusedKey()).toBe("package.json");
-    await userEvent.keyboard("{ArrowUp}{ArrowUp}");
+    await userEvent.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}");
     expect(focusedKey()).toBe("src/routes/orders.ts");
     // A focused file names its flows and what it reaches, for the keyboard.
     expect(
@@ -1344,7 +1350,14 @@ describe("jump palette", () => {
     const groups = within(palette())
       .getAllByRole("region")
       .map((group) => group.getAttribute("aria-label"));
-    expect(groups).toEqual(["Decisions", "Mismatches", "Symbols", "Steps", "Files"]);
+    expect(groups).toEqual([
+      "Decisions",
+      "Mismatches",
+      "Used unchanged",
+      "Symbols",
+      "Steps",
+      "Files",
+    ]);
     await userEvent.clear(within(palette()).getByRole("searchbox", { name: "Jump to" }));
     await userEvent.keyboard("!dayjs");
     expect(within(palette()).getAllByRole("region")).toHaveLength(1);
@@ -1782,5 +1795,77 @@ describe("publishing", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(requests.some((request) => request.url === `${viewPath}/publication`)).toBe(false);
+  });
+});
+
+describe("outside the pull request", () => {
+  const withCheckout = (checkout: AnalysisView["analysis"]["checkout"]): AnalysisView => ({
+    ...fixture,
+    analysis: { ...analysis, checkout, unchangedCallers: [] },
+  });
+
+  it("counts a changed definition's uses on its card, and lists each with the lines around it", async () => {
+    renderReview();
+    await loaded();
+    const card = cardOf(h.receiptFormatting);
+    const toggle = within(card).getByRole("button", {
+      name: "Used unchanged in 1 place and 1 test",
+    });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    const uses = [...card.querySelectorAll(".unchanged-uses > li")];
+    expect(uses.map((use) => use.querySelector(".unchanged-place")?.textContent)).toEqual([
+      "src/jobs/email-receipts.ts:14",
+      "test/jobs/email-receipts.test.ts:31",
+    ]);
+    const used = uses[0]?.querySelector(".unchanged-line.used");
+    expect(used?.textContent).toBe("14    const text = await renderReceipt(order);\n");
+    expect(uses[0]?.querySelectorAll(".unchanged-line")).toHaveLength(5);
+    // Only the card of the part that changes the definition says so.
+    expect(within(cardOf(h.receiptRoute)).queryByText(/Used unchanged/)).toBeNull();
+  });
+
+  it("shows a faded node per caller file in the overview, opening the code it uses", async () => {
+    renderReview();
+    await loaded();
+    await openOverview();
+    const outside = nodeOf("outside:src/jobs/email-receipts.ts");
+    expect(outside.classList.contains("outside")).toBe(true);
+    expect(outside.getAttribute("aria-label")).toBe("email-receipts.ts, outside the PR · 1 use");
+    act(() => outside.focus());
+    expect(overviewBox().querySelector(".overview-detail")?.textContent).toBe(
+      "src/jobs/email-receipts.ts · outside the pull request · uses receipts.ts (renderReceipt).",
+    );
+    expect(overviewBox().querySelector(".overview-legend")?.textContent).toContain(
+      "Faded files at the bottom are outside the pull request and use what it changes.",
+    );
+    await userEvent.click(outside);
+    expect(pressed("Map")).toBe(true);
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptFormatting}`);
+  });
+
+  it("says in the details why nothing outside is shown without a checkout", async () => {
+    renderReview({ view: withCheckout("none") });
+    await loaded();
+    expect(
+      within(await openDetails()).getByText(/didn't run in a checkout of acme\/shop/),
+    ).toBeTruthy();
+    expect(document.querySelector(".hunk-outside")).toBeNull();
+  });
+
+  it("says in the details to fetch the head commit when the checkout lacks it", async () => {
+    renderReview({ view: withCheckout("missing-commit") });
+    await loaded();
+    const details = await openDetails();
+    expect(details.querySelector(".checkout-note")?.textContent).toBe(
+      "Code outside the pull request that calls what it changes isn't shown: the local checkout doesn't have the head commit 9e8d7c6. Run git fetch in it, or git fetch origin pull/128/head for a pull request from a fork, then open the pull request again.",
+    );
+  });
+
+  it("says nothing about the checkout in the details when one was read", async () => {
+    renderReview();
+    await loaded();
+    expect((await openDetails()).querySelector(".checkout-note")).toBeNull();
   });
 });

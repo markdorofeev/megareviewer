@@ -5,6 +5,7 @@ import {
   HunkId,
   type MechanicalProof,
   PartId,
+  type UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
 import {
   type RiskAssessment,
@@ -156,6 +157,7 @@ describe("fileOverview", () => {
         uses: ["import", "call", "type"],
         symbols: ["Thing", "run"],
         back: false,
+        outside: false,
       },
     ]);
   });
@@ -189,6 +191,7 @@ describe("fileOverview", () => {
       uses: ["request"],
       symbols: ["GET /api/items", "PUT /api/items/{id}"],
       back: false,
+      outside: false,
     });
     expect(overview.rows[2]?.[0]?.badges).toEqual(["tests/test_api.py"]);
   });
@@ -430,5 +433,92 @@ describe("fileOverview", () => {
       expect(new Set(asNode).size).toBe(asNode.length);
       expect([...overview.placeOf.keys()].sort()).toEqual(toReview);
     }
+  });
+});
+
+/** Uses of what hunk `n` changes, one per path, outside the pull request. */
+const usedBy = (n: number, symbol: string, paths: readonly string[]): UnchangedCallers => ({
+  partId: h(n),
+  symbol,
+  uses: paths.map((path) => ({
+    path,
+    line: 3,
+    use: "call" as const,
+    excerpt: { start: 1, lines: ["a", "b", symbol] },
+  })),
+  more: 0,
+});
+
+describe("fileOverview outside the pull request", () => {
+  it("puts each caller file one row below the file it uses, with an outside edge", () => {
+    const files = [file("app/main.py", [1]), file("app/store.py", [2])];
+    const overview = fileOverview(
+      input(files, {
+        callGraph: [call(1, 2)],
+        unchangedCallers: [
+          usedBy(2, "save", ["jobs/sync.py", "tests/test_sync.py"]),
+          usedBy(1, "main", ["jobs/sync.py"]),
+        ],
+      }),
+      tourOf(files),
+    );
+    expect(rowsOf(overview)).toEqual([["main.py"], ["store.py"], ["sync.py", "test_sync.py"]]);
+    const sync = overview.rows[2]?.[0];
+    expect(sync).toMatchObject({
+      key: "outside:jobs/sync.py",
+      kind: "outside",
+      paths: ["jobs/sync.py"],
+      partIds: [h(2), h(1)],
+      uses: 2,
+    });
+    expect(
+      overview.edges
+        .filter((edge) => edge.outside)
+        .map((edge) => [edge.from, edge.to, edge.symbols]),
+    ).toEqual([
+      ["outside:jobs/sync.py", "app/store.py", ["save"]],
+      ["outside:jobs/sync.py", "app/main.py", ["main"]],
+      ["outside:tests/test_sync.py", "app/store.py", ["save"]],
+    ]);
+    expect(overview.placeOf.has("jobs/sync.py")).toBe(false);
+  });
+
+  it("brings a file nothing in the pull request links into the diagram", () => {
+    const files = [file("app/store.py", [1])];
+    const overview = fileOverview(
+      input(files, { unchangedCallers: [usedBy(1, "save", ["jobs/sync.py"])] }),
+      tourOf(files),
+    );
+    expect(rowsOf(overview)).toEqual([["store.py"], ["sync.py"]]);
+    expect(overview.strip).toEqual([]);
+  });
+
+  it("groups more than ten caller files by directory", () => {
+    const files = [file("app/store.py", [1])];
+    const paths = [
+      ...Array.from({ length: 10 }, (_, at) => `jobs/nightly/job${at}.py`),
+      "scripts/one.py",
+    ];
+    const overview = fileOverview(
+      input(files, { unchangedCallers: [usedBy(1, "save", paths)] }),
+      tourOf(files),
+    );
+    const outside = overview.rows[1] ?? [];
+    expect(outside.map((node) => [node.key, node.label, node.paths.length, node.uses])).toEqual([
+      ["outside:jobs/nightly/", "jobs/nightly/", 10, 10],
+      ["outside:scripts/one.py", "one.py", 1, 1],
+    ]);
+  });
+
+  it("leaves out callers of tests and helpers, which have no node", () => {
+    const files = [file("app/store.py", [1]), file("tests/test_store.py", [2])];
+    const overview = fileOverview(
+      input(files, {
+        callGraph: [call(2, 1)],
+        unchangedCallers: [usedBy(2, "make_store", ["tests/test_other.py"])],
+      }),
+      tourOf(files),
+    );
+    expect(overview.edges.some((edge) => edge.outside)).toBe(false);
   });
 });

@@ -23,10 +23,16 @@ const MAX_FIT = 380;
 
 const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 
-const metaText = (node: Pick<OverviewNode, "kind" | "paths" | "added" | "deleted" | "entries">) =>
-  `${node.kind === "group" ? `${node.paths.length} files · ` : ""}+${node.added} −${node.deleted}${
-    node.entries.length > 0 ? ` · ${node.entries.join(", ")}` : ""
-  }`;
+const uses = (count: number): string => (count === 1 ? "1 use" : `${count} uses`);
+
+const metaText = (
+  node: Pick<OverviewNode, "kind" | "paths" | "added" | "deleted" | "entries" | "uses">,
+) =>
+  node.kind === "outside"
+    ? `${node.paths.length > 1 ? `${node.paths.length} files · ` : ""}outside the PR · ${uses(node.uses)}`
+    : `${node.kind === "group" ? `${node.paths.length} files · ` : ""}+${node.added} −${node.deleted}${
+        node.entries.length > 0 ? ` · ${node.entries.join(", ")}` : ""
+      }`;
 
 /**
  * Wider with more lines changed, up to a maximum, and at least wide enough for its label, entries
@@ -79,15 +85,20 @@ const layout = (rows: FileOverview["rows"], backEdges: boolean) => {
   return { boxes, width, height };
 };
 
-/** Solid for a call, dash-dot for a request, dashed for an import only, dotted for a type. */
-const edgeStyle = (edge: OverviewEdge): "call" | "request" | "import" | "type" =>
-  edge.uses.includes("call")
-    ? "call"
-    : edge.uses.includes("request")
-      ? "request"
-      : edge.uses.every((use) => use === "import")
-        ? "import"
-        : "type";
+/**
+ * Solid for a call, dash-dot for a request, dashed for an import only, dotted for a type. From
+ * outside the pull request, faded.
+ */
+const edgeStyle = (edge: OverviewEdge): string =>
+  edge.outside
+    ? "outside"
+    : edge.uses.includes("call")
+      ? "call"
+      : edge.uses.includes("request")
+        ? "request"
+        : edge.uses.every((use) => use === "import")
+          ? "import"
+          : "type";
 
 /**
  * Where each edge leaves its caller and enters its callee, spread across the middle of the node in
@@ -115,7 +126,7 @@ const anchors = (edges: readonly OverviewEdge[], boxes: ReadonlyMap<string, Box>
       ]),
     );
   };
-  const forward = edges.filter((edge) => !edge.back);
+  const forward = edges.filter((edge) => !edge.back && !edge.outside);
   const out = new Map<OverviewEdge, number>();
   const into = new Map<OverviewEdge, number>();
   for (const key of boxes.keys()) {
@@ -151,6 +162,13 @@ const edgePath = (
     const y2 = to.y + NODE_HEIGHT / 2;
     const side = width - BACK_ROOM / 2;
     return `M ${x1} ${y1} C ${side} ${y1} ${side} ${y2} ${x2} ${y2}`;
+  }
+  if (from.y > to.y) {
+    // From a file outside the pull request, up into the bottom of the file it uses.
+    const y1 = from.y;
+    const y2 = to.y + NODE_HEIGHT;
+    const bend = Math.max(ROW_GAP / 2, (y1 - y2) / 2);
+    return `M ${x1} ${y1} C ${x1} ${y1 - bend} ${x2} ${y2 + bend} ${x2} ${y2}`;
   }
   const y1 = from.y + NODE_HEIGHT;
   const y2 = to.y;
@@ -194,20 +212,25 @@ const NodeButton = ({
 }) => {
   const state = reviewedState(node, reviewed);
   const group = node.kind === "group";
-  const name = [
-    node.label,
-    group ? `${node.paths.length} files` : null,
-    ...node.entries,
-    node.risk,
-    node.generated ? "generated" : null,
-    state.all ? "reviewed" : `${state.done} of ${state.total} hunks reviewed`,
-  ]
+  const outside = node.kind === "outside";
+  const name = (
+    outside
+      ? [node.label, metaText(node)]
+      : [
+          node.label,
+          group ? `${node.paths.length} files` : null,
+          ...node.entries,
+          node.risk,
+          node.generated ? "generated" : null,
+          state.all ? "reviewed" : `${state.done} of ${state.total} hunks reviewed`,
+        ]
+  )
     .filter((part) => part !== null)
     .join(", ");
   return (
     <button
       type="button"
-      className={`overview-node risk-${node.risk}${node.generated ? " generated" : ""}${group ? " group" : ""}${active ? " active" : ""}`}
+      className={`overview-node ${outside ? "outside" : `risk-${node.risk}`}${node.generated ? " generated" : ""}${group ? " group" : ""}${active ? " active" : ""}`}
       data-key={node.key}
       aria-label={name}
       title={node.paths.length === 1 ? node.paths[0] : undefined}
@@ -223,7 +246,7 @@ const NodeButton = ({
     >
       <span className="overview-node-head">
         <span className="overview-label">{node.label}</span>
-        {state.all ? (
+        {outside ? null : state.all ? (
           <span className="overview-tick" role="img" aria-label="reviewed">
             ✓
           </span>
@@ -366,6 +389,8 @@ export const Overview = ({
         Files that nothing in the pull request calls are on top; each file sits below its callers.
         Solid lines are calls, dash-dot ones HTTP requests to a route, dashed ones imports, dotted
         ones types. Tests show on the files they call.
+        {overview.edges.some((edge) => edge.outside) &&
+          " Faded files at the bottom are outside the pull request and use what it changes."}
       </p>
       {expandedGroups.length > 0 && (
         <p className="overview-expanded">
@@ -468,6 +493,11 @@ const nodeDetail = (
       const symbols = edge.symbols.length > 0 ? ` (${edge.symbols.join(", ")})` : "";
       return `${labelOf(edge.to)}${symbols}`;
     });
+  if (node.kind === "outside") {
+    const where =
+      node.paths.length > 1 ? `${node.label}: ${node.paths.length} files` : node.paths[0];
+    return `${where} · outside the pull request · uses ${out.join(", ")}.`;
+  }
   const parts = [
     node.kind === "group"
       ? `${node.label}: ${node.paths.length} files, Enter expands`
