@@ -160,6 +160,39 @@ describe("fileOverview", () => {
     ]);
   });
 
+  it("draws a request from the file that sends it to the routes it reaches, under it", () => {
+    const files = [
+      file("web/src/routes/setup.tsx", [1]),
+      file("web/src/Connections.tsx", [2]),
+      file("api/routes.py", [3]),
+      file("tests/test_api.py", [4]),
+    ];
+    const request = (from: number, to: number, symbol: string): CallGraphHint => ({
+      ...call(from, to, symbol),
+      use: "request",
+    });
+    const overview = fileOverview(
+      input(files, {
+        callGraph: [
+          call(1, 2),
+          request(2, 3, "GET /api/items"),
+          request(2, 3, "PUT /api/items/{id}"),
+          request(4, 3, "GET /api/items"),
+        ],
+      }),
+      tourOf(files),
+    );
+    expect(rowsOf(overview)).toEqual([["setup.tsx"], ["Connections.tsx"], ["routes.py"]]);
+    expect(overview.edges[1]).toEqual({
+      from: "web/src/Connections.tsx",
+      to: "api/routes.py",
+      uses: ["request"],
+      symbols: ["GET /api/items", "PUT /api/items/{id}"],
+      back: false,
+    });
+    expect(overview.rows[2]?.[0]?.badges).toEqual(["tests/test_api.py"]);
+  });
+
   it("makes tests and helpers badges on the code they reach, through a helper too", () => {
     const files = [
       file("app/service.py", [1]),

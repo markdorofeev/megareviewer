@@ -839,6 +839,7 @@ details.warnings ul {
 }
 
 .call-arrow,
+.call-kind,
 .call-file,
 .call-note,
 .call-risk.risk-logic,
@@ -849,6 +850,13 @@ details.warnings ul {
 .call-symbol,
 .call-risk {
   font-weight: 600;
+}
+
+/* A request goes to another process: its kind is named before the method and path. */
+.call-kind {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85em;
 }
 
 .call-risk.risk-contract {
@@ -1010,6 +1018,13 @@ details.warnings ul {
 
 .overview-edge.import .overview-edge-line {
   stroke-dasharray: 6 4;
+}
+
+/* A request crosses a process boundary: heavier, and broken unlike any call. */
+.overview-edge.request .overview-edge-line {
+  stroke: var(--color-text-muted);
+  stroke-dasharray: 12 4 3 4;
+  stroke-width: 2.5;
 }
 
 .overview-edge.type .overview-edge-line {
@@ -1227,11 +1242,16 @@ details.warnings ul {
   white-space: nowrap;
 }
 
+/* A long detail gives way before the label does. */
 .palette-detail {
-  flex: none;
+  flex: 0 4 auto;
+  min-width: 0;
   margin-left: auto;
+  overflow: hidden;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pr-description {

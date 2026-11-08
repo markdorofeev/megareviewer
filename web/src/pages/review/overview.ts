@@ -17,7 +17,7 @@ import {
 // `pnpm measure` prints its rows with the page's own rules.
 
 /** What an edge between two files carries. */
-export type EdgeUse = "import" | "call" | "type";
+export type EdgeUse = "import" | "call" | "type" | "request";
 
 export interface OverviewNode {
   /** The file's path, or `group:<directory>` for a group of files. */
@@ -48,9 +48,9 @@ export interface OverviewNode {
 export interface OverviewEdge {
   readonly from: string;
   readonly to: string;
-  /** In the order import, call, type. */
+  /** In the order import, call, type, request. */
   readonly uses: readonly EdgeUse[];
-  /** The symbols its calls and type uses name. */
+  /** The symbols its calls and type uses name, and the methods and paths its requests send. */
   readonly symbols: readonly string[];
   /** It closes a cycle, so it points up instead of down. */
   readonly back: boolean;
@@ -71,7 +71,7 @@ export interface FileOverview {
 export const MAX_FILE_NODES = 40;
 
 const RISK_RANK: Readonly<Record<RiskClass, number>> = { mechanical: 0, logic: 1, contract: 2 };
-const USES: readonly EdgeUse[] = ["import", "call", "type"];
+const USES: readonly EdgeUse[] = ["import", "call", "type", "request"];
 
 // Repository paths are always "/"-separated.
 const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
@@ -219,8 +219,10 @@ interface Link {
  * helpers (files with a helper's name only tests link to) are badges on the nodes they link to;
  * docs, tests that link to nothing and nodes no edge touches sit in the strip.
  *
- * Edges come from imports and from calls and type uses between files. A node's row is one more
- * than its lowest caller's; a cycle is broken at the edge into its file earliest in tour order.
+ * Edges come from imports, from calls and type uses between files, and from requests a file sends
+ * to the routes another file adds, so a test's requests put its badge on the routes. A node's row
+ * is one more than its lowest caller's; a cycle is broken at the edge into its file earliest in
+ * tour order.
  * Rows are ordered by the mean position of each node's callers, then of its callees, then of its
  * callers again, with tour order on ties. Above 40 nodes, files group by directory, three levels
  * deep, except the groups in `expanded`.
@@ -279,7 +281,7 @@ export const fileOverview = (
   const byRank = (a: string, b: string) => fileRank(a) - fileRank(b) || compare(a, b);
   const paths = files.map((file) => file.path).sort(byRank);
 
-  // Links between those files: imports, calls and type uses.
+  // Links between those files: imports, calls, type uses and requests.
   const links = new Map<string, Map<string, Link>>();
   const link = (from: string, to: string, use: EdgeUse, symbol?: string) => {
     if (from === to || !fileFacts.has(from) || !fileFacts.has(to)) return;
@@ -294,8 +296,7 @@ export const fileOverview = (
   for (const hint of analysis.callGraph) {
     const from = pathOfHunk.get(hunkIdOf(hint.fromPartId));
     const to = pathOfHunk.get(hunkIdOf(hint.toPartId));
-    if (from !== undefined && to !== undefined && hint.use !== "request")
-      link(from, to, hint.use, hint.symbol);
+    if (from !== undefined && to !== undefined) link(from, to, hint.use, hint.symbol);
   }
   const linkedFrom = (path: string) => [...(links.get(path)?.keys() ?? [])];
   const linkersOf = (path: string) => paths.filter((other) => links.get(other)?.has(path) === true);

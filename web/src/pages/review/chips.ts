@@ -1,11 +1,15 @@
 // Pure, and importing only domain types, so scripts/measure-pr.ts can count chips the same way.
 import type { PartId } from "../../../../src/domain/diff/index.ts";
 
-/** A call the code makes on one of its lines, to the hunk that changes what it calls. */
+/**
+ * A call the code makes on one of its lines, to the hunk that changes what it calls. A request is
+ * an HTTP request to the part that adds its route; its symbol is the route's method and path.
+ */
 export interface Call {
   readonly symbol: string;
   readonly toPartId: PartId;
   readonly line: number;
+  readonly request?: true;
 }
 
 /** Where a symbol stands in a line's text: characters `start` to `end`, end excluded. */

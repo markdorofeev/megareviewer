@@ -3,12 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisView } from "../../../../contracts/index.ts";
-import {
-  type HunkId,
-  hunkIdOf,
-  type PartId,
-  renameHints,
-} from "../../../../src/domain/diff/index.ts";
+import { HunkId, hunkIdOf, type PartId, renameHints } from "../../../../src/domain/diff/index.ts";
 import {
   AnalysisId,
   DecisionId,
@@ -873,7 +868,119 @@ const ambiguous: AnalysisView = {
 const chip = (within_: HTMLElement, symbol: string) =>
   within(within_).getByRole("button", { name: new RegExp(`^${symbol} `) });
 
+/** The fixture plus a Python route and a TSX page that requests it, each read in a step. */
+const withRequest = (): AnalysisView => {
+  const routeId = HunkId.parse("h_00000000000000a1");
+  const pageId = HunkId.parse("h_00000000000000a2");
+  const added = (path: string, id: HunkId, language: string, lines: readonly string[]) => ({
+    path,
+    oldPath: null,
+    status: "added" as const,
+    binary: false,
+    oldMode: null,
+    newMode: null,
+    language,
+    hunks: [
+      {
+        id,
+        path,
+        oldStart: 0,
+        oldLines: 0,
+        newStart: 1,
+        newLines: lines.length,
+        sectionHeading: null,
+        lines: lines.map((text, at) => ({
+          kind: "add" as const,
+          oldLine: null,
+          newLine: at + 1,
+          text,
+          noNewlineAtEnd: false,
+        })),
+      },
+    ],
+    additions: lines.length,
+    deletions: 0,
+  });
+  const steps = analysis.tour?.steps ?? [];
+  const step = (n: number, title: string, partIds: PartId[], via: PartId[]) => ({
+    id: TourStepId.parse(`s${n}`),
+    title,
+    explanation: "",
+    partIds,
+    kind: "flow" as const,
+    via,
+    entries: partIds.slice(0, 1),
+  });
+  return {
+    ...fixture,
+    analysis: {
+      ...analysis,
+      files: [
+        ...analysis.files,
+        added("api/routes.py", routeId, "python", [
+          '@router.get("/api/items")',
+          "def items():",
+          "    return []",
+        ]),
+        added("web/src/routes/Items.tsx", pageId, "tsx", [
+          "export const Items = () => {",
+          '  const items = useQuery(() => client.GET("/api/items"));',
+          "};",
+        ]),
+      ],
+      risk: [
+        ...analysis.risk,
+        ...[routeId, pageId].map((hunkId) => ({
+          hunkId,
+          riskClass: "logic" as const,
+          reason: "Ordinary code.",
+          source: "rule" as const,
+        })),
+      ],
+      callGraph: [
+        ...analysis.callGraph,
+        {
+          fromPartId: pageId,
+          toPartId: routeId,
+          symbol: "GET /api/items",
+          line: 2,
+          use: "request",
+        },
+      ],
+      tour:
+        analysis.tour === null
+          ? null
+          : {
+              ...analysis.tour,
+              steps: [
+                ...steps,
+                step(steps.length + 1, "GET /api/items", [routeId], []),
+                step(steps.length + 2, "Page: Items", [pageId], [routeId]),
+              ],
+            },
+    },
+  };
+};
+
 describe("inline calls", () => {
+  it("show a request as a chip that opens the route's part in its own file", async () => {
+    renderReview({ view: withRequest() });
+    await loaded();
+    const page = cardOf(HunkId.parse("h_00000000000000a2"));
+    const request = chip(page, "sends GET /api/items");
+    expect(request.textContent).toBe("▸sends GET /api/items api/routes.py logic");
+    await userEvent.click(request);
+    const opened = page.querySelector<HTMLElement>(".inline-call");
+    if (opened === null) throw new Error("no inline call");
+    expect(within(opened).getAllByRole("region")[0]?.getAttribute("aria-label")).toMatch(
+      /^api\/routes\.py, lines 1–3$/,
+    );
+    // The route lists the page among its callers.
+    expect(
+      cardOf(HunkId.parse("h_00000000000000a1")).querySelector(".hunk-callers")?.textContent,
+    ).toContain("Items.tsx");
+  });
+
   it("leave out type uses, which only group code", async () => {
     renderReview({
       view: {

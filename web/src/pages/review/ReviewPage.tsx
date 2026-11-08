@@ -192,9 +192,9 @@ const Review = ({
         on.set(id, [...(on.get(id) ?? []), decision]);
     return on;
   }, [analysis.decisions, index]);
-  // A type use groups code in the tour; the reader follows only calls.
+  // A type use groups code in the tour; the reader follows calls and requests.
   const callHints = useMemo(
-    () => analysis.callGraph.filter((hint) => hint.use === "call"),
+    () => analysis.callGraph.filter((hint) => hint.use !== "type"),
     [analysis.callGraph],
   );
   const calls = useMemo(() => callsByLine(callHints, index), [callHints, index]);

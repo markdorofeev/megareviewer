@@ -247,10 +247,12 @@ export const callsByLine = (
   index: PartIndex,
 ): ReadonlyMap<PartId, ReadonlyMap<number, readonly Call[]>> => {
   const calls = new Map<PartId, Map<number, Call[]>>();
-  for (const { fromPartId, toPartId, symbol, line } of callGraph) {
+  for (const { fromPartId, toPartId, symbol, line, use } of callGraph) {
     if (!index.parts.has(fromPartId) || !index.parts.has(toPartId)) continue;
     const lines = calls.get(fromPartId) ?? new Map<number, Call[]>();
-    lines.set(line, [...(lines.get(line) ?? []), { symbol, toPartId, line }]);
+    const call: Call =
+      use === "request" ? { symbol, toPartId, line, request: true } : { symbol, toPartId, line };
+    lines.set(line, [...(lines.get(line) ?? []), call]);
     calls.set(fromPartId, lines);
   }
   return calls;

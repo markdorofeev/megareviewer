@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { PartId } from "../../../../src/domain/diff/index.ts";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
 import { partIndex, tourSteps } from "./model.ts";
@@ -6,6 +7,7 @@ import { paletteItems, searchPalette } from "./palette.ts";
 
 const analysis = fixtureAnalysisView.analysis;
 const h = fixtureHunks;
+const p = fixtureParts;
 const index = partIndex(analysis);
 const items = paletteItems(analysis, tourSteps(analysis, index), index);
 
@@ -58,6 +60,31 @@ describe("the jump palette", () => {
     expect(target("src/lib/dates.ts")).toEqual({ kind: "mechanical" });
     expect(target("src/routes/orders.ts")).toEqual({ kind: "hunk", partId: h.routeImports });
     expect(target("The receipt endpoint")).toEqual({ kind: "step", stepId: "s1" });
+  });
+
+  it("lists routes with the files that request them, not as symbols", () => {
+    const request = (fromPartId: PartId) => ({
+      fromPartId,
+      toPartId: h.receiptRoute,
+      symbol: "GET /orders/:id/receipt",
+      line: 1,
+      use: "request" as const,
+    });
+    const requested: Analysis = {
+      ...analysis,
+      callGraph: [...analysis.callGraph, request(h.receiptFormatting), request(p.cache)],
+    };
+    const found = searchPalette(paletteItems(requested, [], index), "receipt").find(
+      ({ group }) => group === "routes",
+    )?.items;
+    expect(found?.map((item) => [item.label, item.detail, item.target])).toEqual([
+      [
+        "GET /orders/:id/receipt",
+        "orders.ts, requested in receipts.ts",
+        { kind: "hunk", partId: h.receiptRoute },
+      ],
+    ]);
+    expect(searchPalette(paletteItems(requested, [], index), "@ orders/:id")).toEqual([]);
   });
 
   it("has no decisions, mismatches or symbols without the model and the hints", () => {

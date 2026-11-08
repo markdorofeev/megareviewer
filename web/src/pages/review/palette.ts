@@ -1,4 +1,4 @@
-import type { PartId } from "../../../../src/domain/diff/index.ts";
+import { isTestFile, type PartId } from "../../../../src/domain/diff/index.ts";
 import type {
   Analysis,
   DecisionId,
@@ -9,12 +9,20 @@ import { hunkLocation } from "../../diff/index.ts";
 import { CATEGORY_NAMES } from "./DecisionCard.tsx";
 import type { PartIndex } from "./model.ts";
 
-export type PaletteGroup = "decisions" | "mismatches" | "contract" | "symbols" | "steps" | "files";
+export type PaletteGroup =
+  | "decisions"
+  | "mismatches"
+  | "contract"
+  | "routes"
+  | "symbols"
+  | "steps"
+  | "files";
 
 export const PALETTE_GROUPS: readonly { readonly group: PaletteGroup; readonly title: string }[] = [
   { group: "decisions", title: "Decisions" },
   { group: "mismatches", title: "Mismatches" },
   { group: "contract", title: "Contract changes" },
+  { group: "routes", title: "Routes" },
   { group: "symbols", title: "Symbols" },
   { group: "steps", title: "Steps" },
   { group: "files", title: "Files" },
@@ -43,6 +51,8 @@ const PREFIXES: Readonly<Record<string, readonly PaletteGroup[]>> = {
   "/": ["files"],
 };
 
+const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
+
 /** Items each group shows at most. */
 const MAX_PER_GROUP = 8;
 
@@ -56,8 +66,38 @@ export const paletteItems = (
     const found = index.parts.get(id);
     return found === undefined ? "" : `${found.file.path}, ${hunkLocation(found.hunk)}`;
   };
+  // Routes the pull request requests, each with the files that request it.
+  const requesters = new Map<
+    string,
+    { readonly route: PartId; readonly symbol: string; readonly files: Set<string> }
+  >();
+  for (const hint of analysis.callGraph) {
+    const from = index.parts.get(hint.fromPartId);
+    if (hint.use !== "request" || from === undefined || !index.parts.has(hint.toPartId)) continue;
+    const key = `route:${hint.symbol}:${hint.toPartId}`;
+    const known = requesters.get(key) ?? {
+      route: hint.toPartId,
+      symbol: hint.symbol,
+      files: new Set<string>(),
+    };
+    known.files.add(from.file.path);
+    requesters.set(key, known);
+  }
+  const routes = [...requesters].map(
+    ([key, { route, symbol, files }]): PaletteItem => ({
+      key,
+      group: "routes",
+      label: symbol,
+      detail: `${basename(index.parts.get(route)?.file.path ?? "")}, requested in ${[...files]
+        .sort((a, b) => Number(isTestFile(a)) - Number(isTestFile(b)))
+        .map(basename)
+        .join(", ")}`,
+      target: { kind: "hunk", partId: route },
+    }),
+  );
   const symbols = new Map<string, PaletteItem>();
   for (const hint of analysis.callGraph) {
+    if (hint.use === "request") continue;
     const key = `symbol:${hint.symbol}:${hint.toPartId}`;
     if (symbols.has(key) || !index.parts.has(hint.toPartId)) continue;
     symbols.set(key, {
@@ -102,6 +142,7 @@ export const paletteItems = (
             },
           ];
     }),
+    ...routes,
     ...symbols.values(),
     ...steps.map(
       (step, at): PaletteItem => ({

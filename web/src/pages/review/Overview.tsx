@@ -79,13 +79,15 @@ const layout = (rows: FileOverview["rows"], backEdges: boolean) => {
   return { boxes, width, height };
 };
 
-/** Solid for a call, dashed for an import only, dotted for a type. */
-const edgeStyle = (edge: OverviewEdge): "call" | "import" | "type" =>
+/** Solid for a call, dash-dot for a request, dashed for an import only, dotted for a type. */
+const edgeStyle = (edge: OverviewEdge): "call" | "request" | "import" | "type" =>
   edge.uses.includes("call")
     ? "call"
-    : edge.uses.every((use) => use === "import")
-      ? "import"
-      : "type";
+    : edge.uses.includes("request")
+      ? "request"
+      : edge.uses.every((use) => use === "import")
+        ? "import"
+        : "type";
 
 /**
  * Where each edge leaves its caller and enters its callee, spread across the middle of the node in
@@ -156,7 +158,12 @@ const edgePath = (
   return `M ${x1} ${y1} C ${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}`;
 };
 
-const USE_NAMES = { import: "imports", call: "calls", type: "uses types from" } as const;
+const USE_NAMES = {
+  import: "imports",
+  call: "calls",
+  type: "uses types from",
+  request: "sends requests to",
+} as const;
 
 const describeEdge = (edge: OverviewEdge, labelOf: (key: string) => string): string => {
   const uses = edge.uses.map((use) => USE_NAMES[use]).join(", ");
@@ -357,8 +364,8 @@ export const Overview = ({
     >
       <p className="overview-legend muted">
         Files that nothing in the pull request calls are on top; each file sits below its callers.
-        Solid lines are calls, dashed ones imports, dotted ones types. Tests show on the files they
-        call.
+        Solid lines are calls, dash-dot ones HTTP requests to a route, dashed ones imports, dotted
+        ones types. Tests show on the files they call.
       </p>
       {expandedGroups.length > 0 && (
         <p className="overview-expanded">

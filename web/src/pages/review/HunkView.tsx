@@ -98,7 +98,7 @@ export const HunkView = ({
   );
 };
 
-/** A call's name, the called hunk's file and its risk class. */
+/** A call's name, or a request's method and path, the called hunk's file and its risk class. */
 export const CallLabel = ({ call, index }: { readonly call: Call; readonly index: PartIndex }) => {
   const target = index.items([call.toPartId])[0];
   const riskClass = index.mechanical.has(call.toPartId)
@@ -106,6 +106,8 @@ export const CallLabel = ({ call, index }: { readonly call: Call; readonly index
     : (target?.risk.riskClass ?? "logic");
   return (
     <>
+      {call.request === true && <span className="call-kind">sends</span>}
+      {call.request === true && " "}
       <code className="call-symbol">{call.symbol}</code>{" "}
       <span className="call-file">{target?.file.path}</span>{" "}
       <span className={`call-risk risk-${riskClass}`}>{riskClass}</span>
