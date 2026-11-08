@@ -1820,7 +1820,7 @@ describe("outside the pull request", () => {
       "test/jobs/email-receipts.test.ts:31",
     ]);
     const used = uses[0]?.querySelector(".unchanged-line.used");
-    expect(used?.textContent).toBe("14    const text = await renderReceipt(order);\n");
+    expect(used?.textContent).toBe("14    const text = await renderReceipt(order);");
     expect(uses[0]?.querySelectorAll(".unchanged-line")).toHaveLength(5);
     // Only the card of the part that changes the definition says so.
     expect(within(cardOf(h.receiptRoute)).queryByText(/Used unchanged/)).toBeNull();
@@ -1838,7 +1838,7 @@ describe("outside the pull request", () => {
       "src/jobs/email-receipts.ts · outside the pull request · uses receipts.ts (renderReceipt).",
     );
     expect(overviewBox().querySelector(".overview-legend")?.textContent).toContain(
-      "Faded files at the bottom are outside the pull request and use what it changes.",
+      "Faded files are outside the pull request, under the files whose changes they use.",
     );
     await userEvent.click(outside);
     expect(pressed("Map")).toBe(true);

@@ -178,7 +178,6 @@ const UnchangedUses = ({
                     >
                       <span className="unchanged-number">{line}</span>
                       {text}
-                      {"\n"}
                     </span>
                   );
                 })}

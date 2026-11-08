@@ -73,6 +73,11 @@
   font-size: var(--text-xs);
 }
 
+/* A grid item grows with its longest line unless it may shrink; the excerpt scrolls instead. */
+.unchanged-uses > li {
+  min-width: 0;
+}
+
 .unchanged-place {
   margin: 0 0 var(--space-1);
   color: var(--color-text-muted);

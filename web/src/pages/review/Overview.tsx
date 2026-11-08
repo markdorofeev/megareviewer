@@ -390,7 +390,7 @@ export const Overview = ({
         Solid lines are calls, dash-dot ones HTTP requests to a route, dashed ones imports, dotted
         ones types. Tests show on the files they call.
         {overview.edges.some((edge) => edge.outside) &&
-          " Faded files at the bottom are outside the pull request and use what it changes."}
+          " Faded files are outside the pull request, under the files whose changes they use."}
       </p>
       {expandedGroups.length > 0 && (
         <p className="overview-expanded">
