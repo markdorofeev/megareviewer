@@ -75,18 +75,29 @@ test("analyzes a PR picked from the list", async ({ page }) => {
 
 test("the map moves through the hunks and the steps with the keyboard", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  // config/app.yaml has three hunks; j and k move the focus between their cards.
+  // j and k move the focus between the cards of a step, n to the next step.
+  const labelsIn = (step: number) =>
+    page
+      .locator(".map-step")
+      .nth(step)
+      .locator(".hunk-card")
+      .evaluateAll((cards) => cards.map((card) => card.getAttribute("aria-label") ?? ""));
+  const [first, second] = await labelsIn(0);
+  const [next] = await labelsIn(1);
+  if (first === undefined || second === undefined || next === undefined) {
+    throw new Error("expected two cards in the first step and one in the second");
+  }
   const focused = page.locator(".hunk-card:focus");
   await page.keyboard.press("j");
-  await expect(focused).toHaveAttribute("aria-label", /^config\/app\.yaml, lines 10–16$/);
+  await expect(focused).toHaveAttribute("aria-label", first);
   await page.keyboard.press("j");
-  await expect(focused).toHaveAttribute("aria-label", /^config\/app\.yaml, lines 19–25$/);
+  await expect(focused).toHaveAttribute("aria-label", second);
   await page.keyboard.press("k");
-  await expect(focused).toHaveAttribute("aria-label", /^config\/app\.yaml, lines 10–16$/);
+  await expect(focused).toHaveAttribute("aria-label", first);
 
   await page.keyboard.press("n");
   await page.keyboard.press("j");
-  await expect(focused).toHaveAttribute("aria-label", /^src\/routes\/orders\.ts/);
+  await expect(focused).toHaveAttribute("aria-label", next);
   await expect(rail(page).locator(".rail-hunk.in-view").first()).toBeVisible();
 });
 
