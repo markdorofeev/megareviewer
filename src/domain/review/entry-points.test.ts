@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hunk } from "../../application/testing/index.ts";
 import type { FileChange, Hunk } from "../diff/index.ts";
-import { type Entry, entryLabel, entryOf, routeReceivers } from "./entry-points.ts";
+import { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 
 const file = (path: string, ...hunks: Hunk[]): FileChange => ({
   path,
@@ -175,18 +175,5 @@ describe("entryLabel", () => {
         { kind: "page", names: ["A"] },
       ]),
     ).toBe("GET /a; Page: A, B");
-  });
-});
-
-describe("routeReceivers", () => {
-  it.each([
-    ['@connection_changes.put("/token", response_model=Token)', ["connection_changes"]],
-    ['router.get("/items", list)', ["router"]],
-    ['mux.HandleFunc("GET /items", list)', ["mux"]],
-    ['@app.route("/items", methods=["GET"])', ["app"]],
-    ['axios.get("/items")', []],
-    ["return save(id)", []],
-  ])("reads the router of %s", (line, receivers) => {
-    expect(routeReceivers(line)).toEqual(receivers);
   });
 });

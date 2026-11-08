@@ -148,7 +148,8 @@ export const counts = (measured: Measured) => {
     candidateParts: measured.candidates,
     fileLinks: measured.fileLinks.length,
     callHints: calls.length,
-    typeHints: callGraph.length - calls.length,
+    typeHints: callGraph.filter((hint) => hint.use === "type").length,
+    requestHints: callGraph.filter((hint) => hint.use === "request").length,
     linesWithSeveralCalls: lines.filter((onLine) => onLine.length > 1).length,
     ...chipCounts(plan),
     calledByLinks: calls.length,
@@ -199,6 +200,16 @@ export const report = (measured: Measured): string => {
     const hunks = step.partIds.length === 1 ? "1 part" : `${step.partIds.length} parts`;
     out.push(`  ${at + 1}. [${step.kind}] ${step.title}  (${hunks}${via})`);
   });
+  const pathOfPart = (id: PartId) =>
+    measured.files.find((file) => file.hunks.some((hunk) => hunk.id === hunkIdOf(id)))?.path ?? "";
+  const requests = measured.callGraph.filter((hint) => hint.use === "request");
+  if (requests.length > 0) {
+    out.push("", "Requests");
+    for (const hint of requests) {
+      const to = `${basename(pathOfPart(hint.toPartId))} ${hint.toPartId}`;
+      out.push(`  ${basename(pathOfPart(hint.fromPartId))}:${hint.line}  ${hint.symbol}  → ${to}`);
+    }
+  }
   out.push("", "Overview", ...overviewLines(overviewOf(measured)));
   out.push("", "Counts");
   for (const [name, value] of Object.entries(counts(measured))) out.push(`  ${name}: ${value}`);

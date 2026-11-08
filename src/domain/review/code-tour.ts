@@ -8,8 +8,9 @@ import {
   type PartId,
   partsByHunk,
   piecesOf,
+  routeReceivers,
 } from "../diff/index.ts";
-import { type Entry, entryLabel, entryOf, routeReceivers } from "./entry-points.ts";
+import { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 import type { RiskAssessment } from "./risk.ts";
 import { type Tour, type TourStep, TourStepId } from "./tour.ts";
 
@@ -95,16 +96,24 @@ interface Flow extends Start {
 
 type StepDraft = Omit<TourStep, "id">;
 
+/** A request a flow sends to a route an earlier step reads. */
+interface Send {
+  readonly route: PartId;
+  readonly symbol: string;
+  readonly step: number;
+}
+
 /**
  * The tour without the model, as flows. A flow starts at an entry point (a route, a page, a
  * command) or at a root (code nothing calls that calls something) and reads the changed code it
  * runs, callers before callees. Code an earlier flow read goes in `via` instead. Registering an
- * entry, like adding a router to an app, is read first in that entry's flow.
+ * entry, like adding a router to an app, is read first in that entry's flow. A request never
+ * extends the walk: the route it reaches goes in `via`, and the flow comes after the route's.
  *
  * What no flow runs joins the flow it belongs with: a type the flow that uses it, any other code
- * the flow with most of its file, a test the flow it calls into, then its file's, then its
- * subject's; a doc the code in its directory. The rest goes into supporting steps: API schema,
- * docs, tests, and other changes by area.
+ * the flow with most of its file, a test the flow of the route it requests, then the flow it
+ * calls into, then its file's, then its subject's; a doc the code in its directory. The rest goes
+ * into supporting steps: API schema, docs, tests, and other changes by area.
  *
  * Flows that reach contract hunks come first, then routes, pages, commands and roots. Every
  * required hunk is in exactly one step.
@@ -130,17 +139,26 @@ export const codeTour = (input: CodeTourInput): Tour => {
   );
   const contract = new Set<PartId>(ids.filter((id) => contractHunks.has(hunkIdOf(id))));
 
-  // Calls in the order they're made, and type uses, between required hunks.
+  // Calls in the order they're made, type uses, and requests, between required hunks.
   const edges = () => new Map<PartId, PartId[]>(ids.map((id) => [id, []]));
   const [callees, callers, typeUses, usedAsType] = [edges(), edges(), edges(), edges()];
-  for (const { fromPartId: from, toPartId: to, use } of [...callGraph].sort(
+  /** The route parts each part requests, with the methods and paths, in line order. */
+  const requests = new Map<PartId, Map<PartId, string[]>>();
+  for (const { fromPartId: from, toPartId: to, use, symbol } of [...callGraph].sort(
     (a, b) => a.line - b.line,
   )) {
-    if (use === "request" || from === to || !order.has(from) || !order.has(to)) continue;
+    if (from === to || !order.has(from) || !order.has(to)) continue;
+    if (use === "request") {
+      const routes = requests.get(from) ?? new Map<PartId, string[]>();
+      routes.set(to, [...(routes.get(to) ?? []), symbol]);
+      requests.set(from, routes);
+      continue;
+    }
     const [out, back] = use === "call" ? [callees, callers] : [typeUses, usedAsType];
     if (!out.get(from)?.includes(to)) out.get(from)?.push(to);
     if (!back.get(to)?.includes(from)) back.get(to)?.push(from);
   }
+  const requestsOf = (id: PartId) => [...(requests.get(id) ?? [])];
   const codeCallees = (id: PartId) => (callees.get(id) ?? []).filter(isCode);
   const codeCallers = (id: PartId) => (callers.get(id) ?? []).filter(isCode);
   const reach = (starts: readonly PartId[]): PartId[] => {
@@ -237,6 +255,9 @@ export const codeTour = (input: CodeTourInput): Tour => {
       KIND_RANK[a.kind] - KIND_RANK[b.kind] ||
       firstAt(a) - firstAt(b),
   );
+  const ordered = afterRequestedRoutes(starts, (start) =>
+    reach(start.starts).flatMap((id) => requestsOf(id).map(([route]) => route)),
+  );
 
   const owner = new Map<PartId, Flow>();
   const flows: Flow[] = [];
@@ -244,7 +265,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
     flow.hunks.push(id);
     owner.set(id, flow);
   };
-  for (const start of starts) {
+  for (const start of ordered) {
     const reached = reach(start.starts);
     const read = reached.filter((id) => owner.has(id));
     // A root whose code is mostly read already joins the flow it shares the most with.
@@ -304,7 +325,10 @@ export const codeTour = (input: CodeTourInput): Tour => {
       );
     }
     if (isTest(id)) {
-      // A test follows the code it calls; a test helper, like a fake, the tests that use it.
+      // A test that requests a route follows it; any other the code it calls; a test helper,
+      // like a fake, the tests that use it.
+      const requested = mostCommon(requestsOf(id).map(([route]) => owner.get(route)));
+      if (requested !== undefined) return requested;
       const linked = [
         ...(callees.get(id) ?? []),
         ...(typeUses.get(id) ?? []),
@@ -344,20 +368,39 @@ export const codeTour = (input: CodeTourInput): Tour => {
     flow.hunks.splice(0, flow.hunks.length, ...code, ...flow.hunks.filter(isTest).sort(byOrder));
   }
 
+  // A flow passes through the routes it requests in earlier flows, but never walks into them: a
+  // page flow that read the backend would read the whole PR.
+  const sendsOf = (flow: Flow, at: number): Send[] => {
+    const sent: Send[] = [];
+    for (const [route, symbols] of flow.hunks.flatMap(requestsOf)) {
+      const routeAt = flows.findIndex((other) => other.hunks.includes(route));
+      if (routeAt < 0 || routeAt >= at) continue;
+      if (!flow.via.includes(route)) flow.via.push(route);
+      for (const symbol of symbols) {
+        if (!sent.some((one) => one.symbol === symbol))
+          sent.push({ route, symbol, step: routeAt + 1 });
+      }
+    }
+    return sent;
+  };
+
   const stepOfFlow = new Map(flows.map((flow, at) => [flow, at + 1]));
   const stepOf = (id: PartId) => {
     const flow = owner.get(id);
     return flow === undefined ? undefined : stepOfFlow.get(flow);
   };
   const steps: StepDraft[] = [
-    ...flows.map((flow) => ({
-      title: flowTitle(flow, pathOf, definitions),
-      explanation: flowExplanation(flow, pathOf, isTest, stepOf),
-      partIds: flow.hunks,
-      kind: "flow" as const,
-      via: flow.via,
-      entries: flow.kind === "root" ? [] : flow.starts,
-    })),
+    ...flows.map((flow, at) => {
+      const sent = sendsOf(flow, at);
+      return {
+        title: flowTitle(flow, pathOf, definitions),
+        explanation: flowExplanation(flow, pathOf, isTest, stepOf, sent),
+        partIds: flow.hunks,
+        kind: "flow" as const,
+        via: flow.via,
+        entries: flow.kind === "root" ? [] : flow.starts,
+      };
+    }),
     ...supportingSteps(
       ids.filter((id) => !owner.has(id)),
       pathOf,
@@ -370,6 +413,29 @@ export const codeTour = (input: CodeTourInput): Tour => {
     steps: steps.map((step, index) => ({ id: TourStepId.parse(`s${index + 1}`), ...step })),
     builtBy: "code",
   };
+};
+
+/**
+ * The starts with each moved after the starts whose routes it requests, in their order otherwise.
+ * A cycle of requests keeps its order.
+ */
+const afterRequestedRoutes = (
+  starts: readonly Start[],
+  requestedBy: (start: Start) => readonly PartId[],
+): Start[] => {
+  const left = starts.map((start) => {
+    const routes = requestedBy(start);
+    const after = starts.filter(
+      (other) => other !== start && other.starts.some((id) => routes.includes(id)),
+    );
+    return { start, after };
+  });
+  const placed: Start[] = [];
+  while (left.length > 0) {
+    const ready = left.findIndex(({ after }) => after.every((one) => placed.includes(one)));
+    for (const { start } of left.splice(Math.max(ready, 0), 1)) placed.push(start);
+  }
+  return placed;
 };
 
 /** The value that occurs most, the first of them on a tie; undefined values don't count. */
@@ -406,10 +472,13 @@ const flowExplanation = (
   pathOf: (id: PartId) => string,
   isTest: (id: PartId) => boolean,
   stepOf: (id: PartId) => number | undefined,
+  sends: readonly Send[],
 ): string => {
   const names = (ids: readonly PartId[]) => [...new Set(ids.map((id) => basename(pathOf(id))))];
   const tests = names(flow.hunks.filter(isTest));
-  const earlier = [...new Set(flow.via.flatMap((id) => stepOf(id) ?? []))].sort((a, b) => a - b);
+  const requested = new Set(sends.map((one) => one.route));
+  const walkedVia = flow.via.filter((id) => !requested.has(id));
+  const earlier = [...new Set(walkedVia.flatMap((id) => stepOf(id) ?? []))].sort((a, b) => a - b);
   const parts = [
     `Reads ${listed(names(flow.hunks.filter((id) => !isTest(id))))}`,
     ...(tests.length > 0 ? [`tested in ${listed(tests)}`] : []),
@@ -417,6 +486,15 @@ const flowExplanation = (
       ? []
       : [
           `passes through ${earlier.length === 1 ? "step" : "steps"} ${listed(earlier.map(String))}`,
+        ]),
+    ...(sends.length === 0
+      ? []
+      : [
+          `sends ${listed(
+            [...sends]
+              .sort((a, b) => a.step - b.step)
+              .map(({ symbol, step }) => `${symbol} (step ${step})`),
+          )}`,
         ]),
   ];
   return `${parts.join("; ")}.`;

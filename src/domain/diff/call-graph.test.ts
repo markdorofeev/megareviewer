@@ -584,3 +584,81 @@ describe("hints and definitions on parts", () => {
     ]);
   });
 });
+
+describe("request hints", () => {
+  // Two routes in one Python hunk; a page requests both, a test one.
+  const routes = hunk("api/routes.py", "@@ -1,0 +1,6 @@", [
+    '+@router.get("/api/items")',
+    "+def items():",
+    "+    pass",
+    '+@router.put("/api/items/{item_id}")',
+    "+def save(item_id):",
+    "+    pass",
+  ]);
+  const routeSymbols = symbols([
+    ["items", 1, 3],
+    ["save", 4, 6],
+  ]);
+  const routeParts = splitByDefinition(routes, { head: routeSymbols.definitions, base: [] });
+  const [listRoute, saveRoute] = routeParts.map((part) => part.id);
+  const page = hunk("web/src/Items.tsx", "@@ -1,0 +1,3 @@", [
+    '+const list = () => client.GET("/api/items");',
+    '+const save = (id: string) => client.PUT("/api/items/{item_id}", { params: { id } });',
+    '+const again = () => client.GET("/api/items");',
+  ]);
+  const test = hunk("tests/test_items.py", "@@ -1,0 +1,2 @@", [
+    "+def test_save(client):",
+    '+    client.put(f"/api/items/{item_id}", json={})',
+  ]);
+  const byPath = new Map([["api/routes.py", routeSymbols]]);
+  const hints = (files: FileChange[]) =>
+    buildCallGraphHints(files, byPath, routeParts)
+      .filter((hint) => hint.use === "request")
+      .map(({ fromPartId, toPartId, symbol, line }) => [fromPartId, toPartId, symbol, line]);
+
+  it("links a TSX request to the Python part that adds its route, once per route", () => {
+    expect(hints([file("api/routes.py", routes), file("web/src/Items.tsx", page)])).toEqual([
+      [page.id, listRoute, "GET /api/items", 1],
+      [page.id, saveRoute, "PUT /api/items/{item_id}", 2],
+    ]);
+  });
+
+  it("links a test's request to the route it sends", () => {
+    expect(hints([file("api/routes.py", routes), file("tests/test_items.py", test)])).toEqual([
+      [test.id, saveRoute, "PUT /api/items/{item_id}", 2],
+    ]);
+  });
+
+  it("never links production code to a route in a test", () => {
+    const fakeServer = hunk("tests/fake_server.py", "@@ -1,0 +1,2 @@", [
+      '+@app.get("/api/items")',
+      "+def items():",
+    ]);
+    expect(
+      hints([file("tests/fake_server.py", fakeServer), file("web/src/Items.tsx", page)]),
+    ).toEqual([]);
+  });
+
+  it("links a request that two routes match to each", () => {
+    const latest = hunk("api/latest.py", "@@ -1,0 +1,1 @@", ['+@router.get("/api/items/latest")']);
+    const any = hunk("api/any.py", "@@ -1,0 +1,1 @@", ['+@router.get("/api/items/{item_id}")']);
+    const caller = hunk("web/src/Latest.tsx", "@@ -1,0 +1,1 @@", [
+      '+client.GET("/api/items/latest");',
+    ]);
+    expect(
+      hints([
+        file("api/latest.py", latest),
+        file("api/any.py", any),
+        file("web/src/Latest.tsx", caller),
+      ]),
+    ).toEqual([
+      [caller.id, latest.id, "GET /api/items/latest", 1],
+      [caller.id, any.id, "GET /api/items/{item_id}", 1],
+    ]);
+  });
+
+  it("reads requests in code only", () => {
+    const doc = hunk("docs/api.md", "@@ -1,0 +1,1 @@", ['+Call `client.GET("/api/items")`.']);
+    expect(hints([file("api/routes.py", routes), file("docs/api.md", doc)])).toEqual([]);
+  });
+});

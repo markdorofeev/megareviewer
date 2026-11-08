@@ -18,6 +18,7 @@ export {
   splitHunks,
 } from "./parts.ts";
 export { findMechanicalProofs, type ProofContext } from "./proofs.ts";
+export { type Route, requestsOn, routeReceivers, routesFor, routesOn } from "./requests.ts";
 export { isTestFile } from "./test-files.ts";
 export {
   CallGraphHint,

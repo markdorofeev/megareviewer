@@ -1,80 +1,10 @@
-import type { FileChange, Hunk } from "../diff/index.ts";
-
-export interface Route {
-  /** Upper case; ALL when the route takes any method. */
-  readonly method: string;
-  readonly path: string;
-}
+import { type FileChange, type Hunk, type Route, routesOn } from "../diff/index.ts";
 
 /** Where a user or caller reaches the changed code: what a flow in the tour starts from. */
 export type Entry =
   | { readonly kind: "route"; readonly routes: readonly Route[] }
   | { readonly kind: "page"; readonly names: readonly string[] }
   | { readonly kind: "command"; readonly name: string; readonly path: string };
-
-const METHODS = "get|post|put|patch|delete|head|options|all";
-/** Objects routes are registered on, by convention: app.get, router.post, r.GET, mux.HandleFunc. */
-const RECEIVER = String.raw`(?:app|router|server|mux|r|e|g|fastify|\w*(?:Router|router|App))`;
-const PATH = String.raw`["'\`](\/[^"'\`]*)["'\`]`;
-
-/**
- * One row per framework. A pattern finds a route on one added line, with its method and path.
- * Client calls such as `axios.get("/x")` don't match: only decorators and known receivers do.
- */
-const ROUTE_PATTERNS: readonly ((line: string) => Route[])[] = [
-  // FastAPI and the like: @router.put("/p").
-  (line) =>
-    [...line.matchAll(new RegExp(String.raw`@[\w.]+\.(${METHODS})\(\s*${PATH}`, "gi"))].map(
-      ([, method = "", path = ""]) => ({ method: method.toUpperCase(), path }),
-    ),
-  // Flask: @app.route("/p", methods=["GET", "POST"]).
-  (line) => {
-    const match = new RegExp(String.raw`@[\w.]+\.route\(\s*${PATH}(.*)`).exec(line);
-    if (match === null) return [];
-    const [, path = "", rest = ""] = match;
-    const methods = /methods\s*=\s*[[(]([^\])]*)/.exec(rest)?.[1];
-    const listed = [...(methods ?? "").matchAll(/["'](\w+)["']/g)].map(([, m = ""]) =>
-      m.toUpperCase(),
-    );
-    return (listed.length > 0 ? listed : ["GET"]).map((method) => ({ method, path }));
-  },
-  // Express, Fastify, Gin, Echo, Chi: app.get("/p", …), r.GET("/p", …).
-  (line) =>
-    [
-      ...line.matchAll(
-        new RegExp(String.raw`(?<![\w@.])${RECEIVER}\.(${METHODS})\(\s*${PATH}`, "gi"),
-      ),
-    ].map(([, method = "", path = ""]) => ({ method: method.toUpperCase(), path })),
-  // Spring: @GetMapping("/p"), @RequestMapping(value = "/p").
-  (line) => {
-    const match = new RegExp(
-      String.raw`@(Get|Post|Put|Patch|Delete|Request)Mapping\(\s*(?:(?:value|path)\s*=\s*)?${PATH}`,
-    ).exec(line);
-    if (match === null) return [];
-    const [, verb = "", path = ""] = match;
-    return [{ method: verb === "Request" ? "ALL" : verb.toUpperCase(), path }];
-  },
-  // Go's net/http: mux.HandleFunc("/p", …) and, since Go 1.22, HandleFunc("GET /p", …).
-  (line) => {
-    const match = /\bHandle(?:Func)?\(\s*"(?:([A-Z]+) )?(\/[^"]*)"/.exec(line);
-    if (match === null) return [];
-    const [, method = "ALL", path = ""] = match;
-    return [{ method, path }];
-  },
-];
-
-/**
- * The objects a line declares routes on: `router` in `@router.put("/p")` or `router.get("/p", …)`.
- * Empty when the line declares no route.
- */
-export const routeReceivers = (line: string): string[] =>
-  ROUTE_PATTERNS.some((pattern) => pattern(line).length > 0)
-    ? [
-        ...line.matchAll(
-          new RegExp(String.raw`([\w$]+)\s*\.\s*(?:${METHODS}|route|Handle|HandleFunc)\(`, "gi"),
-        ),
-      ].flatMap(([, receiver]) => receiver ?? [])
-    : [];
 
 const PAGE_DIRECTORIES = new Set(["routes", "pages", "app", "screens", "views"]);
 
@@ -97,7 +27,7 @@ export const entryOf = (
   definitions: readonly string[],
 ): Entry | null => {
   const added = hunk.lines.flatMap((line) => (line.kind === "add" ? [line.text] : []));
-  const routes = added.flatMap((line) => ROUTE_PATTERNS.flatMap((pattern) => pattern(line)));
+  const routes = added.flatMap(routesOn);
   if (routes.length > 0) return { kind: "route", routes: unique(routes) };
   const components = definitions.filter((name) => /^[A-Z]/.test(name));
   if (isPageFile(file.path) && components.length > 0) return { kind: "page", names: components };

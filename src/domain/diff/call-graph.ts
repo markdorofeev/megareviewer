@@ -7,6 +7,7 @@ import {
   sharesPackage,
 } from "./imports.ts";
 import { type Piece, partsByHunk, piecesOf } from "./parts.ts";
+import { type Route, requestsOn, routesFor, routesOn } from "./requests.ts";
 import { isTestFile } from "./test-files.ts";
 import type { CallGraphHint, FileChange, Hunk, HunkPart, PartId } from "./types.ts";
 
@@ -59,6 +60,10 @@ interface Change {
  * A definition changed by several hunks gets one hint, to the first. One hint per symbol and
  * hunk, on its first reference's line. At most 10 calls and 10 type uses per hunk, same file
  * first, then by symbol name. Calls come before type uses.
+ *
+ * Requests come last: a part that sends an HTTP request points to each part whose added lines
+ * declare a route serving it (see `routesFor`), across languages but never from production code
+ * into tests. Both ends are code, in a language the parser knows. At most 10 per part, by line.
  */
 export const buildCallGraphHints = (
   files: readonly FileChange[],
@@ -98,7 +103,16 @@ export const buildCallGraphHints = (
         sharesPackage(from.language ?? "", from.path, to.path) ||
         (reaches.get(from.path) ?? []).some((reach) => reachesBy(reach, kind, name, to.path))));
 
+  const routes = hunks.flatMap((at) =>
+    at.file.language === null
+      ? []
+      : at.piece.hunk.lines.flatMap((line) =>
+          line.kind === "add" ? routesOn(line.text).map((route) => ({ ...route, at })) : [],
+        ),
+  );
+
   return hunks.flatMap((from): CallGraphHint[] => {
+    const requests = requestHints(from, routes);
     const lines = new Set(newLines(from.piece.hunk, ["add", "context"]));
     // The first line each symbol is used on, per use and hunk it reaches.
     const firstUse = { call: new Map<Located, Map<string, number>>(), type: new Map() };
@@ -152,8 +166,43 @@ export const buildCallGraphHints = (
           line,
           use,
         }));
-    return [...hints("call"), ...hints("type")];
+    return [...hints("call"), ...hints("type"), ...requests];
   });
+};
+
+/** The requests a part sends, each to the parts that add a route serving it. */
+const requestHints = (
+  from: Located,
+  routes: readonly (Route & { readonly at: Located })[],
+): CallGraphHint[] => {
+  if (from.file.language === null) return [];
+  const first = new Map<string, CallGraphHint>();
+  for (const line of from.piece.hunk.lines) {
+    if (line.kind === "del" || line.newLine === null) continue;
+    for (const request of requestsOn(line.text, from.file.path)) {
+      for (const route of routesFor(request, routes)) {
+        const to = route.at;
+        // Production code never links into tests.
+        if (
+          to.piece.id === from.piece.id ||
+          (isTestFile(to.file.path) && !isTestFile(from.file.path))
+        )
+          continue;
+        const symbol = `${route.method} ${route.path}`;
+        const key = `${to.piece.id} ${symbol}`;
+        if (!first.has(key)) {
+          first.set(key, {
+            fromPartId: from.piece.id,
+            toPartId: to.piece.id,
+            symbol,
+            line: line.newLine,
+            use: "request",
+          });
+        }
+      }
+    }
+  }
+  return [...first.values()].slice(0, MAX_HINTS_PER_HUNK);
 };
 
 /** Each part's changed definitions, innermost, by name: what the tour reads entry points from. */

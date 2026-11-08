@@ -4,12 +4,12 @@ import {
   type PartId,
   partsByHunk,
   piecesOf,
+  type Route,
 } from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
   entryOf,
   type RiskClass,
-  type Route,
   type TourStep,
 } from "../../../../src/domain/review/index.ts";
 

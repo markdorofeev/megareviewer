@@ -20,7 +20,7 @@ export {
   DecisionVerdict,
   Verdict,
 } from "./decision.ts";
-export { type Entry, entryLabel, entryOf, type Route } from "./entry-points.ts";
+export { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 export {
   HostError,
   HostErrorKind,

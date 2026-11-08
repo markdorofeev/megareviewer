@@ -54,7 +54,7 @@ const file = (path: string, ...hunks: Hunk[]): FileChange => ({
 const one = (n: number, path: string, ...lines: string[]): FileChange =>
   file(path, hunk(n, path, ...lines));
 
-const hint = (from: number, to: number, use: "call" | "type" = "call"): CallGraphHint => ({
+const hint = (from: number, to: number, use: CallGraphHint["use"] = "call"): CallGraphHint => ({
   fromPartId: h(from),
   toPartId: h(to),
   symbol: `s${to}`,
@@ -364,6 +364,16 @@ describe("codeTour", () => {
       hint(10, 11),
       hint(13, 14),
       hint(14, 15, "type"),
+      // ConnectionsSection.tsx sends the three routes' requests; the test sends one.
+      ...["GET /api/account-connections", "DELETE /api/account-connections/{domain}/token"].map(
+        (symbol, at): CallGraphHint => ({ ...hint(14, 2, "request"), symbol, line: 141 + at }),
+      ),
+      {
+        ...hint(14, 2, "request"),
+        symbol: "PUT /api/account-connections/{domain}/token",
+        line: 145,
+      },
+      { ...hint(10, 2, "request"), symbol: "GET /api/account-connections", line: 102 },
     ];
     const tour = tourOf(files, {
       callGraph,
@@ -387,6 +397,12 @@ describe("codeTour", () => {
       ["Docs", [18]],
     ]);
     expect(tour.steps[1]?.via).toEqual([h(6), h(9)]);
+    expect(tour.steps[2]?.via).toEqual([h(2)]);
+    expect(tour.steps[2]?.explanation).toBe(
+      "Reads setup.tsx and ConnectionsSection.tsx; tested in setup.test.tsx; sends" +
+        " GET /api/account-connections (step 1), DELETE /api/account-connections/{domain}/token" +
+        " (step 1) and PUT /api/account-connections/{domain}/token (step 1).",
+    );
   });
 
   it("covers every required hunk exactly once, over random pull requests", () => {
@@ -490,6 +506,73 @@ describe("codeTour with parts", () => {
     ]);
     expect(tour.steps.map((step) => step.entries)).toEqual([[p(1, 2)], [p(1, 3)], [p(1, 4)]]);
     expect(tour.steps[2]?.via).toEqual([p(1, 1)]);
+  });
+
+  describe("requests", () => {
+    const request = (from: PartId, to: PartId, line: number, symbol: string): CallGraphHint => ({
+      fromPartId: from,
+      toPartId: to,
+      symbol,
+      line,
+      use: "request",
+    });
+    // A page whose table sends the three routes' requests, and a test that calls GET's service
+    // but sends PUT's request.
+    const fullStack = [
+      ...files,
+      one(5, "web/src/routes/Items.tsx"),
+      one(6, "web/src/items/ItemsTable.tsx"),
+      one(7, "tests/test_items.py"),
+    ];
+    const requests = [
+      ...callGraph,
+      call(h(5), h(6), 50),
+      request(h(5), p(1, 2), 51, "GET /items"),
+      request(h(6), p(1, 2), 61, "GET /items"),
+      request(h(6), p(1, 4), 62, "DELETE /items/{id}"),
+      request(h(6), p(1, 3), 63, "PUT /items/{id}"),
+      call(h(7), p(3, 1), 70),
+      request(h(7), p(1, 3), 71, "PUT /items/{id}"),
+    ];
+    const withRequests = tourOf(fullStack, {
+      parts,
+      callGraph: requests,
+      definitions: new Map([[h(5), ["Items"]]]),
+      // The table is contract, which would put the page's flow first.
+      risk: contract(6),
+    });
+
+    it("passes through the routes a flow requests without walking into them", () => {
+      const page = withRequests.steps.find((step) => step.title === "Page: Items");
+      expect(page?.partIds).toEqual([h(5), h(6)]);
+      expect(page?.via).toEqual([p(1, 2), p(1, 4), p(1, 3)]);
+      expect(page?.explanation).toBe(
+        "Reads Items.tsx and ItemsTable.tsx; sends GET /items (step 1), PUT /items/{id} (step 2)" +
+          " and DELETE /items/{id} (step 3).",
+      );
+    });
+
+    it("puts a flow after the flows of the routes it requests", () => {
+      expect(withRequests.steps.map((step) => step.title)).toEqual([
+        "GET /items",
+        "PUT /items/{id}",
+        "DELETE /items/{id}",
+        "Page: Items",
+      ]);
+    });
+
+    it("joins a test to the flow of the route it requests, before the code it calls", () => {
+      expect(withRequests.steps[1]?.partIds.at(-1)).toBe(h(7));
+    });
+
+    it("keeps a request cycle in order", () => {
+      const cycle = tourOf(fullStack, {
+        parts,
+        callGraph: [...requests, request(p(1, 2), h(6), 12, "GET /x")],
+        definitions: new Map([[h(5), ["Items"]]]),
+      });
+      expect(cycle.steps.map((step) => step.title)).toContain("Page: Items");
+    });
   });
 
   it("joins back nothing when every part reads apart from its neighbors", () => {
