@@ -2,6 +2,7 @@ import {
   buildCallGraphHints,
   type CallGraphHint,
   changedDefinitionNames,
+  changedDefinitions,
   type FileDefinitions,
   type FileLink,
   type FileSymbols,
@@ -14,10 +15,12 @@ import {
   type MechanicalProof,
   type PartId,
   splitHunks,
+  type UnchangedCallers,
 } from "../../domain/diff/index.ts";
 import { looksGenerated } from "../../domain/review/index.ts";
 import type { CodeParser, Token } from "../ports/index.ts";
 import type { Collected } from "./collect.ts";
+import { type CheckoutAt, readUnchangedCallers } from "./unchanged-callers.ts";
 
 export interface Prepared {
   /** At most one per hunk. */
@@ -34,13 +37,22 @@ export interface Prepared {
   readonly definitions: ReadonlyMap<PartId, readonly string[]>;
   /** Paths whose first lines say a tool wrote them, for the tour's grouping and the overview. */
   readonly generated: ReadonlySet<string>;
+  /** Read from the checkout, naming candidate parts like the hints; none without a checkout. */
+  readonly unchangedCallers: readonly UnchangedCallers[];
   readonly warnings: readonly string[];
   /** Hunks without a proof: the ones the model passes must cover. */
   readonly required: ReadonlySet<HunkId>;
 }
 
-/** The deterministic step: mechanical proofs, parts and call-graph hints, no model. */
-export const prep = async (parser: CodeParser, collected: Collected): Promise<Prepared> => {
+/**
+ * The deterministic step: mechanical proofs, parts and call-graph hints, no model. With a checkout,
+ * also the callers outside the PR of the definitions it changes.
+ */
+export const prep = async (
+  parser: CodeParser,
+  collected: Collected,
+  checkout: CheckoutAt | null = null,
+): Promise<Prepared> => {
   const { files, baseContents, headContents } = collected;
   const diffProofs = findMechanicalProofs(files, {
     gitattributes: collected.gitattributes,
@@ -94,18 +106,36 @@ export const prep = async (parser: CodeParser, collected: Collected): Promise<Pr
   const provedHunks = new Set(proofs.flatMap((proof) => proof.hunkId ?? []));
   // A proof is about a whole hunk, so a proved hunk is never split.
   const parts = splitHunks(files, definitionsByPath, provedHunks);
+  const generated = new Set(
+    files.flatMap((file) => (looksGenerated(headContents.get(file.path) ?? "") ? [file.path] : [])),
+  );
+  const outside =
+    checkout === null
+      ? { unchangedCallers: [], warnings: [] }
+      : await readUnchangedCallers(
+          parser,
+          checkout,
+          files,
+          // Mechanical hunks don't change what a definition does.
+          changedDefinitions(
+            files.map((file) => ({
+              ...file,
+              hunks: file.hunks.filter((hunk) => !provedHunks.has(hunk.id)),
+            })),
+            definitionsByPath,
+            parts,
+          ),
+          generated,
+        );
   return {
     proofs,
     parts,
     callGraph: buildCallGraphHints(files, symbolsByPath, parts),
     fileLinks: fileLinks(files, symbolsByPath),
     definitions: changedDefinitionNames(files, symbolsByPath, parts),
-    generated: new Set(
-      files.flatMap((file) =>
-        looksGenerated(headContents.get(file.path) ?? "") ? [file.path] : [],
-      ),
-    ),
-    warnings: lockfileWarnings(files),
+    generated,
+    unchangedCallers: outside.unchangedCallers,
+    warnings: [...lockfileWarnings(files), ...outside.warnings],
     required: new Set(
       files
         .flatMap((file) => file.hunks.map((hunk) => hunk.id))

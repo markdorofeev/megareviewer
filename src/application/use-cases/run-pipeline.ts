@@ -19,6 +19,7 @@ import type { UseCaseError } from "./errors.ts";
 import { buildAnalysisInput, fitToModel } from "./model-input.ts";
 import { runDecisions, runIntent, runRisk, runTour } from "./model-passes.ts";
 import { prep } from "./prep.ts";
+import type { CheckoutAt } from "./unchanged-callers.ts";
 
 const MODEL_STAGES: readonly StageName[] = ["intent", "risk", "decisions", "tour"];
 
@@ -85,10 +86,11 @@ export const runPipeline = async (
   host: GitHost,
   analysis: Analysis,
   pullRequest: PullRequest,
+  checkout: CheckoutAt | null = null,
 ): Promise<void> => {
   const tracker = createTracker(deps, analysis);
   try {
-    await stages(deps, host, pullRequest, tracker);
+    await stages(deps, host, pullRequest, checkout, tracker);
   } catch (error) {
     deps.logger.error("The analysis pipeline crashed", { analysisId: analysis.id, error });
     await tracker.fail(tracker.lastStage, {
@@ -102,6 +104,7 @@ const stages = async (
   deps: AppDeps,
   host: GitHost,
   pullRequest: PullRequest,
+  checkout: CheckoutAt | null,
   tracker: ReturnType<typeof createTracker>,
 ): Promise<void> => {
   const { model, logger } = deps;
@@ -118,8 +121,8 @@ const stages = async (
   }));
 
   await tracker.setStage("prep", "running");
-  const prepared = await prep(deps.parser, collected.value);
-  const { proofs, parts, callGraph, required, definitions, generated } = prepared;
+  const prepared = await prep(deps.parser, collected.value, checkout);
+  const { proofs, parts, callGraph, required, definitions, generated, unchangedCallers } = prepared;
   const proofRisk = proofs.flatMap((proof) =>
     proof.hunkId === null
       ? []
@@ -137,6 +140,10 @@ const stages = async (
   const prepPatch = {
     proofs,
     callGraph: renameHints(callGraph, hunkIdOf),
+    unchangedCallers: unchangedCallers.map((callers) => ({
+      ...callers,
+      partId: hunkIdOf(callers.partId),
+    })),
     fileLinks: prepared.fileLinks,
     generated: [...generated].sort(),
   };
@@ -148,7 +155,7 @@ const stages = async (
     await tracker.setStage("prep", "done", (analysis) => ({
       ...prepPatch,
       risk,
-      ...joinParts(tour, parts, callGraph),
+      ...joinParts(tour, parts, callGraph, unchangedCallers),
       ...adding(prepared)(analysis),
     }));
     for (const stage of MODEL_STAGES) await tracker.setStage(stage, "skipped");
@@ -240,7 +247,7 @@ const stages = async (
     logger,
   );
   await tracker.setStage("tour", "done", (analysis) => ({
-    ...joinParts(tour.tour, parts, callGraph),
+    ...joinParts(tour.tour, parts, callGraph, unchangedCallers),
     ...adding(tour)(analysis),
   }));
 

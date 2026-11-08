@@ -3,6 +3,7 @@ import {
   type AnalysisId,
   type AnalysisKey,
   analysisId,
+  type CheckoutStatus,
   type HostKind,
   type PullRequest,
   type PullRequestRef,
@@ -16,6 +17,7 @@ import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { pipelineVersion } from "./pipeline-version.ts";
 import { runPipeline } from "./run-pipeline.ts";
+import { lookUpCheckout } from "./unchanged-callers.ts";
 
 /** More than enough to find every analysis that was running when megareviewer stopped. */
 const RECOVERY_SCAN_LIMIT = 200;
@@ -48,6 +50,7 @@ const newAnalysis = (
   deps: AppDeps,
   key: AnalysisKey,
   pullRequest: PullRequest,
+  checkout: CheckoutStatus,
   createdAt: string,
 ): Analysis => ({
   id: analysisId(key),
@@ -71,7 +74,7 @@ const newAnalysis = (
   callGraph: [],
   fileLinks: [],
   generated: [],
-  checkout: "none",
+  checkout,
   unchangedCallers: [],
   intent: null,
   risk: [],
@@ -90,20 +93,31 @@ export const createAnalysisRunner = (deps: AppDeps) => {
   const inFlight = new Map<AnalysisId, Promise<void>>();
 
   const startFor = async (host: GitHost, pullRequest: PullRequest): Promise<AnalysisId> => {
+    const checkout = await lookUpCheckout(
+      deps.checkouts,
+      pullRequest.ref.repo,
+      pullRequest.headSha,
+    );
     const key: AnalysisKey = {
       ref: pullRequest.ref,
       headSha: pullRequest.headSha,
-      pipelineVersion: pipelineVersion(deps.model, deps.modelEnabled, false),
+      pipelineVersion: pipelineVersion(deps.model, deps.modelEnabled, checkout.status === "read"),
     };
     const existing = await deps.store.findByKey(key);
     const id = existing?.id ?? analysisId(key);
     // No await from here on until the run is in the map, so two requests can't both start it.
     if (existing?.status === "complete" || inFlight.has(id)) return id;
     // A failed analysis, or one interrupted by a restart, runs again under the same ID.
-    const analysis = newAnalysis(deps, key, pullRequest, existing?.createdAt ?? deps.clock.now());
+    const analysis = newAnalysis(
+      deps,
+      key,
+      pullRequest,
+      checkout.status,
+      existing?.createdAt ?? deps.clock.now(),
+    );
     const run = (async () => {
       await deps.store.saveAnalysis(analysis);
-      await runPipeline(deps, host, analysis, pullRequest);
+      await runPipeline(deps, host, analysis, pullRequest, checkout.at);
     })()
       .catch((error: unknown) => {
         deps.logger.error("Couldn't record the analysis", { analysisId: id, error });

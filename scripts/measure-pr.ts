@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { createGitCheckout } from "../src/adapters/git/index.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
-import type { CodeParser } from "../src/application/ports/index.ts";
+import type { CodeParser, LocalCheckout } from "../src/application/ports/index.ts";
 import { prep } from "../src/application/use-cases/prep.ts";
 import {
   type CallGraphHint,
@@ -13,6 +14,7 @@ import {
   type MechanicalProof,
   type PartId,
   parseUnifiedDiff,
+  type UnchangedCallers,
 } from "../src/domain/diff/index.ts";
 import {
   classifyByRules,
@@ -45,6 +47,8 @@ export interface Measured {
   /** How many candidate parts prep cut, before joining back. */
   readonly candidates: number;
   readonly tour: Tour;
+  /** Read from a local checkout at the head commit; none without one. */
+  readonly unchangedCallers: readonly UnchangedCallers[];
   /** Files the PR changes that aren't in the cache, so they weren't parsed. */
   readonly missing: readonly string[];
 }
@@ -53,6 +57,7 @@ export const measure = async (
   parser: CodeParser,
   pullRequest: PullRequest,
   cached: CachedFile,
+  checkout: LocalCheckout | null = null,
 ): Promise<Measured> => {
   const parsed = parseUnifiedDiff(pullRequest.diff);
   if (!parsed.ok) throw new Error(`the cached diff doesn't parse: ${parsed.error.message}`);
@@ -73,15 +78,19 @@ export const measure = async (
       file.status === "deleted" ? null : read(pullRequest.headSha, file.path),
     );
   }
-  const prepared = await prep(parser, {
-    files,
-    gitattributes: cached(pullRequest.baseSha, ".gitattributes") ?? null,
-    baseContents,
-    headContents,
-    tickets: [],
-    missingTicketKeys: [],
-    warnings: [],
-  });
+  const prepared = await prep(
+    parser,
+    {
+      files,
+      gitattributes: cached(pullRequest.baseSha, ".gitattributes") ?? null,
+      baseContents,
+      headContents,
+      tickets: [],
+      missingTicketKeys: [],
+      warnings: [],
+    },
+    checkout === null ? null : { checkout, sha: pullRequest.headSha },
+  );
   const proofRisk = prepared.proofs.flatMap((proof): RiskAssessment[] =>
     proof.hunkId === null
       ? []
@@ -95,6 +104,7 @@ export const measure = async (
     codeTour({ files, risk, ...prepared }),
     prepared.parts,
     prepared.callGraph,
+    prepared.unchangedCallers,
   );
   return {
     files,
@@ -106,6 +116,7 @@ export const measure = async (
     parts: joined.parts,
     candidates: prepared.parts.length,
     tour: joined.tour,
+    unchangedCallers: joined.unchangedCallers,
     missing: [...new Set(missing)],
   };
 };
@@ -149,6 +160,14 @@ export const counts = (measured: Measured) => {
     fileLinks: measured.fileLinks.length,
     callHints: calls.length,
     typeHints: callGraph.filter((hint) => hint.use === "type").length,
+    unchangedCallerDefinitions: measured.unchangedCallers.length,
+    unchangedUses: measured.unchangedCallers.reduce(
+      (sum, callers) => sum + callers.uses.length + callers.more,
+      0,
+    ),
+    unchangedCallerFiles: new Set(
+      measured.unchangedCallers.flatMap((callers) => callers.uses.map((use) => use.path)),
+    ).size,
     requestHints: callGraph.filter((hint) => hint.use === "request").length,
     linesWithSeveralCalls: lines.filter((onLine) => onLine.length > 1).length,
     ...chipCounts(plan),
@@ -210,6 +229,17 @@ export const report = (measured: Measured): string => {
       out.push(`  ${basename(pathOfPart(hint.fromPartId))}:${hint.line}  ${hint.symbol}  → ${to}`);
     }
   }
+  if (measured.unchangedCallers.length > 0) {
+    out.push("", "Used unchanged");
+    for (const { partId, symbol, uses, more } of measured.unchangedCallers) {
+      const calls = uses.filter((use) => use.use === "call").length;
+      out.push(
+        `  ${symbol} (${basename(pathOfPart(partId))} ${partId}): ${uses.length + more} uses, ${calls} calls`,
+      );
+      for (const use of uses) out.push(`    ${use.path}:${use.line}  ${use.use}`);
+      if (more > 0) out.push(`    and ${more} more`);
+    }
+  }
   out.push("", "Overview", ...overviewLines(overviewOf(measured)));
   out.push("", "Counts");
   for (const [name, value] of Object.entries(counts(measured))) out.push(`  ${name}: ${value}`);
@@ -259,14 +289,20 @@ if (import.meta.main) {
   const { DatabaseSync } = await import("node:sqlite");
   const { homedir } = await import("node:os");
   const db = new DatabaseSync(join(homedir(), ".megareviewer", "db.sqlite"), { readOnly: true });
-  const [analysisId] = process.argv.slice(2);
-  if (analysisId === undefined) {
-    console.log(`Usage: pnpm measure <analysis id>\n\nCached analyses:\n${listAnalyses(db)}`);
+  const [analysisId, flag, dir] = process.argv.slice(2);
+  if (analysisId === undefined || (flag !== undefined && (flag !== "--checkout" || !dir))) {
+    console.log(
+      `Usage: pnpm measure <analysis id> [--checkout <dir>]\n\nCached analyses:\n${listAnalyses(db)}`,
+    );
     process.exit(1);
   }
   const { pullRequest, cached } = fromDatabase(db, analysisId);
   const parser = await createTreeSitterCodeParser({
     grammarsDir: join(import.meta.dirname, "../src/adapters/treesitter/grammars"),
   });
-  console.log(report(await measure(parser, pullRequest, cached)));
+  const checkout = dir === undefined ? null : createGitCheckout({ dir });
+  if (checkout !== null && !(await checkout.hasCommit(pullRequest.headSha))) {
+    throw new Error(`${dir} doesn't have the PR's head commit ${pullRequest.headSha}`);
+  }
+  console.log(report(await measure(parser, pullRequest, cached, checkout)));
 }

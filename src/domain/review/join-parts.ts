@@ -5,6 +5,7 @@ import {
   partId,
   partsByHunk,
   renameHints,
+  type UnchangedCallers,
 } from "../diff/index.ts";
 import type { Tour } from "./tour.ts";
 
@@ -13,13 +14,14 @@ export interface JoinedParts {
   /** The parts left, of the hunks still split. */
   readonly parts: readonly HunkPart[];
   readonly callGraph: readonly CallGraphHint[];
+  readonly unchangedCallers: readonly UnchangedCallers[];
 }
 
 /**
  * Joins back what the tour placed together. Consecutive candidate parts of one hunk in the same
  * step become one part, which reads where the first of them did; a hunk whose candidates all
  * landed in one step is whole again, with its hunk ID. Parts left are numbered again from 1. The
- * tour's steps, `via` and entries, and the hints, name the joined parts.
+ * tour's steps, `via` and entries, the hints and the unchanged callers name the joined parts.
  *
  * Splitting without joining gave 115 parts on a PR of 48 hunks, one file in 29 pieces: too fine to
  * read. A part is split off only where the tour reads it apart from its neighbors.
@@ -28,6 +30,7 @@ export const joinParts = (
   tour: Tour,
   candidates: readonly HunkPart[],
   callGraph: readonly CallGraphHint[],
+  unchangedCallers: readonly UnchangedCallers[] = [],
 ): JoinedParts => {
   const stepOf = new Map<PartId, number>();
   tour.steps.forEach((step, at) => {
@@ -75,5 +78,9 @@ export const joinParts = (
     },
     parts,
     callGraph: renameHints(callGraph, renamed),
+    unchangedCallers: unchangedCallers.map((callers) => ({
+      ...callers,
+      partId: renamed(callers.partId),
+    })),
   };
 };

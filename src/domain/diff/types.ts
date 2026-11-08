@@ -146,7 +146,7 @@ export type UnchangedUse = z.infer<typeof UnchangedUse>;
 
 /**
  * The unchanged callers of one definition the PR changes, which part `partId` changes: at most 50
- * uses, in path and line order, and how many more there are.
+ * uses, code before tests and then by path and line, and how many more there are.
  */
 export const UnchangedCallers = z
   .object({

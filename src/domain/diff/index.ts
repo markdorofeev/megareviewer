@@ -2,7 +2,7 @@ export { buildCallGraphHints, changedDefinitionNames, type FileSymbols } from ".
 export { FileLink, fileLinks } from "./file-links.ts";
 export { findFormattingProofs } from "./formatting.ts";
 export { hunkId } from "./hunk-id.ts";
-export type { SymbolImport } from "./imports.ts";
+export { languageFamily, resolvesImports, type SymbolImport } from "./imports.ts";
 export { type DiffParseError, parseUnifiedDiff } from "./parse-diff.ts";
 export {
   type DefinitionSpan,
@@ -34,4 +34,12 @@ export {
   UnchangedCallers,
   UnchangedUse,
 } from "./types.ts";
+export {
+  type ChangedDefinition,
+  changedDefinitions,
+  findUnchangedCallers,
+  MAX_UNCHANGED_USES,
+  mentionsAny,
+  type UnchangedFile,
+} from "./unchanged-callers.ts";
 export { lockfileWarnings } from "./warnings.ts";

@@ -1,7 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { MIGRATIONS, migrate } from "../src/adapters/sqlite/migrations.ts";
-import { FakeCodeParser, smallFeature } from "../src/application/testing/index.ts";
+import {
+  FakeCodeParser,
+  FakeLocalCheckout,
+  smallFeature,
+} from "../src/application/testing/index.ts";
 import { counts, fromDatabase, measure, report } from "./measure-pr.ts";
 
 const { pullRequest, baseFiles, headFiles } = smallFeature;
@@ -59,6 +63,21 @@ describe("measure-pr", () => {
     expect(printed).toContain(
       "Overview\n  1. orders.ts (GET /orders/:id/receipt)\n  2. receipts.ts\n  Not linked: app.yaml (contract)\n",
     );
+  });
+
+  it("lists the callers outside the PR it reads from a checkout", async () => {
+    const paths = [...new Set([...Object.keys(baseFiles), ...Object.keys(headFiles)])];
+    const { cached } = fromDatabase(cachedDatabase(paths), "a_1");
+    const checkout = new FakeLocalCheckout({
+      [pullRequest.headSha]: {
+        ...headFiles,
+        "src/app.ts": 'import { ordersRouter } from "./routes/orders.ts";\napp.use(ordersRouter);',
+      },
+    });
+    const measured = await measure(new FakeCodeParser(), pullRequest, cached, checkout);
+    expect(counts(measured).unchangedUses).toBe(1);
+    expect(report(measured)).toContain("Used unchanged\n  ordersRouter (orders.ts h_");
+    expect(report(measured)).toContain("1 uses, 1 calls\n    src/app.ts:2  call\n");
   });
 
   it("lists the files it couldn't read from the cache", async () => {

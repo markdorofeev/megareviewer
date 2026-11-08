@@ -19,6 +19,7 @@ import {
   FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
+  FakeLocalCheckout,
   FakeLocalCheckouts,
   FakeTicketSource,
   FixedClock,
@@ -1026,5 +1027,126 @@ describe("without the model", () => {
     const contract = analysis.risk.filter((risk) => risk.riskClass === "contract");
     expect(contract.length).toBeGreaterThan(0);
     expect(contract.every((risk) => risk.source === "rule")).toBe(true);
+  });
+});
+
+describe("with a local checkout", () => {
+  const { headSha } = smallFeature.pullRequest;
+  const appLines = [
+    'import { ordersRouter } from "./routes/orders.ts";',
+    "",
+    "export const app = express();",
+    'app.use("/api", ordersRouter);',
+  ];
+  const checkout = (files: Record<string, string> = {}) =>
+    new FakeLocalCheckout({
+      [headSha]: {
+        ...smallFeature.headFiles,
+        "src/app.ts": appLines.join("\n"),
+        // Names the router, but doesn't import it.
+        "src/admin.ts": "export const adminRouter = ordersRouter;",
+        "README.md": "ordersRouter",
+        ...files,
+      },
+    });
+  const ordersHunk = smallFeatureFiles[1]?.hunks[1]?.id;
+
+  it.each([false, true])(
+    "reads the callers of changed definitions outside the PR (model %s)",
+    async (modelEnabled) => {
+      const { analyze } = setup({
+        modelEnabled,
+        checkouts: new FakeLocalCheckouts({ checkout: checkout(), namesRepo: true }),
+      });
+      const analysis = await analyze();
+      expect(analysis.status).toBe("complete");
+      expect(analysis.checkout).toBe("read");
+      expect(analysis.key.pipelineVersion).toBe(
+        `10+${modelEnabled ? "fake-model/1" : "no-model"}+checkout`,
+      );
+      expect(analysis.unchangedCallers).toEqual([
+        {
+          partId: ordersHunk,
+          symbol: "ordersRouter",
+          uses: [
+            {
+              path: "src/app.ts",
+              line: 4,
+              use: "call",
+              excerpt: { start: 2, lines: appLines.slice(1) },
+            },
+          ],
+          more: 0,
+        },
+      ]);
+    },
+  );
+
+  it("parses only unchanged files in the PR's languages that name a changed definition", async () => {
+    const reader = checkout({ "scripts/tool.py": "ordersRouter = 1", "src/other.ts": "x" });
+    const parser = new FakeCodeParser();
+    const { analyze } = setup({
+      modelEnabled: false,
+      parser,
+      checkouts: new FakeLocalCheckouts({ checkout: reader, namesRepo: true }),
+    });
+    await analyze();
+    expect(reader.reads).toEqual([["src/admin.ts", "src/app.ts", "src/other.ts"]]);
+    const parsed = parser.calls
+      .filter((call) => call.method === "symbols")
+      .map((call) => call.source);
+    expect(parsed).toContain(appLines.join("\n"));
+    expect(parsed).not.toContain("x");
+  });
+
+  it("warns about files too large to read, and about a checkout it can't read", async () => {
+    const big = "x".repeat(1024 * 1024 + 1);
+    const { analyze } = setup({
+      modelEnabled: false,
+      checkouts: new FakeLocalCheckouts({
+        checkout: checkout({ "src/big.ts": big, "src/huge.ts": big }),
+        namesRepo: true,
+      }),
+    });
+    expect((await analyze()).warnings).toContain(
+      "2 files in the local checkout are over 1 MB, so callers in them aren't shown.",
+    );
+
+    const failing = checkout();
+    failing.listFiles = async () => err({ kind: "failed", message: "git ls-tree failed: boom" });
+    const second = setup({
+      modelEnabled: false,
+      checkouts: new FakeLocalCheckouts({ checkout: failing, namesRepo: true }),
+    });
+    const analysis = await second.analyze();
+    expect(analysis.status).toBe("complete");
+    expect(analysis.unchangedCallers).toEqual([]);
+    expect(analysis.warnings).toContain(
+      "Couldn't read the local checkout: git ls-tree failed: boom",
+    );
+  });
+
+  it.each([
+    [true, "missing-commit"],
+    [false, "none"],
+  ] as const)(
+    "reads nothing from a checkout without the head commit (remote names the repository: %s)",
+    async (namesRepo, status) => {
+      const reader = new FakeLocalCheckout({ ["0".repeat(40)]: smallFeature.headFiles });
+      const { analyze } = setup({
+        modelEnabled: false,
+        checkouts: new FakeLocalCheckouts({ checkout: reader, namesRepo }),
+      });
+      const analysis = await analyze();
+      expect(analysis.checkout).toBe(status);
+      expect(analysis.key.pipelineVersion).toBe("10+no-model");
+      expect(analysis.unchangedCallers).toEqual([]);
+      expect(reader.reads).toEqual([]);
+    },
+  );
+
+  it("says none was found without a checkout", async () => {
+    const { analyze } = setup({ modelEnabled: false });
+    expect((await analyze()).checkout).toBe("none");
   });
 });
