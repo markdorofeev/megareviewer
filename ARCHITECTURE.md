@@ -16,7 +16,7 @@ Why:
 
 - **Nothing to host or pay for.** Users bring their own Anthropic credentials.
 - **Privacy is simple to explain.** "Your code never leaves your machine, except to the model provider" makes security reviews easy.
-- **A local process can do what a browser page can't.** It can call Jira and Bitbucket (which block cross-origin browser requests), reuse the `gh` token, read the local git checkout, and later read agent transcripts on disk.
+- **A local process can do what a browser page can't.** It can call Jira and Bitbucket (which block cross-origin browser requests), reuse the `gh` token, read the local git checkout, and later read agent transcripts on disk. The checkout is read when there is one (see [Local checkout](#local-checkout)) and never changed.
 
 Costs we accept:
 
@@ -53,6 +53,14 @@ Flaky networks: on a lossy link, one dropped request used to fail the whole anal
 - **Reads that fail on the network are retried** three times, after 1, 2 and 4 seconds. One wrapper around every host does this, so both hosts share the policy. Other failures, such as a rate limit or a missing PR, are answers and aren't retried.
 - **Publishing is never retried and has no timeout.** A post that failed on the network may still have been posted, and retrying it would post it twice. The reviewer retries it, and the posted-comment records skip what's already there.
 
+## Local checkout
+
+The checkout is the directory given with `--checkout`, or else the one megareviewer runs in. It's read when it has the PR's head commit, whatever its remotes say: the commit pins every file's content, so a fork's checkout, or one cloned before its owner was renamed, reads the same. Requiring a remote that names the PR's repository was the plan, and refused delphi-code's own checkout, whose remote still names its owner's old account. The remotes only decide what the page says when the commit is missing: with one that names the repository, that a `git fetch` would bring it; without, that no checkout was found. `doctor` names the checkout and the repositories its remotes name.
+
+Reading runs `git` without a shell and without a new dependency: `cat-file -e` for the commit, `ls-tree` for the files at it, and `cat-file --batch` for many files in one process, after `--batch-check` skips those over 1 MB. Nothing it runs fetches, checks out or writes, so the reviewer's working tree stays as it is. A failure to read is a warning on the analysis, never a failed analysis.
+
+It's used for one thing so far: the unchanged callers of what the PR changes (see prep).
+
 ## Components
 
 ```mermaid
@@ -70,7 +78,7 @@ flowchart LR
 | CLI | Checks credentials, starts the server, opens the browser | Node 22.13+, TypeScript |
 | Local server | Serves the UI and the API, runs the analysis pipeline, holds all credentials | Hono |
 | Web UI | PR picker, review page, publishing | Vite, React, Shiki |
-| Connectors | Git hosts, tickets, model calls | Octokit, Bitbucket REST, Jira REST, `@anthropic-ai/sdk` |
+| Connectors | Git hosts, tickets, model calls, the local checkout | Octokit, Bitbucket REST, Jira REST, `@anthropic-ai/sdk`, the `git` command |
 | Code analysis | Parse changed files for mechanical proofs and call-graph hints | `web-tree-sitter` |
 | Store | Cached analyses and review state | SQLite via built-in `node:sqlite`, plain SQL migrations |
 
@@ -115,7 +123,7 @@ At least one git host must be configured. Credentials stay in the server process
 
 ## Analysis pipeline
 
-Input is a PR URL from either host. Output is one analysis, cached by `(host, repo, PR, head SHA, pipeline version)`, so reopening a PR is instant and a new push triggers a fresh analysis. The pipeline version says whether the model ran, so starting with `--ai` analyzes again.
+Input is a PR URL from either host. Output is one analysis, cached by `(host, repo, PR, head SHA, pipeline version)`, so reopening a PR is instant and a new push triggers a fresh analysis. The pipeline version says whether the model ran and whether a local checkout was read, so starting with `--ai`, or reopening a PR once the checkout has its head commit, analyzes again.
 
 The model passes run only with `--ai`. Without it, the analysis is complete after prep, and the four model stages show as skipped.
 
@@ -124,6 +132,7 @@ The model passes run only with `--ai`. Without it, the analysis is complete afte
 - PR title, description, branch name, commits, and the diff, from the host connector.
 - Base and head contents of each changed file, for parsing and context.
 - Jira tickets: keys matching `[A-Z][A-Z0-9]+-\d+` in the description, commit messages and branch name, fetched from Jira.
+- Whether the local checkout has the PR's head commit, decided before the analysis starts, since its pipeline version says so.
 
 ### 2. Deterministic prep (no model)
 
@@ -139,6 +148,7 @@ The model passes run only with `--ai`. Without it, the analysis is complete afte
 - Link changed files by their imports, by the same rules, for the overview: an import that reaches another changed file is a link, even where no hint does, such as an app importing the module that registers its routes.
 - Link requests to routes, across languages: a call that names an HTTP method and a literal path (a typed or generated client, `fetch` and the like, a test client in a test) links to the part that adds the route serving it. Methods match exactly and paths segment by segment, a placeholder in any syntax matching one segment. A base prefix the client adds isn't in the code, so a request also matches after dropping its leading segments, but only when that leaves one route. Hints stop at a language, so a full-stack PR was two islands: on delphi-code #2, nothing linked the page to the three routes it calls.
 
+- With a checkout, find the **unchanged callers** of what the PR changes: code outside the PR that calls a definition the PR changes, or names it as a type, which is where a regression shows. A changed definition is one the base file has and whose own lines the PR adds or deletes, not counting nested definitions or blank lines, so a class that only gains methods isn't one. Callers are found by the hints' rules: through imports (or the package, in Go and Java), within a language family, never from code into tests, and not type uses of generated files. Only files in the PR's languages whose text names a changed definition are parsed, and languages whose imports aren't read are left out. At most 50 uses per definition are kept, code first, with the rest counted. Matching names across the repository was measured first: on delphi-code #2 it found 357 uses in 83 files, almost all other things named `state`, `to_json` or `main`. Following imports leaves 6: `create_app`'s three callers, the one of `clone_credentials`, whose order of credentials the PR changes, and the page that renders `CredentialsGuide`. One level only; callers of callers would need the same reading again.
 - Classify every remaining hunk as *contract* or *logic* with rules: dependency manifests, schemas and migrations, CI and infrastructure, repository config, auth and security paths, risky calls in added lines, and removed or skipped tests. A rule can only raise a hunk to *contract*; one no rule matches is *logic*.
 - Build the tour from the call-graph hints, as flows. A flow starts at an entry point a user or caller reaches (an HTTP route, a page, a command), found by framework markers on added lines, and reads the changed code it runs, callers before callees. Code an earlier flow read is linked from the next flow instead of shown again. Types, imports, tests and docs join the flow they belong with; what no flow runs goes into supporting steps: API schema, docs, tests, and other changes by area. Flows that reach contract hunks come first. The tour has no step cap: merging unrelated code to meet one would hide the story. Grouping the files the call graph connects was the first version: its steps were whatever happened to connect, titled by a chain of symbols, and on a real PR one step held 33 of 48 hunks. Code that registers an entry, like a router the routes are declared on or an app adding that router, is read first in the first flow it registers. A request never extends a flow: the flow passes through the route in an earlier step, says what it sends, and comes after the route's flow. A page flow that walked into the backend would read the whole PR. A test that requests a route joins that route's flow.
 - Join back the parts the tour read together: consecutive parts of one hunk in the same step become one part again, and a hunk read in one step is whole again. Splitting without joining gave 115 parts on delphi-code #2, one file in 29 pieces, too fine to read; with joining, 8 of its 48 hunks stay split, into 32 parts, and each of its three routes is a flow of its own. The model's passes see whole hunks: its input maps hints back to hunks, and each hunk its tour lists reads as all of its parts.
@@ -174,14 +184,14 @@ PR content is untrusted. A description or code comment can contain text aimed at
 
 **PR picker.** Lists PRs waiting for the user's review and their own open PRs from every configured host, or accepts a pasted PR URL.
 
-**Review page.** It opens on the code. The header holds the PR and its intent in one line: the model's summary with `--ai`, or the description's first line without it. A red chip names a mismatch between what was asked and what the code does, and goes to the code it rests on; "Details" opens the full intent in a dialog. The reviewer picks one of two layouts with a switch (`v`), kept per browser:
+**Review page.** It opens on the code. The header holds the PR and its intent in one line: the model's summary with `--ai`, or the description's first line without it. A red chip names a mismatch between what was asked and what the code does, and goes to the code it rests on; "Details" opens the full intent in a dialog, and says why nothing outside the PR is shown when no checkout was read. The reviewer picks one of two layouts with a switch (`v`), kept per browser:
 
-- **Map**, the default: every hunk in one scroll, step after step in tour order, then the proved-mechanical changes. A rail beside it has a bar per hunk or part, sized by its length, colored by risk and marked for each decision and contract rule on it; the hunks in view are outlined, reviewed ones dimmed, and a click scrolls there. The first call in a step to a changed hunk has a chip under its line that opens the called hunk in place, indented, so the reviewer reads down the call stack without leaving the page. A later call to that hunk in the same step underlines the symbol instead, with a peek of the called code on hover or focus; a symbol that reaches several hunks is one chip listing them. A request's chip names its method and path and opens the route's part. Under a hunk's header, its callers are listed by file, tests counted. A chip on every call was the first version: on delphi-code #2, 29 of 54 chips repeated a call shown earlier in the same step, and one hunk listed six of its 17 callers by symbol. A part of a split hunk is a card, a bar and a reviewed mark of its own: its header names what it changes, which part it is and the steps the rest of its hunk is in, and a row above and below its lines goes to the hunk's neighboring parts. The header's count stays in hunks: a split hunk is reviewed once all its parts are.
-- **Overview:** the changed files as a layered diagram. Files nothing in the PR calls are on top, each file one row below its lowest caller, with its entry (routes, a page, a command) named on it. Edges are imports, calls, type uses and requests between files, a request drawn apart because it crosses into another process; color is the file's highest risk class and width its lines changed. Tests and test helpers are badges on the files they reach, generated files are faded, and files no edge touches sit in a strip under the diagram. A click opens the file's first hunk in the map, and Esc there comes back. Above 40 files, files group by directory, and a group opens in place. Rows by depth, ordered by their neighbors' positions, are enough at that size without a layout library.
+- **Map**, the default: every hunk in one scroll, step after step in tour order, then the proved-mechanical changes. A rail beside it has a bar per hunk or part, sized by its length, colored by risk and marked for each decision and contract rule on it; the hunks in view are outlined, reviewed ones dimmed, and a click scrolls there. The first call in a step to a changed hunk has a chip under its line that opens the called hunk in place, indented, so the reviewer reads down the call stack without leaving the page. A later call to that hunk in the same step underlines the symbol instead, with a peek of the called code on hover or focus; a symbol that reaches several hunks is one chip listing them. A request's chip names its method and path and opens the route's part. Under a hunk's header, its callers are listed by file, tests counted, and a part that changes a definition used outside the PR says "Used unchanged in 2 places and 1 test", opening each use with its file, line and the lines around it. A chip on every call was the first version: on delphi-code #2, 29 of 54 chips repeated a call shown earlier in the same step, and one hunk listed six of its 17 callers by symbol. A part of a split hunk is a card, a bar and a reviewed mark of its own: its header names what it changes, which part it is and the steps the rest of its hunk is in, and a row above and below its lines goes to the hunk's neighboring parts. The header's count stays in hunks: a split hunk is reviewed once all its parts are.
+- **Overview:** the changed files as a layered diagram. Files nothing in the PR calls are on top, each file one row below its lowest caller, with its entry (routes, a page, a command) named on it. Edges are imports, calls, type uses and requests between files, a request drawn apart because it crosses into another process; color is the file's highest risk class and width its lines changed. Tests and test helpers are badges on the files they reach, generated files are faded, and files no edge touches sit in a strip under the diagram. Files outside the PR that use what it changes are faded nodes one row below the file they use, with a dashed edge up into it, grouped by directory above 10; a click opens the code they use. A click opens the file's first hunk in the map, and Esc there comes back. Above 40 files, files group by directory, and a group opens in place. Rows by depth, ordered by their neighbors' positions, are enough at that size without a layout library.
 
 The overview replaced a call tree: the changed hunks as a tree of symbols from the entry points. On delphi-code #2 it had 42 rows for 29 hunks, 13 of them "above" references to a hunk placed higher, three test files among its seven roots, and 19 hunks under "Not on a call path". Its rows were symbols, so it never showed that the PR runs from the routes through the services to the host classes and the keychain. Reviewers didn't use it. A tree of the tour's flows instead of symbols is the alternative kept for later.
 
-In the map, each decision is a card under the first hunk it rests on, with approve, reject and comment there, and its other hunks link to it. Mechanical hunks are collapsed with their proof ("moved, verified identical"), and the user can expand them. A jump palette (`⌘K`) searches decisions, mismatches, contract changes, routes (with the files that request them), symbols, steps and files; in the overview, it focuses the item's file.
+In the map, each decision is a card under the first hunk it rests on, with approve, reject and comment there, and its other hunks link to it. Mechanical hunks are collapsed with their proof ("moved, verified identical"), and the user can expand them. A jump palette (`⌘K`) searches decisions, mismatches, contract changes, definitions used unchanged outside the PR, routes (with the files that request them), symbols, steps and files; in the overview, it focuses the item's file.
 
 The page opens on the code because the intro in front of it, an intent panel and two sidebars, was what reviewers skipped. Two alternatives were rejected:
 
@@ -219,7 +229,7 @@ In scope: the CLI, GitHub and Bitbucket Cloud connectors, PR picker, all four mo
 
 Later, in rough order:
 
-1. Read the local git checkout when one exists (full repo context, no API rate limits, other git hosts).
+1. Read more of the local git checkout. It's read for unchanged callers already; left are the PR's own files instead of the host's API (no rate limits, other git hosts), unchanged functions on a call path between two changed hunks, and callers of callers.
 2. Carry decision statuses over when a PR gets new commits.
 3. Agent transcripts (e.g. Claude Code sessions) as an intent source.
 4. Ask the code (principle 7).

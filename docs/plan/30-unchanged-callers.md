@@ -1,6 +1,6 @@
 # Stage 30: Unchanged callers from a local checkout
 
-**Status:** In progress (on main)
+**Status:** Done (on main, no PR)
 **Depends on:** 27 (the overview shows them); after 28, so callers point at parts
 **Unblocks:** the rest of ARCHITECTURE.md "Later" item 1 (full repository context from the checkout)
 **Owns:** `src/application/ports/local-checkout.ts` (new), `src/adapters/git/` (new), `src/domain/diff/call-graph.ts` (callers outside the PR), `src/application/use-cases/collect.ts` and `prep.ts`, `src/cli/` (finding the checkout), the callers list in `web/src/pages/review/` and the overview's outside nodes
@@ -87,10 +87,10 @@ A separate commit, with a line in stage 02's **Change log**:
 
 ## Definition of done
 
-- [ ] Contract change commit, with the stage 02 change log line.
-- [ ] Tasks above, with the tests. Coverage holds for `domain` and `application`.
-- [ ] On delphi-code #2 with its checkout, the callers include `sources.py:169` for `clone_credentials`, `create_app`'s three, and `ServiceStep.tsx` for `CredentialsGuide`, and none of the `DelphiCode` type uses. `pnpm measure` prints them. Differences go in **Notes for later stages**.
-- [ ] ARCHITECTURE.md: "Shape" says the checkout is read when present and never changed, and "Later" item 1 says what's left.
+- [x] Contract change commit, with the stage 02 change log line.
+- [x] Tasks above, with the tests. Coverage holds for `domain` and `application`.
+- [x] On delphi-code #2 with its checkout, the callers include `sources.py:169` for `clone_credentials`, `create_app`'s three, and `ServiceStep.tsx` for `CredentialsGuide`, and none of the `DelphiCode` type uses. `pnpm measure` prints them. Differences go in **Notes for later stages**.
+- [x] ARCHITECTURE.md: "Shape" says the checkout is read when present and never changed, and "Later" item 1 says what's left.
 
 ## Open issues
 
@@ -98,4 +98,13 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+Where the code differs from or adds to this doc:
+
+- **Measured on delphi-code #2** with `pnpm measure a_629b69c2678eb0fe --checkout ~/Projects/work/delphi-code`: 4 definitions with callers, 6 uses in 6 files, all calls. `create_app` in `server.py:16`, `export_openapi.py:12` and `test_front_end_contract.py:73`; `clone_credentials` in `sources.py:169`; `CredentialsGuide` in `ServiceStep.tsx:29`; and one more than the doc expected, `FakeHost` in `tests/e2e_server.py:19`, a test helper the PR changes. None of `DelphiCode`'s type uses. The real server with `--checkout` gave the same, as `10+no-model+checkout`. In the overview, the three callers of `create_app` sit in the row under `app.py`, and `sources.py` under `hosts.py`; `e2e_server.py` has no node, since `fakes.py` is a badge.
+- **The remote doesn't decide whether a checkout is read; the head commit does.** delphi-code's own checkout has the remote `github.com/markdorof/delphi-code`, from before its owner was renamed to `markdorofeev`, so requiring a matching remote refused the checkout this stage measures on. A commit pins every file's content, so a fork's checkout reads the same too. The remotes only choose between `missing-commit` (a remote names the repository, so `git fetch` would help) and `none`. `LocalCheckouts.find(repo)` gives the checkout and `namesRepo`; `lookUpCheckout` in `src/application/use-cases/unchanged-callers.ts` decides.
+- **The port reads many files at once:** `readFiles(sha, paths)` instead of `readFile(sha, path)`, each file `text`, `too-large` or `unreadable`. Errors are `missing-commit` and `failed` (git couldn't run or answer), which the pipeline turns into a warning. Files over 1 MB are counted in a warning too.
+- **`Analysis.unchangedCallers` is grouped by definition:** `{ partId, symbol, uses, more }`, each use `{ path, line, use, excerpt: { start, lines } }`, since "and N more" needs a count per definition. Its part IDs are joined with the tour's like the hints' (`joinParts` takes and renames them).
+- **Which files are parsed:** unchanged files in a language whose imports are read and in the family of a changed file, read in batches of 500, and parsed only when their text names a changed definition. Languages whose imports aren't read (Rust, C#) are left out, rather than matched by name. A name the caller defines itself is its own. Mechanical hunks change no definition.
+- **The card** says "Used unchanged in 2 places and 1 test" and names the definition only when the part has several with callers. "And N more" is added after the counts.
+- **The overview** places an outside node one row below the lowest file it uses, which brings a file nothing else links into the diagram. Callers of tests and helpers, which have no node, show only on their cards. A click opens the first part it uses.
+- **The startup summary** has a `Checkout` line. `doctor` takes `--checkout` too, and its check passes with the checkout's root and the repositories its remotes name, or is skipped outside a checkout.

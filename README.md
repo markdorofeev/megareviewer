@@ -12,7 +12,7 @@ Needs Node 22.13 or later.
 npx megareviewer
 ```
 
-It starts a server on `127.0.0.1` and opens the review UI in your browser. `--port <n>` picks the port, `--no-open` skips the browser, and `--ai` turns on the Claude analysis.
+It starts a server on `127.0.0.1` and opens the review UI in your browser. `--port <n>` picks the port, `--no-open` skips the browser, and `--ai` turns on the Claude analysis. Run it in a git checkout of the PR's repository, or pass `--checkout <dir>`, and the review also shows the code outside the PR that calls what it changes. The checkout is only read, and only when it has the PR's head commit.
 
 ```bash
 npx megareviewer doctor

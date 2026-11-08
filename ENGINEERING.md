@@ -60,7 +60,7 @@ domain  ←  application  ←  adapters  ←  cli (composition root)
 src/
   domain/
   application/
-  adapters/{github,bitbucket,jira,claude,sqlite,treesitter,http}/
+  adapters/{github,bitbucket,jira,claude,sqlite,treesitter,git,http}/
   cli/
 contracts/   HTTP API schemas shared by server and web
 web/
