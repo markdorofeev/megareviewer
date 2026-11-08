@@ -1,9 +1,10 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
+import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
 import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
 import type { GitHost, Logger, TicketSource } from "../application/ports/index.ts";
-import type { HostKind } from "../domain/review/index.ts";
+import type { HostKind, RepoRef } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
 import { anthropicConfigured, createHosts, createTicketSource, systemClock } from "./compose.ts";
 import type { BitbucketCredential, Config, GitHubTokenSource } from "./config.ts";
@@ -30,6 +31,8 @@ export interface DoctorDeps {
   };
   /** Creates the home directory if needed, then opens and closes the database. */
   openStore(): Result<void, string>;
+  /** Where unchanged callers are read from, and what's there; null when it isn't a checkout. */
+  readonly checkout: { readonly dir: string; readonly info: CheckoutInfo | null };
 }
 
 /** The model the Claude adapter uses. */
@@ -136,6 +139,36 @@ const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
       );
 };
 
+const HOST_DOMAINS: Readonly<Record<HostKind, string>> = {
+  github: "github.com",
+  bitbucket: "bitbucket.org",
+};
+
+export const repoName = ({ host, owner, repo }: RepoRef): string =>
+  `${HOST_DOMAINS[host]}/${owner}/${repo}`;
+
+/** No PR to check the commit of: says where callers come from, and what a missing commit needs. */
+const checkCheckout = ({ checkout: { dir, info } }: DoctorDeps): Check => {
+  if (info === null) {
+    return check(
+      "skip",
+      "Checkout",
+      `${dir} isn't in a git checkout: callers outside a PR aren't shown`,
+      "Run megareviewer in a checkout of the PR's repository, or pass --checkout <dir>.",
+    );
+  }
+  const repos =
+    info.repos.length === 0
+      ? "with no GitHub or Bitbucket remote; read for a PR whose head commit it has"
+      : `a checkout of ${info.repos.map(repoName).join(", ")}`;
+  return check(
+    "pass",
+    "Checkout",
+    `${info.root}, ${repos}`,
+    "Callers outside a PR need its head commit: if a review says it's missing, run `git fetch` there.",
+  );
+};
+
 /** One check per line of `doctor`, in a fixed order. Network checks run in parallel. */
 export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
   const node = nodeSupported(deps.nodeVersion)
@@ -152,7 +185,7 @@ export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
   const store = opened.ok
     ? check("pass", "Home", `${deps.config.home} is writable and the database opens`)
     : check("fail", "Home", opened.error, "Set MEGAREVIEWER_HOME to a writable directory.");
-  return [node, ...problems, ...services, store];
+  return [node, ...problems, ...services, checkCheckout(deps), store];
 };
 
 const MARK: Readonly<Record<Check["status"], string>> = { pass: "✓", fail: "✗", skip: "–" };
@@ -166,6 +199,8 @@ const messageOf = (error: unknown): string =>
 /** The real services `doctor` checks. */
 export const createDoctorDeps = async (options: {
   readonly config: Config;
+  /** The directory unchanged callers are read from. */
+  readonly checkoutDir: string;
   readonly problems: readonly string[];
   readonly version: string;
   readonly logger: Logger;
@@ -174,6 +209,7 @@ export const createDoctorDeps = async (options: {
   const client = new Anthropic({ maxRetries: 0 });
   return {
     nodeVersion: process.versions.node,
+    checkout: { dir: options.checkoutDir, info: await inspectCheckout(options.checkoutDir) },
     config,
     problems: options.problems,
     hosts: createHosts(config, { version: options.version, clock: systemClock, logger }),

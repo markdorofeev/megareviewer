@@ -3,11 +3,16 @@ import { parseCliArgs } from "./args.ts";
 
 describe("parseCliArgs", () => {
   it.each([
-    [[], { kind: "serve", port: 0, open: true, ai: false }],
-    [["--port", "4823"], { kind: "serve", port: 4823, open: true, ai: false }],
-    [["--port=0", "--no-open"], { kind: "serve", port: 0, open: false, ai: false }],
-    [["--ai"], { kind: "serve", port: 0, open: true, ai: true }],
-    [["doctor"], { kind: "doctor" }],
+    [[], { kind: "serve", port: 0, open: true, ai: false, checkout: null }],
+    [["--port", "4823"], { kind: "serve", port: 4823, open: true, ai: false, checkout: null }],
+    [["--port=0", "--no-open"], { kind: "serve", port: 0, open: false, ai: false, checkout: null }],
+    [["--ai"], { kind: "serve", port: 0, open: true, ai: true, checkout: null }],
+    [["doctor"], { kind: "doctor", checkout: null }],
+    [["doctor", "--checkout", "../shop"], { kind: "doctor", checkout: "../shop" }],
+    [
+      ["--checkout=/src/shop", "--ai"],
+      { kind: "serve", port: 0, open: true, ai: true, checkout: "/src/shop" },
+    ],
     [["--version"], { kind: "version" }],
     [["--help"], { kind: "help" }],
     [["-h"], { kind: "help" }],
@@ -24,7 +29,10 @@ describe("parseCliArgs", () => {
     [["--port", "-1"], "--port"],
     [["serve"], "Unknown command: serve"],
     [["doctor", "now"], "Unexpected argument: now"],
-    [["doctor", "--no-open"], "doctor takes no options"],
+    [["doctor", "--no-open"], "doctor takes no options but --checkout"],
+    [["--checkout"], "--checkout"],
+    [["--checkout="], "--checkout needs a directory"],
+    [["--version", "--checkout", "."], "--version takes no other arguments"],
     [["doctor", "--ai"], "doctor takes no options"],
     [["--version", "--port", "1"], "--version takes no other arguments"],
     [["doctor", "--version"], "--version takes no other arguments"],

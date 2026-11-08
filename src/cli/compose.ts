@@ -7,6 +7,7 @@ import { loadConfig as loadAnthropicConfig } from "@anthropic-ai/sdk/core/creden
 import type { Hono } from "hono";
 import { createBitbucketHost } from "../adapters/bitbucket/index.ts";
 import { createClaudeAnalysisModel } from "../adapters/claude/index.ts";
+import { createGitCheckouts } from "../adapters/git/index.ts";
 import { createGitHubHost } from "../adapters/github/index.ts";
 import { createHttpApp } from "../adapters/http/index.ts";
 import { createJiraTicketSource, createUnconfiguredTicketSource } from "../adapters/jira/index.ts";
@@ -33,6 +34,8 @@ export interface ComposeOptions {
   readonly staticDir: string | null;
   /** Run the model passes (`--ai`). They need Anthropic credentials. */
   readonly ai: boolean;
+  /** Where unchanged callers are read from, when it's a checkout with the PR's head commit. */
+  readonly checkoutDir: string;
   readonly version: string;
   readonly logger: Logger;
 }
@@ -182,7 +185,7 @@ export const compose = async (
           modelEnabled: options.ai,
           store,
           fileCache: store,
-          checkouts: { find: async () => null },
+          checkouts: createGitCheckouts({ dir: options.checkoutDir }),
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),
           clock,
           logger,

@@ -31,6 +31,13 @@ const deps = (overrides: Partial<DoctorDeps> = {}): DoctorDeps => ({
   tickets: new FakeTicketSource(),
   anthropic: { configured: true, retrieveModel: async () => ok(undefined) },
   openStore: () => ok(undefined),
+  checkout: {
+    dir: "/home/lee/src/shop/web",
+    info: {
+      root: "/home/lee/src/shop",
+      repos: [{ host: "github", owner: "acme", repo: "shop" }],
+    },
+  },
   ...overrides,
 });
 
@@ -51,8 +58,28 @@ describe("runDoctor", () => {
       "✓ Bitbucket: signed in as Lee Park, listing PRs in acme",
       "✓ Jira: signed in at https://acme.atlassian.net",
       "✓ Anthropic: credentials work, claude-haiku-5-5 is available",
+      "✓ Checkout: /home/lee/src/shop, a checkout of github.com/acme/shop\n    Callers outside a PR need its head commit: if a review says it's missing, run `git fetch` there.",
       "✓ Home: /home/lee/.megareviewer is writable and the database opens",
     ]);
+  });
+
+  it("skips the checkout outside a git checkout", async () => {
+    const checks = await runDoctor(deps({ checkout: { dir: "/tmp", info: null } }));
+    expect(checks.find((check) => check.title === "Checkout")).toEqual({
+      status: "skip",
+      title: "Checkout",
+      detail: "/tmp isn't in a git checkout: callers outside a PR aren't shown",
+      fix: "Run megareviewer in a checkout of the PR's repository, or pass --checkout <dir>.",
+    });
+  });
+
+  it("names a checkout without a GitHub or Bitbucket remote", async () => {
+    const checks = await runDoctor(
+      deps({ checkout: { dir: "/src/shop", info: { root: "/src/shop", repos: [] } } }),
+    );
+    expect(checks.find((check) => check.title === "Checkout")?.detail).toBe(
+      "/src/shop, with no GitHub or Bitbucket remote; read for a PR whose head commit it has",
+    );
   });
 
   it("fails an old Node and each configuration problem", async () => {

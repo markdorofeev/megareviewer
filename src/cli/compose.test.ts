@@ -164,7 +164,13 @@ describe("compose", () => {
     home: join(await mkdtemp(join(tmpdir(), "megareviewer-cli-")), "home"),
     logLevel: "info",
   });
-  const options = { grammarsDir: GRAMMARS, staticDir: null, ai: false, version: "1.2.3" };
+  const options = {
+    grammarsDir: GRAMMARS,
+    staticDir: null,
+    ai: false,
+    checkoutDir: "/nowhere",
+    version: "1.2.3",
+  };
 
   const composed = async (config: Config): Promise<Composition> => {
     const result = await compose(config, { ...options, logger: new RecordingLogger() });

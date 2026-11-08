@@ -1,13 +1,14 @@
 import "./warnings.ts";
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import packageJson from "../../package.json" with { type: "json" };
+import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
 import type { Logger } from "../application/ports/index.ts";
 import { EXIT, parseCliArgs, USAGE } from "./args.ts";
 import { type Composition, compose } from "./compose.ts";
 import { type Config, loadConfig } from "./config.ts";
-import { createDoctorDeps, formatCheck, runDoctor } from "./doctor.ts";
+import { createDoctorDeps, formatCheck, repoName, runDoctor } from "./doctor.ts";
 import { createLogger } from "./logger.ts";
 import { openBrowser } from "./open-browser.ts";
 import { serve } from "./serve.ts";
@@ -34,7 +35,13 @@ const printProblems = (problems: readonly string[]): void => {
   console.error("\nRun `megareviewer doctor` for details.");
 };
 
-const printSummary = (config: Config, composition: Composition, url: string, ui: boolean) => {
+const printSummary = (
+  config: Config,
+  composition: Composition,
+  checkout: CheckoutInfo | null,
+  url: string,
+  ui: boolean,
+) => {
   const github = config.github === null ? "not configured" : `token from ${config.github.source}`;
   const bitbucket =
     config.bitbucket === null
@@ -45,21 +52,38 @@ const printSummary = (config: Config, composition: Composition, url: string, ui:
   const model = composition.modelEnabled
     ? "on: intent, decisions and the guided tour come from Claude"
     : "off: start with --ai to add intent, decisions and a guided tour from Claude";
+  const repos = checkout?.repos.map(repoName).join(", ") ?? "";
+  const local =
+    checkout === null
+      ? "none: start in a checkout of the PR's repository, or pass --checkout, to show callers outside the PR"
+      : `${checkout.root}${repos === "" ? "" : ` (${repos})`}`;
   console.log(`megareviewer ${version}
   GitHub     ${github}
   Bitbucket  ${bitbucket}
   Jira       ${jira}
   Anthropic  ${model}
+  Checkout   ${local}
 ${ui ? "" : "\nNo built UI found, so only the API is served.\n"}
 Open ${url}
 Press Ctrl+C to stop.`);
 };
 
-const doctor = async (): Promise<number> => {
+/** The directory given with --checkout, or the one megareviewer runs in. */
+const checkoutDir = (given: string | null): string => resolve(given ?? process.cwd());
+
+const doctor = async (options: { checkout: string | null }): Promise<number> => {
   const { config, problems } = await loadConfig();
   // Adapters' own logs would interleave with the checks; their failures are in the checks.
   const logger = createLogger({ level: "error" });
-  const checks = await runDoctor(await createDoctorDeps({ config, problems, version, logger }));
+  const checks = await runDoctor(
+    await createDoctorDeps({
+      config,
+      problems,
+      checkoutDir: checkoutDir(options.checkout),
+      version,
+      logger,
+    }),
+  );
   for (const check of checks) console.log(formatCheck(check));
   return checks.some((check) => check.status === "fail") ? EXIT.config : EXIT.ok;
 };
@@ -88,6 +112,7 @@ const start = async (options: {
   port: number;
   open: boolean;
   ai: boolean;
+  checkout: string | null;
 }): Promise<number | null> => {
   const { config, problems } = await loadConfig();
   if (problems.length > 0) {
@@ -96,7 +121,14 @@ const start = async (options: {
   }
   const logger = createLogger({ level: config.logLevel });
   const assets = locateAssets();
-  const composed = await compose(config, { ...assets, ai: options.ai, version, logger });
+  const dir = checkoutDir(options.checkout);
+  const composed = await compose(config, {
+    ...assets,
+    ai: options.ai,
+    checkoutDir: dir,
+    version,
+    logger,
+  });
   if (!composed.ok) {
     printProblems([composed.error]);
     return EXIT.config;
@@ -117,7 +149,7 @@ const start = async (options: {
   }, logger);
 
   const url = `http://127.0.0.1:${server.port}/?token=${composition.sessionToken}`;
-  printSummary(config, composition, url, assets.staticDir !== null);
+  printSummary(config, composition, await inspectCheckout(dir), url, assets.staticDir !== null);
   if (options.open) openBrowser(url, logger);
   return null;
 };
@@ -137,7 +169,7 @@ const main = async (argv: readonly string[]): Promise<number | null> => {
       console.log(version);
       return EXIT.ok;
     case "doctor":
-      return doctor();
+      return doctor(command);
     case "serve":
       return start(command);
   }
