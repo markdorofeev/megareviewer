@@ -1,6 +1,6 @@
 # Stage 28: Hunks split by definition
 
-**Status:** In progress (on main)
+**Status:** Done (on main, no PR)
 **Depends on:** 26 (chip rules keep the extra calls in check), 27
 **Unblocks:** 29, whose links land on one route instead of a hunk of three
 **Owns:** `src/domain/diff/parts.ts` (new), `src/domain/diff/call-graph.ts`, `src/domain/review/code-tour.ts`, `entry-points.ts`, `validation.ts`, `src/application/use-cases/prep.ts`, `model-input.ts` (hints mapped to hunks), `web/src/pages/review/` (cards, rail, reviewed state), `web/src/diff/HunkCard.tsx` (partial cards), the "Hunk" and new "Part" rows of ENGINEERING.md's ubiquitous language
