@@ -29,6 +29,8 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Decision | A choice the code makes, resting on one or more hunks |
 | Verdict | The reviewer's answer on a decision: pending, approved or rejected |
 | Tour | Hunks ordered into steps, grouped by concept |
+| Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed |
+| Unchanged caller | Code outside the PR that calls a definition the PR changes, or names it as a type. Read from a checkout |
 | Analysis | All of the above for one PR at one head SHA and pipeline version |
 | Publication | The review sent back to the git host |
 
