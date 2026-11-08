@@ -231,7 +231,8 @@ describe("the analysis pipeline", () => {
     );
     expect(updates).toEqual([
       "collect:running",
-      // Files fetched: none cached, then the one batch.
+      // Files fetched: none cached, then each of the two batches.
+      "collect:running",
       "collect:running",
       "collect:running",
       "collect:done",

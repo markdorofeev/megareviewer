@@ -35,7 +35,7 @@ The pipeline and UI never talk to a host directly. Each host is a connector behi
 | Get PR (title, description, branch, head SHA) | `GET /repos/{o}/{r}/pulls/{n}` | `GET /2.0/repositories/{ws}/{repo}/pullrequests/{id}` |
 | Get commits | `.../pulls/{n}/commits` | `.../pullrequests/{id}/commits` |
 | Get diff (unified) | `.../compare/{base}...{head}` at the PR's SHAs, with diff media type, so a push while loading can't mismatch diff and head SHA | `.../diff/{head}..{dest}?topic=true` at the PR's commits: the same three-dot diff the PR's diff endpoint redirects to, pinned the same way |
-| Get files at commits | One GraphQL query per 25 files (`object(expression: "sha:path")`); `.../contents/{path}?ref={sha}` for a file GraphQL truncates or won't give as text | `.../src/{sha}/{path}`, one request per file, 8 at a time |
+| Get files at commits | One GraphQL query per 3 files, 6 at a time (`object(expression: "sha:path")`); `.../contents/{path}?ref={sha}` for a file GraphQL truncates or won't give as text | `.../src/{sha}/{path}`, one request per file, 18 at a time |
 | List PRs to review | Search API (`review-requested:@me`, `author:@me`) | PRs to review: per repo, the 50 most recently updated of the configured workspace. Own PRs: one workspace-wide call |
 | Publish review | One PR review with inline comments and a verdict | Approve or request changes, plus one call per inline comment |
 
@@ -51,6 +51,7 @@ Flaky networks: on a lossy link, one dropped request used to fail the whole anal
 
 - **Every read times out after 60 seconds** and fails as a network error.
 - **Reads that fail on the network are retried** three times, after 1, 2 and 4 seconds. One wrapper around every host does this, so both hosts share the policy. Other failures, such as a rate limit or a missing PR, are answers and aren't retried.
+- **Files come in small batches over several connections.** On a slow link each connection is slow on its own: one 250 KB GraphQL answer took 13 to 18 seconds while GitHub had started answering within 2, and the same files as ten parallel requests took 4 to 8. Through a proxy capping each connection at 20 KB/s, megareviewer #1's 49 files took 21 seconds in batches of 10, two at a time, which was the first version, and 11 in batches of 3, six at a time. On a fast link the smaller batches were no slower (1.2 to 1.9 seconds against 1.8 to 3.6). Batches of 2, eight at a time, gained nothing more.
 - **Publishing is never retried and has no timeout.** A post that failed on the network may still have been posted, and retrying it would post it twice. The reviewer retries it, and the posted-comment records skip what's already there.
 
 ## Local checkout
