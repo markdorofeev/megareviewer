@@ -109,12 +109,12 @@ A separate commit, with a line in stage 02's **Change log**, after ENGINEERING.m
 
 ## Definition of done
 
-- [ ] ENGINEERING.md's ubiquitous language has "Part", then the contract change commit with the stage 02 change log line.
-- [ ] Tasks above, with the tests; 90% branch coverage holds.
-- [ ] On delphi-code #2, `pnpm measure` shows the steps in the target above, or the differences are in **Notes for later stages**.
-- [ ] Evals run once, to confirm the model's results didn't change with the hint mapping.
-- [ ] Checked in the browser on delphi-code #2 and the 240-hunk dev fixture.
-- [ ] ARCHITECTURE.md "2. Deterministic prep" describes parts, why a hunk is split, and why parts join back (115 parts unjoined on delphi-code #2).
+- [x] ENGINEERING.md's ubiquitous language has "Part", then the contract change commit with the stage 02 change log line.
+- [x] Tasks above, with the tests; 90% branch coverage holds.
+- [x] On delphi-code #2, `pnpm measure` shows the steps in the target above, or the differences are in **Notes for later stages**.
+- [x] Evals run once, to confirm the model's results didn't change with the hint mapping.
+- [x] Checked in the browser on delphi-code #2 and the 240-hunk dev fixture.
+- [x] ARCHITECTURE.md "2. Deterministic prep" describes parts, why a hunk is split, and why parts join back (115 parts unjoined on delphi-code #2).
 
 ## Open issues
 
@@ -122,4 +122,16 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+Where the code differs from or adds to this doc:
+
+- **Measured on delphi-code #2** with `pnpm measure a_12601c941646fd63` (pipeline 8): GET 37 parts, PUT 13 parts with 14 via, DELETE 5 with 17 via, SetupPage 5, main 5, then the three supporting steps with 7. PUT and DELETE match the target; GET has 37 parts, not 40. 8 hunks split, 72 parts in all, not 75. Prep cuts 73 candidates, not the prototype's 115, so joining back merges only one: unchanged lines of an unchanged definition don't start a part of their own, and changed lines outside any definition join the next part.
+- **The router part is read first in the PUT flow, not GET.** The cut gives the routes hunk a first part with the imports, the unchanged `router = APIRouter()` and the new `connection_changes`. It changes only `connection_changes`, which PUT and DELETE declare their routes on; GET's `router` is unchanged, so GET has no hint to the part. The wiring rule reads it, and `app.py` adding the router before it, first in the first flow it registers: PUT. The synthetic test checks that.
+- **Wiring is narrower than "called only by entries":** a part is wiring when it's used only as the receiver of entries' route lines (`@connection_changes.put`, `router.get(`; `routeReceivers` in `entry-points.ts`) or by other wiring, or nothing calls it, and it calls only entries and wiring. A response model named on the same decorator line isn't wiring.
+- **A renamed definition is one part.** A base and a head definition that share an unchanged line are one; without that, `_hosts_with_credentials` → `_known_hosts` alternated old and new lines into six candidates and made a root flow of its own.
+- **Parts are stored with the tour.** With the model, prep saves hints mapped to whole hunks and no parts, so the page reads whole hunks until the tour is done. The model's tour lists hunks, so its hunks expand to all their parts and join back whole: with `--ai`, nothing stays split until stage 31 gives the model flows.
+- **Decisions stay on hunks,** so a decision's card sits on its hunk's first part on the page even when it's about another part: in the mock fixture, "Retries the tax service" sits on the cache part, which step 1 reads first.
+- **Highlighting was cached by hunk ID,** which every part of a hunk shares, so a hunk's second part showed the first part's code. The cache key adds the part's start lines and length.
+- **The mock fixture splits its retry and cache hunk:** the cache part is read with the endpoint, the retry in step 2 ("Retrying the tax service"). `analysisInProgress` leaves parts out until the tour is done, as the server does.
+- **The overview** counts hunks on its nodes, and gives a file one routes label however many flows its routes start.
+- **Evals:** every prompt of every pass, on all 13 eval cases, is byte-identical to before this stage, hint lines included (rendered with the fake model at `2382d42` and after), so the passes can't have changed with the hint mapping.
+- **The paid run** (2026-11-08, pipeline 8, Haiku 5.5, $0.43 for 13 cases): contractRecall 100% (19/19), riskAccuracy 85% (28/33, just under its target), mustHaveRecall 100% (18/18), decisionNoise 7%, mismatchRecall 88% (7/8), no false-positive mismatches, injectionResistance 0/1 (one of the prompt-injection case's two labeled hunks misclassified), first try valid 12 of 13, no fallbacks. With identical prompts, the two misses are the model's, not this stage's. There's no `evals/baseline.json` to compare against; writing one from a run is the next step for whoever changes a prompt.
