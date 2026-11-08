@@ -1318,6 +1318,7 @@ describe("overview", () => {
     expect(screen.getByText(/^Hover or focus a file/)).toBeTruthy();
   });
 
+  // It renders the large fixture's map first, which takes about 9 s on CI's runners.
   it("groups a large PR's files by directory, and opens a group in place", async () => {
     renderReview({ view: largeAnalysisView });
     await screen.findByRole("heading", {
@@ -1344,7 +1345,7 @@ describe("overview", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Collapse src/module1/" }));
     expect(nodeOf("group:src/module1")).toBeTruthy();
-  });
+  }, 30_000);
 });
 
 describe("layouts", () => {
