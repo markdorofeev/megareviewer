@@ -106,17 +106,19 @@ interface Send {
 /**
  * The tour without the model, as flows. A flow starts at an entry point (a route, a page, a
  * command) or at a root (code nothing calls that calls something) and reads the changed code it
- * runs, callers before callees. Code an earlier flow read goes in `via` instead. Registering an
- * entry, like adding a router to an app, is read first in that entry's flow. A request never
- * extends the walk: the route it reaches goes in `via`, and the flow comes after the route's.
+ * runs, callers before callees. Code an earlier flow read goes in `via` instead. Code that more
+ * than one flow runs is read once, in a shared section before them, one per connected piece of it,
+ * and goes in their `via`. Registering an entry, like adding a router to an app, is read first in
+ * that entry's flow. A request never extends the walk: the route it reaches goes in `via`, and
+ * the flow comes after the route's.
  *
  * What no flow runs joins the flow it belongs with: a type the flow that uses it, any other code
  * the flow with most of its file, a test the flow of the route it requests, then the flow it
  * calls into, then its file's, then its subject's; a doc the code in its directory. The rest goes
  * into supporting steps: API schema, docs, tests, and other changes by area.
  *
- * Flows that reach contract hunks come first, then routes, pages, commands and roots. Every
- * required hunk is in exactly one step.
+ * Shared sections come first, then flows that reach contract hunks, then routes, pages, commands
+ * and roots. Every required hunk is in exactly one step.
  */
 export const codeTour = (input: CodeTourInput): Tour => {
   const { files, required, callGraph, risk, definitions } = input;
@@ -305,6 +307,45 @@ export const codeTour = (input: CodeTourInput): Tour => {
     owner.set(id, flow);
   }
 
+  const consumers = new Map<PartId, Flow[]>();
+  for (const flow of flows) {
+    for (const id of reach(flow.starts)) {
+      if (entryOfHunk.has(id) || wiring.has(id)) continue;
+      consumers.set(id, [...(consumers.get(id) ?? []), flow]);
+    }
+  }
+  const shared = new Set([...consumers].flatMap(([id, users]) => (users.length > 1 ? [id] : [])));
+  /** Each shared section, and the flows that pass through it. */
+  const usedBy = new Map<Flow, Flow[]>();
+  while (shared.size > 0) {
+    const first = ids.find((id) => shared.has(id));
+    if (first === undefined) break;
+    const component = new Set<PartId>();
+    const collect = (id: PartId) => {
+      if (!shared.delete(id)) return;
+      component.add(id);
+      for (const other of linked(id)) collect(other);
+    };
+    collect(first);
+    const roots = [...component].filter(
+      (id) => !codeCallers(id).some((caller) => component.has(caller)),
+    );
+    const orderedParts = reach([...roots, ...component]).filter((id) => component.has(id));
+    const section: Flow = { starts: roots, entries: [], kind: "root", hunks: [], via: [] };
+    const users: Flow[] = [];
+    usedBy.set(section, users);
+    for (const id of orderedParts) {
+      const previous = owner.get(id);
+      if (previous !== undefined) previous.hunks.splice(previous.hunks.indexOf(id), 1);
+      own(section, id);
+      for (const consumer of consumers.get(id) ?? []) {
+        if (!consumer.via.includes(id)) consumer.via.push(id);
+        if (!users.includes(consumer)) users.push(consumer);
+      }
+    }
+  }
+  flows.unshift(...usedBy.keys());
+
   // Attach the rest, again while something joins: a test can follow a fake that just did.
   const flowWithMostOf = (path: string, kind: (id: PartId) => boolean) =>
     mostCommon([...owner].flatMap(([id, flow]) => (pathOf(id) === path && kind(id) ? [flow] : [])));
@@ -393,8 +434,15 @@ export const codeTour = (input: CodeTourInput): Tour => {
     ...flows.map((flow, at) => {
       const sent = sendsOf(flow, at);
       return {
-        title: flowTitle(flow, pathOf, definitions),
-        explanation: flowExplanation(flow, pathOf, isTest, stepOf, sent),
+        title: `${usedBy.has(flow) ? "Shared: " : ""}${flowTitle(flow, pathOf, definitions)}`,
+        explanation: flowExplanation(
+          flow,
+          pathOf,
+          isTest,
+          stepOf,
+          sent,
+          (usedBy.get(flow) ?? []).map((user) => stepOfFlow.get(user) ?? 0).sort((a, b) => a - b),
+        ),
         partIds: flow.hunks,
         kind: "flow" as const,
         via: flow.via,
@@ -475,6 +523,8 @@ const flowExplanation = (
   isTest: (id: PartId) => boolean,
   stepOf: (id: PartId) => number | undefined,
   sends: readonly Send[],
+  /** The steps that pass through a shared section. */
+  users: readonly number[],
 ): string => {
   const names = (ids: readonly PartId[]) => [...new Set(ids.map((id) => basename(pathOf(id))))];
   const tests = names(flow.hunks.filter(isTest));
@@ -484,6 +534,9 @@ const flowExplanation = (
   const parts = [
     `Reads ${listed(names(flow.hunks.filter((id) => !isTest(id))))}`,
     ...(tests.length > 0 ? [`tested in ${listed(tests)}`] : []),
+    ...(users.length === 0
+      ? []
+      : [`used by ${users.length === 1 ? "step" : "steps"} ${listed(users.map(String))}`]),
     ...(earlier.length === 0
       ? []
       : [

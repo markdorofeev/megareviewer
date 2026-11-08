@@ -128,6 +128,14 @@ After 28, stage 31 can run beside 29 or 30. Stages 29 and 30 both change `call-g
 
 Each stage measures itself on [delphi-code #2](https://github.com/markdorofeev/delphi-code/pull/2) with `pnpm measure`, which stage 26 adds: it runs today's prep and tour on the diff and files cached in `~/.megareviewer/db.sqlite`.
 
+## Fifth slice: review readability
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 32 | [Review readability and flow grouping](32-review-readability.md) | 31 | Responsive review layout, compact card navigation, flow grouping and risk-rule improvements |
+
+Implement the responsive layout first, navigation simplification second, and measured analysis changes last. The first two changes work with existing cached analyses; analysis changes require a pipeline version bump.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

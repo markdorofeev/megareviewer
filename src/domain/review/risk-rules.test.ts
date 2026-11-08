@@ -372,3 +372,60 @@ describe("raiseByRules", () => {
     expect(raiseByRules(model, [rule(2, "contract", "r")])).toEqual(model);
   });
 });
+
+describe("credential handling in ordinary paths", () => {
+  it.each([
+    ["+save_secret(domain, value)", "changes credential storage (save_secret)"],
+    ["-return saved_secret(domain)", "changes credential storage (saved_secret)"],
+    ["+def clone_credentials(self):", "changes credential storage (clone_credentials)"],
+    ["+await forgetSavedToken(host)", "changes credential storage (forgetSavedToken)"],
+    ["+keyring.set_password(SERVICE, user, token)", "changes credential storage (set_password)"],
+    ["-require_permission(user)", "changes authorization (require_permission)"],
+    ["+return _authorization_for(token)", "changes authorization (_authorization_for)"],
+    ["+if not verify_token(raw):", "changes authorization (verify_token)"],
+    [
+      '+@router.put("/accounts/{domain}/token")',
+      "changes a credential endpoint (PUT /accounts/{domain}/token)",
+    ],
+    [
+      "-router.delete('/accounts/:id/credentials', handler)",
+      "changes a credential endpoint (DELETE /accounts/:id/credentials)",
+    ],
+  ])("raises %s", (text, reason) => {
+    expect(reasonOf("src/service.py", lines(text))).toBe(reason);
+  });
+
+  it("names every match, once per rule", () => {
+    expect(
+      reasonOf(
+        "src/service.py",
+        lines(
+          "+def save_token(self, token):",
+          "+    save_secret(self.domain, token)",
+          "+    save_secret(x)",
+        ),
+      ),
+    ).toBe("changes credential storage (save_token, save_secret)");
+  });
+
+  it.each([
+    "+token_count = count_words(text)",
+    "+save_token_count(total)",
+    "+total = count_tokens(text)",
+    "+words = tokenize(text)",
+    "+settings.save(path)",
+    '+const [token, setToken] = useState("");',
+    "+def test_saved_tokens_come_first():",
+    '+await client.put("/accounts/github.com/token", { body })',
+    '+router.get("/accounts/token", read)',
+    '+router.put("/token-counts", update)',
+    " save_secret(domain, value)",
+  ])("leaves %s alone", (text) => {
+    expect(reasonOf("src/service.py", lines(text))).toBeNull();
+  });
+
+  it("keeps security paths in tests and guides contract", () => {
+    expect(reasonOf("tests/fake_keychain.py")).toBe("auth or security path");
+    expect(reasonOf("docs/credentials.md")).toBe("auth or security path");
+  });
+});

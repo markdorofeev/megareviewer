@@ -2,6 +2,15 @@ import type { Analysis } from "../../../../src/domain/review/index.ts";
 
 const HEADING = /^#{1,6}\s+/;
 
+export const plainIntent = (text: string): string =>
+  text
+    .replace(/!?(\[([^\]]+)\])\([^)]*\)/g, "$2")
+    .replace(/(`+)(.*?)\1/g, "$2")
+    .replace(/(\*\*|__|~~)(.*?)\1/g, "$2")
+    .replace(/(^|\s)[*_]([^*_]+)[*_](?=\s|[.,!?]|$)/g, "$1$2")
+    .replace(/^\s*(?:>\s*|[-*+]\s+|\d+[.)]\s+)/, "")
+    .replace(/\\([\\`*_{}[\]()#+.!>-])/g, "$1");
+
 /**
  * The description's first line of prose. Markdown headings such as "## What changed" name a part
  * of the description rather than say what was asked, so they're skipped unless there's nothing else.
@@ -11,7 +20,9 @@ export const firstLine = (text: string): string => {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");
-  return lines.find((line) => !HEADING.test(line)) ?? lines[0]?.replace(HEADING, "") ?? "";
+  return plainIntent(
+    lines.find((line) => !HEADING.test(line)) ?? lines[0]?.replace(HEADING, "") ?? "",
+  );
 };
 
 /**
@@ -48,7 +59,7 @@ export const IntentLine = ({
               ? "From the code:"
               : "✓ Does what was asked:"}
           </span>{" "}
-          <span className="model-text">{intent.inferred.summary}</span>
+          <span className="model-text">{plainIntent(intent.inferred.summary)}</span>
         </p>
       ) : modelOn && analysis.status === "running" ? (
         <p className="intent-text muted" aria-busy="true">

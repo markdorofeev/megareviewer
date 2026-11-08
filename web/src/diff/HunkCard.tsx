@@ -222,14 +222,13 @@ const Names = ({ names }: { readonly names: readonly string[] }) =>
     </>
   );
 
-/** "save_token · part 4 of 10 · rest of this hunk in steps 1 and 3". */
+/** "part 4 of 10 · rest of this hunk in steps 1 and 3". */
 const PartLabel = ({ part }: { readonly part: PartHeader }) => (
-  <span className="hunk-part">
-    <Names names={part.definitions} />
+  <p className="hunk-part-of">
     part {part.n} of {part.of}
     {part.elsewhere.length > 0 &&
       ` · rest of this hunk in ${part.elsewhere.length === 1 ? "step" : "steps"} ${listed(part.elsewhere.map(String))}`}
-  </span>
+  </p>
 );
 
 /** A row above or below a part's lines that goes to the neighboring part of its hunk. */
@@ -378,13 +377,15 @@ export const HunkCard = memo(function HunkCard({
       <header className="hunk-header">
         <FilePath file={file} />
         <FileStatusBadge status={file.status} />
-        {part != null ? (
-          <PartLabel part={part} />
-        ) : (
-          hunk.sectionHeading !== null && (
-            <code className="hunk-heading">{hunk.sectionHeading}</code>
-          )
-        )}
+        {part != null
+          ? part.definitions.length > 0 && (
+              <span className="hunk-part">
+                {joined(part.definitions.map((name) => <code key={name}>{name}</code>))}
+              </span>
+            )
+          : hunk.sectionHeading !== null && (
+              <code className="hunk-heading">{hunk.sectionHeading}</code>
+            )}
         <span className="hunk-counts">
           <span className="count-added">+{counts.added}</span>{" "}
           <span className="count-deleted">−{counts.deleted}</span>
@@ -416,8 +417,22 @@ export const HunkCard = memo(function HunkCard({
         <UnchangedUses key={one.symbol} callers={one} named={unchanged.length > 1} />
       ))}
       {afterHeader}
-      {part?.previous != null && (
-        <PartFold neighbor={part.previous} of={part.of} direction="previous" onFollow={onFollow} />
+      {part != null && (
+        <details className="hunk-related">
+          <summary>Related parts</summary>
+          <PartLabel part={part} />
+          {part.previous != null && (
+            <PartFold
+              neighbor={part.previous}
+              of={part.of}
+              direction="previous"
+              onFollow={onFollow}
+            />
+          )}
+          {part.next != null && (
+            <PartFold neighbor={part.next} of={part.of} direction="next" onFollow={onFollow} />
+          )}
+        </details>
       )}
       <div
         className="hunk-body"
@@ -483,9 +498,6 @@ export const HunkCard = memo(function HunkCard({
         <button type="button" className="button show-all" onClick={() => setShowAll(true)}>
           Show all {lines.length} lines
         </button>
-      )}
-      {part?.next != null && (
-        <PartFold neighbor={part.next} of={part.of} direction="next" onFollow={onFollow} />
       )}
     </section>
   );

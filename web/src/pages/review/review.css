@@ -1564,9 +1564,58 @@ details.warnings ul {
   border-radius: var(--radius-2);
 }
 
-/* Below 1024px the page scrolls sideways rather than squeezing the diff. */
-@media (max-width: 1023px) {
-  .review-page {
-    min-width: 1000px;
+.review-page,
+.review-body,
+.overview-scroll {
+  min-width: 0;
+}
+
+.pr-meta,
+.hunk-header {
+  overflow-wrap: anywhere;
+}
+
+.rail-toggle {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .review-header,
+  .review-body.map {
+    grid-template-columns: minmax(0, 1fr);
   }
+
+  .review-actions {
+    justify-content: flex-start;
+  }
+
+  .rail-toggle {
+    display: block;
+    justify-self: start;
+    grid-row: 1;
+  }
+
+  .review-body.map > .risk-rail {
+    display: none;
+    position: static;
+    grid-row: 2;
+    max-height: 50vh;
+    width: 100%;
+  }
+
+  .review-body.map.rail-open > .risk-rail {
+    display: block;
+  }
+
+  .intent-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rail-bars[hidden] {
+  display: none;
+}
+
+.step-via summary {
+  cursor: pointer;
 }

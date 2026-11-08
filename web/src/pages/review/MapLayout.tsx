@@ -319,18 +319,30 @@ const PassesThrough = ({
     return found === undefined ? [] : [{ id, ...found }];
   });
   if (known.length === 0) return null;
+  const destinations = new Map<string, typeof known>();
+  for (const part of known) {
+    const step = deps.stepOf(part.id) ?? "Other changes";
+    destinations.set(step, [...(destinations.get(step) ?? []), part]);
+  }
   return (
     <div className="step-via">
       <span className="step-via-label">Passes through</span>
-      <ul className="hunk-links" aria-label="Passes through">
-        {known.map(({ id, file, hunk }) => (
-          <li key={id}>
-            <button type="button" className="hunk-link" onClick={() => deps.onFollow(id)}>
-              {file.path.slice(file.path.lastIndexOf("/") + 1)} {hunkLocation(hunk)} ↑
-            </button>
-          </li>
-        ))}
-      </ul>
+      {[...destinations].map(([step, parts]) => (
+        <details key={step}>
+          <summary>
+            {step} · {parts.length} {parts.length === 1 ? "part" : "parts"}
+          </summary>
+          <ul className="hunk-links" aria-label={`Passes through ${step}`}>
+            {parts.map(({ id, file, hunk }) => (
+              <li key={id}>
+                <button type="button" className="hunk-link" onClick={() => deps.onFollow(id)}>
+                  {file.path.slice(file.path.lastIndexOf("/") + 1)} {hunkLocation(hunk)} ↑
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ))}
     </div>
   );
 };

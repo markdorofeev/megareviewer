@@ -484,6 +484,7 @@ describe("map", () => {
     await loaded();
     expect(stepHeadings()).toHaveLength(2);
     // Going to a hunk that isn't shown shows everything again.
+    await userEvent.click(within(rail()).getByRole("button", { name: /^2 / }));
     await userEvent.click(
       within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
     );
@@ -533,7 +534,8 @@ describe("map", () => {
     });
     await loaded();
     const second = screen.getByRole("region", { name: "2 Command: main in cli.ts" });
-    const through = within(second).getByRole("list", { name: "Passes through" });
+    await userEvent.click(within(second).getByText(/1 part$/));
+    const through = within(second).getByRole("list", { name: /^Passes through/ });
     await userEvent.click(within(through).getByRole("button", { name: /^receipts\.ts lines 26/ }));
     expect(focusedLabel()).toMatch(RECEIPTS);
     const supporting = screen.getByRole("region", { name: "3 Other changes in src/routes" });
@@ -654,7 +656,7 @@ class FakeObserver {
 }
 
 describe("risk map", () => {
-  const bar = (name: RegExp) => within(rail()).getByRole("button", { name });
+  const bar = (name: RegExp) => within(rail()).getByRole("button", { name, hidden: true });
 
   it("has a row per hunk: its file and lines, and a bar sized by them and marked", async () => {
     renderReview();
@@ -1516,14 +1518,18 @@ describe("parts of a split hunk", () => {
     renderReview();
     await loaded();
     const cache = cardOf(p.cache);
-    expect(cache.querySelector(".hunk-part")?.textContent).toBe(
-      "receiptCache and cachedReceipt · part 2 of 2 · rest of this hunk in step 2",
-    );
+    expect(cache.querySelector(".hunk-part")?.textContent).toBe("receiptCache and cachedReceipt");
     expect(cache.querySelector(".part-fold.next")).toBeNull();
+    expect(cache.querySelector("details")?.open).toBe(false);
+    await userEvent.click(within(cache).getByText("Related parts"));
+    expect(cache.querySelector(".hunk-part-of")?.textContent).toBe(
+      "part 2 of 2 · rest of this hunk in step 2",
+    );
     const up = within(cache).getByRole("button", { name: /part 1 of 2/ });
     expect(up.textContent).toBe("↑ loadTaxLines and TAX_ATTEMPTS · part 1 of 2 · step 2");
     await userEvent.click(up);
     expect(focusedLabel()).toMatch(RETRY);
+    await userEvent.click(within(cardOf(p.retry)).getByText("Related parts"));
     const down = within(cardOf(p.retry)).getByRole("button", { name: /part 2 of 2/ });
     expect(down.textContent).toBe("↓ receiptCache and cachedReceipt · part 2 of 2 · step 1");
   });
@@ -1920,4 +1926,22 @@ describe("outside the pull request", () => {
     await loaded();
     expect((await openDetails()).querySelector(".checkout-note")).toBeNull();
   });
+});
+
+it("keeps flow headings available and reveals details for a navigation target", async () => {
+  renderReview();
+  await loaded();
+  const headings = within(rail())
+    .getAllByRole("button")
+    .filter((button) => button.classList.contains("rail-step"));
+  expect(headings).toHaveLength(5);
+  expect(rail().querySelectorAll(".rail-bars:not([hidden])")).toHaveLength(1);
+  await userEvent.click(within(rail()).getByRole("button", { name: /^2 / }));
+  expect(
+    within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
+  ).toBeTruthy();
+  await userEvent.click(
+    within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
+  );
+  expect(focusedLabel()).toMatch(RETRY);
 });

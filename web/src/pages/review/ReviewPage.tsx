@@ -274,6 +274,7 @@ const Review = ({
     }
     return (id: PartId) => places.get(id) ?? null;
   }, [sections]);
+  const [railOpen, setRailOpen] = useState(false);
   const [focusedHunkId, setFocusedHunkId] = useState<PartId | null>(null);
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
@@ -836,7 +837,16 @@ const Review = ({
           </p>
         </section>
       ) : layout === "map" ? (
-        <div className="review-body map">
+        <div className={`review-body map${railOpen ? " rail-open" : ""}`}>
+          <button
+            type="button"
+            className="button rail-toggle"
+            aria-expanded={railOpen}
+            aria-controls="review-map-rail"
+            onClick={() => setRailOpen(!railOpen)}
+          >
+            {railOpen ? "Hide Map" : "Show Map"}
+          </button>
           <MapLayout
             analysis={analysis}
             sections={sections}
@@ -852,6 +862,7 @@ const Review = ({
             signatureOf={signatureOf}
           />
           <RiskRail
+            activePartId={focusedHunkId}
             sections={sections}
             index={index}
             decisionsOn={(id) => restingOn.get(id) ?? NO_DECISIONS}

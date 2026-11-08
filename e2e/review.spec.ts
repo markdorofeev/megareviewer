@@ -288,3 +288,25 @@ test.describe("without the model", () => {
     expect(attempt?.publication.verdict).toBe("approve");
   });
 });
+
+for (const width of [720, 1024, 1440]) {
+  test(`review stays within the viewport at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+    const overflows = () =>
+      page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
+    expect(await overflows()).toBe(false);
+    await expect(page.getByRole("button", { name: "Publish…" })).toBeInViewport();
+    await expect(page.locator(".review-progress")).toBeInViewport();
+    if (width <= 1024) {
+      await expect(rail(page)).toBeHidden();
+      await page.getByRole("button", { name: "Show Map" }).click();
+      await expect(rail(page)).toBeVisible();
+      expect(await overflows()).toBe(false);
+      await page.getByRole("button", { name: "Hide Map" }).click();
+    }
+    await page.getByRole("button", { name: "Overview", exact: true }).click();
+    await expect(page.locator(".overview-scroll")).toBeVisible();
+    expect(await overflows()).toBe(false);
+  });
+}

@@ -1,4 +1,4 @@
-import { type FileChange, type Hunk, type HunkId, isTestFile } from "../diff/index.ts";
+import { type FileChange, type Hunk, type HunkId, isTestFile, routesOn } from "../diff/index.ts";
 
 export { isTestFile };
 
@@ -180,10 +180,120 @@ const textOf = (hunk: Hunk, kind: "add" | "del"): string[] =>
 const count = (lines: readonly string[], patterns: readonly RegExp[]): number =>
   lines.filter((line) => patterns.some((pattern) => pattern.test(line))).length;
 
+const CREDENTIAL_NOUNS = new Set([
+  "secret",
+  "secrets",
+  "token",
+  "tokens",
+  "credential",
+  "credentials",
+  "password",
+  "passwords",
+  "passphrase",
+]);
+/** What a function does with a credential to store or fetch it: save_secret, forgetSavedToken. */
+const STORAGE_VERBS = new Set([
+  "save",
+  "saved",
+  "store",
+  "stored",
+  "persist",
+  "set",
+  "get",
+  "load",
+  "read",
+  "write",
+  "find",
+  "delete",
+  "remove",
+  "forget",
+  "clear",
+  "clone",
+  "rotate",
+  "revoke",
+  "refresh",
+]);
+const AUTHORIZATION_WORDS = new Set([
+  "authorize",
+  "authorized",
+  "authorization",
+  "authenticate",
+  "authentication",
+  "permission",
+  "permissions",
+]);
+const CHECK_VERBS = new Set(["verify", "validate", "check"]);
+
+const CHANGING_METHODS = new Set(["PUT", "POST", "PATCH", "DELETE", "ALL"]);
+const CREDENTIAL_SEGMENT = /^(?:tokens?|credentials?|passwords?|secrets?|api[-_]?keys?)$/i;
+
+/**
+ * Names called or defined on a line: `save_secret(`, `def clone_credentials(`. A test's name
+ * describes it, and a React state setter like `setToken` holds what a form shows, not a stored
+ * credential, so neither counts.
+ */
+const calledNames = (line: string): string[] =>
+  [...line.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)].flatMap(([, name]) =>
+    name === undefined || /^(?:test(?:_|[A-Z])|set[A-Z])/.test(name) ? [] : [name],
+  );
+
+const namesWhere =
+  (fits: (words: readonly string[]) => boolean) =>
+  (line: string): string[] =>
+    calledNames(line).filter((name) => fits(pathWords(name)));
+
+/**
+ * Credential handling an ordinary path doesn't name, found by the shape of the names a hunk
+ * changes. A noun has to end the name, so `save_token_count` is a count, not a token; a verb has
+ * to come with it, so `count_tokens` and `token_count` are not storage. An endpoint is a route
+ * declaration that changes a credential, not a request a client sends to one. False matches only
+ * ask for more attention.
+ */
+const CREDENTIAL_RULES: readonly {
+  readonly found: (line: string) => string[];
+  readonly reason: string;
+}[] = [
+  {
+    found: namesWhere(
+      (words) =>
+        CREDENTIAL_NOUNS.has(words.at(-1) ?? "") &&
+        words.slice(0, -1).some((word) => STORAGE_VERBS.has(word)),
+    ),
+    reason: "changes credential storage",
+  },
+  {
+    found: namesWhere(
+      (words) =>
+        words.some((word) => AUTHORIZATION_WORDS.has(word)) ||
+        (CREDENTIAL_NOUNS.has(words.at(-1) ?? "") && words.some((word) => CHECK_VERBS.has(word))),
+    ),
+    reason: "changes authorization",
+  },
+  {
+    found: (line) =>
+      routesOn(line)
+        .filter(
+          ({ method, path }) =>
+            CHANGING_METHODS.has(method) &&
+            path.split("/").some((segment) => CREDENTIAL_SEGMENT.test(segment)),
+        )
+        .map(({ method, path }) => `${method} ${path}`),
+    reason: "changes a credential endpoint",
+  },
+];
+
 /** A rule on one hunk of a file: the reason when it matches, else null. */
 type HunkRule = (hunk: Hunk, file: FileChange) => string | null;
 
 const HUNK_RULES: readonly HunkRule[] = [
+  (hunk) => {
+    const changed = [...textOf(hunk, "add"), ...textOf(hunk, "del")];
+    const reasons = CREDENTIAL_RULES.flatMap(({ found, reason }) => {
+      const names = [...new Set(changed.flatMap(found))];
+      return names.length === 0 ? [] : [`${reason} (${names.join(", ")})`];
+    });
+    return reasons.length === 0 ? null : reasons.join("; ");
+  },
   (hunk) => {
     const added = textOf(hunk, "add");
     const labels = DANGEROUS_CALLS.filter(({ pattern }) =>

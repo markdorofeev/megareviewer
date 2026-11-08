@@ -50,6 +50,7 @@ const useInView = (ids: readonly PartId[]): ReadonlySet<PartId> => {
  */
 export const RiskRail = ({
   sections,
+  activePartId,
   index,
   decisionsOn,
   totals,
@@ -61,6 +62,7 @@ export const RiskRail = ({
   onInView,
 }: {
   readonly sections: readonly MapSection[];
+  readonly activePartId?: PartId | null;
   readonly index: PartIndex;
   /** Every decision resting on the hunk. */
   readonly decisionsOn: (id: PartId) => readonly Decision[];
@@ -74,6 +76,7 @@ export const RiskRail = ({
   readonly onInView: (ids: readonly PartId[]) => void;
 }) => {
   const id = useId();
+  const [selected, setSelected] = useState<string | null>(null);
   const rail = useRef<HTMLElement>(null);
   const [ids, setIds] = useState<readonly PartId[]>([]);
   // The hunks the page shows; their places change when the filter does.
@@ -99,8 +102,18 @@ export const RiskRail = ({
     }
   }, [inView, ids]);
 
+  // Only the section being read lists its bars; every heading stays. The focused part wins while
+  // it's on screen, then the first part in view.
+  const current =
+    (activePartId != null && (inView.size === 0 || inView.has(activePartId))
+      ? activePartId
+      : ids.find((one) => inView.has(one))) ?? sections[0]?.partIds[0];
+  // A heading clicked opens its section until the reader scrolls on.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: inView is the trigger, not an input.
+  useEffect(() => setSelected(null), [inView]);
+
   return (
-    <aside ref={rail} className="risk-rail" aria-labelledby={`${id}-title`}>
+    <aside id="review-map-rail" ref={rail} className="risk-rail" aria-labelledby={`${id}-title`}>
       <div className="rail-header">
         <h2 id={`${id}-title`}>Map</h2>
         <p className="risk-totals">
@@ -121,6 +134,8 @@ export const RiskRail = ({
       <ol className="rail-steps">
         {sections.map((section) => {
           const key = sectionKey(section);
+          const active =
+            selected === key || (current !== undefined && section.partIds.includes(current));
           const toReview = section.partIds.filter((hunkId) => !index.mechanical.has(hunkId));
           const done = toReview.length > 0 && toReview.every((id) => reviewed.has(id));
           return (
@@ -132,7 +147,11 @@ export const RiskRail = ({
                     ? "rail-step supporting"
                     : "rail-step"
                 }
-                onClick={() => onGo({ kind: "section", key })}
+                aria-expanded={active}
+                onClick={() => {
+                  setSelected(key);
+                  onGo({ kind: "section", key });
+                }}
               >
                 {section.kind === "step" && (
                   <span className="rail-step-number">{section.number}</span>
@@ -155,7 +174,7 @@ export const RiskRail = ({
                   </span>
                 )}
               </button>
-              <ul className="rail-bars">
+              <ul className="rail-bars" hidden={!active}>
                 {index.items(section.partIds).map(({ id: partId, hunk, file, risk }) => {
                   const mechanical = index.mechanical.has(partId);
                   const riskClass = mechanical ? "mechanical" : risk.riskClass;

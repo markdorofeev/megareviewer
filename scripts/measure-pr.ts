@@ -152,7 +152,30 @@ export const counts = (measured: Measured) => {
   }
   const lines = [...byLine.values()].flatMap((onLines) => [...onLines.values()]);
   const split = new Set(measured.parts.map((part) => part.hunkId)).size;
+  const placed = tour.steps.flatMap((step) => step.partIds);
+  const expected = files
+    .flatMap((file) => file.hunks)
+    .filter((hunk) => !measured.proofs.some((proof) => proof.hunkId === hunk.id))
+    .flatMap((hunk) => {
+      const parts = measured.parts.filter((part) => part.hunkId === hunk.id);
+      return parts.length > 0 ? parts.map((part) => part.id) : [hunk.id];
+    });
   return {
+    largestFlow: Math.max(
+      0,
+      ...tour.steps.filter((step) => step.kind === "flow").map((step) => step.partIds.length),
+    ),
+    crossStepReferences: tour.steps.reduce((sum, step) => sum + step.via.length, 0),
+    destinationSummaries: tour.steps.reduce(
+      (sum, step) =>
+        sum +
+        new Set(step.via.map((id) => tour.steps.findIndex((other) => other.partIds.includes(id))))
+          .size,
+      0,
+    ),
+    missingParts: expected.filter((id) => !placed.includes(id)).length,
+    duplicateParts: placed.length - new Set(placed).size,
+    unexpectedParts: placed.filter((id) => !expected.includes(id)).length,
     hunks: pathOf.size,
     splitHunks: split,
     parts: pathOf.size - split + measured.parts.length,

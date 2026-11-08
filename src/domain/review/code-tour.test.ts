@@ -122,7 +122,7 @@ describe("codeTour", () => {
     expect(tour.steps[0]?.entries).toEqual([h(2)]);
   });
 
-  it("reads shared code in the first flow and points to it from the next", () => {
+  it("reads shared code once before both consuming flows", () => {
     const files = [
       one(1, "api/a.py", route("get", "/a")),
       one(2, "api/b.py", route("get", "/b")),
@@ -130,11 +130,14 @@ describe("codeTour", () => {
     ];
     const tour = tourOf(files, { callGraph: [hint(1, 3), hint(2, 3)] });
     expect(shape(tour)).toEqual([
-      ["GET /a", [1, 3]],
+      ["Shared: app/shared.py", [3]],
+      ["GET /a", [1]],
       ["GET /b", [2]],
     ]);
     expect(tour.steps[1]?.via).toEqual([h(3)]);
-    expect(tour.steps[1]?.explanation).toBe("Reads b.py; passes through step 1.");
+    expect(tour.steps[2]?.via).toEqual([h(3)]);
+    expect(tour.steps[0]?.explanation).toBe("Reads shared.py; used by steps 2 and 3.");
+    expect(tour.steps[2]?.explanation).toBe("Reads b.py; passes through step 1.");
   });
 
   it("makes one flow of entry hunks that change the same definition", () => {
@@ -386,9 +389,10 @@ describe("codeTour", () => {
       risk: contract(9, 16, 19),
     });
     expect(shape(tour)).toEqual([
+      ["Shared: app/infrastructure/hosts.py", [6, 9, 12]],
       [
         "/api/account-connections: GET, PUT /{domain}/token, DELETE /{domain}/token",
-        [1, 2, 4, 5, 6, 7, 9, 3, 10, 11, 12],
+        [1, 2, 4, 5, 7, 3, 10, 11],
       ],
       ["Command: main in hosts.py", [8]],
       ["Page: SetupPage", [13, 14, 17]],
@@ -396,12 +400,12 @@ describe("codeTour", () => {
       ["Other changes in web/src/picker", [19]],
       ["Docs", [18]],
     ]);
-    expect(tour.steps[1]?.via).toEqual([h(6), h(9)]);
-    expect(tour.steps[2]?.via).toEqual([h(2)]);
-    expect(tour.steps[2]?.explanation).toBe(
+    expect(tour.steps[2]?.via).toEqual([h(6), h(9)]);
+    expect(tour.steps[3]?.via).toEqual([h(2)]);
+    expect(tour.steps[3]?.explanation).toBe(
       "Reads setup.tsx and ConnectionsSection.tsx; tested in setup.test.tsx; sends" +
-        " GET /api/account-connections (step 1), DELETE /api/account-connections/{domain}/token" +
-        " (step 1) and PUT /api/account-connections/{domain}/token (step 1).",
+        " GET /api/account-connections (step 2), DELETE /api/account-connections/{domain}/token" +
+        " (step 2) and PUT /api/account-connections/{domain}/token (step 2).",
     );
   });
 
@@ -437,6 +441,72 @@ describe("codeTour", () => {
         required: new Set(ids.filter(() => next(4) !== 0).map(h)),
       });
     }
+  });
+
+  it("keeps shared components coherent, callers first, with associated tests", () => {
+    const files = [
+      one(1, "api/a.py", route("get", "/a")),
+      one(2, "api/b.py", route("put", "/b")),
+      one(3, "app/store.py"),
+      one(4, "app/service.py"),
+      one(5, "tests/test_service.py"),
+      one(6, "app/schema.py"),
+      one(7, "app/exclusive.py"),
+    ];
+    const tour = tourOf(files, {
+      callGraph: [
+        hint(1, 4),
+        hint(2, 4),
+        hint(4, 3),
+        hint(5, 4),
+        hint(1, 6),
+        hint(2, 6),
+        hint(1, 7),
+      ],
+    });
+    expect(shape(tour)).toEqual([
+      ["Shared: app/service.py", [4, 3, 5]],
+      ["Shared: app/schema.py", [6]],
+      ["GET /a", [1, 7]],
+      ["PUT /b", [2]],
+    ]);
+    expect(tour.steps[0]?.explanation).toBe(
+      "Reads service.py and store.py; tested in test_service.py; used by steps 3 and 4.",
+    );
+    expect(tour.steps[2]?.via).toEqual(expect.arrayContaining([h(3), h(4), h(6)]));
+    expect(tour.steps[3]?.via).toEqual(expect.arrayContaining([h(3), h(4), h(6)]));
+  });
+
+  it("lists a shared section's users in step order, whichever reaches it first", () => {
+    const tour = tourOf(
+      [
+        one(1, "api/a.py", route("get", "/a")),
+        one(2, "api/b.py", route("put", "/b")),
+        one(3, "api/c.py", route("delete", "/c")),
+        one(4, "app/refresh.py"),
+        one(5, "app/read.py"),
+      ],
+      { callGraph: [hint(2, 4), hint(3, 4), hint(4, 5), hint(1, 5)] },
+    );
+    expect(shape(tour)[0]).toEqual(["Shared: app/refresh.py", [4, 5]]);
+    expect(tour.steps[0]?.explanation).toBe(
+      "Reads refresh.py and read.py; used by steps 2, 3 and 4.",
+    );
+  });
+
+  it("reads a shared call cycle once", () => {
+    const tour = tourOf(
+      [
+        one(1, "api/a.py", route("get", "/a")),
+        one(2, "api/b.py", route("put", "/b")),
+        one(3, "app/a.py"),
+        one(4, "app/b.py"),
+      ],
+      { callGraph: [hint(1, 3), hint(2, 4), hint(3, 4), hint(4, 3)] },
+    );
+
+    expect(tour.steps[0]?.partIds).toEqual([h(3), h(4)]);
+    expect(tour.steps[0]?.entries).toEqual([]);
   });
 });
 
@@ -588,13 +658,15 @@ describe("codeTour with parts", () => {
       call(p(1, 2), p(3, 3), 11, "ItemsResponse"),
       call(p(1, 3), p(3, 3), 13, "ItemsResponse"),
     ];
-    const titles = tourOf(files, { parts, callGraph: withModel }).steps.map((step) => [
-      step.title,
-      step.partIds[0],
+    const steps = tourOf(files, { parts, callGraph: withModel }).steps;
+    // ItemsResponse is named on GET's and PUT's route lines, but it's no router: it's code both
+    // read, so it's shared, and GET still starts at its route.
+    expect(steps[0]?.title).toMatch(/^Shared: /);
+    expect(steps[0]?.partIds).toContain(p(3, 3));
+    expect(steps.map((step) => [step.title, step.partIds[0]])).toContainEqual([
+      "GET /items",
+      p(1, 2),
     ]);
-    // forget is called from GET's route line, but it's no router: it stays code GET reads.
-    expect(titles[0]).toEqual(["GET /items", p(1, 2)]);
-    expect(tourOf(files, { parts, callGraph: withModel }).steps[0]?.partIds).toContain(p(3, 3));
   });
 });
 
