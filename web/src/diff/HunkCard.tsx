@@ -303,6 +303,7 @@ export const HunkCard = memo(function HunkCard({
   afterHeader,
   belowLine,
   inLine,
+  inFile = false,
 }: {
   /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
   readonly id?: PartId;
@@ -339,6 +340,8 @@ export const HunkCard = memo(function HunkCard({
   readonly belowLine?: ReadonlyMap<number, ReactNode>;
   /** Parts of the line with this new-side number to show differently, e.g. a call's symbol. */
   readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
+  /** One of several parts on a file's card, which names the file: the header is a divider. */
+  readonly inFile?: boolean;
 }) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -364,7 +367,12 @@ export const HunkCard = memo(function HunkCard({
   }, [focused]);
 
   const counts = lineCounts(hunk);
-  const classes = ["hunk-card", highlighted && "highlighted", risk && `risk-${risk.riskClass}`];
+  const classes = [
+    "hunk-card",
+    inFile && "in-file",
+    highlighted && "highlighted",
+    risk && `risk-${risk.riskClass}`,
+  ];
   return (
     <section
       ref={ref}
@@ -375,8 +383,14 @@ export const HunkCard = memo(function HunkCard({
       onFocus={() => onFocus?.(id)}
     >
       <header className="hunk-header">
-        <FilePath file={file} />
-        <FileStatusBadge status={file.status} />
+        {inFile ? (
+          <span className="hunk-location">{hunkLocation(hunk)}</span>
+        ) : (
+          <>
+            <FilePath file={file} />
+            <FileStatusBadge status={file.status} />
+          </>
+        )}
         {part != null
           ? part.definitions.length > 0 && (
               <span className="hunk-part">

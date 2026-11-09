@@ -97,6 +97,8 @@ const placeOf = (hunkId: PartId) => {
   if (place === null) throw new Error(`no hunk ${hunkId} in the map`);
   return place;
 };
+/** The card of a step's parts from one file, named by its path. */
+const fileCardOf = (path: string) => screen.getByRole("region", { name: path });
 const cardOf = (hunkId: PartId) => {
   const card = placeOf(hunkId).querySelector<HTMLElement>(":scope > .hunk-card");
   if (card === null) throw new Error(`no card for ${hunkId}`);
@@ -445,8 +447,9 @@ describe("map", () => {
         .getAllByRole("region", { name: /, lines / })
         .map((card) => card.getAttribute("aria-label")),
     ).toEqual([
-      "src/routes/orders.ts, lines 10–24",
+      // A step reads each file's parts together, in the file's order.
       "src/routes/orders.ts, lines 1–8",
+      "src/routes/orders.ts, lines 10–24",
       // The retry and cache hunk is two parts, each read in its own step.
       "src/services/receipts.ts, lines 40–50",
       "src/services/receipts.ts, lines 26–39",
@@ -715,7 +718,7 @@ describe("risk map", () => {
     renderReview();
     await loaded();
     await userEvent.click(
-      within(cardOf(h.routeImports)).getByRole("checkbox", { name: "Reviewed" }),
+      within(fileCardOf("src/routes/orders.ts")).getByRole("checkbox", { name: "Reviewed" }),
     );
     const imports = bar(/^src\/routes\/orders\.ts, lines 1–8, logic, reviewed$/);
     expect(imports.querySelector(".rail-bar")?.classList.contains("reviewed")).toBe(true);
@@ -727,7 +730,7 @@ describe("risk map", () => {
         .getAllByRole("button")
         .filter((button) => button.getAttribute("aria-current") === "location")
         .map((button) => button.getAttribute("aria-label")?.split(", ")[1]);
-    expect(inView()).toEqual(["lines 10–24", "lines 1–8"]);
+    expect(inView()).toEqual(["lines 1–8", "lines 10–24"]);
     act(() => FakeObserver.report([placeOf(h.receiptRoute)], false));
     expect(inView()).toEqual(["lines 1–8"]);
 
@@ -1108,10 +1111,10 @@ describe("inline calls", () => {
   it("chip only the first call to a hunk in a step, and underline the later ones", async () => {
     renderReview({ view: repeated });
     await loaded();
-    expect(chip(cardOf(h.receiptRoute), "cachedReceipt")).toBeTruthy();
-    const imports = cardOf(h.routeImports);
-    expect(within(imports).queryByRole("button", { name: /^cachedReceipt / })).toBeNull();
-    const mention = within(imports).getByRole("button", { name: "cachedReceipt" });
+    expect(chip(cardOf(h.routeImports), "cachedReceipt")).toBeTruthy();
+    const route = cardOf(h.receiptRoute);
+    expect(within(route).queryByRole("button", { name: /^cachedReceipt / })).toBeNull();
+    const mention = within(route).getByRole("button", { name: "cachedReceipt" });
     expect(mention.classList.contains("call-mention")).toBe(true);
     // Both calls come from orders.ts, so the callee lists the file once.
     expect(cardOf(p.cache).querySelector(".hunk-callers")?.textContent).toBe(
@@ -1122,7 +1125,7 @@ describe("inline calls", () => {
   it("peek at a mention's code on focus, close on Esc, and go there on click", async () => {
     renderReview({ view: repeated });
     await loaded();
-    const mention = within(cardOf(h.routeImports)).getByRole("button", { name: "cachedReceipt" });
+    const mention = within(cardOf(h.receiptRoute)).getByRole("button", { name: "cachedReceipt" });
     mention.focus();
     const peek = await waitFor(() => {
       const shown = document.querySelector<HTMLElement>(".peek");
@@ -1142,13 +1145,13 @@ describe("inline calls", () => {
     await userEvent.click(mention);
     expect(focusedLabel()).toMatch(CACHE);
     await userEvent.keyboard("{Escape}");
-    expect(focusedLabel()).toMatch(IMPORTS);
+    expect(focusedLabel()).toMatch(ROUTE);
   });
 
   it("peek at a mention's code after resting on it, and close on leaving it", async () => {
     renderReview({ view: repeated });
     await loaded();
-    const mention = within(cardOf(h.routeImports)).getByRole("button", { name: "cachedReceipt" });
+    const mention = within(cardOf(h.receiptRoute)).getByRole("button", { name: "cachedReceipt" });
     await userEvent.hover(mention);
     expect(document.querySelector(".peek")).toBeNull();
     await waitFor(() => expect(document.querySelector(".peek")).not.toBeNull());
@@ -1183,7 +1186,7 @@ describe("inline calls", () => {
   it("o goes to the first mention's hunk when a hunk has no chip", async () => {
     renderReview({ view: repeated });
     await loaded();
-    cardOf(h.routeImports).focus();
+    cardOf(h.receiptRoute).focus();
     await userEvent.keyboard("o");
     expect(focusedLabel()).toMatch(CACHE);
   });
@@ -1191,7 +1194,7 @@ describe("inline calls", () => {
   it("o opens and closes the focused hunk's first call", async () => {
     renderReview();
     await loaded();
-    await userEvent.keyboard("j");
+    await userEvent.keyboard("jj");
     expect(focusedLabel()).toMatch(ROUTE);
     await userEvent.keyboard("o");
     expect(cardOf(h.receiptRoute).querySelector(".inline-call")).not.toBeNull();
@@ -1354,7 +1357,7 @@ describe("layouts", () => {
   it("switch with v, keeping the file the reviewer is on", async () => {
     renderReview();
     await loaded();
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     expect(focusedLabel()).toMatch(IMPORTS);
     await userEvent.keyboard("v");
     expect(pressed("Overview")).toBe(true);
@@ -1452,11 +1455,11 @@ describe("keyboard shortcuts", () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("j");
-    expect(focusedLabel()).toMatch(ROUTE);
-    await userEvent.keyboard("j");
     expect(focusedLabel()).toMatch(IMPORTS);
-    await userEvent.keyboard("k");
+    await userEvent.keyboard("j");
     expect(focusedLabel()).toMatch(ROUTE);
+    await userEvent.keyboard("k");
+    expect(focusedLabel()).toMatch(IMPORTS);
 
     await userEvent.keyboard("n");
     expect(scrolledTo().at(-1)).toBe("step-s2");
@@ -1474,7 +1477,7 @@ describe("keyboard shortcuts", () => {
     await userEvent.keyboard("a");
     expect(approve(ENDPOINT).getAttribute("aria-pressed")).toBe("false");
 
-    await userEvent.keyboard("j");
+    await userEvent.keyboard("jj");
     await userEvent.keyboard("r");
     expect(reject(ENDPOINT).getAttribute("aria-pressed")).toBe("true");
 
@@ -1589,19 +1592,36 @@ describe("navigation", () => {
   it("marks hunks reviewed, counts them, and remembers them by hunk", async () => {
     const { unmount } = renderReview();
     await loaded();
-    await userEvent.click(
-      within(cardOf(h.receiptRoute)).getByRole("checkbox", { name: "Reviewed" }),
-    );
-    expect(screen.getByText("1 of 5 hunks reviewed")).toBeTruthy();
-    expect(window.localStorage.getItem("megareviewer:reviewed-hunks")).toContain(h.receiptRoute);
+    await userEvent.click(within(cardOf(p.cache)).getByRole("checkbox", { name: "Reviewed" }));
+    // The part's hunk has another part, in step 2, so the hunk doesn't count yet.
+    expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
+    expect(window.localStorage.getItem("megareviewer:reviewed-hunks")).toContain(p.cache);
 
     unmount();
     renderReview();
     await loaded();
     expect(
-      within(cardOf(h.receiptRoute)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" })
-        .checked,
+      within(cardOf(p.cache)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" }).checked,
     ).toBe(true);
+  });
+
+  it("marks a file's parts in a step reviewed together, from its card", async () => {
+    renderReview();
+    await loaded();
+    const orders = fileCardOf("src/routes/orders.ts");
+    const mark = within(orders).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" });
+    // The file's card holds the mark: its parts have none of their own.
+    expect(within(cardOf(h.receiptRoute)).queryByRole("checkbox")).toBeNull();
+
+    await userEvent.keyboard("jx");
+    expect(mark.checked).toBe(false);
+    expect(mark.indeterminate).toBe(true);
+
+    await userEvent.click(mark);
+    expect(mark.checked).toBe(true);
+    expect(screen.getByText("2 of 5 hunks reviewed")).toBeTruthy();
+    await userEvent.click(mark);
+    expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
   });
 
   it("x marks the focused hunk reviewed and moves on; ] finds the next unreviewed one", async () => {

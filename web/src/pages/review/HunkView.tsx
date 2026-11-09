@@ -52,6 +52,7 @@ export const HunkView = ({
   inLine,
   focused = false,
   nested = false,
+  inFile = false,
 }: {
   readonly id: PartId;
   readonly deps: HunkDeps;
@@ -59,6 +60,8 @@ export const HunkView = ({
   readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
   readonly focused?: boolean;
   readonly nested?: boolean;
+  /** On a file's card with other parts, which marks them all reviewed at once. */
+  readonly inFile?: boolean;
 }) => {
   const [item] = deps.index.items([id]);
   if (item === undefined) return null;
@@ -89,7 +92,8 @@ export const HunkView = ({
       unchanged={nested ? undefined : deps.unchangedOf(id)}
       onFollow={deps.onFollow}
       reviewed={deps.reviewed.has(id)}
-      onReviewed={deps.onReviewed}
+      onReviewed={inFile ? undefined : deps.onReviewed}
+      inFile={inFile}
       comments={deps.commentsOf(id)}
       openComment={!nested && deps.openComment?.partId === id ? deps.openComment.place : null}
       onOpenComment={nested ? undefined : deps.onOpenComment}

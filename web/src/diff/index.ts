@@ -5,6 +5,7 @@ export {
   type CallerFile,
   commentPlace,
   FilePath,
+  FileStatusBadge,
   HunkCard,
   type LineComment,
   type LineMark,
@@ -14,6 +15,6 @@ export {
   shortPaths,
 } from "./HunkCard.tsx";
 export type { Highlighter } from "./highlight.ts";
-export { hunkLocation } from "./lines.ts";
+export { hunkLocation, lineCounts } from "./lines.ts";
 export { MechanicalGroup } from "./MechanicalGroup.tsx";
 export { HighlighterContext, useHighlighter } from "./useHighlighter.ts";

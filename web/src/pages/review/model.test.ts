@@ -6,9 +6,12 @@ import {
   BAR_MAX_PX,
   BAR_MIN_PX,
   barHeight,
+  byFile,
   callerFiles,
   callsByLine,
   decisionPlaces,
+  fileGroups,
+  gapBetween,
   mapSections,
   mechanicalCount,
   parseLayout,
@@ -92,9 +95,10 @@ describe("mapSections and reviewOrder", () => {
   it("is the tour's steps, with mechanical hunks in place", () => {
     const sections = mapSections(analysis, steps, index);
     expect(sections.map((section) => section.kind)).toEqual(["step", "step", "step", "step"]);
+    // A file's parts are together, in the file's order: the route's imports come first.
     expect(sections[0]?.partIds).toEqual([
-      h.receiptRoute,
       h.routeImports,
+      h.receiptRoute,
       h.formatMoneyRemoved,
       p.cache,
     ]);
@@ -110,8 +114,38 @@ describe("mapSections and reviewOrder", () => {
 
   it("lists the hunks to review in the map's order, without mechanical ones", () => {
     expect(reviewOrder(mapSections(analysis, steps, index), index)).toEqual(
-      steps.flatMap((step) => step.partIds),
+      steps.flatMap((step) => byFile(step.partIds, index)),
     );
+  });
+});
+
+describe("byFile, fileGroups and gapBetween", () => {
+  const index = partIndex(analysis);
+
+  it("puts a step's parts from one file together, in the file's order, files as first reached", () => {
+    expect(byFile([h.receiptRoute, p.cache, h.routeImports], index)).toEqual([
+      h.routeImports,
+      h.receiptRoute,
+      p.cache,
+    ]);
+  });
+
+  it("groups consecutive parts from one file, leaving out parts it doesn't know", () => {
+    const unknown = "h_0000000000000000" as PartId;
+    const groups = fileGroups([h.routeImports, h.receiptRoute, unknown, p.cache], index);
+    expect(groups.map((group) => [group.file.path, group.partIds])).toEqual([
+      ["src/routes/orders.ts", [h.routeImports, h.receiptRoute]],
+      ["src/services/receipts.ts", [p.cache]],
+    ]);
+  });
+
+  it("counts the lines between two parts of a file, and the parts read elsewhere among them", () => {
+    // The imports are lines 1–8 and the route starts at line 10.
+    expect(gapBetween(h.routeImports, h.receiptRoute, index)).toEqual({ lines: 1, parts: [] });
+    expect(gapBetween(h.routeImports, h.formatMoneyRemoved, index)?.parts).toEqual([
+      h.receiptRoute,
+    ]);
+    expect(gapBetween(h.routeImports, p.cache, index)).toBeNull();
   });
 });
 

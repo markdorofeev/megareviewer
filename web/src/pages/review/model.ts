@@ -71,6 +71,8 @@ export const partIndex = (analysis: Analysis) => {
     { readonly hunk: Hunk; readonly file: FileChange; readonly place: PartPlace | null }
   >();
   const ofHunk = new Map<HunkId, readonly PartId[]>();
+  // Where each part is in its file, counted across the pull request: parts of one file in order.
+  const position = new Map<PartId, number>();
   for (const file of analysis.files) {
     for (const hunk of file.hunks) {
       const split = byHunk.get(hunk.id) ?? [];
@@ -81,6 +83,7 @@ export const partIndex = (analysis: Analysis) => {
       const split = byHunk.get(piece.hunk.id) ?? [];
       const at = split.findIndex((part) => part.id === piece.id);
       const part = split[at];
+      position.set(piece.id, position.size);
       parts.set(piece.id, {
         hunk: piece.hunk,
         file,
@@ -127,7 +130,10 @@ export const partIndex = (analysis: Analysis) => {
     });
   /** A hunk's parts in order, or none when the page doesn't know the hunk. */
   const partsOf = (hunkId: HunkId): readonly PartId[] => ofHunk.get(hunkId) ?? [];
-  return { parts, mechanical, items, partsOf };
+  /** A file's parts, in the file's order. */
+  const partsInFile = (file: FileChange): readonly PartId[] =>
+    file.hunks.flatMap((hunk) => partsOf(hunk.id));
+  return { parts, mechanical, items, partsOf, partsInFile, position };
 };
 
 export type PartIndex = ReturnType<typeof partIndex>;
@@ -193,8 +199,76 @@ export const mapSections = (
         kind: "step",
         step,
         number: at + 1,
-        partIds: withMechanicalInPlace(step.partIds, index),
+        partIds: withMechanicalInPlace(byFile(step.partIds, index), index),
       }));
+
+/**
+ * A step's parts with each file's together, in the file's order, the files in the order the step
+ * reaches them. A step reads one card per file: in call order, a step that goes back and forth
+ * between two files cut each into several cards, 79 of them for 32 files on delphi-code #2.
+ */
+export const byFile = (ids: readonly PartId[], index: PartIndex): PartId[] => {
+  const files = new Map<string, PartId[]>();
+  for (const id of ids) {
+    const path = index.parts.get(id)?.file.path ?? id;
+    files.set(path, [...(files.get(path) ?? []), id]);
+  }
+  const at = (id: PartId) => index.position.get(id) ?? Number.MAX_SAFE_INTEGER;
+  return [...files.values()].flatMap((parts) => parts.sort((a, b) => at(a) - at(b)));
+};
+
+/** A run of a section's parts from one file: one card on the map. */
+export interface FileGroup {
+  readonly file: FileChange;
+  readonly partIds: readonly PartId[];
+}
+
+/** Consecutive parts from one file, grouped. A part the index doesn't know is left out. */
+export const fileGroups = (ids: readonly PartId[], index: PartIndex): FileGroup[] => {
+  const groups: { file: FileChange; partIds: PartId[] }[] = [];
+  for (const id of ids) {
+    const file = index.parts.get(id)?.file;
+    if (file === undefined) continue;
+    const last = groups.at(-1);
+    if (last?.file === file) last.partIds.push(id);
+    else groups.push({ file, partIds: [id] });
+  }
+  return groups;
+};
+
+/** The lines between two parts of a file on one card, and the file's parts read among them. */
+export interface Gap {
+  readonly lines: number;
+  /** Parts of the file between the two, which other steps read. */
+  readonly parts: readonly PartId[];
+}
+
+/**
+ * What lies between two parts of one file that a card shows one after the other: how many lines,
+ * on the head side (the base side for a deleted file), and the file's other parts there.
+ */
+export const gapBetween = (previous: PartId, next: PartId, index: PartIndex): Gap | null => {
+  const before = index.parts.get(previous);
+  const after = index.parts.get(next);
+  if (before === undefined || after === undefined || before.file !== after.file) return null;
+  const side = before.file.status === "deleted" ? "old" : "new";
+  const span = (hunk: Hunk) =>
+    side === "old"
+      ? { start: hunk.oldStart, count: hunk.oldLines }
+      : { start: hunk.newStart, count: hunk.newLines };
+  const a = span(before.hunk);
+  const b = span(after.hunk);
+  // As in a diff, an empty side starts at the line before where it would be.
+  const end = a.count === 0 ? a.start : a.start + a.count - 1;
+  const start = b.count === 0 ? b.start + 1 : b.start;
+  const from = index.position.get(previous) ?? 0;
+  const to = index.position.get(next) ?? 0;
+  const parts = index.partsInFile(before.file).filter((id) => {
+    const at = index.position.get(id) ?? -1;
+    return at > from && at < to;
+  });
+  return { lines: Math.max(start - end - 1, 0), parts };
+};
 
 export const sectionKey = (section: MapSection): string =>
   section.kind === "step" ? section.step.id : "files";

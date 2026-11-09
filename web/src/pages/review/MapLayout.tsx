@@ -1,10 +1,18 @@
-import { memo, type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "react";
 import type { MechanicalProof, PartId } from "../../../../src/domain/diff/index.ts";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
-import { FileNotices, hunkLocation, type LineMark, MechanicalGroup } from "../../diff/index.ts";
+import {
+  FileNotices,
+  FilePath,
+  FileStatusBadge,
+  hunkLocation,
+  type LineMark,
+  lineCounts,
+  MechanicalGroup,
+} from "../../diff/index.ts";
 import type { Call, CallMark } from "./chips.ts";
 import { CallLabel, type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
-import { type MapSection, sectionKey } from "./model.ts";
+import { type FileGroup, fileGroups, gapBetween, type MapSection, sectionKey } from "./model.ts";
 import { Mention } from "./Peek.tsx";
 
 export const stepAnchor = (key: string): string => `step-${key}`;
@@ -347,6 +355,142 @@ const PassesThrough = ({
   );
 };
 
+/** A part's place on the map: its anchor, and its card, drawn again only when it changes. */
+const MapPart = ({
+  id,
+  deps,
+  openCalls,
+  onToggleCall,
+  signatureOf,
+  inFile,
+}: {
+  readonly id: PartId;
+  readonly deps: HunkDeps;
+  readonly openCalls: ReadonlySet<string>;
+  readonly onToggleCall: (key: string) => void;
+  readonly signatureOf: (id: PartId) => string;
+  readonly inFile: boolean;
+}) => (
+  <div id={hunkAnchor(id)} className="map-hunk" data-hunk-id={id}>
+    <Stable
+      signature={signatureOf(id)}
+      render={() => (
+        <HunkView
+          id={id}
+          deps={deps}
+          belowLine={belowLines([id], deps, openCalls, onToggleCall)}
+          inLine={mentionsIn(id, deps)}
+          inFile={inFile}
+        />
+      )}
+    />
+  </div>
+);
+
+/** "⋯ 18 unchanged lines", or the lines between and the file's parts other steps read there. */
+const GapRow = ({
+  previous,
+  next,
+  deps,
+}: {
+  readonly previous: PartId;
+  readonly next: PartId;
+  readonly deps: HunkDeps;
+}) => {
+  const gap = gapBetween(previous, next, deps.index);
+  if (gap === null || (gap.lines === 0 && gap.parts.length === 0)) return null;
+  const lines = `${gap.lines} ${gap.lines === 1 ? "line" : "lines"}`;
+  return (
+    <div className="file-gap">
+      <span aria-hidden="true">⋯</span>{" "}
+      {gap.parts.length === 0 ? (
+        `${lines} unchanged`
+      ) : (
+        <>
+          {lines}, with changes read elsewhere:{" "}
+          {gap.parts.map((id) => {
+            const found = deps.index.parts.get(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                className="hunk-link"
+                title={deps.stepOf(id) ?? undefined}
+                onClick={() => deps.onFollow(id)}
+              >
+                {found === undefined ? id : hunkLocation(found.hunk)} ↑
+              </button>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+};
+
+/**
+ * A step's parts from one file, on one card: the file once in its header, with one Reviewed mark
+ * for them all, and each part under a divider of its own, the lines between them counted.
+ */
+const FileCard = ({
+  group,
+  deps,
+  part,
+}: {
+  readonly group: FileGroup;
+  readonly deps: HunkDeps;
+  readonly part: (id: PartId) => ReactNode;
+}) => {
+  const items = deps.index.items(group.partIds);
+  const toReview = items.filter((item) => !deps.index.mechanical.has(item.id));
+  const done = toReview.filter((item) => deps.reviewed.has(item.id)).length;
+  const added = items.reduce((sum, item) => sum + lineCounts(item.hunk).added, 0);
+  const deleted = items.reduce((sum, item) => sum + lineCounts(item.hunk).deleted, 0);
+  const contract = toReview.some((item) => item.risk.riskClass === "contract");
+  const mark = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (mark.current !== null) mark.current.indeterminate = done > 0 && done < toReview.length;
+  });
+  return (
+    <section
+      className={contract ? "file-card risk-contract" : "file-card"}
+      aria-label={group.file.path}
+    >
+      <header className="file-card-header">
+        <FilePath file={group.file} />
+        <FileStatusBadge status={group.file.status} />
+        <span className="hunk-counts">
+          {toReview.length} {toReview.length === 1 ? "part" : "parts"} ·{" "}
+          <span className="count-added">+{added}</span>{" "}
+          <span className="count-deleted">−{deleted}</span>
+        </span>
+        {toReview.length > 0 && (
+          <label className="hunk-reviewed">
+            <input
+              ref={mark}
+              type="checkbox"
+              checked={done === toReview.length}
+              onChange={(event) => {
+                for (const item of toReview) deps.onReviewed(item.id, event.target.checked);
+              }}
+            />
+            Reviewed
+          </label>
+        )}
+      </header>
+      {group.partIds.map((id, at) => {
+        const previous = group.partIds[at - 1];
+        return (
+          <Fragment key={id}>
+            {previous !== undefined && <GapRow previous={previous} next={id} deps={deps} />}
+            {part(id)}
+          </Fragment>
+        );
+      })}
+    </section>
+  );
+};
+
 /**
  * Every hunk in one scroll, step after step in tour order, then the mechanical changes. A call in
  * the code opens the hunk it calls in place; the hunk also stays at its own place.
@@ -452,21 +596,31 @@ export const MapLayout = ({
                 </p>
               </header>
             )}
-            {ids.map((id) => (
-              <div key={id} id={hunkAnchor(id)} className="map-hunk" data-hunk-id={id}>
-                <Stable
-                  signature={signatureOf(id)}
-                  render={() => (
-                    <HunkView
-                      id={id}
-                      deps={deps}
-                      belowLine={belowLines([id], deps, openCalls, onToggleCall)}
-                      inLine={mentionsIn(id, deps)}
-                    />
-                  )}
+            {fileGroups(ids, deps.index).map((group) => {
+              const part = (id: PartId, inFile: boolean) => (
+                <MapPart
+                  key={id}
+                  id={id}
+                  deps={deps}
+                  openCalls={openCalls}
+                  onToggleCall={onToggleCall}
+                  signatureOf={signatureOf}
+                  inFile={inFile}
                 />
-              </div>
-            ))}
+              );
+              const [only, ...more] = group.partIds;
+              // A file with one part is that part's card, which names the file already.
+              return only !== undefined && more.length === 0 ? (
+                part(only, false)
+              ) : (
+                <FileCard
+                  key={`${group.file.path}@${only}`}
+                  group={group}
+                  deps={deps}
+                  part={(id) => part(id, true)}
+                />
+              );
+            })}
           </section>
         );
       })}
