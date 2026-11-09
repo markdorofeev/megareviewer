@@ -1,0 +1,87 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-mock",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev:web:mock", "--port", "5173", "--strictPort"],
+      "port": 5173
+    },
+    {
+      "name": "fake-static",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "run",
+        "dev:fake",
+        "--port",
+        "4999",
+        "--token",
+        "dev-token",
+        "--static",
+        "dist/web"
+      ],
+      "port": 4999
+    },
+    {
+      "name": "fake-no-ai",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev:fake", "--port", "4999", "--token", "dev-token", "--no-ai"],
+      "port": 4999
+    },
+    {
+      "name": "web-proxy",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev:web", "--port", "5174", "--strictPort"],
+      "port": 5174
+    },
+    {
+      "name": "real-server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev:server", "--port", "4998", "--no-open"],
+      "port": 4998
+    },
+    {
+      "name": "web-proxy-real",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "MEGAREVIEWER_DEV_PORT=4998",
+        "pnpm",
+        "run",
+        "dev:web",
+        "--port",
+        "5175",
+        "--strictPort"
+      ],
+      "port": 5175
+    },
+    {
+      "name": "real-server-delphi",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "run",
+        "dev:server",
+        "--port",
+        "4998",
+        "--no-open",
+        "--checkout",
+        "../delphi-code"
+      ],
+      "port": 4998
+    },
+    {
+      "name": "real-server-delphi-ai",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "run",
+        "dev:server",
+        "--port",
+        "4997",
+        "--no-open",
+        "--ai",
+        "--checkout",
+        "../delphi-code"
+      ],
+      "port": 4997
+    }
+  ]
+}
