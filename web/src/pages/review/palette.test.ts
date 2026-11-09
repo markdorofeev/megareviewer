@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { PartId } from "../../../../src/domain/diff/index.ts";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
-import { partIndex, tourSteps } from "./model.ts";
+import { partIndex } from "./model.ts";
 import { paletteItems, searchPalette } from "./palette.ts";
 
 const analysis = fixtureAnalysisView.analysis;
 const h = fixtureHunks;
 const p = fixtureParts;
 const index = partIndex(analysis);
-const items = paletteItems(analysis, tourSteps(analysis, index), index);
+const items = paletteItems(analysis, index);
 
 const search = (query: string) =>
   searchPalette(items, query).map(({ group, items: found }) => [
@@ -25,7 +25,6 @@ describe("the jump palette", () => {
       "contract",
       "unchanged",
       "symbols",
-      "steps",
       "files",
     ]);
   });
@@ -38,12 +37,7 @@ describe("the jump palette", () => {
     expect(search("ORDERS")).toEqual(expect.arrayContaining([["files", ["src/routes/orders.ts"]]]));
     expect(search("tax retr")).toEqual([
       ["decisions", ["Retries the tax service 3 times with no backoff"]],
-      ["steps", ["Retrying the tax service"]],
     ]);
-    // A step is found by the code's title too.
-    expect(search("loadTaxLines")).toEqual(
-      expect.arrayContaining([["steps", ["Retrying the tax service"]]]),
-    );
     expect(search("nothing matches this")).toEqual([]);
   });
 
@@ -64,7 +58,6 @@ describe("the jump palette", () => {
     expect(target("cachedReceipt")).toEqual({ kind: "hunk", partId: fixtureParts.cache });
     expect(target("src/lib/dates.ts")).toEqual({ kind: "mechanical" });
     expect(target("src/routes/orders.ts")).toEqual({ kind: "hunk", partId: h.routeImports });
-    expect(target("The receipt endpoint")).toEqual({ kind: "step", stepId: "s1" });
   });
 
   it("lists routes with the files that request them, not as symbols", () => {
@@ -79,7 +72,7 @@ describe("the jump palette", () => {
       ...analysis,
       callGraph: [...analysis.callGraph, request(h.receiptFormatting), request(p.cache)],
     };
-    const found = searchPalette(paletteItems(requested, [], index), "receipt").find(
+    const found = searchPalette(paletteItems(requested, index), "receipt").find(
       ({ group }) => group === "routes",
     )?.items;
     expect(found?.map((item) => [item.label, item.detail, item.target])).toEqual([
@@ -89,7 +82,7 @@ describe("the jump palette", () => {
         { kind: "hunk", partId: h.receiptRoute },
       ],
     ]);
-    expect(searchPalette(paletteItems(requested, [], index), "@ orders/:id")).toEqual([]);
+    expect(searchPalette(paletteItems(requested, index), "@ orders/:id")).toEqual([]);
   });
 
   it("lists the definitions used unchanged outside the pull request", () => {
@@ -116,7 +109,7 @@ describe("the jump palette", () => {
       callGraph: [],
       unchangedCallers: [],
     };
-    const groups = searchPalette(paletteItems(bare, [], index), "").map(({ group }) => group);
+    const groups = searchPalette(paletteItems(bare, index), "").map(({ group }) => group);
     expect(groups).toEqual(["contract", "files"]);
   });
 });

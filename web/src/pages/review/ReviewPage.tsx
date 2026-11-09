@@ -25,18 +25,13 @@ import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { JumpPalette } from "./JumpPalette.tsx";
-import {
-  callKey,
-  MapLayout,
-  MECHANICAL_ANCHOR,
-  type ScrollRequest,
-  stepAnchor,
-} from "./MapLayout.tsx";
+import { callKey, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
 import {
   callerFiles,
   callsByLine,
   commentsInParts,
   decisionPlaces,
+  fileGroups,
   type Layout,
   mapSections,
   markReviewed,
@@ -47,12 +42,11 @@ import {
   reviewedParts,
   reviewOrder,
   riskTotals,
-  sectionKey,
   tourSteps,
   trailingProofs,
 } from "./model.ts";
 import { Overview } from "./Overview.tsx";
-import { fileOverview, type OverviewNode } from "./overview.ts";
+import { fileOverview, filesInCallOrder, type OverviewNode } from "./overview.ts";
 import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { type PaletteTarget, paletteItems } from "./palette.ts";
@@ -198,7 +192,15 @@ const Review = ({
 
   const index = useMemo(() => partIndex(analysis), [analysis]);
   const steps = useMemo(() => tourSteps(analysis, index), [analysis, index]);
-  const sections = useMemo(() => mapSections(analysis, steps, index), [analysis, steps, index]);
+  // The map reads the files in the overview's order, as it lays them out before a group is opened.
+  const callOrder = useMemo(
+    () => filesInCallOrder(fileOverview(analysis, steps)),
+    [analysis, steps],
+  );
+  const sections = useMemo(
+    () => mapSections(analysis, callOrder, index),
+    [analysis, callOrder, index],
+  );
   const order = useMemo(() => sections.flatMap((section) => section.partIds), [sections]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
   const mechanical = mechanicalCount(trailing);
@@ -247,9 +249,15 @@ const Review = ({
       chipPlan(
         sections.map((section) => section.partIds.filter((id) => !contractOnly || isContract(id))),
         calls,
-        (id, line) =>
-          index.parts.get(id)?.hunk.lines.find((one) => one.kind !== "del" && one.newLine === line)
-            ?.text,
+        (id, line) => {
+          const found = index.parts.get(id);
+          const text = found?.hunk.lines.find(
+            (one) => one.kind !== "del" && one.newLine === line,
+          )?.text;
+          return found === undefined || text === undefined
+            ? undefined
+            : { text, path: found.file.path };
+        },
       ),
     [sections, calls, index, contractOnly, isContract],
   );
@@ -263,16 +271,6 @@ const Review = ({
     return byPart;
   }, [analysis.unchangedCallers]);
   const unchangedOf = useCallback((id: PartId) => unchanged.get(id) ?? NO_UNCHANGED, [unchanged]);
-  const stepOf = useMemo(() => {
-    const places = new Map<PartId, string>();
-    for (const section of sections) {
-      if (section.kind !== "step") continue;
-      for (const id of section.partIds) {
-        if (!places.has(id)) places.set(id, `step ${section.number}: ${section.step.title}`);
-      }
-    }
-    return (id: PartId) => places.get(id) ?? null;
-  }, [sections]);
   const [railOpen, setRailOpen] = useState(false);
   const [focusedHunkId, setFocusedHunkId] = useState<PartId | null>(null);
   // The file the overview asks to focus, and the node last focused there.
@@ -309,7 +307,7 @@ const Review = ({
       setReviewedList((previous) => markReviewed(previous, id, value, index).slice(-MAX_REVIEWED)),
     [setReviewedList, index],
   );
-  const headers = useMemo(() => partHeaders(sections, index), [sections, index]);
+  const headers = useMemo(() => partHeaders(index), [index]);
   const partHeaderOf = useCallback((id: PartId) => headers.get(id) ?? null, [headers]);
 
   // Comments on hunk lines are drafts in this browser until they're published with the review.
@@ -411,19 +409,6 @@ const Review = ({
     const [first] = ids;
     if (first !== undefined) showHunk(first);
   };
-  const goToSection = (key: string) => {
-    const section = sections.find((one) => sectionKey(one) === key);
-    if (section === undefined) return;
-    if (layout === "overview") {
-      const first = section.partIds.find((id) => !index.mechanical.has(id));
-      if (first !== undefined) showHunk(first);
-      return;
-    }
-    if (contractOnly && !section.partIds.some(isContract)) setContractOnly(() => false);
-    setFocusedHunkId(null);
-    setStartAt(section.partIds.find(shownInMap) ?? null);
-    scrollTo(stepAnchor(key));
-  };
   const goToMechanical = () => {
     if (contractOnly) setContractOnly(() => false);
     scrollTo(MECHANICAL_ANCHOR);
@@ -482,14 +467,15 @@ const Review = ({
     const target = mapItems[Math.min(Math.max(next, 0), mapItems.length - 1)];
     if (target !== undefined) scrollTo(hunkAnchor(target));
   };
-  const moveStep = (step: 1 | -1) => {
-    const shown = sections.filter((section) => section.partIds.some(shownInMap));
+  /** The first part of the next or previous file on the map. */
+  const moveFile = (direction: 1 | -1) => {
+    const files = fileGroups(mapItems, index);
     const current = currentHunk() ?? startAt;
-    const at = shown.findIndex((section) =>
-      current === null ? false : section.partIds.includes(current),
-    );
-    const next = shown[at + step];
-    if (next !== undefined) goToSection(sectionKey(next));
+    const at = files.findIndex((group) => current !== null && group.partIds.includes(current));
+    const next = files[at === -1 ? (direction === 1 ? 0 : files.length - 1) : at + direction];
+    const [first] = next?.partIds ?? [];
+    setStartAt(null);
+    if (first !== undefined) scrollTo(hunkAnchor(first));
   };
   /** The next or previous hunk to review that isn't marked reviewed. */
   const goToUnreviewed = (direction: 1 | -1) => {
@@ -524,10 +510,10 @@ const Review = ({
         return moveHunk(1);
       case "previous-hunk":
         return moveHunk(-1);
-      case "next-step":
-        return moveStep(1);
-      case "previous-step":
-        return moveStep(-1);
+      case "next-file":
+        return moveFile(1);
+      case "previous-file":
+        return moveFile(-1);
       case "open-call": {
         // The first chip opens in place; with only mentions, the first goes to its hunk.
         const marks = [...(current === null ? [] : (plan.get(current) ?? []))]
@@ -681,7 +667,6 @@ const Review = ({
     plan,
     callersOf,
     unchangedOf,
-    stepOf,
     onFollow: stable.follow,
     reviewed,
     onReviewed: setReviewed,
@@ -713,7 +698,7 @@ const Review = ({
     </>
   );
 
-  const items = useMemo(() => paletteItems(analysis, steps, index), [analysis, steps, index]);
+  const items = useMemo(() => paletteItems(analysis, index), [analysis, index]);
   const pick = (target: PaletteTarget) => {
     setJumping(false);
     switch (target.kind) {
@@ -724,8 +709,6 @@ const Review = ({
       case "hunk":
         setHighlight(new Set());
         return showHunk(target.partId);
-      case "step":
-        return goToSection(target.stepId);
       case "mechanical":
         if (layout !== "map") setLayout(() => "map");
         goToMechanical();
@@ -734,7 +717,6 @@ const Review = ({
   };
   const goFromRail = (target: RailTarget) => {
     if (target.kind === "hunk") return showHunk(target.partId);
-    if (target.kind === "section") return goToSection(target.key);
     goToMechanical();
   };
   const onInView = useCallback((ids: readonly PartId[]) => {
@@ -825,7 +807,7 @@ const Review = ({
               <circle cx="7" cy="7" r="4.5" />
               <path d="m10.5 10.5 3.5 3.5" />
             </svg>
-            <span className="jump-field-text">Jump to a decision, step, file or symbol…</span>
+            <span className="jump-field-text">Jump to a decision, file or symbol…</span>
             <kbd>⌘K</kbd>
           </button>
           {layout === "map" && (
@@ -866,7 +848,6 @@ const Review = ({
             signatureOf={signatureOf}
           />
           <RiskRail
-            activePartId={focusedHunkId}
             sections={sections}
             index={index}
             decisionsOn={(id) => restingOn.get(id) ?? NO_DECISIONS}

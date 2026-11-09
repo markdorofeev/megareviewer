@@ -84,16 +84,30 @@ const REQUEST_PATH = String.raw`(?<![\w])(?:[fFrRuU]{1,2})?(?<quote>["'\`])(?:\$
 /** A function as the argument after the path: a route or a mock handler, not a request. */
 const HANDLER = /^\s*,\s*(?:async\b|function\b|func\b|\(|[\w$]+\s*=>)/;
 
-/** Requests found by one row: the method, the path, and what follows the call's path. */
-type Found = { readonly method: string | null; readonly path: string; readonly rest: string };
+/**
+ * Requests found by one row: the method, the path, where the path starts in the line, and what
+ * follows the call's path.
+ */
+type Found = {
+  readonly method: string | null;
+  readonly path: string;
+  readonly start: number;
+  readonly rest: string;
+};
 
 /** Calls to `callee` with a path as their first argument; its `method` group is the method. */
 const callsOn = (line: string, callee: string, flags = "g"): Found[] =>
-  [...line.matchAll(new RegExp(String.raw`${callee}\(\s*${REQUEST_PATH}`, flags))].map((match) => ({
-    method: match.groups?.method?.toUpperCase() ?? null,
-    path: match.groups?.path ?? "",
-    rest: line.slice(match.index + match[0].length),
-  }));
+  [...line.matchAll(new RegExp(String.raw`${callee}\(\s*${REQUEST_PATH}`, flags))].map((match) => {
+    const path = match.groups?.path ?? "";
+    const end = match.index + match[0].length;
+    // The match ends with the path and its closing quote.
+    return {
+      method: match.groups?.method?.toUpperCase() ?? null,
+      path,
+      start: end - 1 - path.length,
+      rest: line.slice(end),
+    };
+  });
 
 const CLIENT_METHODS = "get|post|put|patch|delete|head|options";
 
@@ -147,16 +161,36 @@ const REQUEST_PATTERNS: readonly ((line: string, path: string) => Found[])[] = [
  * only in test files. The path keeps its placeholders and loses its query.
  */
 export const requestsOn = (line: string, path: string): Route[] => {
-  if (routesOn(line).length > 0) return [];
   const seen = new Set<string>();
+  return requestPlacesOn(line, path).flatMap(({ method, path: requested }) => {
+    const key = `${method} ${requested}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ method, path: requested }];
+  });
+};
+
+/** A request with where its path stands in the line: characters `start` to `end`, end excluded. */
+export interface RequestPlace extends Route {
+  readonly start: number;
+  readonly end: number;
+}
+
+/** The requests `requestsOn` finds, each with its path's place in the line, repeats included. */
+export const requestPlacesOn = (line: string, path: string): RequestPlace[] => {
+  if (routesOn(line).length > 0) return [];
   return REQUEST_PATTERNS.flatMap((pattern) => pattern(line, path)).flatMap((found) => {
     // A path with more added to it is built at runtime: what it reaches isn't known.
     if (found.method === null || HANDLER.test(found.rest) || /^\s*\+/.test(found.rest)) return [];
-    const request = { method: found.method, path: found.path.replace(/[?#].*$/, "") };
-    const key = `${request.method} ${request.path}`;
-    if (seen.has(key)) return [];
-    seen.add(key);
-    return [request];
+    const requested = found.path.replace(/[?#].*$/, "");
+    return [
+      {
+        method: found.method,
+        path: requested,
+        start: found.start,
+        end: found.start + found.path.length,
+      },
+    ];
   });
 };
 

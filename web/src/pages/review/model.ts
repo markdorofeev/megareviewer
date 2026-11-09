@@ -15,6 +15,7 @@ import {
   type DecisionId,
   type HunkComment,
   isTestFile,
+  pathReasons,
   type RiskAssessment,
   ruleReasons,
   type TourStep,
@@ -64,6 +65,18 @@ const partRisk = (hunk: RiskAssessment, reasons: readonly string[]): RiskAssessm
     : { ...hunk, riskClass: "contract", reason: reasons.join("; ") };
 
 const NO_RULE_IN_PART = "No contract rule matches this part's lines.";
+
+/**
+ * A part's contract reason without the path rules' reasons, which hold for its whole file and are
+ * said once on the file's card: empty when the path is all that makes it contract.
+ */
+export const partReason = (reason: string, file: FileChange): string => {
+  const ofFile = new Set(pathReasons(file));
+  return reason
+    .split("; ")
+    .filter((one) => !ofFile.has(one))
+    .join("; ");
+};
 
 /** A part as the page shows it: its lines as a hunk, its file, its hunk's risk and proofs. */
 export interface PartItem extends HunkItem {
@@ -194,50 +207,31 @@ export const tourSteps = (analysis: Analysis, index: PartIndex): readonly TourSt
  * A part of the map's one scroll: a tour step with the mechanical hunks of its files in place,
  * or, before the tour exists, every change in path order.
  */
-export type MapSection =
-  | {
-      readonly kind: "step";
-      readonly step: TourStep;
-      readonly number: number;
-      readonly partIds: readonly PartId[];
-    }
-  | { readonly kind: "files"; readonly partIds: readonly PartId[] };
-
-export const mapSections = (
-  analysis: Analysis,
-  steps: readonly TourStep[],
-  index: PartIndex,
-): readonly MapSection[] =>
-  analysis.tour === null
-    ? [
-        {
-          kind: "files",
-          partIds: withMechanicalInPlace(partsInPathOrder(analysis, index), index),
-        },
-      ]
-    : steps.map((step, at) => ({
-        kind: "step",
-        step,
-        number: at + 1,
-        partIds: withMechanicalInPlace(byFile(step.partIds, index), index),
-      }));
+/** What the map shows: every part to review, each file's together, the files in `fileOrder`. */
+export interface MapSection {
+  readonly kind: "files";
+  readonly partIds: readonly PartId[];
+}
 
 /**
- * A step's parts with each file's together, in the file's order, the files in the order the step
- * reaches them. A step reads one card per file: in call order, a step that goes back and forth
- * between two files cut each into several cards, 79 of them for 32 files on delphi-code #2.
+ * The map's one section: each file once, with all its parts in the file's order, mechanical ones
+ * in place, the files in `fileOrder` (the call graph's) and any it leaves out by path after them.
  */
-export const byFile = (ids: readonly PartId[], index: PartIndex): PartId[] => {
-  const files = new Map<string, PartId[]>();
-  for (const id of ids) {
-    const path = index.parts.get(id)?.file.path ?? id;
-    files.set(path, [...(files.get(path) ?? []), id]);
-  }
-  const at = (id: PartId) => index.position.get(id) ?? Number.MAX_SAFE_INTEGER;
-  return [...files.values()].flatMap((parts) => parts.sort((a, b) => at(a) - at(b)));
+export const mapSections = (
+  analysis: Analysis,
+  fileOrder: readonly string[],
+  index: PartIndex,
+): readonly MapSection[] => {
+  const rank = new Map(fileOrder.map((path, at) => [path, at]));
+  const rankOf = (file: FileChange) => rank.get(file.path) ?? fileOrder.length;
+  const files = [...analysis.files].sort((a, b) => rankOf(a) - rankOf(b) || byPath(a, b));
+  const partIds = files
+    .flatMap((file) => index.partsInFile(file))
+    .filter((id) => !index.mechanical.has(id));
+  return [{ kind: "files", partIds: withMechanicalInPlace(partIds, index) }];
 };
 
-/** A run of a section's parts from one file: one card on the map. */
+/** A run of the map's parts from one file: one card. */
 export interface FileGroup {
   readonly file: FileChange;
   readonly partIds: readonly PartId[];
@@ -290,8 +284,7 @@ export const gapBetween = (previous: PartId, next: PartId, index: PartIndex): Ga
   return { lines: Math.max(start - end - 1, 0), parts };
 };
 
-export const sectionKey = (section: MapSection): string =>
-  section.kind === "step" ? section.step.id : "files";
+export const sectionKey = (section: MapSection): string => section.kind;
 
 /** Where the decisions show: each as a card on one hunk, linked from its other hunks. */
 export interface DecisionPlaces {
@@ -521,39 +514,21 @@ export const reviewedHunkCount = (
   return { done: [...allDone.values()].filter(Boolean).length, total: allDone.size };
 };
 
-/** Each split part's header, from where the sections put its hunk's parts. */
-export const partHeaders = (
-  sections: readonly MapSection[],
-  index: PartIndex,
-): ReadonlyMap<PartId, PartHeader> => {
-  const stepOf = new Map<PartId, number>();
-  for (const section of sections) {
-    if (section.kind !== "step") continue;
-    for (const id of section.partIds) if (!stepOf.has(id)) stepOf.set(id, section.number);
-  }
+/** Each split part's header: what it changes, which part it is, and its hunk's other parts. */
+export const partHeaders = (index: PartIndex): ReadonlyMap<PartId, PartHeader> => {
   const neighbor = (id: PartId | undefined): PartNeighbor | null => {
     const place = id === undefined ? null : (index.parts.get(id)?.place ?? null);
     return id === undefined || place === null
       ? null
-      : { id, n: place.n, definitions: place.definitions, step: stepOf.get(id) ?? null };
+      : { id, n: place.n, definitions: place.definitions };
   };
   const headers = new Map<PartId, PartHeader>();
   for (const [id, { place }] of index.parts) {
     if (place === null) continue;
-    const own = stepOf.get(id);
-    const elsewhere = [
-      ...new Set(
-        place.siblings.flatMap((other) => {
-          const step = stepOf.get(other);
-          return step === undefined || step === own ? [] : [step];
-        }),
-      ),
-    ].sort((a, b) => a - b);
     headers.set(id, {
       definitions: place.definitions,
       n: place.n,
       of: place.of,
-      elsewhere,
       previous: neighbor(place.siblings[place.n - 2]),
       next: neighbor(place.siblings[place.n]),
     });

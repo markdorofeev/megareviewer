@@ -1,10 +1,5 @@
 import { isTestFile, type PartId } from "../../../../src/domain/diff/index.ts";
-import type {
-  Analysis,
-  DecisionId,
-  TourStep,
-  TourStepId,
-} from "../../../../src/domain/review/index.ts";
+import type { Analysis, DecisionId } from "../../../../src/domain/review/index.ts";
 import { hunkLocation } from "../../diff/index.ts";
 import { CATEGORY_NAMES } from "./DecisionCard.tsx";
 import type { PartIndex } from "./model.ts";
@@ -16,7 +11,6 @@ export type PaletteGroup =
   | "unchanged"
   | "routes"
   | "symbols"
-  | "steps"
   | "files";
 
 export const PALETTE_GROUPS: readonly { readonly group: PaletteGroup; readonly title: string }[] = [
@@ -26,7 +20,6 @@ export const PALETTE_GROUPS: readonly { readonly group: PaletteGroup; readonly t
   { group: "unchanged", title: "Used unchanged" },
   { group: "routes", title: "Routes" },
   { group: "symbols", title: "Symbols" },
-  { group: "steps", title: "Steps" },
   { group: "files", title: "Files" },
 ];
 
@@ -35,7 +28,6 @@ export type PaletteTarget =
   | { readonly kind: "decision"; readonly decisionId: DecisionId }
   | { readonly kind: "mismatch"; readonly index: number }
   | { readonly kind: "hunk"; readonly partId: PartId }
-  | { readonly kind: "step"; readonly stepId: TourStepId }
   | { readonly kind: "mechanical" };
 
 export interface PaletteItem {
@@ -59,11 +51,7 @@ const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1)
 const MAX_PER_GROUP = 8;
 
 /** Everything the palette can jump to, by group. */
-export const paletteItems = (
-  analysis: Analysis,
-  steps: readonly TourStep[],
-  index: PartIndex,
-): PaletteItem[] => {
+export const paletteItems = (analysis: Analysis, index: PartIndex): PaletteItem[] => {
   const where = (id: PartId): string => {
     const found = index.parts.get(id);
     return found === undefined ? "" : `${found.file.path}, ${hunkLocation(found.hunk)}`;
@@ -164,15 +152,6 @@ export const paletteItems = (
     }),
     ...routes,
     ...symbols.values(),
-    ...steps.map(
-      (step, at): PaletteItem => ({
-        key: `step:${step.id}`,
-        group: "steps",
-        label: step.title,
-        detail: step.codeTitle === null ? `Step ${at + 1}` : `Step ${at + 1} · ${step.codeTitle}`,
-        target: { kind: "step", stepId: step.id },
-      }),
-    ),
     ...[...analysis.files]
       .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
       .map((file): PaletteItem => {

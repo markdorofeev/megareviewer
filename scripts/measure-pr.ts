@@ -134,11 +134,13 @@ export const counts = (measured: Measured) => {
     lines.set(line, [...(lines.get(line) ?? []), { symbol, toPartId, line }]);
     byLine.set(fromPartId, lines);
   }
-  const textOf = (id: PartId, line: number) =>
-    files
-      .flatMap((file) => file.hunks)
+  const textOf = (id: PartId, line: number) => {
+    const file = files.find((one) => one.hunks.some((hunk) => hunk.id === hunkIdOf(id)));
+    const text = file?.hunks
       .find((hunk) => hunk.id === hunkIdOf(id))
       ?.lines.find((one) => one.kind !== "del" && one.newLine === line)?.text;
+    return file === undefined || text === undefined ? undefined : { text, path: file.path };
+  };
   const plan = chipPlan(
     tour.steps.map((step) => step.partIds),
     byLine,

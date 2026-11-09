@@ -36,7 +36,7 @@ let closeOpenPeek: (() => void) | null = null;
 /**
  * A call, the symbol underlined in place. Resting on it or focusing it shows a peek of the called
  * code. A click goes there, or, with `onToggle`, opens the called code under the line: the first
- * call in a step to code the reader hasn't been shown yet.
+ * call on the map to code the reader hasn't been shown yet.
  */
 export const Mention = ({
   mark,
@@ -152,14 +152,12 @@ const PeekOf = ({
   const riskClass = deps.index.mechanical.has(hunkId) ? "mechanical" : item.risk.riskClass;
   const start = peekStart(hunk, symbol);
   const lines = hunk.lines.slice(start, start + PEEK_LINES);
-  const step = deps.stepOf(hunkId);
   return (
     <div className="peek-hunk">
       <p className="peek-head">
         <code className="call-symbol">{symbol}</code> <span>{file.path}</span>{" "}
         <span className="muted">{hunkLocation(hunk)}</span>{" "}
         <span className={`call-risk risk-${riskClass}`}>{riskClass}</span>
-        {step !== null && <span className="peek-step muted"> · {step}</span>}
       </p>
       <pre className="peek-code">
         {lines.map((line, at) => (

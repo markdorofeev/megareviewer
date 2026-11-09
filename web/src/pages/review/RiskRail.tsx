@@ -15,7 +15,6 @@ import {
 /** Where a click on the rail goes. */
 export type RailTarget =
   | { readonly kind: "hunk"; readonly partId: PartId }
-  | { readonly kind: "section"; readonly key: string }
   | { readonly kind: "mechanical" };
 
 /**
@@ -141,7 +140,6 @@ const PartBar = ({
  */
 export const RiskRail = ({
   sections,
-  activePartId,
   index,
   decisionsOn,
   totals,
@@ -153,7 +151,6 @@ export const RiskRail = ({
   onInView,
 }: {
   readonly sections: readonly MapSection[];
-  readonly activePartId?: PartId | null;
   readonly index: PartIndex;
   /** Every decision resting on the hunk. */
   readonly decisionsOn: (id: PartId) => readonly Decision[];
@@ -167,7 +164,6 @@ export const RiskRail = ({
   readonly onInView: (ids: readonly PartId[]) => void;
 }) => {
   const id = useId();
-  const [selected, setSelected] = useState<string | null>(null);
   const rail = useRef<HTMLElement>(null);
   const [ids, setIds] = useState<readonly PartId[]>([]);
   // The hunks the page shows; their places change when the filter does.
@@ -193,16 +189,6 @@ export const RiskRail = ({
     }
   }, [inView, ids]);
 
-  // Only the section being read lists its bars; every heading stays. The focused part wins while
-  // it's on screen, then the first part in view.
-  const current =
-    (activePartId != null && (inView.size === 0 || inView.has(activePartId))
-      ? activePartId
-      : ids.find((one) => inView.has(one))) ?? sections[0]?.partIds[0];
-  // A heading clicked opens its section until the reader scrolls on.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: inView is the trigger, not an input.
-  useEffect(() => setSelected(null), [inView]);
-
   return (
     <aside id="review-map-rail" ref={rail} className="risk-rail" aria-labelledby={`${id}-title`}>
       <div className="rail-header">
@@ -223,103 +209,60 @@ export const RiskRail = ({
         </label>
       </div>
       <ol className="rail-steps">
-        {sections.map((section) => {
-          const key = sectionKey(section);
-          const active =
-            selected === key || (current !== undefined && section.partIds.includes(current));
-          const toReview = section.partIds.filter((hunkId) => !index.mechanical.has(hunkId));
-          const done = toReview.length > 0 && toReview.every((id) => reviewed.has(id));
-          return (
-            <li key={key}>
-              <button
-                type="button"
-                className={
-                  section.kind === "step" && section.step.kind === "supporting"
-                    ? "rail-step supporting"
-                    : "rail-step"
-                }
-                aria-expanded={active}
-                onClick={() => {
-                  setSelected(key);
-                  onGo({ kind: "section", key });
-                }}
-              >
-                {section.kind === "step" && (
-                  <span className="rail-step-number">{section.number}</span>
-                )}{" "}
-                <span
-                  className="rail-step-title model-text"
-                  title={
-                    section.kind !== "step"
-                      ? undefined
-                      : section.step.codeTitle === null
-                        ? section.step.title
-                        : `${section.step.title} · ${section.step.codeTitle}`
-                  }
-                >
-                  {section.kind === "step" ? section.step.title : "Changes by file"}
-                </span>
-                {done && (
-                  <span className="rail-tick" role="img" aria-label="reviewed">
-                    ✓
-                  </span>
-                )}
-              </button>
-              <ul className="rail-bars" hidden={!active}>
-                {fileGroups(section.partIds, index).map((group) => {
-                  const [first, ...more] = group.partIds;
-                  if (first === undefined) return null;
-                  const bar = (partId: PartId) => (
-                    <PartBar
-                      key={partId}
-                      partId={partId}
-                      index={index}
-                      inView={inView.has(partId)}
-                      reviewed={reviewed.has(partId)}
-                      dimmed={contractOnly}
-                      decisions={decisionsOn(partId)}
-                      onGo={onGo}
-                      inFile={more.length > 0}
-                    />
-                  );
-                  if (more.length === 0) return <li key={first}>{bar(first)}</li>;
-                  const items = index.items(group.partIds);
-                  const toReview = items.filter((item) => !index.mechanical.has(item.id));
-                  const contract = toReview.filter(
-                    (item) => item.risk.riskClass === "contract",
-                  ).length;
-                  const done =
-                    toReview.length > 0 && toReview.every((item) => reviewed.has(item.id));
-                  return (
-                    <li key={first} className="rail-file">
-                      <button
-                        type="button"
-                        className="rail-file-name"
-                        onClick={() => onGo({ kind: "hunk", partId: first })}
-                      >
-                        <span className="rail-hunk-file">{group.file.path.split("/").at(-1)}</span>
-                        <span className="rail-hunk-meta">
-                          {group.partIds.length} parts
-                          {contract > 0 && ` · ${contract} contract`}
+        {sections.map((section) => (
+          <li key={sectionKey(section)}>
+            <ul className="rail-bars">
+              {fileGroups(section.partIds, index).map((group) => {
+                const [first, ...more] = group.partIds;
+                if (first === undefined) return null;
+                const bar = (partId: PartId) => (
+                  <PartBar
+                    key={partId}
+                    partId={partId}
+                    index={index}
+                    inView={inView.has(partId)}
+                    reviewed={reviewed.has(partId)}
+                    dimmed={contractOnly}
+                    decisions={decisionsOn(partId)}
+                    onGo={onGo}
+                    inFile={more.length > 0}
+                  />
+                );
+                if (more.length === 0) return <li key={first}>{bar(first)}</li>;
+                const items = index.items(group.partIds);
+                const toReview = items.filter((item) => !index.mechanical.has(item.id));
+                const contract = toReview.filter(
+                  (item) => item.risk.riskClass === "contract",
+                ).length;
+                const done = toReview.length > 0 && toReview.every((item) => reviewed.has(item.id));
+                return (
+                  <li key={first} className="rail-file">
+                    <button
+                      type="button"
+                      className="rail-file-name"
+                      onClick={() => onGo({ kind: "hunk", partId: first })}
+                    >
+                      <span className="rail-hunk-file">{group.file.path.split("/").at(-1)}</span>
+                      <span className="rail-hunk-meta">
+                        {contract > 0 && `${contract} contract`}
+                      </span>
+                      {done && (
+                        <span className="rail-tick" role="img" aria-label="reviewed">
+                          ✓
                         </span>
-                        {done && (
-                          <span className="rail-tick" role="img" aria-label="reviewed">
-                            ✓
-                          </span>
-                        )}
-                      </button>
-                      <ul className="rail-file-parts">
-                        {group.partIds.map((partId) => (
-                          <li key={partId}>{bar(partId)}</li>
-                        ))}
-                      </ul>
-                    </li>
-                  );
-                })}
-              </ul>
-            </li>
-          );
-        })}
+                      )}
+                    </button>
+                    <ul className="rail-file-parts">
+                      {group.partIds.map((partId) => (
+                        <li key={partId}>{bar(partId)}</li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
         <li>
           <button
             type="button"

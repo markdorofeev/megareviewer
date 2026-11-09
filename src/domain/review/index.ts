@@ -62,7 +62,13 @@ export {
 } from "./pull-request.ts";
 export { parsePullRequestUrl, pullRequestUrl } from "./pull-request-url.ts";
 export { RiskAssessment, RiskClass } from "./risk.ts";
-export { classifyByRules, isTestFile, raiseByRules, ruleReasons } from "./risk-rules.ts";
+export {
+  classifyByRules,
+  isTestFile,
+  pathReasons,
+  raiseByRules,
+  ruleReasons,
+} from "./risk-rules.ts";
 export { extractTicketKeys } from "./ticket-keys.ts";
 export { Tour, TourStep, TourStepId } from "./tour.ts";
 export {

@@ -19,8 +19,8 @@ describe("shortcutFor", () => {
     expect(keys.map((key) => press(key))).toEqual([
       "next-hunk",
       "previous-hunk",
-      "next-step",
-      "previous-step",
+      "next-file",
+      "previous-file",
       "open-call",
       "toggle-reviewed",
       "next-unreviewed",

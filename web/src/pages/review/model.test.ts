@@ -6,7 +6,6 @@ import {
   BAR_MAX_PX,
   BAR_MIN_PX,
   barHeight,
-  byFile,
   callerFiles,
   callsByLine,
   decisionPlaces,
@@ -16,6 +15,7 @@ import {
   mechanicalCount,
   parseLayout,
   partIndex,
+  partReason,
   partsInPathOrder,
   reviewOrder,
   riskTotals,
@@ -23,6 +23,7 @@ import {
   trailingProofs,
   withMechanicalInPlace,
 } from "./model.ts";
+import { fileOverview, filesInCallOrder } from "./overview.ts";
 import { formatCost, formatTokens } from "./UsageFooter.tsx";
 
 const analysis = fixtureAnalysisView.analysis;
@@ -90,45 +91,37 @@ describe("reading order", () => {
 
 describe("mapSections and reviewOrder", () => {
   const index = partIndex(analysis);
-  const steps = tourSteps(analysis, index);
+  const order = filesInCallOrder(fileOverview(analysis, tourSteps(analysis, index)));
 
-  it("is the tour's steps, with mechanical hunks in place", () => {
-    const sections = mapSections(analysis, steps, index);
-    expect(sections.map((section) => section.kind)).toEqual(["step", "step", "step", "step"]);
-    // A file's parts are together, in the file's order: the route's imports come first.
-    expect(sections[0]?.partIds).toEqual([
-      h.routeImports,
-      h.receiptRoute,
-      h.formatMoneyRemoved,
-      p.cache,
-    ]);
+  it("is one list of files in the call graph's order, each file's parts together", () => {
+    const sections = mapSections(analysis, order, index);
+    expect(sections).toHaveLength(1);
+    const ids = sections[0]?.partIds ?? [];
+    const paths = [...new Set(ids.map((id) => index.parts.get(id)?.file.path))];
+    // The route calls the receipts service, so its file comes first.
+    expect(paths.indexOf("src/routes/orders.ts")).toBeLessThan(
+      paths.indexOf("src/services/receipts.ts"),
+    );
+    // The split hunk's two parts sit together, in the file's order.
+    expect(ids.indexOf(p.cache)).toBe(ids.indexOf(p.retry) + 1);
   });
 
-  it("is every change by path before the tour exists", () => {
-    const early: Analysis = { ...analysis, tour: null };
-    const sections = mapSections(early, tourSteps(early, index), index);
-    expect(sections).toHaveLength(1);
-    expect(sections[0]?.kind).toBe("files");
-    expect(sections[0]?.partIds).toContain(h.formatMoneyRemoved);
+  it("puts files the order leaves out after it, by path", () => {
+    const [section] = mapSections(analysis, [], index);
+    const paths = [...new Set(section?.partIds.map((id) => index.parts.get(id)?.file.path))];
+    expect(paths).toEqual([...paths].sort());
   });
 
   it("lists the hunks to review in the map's order, without mechanical ones", () => {
-    expect(reviewOrder(mapSections(analysis, steps, index), index)).toEqual(
-      steps.flatMap((step) => byFile(step.partIds, index)),
+    const sections = mapSections(analysis, order, index);
+    expect(reviewOrder(sections, index)).toEqual(
+      sections[0]?.partIds.filter((id) => !index.mechanical.has(id)),
     );
   });
 });
 
-describe("byFile, fileGroups and gapBetween", () => {
+describe("fileGroups and gapBetween", () => {
   const index = partIndex(analysis);
-
-  it("puts a step's parts from one file together, in the file's order, files as first reached", () => {
-    expect(byFile([h.receiptRoute, p.cache, h.routeImports], index)).toEqual([
-      h.routeImports,
-      h.receiptRoute,
-      p.cache,
-    ]);
-  });
 
   it("groups consecutive parts from one file, leaving out parts it doesn't know", () => {
     const unknown = "h_0000000000000000" as PartId;
@@ -146,6 +139,17 @@ describe("byFile, fileGroups and gapBetween", () => {
       h.receiptRoute,
     ]);
     expect(gapBetween(h.routeImports, p.cache, index)).toBeNull();
+  });
+
+  it("leaves the path rules' reasons out of a part's, since the file's card says them", () => {
+    const [file] = analysis.files;
+    if (file === undefined) throw new Error("no file");
+    const auth = { ...file, path: "src/auth/session.ts", oldPath: null };
+    expect(partReason("auth or security path", auth)).toBe("");
+    expect(partReason("auth or security path; changes authorization (check)", auth)).toBe(
+      "changes authorization (check)",
+    );
+    expect(partReason("auth or security path", file)).toBe("auth or security path");
   });
 });
 
@@ -195,9 +199,11 @@ describe("a split part's risk", () => {
 
 describe("decisionPlaces", () => {
   const index = partIndex(analysis);
-  const order = mapSections(analysis, tourSteps(analysis, index), index).flatMap(
-    (section) => section.partIds,
-  );
+  const order = mapSections(
+    analysis,
+    filesInCallOrder(fileOverview(analysis, tourSteps(analysis, index))),
+    index,
+  ).flatMap((section) => section.partIds);
   const decision = (id: string, hunkIds: readonly (typeof h)[keyof typeof h][]) => ({
     ...analysis.decisions[0],
     id: DecisionId.parse(id),
@@ -221,8 +227,8 @@ describe("decisionPlaces", () => {
     const nowhere = decision("d2", [h.formatMoneyAdded]);
     const places = decisionPlaces([moved, nowhere], order, index);
     // The card goes on the split hunk's first part on the page, and its other part links to it.
-    expect(places.cards.get(p.cache)).toEqual([moved]);
-    expect(places.mentions.get(p.retry)).toEqual([moved]);
+    expect(places.cards.get(p.retry)).toEqual([moved]);
+    expect(places.mentions.get(p.cache)).toEqual([moved]);
     expect(places.mentions.get(h.formatMoneyRemoved)).toBeUndefined();
     expect(places.unplaced).toEqual([nowhere]);
   });

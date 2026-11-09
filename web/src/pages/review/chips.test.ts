@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { HunkId, type PartId } from "../../../../src/domain/diff/index.ts";
-import { type Call, type CallMark, chipCounts, chipPlan, symbolPlace } from "./chips.ts";
+import {
+  type Call,
+  type CallMark,
+  chipCounts,
+  chipPlan,
+  requestPlace,
+  symbolPlace,
+} from "./chips.ts";
 
 const id = (n: number) => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
 const [a, b, c, d, e] = [1, 2, 3, 4, 5].map(id) as [PartId, PartId, PartId, PartId, PartId];
@@ -19,15 +26,17 @@ const callsOf = (
     }),
   );
 /** Every line's text names its symbols, so mentions find them. */
-const named = (calls: ReadonlyMap<PartId, Lines>) => (from: PartId, line: number) =>
-  [
+const named = (calls: ReadonlyMap<PartId, Lines>) => (from: PartId, line: number) => ({
+  text: [
     ...new Set(
       calls
         .get(from)
         ?.get(line)
         ?.map((call) => `${call.symbol}()`),
     ),
-  ].join("; ");
+  ].join("; "),
+  path: "src/app.ts",
+});
 
 const kinds = (marks: readonly CallMark[] | undefined) =>
   marks?.map((mark) => `${mark.kind} ${mark.symbol}→${mark.calls.length}`);
@@ -130,10 +139,38 @@ describe("chipPlan", () => {
         ],
       ],
     ]);
-    const text = (_: PartId, line: number) => (line === 11 ? "  token," : undefined);
+    const text = (_: PartId, line: number) =>
+      line === 11 ? { text: "  token,", path: "src/app.ts" } : undefined;
     const plan = chipPlan([[a]], calls, text);
     expect(kinds(plan.get(a)?.get(11))).toEqual(["chip save→1"]);
     expect(kinds(plan.get(a)?.get(12))).toEqual(["chip save→1"]);
+  });
+
+  it("places a request at its path, so the path in the code is the call", () => {
+    const line = '    rows = client.get("/api/account-connections", headers=A)';
+    const request: Call = {
+      line: 10,
+      symbol: "GET /api/account-connections",
+      toPartId: c,
+      request: true,
+    };
+    const plan = chipPlan([[a]], new Map([[a, new Map([[10, [request]]])]]), () => ({
+      text: line,
+      path: "tests/test_api.py",
+    }));
+    const [mark] = plan.get(a)?.get(10) ?? [];
+    expect(mark?.at && line.slice(mark.at.start, mark.at.end)).toBe("/api/account-connections");
+  });
+
+  it("matches a request's path to its route by the rules that linked them", () => {
+    // The code under test is a template literal, written here as plain text.
+    const placeholder = (name: string) => `$\{${name}}`;
+    const path = `/hosts/${placeholder("domain")}/token`;
+    const line = `await api.put(\`${placeholder("base")}${path}\`, body)`;
+    const at = requestPlace(line, "web/src/api.ts", "PUT /hosts/{domain}/token");
+    expect(at && line.slice(at.start, at.end)).toBe(path);
+    expect(requestPlace(line, "web/src/api.ts", "DELETE /hosts/{domain}/token")).toBeNull();
+    expect(requestPlace("rows = load()", "web/src/api.ts", "GET /api/x")).toBeNull();
   });
 
   it("places a hunk once, at its first section", () => {

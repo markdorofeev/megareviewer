@@ -10,7 +10,7 @@ import {
   type PartHeader,
 } from "../../diff/index.ts";
 import type { ChipPlan } from "./chips.ts";
-import type { Call, PartIndex } from "./model.ts";
+import { type Call, type PartIndex, partReason } from "./model.ts";
 
 /** What a part on the page needs. */
 export interface HunkDeps {
@@ -21,8 +21,6 @@ export interface HunkDeps {
   readonly callersOf: (id: PartId) => readonly CallerFile[];
   /** Uses outside the pull request of what a part changes, read from a local checkout. */
   readonly unchangedOf: (id: PartId) => readonly UnchangedCallers[];
-  /** The step a hunk is read in, as "step 2: Title", for peeks. */
-  readonly stepOf: (id: PartId) => string | null;
   readonly onFollow: (id: PartId) => void;
   readonly reviewed: ReadonlySet<PartId>;
   readonly onReviewed: (id: PartId, reviewed: boolean) => void;
@@ -60,7 +58,7 @@ export const HunkView = ({
   readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
   readonly focused?: boolean;
   readonly nested?: boolean;
-  /** On a file's card with other parts, which marks them all reviewed at once. */
+  /** On a file's card, which names the file. */
   readonly inFile?: boolean;
 }) => {
   const [item] = deps.index.items([id]);
@@ -84,7 +82,8 @@ export const HunkView = ({
       part={deps.partHeaderOf(id)}
       hunk={hunk}
       file={file}
-      risk={risk}
+      // On a file's card, the file's header gives the path rules' reasons.
+      risk={inFile ? { ...risk, reason: partReason(risk.reason, file) } : risk}
       highlighted={deps.highlighted.has(id)}
       focused={focused}
       onFocus={nested ? undefined : deps.onFocusHunk}
@@ -92,8 +91,8 @@ export const HunkView = ({
         nested
           ? undefined
           : inFile
-            ? // A divider names only callers the reader doesn't meet in this step.
-              deps.callersOf(id).filter((caller) => deps.stepOf(caller.partId) !== deps.stepOf(id))
+            ? // A divider names callers in other files: its own file's are on the same card.
+              deps.callersOf(id).filter((caller) => caller.path !== file.path)
             : deps.callersOf(id)
       }
       unchanged={nested ? undefined : deps.unchangedOf(id)}

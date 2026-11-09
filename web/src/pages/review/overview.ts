@@ -623,3 +623,16 @@ export const fileOverview = (
   );
   return { rows, edges, strip, placeOf, grouped };
 };
+
+/**
+ * The changed files in the overview's order: row by row from the files nothing calls, each
+ * followed by the tests that reach it, then the strip. The map reads the files in this order.
+ */
+export const filesInCallOrder = (overview: FileOverview): string[] => {
+  const order = new Set<string>();
+  for (const node of [...overview.rows.flat(), ...overview.strip]) {
+    if (node.kind === "outside") continue;
+    for (const path of [...node.paths, ...node.badges]) order.add(path);
+  }
+  return [...order];
+};

@@ -4,8 +4,8 @@ import type { Layout } from "./model.ts";
 export type ShortcutAction =
   | "next-hunk"
   | "previous-hunk"
-  | "next-step"
-  | "previous-step"
+  | "next-file"
+  | "previous-file"
   | "toggle-reviewed"
   | "next-unreviewed"
   | "previous-unreviewed"
@@ -33,8 +33,8 @@ export const SHORTCUTS: readonly {
 }[] = [
   { keys: ["j"], action: "next-hunk", description: "Next hunk", layouts: ["map"] },
   { keys: ["k"], action: "previous-hunk", description: "Previous hunk", layouts: ["map"] },
-  { keys: ["n"], action: "next-step", description: "Next tour step", layouts: ["map"] },
-  { keys: ["p"], action: "previous-step", description: "Previous tour step", layouts: ["map"] },
+  { keys: ["n"], action: "next-file", description: "Next file", layouts: ["map"] },
+  { keys: ["p"], action: "previous-file", description: "Previous file", layouts: ["map"] },
   {
     keys: ["o"],
     action: "open-call",

@@ -1,6 +1,13 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: these strings are lines of code that build paths.
 import { describe, expect, it } from "vitest";
-import { type Route, requestsOn, routeReceivers, routesFor, routesOn } from "./requests.ts";
+import {
+  type Route,
+  requestPlacesOn,
+  requestsOn,
+  routeReceivers,
+  routesFor,
+  routesOn,
+} from "./requests.ts";
 
 describe("requestsOn", () => {
   const ui = "web/src/setup/ConnectionsSection.tsx";
@@ -78,6 +85,30 @@ describe("requestsOn", () => {
       { method: "GET", path: "/a" },
       { method: "GET", path: "/b" },
     ]);
+  });
+});
+
+describe("requestPlacesOn", () => {
+  const placed = (line: string, path = "web/src/api.ts") =>
+    requestPlacesOn(line, path).map(({ method, start, end }) => [method, line.slice(start, end)]);
+
+  it("places each request's path in its line, query and all, repeats included", () => {
+    expect(placed('fetch("/api/x?y=1"); fetch("/api/x?y=1")')).toEqual([
+      ["GET", "/api/x?y=1"],
+      ["GET", "/api/x?y=1"],
+    ]);
+    expect(placed("await api.put(`${base}/repos/${id}`, body)")).toEqual([["PUT", "/repos/${id}"]]);
+    expect(
+      placed(
+        '    connections = self.client.get("/api/account-connections", headers=A)',
+        "tests/test_api.py",
+      ),
+    ).toEqual([["GET", "/api/account-connections"]]);
+  });
+
+  it("finds nothing where requestsOn finds nothing", () => {
+    expect(placed('router.get("/api/x", handler)')).toEqual([]);
+    expect(placed('fetch("/api/" + id)')).toEqual([]);
   });
 });
 

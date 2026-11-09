@@ -83,19 +83,18 @@ test("analyzes a PR picked from the list", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Publish…" })).toBeEnabled();
 });
 
-test("the map moves through the hunks and the steps with the keyboard", async ({ page }) => {
+test("the map moves through the hunks and the files with the keyboard", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  // j and k move the focus between the cards of a step, n to the next step.
-  const labelsIn = (step: number) =>
+  // j and k move the focus between the cards, n to the next file's first.
+  const labels = (scope: string) =>
     page
-      .locator(".map-step")
-      .nth(step)
-      .locator(".hunk-card")
+      .locator(scope)
       .evaluateAll((cards) => cards.map((card) => card.getAttribute("aria-label") ?? ""));
-  const [first, second] = await labelsIn(0);
-  const [next] = await labelsIn(1);
+  const [first, second] = await labels(".map .hunk-card");
+  const firstFile = await labels(".map .file-card:nth-of-type(1) .hunk-card");
+  const [next] = await labels(".map .file-card:nth-of-type(2) .hunk-card");
   if (first === undefined || second === undefined || next === undefined) {
-    throw new Error("expected two cards in the first step and one in the second");
+    throw new Error("expected two cards, and a second file");
   }
   const focused = page.locator(".hunk-card:focus");
   await page.keyboard.press("j");
@@ -106,8 +105,8 @@ test("the map moves through the hunks and the steps with the keyboard", async ({
   await expect(focused).toHaveAttribute("aria-label", first);
 
   await page.keyboard.press("n");
-  await page.keyboard.press("j");
   await expect(focused).toHaveAttribute("aria-label", next);
+  expect(firstFile).not.toContain(next);
   await expect(rail(page).locator(".rail-hunk.in-view").first()).toBeVisible();
 });
 

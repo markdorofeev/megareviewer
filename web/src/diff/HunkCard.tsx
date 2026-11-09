@@ -195,13 +195,11 @@ const UnchangedUses = ({
   );
 };
 
-/** A part of a split hunk: what it changes, which part it is, and where the rest of its hunk is. */
+/** A part of a split hunk: what it changes, which part it is, and its neighbors in its hunk. */
 export interface PartHeader {
   readonly definitions: readonly string[];
   readonly n: number;
   readonly of: number;
-  /** The steps the hunk's other parts are in, by number, when they're not all in this one. */
-  readonly elsewhere: readonly number[];
   readonly previous: PartNeighbor | null;
   readonly next: PartNeighbor | null;
 }
@@ -211,12 +209,7 @@ export interface PartNeighbor {
   readonly id: PartId;
   readonly n: number;
   readonly definitions: readonly string[];
-  /** The step it's read in, by number; null when no step shows it. */
-  readonly step: number | null;
 }
-
-const listed = (items: readonly string[]): string =>
-  items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 
 const Names = ({ names }: { readonly names: readonly string[] }) =>
   names.length === 0 ? null : (
@@ -226,12 +219,10 @@ const Names = ({ names }: { readonly names: readonly string[] }) =>
     </>
   );
 
-/** "part 4 of 10 · rest of this hunk in steps 1 and 3". */
+/** "part 4 of 10". */
 const PartLabel = ({ part }: { readonly part: PartHeader }) => (
   <p className="hunk-part-of">
     part {part.n} of {part.of}
-    {part.elsewhere.length > 0 &&
-      ` · rest of this hunk in ${part.elsewhere.length === 1 ? "step" : "steps"} ${listed(part.elsewhere.map(String))}`}
   </p>
 );
 
@@ -256,7 +247,6 @@ const PartFold = ({
     <span aria-hidden="true">{direction === "previous" ? "↑" : "↓"}</span>{" "}
     <Names names={neighbor.definitions} />
     part {neighbor.n} of {of}
-    {neighbor.step === null ? "" : ` · step ${neighbor.step}`}
   </button>
 );
 
@@ -374,16 +364,12 @@ export const HunkCard = memo(function HunkCard({
   }, [focused]);
 
   const counts = lineCounts(hunk);
-  // On a file's card the gutter numbers the lines and the file's header counts the changes, so a
-  // part's divider shows only what the code doesn't: what it changes, why it's contract, and
-  // links to other steps. A part with none of those has no divider.
-  const showsRelated = part != null && part.elsewhere.length > 0;
+  // On a file's card the gutter numbers the lines, the code names what they define and the
+  // card holds the file's other parts, so a part's divider shows only why it's contract, past what
+  // the file's header says, and who calls it from another file. A part with neither has none.
+  const showsReason = risk?.riskClass === "contract" && risk.reason !== "";
   const dividerShows =
-    (part?.definitions.length ?? 0) > 0 ||
-    proofs.length > 0 ||
-    risk?.riskClass === "contract" ||
-    (callers.length > 0 && onFollow !== undefined) ||
-    showsRelated;
+    proofs.length > 0 || showsReason || (callers.length > 0 && onFollow !== undefined);
   const related = part != null && (
     <details className="hunk-related">
       <summary>Related parts</summary>
@@ -426,18 +412,16 @@ export const HunkCard = memo(function HunkCard({
               <FileStatusBadge status={file.status} />
             </>
           )}
-          {part != null
-            ? part.definitions.length > 0 && (
-                <span className="hunk-part">
-                  {joined(part.definitions.map((name) => <code key={name}>{name}</code>))}
-                </span>
-              )
-            : // Git's heading is a line above the hunk, not in it: on a file's card, under the code
-              // before it, it read as one more line of the diff.
-              !inFile &&
-              hunk.sectionHeading !== null && (
-                <code className="hunk-heading">{hunk.sectionHeading}</code>
-              )}
+          {!inFile &&
+            (part != null
+              ? part.definitions.length > 0 && (
+                  <span className="hunk-part">
+                    {joined(part.definitions.map((name) => <code key={name}>{name}</code>))}
+                  </span>
+                )
+              : hunk.sectionHeading !== null && (
+                  <code className="hunk-heading">{hunk.sectionHeading}</code>
+                ))}
           {!inFile && (
             <span className="hunk-counts">
               <span className="count-added">+{counts.added}</span>{" "}
@@ -449,15 +433,11 @@ export const HunkCard = memo(function HunkCard({
               ✓ {proof.detail}
             </span>
           ))}
-          {risk?.riskClass === "contract" && (
-            <span className="hunk-contract-reason model-text">{risk.reason}</span>
-          )}
+          {showsReason && <span className="hunk-contract-reason model-text">{risk.reason}</span>}
           {!inFile && risk !== null && <RiskBadge risk={risk} />}
           {inFile && callers.length > 0 && onFollow !== undefined && (
             <Callers callers={callers} onFollow={onFollow} inline />
           )}
-          {/* On a file's card, the hunk's other parts in this step are on the card already. */}
-          {inFile && showsRelated && related}
           {onReviewed !== undefined && (
             <label className="hunk-reviewed">
               <input

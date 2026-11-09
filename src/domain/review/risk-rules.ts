@@ -331,7 +331,8 @@ export const raiseByRules = (
   });
 };
 
-const pathReasonsOf = (file: FileChange): string[] => {
+/** The reasons the path rules give for a file: they hold for every hunk in it. */
+export const pathReasons = (file: FileChange): string[] => {
   const paths = file.oldPath === null ? [file.path] : [file.path, file.oldPath];
   return PATH_RULES.flatMap(
     (rule) => paths.map(rule).find((reason): reason is string => reason !== null) ?? [],
@@ -343,7 +344,7 @@ const pathReasonsOf = (file: FileChange): string[] => {
  * definitions it changes, so its reasons don't repeat its hunk's other parts.
  */
 export const ruleReasons = (hunk: Hunk, file: FileChange): string[] => [
-  ...new Set([...pathReasonsOf(file), ...HUNK_RULES.flatMap((rule) => rule(hunk, file) ?? [])]),
+  ...new Set([...pathReasons(file), ...HUNK_RULES.flatMap((rule) => rule(hunk, file) ?? [])]),
 ];
 
 /**

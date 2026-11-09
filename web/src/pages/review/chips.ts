@@ -1,5 +1,5 @@
-// Pure, and importing only domain types, so scripts/measure-pr.ts can count chips the same way.
-import type { PartId } from "../../../../src/domain/diff/index.ts";
+// Pure, and importing only the domain, so scripts/measure-pr.ts can count chips the same way.
+import { type PartId, requestPlacesOn, routesFor } from "../../../../src/domain/diff/index.ts";
 
 /**
  * A call the code makes on one of its lines, to the hunk that changes what it calls. A request is
@@ -22,7 +22,7 @@ export interface SymbolPlace {
  * How one symbol on one line shows its calls: a chip, which opens the called code in place, or a
  * mention, which peeks at it and goes there. `calls` has one call per hunk the symbol reaches, more
  * for an ambiguous call. A chip whose symbol is on the line (`at`) is the symbol itself, clickable;
- * one that isn't, such as a request or a call spread over lines, is a row under the line.
+ * a request's is its path. One that isn't, such as a call spread over lines, is a row under it.
  */
 export type CallMark =
   | {
@@ -51,8 +51,24 @@ export const symbolPlace = (text: string, symbol: string): SymbolPlace | null =>
 };
 
 /**
- * Which calls get a chip on the map. Within each section (a tour step, or the one list of files
- * before the tour exists), read in order, the first call to a hunk gets a chip and a later call to
+ * Where a request to the route `symbol` names ("GET /api/x/{id}") has its path in the line of the
+ * file at `path`, by the rules that linked them; null when the line doesn't show it.
+ */
+export const requestPlace = (text: string, path: string, symbol: string): SymbolPlace | null => {
+  const space = symbol.indexOf(" ");
+  const route = { method: symbol.slice(0, space), path: symbol.slice(space + 1) };
+  const found = requestPlacesOn(text, path).find((one) => routesFor(one, [route]).length > 0);
+  return found === undefined ? null : { start: found.start, end: found.end };
+};
+
+/** A line the plan reads: its text and its file's path, which says whether it's a test. */
+export interface PlanLine {
+  readonly text: string;
+  readonly path: string;
+}
+
+/**
+ * Which calls get a chip on the map. Within each section, read in order, the first call to a hunk gets a chip and a later call to
  * it is a mention. The calls on a line with one symbol are one mark, a chip when any of their hunks
  * is new to the section. A mention whose symbol isn't on the line's text, such as a call spread
  * over lines, stays a chip: when unsure, show more. Every call is in exactly one mark.
@@ -60,7 +76,7 @@ export const symbolPlace = (text: string, symbol: string): SymbolPlace | null =>
 export const chipPlan = (
   sections: readonly (readonly PartId[])[],
   calls: ReadonlyMap<PartId, ReadonlyMap<number, readonly Call[]>>,
-  lineText: (id: PartId, line: number) => string | undefined,
+  lineOf: (id: PartId, line: number) => PlanLine | undefined,
 ): ChipPlan => {
   const plan = new Map<PartId, Map<number, CallMark[]>>();
   for (const section of sections) {
@@ -77,8 +93,13 @@ export const chipPlan = (
         for (const [symbol, symbolCalls] of bySymbol) {
           const fresh = symbolCalls.some((call) => !reached.has(call.toPartId));
           for (const call of symbolCalls) reached.add(call.toPartId);
-          const text = lineText(id, line);
-          const at = text === undefined ? null : symbolPlace(text, symbol);
+          const of = lineOf(id, line);
+          const at =
+            of === undefined
+              ? null
+              : symbolCalls.some((call) => call.request)
+                ? requestPlace(of.text, of.path, symbol)
+                : symbolPlace(of.text, symbol);
           lineMarks.push(
             fresh || at === null
               ? { kind: "chip", symbol, calls: symbolCalls, at }

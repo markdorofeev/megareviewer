@@ -1,6 +1,6 @@
 import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "react";
 import type { MechanicalProof, PartId } from "../../../../src/domain/diff/index.ts";
-import type { Analysis } from "../../../../src/domain/review/index.ts";
+import { type Analysis, pathReasons } from "../../../../src/domain/review/index.ts";
 import {
   FileNotices,
   FilePath,
@@ -15,7 +15,6 @@ import { CallLabel, type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
 import { type FileGroup, fileGroups, gapBetween, type MapSection, sectionKey } from "./model.ts";
 import { Mention } from "./Peek.tsx";
 
-export const stepAnchor = (key: string): string => `step-${key}`;
 export const MECHANICAL_ANCHOR = "mechanical-changes";
 
 /** Where the map scrolls to. `n` changes on every request, so asking twice scrolls twice. */
@@ -299,7 +298,7 @@ const belowLines = (
 
 /**
  * Calls underlined where their symbol stands: a mention goes to the code it calls, and the first
- * call to code in a step opens it under the line.
+ * call to code on the map opens it under the line.
  */
 const mentionsIn = (
   id: PartId,
@@ -368,47 +367,6 @@ const NestedHunk = ({
   />
 );
 
-/** Links to the code of earlier steps a flow runs, which the page shows there, not again here. */
-const PassesThrough = ({
-  via,
-  deps,
-}: {
-  readonly via: readonly PartId[];
-  readonly deps: HunkDeps;
-}) => {
-  const known = via.flatMap((id) => {
-    const found = deps.index.parts.get(id);
-    return found === undefined ? [] : [{ id, ...found }];
-  });
-  if (known.length === 0) return null;
-  const destinations = new Map<string, typeof known>();
-  for (const part of known) {
-    const step = deps.stepOf(part.id) ?? "Other changes";
-    destinations.set(step, [...(destinations.get(step) ?? []), part]);
-  }
-  return (
-    <div className="step-via">
-      <span className="step-via-label">Passes through</span>
-      {[...destinations].map(([step, parts]) => (
-        <details key={step}>
-          <summary>
-            {step} · {parts.length} {parts.length === 1 ? "part" : "parts"}
-          </summary>
-          <ul className="hunk-links" aria-label={`Passes through ${step}`}>
-            {parts.map(({ id, file, hunk }) => (
-              <li key={id}>
-                <button type="button" className="hunk-link" onClick={() => deps.onFollow(id)}>
-                  {file.path.slice(file.path.lastIndexOf("/") + 1)} {hunkLocation(hunk)} ↑
-                </button>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ))}
-    </div>
-  );
-};
-
 /** A part's place on the map: its anchor, and its card, drawn again only when it changes. */
 const MapPart = ({
   id,
@@ -441,50 +399,45 @@ const MapPart = ({
   </div>
 );
 
-/** "⋯ 18 unchanged lines", or the lines between and the file's parts other steps read there. */
-const GapRow = ({
-  previous,
-  next,
-  deps,
-}: {
-  readonly previous: PartId;
-  readonly next: PartId;
-  readonly deps: HunkDeps;
-}) => {
-  const gap = gapBetween(previous, next, deps.index);
-  if (gap === null || (gap.lines === 0 && gap.parts.length === 0)) return null;
-  const lines = `${gap.lines} ${gap.lines === 1 ? "line" : "lines"}`;
+/** Arrows apart from a line: lines folded away here. */
+const UnfoldIcon = () => (
+  <svg
+    className="unfold-icon"
+    viewBox="0 0 16 16"
+    width="16"
+    height="16"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path
+      d="M8 1.5v4M5.5 3.5 8 1l2.5 2.5M8 14.5v-4M5.5 12.5 8 15l2.5-2.5M2 8h12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/**
+ * The lines between two parts on a card, folded: how many, under an unfold icon. With the
+ * contract filter on, they can hold changes it hides, so the row doesn't call them unchanged.
+ */
+const GapRow = ({ lines, hidden }: { readonly lines: number; readonly hidden: boolean }) => {
+  if (lines === 0 && !hidden) return null;
+  const count = `${lines} ${lines === 1 ? "line" : "lines"}`;
   return (
-    <div className="file-gap">
-      <span aria-hidden="true">⋯</span>{" "}
-      {gap.parts.length === 0 ? (
-        `${lines} unchanged`
-      ) : (
-        <>
-          {lines}, with changes read elsewhere:{" "}
-          {gap.parts.map((id) => {
-            const found = deps.index.parts.get(id);
-            return (
-              <button
-                key={id}
-                type="button"
-                className="hunk-link"
-                title={deps.stepOf(id) ?? undefined}
-                onClick={() => deps.onFollow(id)}
-              >
-                {found === undefined ? id : hunkLocation(found.hunk)} ↑
-              </button>
-            );
-          })}
-        </>
-      )}
+    <div className="file-gap folded">
+      <UnfoldIcon />
+      <span>{hidden ? `${count}, with changes the filter hides` : `${count} unchanged`}</span>
     </div>
   );
 };
 
 /**
- * A step's parts from one file, on one card: the file once in its header, with one Reviewed mark
- * for them all, and each part under a divider of its own, the lines between them counted.
+ * A file's parts on one card: the file once in its header, and each part under a divider of its
+ * own when it has something to say, the lines between them folded.
  */
 const FileCard = ({
   group,
@@ -496,15 +449,13 @@ const FileCard = ({
   readonly part: (id: PartId) => ReactNode;
 }) => {
   const items = deps.index.items(group.partIds);
-  const toReview = items.filter((item) => !deps.index.mechanical.has(item.id));
-  const done = toReview.filter((item) => deps.reviewed.has(item.id)).length;
   const added = items.reduce((sum, item) => sum + lineCounts(item.hunk).added, 0);
   const deleted = items.reduce((sum, item) => sum + lineCounts(item.hunk).deleted, 0);
-  const contract = toReview.filter((item) => item.risk.riskClass === "contract").length;
-  const mark = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (mark.current !== null) mark.current.indeterminate = done > 0 && done < toReview.length;
-  });
+  const contract = items.filter(
+    (item) => !deps.index.mechanical.has(item.id) && item.risk.riskClass === "contract",
+  ).length;
+  // A path rule holds for every part of the file, so its reason is said once, here.
+  const fileReasons = contract > 0 ? pathReasons(group.file) : [];
   return (
     <section
       className={contract > 0 ? "file-card risk-contract" : "file-card"}
@@ -512,32 +463,23 @@ const FileCard = ({
     >
       <header className="file-card-header">
         <FilePath file={group.file} />
-        <FileStatusBadge status={group.file.status} />
+        {/* Nearly every file is modified, so only the other statuses are worth a badge. */}
+        {group.file.status !== "modified" && <FileStatusBadge status={group.file.status} />}
         <span className="hunk-counts">
-          {toReview.length} {toReview.length === 1 ? "part" : "parts"}
-          {contract > 0 && <span className="count-contract"> · {contract} contract</span>} ·{" "}
+          {fileReasons.length > 0 && (
+            <span className="file-card-reason">{fileReasons.join("; ")} · </span>
+          )}
+          {contract > 0 && <span className="count-contract">{contract} contract · </span>}
           <span className="count-added">+{added}</span>{" "}
           <span className="count-deleted">−{deleted}</span>
         </span>
-        {toReview.length > 0 && (
-          <label className="hunk-reviewed">
-            <input
-              ref={mark}
-              type="checkbox"
-              checked={done === toReview.length}
-              onChange={(event) => {
-                for (const item of toReview) deps.onReviewed(item.id, event.target.checked);
-              }}
-            />
-            Reviewed
-          </label>
-        )}
       </header>
       {group.partIds.map((id, at) => {
         const previous = group.partIds[at - 1];
+        const gap = previous === undefined ? null : gapBetween(previous, id, deps.index);
         return (
           <Fragment key={id}>
-            {previous !== undefined && <GapRow previous={previous} next={id} deps={deps} />}
+            {gap !== null && <GapRow lines={gap.lines} hidden={gap.parts.length > 0} />}
             {part(id)}
           </Fragment>
         );
@@ -547,8 +489,8 @@ const FileCard = ({
 };
 
 /**
- * Every hunk in one scroll, step after step in tour order, then the mechanical changes. A call in
- * the code opens the hunk it calls in place; the hunk also stays at its own place.
+ * Every hunk in one scroll, file after file in the call graph's order, then the mechanical changes.
+ * A call in the code opens the hunk it calls in place; the hunk also stays at its own place.
  */
 export const MapLayout = ({
   analysis,
@@ -571,7 +513,7 @@ export const MapLayout = ({
   readonly isContract: (id: PartId) => boolean;
   readonly openCalls: ReadonlySet<string>;
   readonly onToggleCall: (key: string) => void;
-  /** Shown before the first step, e.g. decisions on no hunk. */
+  /** Shown before the first file, e.g. decisions on no hunk. */
   readonly before: ReactNode;
   readonly trailingProofs: readonly MechanicalProof[];
   readonly mechanicalCount: number;
@@ -597,11 +539,6 @@ export const MapLayout = ({
 
   return (
     <section className="main-area map" aria-label="Changes">
-      {analysis.tour?.builtBy === "code" && analysis.stages.tour === "done" && (
-        <p className="banner">
-          The model couldn't title the tour, so its steps keep the code's titles.
-        </p>
-      )}
       {before}
       {contractOnly && !anyShown && (
         <p className="muted">
@@ -614,43 +551,7 @@ export const MapLayout = ({
         if (contractOnly && ids.length === 0) return null;
         const key = sectionKey(section);
         return (
-          <section
-            key={key}
-            id={stepAnchor(key)}
-            className="map-step"
-            aria-labelledby={`${stepAnchor(key)}-title`}
-            tabIndex={-1}
-          >
-            {section.kind === "step" ? (
-              <header
-                className={
-                  section.step.kind === "supporting" ? "step-heading supporting" : "step-heading"
-                }
-              >
-                <h2 id={`${stepAnchor(key)}-title`} className="model-text">
-                  <span className="step-number">{section.number}</span> {section.step.title}
-                </h2>
-                {section.step.codeTitle !== null && (
-                  <p className="step-code-title">{section.step.codeTitle}</p>
-                )}
-                <p className="model-text">{section.step.explanation}</p>
-                {section.step.merged.map((merged) => (
-                  <p key={merged.title} className="step-merged">
-                    Also reads {merged.title}: <span className="model-text">{merged.reason}</span>
-                  </p>
-                ))}
-                <PassesThrough via={section.step.via} deps={deps} />
-              </header>
-            ) : (
-              <header className="step-heading">
-                <h2 id={`${stepAnchor(key)}-title`}>Changes by file</h2>
-                <p className="muted">
-                  {analysis.status === "running"
-                    ? "The guided tour appears when the analysis finishes."
-                    : "There's no guided tour, so the changes are shown by file."}
-                </p>
-              </header>
-            )}
+          <section key={key} className="map-step" aria-label="Files" tabIndex={-1}>
             {fileGroups(ids, deps.index).map((group) => {
               const part = (id: PartId, inFile: boolean) => (
                 <MapPart
@@ -663,13 +564,9 @@ export const MapLayout = ({
                   inFile={inFile}
                 />
               );
-              const [only, ...more] = group.partIds;
-              // A file with one part is that part's card, which names the file already.
-              return only !== undefined && more.length === 0 ? (
-                part(only, false)
-              ) : (
+              return (
                 <FileCard
-                  key={`${group.file.path}@${only}`}
+                  key={`${group.file.path}@${group.partIds[0]}`}
                   group={group}
                   deps={deps}
                   part={(id) => part(id, true)}

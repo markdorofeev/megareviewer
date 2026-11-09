@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisView } from "../../../../contracts/index.ts";
-import { HunkId, hunkIdOf, type PartId, renameHints } from "../../../../src/domain/diff/index.ts";
+import { HunkId, type PartId } from "../../../../src/domain/diff/index.ts";
 import {
   AnalysisId,
   DecisionId,
@@ -30,7 +30,6 @@ const id = analysis.id;
 const h = fixtureHunks;
 const p = fixtureParts;
 /** The analysis with the retry and cache hunk whole, for tours that place hunks. */
-const unsplit = { ...analysis, parts: [], callGraph: renameHints(analysis.callGraph, hunkIdOf) };
 const otherId = AnalysisId.parse("a_00000000000000ff");
 const viewPath = `/api/analyses/${id}`;
 
@@ -89,8 +88,9 @@ const mainArea = () => {
   return main;
 };
 /** The step headings in the map, in order. */
-const stepHeadings = () =>
-  [...mainArea().querySelectorAll(".step-heading h2")].map((heading) => heading.textContent);
+/** The map's file cards, by path, in page order. */
+const fileCards = () =>
+  [...mainArea().querySelectorAll(".file-card")].map((card) => card.getAttribute("aria-label"));
 /** A hunk's place in the map: its card, or its collapsed row. */
 const placeOf = (hunkId: PartId) => {
   const place = document.getElementById(`hunk-${hunkId}`);
@@ -104,6 +104,11 @@ const cardOf = (hunkId: PartId) => {
   if (card === null) throw new Error(`no card for ${hunkId}`);
   return card;
 };
+/** The rail's bar for a part, which says whether it's reviewed. */
+const railBar = (lines: string) =>
+  within(rail()).getByRole("button", { name: new RegExp(`, lines ${lines}, `), hidden: true });
+const isReviewed = (lines: string) =>
+  railBar(lines).getAttribute("aria-label")?.endsWith(", reviewed") === true;
 const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
 const storedReviewed = (): unknown =>
   JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "[]");
@@ -149,7 +154,7 @@ describe("ReviewPage states", () => {
     expect(screen.getByLabelText("Loading the analysis")).toBeTruthy();
     await loaded();
     expect(screen.queryByLabelText("Loading the analysis")).toBeNull();
-    expect(stepHeadings()[0]).toBe("1 The receipt endpoint");
+    expect(fileCards()[0]).toBe("src/routes/orders.ts");
   });
 
   it("says how many files Collect has while it runs", async () => {
@@ -181,7 +186,7 @@ describe("ReviewPage states", () => {
     expect(progress.textContent).toContain("Prepare: done");
     expect(progress.textContent).toContain("Intent: running");
     expect(screen.getByText("Working out the intent…")).toBeTruthy();
-    expect(stepHeadings()).toEqual(["Changes by file"]);
+    expect(fileCards()).toContain("src/routes/orders.ts");
     expect(within(mainArea()).getAllByRole("region", { name: /, lines / })).toHaveLength(5);
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
 
@@ -197,8 +202,9 @@ describe("ReviewPage states", () => {
     expect(screen.getByRole("button", { name: "Publish…" }).hasAttribute("disabled")).toBe(true);
 
     setView(fixture);
-    await waitFor(() => expect(stepHeadings()[0]).toBe("1 The receipt endpoint"));
-    expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull(),
+    );
   });
 
   it("shows where a failed analysis stopped, what it has, and retries it", async () => {
@@ -214,9 +220,7 @@ describe("ReviewPage states", () => {
       "The analysis failed at the risk stage: The model gave up",
     );
     expect(screen.getByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
-    expect(
-      screen.getByText("There's no guided tour, so the changes are shown by file."),
-    ).toBeTruthy();
+    expect(fileCards()).toContain("src/routes/orders.ts");
 
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(requests.some((request) => request.url === `${viewPath}/retry`)).toBe(true);
@@ -362,7 +366,7 @@ describe("intent", () => {
 
     await userEvent.click(next);
     // The split hunk's first part on the page.
-    expect(focusedLabel()).toMatch(CACHE);
+    expect(focusedLabel()).toMatch(RETRY);
     expect(cardOf(h.receiptRoute).classList.contains("highlighted")).toBe(false);
     expect(cardOf(p.retry).classList.contains("highlighted")).toBe(true);
     await userEvent.keyboard("{Escape}");
@@ -432,34 +436,33 @@ describe("intent", () => {
 });
 
 describe("map", () => {
-  it("shows every step in one scroll, in tour order, then the mechanical changes", async () => {
+  it("shows each file once, in the call graph's order, then the mechanical changes", async () => {
     renderReview();
     await loaded();
-    expect(stepHeadings()).toEqual([
-      "1 The receipt endpoint",
-      "2 Retrying the tax service",
-      "3 Dates and prices on the receipt",
-      "4 The new dependency",
+    // The route calls the receipts service; the dependency is in no call.
+    expect(fileCards()).toEqual([
+      "src/routes/orders.ts",
+      "src/services/receipts.ts",
+      "package.json",
     ]);
-    expect(screen.getByText(analysis.tour?.steps[0]?.explanation ?? "")).toBeTruthy();
+    expect(mainArea().querySelector(".step-heading")).toBeNull();
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
     expect(
       within(mainArea())
         .getAllByRole("region", { name: /, lines / })
         .map((card) => card.getAttribute("aria-label")),
     ).toEqual([
-      // A step reads each file's parts together, in the file's order.
+      // A file's parts are together, in the file's order.
       "src/routes/orders.ts, lines 1–8",
       "src/routes/orders.ts, lines 10–24",
-      // The retry and cache hunk is two parts, each read in its own step.
-      "src/services/receipts.ts, lines 40–50",
-      "src/services/receipts.ts, lines 26–39",
       expect.stringMatching(/^src\/services\/receipts\.ts, lines 1–/),
+      "src/services/receipts.ts, lines 26–39",
+      "src/services/receipts.ts, lines 40–50",
       expect.stringMatching(/^package\.json/),
     ]);
   });
 
-  it("shows a mechanical hunk collapsed in its file's step, expanding to its card", async () => {
+  it("shows a mechanical hunk collapsed in its file, expanding to its card", async () => {
     renderReview();
     await loaded();
     const row = within(placeOf(h.formatMoneyRemoved)).getByRole("button", { name: /moved/ });
@@ -480,139 +483,19 @@ describe("map", () => {
       "src/routes/orders.ts",
       "package.json",
     ]);
-    expect(stepHeadings()).toEqual(["1 The receipt endpoint", "4 The new dependency"]);
+    expect(fileCards()).toEqual(["src/routes/orders.ts", "package.json"]);
     expect(window.localStorage.getItem(`megareviewer:contract-only:${id}`)).toBe("true");
     first.unmount();
 
     renderReview();
     await loaded();
-    expect(stepHeadings()).toHaveLength(2);
+    expect(fileCards()).toHaveLength(2);
     // Going to a hunk that isn't shown shows everything again.
-    await userEvent.click(within(rail()).getByRole("button", { name: /^2 / }));
     await userEvent.click(
       within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
     );
-    expect(stepHeadings()).toHaveLength(4);
+    expect(fileCards()).toHaveLength(3);
     expect(focusedLabel()).toMatch(RECEIPTS);
-  });
-
-  it("links a flow to the code of earlier steps it passes through, and quiets supporting steps", async () => {
-    const step = (id: string, title: string, partIds: HunkId[], extra: object = {}) => ({
-      id: TourStepId.parse(id),
-      title,
-      explanation: "",
-      partIds,
-      kind: "flow" as const,
-      via: [],
-      entries: [],
-      codeTitle: null,
-      merged: [],
-      ...extra,
-    });
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...unsplit,
-          tour: {
-            steps: [
-              step("s1", "GET /orders/:id/receipt", [
-                h.routeImports,
-                h.receiptRoute,
-                h.retryAndCache,
-              ]),
-              step("s2", "Command: main in cli.ts", [h.receiptFormatting], {
-                via: [h.retryAndCache],
-                entries: [],
-                codeTitle: null,
-                merged: [],
-              }),
-              step("s3", "Other changes in src/routes", [h.formatMoneyRemoved], {
-                kind: "supporting",
-              }),
-            ],
-            builtBy: "code",
-          },
-        },
-      },
-    });
-    await loaded();
-    const second = screen.getByRole("region", { name: "2 Command: main in cli.ts" });
-    await userEvent.click(within(second).getByText(/1 part$/));
-    const through = within(second).getByRole("list", { name: /^Passes through/ });
-    await userEvent.click(within(through).getByRole("button", { name: /^receipts\.ts lines 26/ }));
-    expect(focusedLabel()).toMatch(RECEIPTS);
-    const supporting = screen.getByRole("region", { name: "3 Other changes in src/routes" });
-    expect(supporting.querySelector(".step-heading.supporting")).not.toBeNull();
-    expect(
-      within(screen.getByRole("region", { name: "1 GET /orders/:id/receipt" })).queryByRole(
-        "list",
-        {
-          name: "Passes through",
-        },
-      ),
-    ).toBeNull();
-  });
-
-  it("shows the model's title with the code's under it, and why a step was merged", async () => {
-    const [first, ...rest] = analysis.tour?.steps ?? [];
-    if (first === undefined) throw new Error("fixture has no steps");
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...analysis,
-          tour: {
-            steps: [
-              { ...first, merged: [{ title: "Docs", reason: "Documents the receipt route." }] },
-              ...rest,
-            ],
-            builtBy: "model",
-          },
-        },
-      },
-    });
-    await loaded();
-    const heading = mainArea().querySelector(".step-heading");
-    expect(heading?.querySelector("h2")?.textContent).toBe("1 The receipt endpoint");
-    expect(heading?.querySelector(".step-code-title")?.textContent).toBe("GET /orders/:id/receipt");
-    expect(heading?.querySelector(".step-merged")?.textContent).toBe(
-      "Also reads Docs: Documents the receipt route.",
-    );
-  });
-
-  it("shows no code title when the title is the code's", async () => {
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...analysis,
-          tour: {
-            steps: (analysis.tour?.steps ?? []).map((step) => ({ ...step, codeTitle: null })),
-            builtBy: "code",
-          },
-          stages: { ...analysis.stages, tour: "skipped" },
-        },
-      },
-    });
-    await loaded();
-    expect(mainArea().querySelector(".step-code-title")).toBeNull();
-  });
-
-  it("says when the model couldn't title the tour", async () => {
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...analysis,
-          tour: analysis.tour === null ? null : { ...analysis.tour, builtBy: "code" as const },
-        },
-      },
-    });
-    await loaded();
-    expect(
-      screen.getByText("The model couldn't title the tour, so its steps keep the code's titles."),
-    ).toBeTruthy();
   });
 
   it("still works when storage throws", async () => {
@@ -625,7 +508,7 @@ describe("map", () => {
     renderReview();
     await loaded();
     await userEvent.click(within(rail()).getByRole("checkbox", { name: "Contract changes only" }));
-    expect(stepHeadings()).toHaveLength(2);
+    expect(fileCards()).toHaveLength(2);
   });
 });
 
@@ -662,21 +545,21 @@ class FakeObserver {
 describe("risk map", () => {
   const bar = (name: RegExp) => within(rail()).getByRole("button", { name, hidden: true });
 
-  it("has a row per file in a step, and a bar per hunk sized by its lines and marked", async () => {
+  it("has a row per file, and a bar per hunk sized by its lines and marked", async () => {
     renderReview();
     await loaded();
     const route = bar(/^src\/routes\/orders\.ts, lines 10–24, contract$/);
     const height = (row: HTMLElement) => row.querySelector<HTMLElement>(".rail-bar")?.style.height;
     expect(height(route)).toBe("15px");
     expect(height(bar(/^src\/routes\/orders\.ts, lines 1–8, logic$/))).toBe("12px");
-    // orders.ts has three parts in step 1: its name once, then a row per part.
+    // orders.ts has three parts: its name once, then a row per part.
     const orders = within(rail()).getByRole("button", { name: /^orders\.ts/ });
-    expect(orders.textContent).toBe("orders.ts3 parts · 1 contract");
+    expect(orders.textContent).toBe("orders.ts1 contract");
     // Under the file's name, a part's row gives only its lines.
     expect(route.querySelector(".rail-hunk-file")?.textContent).toBe("10–24");
     expect(route.querySelector(".rail-hunk-meta")?.textContent).toBe("contract · 2 decisions");
     const cache = bar(/^src\/services\/receipts\.ts, lines 40–50, logic$/);
-    expect(cache.querySelector(".rail-hunk-file")?.textContent).toBe("receipts.ts 40–50");
+    expect(cache.querySelector(".rail-hunk-file")?.textContent).toBe("40–50");
     expect(cache.querySelector(".rail-hunk-meta")?.textContent).toBe("logic · 2 decisions");
     expect([...route.querySelectorAll(".rail-mark")].map((mark) => mark.textContent)).toEqual([
       "Decision: Adds a public endpoint GET /orders/:id/receipt",
@@ -708,14 +591,12 @@ describe("risk map", () => {
     );
   });
 
-  it("scrolls to a hunk or a step from the rail", async () => {
+  it("scrolls to a hunk or the mechanical changes from the rail", async () => {
     renderReview();
     await loaded();
     await userEvent.click(bar(/^src\/services\/receipts\.ts, lines 26/));
     expect(scrolledTo().at(-1)).toBe(`hunk-${p.retry}`);
     expect(focusedLabel()).toMatch(RETRY);
-    await userEvent.click(within(rail()).getByRole("button", { name: /^4 The new dependency/ }));
-    expect(scrolledTo().at(-1)).toBe("step-s4");
     await userEvent.click(within(rail()).getByRole("button", { name: "Proved mechanical (5)" }));
     expect(scrolledTo().at(-1)).toBe("mechanical-changes");
   });
@@ -725,9 +606,7 @@ describe("risk map", () => {
     FakeObserver.all = [];
     renderReview();
     await loaded();
-    await userEvent.click(
-      within(fileCardOf("src/routes/orders.ts")).getByRole("checkbox", { name: "Reviewed" }),
-    );
+    await userEvent.keyboard("jx");
     const imports = bar(/^src\/routes\/orders\.ts, lines 1–8, logic, reviewed$/);
     expect(imports.querySelector(".rail-bar")?.classList.contains("reviewed")).toBe(true);
     expect(imports.textContent).toContain("✓");
@@ -1035,12 +914,22 @@ const withRequest = (): AnalysisView => {
 };
 
 describe("inline calls", () => {
-  it("show a request as a chip that opens the route's part in its own file", async () => {
+  it("make a request's path in the code open the route's part in its own file", async () => {
     renderReview({ view: withRequest() });
     await loaded();
     const page = cardOf(HunkId.parse("h_00000000000000a2"));
-    const request = chip(page, "sends GET /api/items");
-    expect(request.textContent).toBe("▸sends GET /api/items api/routes.py logic");
+    // The path is the call: no row under the line.
+    expect(within(page).queryByRole("button", { name: /^sends GET/ })).toBeNull();
+    const request = codeCall(page, "/api/items");
+    request.focus();
+    const peek = await waitFor(() => {
+      const shown = document.querySelector<HTMLElement>(".peek");
+      if (shown === null) throw new Error("no peek");
+      return shown;
+    });
+    // The peek names the route the path reaches.
+    expect(peek.textContent).toContain("GET /api/items");
+    expect(peek.textContent).toContain("api/routes.py");
     await userEvent.click(request);
     const opened = page.querySelector<HTMLElement>(".inline-call");
     if (opened === null) throw new Error("no inline call");
@@ -1118,9 +1007,7 @@ describe("inline calls", () => {
     const opened = cardOf(h.receiptRoute).querySelector<HTMLElement>(".inline-call");
     if (opened === null) throw new Error("no inline call");
     await userEvent.click(within(opened).getByRole("checkbox", { name: "Reviewed" }));
-    expect(
-      within(cardOf(p.cache)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" }).checked,
-    ).toBe(true);
+    expect(isReviewed("40–50")).toBe(true);
   });
 
   it("open the first call to a hunk in a step in place, and underline the later ones", async () => {
@@ -1132,10 +1019,6 @@ describe("inline calls", () => {
     const mention = within(route).getByRole("button", { name: "cachedReceipt" });
     expect(mention.classList.contains("call-mention")).toBe(true);
     expect(mention.classList.contains("call-link")).toBe(false);
-    // Both calls come from orders.ts, so the callee lists the file once.
-    expect(cardOf(p.cache).querySelector(".hunk-callers")?.textContent).toBe(
-      "Called from orders.ts ↑",
-    );
   });
 
   it("peek at a mention's code on focus, close on Esc, and go there on click", async () => {
@@ -1149,7 +1032,6 @@ describe("inline calls", () => {
       return shown;
     });
     expect(peek.textContent).toContain("src/services/receipts.ts");
-    expect(peek.textContent).toContain("step 1: The receipt endpoint");
     // The peek starts at the line that defines the symbol.
     expect(peek.querySelector(".peek-line")?.textContent).toBe(
       "+ export const cachedReceipt = async (order: Order): Promise<string> => {",
@@ -1423,14 +1305,7 @@ describe("jump palette", () => {
     const groups = within(palette())
       .getAllByRole("region")
       .map((group) => group.getAttribute("aria-label"));
-    expect(groups).toEqual([
-      "Decisions",
-      "Mismatches",
-      "Used unchanged",
-      "Symbols",
-      "Steps",
-      "Files",
-    ]);
+    expect(groups).toEqual(["Decisions", "Mismatches", "Used unchanged", "Symbols", "Files"]);
     await userEvent.clear(within(palette()).getByRole("searchbox", { name: "Jump to" }));
     await userEvent.keyboard("!dayjs");
     expect(within(palette()).getAllByRole("region")).toHaveLength(1);
@@ -1467,7 +1342,7 @@ describe("jump palette", () => {
 });
 
 describe("keyboard shortcuts", () => {
-  it("move through hunks with j and k, and between steps with n and p", async () => {
+  it("move through hunks with j and k, and between files with n and p", async () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("j");
@@ -1478,13 +1353,13 @@ describe("keyboard shortcuts", () => {
     expect(focusedLabel()).toMatch(IMPORTS);
 
     await userEvent.keyboard("n");
-    expect(scrolledTo().at(-1)).toBe("step-s2");
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptFormatting}`);
     await userEvent.keyboard("j");
-    expect(focusedLabel()).toMatch(RECEIPTS);
+    expect(focusedLabel()).toMatch(RETRY);
     await userEvent.keyboard("p");
-    expect(scrolledTo().at(-1)).toBe("step-s1");
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.routeImports}`);
     await userEvent.keyboard("p");
-    expect(scrolledTo().at(-1)).toBe("step-s1");
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.routeImports}`);
   });
 
   it("give verdicts and comments on the decision of the hunk the reviewer is on", async () => {
@@ -1533,36 +1408,26 @@ describe("keyboard shortcuts", () => {
 });
 
 describe("parts of a split hunk", () => {
-  it("say what they change, where the rest of the hunk is, and link to each other", async () => {
+  it("sit next to each other on their file's card, which names no definitions", async () => {
     renderReview();
     await loaded();
     const cache = cardOf(p.cache);
-    expect(cache.querySelector(".hunk-part")?.textContent).toBe("receiptCache and cachedReceipt");
-    expect(cache.querySelector(".part-fold.next")).toBeNull();
-    expect(cache.querySelector("details")?.open).toBe(false);
-    await userEvent.click(within(cache).getByText("Related parts"));
-    expect(cache.querySelector(".hunk-part-of")?.textContent).toBe(
-      "part 2 of 2 · rest of this hunk in step 2",
-    );
-    const up = within(cache).getByRole("button", { name: /part 1 of 2/ });
-    expect(up.textContent).toBe("↑ loadTaxLines and TAX_ATTEMPTS · part 1 of 2 · step 2");
-    await userEvent.click(up);
-    expect(focusedLabel()).toMatch(RETRY);
-    await userEvent.click(within(cardOf(p.retry)).getByText("Related parts"));
-    const down = within(cardOf(p.retry)).getByRole("button", { name: /part 2 of 2/ });
-    expect(down.textContent).toBe("↓ receiptCache and cachedReceipt · part 2 of 2 · step 1");
+    // The code names what the part defines.
+    expect(cache.querySelector(".hunk-part")).toBeNull();
+    expect(within(cache).queryByText("Related parts")).toBeNull();
+    // No lines lie between the two parts of one hunk, so no fold either.
+    expect(placeOf(p.retry).nextElementSibling).toBe(placeOf(p.cache));
   });
 
   it("read a reviewed mark stored on their hunk as a mark on each, until one changes", async () => {
     window.localStorage.setItem("megareviewer:reviewed-hunks", JSON.stringify([h.retryAndCache]));
     renderReview();
     await loaded();
-    const checkbox = (id: typeof p.cache) =>
-      within(cardOf(id)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" });
-    expect([checkbox(p.cache).checked, checkbox(p.retry).checked]).toEqual([true, true]);
+    expect([isReviewed("40–50"), isReviewed("26–39")]).toEqual([true, true]);
 
-    await userEvent.click(checkbox(p.cache));
-    expect([checkbox(p.cache).checked, checkbox(p.retry).checked]).toEqual([false, true]);
+    cardOf(p.cache).focus();
+    await userEvent.keyboard("x");
+    expect([isReviewed("40–50"), isReviewed("26–39")]).toEqual([false, true]);
     expect(JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "")).toEqual([
       p.retry,
     ]);
@@ -1571,9 +1436,9 @@ describe("parts of a split hunk", () => {
   it("put a decision's card on the first part on the page, and link the other to it", async () => {
     renderReview();
     await loaded();
-    expect(within(cardOf(p.cache)).getByRole("article", { name: RETRIES })).toBeTruthy();
-    expect(within(cardOf(p.retry)).queryByRole("article", { name: RETRIES })).toBeNull();
-    expect(cardOf(p.retry).querySelector(".decision-mention")?.textContent).toMatch(RETRIES);
+    expect(within(cardOf(p.retry)).getByRole("article", { name: RETRIES })).toBeTruthy();
+    expect(within(cardOf(p.cache)).queryByRole("article", { name: RETRIES })).toBeNull();
+    expect(cardOf(p.cache).querySelector(".decision-mention")?.textContent).toMatch(RETRIES);
   });
 
   it("show a comment in the part that holds its line", async () => {
@@ -1586,13 +1451,34 @@ describe("parts of a split hunk", () => {
     expect(
       within(cardOf(p.cache)).getByRole("textbox", { name: "Comment on line 45" }),
     ).toBeTruthy();
-    expect(within(cardOf(p.retry)).queryByRole("textbox")).toBeNull();
+    // The retry part holds the decision's card, whose own box isn't a line's.
+    expect(within(cardOf(p.retry)).queryByRole("textbox", { name: /^Comment on line/ })).toBeNull();
   });
 });
 
 describe("navigation", () => {
   it("follows a caller's file to its first calling hunk, and Esc goes back", async () => {
-    renderReview();
+    // The cache part read in step 2, apart from the route in step 1 that calls it.
+    const tour = analysis.tour;
+    if (tour === null) throw new Error("no tour");
+    const [first, second, ...rest] = tour.steps;
+    if (first === undefined || second === undefined) throw new Error("no steps");
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          tour: {
+            ...tour,
+            steps: [
+              { ...first, partIds: first.partIds.filter((id) => id !== p.cache) },
+              { ...second, partIds: [...second.partIds, p.cache] },
+              ...rest,
+            ],
+          },
+        },
+      },
+    });
     await loaded();
     cardOf(p.cache).focus();
     const callers = cardOf(p.cache).querySelector<HTMLElement>(".hunk-callers");
@@ -1606,15 +1492,14 @@ describe("navigation", () => {
   it("marks hunks reviewed and remembers them by hunk", async () => {
     const { unmount } = renderReview();
     await loaded();
-    await userEvent.click(within(cardOf(p.cache)).getByRole("checkbox", { name: "Reviewed" }));
+    cardOf(p.cache).focus();
+    await userEvent.keyboard("x");
     expect(window.localStorage.getItem("megareviewer:reviewed-hunks")).toContain(p.cache);
 
     unmount();
     renderReview();
     await loaded();
-    expect(
-      within(cardOf(p.cache)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" }).checked,
-    ).toBe(true);
+    expect(isReviewed("40–50")).toBe(true);
   });
 
   it("count a file's contract parts on its card, and give each its reason on its own line", async () => {
@@ -1623,7 +1508,7 @@ describe("navigation", () => {
     const route = analysis.risk.find((risk) => risk.hunkId === h.receiptRoute);
     const orders = fileCardOf("src/routes/orders.ts");
     expect(orders.querySelector(".file-card-header .count-contract")?.textContent).toBe(
-      " · 1 contract",
+      "1 contract · ",
     );
     expect(orders.querySelector(".file-card-header .hunk-contract-reason")).toBeNull();
     const divider = cardOf(h.receiptRoute).querySelector(".hunk-header");
@@ -1639,65 +1524,54 @@ describe("navigation", () => {
     expect(cardOf(h.receiptRoute).querySelector(".part-risk.risk-contract")).not.toBeNull();
   });
 
-  it("link a part's divider only to code other steps read", async () => {
-    // Both parts of the retry and cache hunk in step 1, on one receipts.ts card.
-    const tour = analysis.tour;
-    if (tour === null) throw new Error("no tour");
-    const [first, , ...rest] = tour.steps;
-    if (first === undefined) throw new Error("no step");
-    const together: AnalysisView = {
-      ...fixture,
-      analysis: {
-        ...analysis,
-        tour: { ...tour, steps: [{ ...first, partIds: [...first.partIds, p.retry] }, ...rest] },
-      },
-    };
-    renderReview({ view: together });
+  it("name on a part's divider only callers in other files", async () => {
+    renderReview();
     await loaded();
-    const receipts = fileCardOf("src/services/receipts.ts");
-    expect(within(receipts).queryByText("Related parts")).toBeNull();
-    // The route calls the cache part in this same step, so its divider doesn't link back to it.
-    expect(cardOf(p.cache).querySelector(".hunk-callers")).toBeNull();
+    // The route in orders.ts calls the cache part.
+    expect(cardOf(p.cache).querySelector(".hunk-callers")?.textContent).toBe(
+      "Called from orders.ts ↑",
+    );
+    for (const id of [p.retry, p.cache, h.receiptFormatting]) {
+      expect(cardOf(id).querySelector(".hunk-callers")?.textContent ?? "").not.toContain(
+        "receipts.ts",
+      );
+    }
   });
 
-  it("marks a file's parts in a step reviewed together, from its card", async () => {
+  it("name a file on its card without a status for modified, a part count or a Reviewed mark", async () => {
     renderReview();
     await loaded();
     const orders = fileCardOf("src/routes/orders.ts");
-    const mark = within(orders).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" });
-    // The file's card holds the mark: its parts have none of their own.
-    expect(within(cardOf(h.receiptRoute)).queryByRole("checkbox")).toBeNull();
-
-    await userEvent.keyboard("jx");
-    expect(mark.checked).toBe(false);
-    expect(mark.indeterminate).toBe(true);
-
-    await userEvent.click(mark);
-    expect(mark.checked).toBe(true);
-    expect(within(cardOf(h.routeImports)).queryByRole("checkbox")).toBeNull();
-    expect(storedReviewed()).toEqual(expect.arrayContaining([h.routeImports, h.receiptRoute]));
-    await userEvent.click(mark);
-    expect(mark.checked).toBe(false);
-    expect(storedReviewed()).toEqual([]);
+    expect(orders.querySelector(".file-status")).toBeNull();
+    expect(orders.querySelector(".file-card-header")?.textContent).not.toMatch(/part/);
+    expect(within(orders).queryByRole("checkbox")).toBeNull();
+    // The line between the imports and the route is a fold.
+    const gap = orders.querySelector(".file-gap.folded");
+    expect(gap?.textContent).toBe("1 line unchanged");
+    expect(gap?.querySelector("svg.unfold-icon")).not.toBeNull();
   });
 
   it("x marks the focused hunk reviewed and moves on; ] finds the next unreviewed one", async () => {
     renderReview();
     await loaded();
+    const file = (name: RegExp) => within(rail()).getByRole("button", { name });
     await userEvent.keyboard("jxx");
-    expect(storedReviewed()).toHaveLength(2);
-    const firstStep = () => within(rail()).getByRole("button", { name: /^1 The receipt endpoint/ });
-    expect(firstStep().textContent).not.toContain("✓");
+    expect(storedReviewed()).toEqual([h.routeImports, h.receiptRoute]);
+    // Every part of orders.ts is reviewed, so its row in the rail is ticked.
+    expect(file(/^orders\.ts/).textContent).toContain("✓");
+    expect(file(/^receipts\.ts/).textContent).not.toContain("✓");
     await userEvent.keyboard("]");
-    expect(focusedLabel()).toMatch(CACHE);
+    expect(focusedLabel()).toMatch(/^src\/services\/receipts\.ts, lines 1–/);
+    await userEvent.keyboard("]");
+    expect(focusedLabel()).toMatch(RETRY);
     // "[[" types one "[" in user-event's key syntax.
     await userEvent.keyboard("[[");
-    expect(focusedLabel()).toMatch(CACHE);
-    await userEvent.keyboard("x");
-    expect(firstStep().textContent).toContain("✓");
-    expect(focusedLabel()).toMatch(RETRY);
-    await userEvent.keyboard("x");
-    expect(storedReviewed()).toEqual(expect.arrayContaining([p.cache, p.retry]));
+    expect(focusedLabel()).toMatch(/^src\/services\/receipts\.ts, lines 1–/);
+    await userEvent.keyboard("xxx");
+    expect(storedReviewed()).toEqual(
+      expect.arrayContaining([h.receiptFormatting, p.cache, p.retry]),
+    );
+    expect(file(/^receipts\.ts/).textContent).toContain("✓");
   });
 });
 
@@ -2023,18 +1897,12 @@ describe("outside the pull request", () => {
   });
 });
 
-it("keeps flow headings available and reveals details for a navigation target", async () => {
+it("lists every file's bars in the rail, and goes to a part from it", async () => {
   renderReview();
   await loaded();
-  const headings = within(rail())
-    .getAllByRole("button")
-    .filter((button) => button.classList.contains("rail-step"));
-  expect(headings).toHaveLength(5);
-  expect(rail().querySelectorAll(".rail-bars:not([hidden])")).toHaveLength(1);
-  await userEvent.click(within(rail()).getByRole("button", { name: /^2 / }));
-  expect(
-    within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
-  ).toBeTruthy();
+  // No steps: one list of bars, always shown, then the mechanical changes.
+  expect(rail().querySelectorAll(".rail-bars")).toHaveLength(1);
+  expect(rail().querySelector(".rail-bars[hidden]")).toBeNull();
   await userEvent.click(
     within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
   );

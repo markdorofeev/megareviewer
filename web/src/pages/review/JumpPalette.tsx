@@ -3,7 +3,7 @@ import { Dialog } from "./Dialog.tsx";
 import { type PaletteItem, type PaletteTarget, searchPalette } from "./palette.ts";
 
 /**
- * One search over decisions, mismatches, contract changes, symbols, steps and files. Arrows move,
+ * One search over decisions, mismatches, contract changes, symbols and files. Arrows move,
  * Enter opens; `!`, `@` and `/` narrow it to findings, symbols and files.
  */
 export const JumpPalette = ({
@@ -28,7 +28,7 @@ export const JumpPalette = ({
         type="search"
         className="input"
         aria-label="Jump to"
-        placeholder="A decision, function, step or file · ! findings · @ symbols · / files"
+        placeholder="A decision, function or file · ! findings · @ symbols · / files"
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
