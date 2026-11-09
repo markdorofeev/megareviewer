@@ -42,6 +42,7 @@
     "dev:web:mock": "vite --config web/vite.config.ts --mode mock",
     "dev:fake": "node src/cli/dev/fake-main.ts",
     "build": "node scripts/build.ts",
+    "local": "node scripts/build.ts && node dist/cli.js",
     "e2e": "playwright test -c e2e",
     "measure": "node scripts/measure-pr.ts"
   },

@@ -57,7 +57,7 @@ Without `--ai`, your code goes nowhere but your machine and your git host. With 
 
 ## Contributing
 
-With pnpm installed, `pnpm install`, then `pnpm check` (types, lint, dependency rules, tests), `pnpm build` and `pnpm e2e` (end-to-end tests against the build) are what CI runs.
+With pnpm installed, `pnpm install`, then `pnpm check` (types, lint, dependency rules, tests), `pnpm build` and `pnpm e2e` (end-to-end tests against the build) are what CI runs. `pnpm local` builds the package and starts it, as `npx megareviewer` would; arguments go after it, e.g. `pnpm local --ai --checkout ~/code/repo`.
 
 - [MISSION.md](MISSION.md): why this exists
 - [DESIGN.md](DESIGN.md): how review should work
