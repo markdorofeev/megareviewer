@@ -724,7 +724,7 @@ const analysis: Analysis = {
   },
   warnings: [
     "Full file contents omitted for 1 file to fit the model's limit",
-    "Dropped 1 unknown hunk reference from decisions",
+    "Couldn't fetch Jira tickets: Jira answered 503",
   ],
   usage,
   error: null,

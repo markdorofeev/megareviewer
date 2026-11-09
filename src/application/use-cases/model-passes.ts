@@ -107,7 +107,10 @@ export const runIntent = async (
   if (!outcome.ok) return { outcome, usage, warnings: [] };
   const { value: intent, problems } = outcome.value;
   if (problems.length === 0) return { outcome: ok(intent), usage, warnings: [] };
-  const unknown = unknownIn(intent).length;
+  // Not a warning on the page: the reviewer can't act on the model's mistake.
+  logger.warn("Dropped unknown hunk references from intent mismatches", {
+    count: unknownIn(intent).length,
+  });
   const repaired: Intent = {
     ...intent,
     mismatches: intent.mismatches.map((mismatch) => ({
@@ -115,11 +118,7 @@ export const runIntent = async (
       hunkIds: mismatch.hunkIds.filter((id) => knownHunks.has(id)),
     })),
   };
-  return {
-    outcome: ok(repaired),
-    usage,
-    warnings: [`Dropped ${count(unknown, "unknown hunk reference")} from intent mismatches`],
-  };
+  return { outcome: ok(repaired), usage, warnings: [] };
 };
 
 export interface RiskOutcome {
@@ -195,7 +194,12 @@ export const runDecisions = async (
   );
   if (!outcome.ok) return { outcome, usage, warnings: [] };
   const { value: drafts, problems } = outcome.value;
-  const unknown = unknownIn(drafts).length;
+  if (problems.length > 0) {
+    // Not a warning on the page: the reviewer can't act on the model's mistake.
+    logger.warn("Dropped unknown hunk references from decisions", {
+      count: unknownIn(drafts).length,
+    });
+  }
   return {
     outcome: ok(
       drafts.map((draft, index) => ({
@@ -205,10 +209,7 @@ export const runDecisions = async (
       })),
     ),
     usage,
-    warnings:
-      problems.length === 0
-        ? []
-        : [`Dropped ${count(unknown, "unknown hunk reference")} from decisions`],
+    warnings: [],
   };
 };
 

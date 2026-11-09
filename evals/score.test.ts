@@ -139,7 +139,7 @@ describe("scoreCase", () => {
     expect(scoreCase(tourFallback, labels, oracleVerdict).fallbackUsed).toBe(true);
     const dropped = {
       ...smallFeatureAnalysis,
-      warnings: ["Dropped 1 unknown hunk reference from decisions"],
+      warnings: ["The model didn't classify 1 hunk, so they're shown as logic"],
     };
     expect(scoreCase(dropped, labels, oracleVerdict).fallbackUsed).toBe(true);
     const unrelated = { ...smallFeatureAnalysis, warnings: ["Couldn't fetch Jira tickets: down"] };

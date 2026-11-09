@@ -542,15 +542,20 @@ describe("the analysis pipeline", () => {
       };
       const model = new FakeAnalysisModel();
       model.script("intent", ok(intent), ok(intent));
-      const { analyze } = setup({ model });
+      const { analyze, logger } = setup({ model });
       const analysis = await analyze();
       expect(model.callsTo("intent")[1]?.options).toEqual({
         feedback: [`${unknownHunk} isn't a hunk of this pull request.`],
       });
       expect(analysis.intent?.mismatches[0]?.hunkIds).toEqual([h1]);
-      expect(analysis.warnings).toEqual([
-        "Dropped 1 unknown hunk reference from intent mismatches",
-      ]);
+      // The reviewer can't act on the model's mistake, so it's logged, not shown.
+      expect(analysis.warnings).toEqual([]);
+      expect(logger.entries).toContainEqual(
+        expect.objectContaining({
+          level: "warn",
+          message: "Dropped unknown hunk references from intent mismatches",
+        }),
+      );
     });
   });
 
@@ -660,7 +665,7 @@ describe("the analysis pipeline", () => {
       const model = new FakeAnalysisModel();
       const drafts = [draft([h1, unknownHunk]), draft([unknownHunk]), draft([h2])];
       model.script("decisions", ok(drafts), ok(drafts));
-      const { analyze } = setup({ model });
+      const { analyze, logger } = setup({ model });
       const analysis = await analyze();
 
       expect(model.callsTo("decisions")[1]?.options).toEqual({
@@ -671,7 +676,13 @@ describe("the analysis pipeline", () => {
         ["d2", []],
         ["d3", [h2]],
       ]);
-      expect(analysis.warnings).toEqual(["Dropped 1 unknown hunk reference from decisions"]);
+      expect(analysis.warnings).toEqual([]);
+      expect(logger.entries).toContainEqual(
+        expect.objectContaining({
+          level: "warn",
+          message: "Dropped unknown hunk references from decisions",
+        }),
+      );
     });
 
     it("may reference mechanical hunks", async () => {

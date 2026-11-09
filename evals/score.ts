@@ -33,7 +33,7 @@ export const rate = (r: Ratio): number | null => (r.total === 0 ? null : r.hit /
 const callsTo = (analysis: Analysis, pass: ModelPass): number =>
   analysis.usage.filter((usage) => usage.pass === pass).length;
 
-const FALLBACK_WARNING = /^(Dropped |Ignored risk |The model didn't classify )/;
+const FALLBACK_WARNING = /^(Ignored risk |The model didn't classify )/;
 
 const matched = (matches: JudgeVerdict["decisions"], expected: number, produced: number) =>
   matches.some(
