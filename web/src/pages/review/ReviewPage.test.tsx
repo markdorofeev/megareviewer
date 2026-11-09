@@ -1633,6 +1633,10 @@ describe("navigation", () => {
     expect(orders.querySelector(".file-card-header .hunk-contract-reason")).toBeNull();
     const divider = cardOf(h.receiptRoute).querySelector(".hunk-header");
     expect(divider?.querySelector(".hunk-contract-reason")?.textContent).toBe(route?.reason);
+    // The gutter numbers the lines and the header counts the changes, so the divider doesn't.
+    expect(divider?.textContent).toBe(route?.reason);
+    // The imports are logic and link nowhere else: nothing to say, so no divider.
+    expect(cardOf(h.routeImports).querySelector(".hunk-header")).toBeNull();
     // Git's section heading, a line from above the hunk, isn't on a divider.
     expect(divider?.querySelector(".hunk-heading")).toBeNull();
     // The risk is a bar beside the lines, not a badge on the line.

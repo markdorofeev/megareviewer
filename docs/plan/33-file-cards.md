@@ -39,6 +39,7 @@ Without the hunk's reason, a part red only for its hunk's other parts showed a r
 - A first call is the symbol in the code: a click opens the called part under the line, and `o` still does. Requests and symbols reaching several hunks keep their chip row: 11 rows on delphi-code #2, 6 ambiguous and 5 requests.
 - The divider links to callers in other steps only, and shows Related parts only when the rest of its hunk is in another step.
 - The rail lists a file's name once, then a short row per part.
+- A divider drops the part's lines and counts, which the gutter and the file's header give, and a part with nothing else to say has none.
 - A divider drops git's section heading (`const BASE = "b".repeat(40);` over a hunk that changes a comment). A card of its own keeps it, beside the file's path.
 
 ## Measurements

@@ -171,12 +171,6 @@
   background: var(--color-danger-subtle);
 }
 
-.hunk-location {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
 .file-path {
   font-family: var(--font-mono);
   font-weight: 600;

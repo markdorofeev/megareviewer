@@ -242,9 +242,10 @@ test.describe("without the model", () => {
     await expect(page.getByText("Asked:")).toBeVisible();
     await expect(page.getByRole("article")).toHaveCount(0);
 
-    // In the map, the receipt route's call opens the receipt service in place.
+    // In the map, the receipt route's call, the symbol in its code, opens the receipt service in
+    // place.
     const route = page.getByRole("region", { name: /^src\/routes\/orders\.ts, lines 29–/ });
-    const call = route.getByRole("button", { name: /^renderReceipt src\/services\/receipts\.ts/ });
+    const call = route.locator(".call-link", { hasText: /^renderReceipt$/ });
     await call.click();
     await expect(call).toHaveAttribute("aria-expanded", "true");
     const opened = route.locator(".inline-call");

@@ -490,6 +490,7 @@ details.warnings ul {
 }
 
 .file-card-header {
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1708,4 +1709,9 @@ details.warnings ul {
 
 .step-via summary {
   cursor: pointer;
+}
+
+/* The file's header draws the line above its first part, whose divider then needs none. */
+.file-card-header + .map-hunk .hunk-card.in-file .hunk-header {
+  border-top: 0;
 }

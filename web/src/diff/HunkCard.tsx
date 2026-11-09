@@ -374,6 +374,16 @@ export const HunkCard = memo(function HunkCard({
   }, [focused]);
 
   const counts = lineCounts(hunk);
+  // On a file's card the gutter numbers the lines and the file's header counts the changes, so a
+  // part's divider shows only what the code doesn't: what it changes, why it's contract, and
+  // links to other steps. A part with none of those has no divider.
+  const showsRelated = part != null && part.elsewhere.length > 0;
+  const dividerShows =
+    (part?.definitions.length ?? 0) > 0 ||
+    proofs.length > 0 ||
+    risk?.riskClass === "contract" ||
+    (callers.length > 0 && onFollow !== undefined) ||
+    showsRelated;
   const related = part != null && (
     <details className="hunk-related">
       <summary>Related parts</summary>
@@ -408,56 +418,58 @@ export const HunkCard = memo(function HunkCard({
           </span>
         </span>
       )}
-      <header className="hunk-header">
-        {inFile ? (
-          <span className="hunk-location">{hunkLocation(hunk)}</span>
-        ) : (
-          <>
-            <FilePath file={file} />
-            <FileStatusBadge status={file.status} />
-          </>
-        )}
-        {part != null
-          ? part.definitions.length > 0 && (
-              <span className="hunk-part">
-                {joined(part.definitions.map((name) => <code key={name}>{name}</code>))}
-              </span>
-            )
-          : // Git's heading is a line above the hunk, not in it: on a file's card, under the code
-            // before it, it read as one more line of the diff.
-            !inFile &&
-            hunk.sectionHeading !== null && (
-              <code className="hunk-heading">{hunk.sectionHeading}</code>
-            )}
-        <span className="hunk-counts">
-          <span className="count-added">+{counts.added}</span>{" "}
-          <span className="count-deleted">−{counts.deleted}</span>
-        </span>
-        {proofs.map((proof) => (
-          <span key={proof.kind} className="hunk-proof" title="Mechanical proof">
-            ✓ {proof.detail}
-          </span>
-        ))}
-        {risk?.riskClass === "contract" && (
-          <span className="hunk-contract-reason model-text">{risk.reason}</span>
-        )}
-        {!inFile && risk !== null && <RiskBadge risk={risk} />}
-        {inFile && callers.length > 0 && onFollow !== undefined && (
-          <Callers callers={callers} onFollow={onFollow} inline />
-        )}
-        {/* On a file's card, the hunk's other parts in this step are on the card already. */}
-        {inFile && part != null && part.elsewhere.length > 0 && related}
-        {onReviewed !== undefined && (
-          <label className="hunk-reviewed">
-            <input
-              type="checkbox"
-              checked={reviewed === true}
-              onChange={(event) => onReviewed(id, event.target.checked)}
-            />
-            Reviewed
-          </label>
-        )}
-      </header>
+      {(!inFile || dividerShows) && (
+        <header className="hunk-header">
+          {!inFile && (
+            <>
+              <FilePath file={file} />
+              <FileStatusBadge status={file.status} />
+            </>
+          )}
+          {part != null
+            ? part.definitions.length > 0 && (
+                <span className="hunk-part">
+                  {joined(part.definitions.map((name) => <code key={name}>{name}</code>))}
+                </span>
+              )
+            : // Git's heading is a line above the hunk, not in it: on a file's card, under the code
+              // before it, it read as one more line of the diff.
+              !inFile &&
+              hunk.sectionHeading !== null && (
+                <code className="hunk-heading">{hunk.sectionHeading}</code>
+              )}
+          {!inFile && (
+            <span className="hunk-counts">
+              <span className="count-added">+{counts.added}</span>{" "}
+              <span className="count-deleted">−{counts.deleted}</span>
+            </span>
+          )}
+          {proofs.map((proof) => (
+            <span key={proof.kind} className="hunk-proof" title="Mechanical proof">
+              ✓ {proof.detail}
+            </span>
+          ))}
+          {risk?.riskClass === "contract" && (
+            <span className="hunk-contract-reason model-text">{risk.reason}</span>
+          )}
+          {!inFile && risk !== null && <RiskBadge risk={risk} />}
+          {inFile && callers.length > 0 && onFollow !== undefined && (
+            <Callers callers={callers} onFollow={onFollow} inline />
+          )}
+          {/* On a file's card, the hunk's other parts in this step are on the card already. */}
+          {inFile && showsRelated && related}
+          {onReviewed !== undefined && (
+            <label className="hunk-reviewed">
+              <input
+                type="checkbox"
+                checked={reviewed === true}
+                onChange={(event) => onReviewed(id, event.target.checked)}
+              />
+              Reviewed
+            </label>
+          )}
+        </header>
+      )}
       {!inFile && callers.length > 0 && onFollow !== undefined && (
         <Callers callers={callers} onFollow={onFollow} />
       )}
