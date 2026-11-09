@@ -10,7 +10,7 @@ import {
   type PartHeader,
 } from "../../diff/index.ts";
 import type { ChipPlan } from "./chips.ts";
-import { type Call, type PartIndex, riskNote } from "./model.ts";
+import type { Call, PartIndex } from "./model.ts";
 
 /** What a part on the page needs. */
 export interface HunkDeps {
@@ -88,13 +88,19 @@ export const HunkView = ({
       highlighted={deps.highlighted.has(id)}
       focused={focused}
       onFocus={nested ? undefined : deps.onFocusHunk}
-      callers={nested ? undefined : deps.callersOf(id)}
+      callers={
+        nested
+          ? undefined
+          : inFile
+            ? // A divider names only callers the reader doesn't meet in this step.
+              deps.callersOf(id).filter((caller) => deps.stepOf(caller.partId) !== deps.stepOf(id))
+            : deps.callersOf(id)
+      }
       unchanged={nested ? undefined : deps.unchangedOf(id)}
       onFollow={deps.onFollow}
       reviewed={deps.reviewed.has(id)}
       onReviewed={inFile ? undefined : deps.onReviewed}
       inFile={inFile}
-      riskNote={inFile ? riskNote(item) : undefined}
       comments={deps.commentsOf(id)}
       openComment={!nested && deps.openComment?.partId === id ? deps.openComment.place : null}
       onOpenComment={nested ? undefined : deps.onOpenComment}

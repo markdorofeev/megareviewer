@@ -19,11 +19,18 @@ export interface SymbolPlace {
 }
 
 /**
- * How one symbol on one line shows its calls: a chip under the line, or a mention, the symbol
- * underlined in place. `calls` has one call per hunk the symbol reaches, more for an ambiguous call.
+ * How one symbol on one line shows its calls: a chip, which opens the called code in place, or a
+ * mention, which peeks at it and goes there. `calls` has one call per hunk the symbol reaches, more
+ * for an ambiguous call. A chip whose symbol is on the line (`at`) is the symbol itself, clickable;
+ * one that isn't, such as a request or a call spread over lines, is a row under the line.
  */
 export type CallMark =
-  | { readonly kind: "chip"; readonly symbol: string; readonly calls: readonly Call[] }
+  | {
+      readonly kind: "chip";
+      readonly symbol: string;
+      readonly calls: readonly Call[];
+      readonly at: SymbolPlace | null;
+    }
   | {
       readonly kind: "mention";
       readonly symbol: string;
@@ -71,10 +78,10 @@ export const chipPlan = (
           const fresh = symbolCalls.some((call) => !reached.has(call.toPartId));
           for (const call of symbolCalls) reached.add(call.toPartId);
           const text = lineText(id, line);
-          const at = fresh || text === undefined ? null : symbolPlace(text, symbol);
+          const at = text === undefined ? null : symbolPlace(text, symbol);
           lineMarks.push(
-            at === null
-              ? { kind: "chip", symbol, calls: symbolCalls }
+            fresh || at === null
+              ? { kind: "chip", symbol, calls: symbolCalls, at }
               : { kind: "mention", symbol, calls: symbolCalls, at },
           );
         }

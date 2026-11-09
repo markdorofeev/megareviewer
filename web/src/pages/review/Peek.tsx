@@ -34,17 +34,22 @@ export const peekStart = (hunk: Hunk, symbol: string): number => {
 let closeOpenPeek: (() => void) | null = null;
 
 /**
- * A later call to code the reader has already been shown in this step: the symbol underlined in
- * place. Resting on it or focusing it shows a peek of the called code; a click goes there.
+ * A call, the symbol underlined in place. Resting on it or focusing it shows a peek of the called
+ * code. A click goes there, or, with `onToggle`, opens the called code under the line: the first
+ * call in a step to code the reader hasn't been shown yet.
  */
 export const Mention = ({
   mark,
   deps,
   children,
+  expanded = false,
+  onToggle,
 }: {
-  readonly mark: Extract<CallMark, { kind: "mention" }>;
+  readonly mark: CallMark;
   readonly deps: HunkDeps;
   readonly children: ReactNode;
+  readonly expanded?: boolean;
+  readonly onToggle?: () => void;
 }) => {
   const id = useId();
   const button = useRef<HTMLButtonElement>(null);
@@ -95,8 +100,9 @@ export const Mention = ({
       <button
         ref={button}
         type="button"
-        className={`call-mention risk-${riskClass}`}
+        className={`call-mention${onToggle === undefined ? "" : " call-link"} risk-${riskClass}`}
         aria-describedby={place === null ? undefined : id}
+        aria-expanded={onToggle === undefined ? undefined : expanded}
         onMouseEnter={() => {
           if (timer.current !== null) clearTimeout(timer.current);
           timer.current = setTimeout(show, PEEK_DELAY_MS);
@@ -112,7 +118,8 @@ export const Mention = ({
         }}
         onClick={() => {
           close();
-          deps.onFollow(first.toPartId);
+          if (onToggle === undefined) deps.onFollow(first.toPartId);
+          else onToggle();
         }}
       >
         {children}

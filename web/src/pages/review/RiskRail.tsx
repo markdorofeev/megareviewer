@@ -50,10 +50,10 @@ const useInView = (ids: readonly PartId[]): ReadonlySet<PartId> => {
 };
 
 /**
- * One part's bar on the rail: as tall as the part is long within bounds, colored by risk, marked
- * for each decision on it and a contract rule's reason. A part that's its file's only one in the
- * step has its file and lines beside it; the parts of a file with several share one name beside
- * their bars.
+ * One part's row on the rail: a bar as tall as the part is long within bounds, colored by risk,
+ * marked for each decision on it and a contract rule's reason, and its lines beside it. A part
+ * that's its file's only one in the step names the file too; the parts of a file with several are
+ * rows under the file's name.
  */
 const PartBar = ({
   partId,
@@ -63,7 +63,7 @@ const PartBar = ({
   dimmed,
   decisions,
   onGo,
-  labelled,
+  inFile,
 }: {
   readonly partId: PartId;
   readonly index: PartIndex;
@@ -73,7 +73,8 @@ const PartBar = ({
   readonly dimmed: boolean;
   readonly decisions: readonly Decision[];
   readonly onGo: (target: RailTarget) => void;
-  readonly labelled: boolean;
+  /** Under its file's name, so the row gives only its lines. */
+  readonly inFile: boolean;
 }) => {
   const [item] = index.items([partId]);
   if (item === undefined) return null;
@@ -89,7 +90,7 @@ const PartBar = ({
   ];
   const classes = [
     "rail-hunk",
-    !labelled && "rail-part",
+    inFile && "rail-part",
     inView && "in-view",
     dimmed && riskClass !== "contract" && "dimmed",
   ];
@@ -98,7 +99,6 @@ const PartBar = ({
       type="button"
       className={classes.filter(Boolean).join(" ")}
       aria-label={`${file.path}, ${hunkLocation(hunk)}, ${riskClass}${isReviewed ? ", reviewed" : ""}`}
-      title={labelled ? undefined : `${hunkLocation(hunk)}, ${meta.filter(Boolean).join(" · ")}`}
       aria-current={inView ? "location" : undefined}
       onClick={() => onGo({ kind: "hunk", partId })}
     >
@@ -117,14 +117,13 @@ const PartBar = ({
           </span>
         ))}
       </span>
-      {labelled && (
-        <span className="rail-hunk-text">
-          <span className="rail-hunk-file">
-            {file.path.split("/").at(-1)} {hunkLocation(hunk).replace(/^lines /, "")}
-          </span>
-          <span className="rail-hunk-meta">{meta.filter(Boolean).join(" · ")}</span>
+      <span className="rail-hunk-text">
+        <span className="rail-hunk-file">
+          {inFile ? "" : `${file.path.split("/").at(-1)} `}
+          {hunkLocation(hunk).replace(/^lines /, "")}
         </span>
-      )}
+        <span className="rail-hunk-meta">{meta.filter(Boolean).join(" · ")}</span>
+      </span>
       {isReviewed && (
         <span className="rail-bar-tick" aria-hidden="true">
           ✓
@@ -280,7 +279,7 @@ export const RiskRail = ({
                       dimmed={contractOnly}
                       decisions={decisionsOn(partId)}
                       onGo={onGo}
-                      labelled={more.length === 0}
+                      inFile={more.length > 0}
                     />
                   );
                   if (more.length === 0) return <li key={first}>{bar(first)}</li>;
@@ -293,7 +292,6 @@ export const RiskRail = ({
                     toReview.length > 0 && toReview.every((item) => reviewed.has(item.id));
                   return (
                     <li key={first} className="rail-file">
-                      <div className="rail-file-bars">{group.partIds.map(bar)}</div>
                       <button
                         type="button"
                         className="rail-file-name"
@@ -310,6 +308,11 @@ export const RiskRail = ({
                           </span>
                         )}
                       </button>
+                      <ul className="rail-file-parts">
+                        {group.partIds.map((partId) => (
+                          <li key={partId}>{bar(partId)}</li>
+                        ))}
+                      </ul>
                     </li>
                   );
                 })}

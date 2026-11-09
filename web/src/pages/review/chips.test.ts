@@ -41,6 +41,8 @@ describe("chipPlan", () => {
     ]);
     const plan = chipPlan([[a, b], [d]], calls, named(calls));
     expect(kinds(plan.get(a)?.get(10))).toEqual(["chip save→1"]);
+    // A chip says where its symbol is, so the page can make the symbol itself the call.
+    expect(plan.get(a)?.get(10)?.[0]).toMatchObject({ at: { start: 0, end: 4 } });
     expect(plan.get(b)?.get(20)).toEqual([
       {
         kind: "mention",

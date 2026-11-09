@@ -695,27 +695,25 @@ details.warnings ul {
   outline-offset: 1px;
 }
 
-/* A file with several parts in the step: its bars in a column, its name once beside them. */
+/* A file with several parts in the step: its name once, then a short row per part under it. */
 .rail-file {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-1);
-}
-
-.rail-file-bars {
   display: grid;
-  flex: none;
   gap: 1px;
 }
 
-.rail-hunk.rail-part {
-  width: auto;
-  gap: 2px;
+.rail-file-parts {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0 0 0 var(--space-3);
+  list-style: none;
 }
 
 .rail-file-name {
-  display: grid;
-  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  align-items: baseline;
   min-width: 0;
   padding: 2px var(--space-1);
   border: 0;
@@ -739,6 +737,12 @@ details.warnings ul {
   min-width: 0;
   font-size: var(--text-xs);
   line-height: 1.35;
+}
+
+.rail-hunk.rail-part .rail-hunk-text {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
 }
 
 .rail-hunk-file {
@@ -1004,6 +1008,17 @@ details.warnings ul {
 .call-mention:hover,
 .call-mention:focus-visible {
   text-decoration-style: solid;
+}
+
+/* A first call opens the code it calls under its line: a solid line, colored once it's open. */
+.call-mention.call-link {
+  text-decoration-style: solid;
+  text-decoration-thickness: 1px;
+}
+
+.call-mention.call-link[aria-expanded="true"] {
+  background: var(--color-accent-subtle);
+  text-decoration-color: var(--color-accent);
 }
 
 .peek {

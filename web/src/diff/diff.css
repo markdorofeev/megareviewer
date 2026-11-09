@@ -565,10 +565,6 @@
   font-size: var(--text-xs);
 }
 
-.hunk-card.in-file .hunk-counts {
-  margin-right: auto;
-}
-
 .part-risk {
   position: absolute;
   top: 0;
@@ -599,4 +595,14 @@
 
 .hunk-card.in-file .hunk-related[open] {
   flex-basis: 100%;
+}
+
+/* The part's links sit at the end of its line. */
+.hunk-card.in-file .hunk-header > .hunk-callers.inline,
+.hunk-card.in-file .hunk-header > .hunk-related {
+  margin-left: auto;
+}
+
+.hunk-card.in-file .hunk-header > .hunk-callers.inline + .hunk-related {
+  margin-left: 0;
 }

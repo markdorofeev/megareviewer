@@ -12,15 +12,7 @@ import {
 } from "../../diff/index.ts";
 import type { Call, CallMark } from "./chips.ts";
 import { CallLabel, type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
-import {
-  type FileGroup,
-  fileGroups,
-  gapBetween,
-  type MapSection,
-  mergedReasons,
-  ownReasons,
-  sectionKey,
-} from "./model.ts";
+import { type FileGroup, fileGroups, gapBetween, type MapSection, sectionKey } from "./model.ts";
 import { Mention } from "./Peek.tsx";
 
 export const stepAnchor = (key: string): string => `step-${key}`;
@@ -234,8 +226,16 @@ const everyCallAChip = (calls: readonly Call[]): CallMark[] => {
     kind: "chip",
     symbol,
     calls: symbolCalls,
+    at: null,
   }));
 };
+
+/** A chip that is the symbol in the code: one call, whose symbol is on its line. */
+const inCode = (
+  mark: CallMark,
+): mark is Extract<CallMark, { kind: "chip" }> & {
+  readonly at: NonNullable<Extract<CallMark, { kind: "chip" }>["at"]>;
+} => mark.kind === "chip" && mark.at !== null && mark.calls.length === 1;
 
 /** A hunk's marks by line: from the chip plan at its own place, every call a chip when opened. */
 const marksOf = (chain: readonly PartId[], deps: HunkDeps) => {
@@ -258,45 +258,91 @@ const belowLines = (
   if (lines === undefined) return undefined;
   return new Map(
     [...lines].flatMap(([line, marks]) => {
-      const chips = marks.filter((mark) => mark.kind === "chip");
-      return chips.length === 0
+      // A call that's the symbol in the code has no row; what it opens shows under the line.
+      const rows = marks.filter((mark) => mark.kind === "chip" && !inCode(mark));
+      const opened = marks
+        .filter(inCode)
+        .flatMap((mark) => mark.calls)
+        .filter((call) => !chain.includes(call.toPartId) && openCalls.has(callKey(chain, call)));
+      return rows.length === 0 && opened.length === 0
         ? []
         : [
             [
               line,
-              <InlineCalls
-                key={line}
-                marks={chips}
-                chain={chain}
-                deps={deps}
-                openCalls={openCalls}
-                onToggleCall={onToggleCall}
-              />,
+              <Fragment key={line}>
+                {rows.length > 0 && (
+                  <InlineCalls
+                    marks={rows}
+                    chain={chain}
+                    deps={deps}
+                    openCalls={openCalls}
+                    onToggleCall={onToggleCall}
+                  />
+                )}
+                {opened.map((call) => (
+                  <div key={callKey(chain, call)} className="inline-call">
+                    <NestedHunk
+                      id={call.toPartId}
+                      chain={[...chain, call.toPartId]}
+                      deps={deps}
+                      openCalls={openCalls}
+                      onToggleCall={onToggleCall}
+                    />
+                  </div>
+                ))}
+              </Fragment>,
             ] as const,
           ];
     }),
   );
 };
 
-/** Mentions underlined where their symbol stands. */
-const mentionsIn = (id: PartId, deps: HunkDeps): ReadonlyMap<number, readonly LineMark[]> =>
+/**
+ * Calls underlined where their symbol stands: a mention goes to the code it calls, and the first
+ * call to code in a step opens it under the line.
+ */
+const mentionsIn = (
+  id: PartId,
+  deps: HunkDeps,
+  openCalls: ReadonlySet<string>,
+  onToggleCall: (key: string) => void,
+): ReadonlyMap<number, readonly LineMark[]> =>
   new Map(
     [...(deps.plan.get(id) ?? [])].flatMap(([line, marks]) => {
-      const inLine = marks.flatMap((mark): LineMark[] =>
-        mark.kind === "mention"
-          ? [
-              {
-                start: mark.at.start,
-                end: mark.at.end,
-                render: (code) => (
-                  <Mention mark={mark} deps={deps}>
-                    {code}
-                  </Mention>
-                ),
-              },
-            ]
-          : [],
-      );
+      const inLine = marks.flatMap((mark): LineMark[] => {
+        if (mark.kind === "mention") {
+          return [
+            {
+              start: mark.at.start,
+              end: mark.at.end,
+              render: (code) => (
+                <Mention mark={mark} deps={deps}>
+                  {code}
+                </Mention>
+              ),
+            },
+          ];
+        }
+        const [call] = mark.calls;
+        if (!inCode(mark) || call === undefined || call.toPartId === id) return [];
+        const key = callKey([id], call);
+        return [
+          {
+            start: mark.at.start,
+            end: mark.at.end,
+            render: (code) => (
+              <Mention
+                mark={mark}
+                deps={deps}
+                expanded={openCalls.has(key)}
+                onToggle={() => onToggleCall(key)}
+              >
+                {code}
+              </Mention>
+            ),
+          },
+        ];
+      });
       return inLine.length === 0 ? [] : [[line, inLine] as const];
     }),
   );
@@ -387,7 +433,7 @@ const MapPart = ({
           id={id}
           deps={deps}
           belowLine={belowLines([id], deps, openCalls, onToggleCall)}
-          inLine={mentionsIn(id, deps)}
+          inLine={mentionsIn(id, deps, openCalls, onToggleCall)}
           inFile={inFile}
         />
       )}
@@ -455,8 +501,6 @@ const FileCard = ({
   const added = items.reduce((sum, item) => sum + lineCounts(item.hunk).added, 0);
   const deleted = items.reduce((sum, item) => sum + lineCounts(item.hunk).deleted, 0);
   const contract = toReview.filter((item) => item.risk.riskClass === "contract").length;
-  // Each contract reason once, from the parts' own lines.
-  const reasons = mergedReasons(toReview.flatMap((item) => ownReasons(item)));
   const mark = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (mark.current !== null) mark.current.indeterminate = done > 0 && done < toReview.length;
@@ -475,9 +519,6 @@ const FileCard = ({
           <span className="count-added">+{added}</span>{" "}
           <span className="count-deleted">−{deleted}</span>
         </span>
-        {reasons.length > 0 && (
-          <span className="hunk-contract-reason model-text">{reasons.join("; ")}</span>
-        )}
         {toReview.length > 0 && (
           <label className="hunk-reviewed">
             <input

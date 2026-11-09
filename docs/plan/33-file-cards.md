@@ -30,6 +30,17 @@ The first file cards were checked live and read as messy: each part kept three r
 - The rail shows a file with several parts in a step as one row: its bars in a column, the name once.
 - Gap rows use the body font, without a background.
 
+### Risk per part, calls in the code
+
+Without the hunk's reason, a part red only for its hunk's other parts showed a red bar nobody could explain. On delphi-code #2, `account_connections` and `_refreshed_connection` were red because git put them in hunks with `save_token` and `forget_saved_token`. And each first call was a chip row, though on a file card it usually opened a part a few lines down. So:
+
+- The page runs the rules on a split part's own lines when they made its hunk's risk (`partIndex`): a part that matches none is logic. The model's risk stays per hunk. The header's totals count a hunk contract when any of its parts is.
+- A contract part's reason is back on its divider, its own; the file header only counts contract parts.
+- A first call is the symbol in the code: a click opens the called part under the line, and `o` still does. Requests and symbols reaching several hunks keep their chip row: 11 rows on delphi-code #2, 6 ambiguous and 5 requests.
+- The divider links to callers in other steps only, and shows Related parts only when the rest of its hunk is in another step.
+- The rail lists a file's name once, then a short row per part.
+- A divider drops git's section heading (`const BASE = "b".repeat(40);` over a hunk that changes a comment). A card of its own keeps it, beside the file's path.
+
 ## Measurements
 
 The same analysis, before and after, read from the page: 79 cards before, 37 after, one per file per step. Every part is still on the page once.
@@ -38,4 +49,4 @@ The same analysis, before and after, read from the page: 79 cards before, 37 aft
 
 - **Unchanged lines between parts aren't expandable.** The page has no file contents, only hunks. Expanding them needs an API route that serves a file at the head commit, which the server already caches in `file_contents`.
 - **A mechanical hunk on a file card** still shows as its collapsed row, which repeats the path.
-- **The header of a hunk that isn't split** shows git's section heading, the definition the hunk starts in, which can name an unchanged function above the added code (`def _host_of` over the new `_account_connection`). It did that before this stage, too.
+- **A card of its own still shows git's section heading,** which can name an unchanged function above the added code (`def _host_of` over the new `_account_connection`). Naming the definitions an unsplit hunk changes, as a split part's header does, would fix it there too.

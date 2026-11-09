@@ -14,12 +14,10 @@ import {
   gapBetween,
   mapSections,
   mechanicalCount,
-  mergedReasons,
   parseLayout,
   partIndex,
   partsInPathOrder,
   reviewOrder,
-  riskNote,
   riskTotals,
   tourSteps,
   trailingProofs,
@@ -151,38 +149,47 @@ describe("byFile, fileGroups and gapBetween", () => {
   });
 });
 
-describe("mergedReasons", () => {
-  it("is each reason once, a rule's names joined across parts", () => {
-    expect(
-      mergedReasons([
-        "changes credential storage (save_token)",
-        "adds subprocess",
-        "changes credential storage (forget_saved_token, save_token); changes authorization (a)",
-        "adds subprocess",
-      ]),
-    ).toEqual([
-      "changes credential storage (save_token, forget_saved_token)",
-      "adds subprocess",
-      "changes authorization (a)",
-    ]);
+describe("a split part's risk", () => {
+  // The cache part is the second of its hunk; the rules see "cachedReceipt" there, no credentials.
+  const ruled = (reason: string): Analysis => ({
+    ...analysis,
+    risk: analysis.risk.map((risk) =>
+      risk.hunkId === h.retryAndCache
+        ? { ...risk, riskClass: "contract" as const, reason, source: "rule" as const }
+        : risk,
+    ),
   });
-});
 
-describe("riskNote", () => {
-  const [route] = partIndex(analysis).items([h.receiptRoute]);
-  if (route === undefined) throw new Error("no route");
-  const as = (risk: Partial<typeof route.risk>) => ({ ...route, risk: { ...route.risk, ...risk } });
+  it("is the rules' on its own lines, when the rules made its hunk's", () => {
+    const [cache] = partIndex(ruled("changes credential storage (save_token)")).items([p.cache]);
+    expect(cache?.risk).toMatchObject({
+      riskClass: "logic",
+      reason: "No contract rule matches this part's lines.",
+    });
+  });
 
-  it("is a model's reason as it is: it's about the whole hunk", () => {
-    expect(riskNote(as({ riskClass: "contract", source: "model", reason: "Public." }))).toBe(
-      "Public.",
+  it("is the hunk's when the model made it", () => {
+    const modelled: Analysis = {
+      ...analysis,
+      risk: analysis.risk.map((risk) =>
+        risk.hunkId === h.retryAndCache
+          ? {
+              ...risk,
+              riskClass: "contract" as const,
+              reason: "Whole hunk.",
+              source: "model" as const,
+            }
+          : risk,
+      ),
+    };
+    expect(partIndex(modelled).items([p.cache])[0]?.risk.reason).toBe("Whole hunk.");
+  });
+
+  it("counts a hunk contract in the totals only when one of its parts is", () => {
+    const index = partIndex(ruled("changes credential storage (save_token)"));
+    expect(riskTotals(ruled("x"), index).contract).toBe(
+      riskTotals(analysis, partIndex(analysis)).contract,
     );
-  });
-
-  it("says a rule's contract comes from the rest of the hunk when the part's lines match none", () => {
-    expect(
-      riskNote(as({ riskClass: "contract", source: "rule", reason: "changes authorization (x)" })),
-    ).toBe("Contract with the rest of its hunk: changes authorization (x)");
   });
 });
 

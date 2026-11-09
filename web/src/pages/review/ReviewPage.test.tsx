@@ -668,11 +668,12 @@ describe("risk map", () => {
     const height = (row: HTMLElement) => row.querySelector<HTMLElement>(".rail-bar")?.style.height;
     expect(height(route)).toBe("15px");
     expect(height(bar(/^src\/routes\/orders\.ts, lines 1–8, logic$/))).toBe("12px");
-    // orders.ts has three parts in step 1: one name beside their bars, each bar's details on it.
+    // orders.ts has three parts in step 1: its name once, then a row per part.
     const orders = within(rail()).getByRole("button", { name: /^orders\.ts/ });
     expect(orders.textContent).toBe("orders.ts3 parts · 1 contract");
-    expect(route.querySelector(".rail-hunk-file")).toBeNull();
-    expect(route.getAttribute("title")).toBe("lines 10–24, contract · 2 decisions");
+    // Under the file's name, a part's row gives only its lines.
+    expect(route.querySelector(".rail-hunk-file")?.textContent).toBe("10–24");
+    expect(route.querySelector(".rail-hunk-meta")?.textContent).toBe("contract · 2 decisions");
     const cache = bar(/^src\/services\/receipts\.ts, lines 40–50, logic$/);
     expect(cache.querySelector(".rail-hunk-file")?.textContent).toBe("receipts.ts 40–50");
     expect(cache.querySelector(".rail-hunk-meta")?.textContent).toBe("logic · 2 decisions");
@@ -927,6 +928,14 @@ const ambiguous: AnalysisView = {
 };
 const chip = (within_: HTMLElement, symbol: string) =>
   within(within_).getByRole("button", { name: new RegExp(`^${symbol} `) });
+/** A first call in a step: the symbol in the code, which opens what it calls under its line. */
+const codeCall = (within_: HTMLElement, symbol: string) => {
+  const found = within(within_)
+    .getAllByRole("button", { name: symbol })
+    .find((button) => button.classList.contains("call-link"));
+  if (found === undefined) throw new Error(`no call to ${symbol} in the code`);
+  return found;
+};
 
 /** The fixture plus a Python route and a TSX page that requests it, each read in a step. */
 const withRequest = (): AnalysisView => {
@@ -1071,9 +1080,10 @@ describe("inline calls", () => {
     renderReview({ view: chained });
     await loaded();
     const route = cardOf(h.receiptRoute);
-    const cached = chip(route, "cachedReceipt");
-    expect(cached.textContent).toBe("▸cachedReceipt src/services/receipts.ts logic");
-    expect(within(route).queryByRole("button", { name: /^calls / })).toBeNull();
+    // The call is the symbol in the code: no row under the line until it's open.
+    const cached = codeCall(route, "cachedReceipt");
+    expect(cached.getAttribute("aria-expanded")).toBe("false");
+    expect(route.querySelector(".calls")).toBeNull();
 
     await userEvent.click(cached);
     expect(cached.getAttribute("aria-expanded")).toBe("true");
@@ -1103,7 +1113,7 @@ describe("inline calls", () => {
   it("share the reviewed mark with the hunk's own place", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(chip(cardOf(h.receiptRoute), "cachedReceipt"));
+    await userEvent.click(codeCall(cardOf(h.receiptRoute), "cachedReceipt"));
     const opened = cardOf(h.receiptRoute).querySelector<HTMLElement>(".inline-call");
     if (opened === null) throw new Error("no inline call");
     await userEvent.click(within(opened).getByRole("checkbox", { name: "Reviewed" }));
@@ -1114,14 +1124,15 @@ describe("inline calls", () => {
     expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
   });
 
-  it("chip only the first call to a hunk in a step, and underline the later ones", async () => {
+  it("open the first call to a hunk in a step in place, and underline the later ones", async () => {
     renderReview({ view: repeated });
     await loaded();
-    expect(chip(cardOf(h.routeImports), "cachedReceipt")).toBeTruthy();
+    expect(codeCall(cardOf(h.routeImports), "cachedReceipt")).toBeTruthy();
     const route = cardOf(h.receiptRoute);
     expect(within(route).queryByRole("button", { name: /^cachedReceipt / })).toBeNull();
     const mention = within(route).getByRole("button", { name: "cachedReceipt" });
     expect(mention.classList.contains("call-mention")).toBe(true);
+    expect(mention.classList.contains("call-link")).toBe(false);
     // Both calls come from orders.ts, so the callee lists the file once.
     expect(cardOf(p.cache).querySelector(".hunk-callers")?.textContent).toBe(
       "Called from orders.ts ↑",
@@ -1611,20 +1622,43 @@ describe("navigation", () => {
     ).toBe(true);
   });
 
-  it("name a file's contract reasons once, on its card, and show each part's risk as a bar", async () => {
+  it("count a file's contract parts on its card, and give each its reason on its own line", async () => {
     renderReview();
     await loaded();
     const route = analysis.risk.find((risk) => risk.hunkId === h.receiptRoute);
     const orders = fileCardOf("src/routes/orders.ts");
-    expect(orders.querySelector(".file-card-header .hunk-contract-reason")?.textContent).toBe(
-      route?.reason,
+    expect(orders.querySelector(".file-card-header .count-contract")?.textContent).toBe(
+      " · 1 contract",
     );
-    // The part's divider is one quiet line: no reason or risk button of its own.
-    expect(cardOf(h.receiptRoute).querySelector(".hunk-header .hunk-contract-reason")).toBeNull();
+    expect(orders.querySelector(".file-card-header .hunk-contract-reason")).toBeNull();
+    const divider = cardOf(h.receiptRoute).querySelector(".hunk-header");
+    expect(divider?.querySelector(".hunk-contract-reason")?.textContent).toBe(route?.reason);
+    // Git's section heading, a line from above the hunk, isn't on a divider.
+    expect(divider?.querySelector(".hunk-heading")).toBeNull();
+    // The risk is a bar beside the lines, not a badge on the line.
     expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: "contract" })).toBeNull();
-    expect(cardOf(h.receiptRoute).querySelector(".part-risk")?.getAttribute("title")).toBe(
-      route?.reason,
-    );
+    expect(cardOf(h.receiptRoute).querySelector(".part-risk.risk-contract")).not.toBeNull();
+  });
+
+  it("link a part's divider only to code other steps read", async () => {
+    // Both parts of the retry and cache hunk in step 1, on one receipts.ts card.
+    const tour = analysis.tour;
+    if (tour === null) throw new Error("no tour");
+    const [first, , ...rest] = tour.steps;
+    if (first === undefined) throw new Error("no step");
+    const together: AnalysisView = {
+      ...fixture,
+      analysis: {
+        ...analysis,
+        tour: { ...tour, steps: [{ ...first, partIds: [...first.partIds, p.retry] }, ...rest] },
+      },
+    };
+    renderReview({ view: together });
+    await loaded();
+    const receipts = fileCardOf("src/services/receipts.ts");
+    expect(within(receipts).queryByText("Related parts")).toBeNull();
+    // The route calls the cache part in this same step, so its divider doesn't link back to it.
+    expect(cardOf(p.cache).querySelector(".hunk-callers")).toBeNull();
   });
 
   it("marks a file's parts in a step reviewed together, from its card", async () => {

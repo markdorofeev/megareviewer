@@ -52,6 +52,19 @@ export interface PartPlace {
   readonly siblings: readonly PartId[];
 }
 
+/**
+ * A split part's risk when the rules made its hunk's: the rules run on the part's own lines, so a
+ * part is contract for what it changes, with its own reason, and a part git put in a hunk next to
+ * credential code isn't. A part they don't match is logic, which still shows it in full. The
+ * model's risk is about the whole hunk, so it stays the hunk's.
+ */
+const partRisk = (hunk: RiskAssessment, reasons: readonly string[]): RiskAssessment =>
+  reasons.length === 0
+    ? { ...hunk, riskClass: "logic", reason: NO_RULE_IN_PART }
+    : { ...hunk, riskClass: "contract", reason: reasons.join("; ") };
+
+const NO_RULE_IN_PART = "No contract rule matches this part's lines.";
+
 /** A part as the page shows it: its lines as a hunk, its file, its hunk's risk and proofs. */
 export interface PartItem extends HunkItem {
   readonly id: PartId;
@@ -110,9 +123,15 @@ export const partIndex = (analysis: Analysis) => {
   const mechanical: ReadonlySet<PartId> = new Set(proofs.keys());
   const riskOf = (id: PartId): RiskAssessment => {
     const hunkId = hunkIdOf(id);
-    return (
-      risk.get(hunkId) ?? { hunkId, riskClass: "logic", reason: UNCLASSIFIED, source: "fallback" }
-    );
+    const assessed = risk.get(hunkId) ?? {
+      hunkId,
+      riskClass: "logic",
+      reason: UNCLASSIFIED,
+      source: "fallback",
+    };
+    const found = parts.get(id);
+    if (assessed.source !== "rule" || found?.place == null) return assessed;
+    return partRisk(assessed, ruleReasons(found.hunk, found.file));
   };
   const items = (ids: readonly PartId[]): PartItem[] =>
     ids.flatMap((id) => {
@@ -235,44 +254,6 @@ export const fileGroups = (ids: readonly PartId[], index: PartIndex): FileGroup[
     else groups.push({ file, partIds: [id] });
   }
   return groups;
-};
-
-/**
- * Why a contract part is contract, from its own lines: the rules run on the part, so a part
- * doesn't show the definitions its hunk's other parts change. Empty when the part is contract only
- * because the rest of its hunk is. A model's reason is about the whole hunk, and stays.
- */
-export const ownReasons = (item: PartItem): readonly string[] =>
-  item.risk.riskClass !== "contract"
-    ? []
-    : item.risk.source === "rule"
-      ? ruleReasons(item.hunk, item.file)
-      : [item.risk.reason];
-
-/**
- * Reasons from several parts, each once: a rule that names what it found, "changes credential
- * storage (save_token)", is one reason with every name it found across the parts.
- */
-export const mergedReasons = (reasons: readonly string[]): string[] => {
-  const names = new Map<string, string[]>();
-  for (const reason of reasons.flatMap((joined) => joined.split("; "))) {
-    const named = /^(.*) \(([^()]*)\)$/.exec(reason);
-    const label = named?.[1] ?? reason;
-    const found = named?.[2]?.split(", ") ?? [];
-    names.set(label, [...new Set([...(names.get(label) ?? []), ...found])]);
-  }
-  return [...names].map(([label, found]) =>
-    found.length === 0 ? label : `${label} (${found.join(", ")})`,
-  );
-};
-
-/** A contract part's tooltip: its own reasons, or that it's contract with the rest of its hunk. */
-export const riskNote = (item: PartItem): string => {
-  if (item.risk.riskClass !== "contract") return item.risk.reason;
-  const own = ownReasons(item);
-  return own.length > 0
-    ? own.join("; ")
-    : `Contract with the rest of its hunk: ${item.risk.reason}`;
 };
 
 /** The lines between two parts of a file on one card, and the file's parts read among them. */
@@ -435,8 +416,15 @@ export type RiskMix = Readonly<Record<RiskAssessment["riskClass"], number>>;
 export const riskTotals = (analysis: Analysis, index: PartIndex): RiskMix => {
   const totals = { contract: 0, logic: 0, mechanical: 0 };
   const hunks = analysis.files.flatMap((file) => file.hunks.map((hunk) => hunk.id));
-  for (const item of index.items(hunks.flatMap((id) => index.partsOf(id).slice(0, 1)))) {
-    totals[index.mechanical.has(item.hunk.id) ? "mechanical" : item.risk.riskClass] += 1;
+  // A hunk is contract when any of its parts is.
+  for (const hunkId of hunks) {
+    const items = index.items(index.partsOf(hunkId));
+    const riskClass = index.mechanical.has(hunkId)
+      ? "mechanical"
+      : items.some((item) => item.risk.riskClass === "contract")
+        ? "contract"
+        : "logic";
+    if (items.length > 0) totals[riskClass] += 1;
   }
   totals.mechanical += analysis.proofs.filter((proof) => proof.hunkId === null).length;
   return totals;

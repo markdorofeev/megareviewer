@@ -308,7 +308,6 @@ export const HunkCard = memo(function HunkCard({
   belowLine,
   inLine,
   inFile = false,
-  riskNote,
 }: {
   /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
   readonly id?: PartId;
@@ -346,11 +345,10 @@ export const HunkCard = memo(function HunkCard({
   /** Parts of the line with this new-side number to show differently, e.g. a call's symbol. */
   readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
   /**
-   * One of several parts on a file's card, which names the file and the contract reasons: the
-   * header is one line, and the risk is the color of a bar beside the lines, `riskNote` its tooltip.
+   * One of several parts on a file's card, which names the file: the header is one line, and the
+   * risk is the color of a bar beside the lines.
    */
   readonly inFile?: boolean;
-  readonly riskNote?: string;
 }) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -376,8 +374,6 @@ export const HunkCard = memo(function HunkCard({
   }, [focused]);
 
   const counts = lineCounts(hunk);
-  // On a file's card, a caller in the same file is the card itself.
-  const otherFiles = callers.filter((caller) => caller.path !== file.path);
   const related = part != null && (
     <details className="hunk-related">
       <summary>Related parts</summary>
@@ -406,9 +402,9 @@ export const HunkCard = memo(function HunkCard({
       onFocus={() => onFocus?.(id)}
     >
       {inFile && risk !== null && (
-        <span className={`part-risk risk-${risk.riskClass}`} title={riskNote ?? risk.reason}>
+        <span className={`part-risk risk-${risk.riskClass}`} title={risk.reason}>
           <span className="visually-hidden">
-            {risk.riskClass}: {riskNote ?? risk.reason}
+            {risk.riskClass}: {risk.reason}
           </span>
         </span>
       )}
@@ -427,7 +423,10 @@ export const HunkCard = memo(function HunkCard({
                 {joined(part.definitions.map((name) => <code key={name}>{name}</code>))}
               </span>
             )
-          : hunk.sectionHeading !== null && (
+          : // Git's heading is a line above the hunk, not in it: on a file's card, under the code
+            // before it, it read as one more line of the diff.
+            !inFile &&
+            hunk.sectionHeading !== null && (
               <code className="hunk-heading">{hunk.sectionHeading}</code>
             )}
         <span className="hunk-counts">
@@ -439,14 +438,15 @@ export const HunkCard = memo(function HunkCard({
             ✓ {proof.detail}
           </span>
         ))}
-        {!inFile && risk?.riskClass === "contract" && (
+        {risk?.riskClass === "contract" && (
           <span className="hunk-contract-reason model-text">{risk.reason}</span>
         )}
         {!inFile && risk !== null && <RiskBadge risk={risk} />}
-        {inFile && otherFiles.length > 0 && onFollow !== undefined && (
-          <Callers callers={otherFiles} onFollow={onFollow} inline />
+        {inFile && callers.length > 0 && onFollow !== undefined && (
+          <Callers callers={callers} onFollow={onFollow} inline />
         )}
-        {inFile && related}
+        {/* On a file's card, the hunk's other parts in this step are on the card already. */}
+        {inFile && part != null && part.elsewhere.length > 0 && related}
         {onReviewed !== undefined && (
           <label className="hunk-reviewed">
             <input
