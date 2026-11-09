@@ -7,13 +7,14 @@ import { type ApiError, errorMessage } from "../../api/index.ts";
 const SHOWN_WARNINGS = 2;
 
 /**
- * The PR and its intent in a line, the page's tools, whether the analysis is still current, and
+ * The PR and its intent in a line, the layout switch, whether the analysis is still current, and
  * the way to publish the review.
  */
 export const ReviewHeader = ({
   view,
   intent,
   tools,
+  canPublish,
   reanalyzing,
   reanalyzeError,
   onReanalyze,
@@ -22,8 +23,10 @@ export const ReviewHeader = ({
   readonly view: AnalysisView;
   /** The intent line, under the title. */
   readonly intent: ReactNode;
-  /** Layout, jump and progress, before publishing. */
+  /** The layout switch, before publishing. */
   readonly tools: ReactNode;
+  /** There's something to post: a decision, a line comment, or a verdict the reviewer can give. */
+  readonly canPublish: boolean;
   readonly reanalyzing: boolean;
   readonly reanalyzeError: ApiError | null;
   readonly onReanalyze: () => void;
@@ -36,21 +39,17 @@ export const ReviewHeader = ({
   return (
     <header className="review-header">
       <div className="review-title">
-        <p className="pr-meta">
-          <a href={pullRequest?.url ?? pullRequestUrl(ref)} target="_blank" rel="noreferrer">
-            {ref.repo.owner}/{ref.repo.repo} #{ref.number}
+        <div className="review-title-row">
+          <h1 className="model-text">{pullRequest?.title ?? "Collecting the pull request…"}</h1>
+          <a
+            className="pr-link"
+            href={pullRequest?.url ?? pullRequestUrl(ref)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {ref.repo.repo} #{ref.number}
           </a>
-          {pullRequest !== null && (
-            <>
-              <span> · {pullRequest.author.name || pullRequest.author.id}</span>
-              <span>
-                {" · "}
-                <code>{pullRequest.sourceBranch}</code> → <code>{pullRequest.targetBranch}</code>
-              </span>
-            </>
-          )}
-        </p>
-        <h1 className="model-text">{pullRequest?.title ?? "Collecting the pull request…"}</h1>
+        </div>
         {intent}
       </div>
       <div className="review-actions">
@@ -67,14 +66,16 @@ export const ReviewHeader = ({
             )}
           </p>
         ) : (
-          <button
-            type="button"
-            className="button primary"
-            disabled={analysis.status !== "complete"}
-            onClick={onPublish}
-          >
-            Publish…
-          </button>
+          canPublish && (
+            <button
+              type="button"
+              className="button primary"
+              disabled={analysis.status !== "complete"}
+              onClick={onPublish}
+            >
+              Publish…
+            </button>
+          )
         )}
       </div>
       {stale && (

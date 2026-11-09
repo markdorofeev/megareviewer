@@ -105,6 +105,8 @@ const cardOf = (hunkId: PartId) => {
   return card;
 };
 const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
+const storedReviewed = (): unknown =>
+  JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "[]");
 const rail = () => screen.getByRole("complementary", { name: "Map" });
 const overviewBox = () => screen.getByRole("region", { name: "Overview of the changed files" });
 const decisionCard = (title: RegExp) => screen.getByRole("article", { name: title });
@@ -268,14 +270,13 @@ describe("ReviewPage states", () => {
 });
 
 describe("header", () => {
-  it("links the PR and shows its author and branches", async () => {
+  it("names the PR once, by its title and a link", async () => {
     renderReview();
     await loaded();
-    const link = screen.getByRole("link", { name: "acme/shop #128" });
+    const link = screen.getByRole("link", { name: "shop #128" });
     expect(link.getAttribute("href")).toBe("https://github.com/acme/shop/pull/128");
-    expect(link.closest("p")?.textContent).toBe(
-      "acme/shop #128 · Sam Rivera · shop-142-order-receipts → main",
-    );
+    expect(screen.queryByText(/Sam Rivera/)).toBeNull();
+    expect(screen.queryByText(/shop-142-order-receipts/)).toBeNull();
   });
 
   it("shows up to two warnings in full and collapses more to a count", async () => {
@@ -1120,8 +1121,6 @@ describe("inline calls", () => {
     expect(
       within(cardOf(p.cache)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" }).checked,
     ).toBe(true);
-    // Its hunk's other part isn't reviewed yet, so the hunk doesn't count.
-    expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
   });
 
   it("open the first call to a hunk in a step in place, and underline the later ones", async () => {
@@ -1561,11 +1560,9 @@ describe("parts of a split hunk", () => {
     const checkbox = (id: typeof p.cache) =>
       within(cardOf(id)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" });
     expect([checkbox(p.cache).checked, checkbox(p.retry).checked]).toEqual([true, true]);
-    expect(screen.getByText("1 of 5 hunks reviewed")).toBeTruthy();
 
     await userEvent.click(checkbox(p.cache));
     expect([checkbox(p.cache).checked, checkbox(p.retry).checked]).toEqual([false, true]);
-    expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
     expect(JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "")).toEqual([
       p.retry,
     ]);
@@ -1606,12 +1603,10 @@ describe("navigation", () => {
     expect(focusedLabel()).toMatch(CACHE);
   });
 
-  it("marks hunks reviewed, counts them, and remembers them by hunk", async () => {
+  it("marks hunks reviewed and remembers them by hunk", async () => {
     const { unmount } = renderReview();
     await loaded();
     await userEvent.click(within(cardOf(p.cache)).getByRole("checkbox", { name: "Reviewed" }));
-    // The part's hunk has another part, in step 2, so the hunk doesn't count yet.
-    expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
     expect(window.localStorage.getItem("megareviewer:reviewed-hunks")).toContain(p.cache);
 
     unmount();
@@ -1679,16 +1674,18 @@ describe("navigation", () => {
 
     await userEvent.click(mark);
     expect(mark.checked).toBe(true);
-    expect(screen.getByText("2 of 5 hunks reviewed")).toBeTruthy();
+    expect(within(cardOf(h.routeImports)).queryByRole("checkbox")).toBeNull();
+    expect(storedReviewed()).toEqual(expect.arrayContaining([h.routeImports, h.receiptRoute]));
     await userEvent.click(mark);
-    expect(screen.getByText("0 of 5 hunks reviewed")).toBeTruthy();
+    expect(mark.checked).toBe(false);
+    expect(storedReviewed()).toEqual([]);
   });
 
   it("x marks the focused hunk reviewed and moves on; ] finds the next unreviewed one", async () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("jxx");
-    expect(screen.getByText("2 of 5 hunks reviewed")).toBeTruthy();
+    expect(storedReviewed()).toHaveLength(2);
     const firstStep = () => within(rail()).getByRole("button", { name: /^1 The receipt endpoint/ });
     expect(firstStep().textContent).not.toContain("✓");
     await userEvent.keyboard("]");
@@ -1696,13 +1693,11 @@ describe("navigation", () => {
     // "[[" types one "[" in user-event's key syntax.
     await userEvent.keyboard("[[");
     expect(focusedLabel()).toMatch(CACHE);
-    // The step's last part is reviewed, but its hunk counts once its other part is too.
     await userEvent.keyboard("x");
     expect(firstStep().textContent).toContain("✓");
-    expect(screen.getByText("2 of 5 hunks reviewed")).toBeTruthy();
     expect(focusedLabel()).toMatch(RETRY);
     await userEvent.keyboard("x");
-    expect(screen.getByText("3 of 5 hunks reviewed")).toBeTruthy();
+    expect(storedReviewed()).toEqual(expect.arrayContaining([p.cache, p.retry]));
   });
 });
 
@@ -1727,16 +1722,36 @@ describe("without the model", () => {
     },
   };
 
-  it("shows the title and the description's first line, rule marks only, and no decision cards", async () => {
+  it("shows the title and the description's first sentence, rule marks only, and no decision cards", async () => {
     renderReview({ view: withoutModel });
     await loaded();
-    expect(screen.getByText("Asked:")).toBeTruthy();
+    // Markup is text, and doesn't start a sentence.
     expect(screen.getByText("Adds receipts. <b>Not bold</b>")).toBeTruthy();
     expect(screen.queryByText(/Moves formatMoney too/)).toBeNull();
     expect(document.querySelector(".mismatch-chip")).toBeNull();
     expect(rail().querySelectorAll(".rail-bars .mark-decision")).toHaveLength(0);
     expect(rail().querySelectorAll(".rail-bars .mark-rule")).toHaveLength(2);
     expect(screen.queryByRole("article")).toBeNull();
+  });
+
+  it("offers Publish to the author only once there's something to post", async () => {
+    const { unmount } = renderReview({ view: { ...withoutModel, isAuthor: true } });
+    await loaded();
+    expect(screen.queryByRole("button", { name: "Publish…" })).toBeNull();
+    window.localStorage.setItem(
+      `megareviewer:hunk-comments:${id}`,
+      JSON.stringify([{ hunkId: h.receiptRoute, side: "new", line: 12, body: "Check the owner." }]),
+    );
+    unmount();
+    renderReview({ view: { ...withoutModel, isAuthor: true } });
+    await loaded();
+    expect(screen.getByRole("button", { name: "Publish…" })).toBeTruthy();
+  });
+
+  it("offers Publish to a reviewer with nothing but a verdict to give", async () => {
+    renderReview({ view: withoutModel });
+    await loaded();
+    expect(screen.getByRole("button", { name: "Publish…" })).toBeTruthy();
   });
 
   it("shows what was asked in full, as text, in the details", async () => {

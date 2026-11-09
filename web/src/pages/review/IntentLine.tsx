@@ -26,8 +26,20 @@ export const firstLine = (text: string): string => {
 };
 
 /**
+ * A sentence ends at a stop followed by a capital, a digit or an opening mark, so "e.g. this"
+ * doesn't end one.
+ */
+const SENTENCE_END = /^(.+?[.!?])\s+(?=[A-Z0-9"'(`[])/;
+
+/** The description's first sentence: its first line is often a whole paragraph. */
+export const firstSentence = (text: string): string => {
+  const line = firstLine(text);
+  return SENTENCE_END.exec(line)?.[1] ?? line;
+};
+
+/**
  * The intent in one line under the title: the model's summary of what the code does, or without
- * the model, the description's first line. A red chip names a mismatch between what was asked and
+ * the model, the description's first sentence. The Details button ends the line, so it reads as more of it. A red chip names a mismatch between what was asked and
  * what the code does, and goes to the code it rests on; the next click goes to the next one.
  */
 export const IntentLine = ({
@@ -48,7 +60,7 @@ export const IntentLine = ({
   const mismatches = intent?.mismatches ?? [];
   const at = mismatches.length === 0 ? 0 : mismatchAt % mismatches.length;
   const mismatch = mismatches[at];
-  const description = pullRequest === null ? "" : firstLine(pullRequest.description);
+  const description = pullRequest === null ? "" : firstSentence(pullRequest.description);
 
   return (
     <div className="intent-line">
@@ -67,7 +79,6 @@ export const IntentLine = ({
         </p>
       ) : pullRequest !== null ? (
         <p className="intent-text">
-          <span className="intent-label">Asked:</span>{" "}
           {description === "" ? (
             <span className="muted">The pull request has no description.</span>
           ) : (
@@ -75,6 +86,21 @@ export const IntentLine = ({
           )}
         </p>
       ) : null}
+      {(intent !== null || pullRequest !== null) && (
+        <button
+          type="button"
+          className="details-button"
+          aria-label="Details"
+          title="Details"
+          onClick={onDetails}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" />
+            <path d="M8 7.25v4" />
+            <circle className="details-dot" cx="8" cy="4.9" r="0.4" />
+          </svg>
+        </button>
+      )}
       {mismatch !== undefined && (
         <button
           type="button"
@@ -87,11 +113,6 @@ export const IntentLine = ({
           <span className="mismatch-chip-count">
             {at + 1} of {mismatches.length}
           </span>
-        </button>
-      )}
-      {(intent !== null || pullRequest !== null) && (
-        <button type="button" className="button quiet details-button" onClick={onDetails}>
-          Details
         </button>
       )}
     </div>

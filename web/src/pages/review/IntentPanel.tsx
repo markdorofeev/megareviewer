@@ -99,7 +99,7 @@ export const IntentPanel = ({
   return (
     <div className="intent-panel">
       {mismatches.length === 0 ? (
-        <div className="intent-line">
+        <div className="intent-agrees">
           <p>
             {stated === null ? (
               <span className="intent-label">From the code:</span>

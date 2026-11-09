@@ -20,6 +20,16 @@ const openReview = async (page: Page, url: string, title: string) => {
   await expect(page.getByRole("button", { name: "Publish…" })).toBeEnabled();
 };
 
+/** How many hunks and parts this browser has marked reviewed. */
+const reviewedCount = async (page: Page) =>
+  z
+    .array(z.string())
+    .parse(
+      JSON.parse(
+        (await page.evaluate(() => localStorage.getItem("megareviewer:reviewed-hunks"))) ?? "[]",
+      ),
+    ).length;
+
 const decision = (page: Page, path: string) => ({
   approve: page.getByRole("button", { name: `Approve: Changes ${path}` }),
   reject: page.getByRole("button", { name: `Reject: Changes ${path}` }),
@@ -239,7 +249,7 @@ test.describe("without the model", () => {
     server,
   }) => {
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-    await expect(page.getByText("Asked:")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
     await expect(page.getByRole("article")).toHaveCount(0);
 
     // In the map, the receipt route's call, the symbol in its code, opens the receipt service in
@@ -250,7 +260,7 @@ test.describe("without the model", () => {
     await expect(call).toHaveAttribute("aria-expanded", "true");
     const opened = route.locator(".inline-call");
     await opened.getByRole("checkbox", { name: "Reviewed" }).check();
-    await expect(page.getByText(/^1 of \d+ hunks reviewed$/)).toBeVisible();
+    await expect.poll(() => reviewedCount(page)).toBe(1);
 
     // The overview ticks the receipt service's file; a click on the route's file opens its code.
     await page.getByRole("button", { name: "Overview", exact: true }).click();
@@ -268,7 +278,7 @@ test.describe("without the model", () => {
       /^src\/routes\/orders\.ts/,
     );
     await page.keyboard.press("x");
-    await expect(page.getByText(/^2 of \d+ hunks reviewed$/)).toBeVisible();
+    await expect.poll(() => reviewedCount(page)).toBe(2);
 
     // ⌘K with ! lists the contract changes; Enter goes to the first.
     await page.keyboard.press("ControlOrMeta+k");
@@ -298,7 +308,7 @@ for (const width of [720, 1024, 1440]) {
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: "Publish…" })).toBeInViewport();
-    await expect(page.locator(".review-progress")).toBeInViewport();
+    await expect(page.getByRole("button", { name: /^Jump to/ })).toBeInViewport();
     if (width <= 1024) {
       await expect(rail(page)).toBeHidden();
       await page.getByRole("button", { name: "Show Map" }).click();

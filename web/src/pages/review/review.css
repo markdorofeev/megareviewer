@@ -58,14 +58,28 @@
   min-width: 0;
 }
 
-.review-title h1 {
-  margin: 0;
+.review-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-3);
+  min-width: 0;
 }
 
-.pr-meta {
+.review-title h1 {
+  min-width: 0;
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pr-link {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.pr-link:hover {
+  color: var(--color-accent);
 }
 
 .review-actions {
@@ -75,13 +89,6 @@
   justify-content: flex-end;
   gap: var(--space-3);
   align-self: start;
-}
-
-.review-progress {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
 }
 
 .layout-toggle {
@@ -112,22 +119,63 @@
   font-weight: 600;
 }
 
-.jump-button kbd {
-  margin-left: var(--space-1);
+/* Above the code: jumping moves within it. */
+.review-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.jump-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: min(100%, 480px);
+  min-width: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: text;
+}
+
+.jump-field-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.jump-field:hover {
+  border-color: var(--color-text-muted);
+}
+
+.jump-field-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The intent in one line under the title. */
+/* One line: the text shortens so Details stays right after it. */
 .intent-line {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .intent-text {
   min-width: 0;
-  max-width: 100%;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -144,6 +192,7 @@
   gap: var(--space-2);
   min-width: 0;
   max-width: 520px;
+  margin-left: var(--space-2);
   padding: 0 var(--space-3);
   border: 1px solid var(--risk-contract-bg);
   border-radius: var(--radius-3);
@@ -177,8 +226,37 @@
 }
 
 .details-button {
-  padding-inline: var(--space-2);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.details-button:hover,
+.details-button:focus-visible {
+  background: var(--color-surface-subtle);
   color: var(--color-accent);
+}
+
+.details-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.details-button .details-dot {
+  fill: currentColor;
 }
 
 .verdict-failure {
@@ -283,7 +361,7 @@ details.warnings ul {
   gap: var(--space-5);
 }
 
-.intent-line p {
+.intent-agrees p {
   margin: 0 0 var(--space-2);
 }
 
@@ -1661,7 +1739,6 @@ details.warnings ul {
   min-width: 0;
 }
 
-.pr-meta,
 .hunk-header {
   overflow-wrap: anywhere;
 }
@@ -1682,14 +1759,13 @@ details.warnings ul {
 
   .rail-toggle {
     display: block;
-    justify-self: start;
-    grid-row: 1;
+    flex: none;
   }
 
   .review-body.map > .risk-rail {
     display: none;
     position: static;
-    grid-row: 2;
+    grid-row: 1;
     max-height: 50vh;
     width: 100%;
   }

@@ -44,7 +44,6 @@ import {
   parseLayout,
   partHeaders,
   partIndex,
-  reviewedHunkCount,
   reviewedParts,
   reviewOrder,
   riskTotals,
@@ -305,7 +304,6 @@ const Review = ({
   const [reviewedList, setReviewedList] = useStoredState("reviewed-hunks", NONE, parseStrings);
   const reviewed = useMemo(() => reviewedParts(reviewedList, index), [reviewedList, index]);
   const toReview = useMemo(() => reviewOrder(sections, index), [sections, index]);
-  const reviewedCount = reviewedHunkCount(toReview, reviewed);
   const setReviewed = useCallback(
     (id: PartId, value: boolean) =>
       setReviewedList((previous) => markReviewed(previous, id, value, index).slice(-MAX_REVIEWED)),
@@ -757,35 +755,27 @@ const Review = ({
           />
         }
         tools={
-          <>
-            <fieldset className="layout-toggle">
-              <legend className="visually-hidden">Layout</legend>
-              <button
-                type="button"
-                className="button"
-                aria-pressed={layout === "map"}
-                onClick={() => layout !== "map" && switchLayout()}
-              >
-                Map
-              </button>
-              <button
-                type="button"
-                className="button"
-                aria-pressed={layout === "overview"}
-                onClick={() => layout !== "overview" && switchLayout()}
-              >
-                Overview
-              </button>
-            </fieldset>
-            <button type="button" className="button jump-button" onClick={() => setJumping(true)}>
-              Jump to… <kbd>⌘K</kbd>
+          <fieldset className="layout-toggle">
+            <legend className="visually-hidden">Layout</legend>
+            <button
+              type="button"
+              className="button"
+              aria-pressed={layout === "map"}
+              onClick={() => layout !== "map" && switchLayout()}
+            >
+              Map
             </button>
-            <p className="review-progress" aria-live="polite">
-              {reviewedCount.done} of {reviewedCount.total}{" "}
-              {reviewedCount.total === 1 ? "hunk" : "hunks"} reviewed
-            </p>
-          </>
+            <button
+              type="button"
+              className="button"
+              aria-pressed={layout === "overview"}
+              onClick={() => layout !== "overview" && switchLayout()}
+            >
+              Overview
+            </button>
+          </fieldset>
         }
+        canPublish={!isAuthor || analysis.decisions.length > 0 || hunkComments.length > 0}
         reanalyzing={reanalyze.pending}
         reanalyzeError={reanalyze.error}
         onReanalyze={async () => {
@@ -828,6 +818,29 @@ const Review = ({
         </div>
       )}
 
+      {analysis.stages.prep === "done" && (
+        <div className="review-toolbar">
+          <button type="button" className="jump-field" onClick={() => setJumping(true)}>
+            <svg className="jump-field-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.5" />
+              <path d="m10.5 10.5 3.5 3.5" />
+            </svg>
+            <span className="jump-field-text">Jump to a decision, step, file or symbol…</span>
+            <kbd>⌘K</kbd>
+          </button>
+          {layout === "map" && (
+            <button
+              type="button"
+              className="button rail-toggle"
+              aria-expanded={railOpen}
+              aria-controls="review-map-rail"
+              onClick={() => setRailOpen(!railOpen)}
+            >
+              {railOpen ? "Hide Map" : "Show Map"}
+            </button>
+          )}
+        </div>
+      )}
       {analysis.stages.prep !== "done" ? (
         <section className="main-area" aria-busy={analysis.status === "running"}>
           <p className="muted">
@@ -838,15 +851,6 @@ const Review = ({
         </section>
       ) : layout === "map" ? (
         <div className={`review-body map${railOpen ? " rail-open" : ""}`}>
-          <button
-            type="button"
-            className="button rail-toggle"
-            aria-expanded={railOpen}
-            aria-controls="review-map-rail"
-            onClick={() => setRailOpen(!railOpen)}
-          >
-            {railOpen ? "Hide Map" : "Show Map"}
-          </button>
           <MapLayout
             analysis={analysis}
             sections={sections}
