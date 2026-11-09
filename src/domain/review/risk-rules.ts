@@ -331,6 +331,21 @@ export const raiseByRules = (
   });
 };
 
+const pathReasonsOf = (file: FileChange): string[] => {
+  const paths = file.oldPath === null ? [file.path] : [file.path, file.oldPath];
+  return PATH_RULES.flatMap(
+    (rule) => paths.map(rule).find((reason): reason is string => reason !== null) ?? [],
+  );
+};
+
+/**
+ * The contract rules' reasons for a hunk, or for a part of one: a part's own lines name only the
+ * definitions it changes, so its reasons don't repeat its hunk's other parts.
+ */
+export const ruleReasons = (hunk: Hunk, file: FileChange): string[] => [
+  ...new Set([...pathReasonsOf(file), ...HUNK_RULES.flatMap((rule) => rule(hunk, file) ?? [])]),
+];
+
 /**
  * Risk for every hunk without a mechanical proof, from deterministic rules. A hunk any rule
  * matches is contract, with every matching rule's reason; the rest are logic. Rules only raise
@@ -341,22 +356,18 @@ export const classifyByRules = (
   files: readonly FileChange[],
   mechanicalHunkIds: ReadonlySet<HunkId>,
 ): RiskAssessment[] =>
-  files.flatMap((file) => {
-    const paths = file.oldPath === null ? [file.path] : [file.path, file.oldPath];
-    const pathReasons = PATH_RULES.flatMap(
-      (rule) => paths.map(rule).find((reason): reason is string => reason !== null) ?? [],
-    );
-    return file.hunks
+  files.flatMap((file) =>
+    file.hunks
       .filter((hunk) => !mechanicalHunkIds.has(hunk.id))
       .map((hunk): RiskAssessment => {
-        const reasons = [...pathReasons, ...HUNK_RULES.flatMap((rule) => rule(hunk, file) ?? [])];
+        const reasons = ruleReasons(hunk, file);
         return reasons.length === 0
           ? { hunkId: hunk.id, riskClass: "logic", reason: NO_RULE, source: "rule" }
           : {
               hunkId: hunk.id,
               riskClass: "contract",
-              reason: [...new Set(reasons)].join("; "),
+              reason: reasons.join("; "),
               source: "rule",
             };
-      });
-  });
+      }),
+  );

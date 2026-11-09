@@ -6,7 +6,7 @@ import {
   type Hunk,
   HunkId,
 } from "../diff/index.ts";
-import { classifyByRules, isTestFile, raiseByRules } from "./index.ts";
+import { classifyByRules, isTestFile, raiseByRules, ruleReasons } from "./index.ts";
 
 const h = (n: number): HunkId => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
 
@@ -427,5 +427,41 @@ describe("credential handling in ordinary paths", () => {
   it("keeps security paths in tests and guides contract", () => {
     expect(reasonOf("tests/fake_keychain.py")).toBe("auth or security path");
     expect(reasonOf("docs/credentials.md")).toBe("auth or security path");
+  });
+});
+
+describe("ruleReasons", () => {
+  const body = lines(
+    "+def account_connections(self):",
+    "+    return []",
+    "+def save_token(self, token):",
+    "+    save_secret(self.domain, token)",
+  );
+  const changed = file("app/services.py", [{ id: h(1), body }]);
+  const whole = changed.hunks[0];
+  if (whole === undefined) throw new Error("no hunk");
+
+  it("are the reasons classifyByRules joins for a hunk", () => {
+    expect(ruleReasons(whole, changed).join("; ")).toBe(
+      classifyByRules([changed], new Set())[0]?.reason,
+    );
+  });
+
+  it("name only the definitions a part's own lines change", () => {
+    const part = (from: number, to: number): Hunk => ({
+      ...whole,
+      lines: whole.lines.slice(from, to),
+    });
+    expect(ruleReasons(part(0, 2), changed)).toEqual([]);
+    expect(ruleReasons(part(2, 4), changed)).toEqual([
+      "changes credential storage (save_token, save_secret)",
+    ]);
+  });
+
+  it("keep a path rule's reason for every part of the file", () => {
+    const manifest = file("package.json", [{ id: h(2), body: lines('+  "x": "1"') }]);
+    const [only] = manifest.hunks;
+    if (only === undefined) throw new Error("no hunk");
+    expect(ruleReasons(only, manifest)).not.toEqual([]);
   });
 });

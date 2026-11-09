@@ -661,15 +661,21 @@ class FakeObserver {
 describe("risk map", () => {
   const bar = (name: RegExp) => within(rail()).getByRole("button", { name, hidden: true });
 
-  it("has a row per hunk: its file and lines, and a bar sized by them and marked", async () => {
+  it("has a row per file in a step, and a bar per hunk sized by its lines and marked", async () => {
     renderReview();
     await loaded();
     const route = bar(/^src\/routes\/orders\.ts, lines 10–24, contract$/);
     const height = (row: HTMLElement) => row.querySelector<HTMLElement>(".rail-bar")?.style.height;
     expect(height(route)).toBe("15px");
     expect(height(bar(/^src\/routes\/orders\.ts, lines 1–8, logic$/))).toBe("12px");
-    expect(route.querySelector(".rail-hunk-file")?.textContent).toBe("orders.ts 10–24");
-    expect(route.querySelector(".rail-hunk-meta")?.textContent).toBe("contract · 2 decisions");
+    // orders.ts has three parts in step 1: one name beside their bars, each bar's details on it.
+    const orders = within(rail()).getByRole("button", { name: /^orders\.ts/ });
+    expect(orders.textContent).toBe("orders.ts3 parts · 1 contract");
+    expect(route.querySelector(".rail-hunk-file")).toBeNull();
+    expect(route.getAttribute("title")).toBe("lines 10–24, contract · 2 decisions");
+    const cache = bar(/^src\/services\/receipts\.ts, lines 40–50, logic$/);
+    expect(cache.querySelector(".rail-hunk-file")?.textContent).toBe("receipts.ts 40–50");
+    expect(cache.querySelector(".rail-hunk-meta")?.textContent).toBe("logic · 2 decisions");
     expect([...route.querySelectorAll(".rail-mark")].map((mark) => mark.textContent)).toEqual([
       "Decision: Adds a public endpoint GET /orders/:id/receipt",
       "Decision: Looks up the order by ID without checking that it belongs to the user",
@@ -1603,6 +1609,22 @@ describe("navigation", () => {
     expect(
       within(cardOf(p.cache)).getByRole<HTMLInputElement>("checkbox", { name: "Reviewed" }).checked,
     ).toBe(true);
+  });
+
+  it("name a file's contract reasons once, on its card, and show each part's risk as a bar", async () => {
+    renderReview();
+    await loaded();
+    const route = analysis.risk.find((risk) => risk.hunkId === h.receiptRoute);
+    const orders = fileCardOf("src/routes/orders.ts");
+    expect(orders.querySelector(".file-card-header .hunk-contract-reason")?.textContent).toBe(
+      route?.reason,
+    );
+    // The part's divider is one quiet line: no reason or risk button of its own.
+    expect(cardOf(h.receiptRoute).querySelector(".hunk-header .hunk-contract-reason")).toBeNull();
+    expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: "contract" })).toBeNull();
+    expect(cardOf(h.receiptRoute).querySelector(".part-risk")?.getAttribute("title")).toBe(
+      route?.reason,
+    );
   });
 
   it("marks a file's parts in a step reviewed together, from its card", async () => {

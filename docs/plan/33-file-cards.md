@@ -20,6 +20,16 @@ On delphi-code #2 (`a_6843867360a49450`, without `--ai`): 79 parts in 10 steps, 
 - Between two parts the card says how many lines lie between them, and links to the file's parts other steps read there.
 - Reviewed marks are still stored per part, and `x` still marks the focused part.
 
+### Less on each part
+
+The first file cards were checked live and read as messy: each part kept three rows of chrome (its header, Called from, Related parts), red four ways (band, reason, badge, bar), and its hunk's reason, which on a split hunk names definitions only its other parts change. So:
+
+- A part's divider is one line: lines, what it changes, counts, callers in other files and Related parts. Callers in the same file are dropped there, since the card is that file.
+- A part's risk is a bar beside its lines; its tooltip is the reason from the part's own lines (`ruleReasons`, run on the part), or "Contract with the rest of its hunk" when they match no rule.
+- The file's header counts its contract parts and names each rule once, with the names it found across the parts (`mergedReasons`).
+- The rail shows a file with several parts in a step as one row: its bars in a column, the name once.
+- Gap rows use the body font, without a background.
+
 ## Measurements
 
 The same analysis, before and after, read from the page: 79 cards before, 37 after, one per file per step. Every part is still on the page once.

@@ -171,23 +171,6 @@
   background: var(--color-danger-subtle);
 }
 
-/* A part on a file's card: no box of its own, and a header that divides it from the part above. */
-.hunk-card.in-file {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.hunk-card.in-file.risk-contract {
-  box-shadow: inset 3px 0 0 var(--risk-contract-bg);
-}
-
-.hunk-card.in-file .hunk-header {
-  padding: var(--space-1) var(--space-3);
-  border-top: 1px solid var(--color-border);
-  border-radius: 0;
-}
-
 .hunk-location {
   color: var(--color-text-muted);
   font-family: var(--font-mono);
@@ -565,4 +548,55 @@
 .line-below td {
   padding: 0;
   background: var(--color-surface);
+}
+
+/* A part on a file's card: no box of its own, a one-line divider, and its risk as a bar. */
+.hunk-card.in-file {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.hunk-card.in-file .hunk-header {
+  padding: var(--space-1) var(--space-3);
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface);
+  font-size: var(--text-xs);
+}
+
+.hunk-card.in-file .hunk-counts {
+  margin-right: auto;
+}
+
+.part-risk {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: 3px;
+}
+
+.part-risk.risk-contract {
+  background: var(--risk-contract-bg);
+}
+
+.hunk-callers.inline {
+  padding: 0;
+  border: 0;
+  line-height: inherit;
+}
+
+.hunk-card.in-file .hunk-related {
+  border: 0;
+  background: none;
+}
+
+.hunk-card.in-file .hunk-related > summary {
+  padding: 0;
+}
+
+.hunk-card.in-file .hunk-related[open] {
+  flex-basis: 100%;
 }

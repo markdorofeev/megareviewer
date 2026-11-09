@@ -10,7 +10,7 @@ import {
   type PartHeader,
 } from "../../diff/index.ts";
 import type { ChipPlan } from "./chips.ts";
-import type { Call, PartIndex } from "./model.ts";
+import { type Call, type PartIndex, riskNote } from "./model.ts";
 
 /** What a part on the page needs. */
 export interface HunkDeps {
@@ -94,6 +94,7 @@ export const HunkView = ({
       reviewed={deps.reviewed.has(id)}
       onReviewed={inFile ? undefined : deps.onReviewed}
       inFile={inFile}
+      riskNote={inFile ? riskNote(item) : undefined}
       comments={deps.commentsOf(id)}
       openComment={!nested && deps.openComment?.partId === id ? deps.openComment.place : null}
       onOpenComment={nested ? undefined : deps.onOpenComment}

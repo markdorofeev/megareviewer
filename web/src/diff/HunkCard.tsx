@@ -79,9 +79,12 @@ const joined = (items: readonly ReactNode[]): ReactNode[] =>
 const Callers = ({
   callers,
   onFollow,
+  inline = false,
 }: {
   readonly callers: readonly CallerFile[];
   readonly onFollow: (id: PartId) => void;
+  /** In a part's divider line, rather than a row of its own. */
+  readonly inline?: boolean;
 }) => {
   const [showTests, setShowTests] = useState(false);
   const names = shortPaths(callers.map((caller) => caller.path));
@@ -110,10 +113,11 @@ const Callers = ({
     </button>
   );
   const shown = [...code, ...(tests.length === 0 ? [] : showTests ? tests : [testCount])];
+  const Box = inline ? "span" : "p";
   return (
-    <p className="hunk-callers">
+    <Box className={inline ? "hunk-callers inline" : "hunk-callers"}>
       <span className="hunk-callers-label">Called from</span> {joined(shown)}
-    </p>
+    </Box>
   );
 };
 
@@ -304,6 +308,7 @@ export const HunkCard = memo(function HunkCard({
   belowLine,
   inLine,
   inFile = false,
+  riskNote,
 }: {
   /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
   readonly id?: PartId;
@@ -340,8 +345,12 @@ export const HunkCard = memo(function HunkCard({
   readonly belowLine?: ReadonlyMap<number, ReactNode>;
   /** Parts of the line with this new-side number to show differently, e.g. a call's symbol. */
   readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
-  /** One of several parts on a file's card, which names the file: the header is a divider. */
+  /**
+   * One of several parts on a file's card, which names the file and the contract reasons: the
+   * header is one line, and the risk is the color of a bar beside the lines, `riskNote` its tooltip.
+   */
   readonly inFile?: boolean;
+  readonly riskNote?: string;
 }) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -367,6 +376,20 @@ export const HunkCard = memo(function HunkCard({
   }, [focused]);
 
   const counts = lineCounts(hunk);
+  // On a file's card, a caller in the same file is the card itself.
+  const otherFiles = callers.filter((caller) => caller.path !== file.path);
+  const related = part != null && (
+    <details className="hunk-related">
+      <summary>Related parts</summary>
+      <PartLabel part={part} />
+      {part.previous != null && (
+        <PartFold neighbor={part.previous} of={part.of} direction="previous" onFollow={onFollow} />
+      )}
+      {part.next != null && (
+        <PartFold neighbor={part.next} of={part.of} direction="next" onFollow={onFollow} />
+      )}
+    </details>
+  );
   const classes = [
     "hunk-card",
     inFile && "in-file",
@@ -382,6 +405,13 @@ export const HunkCard = memo(function HunkCard({
       tabIndex={0}
       onFocus={() => onFocus?.(id)}
     >
+      {inFile && risk !== null && (
+        <span className={`part-risk risk-${risk.riskClass}`} title={riskNote ?? risk.reason}>
+          <span className="visually-hidden">
+            {risk.riskClass}: {riskNote ?? risk.reason}
+          </span>
+        </span>
+      )}
       <header className="hunk-header">
         {inFile ? (
           <span className="hunk-location">{hunkLocation(hunk)}</span>
@@ -409,10 +439,14 @@ export const HunkCard = memo(function HunkCard({
             ✓ {proof.detail}
           </span>
         ))}
-        {risk?.riskClass === "contract" && (
+        {!inFile && risk?.riskClass === "contract" && (
           <span className="hunk-contract-reason model-text">{risk.reason}</span>
         )}
-        {risk !== null && <RiskBadge risk={risk} />}
+        {!inFile && risk !== null && <RiskBadge risk={risk} />}
+        {inFile && otherFiles.length > 0 && onFollow !== undefined && (
+          <Callers callers={otherFiles} onFollow={onFollow} inline />
+        )}
+        {inFile && related}
         {onReviewed !== undefined && (
           <label className="hunk-reviewed">
             <input
@@ -424,30 +458,14 @@ export const HunkCard = memo(function HunkCard({
           </label>
         )}
       </header>
-      {callers.length > 0 && onFollow !== undefined && (
+      {!inFile && callers.length > 0 && onFollow !== undefined && (
         <Callers callers={callers} onFollow={onFollow} />
       )}
       {unchanged.map((one) => (
         <UnchangedUses key={one.symbol} callers={one} named={unchanged.length > 1} />
       ))}
       {afterHeader}
-      {part != null && (
-        <details className="hunk-related">
-          <summary>Related parts</summary>
-          <PartLabel part={part} />
-          {part.previous != null && (
-            <PartFold
-              neighbor={part.previous}
-              of={part.of}
-              direction="previous"
-              onFollow={onFollow}
-            />
-          )}
-          {part.next != null && (
-            <PartFold neighbor={part.next} of={part.of} direction="next" onFollow={onFollow} />
-          )}
-        </details>
-      )}
+      {!inFile && related}
       <div
         className="hunk-body"
         // Off screen, the lines are as tall as they will be, so the scrollbar doesn't jump.

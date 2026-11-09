@@ -12,7 +12,15 @@ import {
 } from "../../diff/index.ts";
 import type { Call, CallMark } from "./chips.ts";
 import { CallLabel, type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
-import { type FileGroup, fileGroups, gapBetween, type MapSection, sectionKey } from "./model.ts";
+import {
+  type FileGroup,
+  fileGroups,
+  gapBetween,
+  type MapSection,
+  mergedReasons,
+  ownReasons,
+  sectionKey,
+} from "./model.ts";
 import { Mention } from "./Peek.tsx";
 
 export const stepAnchor = (key: string): string => `step-${key}`;
@@ -446,24 +454,30 @@ const FileCard = ({
   const done = toReview.filter((item) => deps.reviewed.has(item.id)).length;
   const added = items.reduce((sum, item) => sum + lineCounts(item.hunk).added, 0);
   const deleted = items.reduce((sum, item) => sum + lineCounts(item.hunk).deleted, 0);
-  const contract = toReview.some((item) => item.risk.riskClass === "contract");
+  const contract = toReview.filter((item) => item.risk.riskClass === "contract").length;
+  // Each contract reason once, from the parts' own lines.
+  const reasons = mergedReasons(toReview.flatMap((item) => ownReasons(item)));
   const mark = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (mark.current !== null) mark.current.indeterminate = done > 0 && done < toReview.length;
   });
   return (
     <section
-      className={contract ? "file-card risk-contract" : "file-card"}
+      className={contract > 0 ? "file-card risk-contract" : "file-card"}
       aria-label={group.file.path}
     >
       <header className="file-card-header">
         <FilePath file={group.file} />
         <FileStatusBadge status={group.file.status} />
         <span className="hunk-counts">
-          {toReview.length} {toReview.length === 1 ? "part" : "parts"} ·{" "}
+          {toReview.length} {toReview.length === 1 ? "part" : "parts"}
+          {contract > 0 && <span className="count-contract"> · {contract} contract</span>} ·{" "}
           <span className="count-added">+{added}</span>{" "}
           <span className="count-deleted">−{deleted}</span>
         </span>
+        {reasons.length > 0 && (
+          <span className="hunk-contract-reason model-text">{reasons.join("; ")}</span>
+        )}
         {toReview.length > 0 && (
           <label className="hunk-reviewed">
             <input
