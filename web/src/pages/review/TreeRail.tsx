@@ -12,7 +12,7 @@ const ContractCount = ({ count }: { readonly count: number }) =>
   );
 
 /** How a file relates to the file in view. */
-type Relation = "current" | "caller" | "callee" | "both" | "other" | "none";
+export type Relation = "current" | "caller" | "callee" | "both" | "other" | "none";
 
 const ARROWS: Readonly<Record<Relation, { readonly mark: string; readonly text: string } | null>> =
   {
@@ -23,6 +23,65 @@ const ARROWS: Readonly<Record<Relation, { readonly mark: string; readonly text: 
     other: null,
     none: null,
   };
+
+/** For each file, the files it links to: the links the overview draws. */
+export type Neighbors = ReadonlyMap<string, ReadonlySet<string>>;
+
+export const relationOf = (
+  path: string,
+  current: string | null,
+  neighbors: Neighbors,
+): Relation => {
+  if (current === null) return "none";
+  if (path === current) return "current";
+  const calls = neighbors.get(path)?.has(current) === true;
+  const called = neighbors.get(current)?.has(path) === true;
+  return calls && called ? "both" : calls ? "caller" : called ? "callee" : "other";
+};
+
+/**
+ * A file's row: an arrow saying how it relates to the file in view, its name, its directory when
+ * the row isn't under it, and its contract parts. A click scrolls to its card.
+ */
+export const FileRow = ({
+  path,
+  name,
+  directory,
+  contract,
+  relation,
+  onGo,
+}: {
+  readonly path: string;
+  readonly name: string;
+  /** Shown muted after the name, for a row outside its directory's heading. */
+  readonly directory?: string;
+  readonly contract: number;
+  readonly relation: Relation;
+  readonly onGo: (path: string) => void;
+}) => {
+  const arrow = ARROWS[relation];
+  return (
+    <button
+      type="button"
+      className={`tree-file ${relation}`}
+      aria-current={relation === "current" ? "location" : undefined}
+      title={path}
+      onClick={() => onGo(path)}
+    >
+      <span className="tree-arrow">
+        {arrow !== null && (
+          <>
+            <span aria-hidden="true">{arrow.mark}</span>
+            <span className="visually-hidden">{arrow.text}, </span>
+          </>
+        )}
+      </span>
+      <span className="tree-file-name">{name}</span>
+      {directory !== undefined && <span className="tree-file-directory">{directory}/</span>}
+      <ContractCount count={contract} />
+    </button>
+  );
+};
 
 /**
  * The changed files as a directory tree beside the code: directories as headings with the contract
@@ -38,24 +97,16 @@ export const TreeRail = ({
   readonly tree: readonly TreeEntry[];
   /** The path of the file in view, if any. */
   readonly current: string | null;
-  /** For each file, the files it links to: the links the overview draws. */
-  readonly neighbors: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly neighbors: Neighbors;
   readonly onGo: (path: string) => void;
 }) => {
-  const rail = useRef<HTMLElement>(null);
-  const relationOf = (path: string): Relation => {
-    if (current === null) return "none";
-    if (path === current) return "current";
-    const calls = neighbors.get(path)?.has(current) === true;
-    const called = neighbors.get(current)?.has(path) === true;
-    return calls && called ? "both" : calls ? "caller" : called ? "callee" : "other";
-  };
+  const nav = useRef<HTMLElement>(null);
 
   // Keep the file in view in sight when the tree is longer than the rail.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the file in view changes.
   useEffect(() => {
-    const box = rail.current;
-    const row = box?.querySelector<HTMLElement>(".tree-file.current");
+    const box = nav.current?.closest<HTMLElement>(".tree-rail");
+    const row = nav.current?.querySelector<HTMLElement>(".tree-file.current");
     if (box === null || box === undefined || row === null || row === undefined) return;
     const top = row.offsetTop - box.offsetTop;
     if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 40) {
@@ -65,48 +116,32 @@ export const TreeRail = ({
 
   const list = (entries: readonly TreeEntry[]) => (
     <ul className="tree-list">
-      {entries.map((entry) => {
-        if (entry.kind === "directory") {
-          return (
-            <li key={`${entry.path}/`} className="tree-directory">
-              <div className="tree-heading" title={`${entry.path}/`}>
-                <span className="tree-heading-label">{entry.label}</span>
-                <ContractCount count={entry.contract} />
-              </div>
-              {list(entry.children)}
-            </li>
-          );
-        }
-        const relation = relationOf(entry.path);
-        const arrow = ARROWS[relation];
-        return (
-          <li key={entry.path}>
-            <button
-              type="button"
-              className={`tree-file ${relation}`}
-              aria-current={relation === "current" ? "location" : undefined}
-              title={entry.path}
-              onClick={() => onGo(entry.path)}
-            >
-              <span className="tree-arrow">
-                {arrow !== null && (
-                  <>
-                    <span aria-hidden="true">{arrow.mark}</span>
-                    <span className="visually-hidden">{arrow.text}, </span>
-                  </>
-                )}
-              </span>
-              <span className="tree-file-name">{entry.name}</span>
+      {entries.map((entry) =>
+        entry.kind === "directory" ? (
+          <li key={`${entry.path}/`} className="tree-directory">
+            <div className="tree-heading" title={`${entry.path}/`}>
+              <span className="tree-heading-label">{entry.label}</span>
               <ContractCount count={entry.contract} />
-            </button>
+            </div>
+            {list(entry.children)}
           </li>
-        );
-      })}
+        ) : (
+          <li key={entry.path}>
+            <FileRow
+              path={entry.path}
+              name={entry.name}
+              contract={entry.contract}
+              relation={relationOf(entry.path, current, neighbors)}
+              onGo={onGo}
+            />
+          </li>
+        ),
+      )}
     </ul>
   );
 
   return (
-    <nav id="review-tree-rail" ref={rail} className="tree-rail" aria-label="Changed files">
+    <nav ref={nav} className="tree-nav" aria-label="Changed files">
       {list(tree)}
     </nav>
   );

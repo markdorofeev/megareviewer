@@ -490,9 +490,11 @@ describe("map", () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("v");
-    expect(screen.getByRole("button", { name: "Overview" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(
+      within(screen.getByRole("group", { name: "Layout" }))
+        .getByRole("button", { name: "Overview" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
     await userEvent.keyboard("v");
     expect(fileCards()).toHaveLength(3);
   });
@@ -616,7 +618,9 @@ describe("decisions", () => {
 });
 
 const openOverview = async () => {
-  await userEvent.click(screen.getByRole("button", { name: "Overview" }));
+  await userEvent.click(
+    within(screen.getByRole("group", { name: "Layout" })).getByRole("button", { name: "Overview" }),
+  );
   return overviewBox();
 };
 /** The diagram's file nodes by row, as their labels. */

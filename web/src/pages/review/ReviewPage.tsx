@@ -19,6 +19,8 @@ import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
+import { MiniOverview } from "./MiniOverview.tsx";
+import { fitMiniOverview } from "./mini-overview.ts";
 import {
   commentsInParts,
   contractParts,
@@ -35,6 +37,7 @@ import { Overview } from "./Overview.tsx";
 import { fileNeighbors, fileOverview, type OverviewNode } from "./overview.ts";
 import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
+import { parseRailForm, Rail } from "./Rail.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { ShortcutsDialog } from "./ShortcutsDialog.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
@@ -200,6 +203,17 @@ const Review = ({
   const fileInView = useFileInView(filePaths, layout === "map" && analysis.stages.prep === "done");
   // At 1024px or less the rail is behind a button.
   const [railOpen, setRailOpen] = useState(false);
+  const [railForm, setRailForm] = useStoredState("rail-form", "tree", parseRailForm);
+  const mini = useMemo(
+    () =>
+      railForm === "overview"
+        ? fitMiniOverview(
+            (depth) => fileOverview(analysis, steps, new Set(), contractOf, depth),
+            filePaths,
+          )
+        : null,
+    [railForm, analysis, steps, contractOf, filePaths],
+  );
   const unchanged = useMemo(() => {
     const byPart = new Map<PartId, UnchangedCallers[]>();
     for (const one of analysis.unchangedCallers) {
@@ -335,6 +349,14 @@ const Review = ({
     setFocusedHunkId(first);
     if (path === undefined) showHunk(first, "map");
     else scrollTo(fileAnchor(path));
+  };
+  /** From the rail's miniature: a box's first file, or the code a box outside the PR uses. */
+  const goToNode = (node: OverviewNode) => {
+    const path =
+      node.kind === "outside" ? undefined : node.paths.find((one) => filePaths.includes(one));
+    const [first] = node.partIds;
+    if (path !== undefined) scrollTo(fileAnchor(path));
+    else if (first !== undefined) showHunk(first, "map");
   };
   const switchLayout = () => {
     if (layout === "map") return openOverview();
@@ -611,12 +633,26 @@ const Review = ({
         </section>
       ) : layout === "map" ? (
         <div className={`review-body map${railOpen ? " rail-open" : ""}`}>
-          <TreeRail
-            tree={tree}
-            current={fileInView}
-            neighbors={neighbors}
-            onGo={(path) => scrollTo(fileAnchor(path))}
-          />
+          <Rail form={railForm} onForm={(form) => setRailForm(() => form)}>
+            {mini === null ? (
+              <TreeRail
+                tree={tree}
+                current={fileInView}
+                neighbors={neighbors}
+                onGo={(path) => scrollTo(fileAnchor(path))}
+              />
+            ) : (
+              <MiniOverview
+                mini={mini}
+                paths={filePaths}
+                current={fileInView}
+                neighbors={neighbors}
+                contractOf={contractOf}
+                onOpen={goToNode}
+                onGo={(path) => scrollTo(fileAnchor(path))}
+              />
+            )}
+          </Rail>
           <MapLayout
             analysis={analysis}
             files={files}

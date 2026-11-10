@@ -547,6 +547,176 @@ details.warnings ul {
   background: var(--color-danger);
 }
 
+.tree-file-directory {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The rail's switch between the tree and the miniature of the overview */
+
+.rail-switch {
+  margin: 0 0 var(--space-2);
+}
+
+.rail-switch .button {
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+}
+
+/* The miniature stays pinned while the lists under it scroll. */
+.tree-rail.form-overview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mini-overview {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mini-figure {
+  flex: none;
+  padding: 2px;
+}
+
+.mini-lists {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mini-list .tree-heading {
+  margin: var(--space-3) 0 0;
+  font-weight: normal;
+}
+
+.mini-diagram {
+  position: relative;
+  width: 100%;
+}
+
+.mini-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.mini-edge {
+  fill: none;
+  stroke: var(--color-border-strong);
+  stroke-width: 1;
+}
+
+.mini-edge.import {
+  stroke-dasharray: 3 2;
+}
+
+.mini-edge.request {
+  stroke: var(--color-text-muted);
+  stroke-dasharray: 6 2 1.5 2;
+  stroke-width: 1.5;
+}
+
+.mini-edge.type {
+  stroke-dasharray: 1 2;
+}
+
+.mini-edge.outside {
+  stroke-dasharray: 2 2;
+  opacity: 0.6;
+}
+
+.mini-node {
+  position: absolute;
+  min-width: 0;
+  padding: 0 3px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 3px;
+  background: var(--risk-logic-bg);
+  color: var(--risk-logic-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mini-node.risk-contract {
+  border-color: var(--risk-contract-bg);
+  background: var(--risk-contract-bg);
+  color: var(--risk-contract-text);
+}
+
+.mini-node.risk-mechanical {
+  background: var(--risk-mechanical-bg);
+  color: var(--risk-mechanical-text);
+}
+
+.mini-node.outside {
+  border-style: dashed;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+}
+
+.mini-node:hover,
+.mini-chip:hover {
+  border-color: var(--color-accent);
+}
+
+.mini-node:focus-visible,
+.mini-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* The box holding the file in view. */
+.mini-node.current,
+.mini-chip.current {
+  z-index: 1;
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.mini-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mini-chip {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  background: var(--color-surface-subtle);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.mini-chip-count {
+  color: var(--color-text-muted);
+}
+
+.mini-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+}
+
 /* Map: every changed file in one scroll */
 
 .main-area.map {
