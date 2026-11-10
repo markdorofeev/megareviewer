@@ -6,13 +6,7 @@ import {
   type Hunk,
   HunkId,
 } from "../diff/index.ts";
-import {
-  classifyByRules,
-  credentialCalls,
-  isTestFile,
-  raiseByRules,
-  ruleReasons,
-} from "./index.ts";
+import { classifyByRules, isTestFile, raiseByRules, ruleReasons } from "./index.ts";
 
 const h = (n: number): HunkId => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
 
@@ -609,37 +603,5 @@ describe("ruleReasons", () => {
     const [only] = manifest.hunks;
     if (only === undefined) throw new Error("no hunk");
     expect(ruleReasons(only, manifest)).not.toEqual([]);
-  });
-});
-
-describe("credentialCalls", () => {
-  const callsIn = (path: string, ...texts: string[]) => {
-    const one = file(path, [{ id: h(1), body: lines(...texts) }]);
-    const [only] = one.hunks;
-    return only === undefined ? [] : credentialCalls(only, one);
-  };
-
-  it("lists the credential names a hunk calls and its file doesn't define", () => {
-    expect(
-      callsIn(
-        "api/routes.py",
-        "+def forget_account_token(domain):",
-        "+    return app.forget_saved_token(domain)",
-        "+    require_permission(user)",
-      ),
-    ).toEqual([
-      { name: "forget_saved_token", handles: "credential storage" },
-      { name: "require_permission", handles: "authorization" },
-    ]);
-  });
-
-  it("leaves out what the hunk's file defines, which is on its lines", () => {
-    expect(
-      callsIn("api/routes.py", "+def save_token(value):", "+    save_token(other)", "+    run()"),
-    ).toEqual([]);
-  });
-
-  it("has none in test code", () => {
-    expect(callsIn("tests/test_routes.py", "+    forget_saved_token(domain)")).toEqual([]);
   });
 });

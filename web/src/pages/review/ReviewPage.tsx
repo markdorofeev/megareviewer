@@ -483,7 +483,6 @@ const Review = ({
   };
   const deps: HunkDeps = {
     index,
-    callGraph: analysis.callGraph,
     unchangedOf,
     highlighted: highlight,
     commentsOf,

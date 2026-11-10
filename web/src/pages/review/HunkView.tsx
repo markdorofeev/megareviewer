@@ -1,13 +1,11 @@
 import type { ReactNode } from "react";
-import type { CallGraphHint, PartId, UnchangedCallers } from "../../../../src/domain/diff/index.ts";
+import type { PartId, UnchangedCallers } from "../../../../src/domain/diff/index.ts";
 import { CollapsedHunk, HunkCard, type LineComment, type LinePlace } from "../../diff/index.ts";
-import { dividerNote, type PartIndex, partReason } from "./model.ts";
+import type { PartIndex } from "./model.ts";
 
 /** What a part on the page needs. */
 export interface HunkDeps {
   readonly index: PartIndex;
-  /** For the file a contract part calls into, on its divider. */
-  readonly callGraph: readonly CallGraphHint[];
   /** Uses outside the pull request of what a part changes, read from a local checkout. */
   readonly unchangedOf: (id: PartId) => readonly UnchangedCallers[];
   readonly highlighted: ReadonlySet<PartId>;
@@ -44,9 +42,7 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       id={id}
       hunk={hunk}
       file={file}
-      // The file's header gives the path rules' reasons; the bar keeps the rest as its tooltip.
-      risk={{ ...risk, reason: partReason(risk.reason, file) }}
-      note={dividerNote(item, deps.callGraph, deps.index)}
+      risk={risk}
       highlighted={deps.highlighted.has(id)}
       onFocus={deps.onFocusHunk}
       unchanged={deps.unchangedOf(id)}

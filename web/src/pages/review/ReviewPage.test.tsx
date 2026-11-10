@@ -875,26 +875,22 @@ describe("parts of a split hunk", () => {
 });
 
 describe("navigation", () => {
-  it("count a file's contract parts on its card, and give each its reason on its own line", async () => {
+  it("count a file's contract parts on its card, and mark each with a bar, not a reason", async () => {
     renderReview();
     await loaded();
-    const route = analysis.risk.find((risk) => risk.hunkId === h.receiptRoute);
     const orders = fileCardOf("src/routes/orders.ts");
     expect(orders.querySelector(".file-card-header .count-contract")?.textContent).toBe(
       "1 contract · ",
     );
-    expect(orders.querySelector(".file-card-header .hunk-contract-reason")).toBeNull();
-    const divider = cardOf(h.receiptRoute).querySelector(".hunk-header");
-    expect(divider?.querySelector(".hunk-contract-reason")?.textContent).toBe(route?.reason);
-    // The gutter numbers the lines and the header counts the changes, so the divider doesn't.
-    expect(divider?.textContent).toBe(route?.reason);
-    // The imports are logic and link nowhere else: nothing to say, so no divider.
+    // A rule's reason quotes the code under it, so the contract part has no divider at all.
+    expect(orders.querySelector(".hunk-contract-reason")).toBeNull();
+    expect(cardOf(h.receiptRoute).querySelector(".hunk-header")).toBeNull();
     expect(cardOf(h.routeImports).querySelector(".hunk-header")).toBeNull();
-    // Git's section heading, a line from above the hunk, isn't on a divider.
-    expect(divider?.querySelector(".hunk-heading")).toBeNull();
     // The risk is a bar beside the lines, not a badge on the line.
     expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: "contract" })).toBeNull();
-    expect(cardOf(h.receiptRoute).querySelector(".part-risk.risk-contract")).not.toBeNull();
+    const bar = cardOf(h.receiptRoute).querySelector(".part-risk.risk-contract");
+    expect(bar?.textContent).toBe("contract");
+    expect(bar?.getAttribute("title")).toBeNull();
   });
 
   it("name a file on its card without a status for modified, a part count or a Reviewed mark", async () => {

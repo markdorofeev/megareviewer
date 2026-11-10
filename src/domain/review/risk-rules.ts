@@ -327,19 +327,26 @@ const namesWhere =
  * declaration that changes a credential, not a request a client sends to one. False matches only
  * ask for more attention.
  */
-const isStorage = (words: readonly string[]): boolean =>
-  CREDENTIAL_NOUNS.has(words.at(-1) ?? "") &&
-  words.slice(0, -1).some((word) => STORAGE_VERBS.has(word));
-const isAuthorization = (words: readonly string[]): boolean =>
-  words.some((word) => AUTHORIZATION_WORDS.has(word)) ||
-  (CREDENTIAL_NOUNS.has(words.at(-1) ?? "") && words.some((word) => CHECK_VERBS.has(word)));
-
 const CREDENTIAL_RULES: readonly {
   readonly found: (line: string, defined: ReadonlySet<string>) => string[];
   readonly reason: string;
 }[] = [
-  { found: namesWhere(isStorage), reason: "changes credential storage" },
-  { found: namesWhere(isAuthorization), reason: "changes authorization" },
+  {
+    found: namesWhere(
+      (words) =>
+        CREDENTIAL_NOUNS.has(words.at(-1) ?? "") &&
+        words.slice(0, -1).some((word) => STORAGE_VERBS.has(word)),
+    ),
+    reason: "changes credential storage",
+  },
+  {
+    found: namesWhere(
+      (words) =>
+        words.some((word) => AUTHORIZATION_WORDS.has(word)) ||
+        (CREDENTIAL_NOUNS.has(words.at(-1) ?? "") && words.some((word) => CHECK_VERBS.has(word))),
+    ),
+    reason: "changes authorization",
+  },
   {
     found: (line) =>
       routesOn(line)
@@ -352,37 +359,6 @@ const CREDENTIAL_RULES: readonly {
     reason: "changes a credential endpoint",
   },
 ];
-
-/** A credential name a hunk calls from a file that doesn't define it, and what it handles. */
-export interface CredentialCall {
-  readonly name: string;
-  readonly handles: "credential storage" | "authorization";
-}
-
-/**
- * The credential and authorization names a hunk's changed lines call and its file doesn't define:
- * what the credential rules found that the code on screen doesn't show, since the name is defined
- * elsewhere. Names the hunk defines are on its lines, so they're left out. Test code has none.
- */
-export const credentialCalls = (hunk: Hunk, file: FileChange): CredentialCall[] => {
-  if (isTestCode(file.path)) return [];
-  const changed = [...textOf(hunk, "add"), ...textOf(hunk, "del")];
-  const defined = new Set([...definedInFile(file), ...changed.flatMap(definedNames)]);
-  const called = [
-    ...new Set(changed.flatMap((line) => calledNames(line).filter((name) => !defined.has(name)))),
-  ];
-  return called.flatMap((name): CredentialCall[] => {
-    const words = pathWords(name);
-    return isStorage(words)
-      ? [{ name, handles: "credential storage" }]
-      : isAuthorization(words)
-        ? [{ name, handles: "authorization" }]
-        : [];
-  });
-};
-
-/** The reason the test rules give for a net loss of tests, which the deleted lines alone don't show. */
-export const REMOVES_TESTS = "removes tests";
 
 /**
  * A rule on one hunk of a file, or a part of one: the reason when it matches, else null. `whole`
@@ -413,12 +389,12 @@ const HUNK_RULES: readonly HunkRule[] = [
   },
   (hunk, file, whole) => {
     if (!isTestFile(file.path)) return null;
-    if (file.status === "deleted") return REMOVES_TESTS;
+    if (file.status === "deleted") return "removes tests";
     // An edited test deletes and adds its declaration line; only a net loss removes a test. A
     // split part can hold a renamed test's old line without its new one, so the loss is counted
     // over the whole hunk, and said on the parts that delete a test.
     return removedTests(whole) > 0 && count(textOf(hunk, "del"), TEST_DECLARATIONS) > 0
-      ? REMOVES_TESTS
+      ? "removes tests"
       : null;
   },
   (hunk, file) =>
