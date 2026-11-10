@@ -25,10 +25,12 @@ import {
   type CallerFile,
   commentPlace,
   type HunkItem,
+  hunkLocation,
   type PartHeader,
   type PartNeighbor,
 } from "../../diff/index.ts";
 import type { Call } from "./chips.ts";
+import { byCalls, type FileSection, type GroupFile } from "./grouping.ts";
 
 export type { Call } from "./chips.ts";
 
@@ -205,31 +207,72 @@ export const tourSteps = (analysis: Analysis, index: PartIndex): readonly TourSt
 };
 
 /**
- * A part of the map's one scroll: a tour step with the mechanical hunks of its files in place,
- * or, before the tour exists, every change in path order.
+ * A section of the map: files under a header, each file once with all its parts. Call order is one
+ * section without a header; each folder is a section.
  */
-/** What the map shows: every part to review, each file's together, the files in `fileOrder`. */
 export interface MapSection {
   readonly kind: "files";
+  readonly key: string;
+  readonly title: string | null;
+  readonly detail: string | null;
   readonly partIds: readonly PartId[];
 }
 
 /**
- * The map's one section: each file once, with all its parts in the file's order, mechanical ones
- * in place, the files in `fileOrder` (the call graph's) and any it leaves out by path after them.
+ * The files the map shows, those with a part to review: in `fileOrder` (the call graph's), any it
+ * leaves out by path after them, each with its contract parts counted.
+ */
+export const mapFiles = (
+  analysis: Analysis,
+  fileOrder: readonly string[],
+  index: PartIndex,
+): GroupFile[] => {
+  const rank = new Map(fileOrder.map((path, at) => [path, at]));
+  const rankOf = (file: FileChange) => rank.get(file.path) ?? fileOrder.length;
+  return [...analysis.files]
+    .sort((a, b) => rankOf(a) - rankOf(b) || byPath(a, b))
+    .flatMap((file) => {
+      const items = index
+        .items(index.partsInFile(file))
+        .filter((item) => !index.mechanical.has(item.id));
+      return items.length === 0
+        ? []
+        : [
+            {
+              path: file.path,
+              contract: items.filter((item) => item.risk.riskClass === "contract").length,
+            },
+          ];
+    });
+};
+
+/**
+ * The map's sections: each file once, with all its parts in the file's order, mechanical ones in
+ * place, the files in `fileOrder` (the call graph's) and any it leaves out by path after them.
+ * `group` makes the sections from those files; without it, they're one section in that order.
  */
 export const mapSections = (
   analysis: Analysis,
   fileOrder: readonly string[],
   index: PartIndex,
+  group: (files: readonly GroupFile[]) => readonly FileSection[] = byCalls,
 ): readonly MapSection[] => {
-  const rank = new Map(fileOrder.map((path, at) => [path, at]));
-  const rankOf = (file: FileChange) => rank.get(file.path) ?? fileOrder.length;
-  const files = [...analysis.files].sort((a, b) => rankOf(a) - rankOf(b) || byPath(a, b));
-  const partIds = files
-    .flatMap((file) => index.partsInFile(file))
-    .filter((id) => !index.mechanical.has(id));
-  return [{ kind: "files", partIds: withMechanicalInPlace(partIds, index) }];
+  const byFilePath = new Map(analysis.files.map((file) => [file.path, file]));
+  return group(mapFiles(analysis, fileOrder, index)).map((section) => {
+    const partIds = section.paths
+      .flatMap((path) => {
+        const file = byFilePath.get(path);
+        return file === undefined ? [] : index.partsInFile(file);
+      })
+      .filter((id) => !index.mechanical.has(id));
+    return {
+      kind: "files",
+      key: section.key,
+      title: section.title,
+      detail: section.detail,
+      partIds: withMechanicalInPlace(partIds, index),
+    };
+  });
 };
 
 /** A run of the map's parts from one file: one card. */
@@ -285,7 +328,7 @@ export const gapBetween = (previous: PartId, next: PartId, index: PartIndex): Ga
   return { lines: Math.max(start - end - 1, 0), parts };
 };
 
-export const sectionKey = (section: MapSection): string => section.kind;
+export const sectionKey = (section: MapSection): string => section.key;
 
 /** Where the decisions show: each as a card on one hunk, linked from its other hunks. */
 export interface DecisionPlaces {
@@ -554,3 +597,28 @@ export const commentsInParts = (
   }
   return byPart;
 };
+
+/** A contract part in the index above the map. */
+export interface ContractRow {
+  readonly partId: PartId;
+  readonly path: string;
+  /** The definitions it changes, or its lines when it names none. */
+  readonly what: string;
+  /** Its contract reason, without the path rules' reasons unless they're all it has. */
+  readonly reason: string;
+}
+
+/** Every contract part to review, in `order` (the map's). */
+export const contractRows = (order: readonly PartId[], index: PartIndex): ContractRow[] =>
+  index
+    .items(order)
+    .filter((item) => !index.mechanical.has(item.id) && item.risk.riskClass === "contract")
+    .map((item) => ({
+      partId: item.id,
+      path: item.file.path,
+      what:
+        item.place !== null && item.place.definitions.length > 0
+          ? item.place.definitions.join(", ")
+          : hunkLocation(item.hunk),
+      reason: partReason(item.risk.reason, item.file) || item.risk.reason,
+    }));

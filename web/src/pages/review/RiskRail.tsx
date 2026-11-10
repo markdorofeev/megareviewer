@@ -211,6 +211,7 @@ export const RiskRail = ({
       <ol className="rail-steps">
         {sections.map((section) => (
           <li key={sectionKey(section)}>
+            {section.title !== null && <h3 className="rail-section-title">{section.title}</h3>}
             <ul className="rail-bars">
               {fileGroups(section.partIds, index).map((group) => {
                 const [first, ...more] = group.partIds;

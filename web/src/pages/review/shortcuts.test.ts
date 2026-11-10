@@ -63,6 +63,14 @@ describe("shortcutFor", () => {
     }
   });
 
+  it("works from a checkbox or radio button, which take no typing", () => {
+    for (const type of ["checkbox", "radio"]) {
+      const input = document.createElement("input");
+      input.type = type;
+      expect(press("n", "map", input)).toBe("next-file");
+    }
+  });
+
   it("leaves browser shortcuts alone", () => {
     expect(press("r", "map", document.body, { metaKey: true })).toBeNull();
     expect(press("c", "map", document.body, { ctrlKey: true })).toBeNull();

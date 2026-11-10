@@ -134,6 +134,7 @@ Each stage measures itself on [delphi-code #2](https://github.com/markdorofeev/d
 |---|---|---|---|
 | 32 | [Review readability and flow grouping](32-review-readability.md) | 31 | Responsive review layout, compact card navigation, flow grouping and risk-rule improvements |
 | 33 | [One card per file in a step](33-file-cards.md) | 32 | Map cards in `web/src/pages/review/` and `web/src/diff/HunkCard.tsx` |
+| 34 | [Grouping the map's files](34-map-grouping.md) | 33 | Grouping and the contract index in `web/src/pages/review/` |
 
 Implement the responsive layout first, navigation simplification second, and measured analysis changes last. The first two changes work with existing cached analyses; analysis changes require a pipeline version bump.
 

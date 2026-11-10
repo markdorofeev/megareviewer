@@ -512,6 +512,74 @@ describe("map", () => {
   });
 });
 
+describe("grouping the map", () => {
+  const sectionTitles = () =>
+    [...mainArea().querySelectorAll(".map-section-title")].map((title) => title.textContent);
+  const option = (name: string) => screen.getByRole("radio", { name });
+
+  it("switches between calls and folders, and remembers the choice", async () => {
+    const first = renderReview();
+    await loaded();
+    expect(screen.getByRole("radiogroup", { name: "Group files by" })).toBeTruthy();
+    expect(option("Calls")).toHaveProperty("checked", true);
+    expect(sectionTitles()).toEqual([]);
+
+    await userEvent.click(option("Folders"));
+    expect(sectionTitles()).toEqual(["Top level", "src/routes", "src/services"]);
+    expect(
+      within(screen.getByRole("region", { name: "src/routes" })).getByText("1 file · 1 contract"),
+    ).toBeTruthy();
+    // The rail heads its files with the same sections.
+    expect(
+      [...rail().querySelectorAll(".rail-section-title")].map((title) => title.textContent),
+    ).toEqual(["Top level", "src/routes", "src/services"]);
+    expect(fileCards()).toEqual([
+      "package.json",
+      "src/routes/orders.ts",
+      "src/services/receipts.ts",
+    ]);
+    await userEvent.keyboard("n");
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.dependency}`);
+    await userEvent.keyboard("n");
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.routeImports}`);
+    expect(window.localStorage.getItem("megareviewer:map-grouping")).toBe('"folders"');
+    first.unmount();
+
+    renderReview();
+    await loaded();
+    expect(option("Folders")).toHaveProperty("checked", true);
+    expect(sectionTitles()).toEqual(["Top level", "src/routes", "src/services"]);
+  });
+
+  it("lists the contract parts above the map, and goes to one", async () => {
+    renderReview();
+    await loaded();
+    const list = screen.getByRole("navigation", { name: "Contract changes" });
+    const rows = within(list).getAllByRole("button");
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "orders.tslines 10–24New public endpoint that reads orders by ID.",
+      "package.jsonlines 11–18Adds a runtime dependency.",
+    ]);
+    await userEvent.click(within(list).getByRole("button", { name: /^orders\.ts/ }));
+    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptRoute}`);
+    expect(focusedLabel()).toMatch(ROUTE);
+  });
+
+  it("hides the contract list when nothing is contract", async () => {
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          risk: analysis.risk.map((risk) => ({ ...risk, riskClass: "logic" as const })),
+        },
+      },
+    });
+    await loaded();
+    expect(screen.queryByRole("navigation", { name: "Contract changes" })).toBeNull();
+  });
+});
+
 /** IntersectionObserver for tests: records what it observes, and reports what a test says. */
 class FakeObserver {
   static all: FakeObserver[] = [];

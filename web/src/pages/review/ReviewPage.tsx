@@ -21,15 +21,18 @@ import {
 import { type CallMark, chipPlan } from "./chips.ts";
 import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
+import { groupFiles, parseGrouping } from "./grouping.ts";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { JumpPalette } from "./JumpPalette.tsx";
+import { ContractIndex, GroupingToggle } from "./MapGuide.tsx";
 import { callKey, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
 import {
   callerFiles,
   callsByLine,
   commentsInParts,
+  contractRows,
   decisionPlaces,
   fileGroups,
   type Layout,
@@ -197,12 +200,14 @@ const Review = ({
     () => filesInCallOrder(fileOverview(analysis, steps)),
     [analysis, steps],
   );
+  const [grouping, setGrouping] = useStoredState("map-grouping", "calls", parseGrouping);
   const sections = useMemo(
-    () => mapSections(analysis, callOrder, index),
-    [analysis, callOrder, index],
+    () => mapSections(analysis, callOrder, index, (files) => groupFiles(grouping, files)),
+    [analysis, callOrder, index, grouping],
   );
   const order = useMemo(() => sections.flatMap((section) => section.partIds), [sections]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
+  const contracts = useMemo(() => contractRows(order, index), [order, index]);
   const mechanical = mechanicalCount(trailing);
   const totals = useMemo(() => riskTotals(analysis, index), [analysis, index]);
   const contractHunks = useMemo(
@@ -243,23 +248,20 @@ const Review = ({
     false,
     parseBoolean,
   );
-  // Chips count within what the map shows, so a hidden hunk's chip doesn't make a mention.
+  // Chips count within what the map shows, so a hidden hunk's chip doesn't make a mention. The map
+  // is one list to them, so a grouping's sections don't each open their first calls again.
   const plan = useMemo(
     () =>
-      chipPlan(
-        sections.map((section) => section.partIds.filter((id) => !contractOnly || isContract(id))),
-        calls,
-        (id, line) => {
-          const found = index.parts.get(id);
-          const text = found?.hunk.lines.find(
-            (one) => one.kind !== "del" && one.newLine === line,
-          )?.text;
-          return found === undefined || text === undefined
-            ? undefined
-            : { text, path: found.file.path };
-        },
-      ),
-    [sections, calls, index, contractOnly, isContract],
+      chipPlan([order.filter((id) => !contractOnly || isContract(id))], calls, (id, line) => {
+        const found = index.parts.get(id);
+        const text = found?.hunk.lines.find(
+          (one) => one.kind !== "del" && one.newLine === line,
+        )?.text;
+        return found === undefined || text === undefined
+          ? undefined
+          : { text, path: found.file.path };
+      }),
+    [order, calls, index, contractOnly, isContract],
   );
   const callers = useMemo(() => callerFiles(callHints, index, order), [callHints, index, order]);
   const callersOf = useCallback((id: PartId) => callers.get(id) ?? NO_CALLERS, [callers]);
@@ -811,6 +813,9 @@ const Review = ({
             <kbd>⌘K</kbd>
           </button>
           {layout === "map" && (
+            <GroupingToggle grouping={grouping} onChange={(next) => setGrouping(() => next)} />
+          )}
+          {layout === "map" && (
             <button
               type="button"
               className="button rail-toggle"
@@ -822,6 +827,9 @@ const Review = ({
             </button>
           )}
         </div>
+      )}
+      {analysis.stages.prep === "done" && layout === "map" && (
+        <ContractIndex rows={contracts} onGo={(id) => showHunk(id)} />
       )}
       {analysis.stages.prep !== "done" ? (
         <section className="main-area" aria-busy={analysis.status === "running"}>

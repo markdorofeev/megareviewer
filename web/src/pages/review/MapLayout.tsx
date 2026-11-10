@@ -551,7 +551,20 @@ export const MapLayout = ({
         if (contractOnly && ids.length === 0) return null;
         const key = sectionKey(section);
         return (
-          <section key={key} className="map-step" aria-label="Files" tabIndex={-1}>
+          <section
+            key={key}
+            className="map-step"
+            aria-label={section.title ?? "Files"}
+            tabIndex={-1}
+          >
+            {section.title !== null && (
+              <header className="map-section-header">
+                <h2 className="map-section-title">{section.title}</h2>
+                {section.detail !== null && (
+                  <span className="map-section-detail muted">{section.detail}</span>
+                )}
+              </header>
+            )}
             {fileGroups(ids, deps.index).map((group) => {
               const part = (id: PartId, inFile: boolean) => (
                 <MapPart

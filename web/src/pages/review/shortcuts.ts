@@ -102,9 +102,14 @@ const ACTIONS: Readonly<Record<Layout, ReadonlyMap<string, ShortcutAction>>> = {
   overview: actionsFor("overview"),
 };
 
+/** A checkbox or radio button takes no typing, so shortcuts still work while one has the focus. */
+const CHOICES = new Set(["checkbox", "radio"]);
+
 export const isTextField = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
-  (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+  (target.isContentEditable ||
+    ["TEXTAREA", "SELECT"].includes(target.tagName) ||
+    (target instanceof HTMLInputElement && !CHOICES.has(target.type)));
 
 /**
  * The action a key press asks for in this layout, or null. Typing in a text field never triggers
