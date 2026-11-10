@@ -1,4 +1,5 @@
 import {
+  type CallGraphHint,
   type FileChange,
   type Hunk,
   type HunkId,
@@ -10,10 +11,12 @@ import {
 } from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
+  credentialCalls,
   type Decision,
   type DecisionId,
   type HunkComment,
   pathReasons,
+  REMOVES_TESTS,
   type RiskAssessment,
   ruleReasons,
   type TourStep,
@@ -67,6 +70,32 @@ export const partReason = (reason: string, file: FileChange): string => {
     .split("; ")
     .filter((one) => !ofFile.has(one))
     .join("; ");
+};
+
+/**
+ * What a contract part's divider says: only what the code on screen doesn't. The rules' reasons
+ * mostly quote it (the name a part defines, the route it declares, the call it adds), so from them
+ * it keeps the credential names the part calls but its file doesn't define, with the file that
+ * does, and a net loss of tests. The model's reason explains rather than quotes, so it stays,
+ * without the path rules' reasons the file's header gives. Empty when there's nothing to add.
+ */
+export const dividerNote = (
+  item: PartItem,
+  callGraph: readonly CallGraphHint[],
+  index: PartIndex,
+): string => {
+  if (item.risk.riskClass !== "contract") return "";
+  if (item.risk.source !== "rule") return partReason(item.risk.reason, item.file);
+  const calls = credentialCalls(item.hunk, item.file).map(({ name, handles }) => {
+    const target = callGraph.find(
+      (hint) => hint.symbol === name && hunkIdOf(hint.fromPartId) === item.hunkId,
+    );
+    const [to] = target === undefined ? [] : index.partsOf(hunkIdOf(target.toPartId));
+    const where = to === undefined ? undefined : index.parts.get(to)?.file.path;
+    return `Calls ${name} in ${where ?? "another file"}, which handles ${handles}`;
+  });
+  const removes = item.risk.reason.split("; ").includes(REMOVES_TESTS) ? ["Removes tests"] : [];
+  return [...calls, ...removes].join("; ");
 };
 
 /** A part as the page shows it: its lines as a hunk, its file, its hunk's risk and proofs. */

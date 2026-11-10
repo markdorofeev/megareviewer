@@ -63,9 +63,12 @@ export {
 export { parsePullRequestUrl, pullRequestUrl } from "./pull-request-url.ts";
 export { RiskAssessment, RiskClass } from "./risk.ts";
 export {
+  type CredentialCall,
   classifyByRules,
+  credentialCalls,
   isTestFile,
   pathReasons,
+  REMOVES_TESTS,
   raiseByRules,
   ruleReasons,
 } from "./risk-rules.ts";

@@ -4,6 +4,7 @@ import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fi
 import {
   byTreePath,
   decisionPlaces,
+  dividerNote,
   gapBetween,
   mapFiles,
   mechanicalCount,
@@ -172,6 +173,71 @@ describe("a split part's risk", () => {
       ),
     };
     expect(partIndex(modelled).items([p.cache])[0]?.risk.reason).toBe("Whole hunk.");
+  });
+});
+
+describe("dividerNote", () => {
+  const index = partIndex(analysis);
+  const [route] = index.items([h.receiptRoute]);
+  if (route === undefined) throw new Error("no route");
+  /** The route part with these added lines, made contract by a rule or the model. */
+  const routeWith = (
+    texts: readonly string[],
+    reason: string,
+    source: "rule" | "model" = "rule",
+  ) => ({
+    ...route,
+    hunk: {
+      ...route.hunk,
+      lines: texts.map((text, at) => ({
+        kind: "add" as const,
+        oldLine: null,
+        newLine: at + 1,
+        text,
+        noNewlineAtEnd: false,
+      })),
+    },
+    risk: { ...route.risk, riskClass: "contract" as const, reason, source },
+  });
+  const hint = (symbol: string) => ({
+    fromPartId: h.receiptRoute,
+    toPartId: p.cache,
+    symbol,
+    line: 1,
+    use: "call" as const,
+  });
+
+  it("says nothing the part's own lines show: what it defines, its route", () => {
+    const item = routeWith(
+      ['@router.put("/accounts/{domain}/token")', "def save_account_token(domain):"],
+      "changes credential storage (save_account_token); changes a credential endpoint (PUT /accounts/{domain}/token)",
+    );
+    expect(dividerNote(item, [], index)).toBe("");
+  });
+
+  it("names the file a called credential name is defined in, or says it's elsewhere", () => {
+    const item = routeWith(
+      ["return app.forget_saved_token(domain)"],
+      "changes credential storage (forget_saved_token)",
+    );
+    expect(dividerNote(item, [hint("forget_saved_token")], index)).toBe(
+      "Calls forget_saved_token in src/services/receipts.ts, which handles credential storage",
+    );
+    expect(dividerNote(item, [], index)).toBe(
+      "Calls forget_saved_token in another file, which handles credential storage",
+    );
+  });
+
+  it("keeps a net loss of tests, and the model's reason", () => {
+    expect(dividerNote(routeWith(["x"], "removes tests"), [], index)).toBe("Removes tests");
+    expect(
+      dividerNote(routeWith(["x"], "Changes who can read a receipt.", "model"), [], index),
+    ).toBe("Changes who can read a receipt.");
+  });
+
+  it("says nothing of a logic part", () => {
+    const logic = { ...route, risk: { ...route.risk, riskClass: "logic" as const } };
+    expect(dividerNote(logic, [hint("forget_saved_token")], index)).toBe("");
   });
 });
 

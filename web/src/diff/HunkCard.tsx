@@ -171,6 +171,7 @@ export const HunkCard = memo(function HunkCard({
   onComment,
   afterHeader,
   inFile = false,
+  note,
 }: {
   /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
   readonly id?: PartId;
@@ -200,6 +201,11 @@ export const HunkCard = memo(function HunkCard({
    * risk is the color of a bar beside the lines.
    */
   readonly inFile?: boolean;
+  /**
+   * What the divider says of a contract part, when it isn't the risk's reason: only what the code
+   * doesn't show. Empty, no divider for it; the bar beside the lines still gives the reason.
+   */
+  readonly note?: string;
 }) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -227,8 +233,9 @@ export const HunkCard = memo(function HunkCard({
   const counts = lineCounts(hunk);
   // On a file's card the gutter numbers the lines, the code names what they define and the
   // card holds the file's other parts, so a part's divider shows only why it's contract, past what
-  // the file's header says. A part without a reason has none.
-  const showsReason = risk?.riskClass === "contract" && risk.reason !== "";
+  // the file's header and its own lines say. A part without such a reason has none.
+  const reason = note ?? risk?.reason ?? "";
+  const showsReason = risk?.riskClass === "contract" && reason !== "";
   const dividerShows = proofs.length > 0 || showsReason;
   const classes = [
     "hunk-card",
@@ -274,7 +281,7 @@ export const HunkCard = memo(function HunkCard({
               ✓ {proof.detail}
             </span>
           ))}
-          {showsReason && <span className="hunk-contract-reason model-text">{risk.reason}</span>}
+          {showsReason && <span className="hunk-contract-reason model-text">{reason}</span>}
           {!inFile && risk !== null && <RiskBadge risk={risk} />}
         </header>
       )}

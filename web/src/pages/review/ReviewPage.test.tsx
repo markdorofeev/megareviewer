@@ -134,7 +134,6 @@ const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
 const _RECEIPTS = /^src\/services\/receipts\.ts, lines 26–/;
 /** The retry and cache hunk's two parts. */
 const RETRY = /^src\/services\/receipts\.ts, lines 26–39$/;
-const CACHE = /^src\/services\/receipts\.ts, lines 40–50$/;
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
