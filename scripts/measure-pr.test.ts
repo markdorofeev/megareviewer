@@ -43,7 +43,7 @@ const cachedDatabase = (cachedPaths: readonly string[]) => {
 };
 
 describe("measure-pr", () => {
-  it("rebuilds the tour of a cached PR and counts its calls and chips", async () => {
+  it("rebuilds the tour of a cached PR and counts its calls", async () => {
     const paths = [...new Set([...Object.keys(baseFiles), ...Object.keys(headFiles)])];
     const { pullRequest: read, cached } = fromDatabase(cachedDatabase(paths), "a_1");
     expect(read).toEqual(pullRequest);
@@ -53,11 +53,10 @@ describe("measure-pr", () => {
     const found = counts(measured);
     expect(found.hunks).toBe(measured.files.flatMap((file) => file.hunks).length);
     expect(found.callHints).toBe(measured.callGraph.filter((hint) => hint.use === "call").length);
-    expect(found.chips + found.mentions).toBeLessThanOrEqual(found.callHints);
-    expect(found.chips).toBeGreaterThan(0);
+    expect(found.callHints).toBeGreaterThan(0);
     const printed = report(measured);
     expect(printed).toContain("Tour\n  1. [flow] ");
-    expect(printed).toContain(`  chips: ${found.chips}`);
+    expect(printed).toContain(`  callHints: ${found.callHints}`);
     // The overview's rows: the route's file above the service it imports and calls.
     expect(found.fileLinks).toBe(1);
     expect(printed).toContain(

@@ -37,17 +37,7 @@
   font-size: var(--text-xs);
 }
 
-.hunk-reviewed {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  cursor: pointer;
-}
-
 /* Under the header: the files whose code calls this hunk, and the uses outside the PR. */
-.hunk-callers,
 .hunk-outside {
   margin: 0;
   padding: var(--space-1) var(--space-3);
@@ -57,7 +47,6 @@
   line-height: 22px;
 }
 
-.hunk-callers .link-button,
 .hunk-outside .link-button {
   font-size: inherit;
 }
@@ -117,21 +106,6 @@
   user-select: none;
 }
 
-.hunk-link {
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-3);
-  background: transparent;
-  color: var(--color-accent);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  cursor: pointer;
-}
-
-.hunk-link:hover {
-  background: var(--color-surface-subtle);
-}
-
 /* Mechanical hunks among the changes to review: one quiet row each. */
 .collapsed-hunk {
   display: grid;
@@ -175,7 +149,6 @@
 }
 
 .hunk-heading,
-.hunk-part,
 .hunk-counts {
   min-width: 0;
   overflow: hidden;
@@ -193,53 +166,8 @@
   color: var(--color-danger);
 }
 
-.hunk-heading,
-.hunk-part {
+.hunk-heading {
   flex: 0 1 auto;
-}
-
-.hunk-part code {
-  color: var(--color-text);
-  font-family: var(--font-mono);
-}
-
-/* A part of a split hunk: which part it is and its neighbors, behind one quiet row. */
-.hunk-related {
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-subtle);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-.hunk-related > summary {
-  padding: var(--space-1) var(--space-3);
-  cursor: pointer;
-}
-
-.hunk-part-of {
-  margin: 0;
-  padding: 0 var(--space-3) var(--space-1);
-}
-
-.part-fold {
-  display: block;
-  width: 100%;
-  padding: var(--space-1) var(--space-3);
-  border: 0;
-  border-top: 1px solid var(--color-border);
-  background: transparent;
-  color: inherit;
-  font-size: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.part-fold:hover:not(:disabled) {
-  color: var(--color-accent);
-}
-
-.part-fold code {
-  font-family: var(--font-mono);
 }
 
 .hunk-proof {
@@ -527,12 +455,6 @@
   text-decoration: underline;
 }
 
-/* Under a line, e.g. the calls it makes. */
-.line-below td {
-  padding: 0;
-  background: var(--color-surface);
-}
-
 /* A part on a file's card: no box of its own, a one-line divider, and its risk as a bar. */
 .hunk-card.in-file {
   border: 0;
@@ -559,33 +481,4 @@
 
 .part-risk.risk-contract {
   background: var(--risk-contract-bg);
-}
-
-.hunk-callers.inline {
-  padding: 0;
-  border: 0;
-  line-height: inherit;
-}
-
-.hunk-card.in-file .hunk-related {
-  border: 0;
-  background: none;
-}
-
-.hunk-card.in-file .hunk-related > summary {
-  padding: 0;
-}
-
-.hunk-card.in-file .hunk-related[open] {
-  flex-basis: 100%;
-}
-
-/* The part's links sit at the end of its line. */
-.hunk-card.in-file .hunk-header > .hunk-callers.inline,
-.hunk-card.in-file .hunk-header > .hunk-related {
-  margin-left: auto;
-}
-
-.hunk-card.in-file .hunk-header > .hunk-callers.inline + .hunk-related {
-  margin-left: 0;
 }

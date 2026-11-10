@@ -12,63 +12,39 @@ import {
 import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from "../../api/index.ts";
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
-import {
-  type CallerFile,
-  commentPlace,
-  type LineComment,
-  type LinePlace,
-} from "../../diff/index.ts";
-import { type CallMark, chipPlan } from "./chips.ts";
+import { commentPlace, type LineComment, type LinePlace } from "../../diff/index.ts";
 import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
-import { groupFiles, parseGrouping } from "./grouping.ts";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
-import { JumpPalette } from "./JumpPalette.tsx";
-import { ContractIndex, GroupingToggle } from "./MapGuide.tsx";
-import { callKey, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
+import { MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
 import {
-  callerFiles,
-  callsByLine,
   commentsInParts,
-  contractRows,
   decisionPlaces,
-  fileGroups,
   type Layout,
-  mapSections,
-  markReviewed,
+  mapFiles,
   mechanicalCount,
   parseLayout,
-  partHeaders,
   partIndex,
-  reviewedParts,
-  reviewOrder,
-  riskTotals,
   tourSteps,
   trailingProofs,
 } from "./model.ts";
 import { Overview } from "./Overview.tsx";
-import { fileOverview, filesInCallOrder, type OverviewNode } from "./overview.ts";
+import { fileOverview, type OverviewNode } from "./overview.ts";
 import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
-import { type PaletteTarget, paletteItems } from "./palette.ts";
 import { ReviewHeader } from "./ReviewHeader.tsx";
-import { type RailTarget, RiskRail } from "./RiskRail.tsx";
 import { ShortcutsDialog } from "./ShortcutsDialog.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
 import { type ShortcutAction, useShortcuts } from "./shortcuts.ts";
-import { parseBoolean, parseStrings, useStoredState } from "./storage.ts";
+import { useStoredState } from "./storage.ts";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useVerdicts } from "./useVerdicts.ts";
 
-const NONE: readonly string[] = [];
 const NO_COMMENTS: readonly HunkComment[] = [];
 const parseHunkComments = (stored: unknown): readonly HunkComment[] | undefined =>
   HunkComment.array().safeParse(stored).data;
-
-/** Reviewed marks kept across analyses, most recent last; older ones are forgotten. */
-const MAX_REVIEWED = 5_000;
 
 export const ReviewPage = ({ analysisId }: { readonly analysisId: AnalysisId }) => {
   // A retry, or a re-analysis of an unchanged PR, runs again under the same ID. A new run starts
@@ -120,7 +96,6 @@ const ReviewSkeleton = () => (
     <div className="skeleton skeleton-title" />
     <div className="review-body map">
       <div className="skeleton skeleton-main" />
-      <div className="skeleton skeleton-rail" />
     </div>
   </div>
 );
@@ -156,14 +131,7 @@ const CheckoutNote = ({ analysis }: { readonly analysis: AnalysisView["analysis"
   );
 };
 
-const NO_CALLERS: readonly CallerFile[] = [];
 const NO_UNCHANGED: readonly UnchangedCallers[] = [];
-
-/** What a hunk's marks show, for its signature. */
-const marksSignature = (lines: ReadonlyMap<number, readonly CallMark[]> | undefined): string =>
-  [...(lines ?? [])]
-    .map(([line, marks]) => `${line}${marks.map((mark) => mark.kind[0] + mark.symbol).join()}`)
-    .join(";");
 
 // A number per analysis object, so a hunk's signature changes when the analysis does.
 const epochs = new WeakMap<object, number>();
@@ -195,46 +163,14 @@ const Review = ({
 
   const index = useMemo(() => partIndex(analysis), [analysis]);
   const steps = useMemo(() => tourSteps(analysis, index), [analysis, index]);
-  // The map reads the files in the overview's order, as it lays them out before a group is opened.
-  const callOrder = useMemo(
-    () => filesInCallOrder(fileOverview(analysis, steps)),
-    [analysis, steps],
-  );
-  const [grouping, setGrouping] = useStoredState("map-grouping", "calls", parseGrouping);
-  const sections = useMemo(
-    () => mapSections(analysis, callOrder, index, (files) => groupFiles(grouping, files)),
-    [analysis, callOrder, index, grouping],
-  );
-  const order = useMemo(() => sections.flatMap((section) => section.partIds), [sections]);
+  const files = useMemo(() => mapFiles(analysis, index), [analysis, index]);
+  const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
-  const contracts = useMemo(() => contractRows(order, index), [order, index]);
   const mechanical = mechanicalCount(trailing);
-  const totals = useMemo(() => riskTotals(analysis, index), [analysis, index]);
-  const contractHunks = useMemo(
-    () =>
-      new Set(
-        analysis.risk.flatMap((risk) => (risk.riskClass === "contract" ? [risk.hunkId] : [])),
-      ),
-    [analysis.risk],
-  );
-  const isContract = useCallback((id: PartId) => contractHunks.has(hunkIdOf(id)), [contractHunks]);
   const places = useMemo(
     () => decisionPlaces(analysis.decisions, order, index),
     [analysis.decisions, order, index],
   );
-  const restingOn = useMemo(() => {
-    const on = new Map<PartId, Decision[]>();
-    for (const decision of analysis.decisions)
-      for (const id of new Set(decision.hunkIds.flatMap(index.partsOf)))
-        on.set(id, [...(on.get(id) ?? []), decision]);
-    return on;
-  }, [analysis.decisions, index]);
-  // A type use groups code in the tour; the reader follows calls and requests.
-  const callHints = useMemo(
-    () => analysis.callGraph.filter((hint) => hint.use !== "type"),
-    [analysis.callGraph],
-  );
-  const calls = useMemo(() => callsByLine(callHints, index), [callHints, index]);
   // Groups of files the reviewer opened in the overview, when it groups them by directory.
   const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([]);
   const overview = useMemo(
@@ -243,28 +179,6 @@ const Review = ({
   );
 
   const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);
-  const [contractOnly, setContractOnly] = useStoredState(
-    `contract-only:${analysisId}`,
-    false,
-    parseBoolean,
-  );
-  // Chips count within what the map shows, so a hidden hunk's chip doesn't make a mention. The map
-  // is one list to them, so a grouping's sections don't each open their first calls again.
-  const plan = useMemo(
-    () =>
-      chipPlan([order.filter((id) => !contractOnly || isContract(id))], calls, (id, line) => {
-        const found = index.parts.get(id);
-        const text = found?.hunk.lines.find(
-          (one) => one.kind !== "del" && one.newLine === line,
-        )?.text;
-        return found === undefined || text === undefined
-          ? undefined
-          : { text, path: found.file.path };
-      }),
-    [order, calls, index, contractOnly, isContract],
-  );
-  const callers = useMemo(() => callerFiles(callHints, index, order), [callHints, index, order]);
-  const callersOf = useCallback((id: PartId) => callers.get(id) ?? NO_CALLERS, [callers]);
   const unchanged = useMemo(() => {
     const byPart = new Map<PartId, UnchangedCallers[]>();
     for (const one of analysis.unchangedCallers) {
@@ -273,44 +187,24 @@ const Review = ({
     return byPart;
   }, [analysis.unchangedCallers]);
   const unchangedOf = useCallback((id: PartId) => unchanged.get(id) ?? NO_UNCHANGED, [unchanged]);
-  const [railOpen, setRailOpen] = useState(false);
   const [focusedHunkId, setFocusedHunkId] = useState<PartId | null>(null);
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
   const overviewAt = useRef<string | null>(null);
   // The overview node the map was opened from, for Esc to go back to.
   const [openedFrom, setOpenedFrom] = useState<string | null>(null);
-  // Where each "called by" link followed in the map came from, for Esc to go back.
-  const [trail, setTrail] = useState<readonly PartId[]>([]);
   const [selectedDecision, setSelectedDecision] = useState<DecisionId | null>(null);
   // The hunks of a decision or mismatch the reviewer went to.
   const [highlight, setHighlight] = useState<ReadonlySet<PartId>>(new Set());
   const [mismatchAt, setMismatchAt] = useState(0);
-  const [openCalls, setOpenCalls] = useState<ReadonlySet<string>>(new Set());
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
-  // After n or p, the hunk j goes to: the step's first.
-  const [startAt, setStartAt] = useState<PartId | null>(null);
-  const inView = useRef<readonly PartId[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [jumping, setJumping] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const commentField = useRef<HTMLTextAreaElement | null>(null);
   const setCommentField = useCallback((field: HTMLTextAreaElement | null) => {
     commentField.current = field;
   }, []);
-
-  // Kept by part ID, not by analysis: a part a new push didn't change stays reviewed.
-  const [reviewedList, setReviewedList] = useStoredState("reviewed-hunks", NONE, parseStrings);
-  const reviewed = useMemo(() => reviewedParts(reviewedList, index), [reviewedList, index]);
-  const toReview = useMemo(() => reviewOrder(sections, index), [sections, index]);
-  const setReviewed = useCallback(
-    (id: PartId, value: boolean) =>
-      setReviewedList((previous) => markReviewed(previous, id, value, index).slice(-MAX_REVIEWED)),
-    [setReviewedList, index],
-  );
-  const headers = useMemo(() => partHeaders(index), [index]);
-  const partHeaderOf = useCallback((id: PartId) => headers.get(id) ?? null, [headers]);
 
   // Comments on hunk lines are drafts in this browser until they're published with the review.
   const [hunkComments, setHunkComments] = useStoredState(
@@ -349,15 +243,8 @@ const Review = ({
 
   const scrollTo = (id: string) =>
     setScrollRequest((previous) => ({ id, n: (previous?.n ?? 0) + 1 }));
-  const shownInMap = (id: PartId) => !contractOnly || isContract(id);
-  /** The hunk the reviewer is on: the focused one in the map if it's in view, else the first in view. */
-  const currentHunk = (): PartId | null => {
-    if (layout === "overview") return null;
-    const visible = inView.current;
-    if (focusedHunkId !== null && (visible.length === 0 || visible.includes(focusedHunkId)))
-      return focusedHunkId;
-    return visible[0] ?? focusedHunkId;
-  };
+  /** The part the reviewer is on: the one last focused in the map. */
+  const currentHunk = (): PartId | null => (layout === "overview" ? null : focusedHunkId);
 
   /** A decision's card goes with the hunk the reviewer is on, for a, r and c. */
   const focusHunk = useCallback(
@@ -385,7 +272,6 @@ const Review = ({
       if (path !== undefined) focusInOverview(path);
       return;
     }
-    if (!shownInMap(id)) setContractOnly(() => false);
     scrollTo(order.includes(id) ? hunkAnchor(id) : MECHANICAL_ANCHOR);
   };
   const goToDecision = (id: DecisionId) => {
@@ -395,7 +281,6 @@ const Review = ({
     if (layout === "overview") {
       if (cardHunk !== undefined) showHunk(cardHunk);
     } else {
-      if (cardHunk !== undefined && !shownInMap(cardHunk)) setContractOnly(() => false);
       scrollTo(decisionAnchor(id));
     }
     setSelectedDecision(id);
@@ -411,16 +296,6 @@ const Review = ({
     const [first] = ids;
     if (first !== undefined) showHunk(first);
   };
-  const goToMechanical = () => {
-    if (contractOnly) setContractOnly(() => false);
-    scrollTo(MECHANICAL_ANCHOR);
-  };
-  const follow = (id: PartId) => {
-    const from = currentHunk();
-    if (from !== null) setTrail((previous) => [...previous, from]);
-    showHunk(id);
-  };
-
   const openOverview = () => {
     const current = currentHunk();
     setLayout(() => "overview");
@@ -449,45 +324,20 @@ const Review = ({
     setLayout(() => "map");
   };
 
-  const mapItems = order.filter(shownInMap);
-  const moveHunk = (step: 1 | -1) => {
-    if (mapItems.length === 0) return;
-    const at = focusedHunkId === null ? -1 : mapItems.indexOf(focusedHunkId);
-    const from = startAt ?? inView.current.find(shownInMap) ?? null;
-    const base = from === null ? -1 : mapItems.indexOf(from);
-    const next =
-      at !== -1
-        ? at + step
-        : base === -1
-          ? step === 1
-            ? 0
-            : mapItems.length - 1
-          : step === 1
-            ? base
-            : base - 1;
-    setStartAt(null);
-    const target = mapItems[Math.min(Math.max(next, 0), mapItems.length - 1)];
-    if (target !== undefined) scrollTo(hunkAnchor(target));
-  };
-  /** The first part of the next or previous file on the map. */
+  /**
+   * Goes to the next or previous file's card: from the card holding the focus, or else from where
+   * the window is scrolled to.
+   */
   const moveFile = (direction: 1 | -1) => {
-    const files = fileGroups(mapItems, index);
-    const current = currentHunk() ?? startAt;
-    const at = files.findIndex((group) => current !== null && group.partIds.includes(current));
-    const next = files[at === -1 ? (direction === 1 ? 0 : files.length - 1) : at + direction];
-    const [first] = next?.partIds ?? [];
-    setStartAt(null);
-    if (first !== undefined) scrollTo(hunkAnchor(first));
-  };
-  /** The next or previous hunk to review that isn't marked reviewed. */
-  const goToUnreviewed = (direction: 1 | -1) => {
-    const list = toReview.filter(shownInMap);
-    const current = currentHunk();
-    const at = current === null ? (direction === 1 ? -1 : list.length) : list.indexOf(current);
-    for (let i = at + direction; i >= 0 && i < list.length; i += direction) {
-      const id = list[i];
-      if (id !== undefined && !reviewed.has(id)) return showHunk(id);
-    }
+    const cards = [...document.querySelectorAll<HTMLElement>(".main-area.map .file-card")];
+    const focused = cards.findIndex((card) => card.contains(document.activeElement));
+    const target =
+      focused !== -1
+        ? cards[focused + direction]
+        : direction === 1
+          ? cards.find((card) => card.getBoundingClientRect().top > 1)
+          : cards.findLast((card) => card.getBoundingClientRect().top < -1);
+    if (target !== undefined) scrollTo(target.id);
   };
 
   const toggleVerdict = (id: DecisionId, verdict: "approved" | "rejected") => {
@@ -495,56 +345,18 @@ const Review = ({
     const current = verdicts.draftOf(id).verdict;
     verdicts.setVerdict(id, current === verdict ? "pending" : verdict);
   };
-  const toggleCall = useCallback(
-    (key: string) =>
-      setOpenCalls((previous) => {
-        const next = new Set(previous);
-        if (!next.delete(key)) next.add(key);
-        return next;
-      }),
-    [],
-  );
-
   const onShortcut = (action: ShortcutAction) => {
     const current = currentHunk();
     switch (action) {
-      case "next-hunk":
-        return moveHunk(1);
-      case "previous-hunk":
-        return moveHunk(-1);
       case "next-file":
         return moveFile(1);
       case "previous-file":
         return moveFile(-1);
-      case "open-call": {
-        // The first chip opens in place; with only mentions, the first goes to its hunk.
-        const marks = [...(current === null ? [] : (plan.get(current) ?? []))]
-          .sort(([a], [b]) => a - b)
-          .flatMap(([, onLine]) => onLine);
-        const chip = marks.find((mark) => mark.kind === "chip")?.calls[0];
-        if (current !== null && chip !== undefined) return toggleCall(callKey([current], chip));
-        const mention = marks[0]?.calls[0];
-        if (mention !== undefined) follow(mention.toPartId);
-        return;
-      }
       case "approve":
         if (selectedDecision !== null) toggleVerdict(selectedDecision, "approved");
         return;
       case "reject":
         if (selectedDecision !== null) toggleVerdict(selectedDecision, "rejected");
-        return;
-      case "toggle-reviewed":
-        if (current !== null && !index.mechanical.has(current)) {
-          setReviewed(current, !reviewed.has(current));
-          moveHunk(1);
-        }
-        return;
-      case "next-unreviewed":
-        return goToUnreviewed(1);
-      case "previous-unreviewed":
-        return goToUnreviewed(-1);
-      case "jump":
-        setJumping(true);
         return;
       case "toggle-layout":
         return switchLayout();
@@ -563,12 +375,7 @@ const Review = ({
       }
       case "escape": {
         if (highlight.size > 0) return setHighlight(new Set());
-        const last = trail.at(-1);
-        if (layout !== "map") return;
-        if (last !== undefined) {
-          setTrail((previous) => previous.slice(0, -1));
-          showHunk(last);
-        } else if (openedFrom !== null) {
+        if (layout === "map" && openedFrom !== null) {
           // Back to the overview, on the file the map was opened from.
           setLayout(() => "overview");
           setOverviewFocus((previous) => ({ key: openedFrom, n: (previous?.n ?? 0) + 1 }));
@@ -581,7 +388,7 @@ const Review = ({
         return;
     }
   };
-  useShortcuts(!publishing && !showShortcuts && !jumping && !showDetails, layout, onShortcut);
+  useShortcuts(!publishing && !showShortcuts && !showDetails, layout, onShortcut);
 
   const prUrl = analysis.pullRequest?.url ?? pullRequestUrl(analysis.key.ref);
   const reanalyze = useMutation(client.startAnalysis);
@@ -632,22 +439,17 @@ const Review = ({
     );
   };
   // Map cards render again only when their signature changes, so their handlers call the latest.
-  const latest = useRef({ follow, goToDecision });
-  latest.current = { follow, goToDecision };
+  const latest = useRef({ goToDecision });
+  latest.current = { goToDecision };
   const stable = useMemo(
-    () => ({
-      follow: (id: PartId) => latest.current.follow(id),
-      goToDecision: (id: DecisionId) => latest.current.goToDecision(id),
-    }),
+    () => ({ goToDecision: (id: DecisionId) => latest.current.goToDecision(id) }),
     [],
   );
   const signatureOf = (id: PartId): string => {
     const parts: unknown[] = [
       epochOf(analysis),
       readOnly,
-      reviewed.has(id),
       highlight.has(id),
-      marksSignature(plan.get(id)),
       openComment?.partId === id ? `${openComment.place.side}${openComment.place.line}` : "",
       ...commentsOf(id).map((comment) => `${comment.side}${comment.line}${comment.body}`),
     ];
@@ -656,23 +458,11 @@ const Review = ({
       parts.push(decision.id, draft.verdict, draft.comment, verdicts.statusOf(decision.id));
       parts.push(selectedDecision === decision.id);
     }
-    // Hunks opened from this one's calls show their own marks.
-    const opened = [...openCalls].filter(
-      (key) => key.startsWith(`${id}@`) || key.startsWith(`${id}>`),
-    );
-    if (opened.length > 0) parts.push(...opened, ...reviewedList, ...highlight);
     return parts.join("\u0000");
   };
   const deps: HunkDeps = {
     index,
-    calls,
-    plan,
-    callersOf,
     unchangedOf,
-    onFollow: stable.follow,
-    reviewed,
-    onReviewed: setReviewed,
-    partHeaderOf,
     highlighted: highlight,
     commentsOf,
     openComment,
@@ -699,31 +489,6 @@ const Review = ({
       )}
     </>
   );
-
-  const items = useMemo(() => paletteItems(analysis, index), [analysis, index]);
-  const pick = (target: PaletteTarget) => {
-    setJumping(false);
-    switch (target.kind) {
-      case "decision":
-        return goToDecision(target.decisionId);
-      case "mismatch":
-        return goToMismatch(target.index);
-      case "hunk":
-        setHighlight(new Set());
-        return showHunk(target.partId);
-      case "mechanical":
-        if (layout !== "map") setLayout(() => "map");
-        goToMechanical();
-        return;
-    }
-  };
-  const goFromRail = (target: RailTarget) => {
-    if (target.kind === "hunk") return showHunk(target.partId);
-    goToMechanical();
-  };
-  const onInView = useCallback((ids: readonly PartId[]) => {
-    inView.current = ids;
-  }, []);
 
   return (
     <div className={`review-page layout-${layout}`}>
@@ -802,35 +567,6 @@ const Review = ({
         </div>
       )}
 
-      {analysis.stages.prep === "done" && (
-        <div className="review-toolbar">
-          <button type="button" className="jump-field" onClick={() => setJumping(true)}>
-            <svg className="jump-field-icon" viewBox="0 0 16 16" aria-hidden="true">
-              <circle cx="7" cy="7" r="4.5" />
-              <path d="m10.5 10.5 3.5 3.5" />
-            </svg>
-            <span className="jump-field-text">Jump to a decision, file or symbol…</span>
-            <kbd>⌘K</kbd>
-          </button>
-          {layout === "map" && (
-            <GroupingToggle grouping={grouping} onChange={(next) => setGrouping(() => next)} />
-          )}
-          {layout === "map" && (
-            <button
-              type="button"
-              className="button rail-toggle"
-              aria-expanded={railOpen}
-              aria-controls="review-map-rail"
-              onClick={() => setRailOpen(!railOpen)}
-            >
-              {railOpen ? "Hide Map" : "Show Map"}
-            </button>
-          )}
-        </div>
-      )}
-      {analysis.stages.prep === "done" && layout === "map" && (
-        <ContractIndex rows={contracts} onGo={(id) => showHunk(id)} />
-      )}
       {analysis.stages.prep !== "done" ? (
         <section className="main-area" aria-busy={analysis.status === "running"}>
           <p className="muted">
@@ -840,39 +576,22 @@ const Review = ({
           </p>
         </section>
       ) : layout === "map" ? (
-        <div className={`review-body map${railOpen ? " rail-open" : ""}`}>
+        <div className="review-body map">
           <MapLayout
             analysis={analysis}
-            sections={sections}
+            files={files}
             deps={deps}
-            contractOnly={contractOnly}
-            isContract={isContract}
-            openCalls={openCalls}
-            onToggleCall={toggleCall}
             before={before}
             trailingProofs={trailing}
             mechanicalCount={mechanical}
             scrollRequest={scrollRequest}
             signatureOf={signatureOf}
           />
-          <RiskRail
-            sections={sections}
-            index={index}
-            decisionsOn={(id) => restingOn.get(id) ?? NO_DECISIONS}
-            totals={totals}
-            reviewed={reviewed}
-            contractOnly={contractOnly}
-            onContractOnly={(value) => setContractOnly(() => value)}
-            mechanicalCount={mechanical}
-            onGo={goFromRail}
-            onInView={onInView}
-          />
         </div>
       ) : (
         <div className="review-body overview-body">
           <Overview
             overview={overview}
-            reviewed={reviewed}
             focusKey={overviewFocus}
             onOpen={openNode}
             expandedGroups={expandedGroups}
@@ -903,7 +622,6 @@ const Review = ({
         />
       )}
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
-      {jumping && <JumpPalette items={items} onPick={pick} onClose={() => setJumping(false)} />}
       {showDetails && (
         <Dialog
           title={analysis.intent === null ? "What was asked" : "Intent"}

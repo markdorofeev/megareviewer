@@ -1,31 +1,13 @@
 import type { ReactNode } from "react";
 import type { PartId, UnchangedCallers } from "../../../../src/domain/diff/index.ts";
-import {
-  type CallerFile,
-  CollapsedHunk,
-  HunkCard,
-  type LineComment,
-  type LineMark,
-  type LinePlace,
-  type PartHeader,
-} from "../../diff/index.ts";
-import type { ChipPlan } from "./chips.ts";
-import { type Call, type PartIndex, partReason } from "./model.ts";
+import { CollapsedHunk, HunkCard, type LineComment, type LinePlace } from "../../diff/index.ts";
+import { type PartIndex, partReason } from "./model.ts";
 
 /** What a part on the page needs. */
 export interface HunkDeps {
   readonly index: PartIndex;
-  readonly calls: ReadonlyMap<PartId, ReadonlyMap<number, readonly Call[]>>;
-  /** Which of a hunk's calls are chips and which are mentions, at its own place in the map. */
-  readonly plan: ChipPlan;
-  readonly callersOf: (id: PartId) => readonly CallerFile[];
   /** Uses outside the pull request of what a part changes, read from a local checkout. */
   readonly unchangedOf: (id: PartId) => readonly UnchangedCallers[];
-  readonly onFollow: (id: PartId) => void;
-  readonly reviewed: ReadonlySet<PartId>;
-  readonly onReviewed: (id: PartId, reviewed: boolean) => void;
-  /** A split part's header and neighbors; null for a hunk that isn't split. */
-  readonly partHeaderOf: (id: PartId) => PartHeader | null;
   readonly highlighted: ReadonlySet<PartId>;
   readonly commentsOf: (id: PartId) => readonly LineComment[];
   readonly openComment: { readonly partId: PartId; readonly place: LinePlace } | null;
@@ -33,34 +15,14 @@ export interface HunkDeps {
   /** Without it, comments are read-only: the review is published. */
   readonly onComment?: (id: PartId, comment: LineComment) => void;
   readonly onFocusHunk: (id: PartId) => void;
-  /** The decision cards and links that go under a hunk's header. */
+  /** The decision cards and links that go under a part's divider. */
   readonly decisionsOn: (id: PartId) => ReactNode;
 }
 
 export const hunkAnchor = (id: PartId): string => `hunk-${id}`;
 
-/**
- * One hunk: a mechanical one collapsed with its proof, any other as its card. A nested hunk, opened
- * from a call, leaves its callers, decisions and comment boxes to the hunk's own place on the page.
- */
-export const HunkView = ({
-  id,
-  deps,
-  belowLine,
-  inLine,
-  focused = false,
-  nested = false,
-  inFile = false,
-}: {
-  readonly id: PartId;
-  readonly deps: HunkDeps;
-  readonly belowLine?: ReadonlyMap<number, ReactNode>;
-  readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
-  readonly focused?: boolean;
-  readonly nested?: boolean;
-  /** On a file's card, which names the file. */
-  readonly inFile?: boolean;
-}) => {
+/** One part on its file's card: a mechanical one collapsed with its proof, any other its lines. */
+export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: HunkDeps }) => {
   const [item] = deps.index.items([id]);
   if (item === undefined) return null;
   const { hunk, file, risk, proofs = [] } = item;
@@ -71,59 +33,26 @@ export const HunkView = ({
         file={file}
         risk={risk}
         proofs={proofs}
-        focused={focused}
-        onFocus={nested ? undefined : deps.onFocusHunk}
+        onFocus={deps.onFocusHunk}
       />
     );
   }
   return (
     <HunkCard
       id={id}
-      part={deps.partHeaderOf(id)}
       hunk={hunk}
       file={file}
-      // On a file's card, the file's header gives the path rules' reasons.
-      risk={inFile ? { ...risk, reason: partReason(risk.reason, file) } : risk}
+      // The file's header gives the path rules' reasons.
+      risk={{ ...risk, reason: partReason(risk.reason, file) }}
       highlighted={deps.highlighted.has(id)}
-      focused={focused}
-      onFocus={nested ? undefined : deps.onFocusHunk}
-      callers={
-        nested
-          ? undefined
-          : inFile
-            ? // A divider names callers in other files: its own file's are on the same card.
-              deps.callersOf(id).filter((caller) => caller.path !== file.path)
-            : deps.callersOf(id)
-      }
-      unchanged={nested ? undefined : deps.unchangedOf(id)}
-      onFollow={deps.onFollow}
-      reviewed={deps.reviewed.has(id)}
-      onReviewed={inFile ? undefined : deps.onReviewed}
-      inFile={inFile}
+      onFocus={deps.onFocusHunk}
+      unchanged={deps.unchangedOf(id)}
+      inFile
       comments={deps.commentsOf(id)}
-      openComment={!nested && deps.openComment?.partId === id ? deps.openComment.place : null}
-      onOpenComment={nested ? undefined : deps.onOpenComment}
-      onComment={nested ? undefined : deps.onComment}
-      afterHeader={nested ? undefined : deps.decisionsOn(id)}
-      belowLine={belowLine}
-      inLine={inLine}
+      openComment={deps.openComment?.partId === id ? deps.openComment.place : null}
+      onOpenComment={deps.onOpenComment}
+      onComment={deps.onComment}
+      afterHeader={deps.decisionsOn(id)}
     />
-  );
-};
-
-/** A call's name, or a request's method and path, the called hunk's file and its risk class. */
-export const CallLabel = ({ call, index }: { readonly call: Call; readonly index: PartIndex }) => {
-  const target = index.items([call.toPartId])[0];
-  const riskClass = index.mechanical.has(call.toPartId)
-    ? "mechanical"
-    : (target?.risk.riskClass ?? "logic");
-  return (
-    <>
-      {call.request === true && <span className="call-kind">sends</span>}
-      {call.request === true && " "}
-      <code className="call-symbol">{call.symbol}</code>{" "}
-      <span className="call-file">{target?.file.path}</span>{" "}
-      <span className={`call-risk risk-${riskClass}`}>{riskClass}</span>
-    </>
   );
 };

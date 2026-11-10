@@ -20,16 +20,6 @@ const openReview = async (page: Page, url: string, title: string) => {
   await expect(page.getByRole("button", { name: "Publish…" })).toBeEnabled();
 };
 
-/** How many hunks and parts this browser has marked reviewed. */
-const reviewedCount = async (page: Page) =>
-  z
-    .array(z.string())
-    .parse(
-      JSON.parse(
-        (await page.evaluate(() => localStorage.getItem("megareviewer:reviewed-hunks"))) ?? "[]",
-      ),
-    ).length;
-
 const decision = (page: Page, path: string) => ({
   approve: page.getByRole("button", { name: `Approve: Changes ${path}` }),
   reject: page.getByRole("button", { name: `Reject: Changes ${path}` }),
@@ -49,8 +39,6 @@ const writeComment = async (page: Page, textbox: Locator, text: string) => {
 /** Waits until every verdict change so far has been saved. */
 const allSaved = (page: Page, count: number) =>
   expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toHaveCount(count);
-
-const rail = (page: Page) => page.getByRole("complementary", { name: "Map" });
 
 test("the token bootstraps the session and leaves the URL", async ({ page, browser, server }) => {
   await openPicker(page);
@@ -83,38 +71,25 @@ test("analyzes a PR picked from the list", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Publish…" })).toBeEnabled();
 });
 
-test("the map moves through the hunks and the files with the keyboard", async ({ page }) => {
+test("the map moves between the files with the keyboard", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  // j and k move the focus between the cards, n to the next file's first.
-  const labels = (scope: string) =>
-    page
-      .locator(scope)
-      .evaluateAll((cards) => cards.map((card) => card.getAttribute("aria-label") ?? ""));
-  const [first, second] = await labels(".map .hunk-card");
-  const firstFile = await labels(".map .file-card:nth-of-type(1) .hunk-card");
-  const [next] = await labels(".map .file-card:nth-of-type(2) .hunk-card");
-  if (first === undefined || second === undefined || next === undefined) {
-    throw new Error("expected two cards, and a second file");
-  }
-  const focused = page.locator(".hunk-card:focus");
-  await page.keyboard.press("j");
-  await expect(focused).toHaveAttribute("aria-label", first);
-  await page.keyboard.press("j");
-  await expect(focused).toHaveAttribute("aria-label", second);
-  await page.keyboard.press("k");
-  await expect(focused).toHaveAttribute("aria-label", first);
-
+  const files = await page
+    .locator(".map .file-card")
+    .evaluateAll((cards) => cards.map((card) => card.getAttribute("aria-label") ?? ""));
+  // In path order, as a directory tree lists them.
+  expect(files).toEqual(["config/app.yaml", "src/routes/orders.ts", "src/services/receipts.ts"]);
+  const [first, second] = files;
+  if (first === undefined || second === undefined) throw new Error("expected two files");
+  await page.locator(".map .file-card-header").first().click();
+  const focused = page.locator(".map .file-card:focus");
   await page.keyboard.press("n");
-  await expect(focused).toHaveAttribute("aria-label", next);
-  expect(firstFile).not.toContain(next);
-  await expect(rail(page).locator(".rail-hunk.in-view").first()).toBeVisible();
+  await expect(focused).toHaveAttribute("aria-label", second);
+  await page.keyboard.press("p");
+  await expect(focused).toHaveAttribute("aria-label", first);
 });
 
 test("mechanical changes are collapsed until expanded", async ({ page }) => {
   await openReview(page, PR.refactorMove, "Tidy up utilities");
-  await rail(page)
-    .getByRole("button", { name: /^Proved mechanical/ })
-    .click();
   const group = page.getByRole("region", { name: /Mechanical changes/ });
   const toggles = group.getByRole("button", { expanded: false });
   await expect(toggles.first()).toBeVisible();
@@ -243,30 +218,14 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
 test.describe("without the model", () => {
   test.use({ ai: false });
 
-  test("reviews along the calls, opens a file from the overview, jumps with ⌘K and publishes", async ({
-    page,
-    server,
-  }) => {
+  test("opens a file from the overview and publishes", async ({ page, server }) => {
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
     await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
     await expect(page.getByRole("article")).toHaveCount(0);
 
-    // In the map, the receipt route's call, the symbol in its code, opens the receipt service in
-    // place.
-    const route = page.getByRole("region", { name: /^src\/routes\/orders\.ts, lines 29–/ });
-    const call = route.locator(".call-link", { hasText: /^renderReceipt$/ });
-    await call.click();
-    await expect(call).toHaveAttribute("aria-expanded", "true");
-    const opened = route.locator(".inline-call");
-    await opened.getByRole("checkbox", { name: "Reviewed" }).check();
-    await expect.poll(() => reviewedCount(page)).toBe(1);
-
-    // The overview ticks the receipt service's file; a click on the route's file opens its code.
+    // A click on the route's file in the overview opens its code in the map.
     await page.getByRole("button", { name: "Overview", exact: true }).click();
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
-    await expect(
-      overview.getByRole("button", { name: /^receipts\.ts, .*, reviewed$/ }),
-    ).toBeVisible();
     await overview.getByRole("button", { name: /^orders\.ts, / }).click();
     await expect(page.getByRole("button", { name: "Map", exact: true })).toHaveAttribute(
       "aria-pressed",
@@ -276,17 +235,6 @@ test.describe("without the model", () => {
       "aria-label",
       /^src\/routes\/orders\.ts/,
     );
-    await page.keyboard.press("x");
-    await expect.poll(() => reviewedCount(page)).toBe(2);
-
-    // ⌘K with ! lists the contract changes; Enter goes to the first.
-    await page.keyboard.press("ControlOrMeta+k");
-    const palette = page.getByRole("dialog", { name: "Jump to" });
-    await palette.getByRole("searchbox", { name: "Jump to" }).fill("!");
-    await expect(palette.getByRole("region", { name: "Contract changes" })).toBeVisible();
-    await page.keyboard.press("Enter");
-    await expect(palette).toBeHidden();
-    await expect(page.locator(".hunk-card.risk-contract:focus")).toHaveCount(1);
 
     await page.getByRole("button", { name: "Publish…" }).click();
     const dialog = page.getByRole("dialog", { name: "Publish the review" });
@@ -307,14 +255,6 @@ for (const width of [720, 1024, 1440]) {
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: "Publish…" })).toBeInViewport();
-    await expect(page.getByRole("button", { name: /^Jump to/ })).toBeInViewport();
-    if (width <= 1024) {
-      await expect(rail(page)).toBeHidden();
-      await page.getByRole("button", { name: "Show Map" }).click();
-      await expect(rail(page)).toBeVisible();
-      expect(await overflows()).toBe(false);
-      await page.getByRole("button", { name: "Hide Map" }).click();
-    }
     await page.getByRole("button", { name: "Overview", exact: true }).click();
     await expect(page.locator(".overview-scroll")).toBeVisible();
     expect(await overflows()).toBe(false);

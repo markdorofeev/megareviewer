@@ -22,7 +22,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 |---|---|
 | Pull request | A host-agnostic PR: title, description, branch, commits, diff, head SHA |
 | Hunk | One contiguous change, identified by a stable hunk ID. Risk, proofs and decisions are per hunk; the page runs the risk rules on a split part's own lines |
-| Part | The lines of a hunk that change one definition, identified by a part ID. A hunk that isn't split is one part. The tour, hints and reviewed marks are per part |
+| Part | The lines of a hunk that change one definition, identified by a part ID. A hunk that isn't split is one part. The tour and hints are per part |
 | Risk class | *mechanical*, *logic* or *contract* |
 | Mechanical proof | Deterministic evidence that a hunk is mechanical: generated, whitespace, rename, move or formatting |
 | Intent | Stated intent (description, tickets), inferred intent (code), and the mismatches between them |

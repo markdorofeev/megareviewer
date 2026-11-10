@@ -1,6 +1,4 @@
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { PartId } from "../../../../src/domain/diff/index.ts";
-import { reviewedHunkCount } from "./model.ts";
 import type { FileOverview, OverviewEdge, OverviewNode } from "./overview.ts";
 
 // Sizes in pixels. Nodes are HTML buttons, for focus and text that fits; the edges are an inline
@@ -15,8 +13,8 @@ const MAX_WIDTH = 300;
 const LABEL_CHAR = 7.8;
 const META_CHAR = 6.6;
 const BADGE_CHAR = 6.7;
-/** The padding, and the reviewed count beside the label. */
-const LABEL_ROOM = 72;
+/** The padding beside the label. */
+const LABEL_ROOM = 32;
 const TEXT_ROOM = 20;
 /** The widest a node grows to fit its text; past it, the text is cut with an ellipsis. */
 const MAX_FIT = 380;
@@ -189,28 +187,19 @@ const describeEdge = (edge: OverviewEdge, labelOf: (key: string) => string): str
   return `${labelOf(edge.from)} ${uses} ${labelOf(edge.to)}${symbols}`;
 };
 
-/** Hunks reviewed: a split hunk counts once all its parts are. */
-const reviewedState = (node: OverviewNode, reviewed: ReadonlySet<PartId>) => {
-  const { done, total } = reviewedHunkCount(node.partIds, reviewed);
-  return { done, total, all: done === total };
-};
-
 const NodeButton = ({
   node,
   box,
-  reviewed,
   active,
   onOpen,
   onFocus,
 }: {
   readonly node: OverviewNode;
   readonly box?: Box;
-  readonly reviewed: ReadonlySet<PartId>;
   readonly active: boolean;
   readonly onOpen: (node: OverviewNode) => void;
   readonly onFocus: (node: OverviewNode | null) => void;
 }) => {
-  const state = reviewedState(node, reviewed);
   const group = node.kind === "group";
   const outside = node.kind === "outside";
   const name = (
@@ -222,7 +211,6 @@ const NodeButton = ({
           ...node.entries,
           node.risk,
           node.generated ? "generated" : null,
-          state.all ? "reviewed" : `${state.done} of ${state.total} hunks reviewed`,
         ]
   )
     .filter((part) => part !== null)
@@ -246,15 +234,6 @@ const NodeButton = ({
     >
       <span className="overview-node-head">
         <span className="overview-label">{node.label}</span>
-        {outside ? null : state.all ? (
-          <span className="overview-tick" role="img" aria-label="reviewed">
-            ✓
-          </span>
-        ) : (
-          <span className="overview-count">
-            {state.done}/{state.total}
-          </span>
-        )}
       </span>
       <span className="overview-meta">{metaText(node)}</span>
       {node.badges.length > 0 && (
@@ -280,7 +259,6 @@ type Hovered =
  */
 export const Overview = ({
   overview,
-  reviewed,
   focusKey,
   onOpen,
   onCollapse,
@@ -288,7 +266,6 @@ export const Overview = ({
   onFocusNode,
 }: {
   readonly overview: FileOverview;
-  readonly reviewed: ReadonlySet<PartId>;
   /** A file to focus, at its place: its node, or one it's a badge on. A counter tells requests apart. */
   readonly focusKey: { readonly key: string; readonly n: number } | null;
   readonly onOpen: (node: OverviewNode) => void;
@@ -372,7 +349,6 @@ export const Overview = ({
   };
   const nodeProps = (node: OverviewNode) => ({
     node,
-    reviewed,
     active: hoveredNode === node.key,
     onOpen,
     onFocus: onNodeFocus,

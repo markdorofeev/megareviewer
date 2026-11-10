@@ -2,16 +2,9 @@ import { useEffect, useRef } from "react";
 import type { Layout } from "./model.ts";
 
 export type ShortcutAction =
-  | "next-hunk"
-  | "previous-hunk"
   | "next-file"
   | "previous-file"
-  | "toggle-reviewed"
-  | "next-unreviewed"
-  | "previous-unreviewed"
-  | "jump"
   | "toggle-layout"
-  | "open-call"
   | "move-file"
   | "open-file"
   | "approve"
@@ -31,29 +24,8 @@ export const SHORTCUTS: readonly {
   readonly description: string;
   readonly layouts: readonly Layout[];
 }[] = [
-  { keys: ["j"], action: "next-hunk", description: "Next hunk", layouts: ["map"] },
-  { keys: ["k"], action: "previous-hunk", description: "Previous hunk", layouts: ["map"] },
   { keys: ["n"], action: "next-file", description: "Next file", layouts: ["map"] },
   { keys: ["p"], action: "previous-file", description: "Previous file", layouts: ["map"] },
-  {
-    keys: ["o"],
-    action: "open-call",
-    description: "Open or close the hunk's first call",
-    layouts: ["map"],
-  },
-  {
-    keys: ["x"],
-    action: "toggle-reviewed",
-    description: "Mark the hunk reviewed and go to the next",
-    layouts: ["map"],
-  },
-  { keys: ["]"], action: "next-unreviewed", description: "Next unreviewed hunk", layouts: ["map"] },
-  {
-    keys: ["["],
-    action: "previous-unreviewed",
-    description: "Previous unreviewed hunk",
-    layouts: ["map"],
-  },
   {
     keys: ["a"],
     action: "approve",
@@ -64,14 +36,13 @@ export const SHORTCUTS: readonly {
   {
     keys: ["c"],
     action: "comment",
-    description: "Comment on the selected decision, or on the focused hunk",
+    description: "Comment on the selected decision, or on the focused change",
     layouts: ["map"],
   },
   {
     keys: ["Escape"],
     action: "escape",
-    description:
-      "Clear the selection, go back to where a link was followed from, or back to the overview",
+    description: "Clear the highlight, or go back to the overview",
     layouts: ["map"],
   },
   {
@@ -86,7 +57,6 @@ export const SHORTCUTS: readonly {
     description: "Open the file's code in the map, or a group of files in place",
     layouts: ["overview"],
   },
-  { keys: ["⌘K", "t"], action: "jump", description: "Jump to anything", layouts: BOTH },
   { keys: ["v"], action: "toggle-layout", description: "Map or overview", layouts: BOTH },
   { keys: ["?"], action: "help", description: "Show these shortcuts", layouts: BOTH },
 ];
@@ -113,16 +83,13 @@ export const isTextField = (target: EventTarget | null): boolean =>
 
 /**
  * The action a key press asks for in this layout, or null. Typing in a text field never triggers
- * one. ⌘K and Ctrl+K are the only shortcuts with a modifier.
+ * one, and no shortcut takes a modifier.
  */
 export const shortcutFor = (
   event: Pick<KeyboardEvent, "key" | "target" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
   layout: Layout,
 ): ShortcutAction | null => {
-  if (isTextField(event.target) || event.altKey) return null;
-  if (event.metaKey || event.ctrlKey) {
-    return event.key.toLowerCase() === "k" && !event.shiftKey ? "jump" : null;
-  }
+  if (isTextField(event.target) || event.altKey || event.metaKey || event.ctrlKey) return null;
   return ACTIONS[layout].get(event.key) ?? null;
 };
 

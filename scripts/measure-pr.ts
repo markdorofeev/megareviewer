@@ -10,7 +10,6 @@ import {
   type FileLink,
   type HunkPart,
   hunkIdOf,
-  isTestFile,
   type MechanicalProof,
   type PartId,
   parseUnifiedDiff,
@@ -24,7 +23,6 @@ import {
   type RiskAssessment,
   type Tour,
 } from "../src/domain/review/index.ts";
-import { type Call, chipCounts, chipPlan } from "../web/src/pages/review/chips.ts";
 import { type FileOverview, fileOverview } from "../web/src/pages/review/overview.ts";
 
 // Every stage of the flows slice measures itself on one real PR. This runs today's prep, rule
@@ -128,31 +126,6 @@ export const counts = (measured: Measured) => {
     files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, file.path])),
   );
   const calls = callGraph.filter((hint) => hint.use === "call");
-  const byLine = new Map<PartId, Map<number, Call[]>>();
-  for (const { fromPartId, toPartId, symbol, line } of calls) {
-    const lines = byLine.get(fromPartId) ?? new Map<number, Call[]>();
-    lines.set(line, [...(lines.get(line) ?? []), { symbol, toPartId, line }]);
-    byLine.set(fromPartId, lines);
-  }
-  const textOf = (id: PartId, line: number) => {
-    const file = files.find((one) => one.hunks.some((hunk) => hunk.id === hunkIdOf(id)));
-    const text = file?.hunks
-      .find((hunk) => hunk.id === hunkIdOf(id))
-      ?.lines.find((one) => one.kind !== "del" && one.newLine === line)?.text;
-    return file === undefined || text === undefined ? undefined : { text, path: file.path };
-  };
-  const plan = chipPlan(
-    tour.steps.map((step) => step.partIds),
-    byLine,
-    textOf,
-  );
-  const callerFiles = new Map<PartId, Set<string>>();
-  for (const { fromPartId, toPartId } of calls) {
-    const path = pathOf.get(hunkIdOf(fromPartId));
-    if (path !== undefined)
-      callerFiles.set(toPartId, (callerFiles.get(toPartId) ?? new Set()).add(path));
-  }
-  const lines = [...byLine.values()].flatMap((onLines) => [...onLines.values()]);
   const split = new Set(measured.parts.map((part) => part.hunkId)).size;
   const placed = tour.steps.flatMap((step) => step.partIds);
   const expected = files
@@ -194,15 +167,6 @@ export const counts = (measured: Measured) => {
       measured.unchangedCallers.flatMap((callers) => callers.uses.map((use) => use.path)),
     ).size,
     requestHints: callGraph.filter((hint) => hint.use === "request").length,
-    linesWithSeveralCalls: lines.filter((onLine) => onLine.length > 1).length,
-    ...chipCounts(plan),
-    calledByLinks: calls.length,
-    callerFiles: [...callerFiles.values()].reduce((sum, paths) => sum + paths.size, 0),
-    mostCallerFiles: Math.max(0, ...[...callerFiles.values()].map((paths) => paths.size)),
-    mostCallerTests: Math.max(
-      0,
-      ...[...callerFiles.values()].map((paths) => [...paths].filter(isTestFile).length),
-    ),
   };
 };
 

@@ -7,7 +7,7 @@ import type {
 } from "../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../src/domain/review/index.ts";
 import { CollapsedHunk } from "./CollapsedHunk.tsx";
-import { type CallerFile, HunkCard, type LineComment, type LinePlace } from "./HunkCard.tsx";
+import { HunkCard, type LineComment, type LinePlace } from "./HunkCard.tsx";
 
 export interface HunkItem {
   readonly hunk: Hunk;
@@ -26,10 +26,6 @@ export const DiffView = ({
   highlightedHunkIds,
   focusedHunkId = null,
   onFocusHunk,
-  callersOf,
-  onFollow,
-  reviewedHunkIds,
-  onReviewed,
   commentsOf,
   openComment = null,
   onOpenComment,
@@ -40,10 +36,6 @@ export const DiffView = ({
   readonly highlightedHunkIds?: ReadonlySet<PartId>;
   readonly focusedHunkId?: PartId | null;
   readonly onFocusHunk?: (id: PartId) => void;
-  readonly callersOf?: (id: PartId) => readonly CallerFile[];
-  readonly onFollow?: (id: PartId) => void;
-  readonly reviewedHunkIds?: ReadonlySet<string>;
-  readonly onReviewed?: (id: PartId, reviewed: boolean) => void;
   readonly commentsOf?: (id: PartId) => readonly LineComment[];
   readonly openComment?: { readonly hunkId: HunkId; readonly place: LinePlace } | null;
   readonly onOpenComment?: (id: PartId, place: LinePlace | null) => void;
@@ -70,10 +62,6 @@ export const DiffView = ({
           highlighted={highlightedHunkIds?.has(hunk.id) ?? false}
           focused={focusedHunkId === hunk.id}
           onFocus={onFocusHunk}
-          callers={callersOf?.(hunk.id)}
-          onFollow={onFollow}
-          reviewed={reviewedHunkIds?.has(hunk.id)}
-          onReviewed={onReviewed}
           comments={commentsOf?.(hunk.id)}
           openComment={openComment?.hunkId === hunk.id ? openComment.place : null}
           onOpenComment={onOpenComment}

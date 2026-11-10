@@ -1,29 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { PartId } from "../../../../src/domain/diff/index.ts";
 import { type Analysis, DecisionId } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
 import {
-  BAR_MAX_PX,
-  BAR_MIN_PX,
-  barHeight,
-  callerFiles,
-  callsByLine,
+  byTreePath,
   decisionPlaces,
-  fileGroups,
   gapBetween,
-  mapSections,
+  mapFiles,
   mechanicalCount,
   parseLayout,
   partIndex,
   partReason,
   partsInPathOrder,
-  reviewOrder,
-  riskTotals,
   tourSteps,
   trailingProofs,
-  withMechanicalInPlace,
 } from "./model.ts";
-import { fileOverview, filesInCallOrder } from "./overview.ts";
 import { formatCost, formatTokens } from "./UsageFooter.tsx";
 
 const analysis = fixtureAnalysisView.analysis;
@@ -71,73 +61,68 @@ describe("tourSteps", () => {
     expect(result[2]).toMatchObject({
       id: "s3",
       title: "Changes the tour left out",
-      partIds: [h.dependency, h.receiptFormatting],
+      partIds: [h.receiptFormatting, h.dependency],
     });
   });
 });
 
 describe("reading order", () => {
-  it("lists non-mechanical hunks by path", () => {
+  it("lists non-mechanical hunks by path, directories first", () => {
     expect(partsInPathOrder(analysis, partIndex(analysis))).toEqual([
-      h.dependency,
       h.routeImports,
       h.receiptRoute,
       h.receiptFormatting,
       p.retry,
       p.cache,
+      h.dependency,
     ]);
   });
 });
 
-describe("mapSections and reviewOrder", () => {
+describe("mapFiles", () => {
   const index = partIndex(analysis);
-  const order = filesInCallOrder(fileOverview(analysis, tourSteps(analysis, index)));
 
-  it("is one list of files in the call graph's order, each file's parts together", () => {
-    const sections = mapSections(analysis, order, index);
-    expect(sections).toHaveLength(1);
-    const ids = sections[0]?.partIds ?? [];
-    const paths = [...new Set(ids.map((id) => index.parts.get(id)?.file.path))];
-    // The route calls the receipts service, so its file comes first.
-    expect(paths.indexOf("src/routes/orders.ts")).toBeLessThan(
-      paths.indexOf("src/services/receipts.ts"),
-    );
-    // The split hunk's two parts sit together, in the file's order.
-    expect(ids.indexOf(p.cache)).toBe(ids.indexOf(p.retry) + 1);
+  it("lists the files with a part to review in path order, each with all its parts in order", () => {
+    const files = mapFiles(analysis, index);
+    const paths = files.map((group) => group.file.path);
+    expect(paths).toEqual([...paths].sort(byTreePath));
+    const receipts = files.find((group) => group.file.path === "src/services/receipts.ts");
+    if (receipts === undefined) throw new Error("no receipts.ts");
+    expect(receipts.partIds).toEqual(index.partsInFile(receipts.file));
+    // A mechanical part stays in place on its file's card.
+    const orders = files.find((group) => group.file.path === "src/routes/orders.ts");
+    expect(orders?.partIds).toContain(h.formatMoneyRemoved);
   });
 
-  it("puts files the order leaves out after it, by path", () => {
-    const [section] = mapSections(analysis, [], index);
-    const paths = [...new Set(section?.partIds.map((id) => index.parts.get(id)?.file.path))];
-    expect(paths).toEqual([...paths].sort());
-  });
-
-  it("lists the hunks to review in the map's order, without mechanical ones", () => {
-    const sections = mapSections(analysis, order, index);
-    expect(reviewOrder(sections, index)).toEqual(
-      sections[0]?.partIds.filter((id) => !index.mechanical.has(id)),
+  it("leaves out files with nothing but mechanical changes", () => {
+    const files = mapFiles(analysis, index);
+    expect(files.every((group) => group.partIds.some((id) => !index.mechanical.has(id)))).toBe(
+      true,
     );
   });
 });
 
-describe("fileGroups and gapBetween", () => {
-  const index = partIndex(analysis);
-
-  it("groups consecutive parts from one file, leaving out parts it doesn't know", () => {
-    const unknown = "h_0000000000000000" as PartId;
-    const groups = fileGroups([h.routeImports, h.receiptRoute, unknown, p.cache], index);
-    expect(groups.map((group) => [group.file.path, group.partIds])).toEqual([
-      ["src/routes/orders.ts", [h.routeImports, h.receiptRoute]],
-      ["src/services/receipts.ts", [p.cache]],
+describe("byTreePath", () => {
+  it("lists directories before files at each level, then by name", () => {
+    const paths = ["b.ts", "src/z.ts", "README.md", "src/a/b.ts", "a/x.ts", "src/B.ts", "src/a.ts"];
+    expect([...paths].sort(byTreePath)).toEqual([
+      "a/x.ts",
+      "src/a/b.ts",
+      "src/a.ts",
+      "src/B.ts",
+      "src/z.ts",
+      "b.ts",
+      "README.md",
     ]);
   });
+});
 
-  it("counts the lines between two parts of a file, and the parts read elsewhere among them", () => {
+describe("gapBetween", () => {
+  const index = partIndex(analysis);
+
+  it("counts the unchanged lines between two parts of a file", () => {
     // The imports are lines 1–8 and the route starts at line 10.
-    expect(gapBetween(h.routeImports, h.receiptRoute, index)).toEqual({ lines: 1, parts: [] });
-    expect(gapBetween(h.routeImports, h.formatMoneyRemoved, index)?.parts).toEqual([
-      h.receiptRoute,
-    ]);
+    expect(gapBetween(h.routeImports, h.receiptRoute, index)).toBe(1);
     expect(gapBetween(h.routeImports, p.cache, index)).toBeNull();
   });
 
@@ -188,22 +173,11 @@ describe("a split part's risk", () => {
     };
     expect(partIndex(modelled).items([p.cache])[0]?.risk.reason).toBe("Whole hunk.");
   });
-
-  it("counts a hunk contract in the totals only when one of its parts is", () => {
-    const index = partIndex(ruled("changes credential storage (save_token)"));
-    expect(riskTotals(ruled("x"), index).contract).toBe(
-      riskTotals(analysis, partIndex(analysis)).contract,
-    );
-  });
 });
 
 describe("decisionPlaces", () => {
   const index = partIndex(analysis);
-  const order = mapSections(
-    analysis,
-    filesInCallOrder(fileOverview(analysis, tourSteps(analysis, index))),
-    index,
-  ).flatMap((section) => section.partIds);
+  const order = mapFiles(analysis, index).flatMap((group) => group.partIds);
   const decision = (id: string, hunkIds: readonly (typeof h)[keyof typeof h][]) => ({
     ...analysis.decisions[0],
     id: DecisionId.parse(id),
@@ -234,18 +208,6 @@ describe("decisionPlaces", () => {
   });
 });
 
-describe("callsByLine", () => {
-  const index = partIndex(analysis);
-
-  it("puts each call on its line, and drops calls to unknown hunks", () => {
-    const calls = callsByLine(analysis.callGraph, index);
-    expect(calls.get(h.receiptRoute)?.get(20)).toEqual([
-      { symbol: "cachedReceipt", toPartId: p.cache, line: 20 },
-    ]);
-    expect(callsByLine(analysis.callGraph, partIndex({ ...analysis, files: [] })).size).toBe(0);
-  });
-});
-
 describe("parseLayout", () => {
   it("reads a stored call tree as the overview that replaced it", () => {
     expect(parseLayout("tree")).toBe("overview");
@@ -271,116 +233,12 @@ describe("usage formatting", () => {
   });
 });
 
-describe("withMechanicalInPlace", () => {
+describe("trailingProofs", () => {
   const index = partIndex(analysis);
-
-  it("puts a file's later mechanical hunk after the step's last hunk from that file", () => {
-    expect(withMechanicalInPlace([h.receiptRoute, h.retryAndCache], index)).toEqual([
-      h.receiptRoute,
-      h.formatMoneyRemoved,
-      h.retryAndCache,
-    ]);
-  });
-
-  it("puts an earlier mechanical hunk before the step's first hunk from that file", () => {
-    const proved: Analysis = {
-      ...analysis,
-      proofs: [
-        ...analysis.proofs,
-        { path: "src/routes/orders.ts", hunkId: h.routeImports, kind: "whitespace", detail: "w" },
-      ],
-    };
-    expect(withMechanicalInPlace([h.receiptRoute], partIndex(proved))).toEqual([
-      h.routeImports,
-      h.receiptRoute,
-      h.formatMoneyRemoved,
-    ]);
-  });
-
-  it("adds nothing for files without mechanical hunks, and places each hunk once", () => {
-    expect(withMechanicalInPlace([h.dependency], index)).toEqual([h.dependency]);
-    expect(withMechanicalInPlace([h.routeImports, h.receiptRoute], index)).toEqual([
-      h.routeImports,
-      h.receiptRoute,
-      h.formatMoneyRemoved,
-    ]);
-  });
-});
-
-describe("risk counts", () => {
-  const index = partIndex(analysis);
-
-  it("sizes a hunk's bar by its lines, within a minimum and a cap", () => {
-    const lines = (count: number) => ({ lines: Array.from({ length: count }, () => line) });
-    const line = {
-      kind: "add" as const,
-      text: "",
-      oldLine: null,
-      newLine: 1,
-      noNewlineAtEnd: false,
-    };
-    expect(barHeight(lines(1))).toBe(BAR_MIN_PX);
-    expect(barHeight(lines(30))).toBe(30);
-    expect(barHeight(lines(500))).toBe(BAR_MAX_PX);
-  });
-
-  it("counts every hunk and file-level proof once across the pull request", () => {
-    const totals = riskTotals(analysis, index);
-    const hunks = analysis.files.flatMap((file) => file.hunks).length;
-    const fileLevel = analysis.proofs.filter((proof) => proof.hunkId === null).length;
-    expect(totals.contract + totals.logic + totals.mechanical).toBe(hunks + fileLevel);
-    expect(totals.mechanical).toBe(mechanicalCount(analysis.proofs));
-  });
 
   it("leaves mechanical hunks of files with other changes out of the mechanical group", () => {
     const trailing = trailingProofs(analysis, index);
     expect(trailing.some((proof) => proof.hunkId === h.formatMoneyRemoved)).toBe(false);
     expect(trailing).toHaveLength(analysis.proofs.length - 1);
-  });
-});
-
-describe("callerFiles", () => {
-  const index = partIndex(analysis);
-  const call = (fromPartId: PartId, toPartId: PartId) => ({
-    fromPartId,
-    toPartId,
-    symbol: "s",
-    line: 1,
-    use: "call" as const,
-  });
-
-  it("gives one link per calling file, to its first hunk in the map's order", () => {
-    const hints = [call(h.receiptRoute, p.cache), call(h.routeImports, p.cache)];
-    expect(callerFiles(hints, index, [h.routeImports, h.receiptRoute]).get(p.cache)).toEqual([
-      { path: "src/routes/orders.ts", partId: h.routeImports, test: false },
-    ]);
-    expect(callerFiles(hints, index, [h.receiptRoute, h.routeImports]).get(p.cache)).toEqual([
-      { path: "src/routes/orders.ts", partId: h.receiptRoute, test: false },
-    ]);
-  });
-
-  it("puts production files first, then tests, each in the map's order", () => {
-    const withTest = {
-      ...analysis,
-      files: analysis.files.map((file) =>
-        file.path === "src/lib/money.ts" ? { ...file, path: "src/lib/money.test.ts" } : file,
-      ),
-    };
-    const hints = [call(h.formatMoneyAdded, p.cache), call(h.receiptRoute, p.cache)];
-    const order = [h.formatMoneyAdded, h.receiptRoute];
-    expect(
-      callerFiles(hints, partIndex(withTest), order)
-        .get(p.cache)
-        ?.map((caller) => [caller.path, caller.test]),
-    ).toEqual([
-      ["src/routes/orders.ts", false],
-      ["src/lib/money.test.ts", true],
-    ]);
-  });
-
-  it("drops hints to or from hunks the page doesn't know, and a hunk calling itself", () => {
-    const empty = partIndex({ ...analysis, files: [] });
-    expect(callerFiles([call(h.receiptRoute, h.retryAndCache)], empty, []).size).toBe(0);
-    expect(callerFiles([call(h.receiptRoute, h.receiptRoute)], index, []).size).toBe(0);
   });
 });

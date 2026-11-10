@@ -5,7 +5,6 @@ import {
   type FileChange,
   findMechanicalProofs,
   type Hunk,
-  type HunkId,
   type MechanicalProof,
   type PartId,
   parseUnifiedDiff,

@@ -15,17 +15,10 @@ const press = (
 
 describe("shortcutFor", () => {
   it("maps each shortcut key to its action in the map", () => {
-    const keys = ["j", "k", "n", "p", "o", "x", "]", "[", "t", "v", "a", "r", "c", "Escape", "?"];
+    const keys = ["n", "p", "v", "a", "r", "c", "Escape", "?"];
     expect(keys.map((key) => press(key))).toEqual([
-      "next-hunk",
-      "previous-hunk",
       "next-file",
       "previous-file",
-      "open-call",
-      "toggle-reviewed",
-      "next-unreviewed",
-      "previous-unreviewed",
-      "jump",
       "toggle-layout",
       "approve",
       "reject",
@@ -33,33 +26,25 @@ describe("shortcutFor", () => {
       "escape",
       "help",
     ]);
-    expect(press("z")).toBeNull();
-    expect(press("J")).toBeNull();
-    expect(press("ArrowRight")).toBeNull();
+    for (const key of ["j", "k", "o", "x", "[", "]", "t", "z", "J", "ArrowRight"]) {
+      expect(press(key)).toBeNull();
+    }
   });
 
-  it("leaves the overview's arrows and Enter to the focused file, and hunk keys to the map", () => {
+  it("leaves the overview's arrows and Enter to the focused file, and file keys to the map", () => {
     for (const key of ["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown", "Enter"]) {
       expect(press(key, "overview")).toBeNull();
     }
-    for (const key of ["j", "n", "o", "x", "]", "a", "c", "Escape"]) {
+    for (const key of ["n", "p", "a", "c", "Escape"]) {
       expect(press(key, "overview")).toBeNull();
     }
     expect(press("v", "overview")).toBe("toggle-layout");
-    expect(press("t", "overview")).toBe("jump");
     expect(press("?", "overview")).toBe("help");
-  });
-
-  it("opens the palette with ⌘K and Ctrl+K", () => {
-    expect(press("k", "map", document.body, { metaKey: true })).toBe("jump");
-    expect(press("K", "overview", document.body, { ctrlKey: true })).toBe("jump");
-    expect(press("k", "map", document.body, { metaKey: true, shiftKey: true })).toBeNull();
   });
 
   it("ignores keys typed into text fields", () => {
     for (const tag of ["input", "textarea", "select"]) {
       expect(press("a", "map", document.createElement(tag))).toBeNull();
-      expect(press("k", "map", document.createElement(tag), { metaKey: true })).toBeNull();
     }
   });
 
@@ -72,6 +57,7 @@ describe("shortcutFor", () => {
   });
 
   it("leaves browser shortcuts alone", () => {
+    expect(press("k", "map", document.body, { metaKey: true })).toBeNull();
     expect(press("r", "map", document.body, { metaKey: true })).toBeNull();
     expect(press("c", "map", document.body, { ctrlKey: true })).toBeNull();
     expect(press("n", "map", document.body, { altKey: true })).toBeNull();

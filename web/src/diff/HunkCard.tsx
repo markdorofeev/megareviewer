@@ -45,82 +45,6 @@ export const FilePath = ({ file }: { readonly file: Pick<FileChange, "path" | "o
   </span>
 );
 
-/** A file whose code calls this part, and its first part that does. */
-export interface CallerFile {
-  readonly path: string;
-  readonly partId: PartId;
-  readonly test: boolean;
-}
-
-/** Part of a line shown by the caller, such as an underlined call: characters `start` to `end`. */
-export interface LineMark {
-  readonly start: number;
-  readonly end: number;
-  readonly render: (code: ReactNode) => ReactNode;
-}
-
-/** Each path's shortest tail of directories that no other path in the list shares. */
-export const shortPaths = (paths: readonly string[]): string[] => {
-  const parts = paths.map((path) => path.split("/"));
-  return parts.map((segments) => {
-    for (let take = 1; take < segments.length; take++) {
-      const tail = segments.slice(-take).join("/");
-      const shared = parts.filter((other) => other.slice(-take).join("/") === tail).length;
-      if (shared <= 1) return tail;
-    }
-    return segments.join("/");
-  });
-};
-
-const joined = (items: readonly ReactNode[]): ReactNode[] =>
-  items.flatMap((item, at) => [at === 0 ? "" : at === items.length - 1 ? " and " : ", ", item]);
-
-/** "Called from a.py, b.py and 2 tests": a link per file, tests counted until they're opened. */
-const Callers = ({
-  callers,
-  onFollow,
-  inline = false,
-}: {
-  readonly callers: readonly CallerFile[];
-  readonly onFollow: (id: PartId) => void;
-  /** In a part's divider line, rather than a row of its own. */
-  readonly inline?: boolean;
-}) => {
-  const [showTests, setShowTests] = useState(false);
-  const names = shortPaths(callers.map((caller) => caller.path));
-  const link = (caller: CallerFile, at: number) => (
-    <button
-      key={caller.path}
-      type="button"
-      className="hunk-link"
-      title={caller.path}
-      onClick={() => onFollow(caller.partId)}
-    >
-      {names[at]} ↑
-    </button>
-  );
-  const code = callers.flatMap((caller, at) => (caller.test ? [] : [link(caller, at)]));
-  const tests = callers.flatMap((caller, at) => (caller.test ? [link(caller, at)] : []));
-  const testCount = (
-    <button
-      key="tests"
-      type="button"
-      className="link-button"
-      aria-expanded={false}
-      onClick={() => setShowTests(true)}
-    >
-      {tests.length === 1 ? "1 test" : `${tests.length} tests`}
-    </button>
-  );
-  const shown = [...code, ...(tests.length === 0 ? [] : showTests ? tests : [testCount])];
-  const Box = inline ? "span" : "p";
-  return (
-    <Box className={inline ? "hunk-callers inline" : "hunk-callers"}>
-      <span className="hunk-callers-label">Called from</span> {joined(shown)}
-    </Box>
-  );
-};
-
 const places = (count: number, noun: "place" | "test"): string =>
   `${count} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -195,61 +119,6 @@ const UnchangedUses = ({
   );
 };
 
-/** A part of a split hunk: what it changes, which part it is, and its neighbors in its hunk. */
-export interface PartHeader {
-  readonly definitions: readonly string[];
-  readonly n: number;
-  readonly of: number;
-  readonly previous: PartNeighbor | null;
-  readonly next: PartNeighbor | null;
-}
-
-/** A neighboring part of the same hunk, which a fold row links to. */
-export interface PartNeighbor {
-  readonly id: PartId;
-  readonly n: number;
-  readonly definitions: readonly string[];
-}
-
-const Names = ({ names }: { readonly names: readonly string[] }) =>
-  names.length === 0 ? null : (
-    <>
-      {joined(names.map((name) => <code key={name}>{name}</code>))}
-      {" · "}
-    </>
-  );
-
-/** "part 4 of 10". */
-const PartLabel = ({ part }: { readonly part: PartHeader }) => (
-  <p className="hunk-part-of">
-    part {part.n} of {part.of}
-  </p>
-);
-
-/** A row above or below a part's lines that goes to the neighboring part of its hunk. */
-const PartFold = ({
-  neighbor,
-  of,
-  direction,
-  onFollow,
-}: {
-  readonly neighbor: PartNeighbor;
-  readonly of: number;
-  readonly direction: "previous" | "next";
-  readonly onFollow?: (id: PartId) => void;
-}) => (
-  <button
-    type="button"
-    className={`part-fold ${direction}`}
-    disabled={onFollow === undefined}
-    onClick={() => onFollow?.(neighbor.id)}
-  >
-    <span aria-hidden="true">{direction === "previous" ? "↑" : "↓"}</span>{" "}
-    <Names names={neighbor.definitions} />
-    part {neighbor.n} of {of}
-  </button>
-);
-
 /** Where a comment on a hunk goes: a head-side ("new") or base-side ("old") line. */
 export interface LinePlace {
   readonly side: "new" | "old";
@@ -276,7 +145,6 @@ const samePlace = (a: LinePlace, b: LinePlace) => a.side === b.side && a.line ==
 /** One hunk, or one part of a split hunk: a header with its file, place and risk, and its lines. */
 export const HunkCard = memo(function HunkCard({
   id: givenId,
-  part,
   hunk,
   file,
   risk,
@@ -285,24 +153,16 @@ export const HunkCard = memo(function HunkCard({
   focused = false,
   onFocus,
   lineLimit,
-  callers = [],
   unchanged = [],
-  onFollow,
-  reviewed,
-  onReviewed,
   comments = [],
   openComment = null,
   onOpenComment,
   onComment,
   afterHeader,
-  belowLine,
-  inLine,
   inFile = false,
 }: {
   /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
   readonly id?: PartId;
-  /** Set for a part of a split hunk, whose lines `hunk` holds. */
-  readonly part?: PartHeader | null;
   readonly hunk: Hunk;
   readonly file: FileChange;
   readonly risk: RiskAssessment | null;
@@ -314,14 +174,8 @@ export const HunkCard = memo(function HunkCard({
   readonly onFocus?: (id: PartId) => void;
   /** Shows this many lines at first, with a button for the rest. */
   readonly lineLimit?: number;
-  /** Files whose code calls this hunk, which `onFollow` goes to; calls show by `belowLine`. */
-  readonly callers?: readonly CallerFile[];
   /** Uses outside the pull request of the definitions this part changes. */
   readonly unchanged?: readonly UnchangedCallers[];
-  readonly onFollow?: (id: PartId) => void;
-  /** Whether the reviewer has read this hunk; without `onReviewed` there's no checkbox. */
-  readonly reviewed?: boolean;
-  readonly onReviewed?: (id: PartId, reviewed: boolean) => void;
   /** The reviewer's comments on this hunk's lines; without `onComment` they're read-only. */
   readonly comments?: readonly LineComment[];
   /** The line whose comment box is open and focused, if it's in this hunk. */
@@ -330,10 +184,6 @@ export const HunkCard = memo(function HunkCard({
   readonly onComment?: (id: PartId, comment: LineComment) => void;
   /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
   readonly afterHeader?: ReactNode;
-  /** Shown under the line with this new-side number, e.g. the calls it makes. */
-  readonly belowLine?: ReadonlyMap<number, ReactNode>;
-  /** Parts of the line with this new-side number to show differently, e.g. a call's symbol. */
-  readonly inLine?: ReadonlyMap<number, readonly LineMark[]>;
   /**
    * One of several parts on a file's card, which names the file: the header is one line, and the
    * risk is the color of a bar beside the lines.
@@ -366,22 +216,9 @@ export const HunkCard = memo(function HunkCard({
   const counts = lineCounts(hunk);
   // On a file's card the gutter numbers the lines, the code names what they define and the
   // card holds the file's other parts, so a part's divider shows only why it's contract, past what
-  // the file's header says, and who calls it from another file. A part with neither has none.
+  // the file's header says. A part without a reason has none.
   const showsReason = risk?.riskClass === "contract" && risk.reason !== "";
-  const dividerShows =
-    proofs.length > 0 || showsReason || (callers.length > 0 && onFollow !== undefined);
-  const related = part != null && (
-    <details className="hunk-related">
-      <summary>Related parts</summary>
-      <PartLabel part={part} />
-      {part.previous != null && (
-        <PartFold neighbor={part.previous} of={part.of} direction="previous" onFollow={onFollow} />
-      )}
-      {part.next != null && (
-        <PartFold neighbor={part.next} of={part.of} direction="next" onFollow={onFollow} />
-      )}
-    </details>
-  );
+  const dividerShows = proofs.length > 0 || showsReason;
   const classes = [
     "hunk-card",
     inFile && "in-file",
@@ -412,16 +249,9 @@ export const HunkCard = memo(function HunkCard({
               <FileStatusBadge status={file.status} />
             </>
           )}
-          {!inFile &&
-            (part != null
-              ? part.definitions.length > 0 && (
-                  <span className="hunk-part">
-                    {joined(part.definitions.map((name) => <code key={name}>{name}</code>))}
-                  </span>
-                )
-              : hunk.sectionHeading !== null && (
-                  <code className="hunk-heading">{hunk.sectionHeading}</code>
-                ))}
+          {!inFile && hunk.sectionHeading !== null && (
+            <code className="hunk-heading">{hunk.sectionHeading}</code>
+          )}
           {!inFile && (
             <span className="hunk-counts">
               <span className="count-added">+{counts.added}</span>{" "}
@@ -435,29 +265,12 @@ export const HunkCard = memo(function HunkCard({
           ))}
           {showsReason && <span className="hunk-contract-reason model-text">{risk.reason}</span>}
           {!inFile && risk !== null && <RiskBadge risk={risk} />}
-          {inFile && callers.length > 0 && onFollow !== undefined && (
-            <Callers callers={callers} onFollow={onFollow} inline />
-          )}
-          {onReviewed !== undefined && (
-            <label className="hunk-reviewed">
-              <input
-                type="checkbox"
-                checked={reviewed === true}
-                onChange={(event) => onReviewed(id, event.target.checked)}
-              />
-              Reviewed
-            </label>
-          )}
         </header>
-      )}
-      {!inFile && callers.length > 0 && onFollow !== undefined && (
-        <Callers callers={callers} onFollow={onFollow} />
       )}
       {unchanged.map((one) => (
         <UnchangedUses key={one.symbol} callers={one} named={unchanged.length > 1} />
       ))}
       {afterHeader}
-      {!inFile && related}
       <div
         className="hunk-body"
         // Off screen, the lines are as tall as they will be, so the scrollbar doesn't jump.
@@ -478,8 +291,6 @@ export const HunkCard = memo(function HunkCard({
               const comment =
                 place === null ? undefined : comments.find((one) => samePlace(one, place));
               const open = place !== null && openComment !== null && samePlace(openComment, place);
-              const newLine = line.line.kind === "del" ? null : line.line.newLine;
-              const below = newLine === null ? undefined : belowLine?.get(newLine);
               return (
                 // biome-ignore lint/suspicious/noArrayIndexKey: lines don't move within a hunk.
                 <Fragment key={i}>
@@ -487,7 +298,6 @@ export const HunkCard = memo(function HunkCard({
                     line={line}
                     tokens={tokens?.[i] ?? null}
                     changed={changes.get(i) ?? null}
-                    marks={newLine === null ? undefined : inLine?.get(newLine)}
                     onNumber={
                       place === null || onOpenComment === undefined || onComment === undefined
                         ? undefined
@@ -506,11 +316,6 @@ export const HunkCard = memo(function HunkCard({
                       }
                       onDone={() => onOpenComment?.(id, null)}
                     />
-                  )}
-                  {below !== undefined && (
-                    <tr className="line-below">
-                      <td colSpan={4}>{below}</td>
-                    </tr>
                   )}
                 </Fragment>
               );
@@ -582,13 +387,11 @@ const Line = memo(function Line({
   line: { line, text, carriageReturn },
   tokens,
   changed,
-  marks = [],
   onNumber,
 }: {
   readonly line: DisplayLine;
   readonly tokens: readonly CodeToken[] | null;
   readonly changed: readonly CharRange[] | null;
-  readonly marks?: readonly LineMark[];
   /** Opens a comment on this line, from its line number. */
   readonly onNumber?: () => void;
 }) {
@@ -612,7 +415,14 @@ const Line = memo(function Line({
       <td className="line-number">{number(line.newLine, "new")}</td>
       <td className="line-marker">{MARKERS[line.kind]}</td>
       <td className="line-code">
-        {markedCode(segmentLine(tokens ?? plainTokens(text), changed ?? [], marks), marks, Changed)}
+        {segmentLine(tokens ?? plainTokens(text), changed ?? []).map((segment, i) => (
+          <Code
+            // biome-ignore lint/suspicious/noArrayIndexKey: a line's segments are rebuilt together.
+            key={i}
+            segment={segment}
+            Changed={Changed}
+          />
+        ))}
         {carriageReturn && (
           <span className="line-note" title="This line ends in CRLF">
             CRLF
@@ -624,59 +434,30 @@ const Line = memo(function Line({
   );
 });
 
-/** A line's segments as elements, the ones inside a mark wrapped by its `render`. */
-const markedCode = (
-  segments: readonly Segment[],
-  marks: readonly LineMark[],
-  Changed: "del" | "ins",
-): ReactNode[] => {
-  const nodes: ReactNode[] = [];
-  let group: { mark: LineMark; code: ReactNode[] } | null = null;
-  const flush = () => {
-    if (group !== null) {
-      nodes.push(
-        <Fragment key={`mark-${group.mark.start}`}>{group.mark.render(group.code)}</Fragment>,
-      );
-    }
-    group = null;
-  };
-  let offset = 0;
-  segments.forEach((segment, i) => {
-    const start = offset;
-    offset += segment.text.length;
-    const className = [
-      "token",
-      segment.italic && "italic",
-      segment.bold && "bold",
-      segment.changed && "changed",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const style =
-      segment.light === null && segment.dark === null
-        ? undefined
-        : {
-            "--token-light": segment.light ?? undefined,
-            "--token-dark": segment.dark ?? undefined,
-          };
-    const Element = segment.changed ? Changed : "span";
-    const element = (
-      // biome-ignore lint/suspicious/noArrayIndexKey: a line's segments are rebuilt together.
-      <Element key={i} className={className} style={style}>
-        {segment.text}
-      </Element>
-    );
-    const mark = marks.find((one) => start >= one.start && start < one.end);
-    if (mark === undefined) {
-      flush();
-      nodes.push(element);
-    } else if (group?.mark === mark) {
-      group.code.push(element);
-    } else {
-      flush();
-      group = { mark, code: [element] };
-    }
-  });
-  flush();
-  return nodes;
+/** One segment of a line, in its token's colors, marked when it's inside an intra-line change. */
+const Code = ({
+  segment,
+  Changed,
+}: {
+  readonly segment: Segment;
+  readonly Changed: "del" | "ins";
+}) => {
+  const className = [
+    "token",
+    segment.italic && "italic",
+    segment.bold && "bold",
+    segment.changed && "changed",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const style =
+    segment.light === null && segment.dark === null
+      ? undefined
+      : { "--token-light": segment.light ?? undefined, "--token-dark": segment.dark ?? undefined };
+  const Element = segment.changed ? Changed : "span";
+  return (
+    <Element className={className} style={style}>
+      {segment.text}
+    </Element>
+  );
 };

@@ -3,12 +3,11 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisView } from "../../../../contracts/index.ts";
-import { HunkId, type PartId } from "../../../../src/domain/diff/index.ts";
+import type { PartId } from "../../../../src/domain/diff/index.ts";
 import {
   AnalysisId,
   DecisionId,
   type PublicationReceipt,
-  TourStepId,
 } from "../../../../src/domain/review/index.ts";
 import {
   fixtureAnalysisView,
@@ -107,10 +106,10 @@ const cardOf = (hunkId: PartId) => {
 /** The rail's bar for a part, which says whether it's reviewed. */
 const railBar = (lines: string) =>
   within(rail()).getByRole("button", { name: new RegExp(`, lines ${lines}, `), hidden: true });
-const isReviewed = (lines: string) =>
+const _isReviewed = (lines: string) =>
   railBar(lines).getAttribute("aria-label")?.endsWith(", reviewed") === true;
 const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
-const storedReviewed = (): unknown =>
+const _storedReviewed = (): unknown =>
   JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "[]");
 const rail = () => screen.getByRole("complementary", { name: "Map" });
 const overviewBox = () => screen.getByRole("region", { name: "Overview of the changed files" });
@@ -132,7 +131,7 @@ const scrolledTo = () =>
 
 const ROUTE = /^src\/routes\/orders\.ts, lines 10–24$/;
 const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
-const RECEIPTS = /^src\/services\/receipts\.ts, lines 26–/;
+const _RECEIPTS = /^src\/services\/receipts\.ts, lines 26–/;
 /** The retry and cache hunk's two parts. */
 const RETRY = /^src\/services\/receipts\.ts, lines 26–39$/;
 const CACHE = /^src\/services\/receipts\.ts, lines 40–50$/;
@@ -436,16 +435,21 @@ describe("intent", () => {
 });
 
 describe("map", () => {
-  it("shows each file once, in the call graph's order, then the mechanical changes", async () => {
+  it("shows each file once, in path order, then the mechanical changes", async () => {
     renderReview();
     await loaded();
-    // The route calls the receipts service; the dependency is in no call.
+    // Directories come before files, so package.json is last.
     expect(fileCards()).toEqual([
       "src/routes/orders.ts",
       "src/services/receipts.ts",
       "package.json",
     ]);
-    expect(mainArea().querySelector(".step-heading")).toBeNull();
+    // Nothing beside or above the code: no rail, jump field, grouping switch or contract list.
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Show Map|Jump to/ })).toBeNull();
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(document.querySelector(".review-body.map")?.children).toHaveLength(1);
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
     expect(
       within(mainArea())
@@ -472,32 +476,6 @@ describe("map", () => {
     expect(within(placeOf(h.formatMoneyRemoved)).getByRole("region")).toBeTruthy();
   });
 
-  it("shows only contract hunks when asked, remembers it, and shows the rest again", async () => {
-    const first = renderReview();
-    await loaded();
-    expect(within(rail()).getByText("2 contract")).toBeTruthy();
-    const toggle = within(rail()).getByRole("checkbox", { name: "Contract changes only" });
-    await userEvent.click(toggle);
-    const shown = within(mainArea()).getAllByRole("region", { name: /, lines / });
-    expect(shown.map((card) => card.getAttribute("aria-label")?.split(",")[0])).toEqual([
-      "src/routes/orders.ts",
-      "package.json",
-    ]);
-    expect(fileCards()).toEqual(["src/routes/orders.ts", "package.json"]);
-    expect(window.localStorage.getItem(`megareviewer:contract-only:${id}`)).toBe("true");
-    first.unmount();
-
-    renderReview();
-    await loaded();
-    expect(fileCards()).toHaveLength(2);
-    // Going to a hunk that isn't shown shows everything again.
-    await userEvent.click(
-      within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
-    );
-    expect(fileCards()).toHaveLength(3);
-    expect(focusedLabel()).toMatch(RECEIPTS);
-  });
-
   it("still works when storage throws", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
@@ -507,195 +485,12 @@ describe("map", () => {
     });
     renderReview();
     await loaded();
-    await userEvent.click(within(rail()).getByRole("checkbox", { name: "Contract changes only" }));
-    expect(fileCards()).toHaveLength(2);
-  });
-});
-
-describe("grouping the map", () => {
-  const sectionTitles = () =>
-    [...mainArea().querySelectorAll(".map-section-title")].map((title) => title.textContent);
-  const option = (name: string) => screen.getByRole("radio", { name });
-
-  it("switches between calls and folders, and remembers the choice", async () => {
-    const first = renderReview();
-    await loaded();
-    expect(screen.getByRole("radiogroup", { name: "Group files by" })).toBeTruthy();
-    expect(option("Calls")).toHaveProperty("checked", true);
-    expect(sectionTitles()).toEqual([]);
-
-    await userEvent.click(option("Folders"));
-    expect(sectionTitles()).toEqual(["Top level", "src/routes", "src/services"]);
-    expect(
-      within(screen.getByRole("region", { name: "src/routes" })).getByText("1 file · 1 contract"),
-    ).toBeTruthy();
-    // The rail heads its files with the same sections.
-    expect(
-      [...rail().querySelectorAll(".rail-section-title")].map((title) => title.textContent),
-    ).toEqual(["Top level", "src/routes", "src/services"]);
-    expect(fileCards()).toEqual([
-      "package.json",
-      "src/routes/orders.ts",
-      "src/services/receipts.ts",
-    ]);
-    await userEvent.keyboard("n");
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.dependency}`);
-    await userEvent.keyboard("n");
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.routeImports}`);
-    expect(window.localStorage.getItem("megareviewer:map-grouping")).toBe('"folders"');
-    first.unmount();
-
-    renderReview();
-    await loaded();
-    expect(option("Folders")).toHaveProperty("checked", true);
-    expect(sectionTitles()).toEqual(["Top level", "src/routes", "src/services"]);
-  });
-
-  it("lists the contract parts above the map, and goes to one", async () => {
-    renderReview();
-    await loaded();
-    const list = screen.getByRole("navigation", { name: "Contract changes" });
-    const rows = within(list).getAllByRole("button");
-    expect(rows.map((row) => row.textContent)).toEqual([
-      "orders.tslines 10–24New public endpoint that reads orders by ID.",
-      "package.jsonlines 11–18Adds a runtime dependency.",
-    ]);
-    await userEvent.click(within(list).getByRole("button", { name: /^orders\.ts/ }));
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptRoute}`);
-    expect(focusedLabel()).toMatch(ROUTE);
-  });
-
-  it("hides the contract list when nothing is contract", async () => {
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...analysis,
-          risk: analysis.risk.map((risk) => ({ ...risk, riskClass: "logic" as const })),
-        },
-      },
-    });
-    await loaded();
-    expect(screen.queryByRole("navigation", { name: "Contract changes" })).toBeNull();
-  });
-});
-
-/** IntersectionObserver for tests: records what it observes, and reports what a test says. */
-class FakeObserver {
-  static all: FakeObserver[] = [];
-  readonly observed = new Set<Element>();
-  readonly callback: IntersectionObserverCallback;
-  constructor(callback: IntersectionObserverCallback) {
-    this.callback = callback;
-    FakeObserver.all.push(this);
-  }
-  observe(element: Element) {
-    this.observed.add(element);
-  }
-  unobserve(element: Element) {
-    this.observed.delete(element);
-  }
-  disconnect() {
-    this.observed.clear();
-  }
-  /** Reports these elements entering (or leaving) the viewport to every observer watching them. */
-  static report(elements: readonly Element[], isIntersecting = true) {
-    for (const observer of FakeObserver.all) {
-      const entries = elements
-        .filter((element) => observer.observed.has(element))
-        .map((target) => ({ target, isIntersecting }) as IntersectionObserverEntry);
-      if (entries.length > 0)
-        observer.callback(entries, observer as unknown as IntersectionObserver);
-    }
-  }
-}
-
-describe("risk map", () => {
-  const bar = (name: RegExp) => within(rail()).getByRole("button", { name, hidden: true });
-
-  it("has a row per file, and a bar per hunk sized by its lines and marked", async () => {
-    renderReview();
-    await loaded();
-    const route = bar(/^src\/routes\/orders\.ts, lines 10–24, contract$/);
-    const height = (row: HTMLElement) => row.querySelector<HTMLElement>(".rail-bar")?.style.height;
-    expect(height(route)).toBe("15px");
-    expect(height(bar(/^src\/routes\/orders\.ts, lines 1–8, logic$/))).toBe("12px");
-    // orders.ts has three parts: its name once, then a row per part.
-    const orders = within(rail()).getByRole("button", { name: /^orders\.ts/ });
-    expect(orders.textContent).toBe("orders.ts1 contract");
-    // Under the file's name, a part's row gives only its lines.
-    expect(route.querySelector(".rail-hunk-file")?.textContent).toBe("10–24");
-    expect(route.querySelector(".rail-hunk-meta")?.textContent).toBe("contract · 2 decisions");
-    const cache = bar(/^src\/services\/receipts\.ts, lines 40–50, logic$/);
-    expect(cache.querySelector(".rail-hunk-file")?.textContent).toBe("40–50");
-    expect(cache.querySelector(".rail-hunk-meta")?.textContent).toBe("logic · 2 decisions");
-    expect([...route.querySelectorAll(".rail-mark")].map((mark) => mark.textContent)).toEqual([
-      "Decision: Adds a public endpoint GET /orders/:id/receipt",
-      "Decision: Looks up the order by ID without checking that it belongs to the user",
-    ]);
-    expect(
-      bar(/^package\.json, .*, contract$/).querySelector(".rail-marks, .rail-bar")?.textContent,
-    ).toBe("Decision: Adds dependency dayjs 1.11.13 to format dates");
-    expect(within(rail()).getByRole("button", { name: "Proved mechanical (5)" })).toBeTruthy();
-  });
-
-  it("marks a contract rule's reason", async () => {
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...analysis,
-          risk: analysis.risk.map((risk) =>
-            risk.hunkId === h.dependency
-              ? { ...risk, reason: "Changes dependencies.", source: "rule" as const }
-              : risk,
-          ),
-        },
-      },
-    });
-    await loaded();
-    expect(bar(/^package\.json/).querySelector(".mark-rule")?.textContent).toBe(
-      "Rule: Changes dependencies.",
+    await userEvent.keyboard("v");
+    expect(screen.getByRole("button", { name: "Overview" }).getAttribute("aria-pressed")).toBe(
+      "true",
     );
-  });
-
-  it("scrolls to a hunk or the mechanical changes from the rail", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.click(bar(/^src\/services\/receipts\.ts, lines 26/));
-    expect(scrolledTo().at(-1)).toBe(`hunk-${p.retry}`);
-    expect(focusedLabel()).toMatch(RETRY);
-    await userEvent.click(within(rail()).getByRole("button", { name: "Proved mechanical (5)" }));
-    expect(scrolledTo().at(-1)).toBe("mechanical-changes");
-  });
-
-  it("dims and ticks reviewed hunks, and outlines the hunks in view", async () => {
-    vi.stubGlobal("IntersectionObserver", FakeObserver);
-    FakeObserver.all = [];
-    renderReview();
-    await loaded();
-    await userEvent.keyboard("jx");
-    const imports = bar(/^src\/routes\/orders\.ts, lines 1–8, logic, reviewed$/);
-    expect(imports.querySelector(".rail-bar")?.classList.contains("reviewed")).toBe(true);
-    expect(imports.textContent).toContain("✓");
-
-    act(() => FakeObserver.report([placeOf(h.receiptRoute), placeOf(h.routeImports)]));
-    const inView = () =>
-      within(rail())
-        .getAllByRole("button")
-        .filter((button) => button.getAttribute("aria-current") === "location")
-        .map((button) => button.getAttribute("aria-label")?.split(", ")[1]);
-    expect(inView()).toEqual(["lines 1–8", "lines 10–24"]);
-    act(() => FakeObserver.report([placeOf(h.receiptRoute)], false));
-    expect(inView()).toEqual(["lines 1–8"]);
-
-    // Filtering replaces the places on the page, and the new ones are watched.
-    const filter = within(rail()).getByRole("checkbox", { name: "Contract changes only" });
-    await userEvent.click(filter);
-    await userEvent.click(filter);
-    expect(inView()).toEqual([]);
-    act(() => FakeObserver.report([placeOf(p.retry)]));
-    expect(inView()).toEqual(["lines 26–39"]);
+    await userEvent.keyboard("v");
+    expect(fileCards()).toHaveLength(3);
   });
 });
 
@@ -816,359 +611,6 @@ describe("decisions", () => {
   });
 });
 
-/** The fixture with a longer call chain: route → cache → formatting → money, and a call back. */
-const chained: AnalysisView = {
-  ...fixture,
-  analysis: {
-    ...analysis,
-    callGraph: [
-      ...analysis.callGraph,
-      {
-        fromPartId: p.cache,
-        toPartId: h.receiptRoute,
-        symbol: "orders",
-        line: 45,
-        use: "call",
-      },
-      {
-        fromPartId: p.cache,
-        toPartId: h.receiptFormatting,
-        symbol: "renderReceipt",
-        line: 47,
-        use: "call",
-      },
-    ],
-  },
-};
-/** The imports call cachedReceipt again, after the route in the same step. */
-const repeated: AnalysisView = {
-  ...fixture,
-  analysis: {
-    ...analysis,
-    callGraph: [
-      ...analysis.callGraph,
-      {
-        fromPartId: h.routeImports,
-        toPartId: p.cache,
-        symbol: "cachedReceipt",
-        line: 5,
-        use: "call",
-      },
-    ],
-  },
-};
-/** findOrderById reaches two hunks from one line of the route. */
-const ambiguous: AnalysisView = {
-  ...fixture,
-  analysis: {
-    ...analysis,
-    callGraph: [
-      ...analysis.callGraph,
-      ...[p.cache, h.receiptFormatting].map((toPartId) => ({
-        fromPartId: h.receiptRoute,
-        toPartId,
-        symbol: "findOrderById",
-        line: 15,
-        use: "call" as const,
-      })),
-    ],
-  },
-};
-const chip = (within_: HTMLElement, symbol: string) =>
-  within(within_).getByRole("button", { name: new RegExp(`^${symbol} `) });
-/** A first call in a step: the symbol in the code, which opens what it calls under its line. */
-const codeCall = (within_: HTMLElement, symbol: string) => {
-  const found = within(within_)
-    .getAllByRole("button", { name: symbol })
-    .find((button) => button.classList.contains("call-link"));
-  if (found === undefined) throw new Error(`no call to ${symbol} in the code`);
-  return found;
-};
-
-/** The fixture plus a Python route and a TSX page that requests it, each read in a step. */
-const withRequest = (): AnalysisView => {
-  const routeId = HunkId.parse("h_00000000000000a1");
-  const pageId = HunkId.parse("h_00000000000000a2");
-  const added = (path: string, id: HunkId, language: string, lines: readonly string[]) => ({
-    path,
-    oldPath: null,
-    status: "added" as const,
-    binary: false,
-    oldMode: null,
-    newMode: null,
-    language,
-    hunks: [
-      {
-        id,
-        path,
-        oldStart: 0,
-        oldLines: 0,
-        newStart: 1,
-        newLines: lines.length,
-        sectionHeading: null,
-        lines: lines.map((text, at) => ({
-          kind: "add" as const,
-          oldLine: null,
-          newLine: at + 1,
-          text,
-          noNewlineAtEnd: false,
-        })),
-      },
-    ],
-    additions: lines.length,
-    deletions: 0,
-  });
-  const steps = analysis.tour?.steps ?? [];
-  const step = (n: number, title: string, partIds: PartId[], via: PartId[]) => ({
-    id: TourStepId.parse(`s${n}`),
-    title,
-    explanation: "",
-    partIds,
-    kind: "flow" as const,
-    via,
-    entries: partIds.slice(0, 1),
-    codeTitle: null,
-    merged: [],
-  });
-  return {
-    ...fixture,
-    analysis: {
-      ...analysis,
-      files: [
-        ...analysis.files,
-        added("api/routes.py", routeId, "python", [
-          '@router.get("/api/items")',
-          "def items():",
-          "    return []",
-        ]),
-        added("web/src/routes/Items.tsx", pageId, "tsx", [
-          "export const Items = () => {",
-          '  const items = useQuery(() => client.GET("/api/items"));',
-          "};",
-        ]),
-      ],
-      risk: [
-        ...analysis.risk,
-        ...[routeId, pageId].map((hunkId) => ({
-          hunkId,
-          riskClass: "logic" as const,
-          reason: "Ordinary code.",
-          source: "rule" as const,
-        })),
-      ],
-      callGraph: [
-        ...analysis.callGraph,
-        {
-          fromPartId: pageId,
-          toPartId: routeId,
-          symbol: "GET /api/items",
-          line: 2,
-          use: "request",
-        },
-      ],
-      tour:
-        analysis.tour === null
-          ? null
-          : {
-              ...analysis.tour,
-              steps: [
-                ...steps,
-                step(steps.length + 1, "GET /api/items", [routeId], []),
-                step(steps.length + 2, "Page: Items", [pageId], [routeId]),
-              ],
-            },
-    },
-  };
-};
-
-describe("inline calls", () => {
-  it("make a request's path in the code open the route's part in its own file", async () => {
-    renderReview({ view: withRequest() });
-    await loaded();
-    const page = cardOf(HunkId.parse("h_00000000000000a2"));
-    // The path is the call: no row under the line.
-    expect(within(page).queryByRole("button", { name: /^sends GET/ })).toBeNull();
-    const request = codeCall(page, "/api/items");
-    request.focus();
-    const peek = await waitFor(() => {
-      const shown = document.querySelector<HTMLElement>(".peek");
-      if (shown === null) throw new Error("no peek");
-      return shown;
-    });
-    // The peek names the route the path reaches.
-    expect(peek.textContent).toContain("GET /api/items");
-    expect(peek.textContent).toContain("api/routes.py");
-    await userEvent.click(request);
-    const opened = page.querySelector<HTMLElement>(".inline-call");
-    if (opened === null) throw new Error("no inline call");
-    expect(within(opened).getAllByRole("region")[0]?.getAttribute("aria-label")).toMatch(
-      /^api\/routes\.py, lines 1–3$/,
-    );
-    // The route lists the page among its callers.
-    expect(
-      cardOf(HunkId.parse("h_00000000000000a1")).querySelector(".hunk-callers")?.textContent,
-    ).toContain("Items.tsx");
-  });
-
-  it("leave out type uses, which only group code", async () => {
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...analysis,
-          callGraph: [
-            ...analysis.callGraph,
-            {
-              fromPartId: h.receiptRoute,
-              toPartId: h.receiptFormatting,
-              symbol: "Receipt",
-              line: 12,
-              use: "type",
-            },
-          ],
-        },
-      },
-    });
-    await loaded();
-    expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: /^Receipt / })).toBeNull();
-    expect(cardOf(h.receiptFormatting).querySelector(".hunk-callers")).toBeNull();
-  });
-
-  it("open under the line that calls, nest, and stop at a hunk already open above", async () => {
-    renderReview({ view: chained });
-    await loaded();
-    const route = cardOf(h.receiptRoute);
-    // The call is the symbol in the code: no row under the line until it's open.
-    const cached = codeCall(route, "cachedReceipt");
-    expect(cached.getAttribute("aria-expanded")).toBe("false");
-    expect(route.querySelector(".calls")).toBeNull();
-
-    await userEvent.click(cached);
-    expect(cached.getAttribute("aria-expanded")).toBe("true");
-    const opened = route.querySelector<HTMLElement>(".inline-call");
-    if (opened === null) throw new Error("no inline call");
-    expect(within(opened).getAllByRole("region")[0]?.getAttribute("aria-label")).toMatch(CACHE);
-    // The route is open above, so its call back doesn't open it again.
-    expect(within(opened).getByText("open above")).toBeTruthy();
-    expect(within(opened).queryByRole("button", { name: /^orders / })).toBeNull();
-
-    await userEvent.click(chip(opened, "renderReceipt"));
-    const second = opened.querySelector<HTMLElement>(".inline-call");
-    if (second === null) throw new Error("no second level");
-    expect(within(second).getAllByRole("region")[0]?.getAttribute("aria-label")).toMatch(
-      /^src\/services\/receipts\.ts, lines 1–/,
-    );
-    // A mechanical hunk opens collapsed, with its proof.
-    await userEvent.click(chip(second, "formatMoney"));
-    expect(
-      within(second).getByRole("button", { name: /moved from src\/routes\/orders\.ts/ }),
-    ).toBeTruthy();
-
-    await userEvent.click(cached);
-    expect(route.querySelector(".inline-call")).toBeNull();
-  });
-
-  it("share the reviewed mark with the hunk's own place", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.click(codeCall(cardOf(h.receiptRoute), "cachedReceipt"));
-    const opened = cardOf(h.receiptRoute).querySelector<HTMLElement>(".inline-call");
-    if (opened === null) throw new Error("no inline call");
-    await userEvent.click(within(opened).getByRole("checkbox", { name: "Reviewed" }));
-    expect(isReviewed("40–50")).toBe(true);
-  });
-
-  it("open the first call to a hunk in a step in place, and underline the later ones", async () => {
-    renderReview({ view: repeated });
-    await loaded();
-    expect(codeCall(cardOf(h.routeImports), "cachedReceipt")).toBeTruthy();
-    const route = cardOf(h.receiptRoute);
-    expect(within(route).queryByRole("button", { name: /^cachedReceipt / })).toBeNull();
-    const mention = within(route).getByRole("button", { name: "cachedReceipt" });
-    expect(mention.classList.contains("call-mention")).toBe(true);
-    expect(mention.classList.contains("call-link")).toBe(false);
-  });
-
-  it("peek at a mention's code on focus, close on Esc, and go there on click", async () => {
-    renderReview({ view: repeated });
-    await loaded();
-    const mention = within(cardOf(h.receiptRoute)).getByRole("button", { name: "cachedReceipt" });
-    mention.focus();
-    const peek = await waitFor(() => {
-      const shown = document.querySelector<HTMLElement>(".peek");
-      if (shown === null) throw new Error("no peek");
-      return shown;
-    });
-    expect(peek.textContent).toContain("src/services/receipts.ts");
-    // The peek starts at the line that defines the symbol.
-    expect(peek.querySelector(".peek-line")?.textContent).toBe(
-      "+ export const cachedReceipt = async (order: Order): Promise<string> => {",
-    );
-    expect(mention.getAttribute("aria-describedby")).toBe(peek.id);
-    await userEvent.keyboard("{Escape}");
-    expect(document.querySelector(".peek")).toBeNull();
-
-    await userEvent.click(mention);
-    expect(focusedLabel()).toMatch(CACHE);
-    await userEvent.keyboard("{Escape}");
-    expect(focusedLabel()).toMatch(ROUTE);
-  });
-
-  it("peek at a mention's code after resting on it, and close on leaving it", async () => {
-    renderReview({ view: repeated });
-    await loaded();
-    const mention = within(cardOf(h.receiptRoute)).getByRole("button", { name: "cachedReceipt" });
-    await userEvent.hover(mention);
-    expect(document.querySelector(".peek")).toBeNull();
-    await waitFor(() => expect(document.querySelector(".peek")).not.toBeNull());
-    await userEvent.unhover(mention);
-    expect(document.querySelector(".peek")).toBeNull();
-  });
-
-  it("make one chip of a symbol that reaches several hunks, and open the one picked", async () => {
-    renderReview({ view: ambiguous });
-    await loaded();
-    const route = cardOf(h.receiptRoute);
-    const merged = within(route).getByRole("button", { name: /^findOrderById → 2 places/ });
-    await userEvent.click(merged);
-    const choices = within(route).getByRole("list", { name: "Where findOrderById goes" });
-    const [first, second] = within(choices).getAllByRole("button");
-    expect(first?.textContent).toMatch(
-      /^findOrderById src\/services\/receipts\.ts logic lines 40–50/,
-    );
-    first?.focus();
-    await userEvent.keyboard("{ArrowDown}");
-    expect(document.activeElement).toBe(second);
-    await userEvent.keyboard("{Enter}");
-    expect(within(route).queryByRole("list", { name: "Where findOrderById goes" })).toBeNull();
-    const opened = route.querySelector<HTMLElement>(".inline-call");
-    expect(
-      within(opened ?? route)
-        .getAllByRole("region")[0]
-        ?.getAttribute("aria-label"),
-    ).toMatch(/^src\/services\/receipts\.ts, lines 1–/);
-  });
-
-  it("o goes to the first mention's hunk when a hunk has no chip", async () => {
-    renderReview({ view: repeated });
-    await loaded();
-    cardOf(h.receiptRoute).focus();
-    await userEvent.keyboard("o");
-    expect(focusedLabel()).toMatch(CACHE);
-  });
-
-  it("o opens and closes the focused hunk's first call", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.keyboard("jj");
-    expect(focusedLabel()).toMatch(ROUTE);
-    await userEvent.keyboard("o");
-    expect(cardOf(h.receiptRoute).querySelector(".inline-call")).not.toBeNull();
-    await userEvent.keyboard("o");
-    expect(cardOf(h.receiptRoute).querySelector(".inline-call")).toBeNull();
-  });
-});
-
 const openOverview = async () => {
   await userEvent.click(screen.getByRole("button", { name: "Overview" }));
   return overviewBox();
@@ -1245,23 +687,6 @@ describe("overview", () => {
     expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptRoute}`);
   });
 
-  it("ticks a file when all its hunks are reviewed, and counts them otherwise", async () => {
-    window.localStorage.setItem(
-      "megareviewer:reviewed-hunks",
-      JSON.stringify([h.retryAndCache, h.receiptFormatting, h.receiptRoute]),
-    );
-    renderReview();
-    await loaded();
-    await openOverview();
-    expect(
-      within(nodeOf("src/services/receipts.ts")).getByRole("img", { name: "reviewed" }),
-    ).toBeTruthy();
-    expect(nodeOf("src/routes/orders.ts").getAttribute("aria-label")).toMatch(
-      /1 of 2 hunks reviewed$/,
-    );
-    expect(within(nodeOf("src/routes/orders.ts")).getByText("1/2")).toBeTruthy();
-  });
-
   it("names what an edge carries", async () => {
     renderReview();
     await loaded();
@@ -1308,12 +733,6 @@ describe("overview", () => {
     await userEvent.click(nodeOf("group:src/module1"));
     expect(overviewBox().querySelector('[data-key="group:src/module1"]')).toBeNull();
     expect(nodeOf("src/module1/part7.ts")).toBeTruthy();
-    // A file in a closed group, picked in the palette, opens its group.
-    await userEvent.keyboard("t");
-    await userEvent.keyboard("/module3/part9");
-    await userEvent.keyboard("{Enter}");
-    expect(focusedKey()).toBe("src/module3/part9.ts");
-
     await userEvent.click(screen.getByRole("button", { name: "Collapse src/module1/" }));
     expect(nodeOf("group:src/module1")).toBeTruthy();
   }, 30_000);
@@ -1323,7 +742,7 @@ describe("layouts", () => {
   it("switch with v, keeping the file the reviewer is on", async () => {
     renderReview();
     await loaded();
-    await userEvent.keyboard("j");
+    await userEvent.click(cardOf(h.routeImports));
     expect(focusedLabel()).toMatch(IMPORTS);
     await userEvent.keyboard("v");
     expect(pressed("Overview")).toBe(true);
@@ -1351,83 +770,21 @@ describe("layouts", () => {
   });
 });
 
-describe("jump palette", () => {
-  const palette = () => screen.getByRole("dialog", { name: "Jump to" });
-
-  it("opens with ⌘K, Ctrl+K and t, and Esc closes it", async () => {
-    renderReview();
-    await loaded();
-    for (const keys of ["{Meta>}k{/Meta}", "{Control>}k{/Control}", "t"]) {
-      await userEvent.keyboard(keys);
-      expect(palette()).toBeTruthy();
-      await userEvent.keyboard("{Escape}");
-      expect(screen.queryByRole("dialog")).toBeNull();
-    }
-  });
-
-  it("filters as it's typed; arrows move and Enter goes to a decision's card", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.keyboard("t");
-    await userEvent.keyboard("receipt");
-    const groups = within(palette())
-      .getAllByRole("region")
-      .map((group) => group.getAttribute("aria-label"));
-    expect(groups).toEqual(["Decisions", "Mismatches", "Used unchanged", "Symbols", "Files"]);
-    await userEvent.clear(within(palette()).getByRole("searchbox", { name: "Jump to" }));
-    await userEvent.keyboard("!dayjs");
-    expect(within(palette()).getAllByRole("region")).toHaveLength(1);
-    await userEvent.keyboard("{ArrowDown}{ArrowUp}{Enter}");
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(scrolledTo().at(-1)).toBe("decision-d5");
-    expect(decisionCard(DAYJS).classList.contains("selected")).toBe(true);
-  });
-
-  it("jumps to a contract hunk by its reason, and to a symbol's hunk", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.keyboard("t");
-    await userEvent.keyboard("!runtime dependency");
-    await userEvent.keyboard("{Enter}");
-    expect(focusedLabel()).toMatch(/^package\.json/);
-    await userEvent.keyboard("t");
-    await userEvent.keyboard("@cached");
-    await userEvent.click(within(palette()).getByRole("button", { name: /^cachedReceipt/ }));
-    expect(focusedLabel()).toMatch(CACHE);
-  });
-
-  it("selects a decision's file in the overview, and Enter opens its code", async () => {
-    renderReview();
-    await loaded();
-    await openOverview();
-    await userEvent.keyboard("t");
-    await userEvent.keyboard("!belongs");
-    await userEvent.keyboard("{Enter}");
-    expect(focusedKey()).toBe("src/routes/orders.ts");
-    await userEvent.keyboard("{Enter}");
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptRoute}`);
-  });
-});
-
 describe("keyboard shortcuts", () => {
-  it("move through hunks with j and k, and between files with n and p", async () => {
+  it("move between files with n and p, from the focused one", async () => {
     renderReview();
     await loaded();
-    await userEvent.keyboard("j");
-    expect(focusedLabel()).toMatch(IMPORTS);
-    await userEvent.keyboard("j");
-    expect(focusedLabel()).toMatch(ROUTE);
-    await userEvent.keyboard("k");
-    expect(focusedLabel()).toMatch(IMPORTS);
-
+    await userEvent.click(cardOf(h.routeImports));
     await userEvent.keyboard("n");
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptFormatting}`);
-    await userEvent.keyboard("j");
-    expect(focusedLabel()).toMatch(RETRY);
-    await userEvent.keyboard("p");
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.routeImports}`);
-    await userEvent.keyboard("p");
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.routeImports}`);
+    expect(scrolledTo().at(-1)).toBe("file-src/services/receipts.ts");
+    expect(focusedLabel()).toBe("src/services/receipts.ts");
+    await userEvent.keyboard("n");
+    expect(scrolledTo().at(-1)).toBe("file-package.json");
+    // There's no file after the last.
+    await userEvent.keyboard("n");
+    expect(scrolledTo().at(-1)).toBe("file-package.json");
+    await userEvent.keyboard("pp");
+    expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
   });
 
   it("give verdicts and comments on the decision of the hunk the reviewer is on", async () => {
@@ -1436,7 +793,7 @@ describe("keyboard shortcuts", () => {
     await userEvent.keyboard("a");
     expect(approve(ENDPOINT).getAttribute("aria-pressed")).toBe("false");
 
-    await userEvent.keyboard("jj");
+    await userEvent.click(cardOf(h.receiptRoute));
     await userEvent.keyboard("r");
     expect(reject(ENDPOINT).getAttribute("aria-pressed")).toBe("true");
 
@@ -1465,11 +822,11 @@ describe("keyboard shortcuts", () => {
       within(within(dialog).getByRole("region", { name }))
         .getAllByRole("term")
         .map((term) => term.textContent);
-    expect(keysOf("Map")).toEqual(["j", "k", "n", "p", "o", "x", "]", "[", "a", "r", "c", "Esc"]);
+    expect(keysOf("Map")).toEqual(["n", "p", "a", "r", "c", "Esc"]);
     expect(keysOf("Overview")).toEqual(["←→↑↓", "Enter"]);
-    expect(keysOf("Both layouts")).toEqual(["⌘Kt", "v", "?"]);
-    await userEvent.keyboard("j");
-    expect(focusedLabel()).not.toMatch(ROUTE);
+    expect(keysOf("Both layouts")).toEqual(["v", "?"]);
+    await userEvent.keyboard("v");
+    expect(screen.getByRole("button", { name: "Map" }).getAttribute("aria-pressed")).toBe("true");
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -1485,20 +842,6 @@ describe("parts of a split hunk", () => {
     expect(within(cache).queryByText("Related parts")).toBeNull();
     // No lines lie between the two parts of one hunk, so no fold either.
     expect(placeOf(p.retry).nextElementSibling).toBe(placeOf(p.cache));
-  });
-
-  it("read a reviewed mark stored on their hunk as a mark on each, until one changes", async () => {
-    window.localStorage.setItem("megareviewer:reviewed-hunks", JSON.stringify([h.retryAndCache]));
-    renderReview();
-    await loaded();
-    expect([isReviewed("40–50"), isReviewed("26–39")]).toEqual([true, true]);
-
-    cardOf(p.cache).focus();
-    await userEvent.keyboard("x");
-    expect([isReviewed("40–50"), isReviewed("26–39")]).toEqual([false, true]);
-    expect(JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "")).toEqual([
-      p.retry,
-    ]);
   });
 
   it("put a decision's card on the first part on the page, and link the other to it", async () => {
@@ -1525,51 +868,6 @@ describe("parts of a split hunk", () => {
 });
 
 describe("navigation", () => {
-  it("follows a caller's file to its first calling hunk, and Esc goes back", async () => {
-    // The cache part read in step 2, apart from the route in step 1 that calls it.
-    const tour = analysis.tour;
-    if (tour === null) throw new Error("no tour");
-    const [first, second, ...rest] = tour.steps;
-    if (first === undefined || second === undefined) throw new Error("no steps");
-    renderReview({
-      view: {
-        ...fixture,
-        analysis: {
-          ...analysis,
-          tour: {
-            ...tour,
-            steps: [
-              { ...first, partIds: first.partIds.filter((id) => id !== p.cache) },
-              { ...second, partIds: [...second.partIds, p.cache] },
-              ...rest,
-            ],
-          },
-        },
-      },
-    });
-    await loaded();
-    cardOf(p.cache).focus();
-    const callers = cardOf(p.cache).querySelector<HTMLElement>(".hunk-callers");
-    expect(callers?.textContent).toBe("Called from orders.ts ↑");
-    await userEvent.click(within(cardOf(p.cache)).getByRole("button", { name: "orders.ts ↑" }));
-    expect(focusedLabel()).toMatch(ROUTE);
-    await userEvent.keyboard("{Escape}");
-    expect(focusedLabel()).toMatch(CACHE);
-  });
-
-  it("marks hunks reviewed and remembers them by hunk", async () => {
-    const { unmount } = renderReview();
-    await loaded();
-    cardOf(p.cache).focus();
-    await userEvent.keyboard("x");
-    expect(window.localStorage.getItem("megareviewer:reviewed-hunks")).toContain(p.cache);
-
-    unmount();
-    renderReview();
-    await loaded();
-    expect(isReviewed("40–50")).toBe(true);
-  });
-
   it("count a file's contract parts on its card, and give each its reason on its own line", async () => {
     renderReview();
     await loaded();
@@ -1592,20 +890,6 @@ describe("navigation", () => {
     expect(cardOf(h.receiptRoute).querySelector(".part-risk.risk-contract")).not.toBeNull();
   });
 
-  it("name on a part's divider only callers in other files", async () => {
-    renderReview();
-    await loaded();
-    // The route in orders.ts calls the cache part.
-    expect(cardOf(p.cache).querySelector(".hunk-callers")?.textContent).toBe(
-      "Called from orders.ts ↑",
-    );
-    for (const id of [p.retry, p.cache, h.receiptFormatting]) {
-      expect(cardOf(id).querySelector(".hunk-callers")?.textContent ?? "").not.toContain(
-        "receipts.ts",
-      );
-    }
-  });
-
   it("name a file on its card without a status for modified, a part count or a Reviewed mark", async () => {
     renderReview();
     await loaded();
@@ -1617,29 +901,6 @@ describe("navigation", () => {
     const gap = orders.querySelector(".file-gap.folded");
     expect(gap?.textContent).toBe("1 line unchanged");
     expect(gap?.querySelector("svg.unfold-icon")).not.toBeNull();
-  });
-
-  it("x marks the focused hunk reviewed and moves on; ] finds the next unreviewed one", async () => {
-    renderReview();
-    await loaded();
-    const file = (name: RegExp) => within(rail()).getByRole("button", { name });
-    await userEvent.keyboard("jxx");
-    expect(storedReviewed()).toEqual([h.routeImports, h.receiptRoute]);
-    // Every part of orders.ts is reviewed, so its row in the rail is ticked.
-    expect(file(/^orders\.ts/).textContent).toContain("✓");
-    expect(file(/^receipts\.ts/).textContent).not.toContain("✓");
-    await userEvent.keyboard("]");
-    expect(focusedLabel()).toMatch(/^src\/services\/receipts\.ts, lines 1–/);
-    await userEvent.keyboard("]");
-    expect(focusedLabel()).toMatch(RETRY);
-    // "[[" types one "[" in user-event's key syntax.
-    await userEvent.keyboard("[[");
-    expect(focusedLabel()).toMatch(/^src\/services\/receipts\.ts, lines 1–/);
-    await userEvent.keyboard("xxx");
-    expect(storedReviewed()).toEqual(
-      expect.arrayContaining([h.receiptFormatting, p.cache, p.retry]),
-    );
-    expect(file(/^receipts\.ts/).textContent).toContain("✓");
   });
 });
 
@@ -1671,8 +932,6 @@ describe("without the model", () => {
     expect(screen.getByText("Adds receipts. <b>Not bold</b>")).toBeTruthy();
     expect(screen.queryByText(/Moves formatMoney too/)).toBeNull();
     expect(document.querySelector(".mismatch-chip")).toBeNull();
-    expect(rail().querySelectorAll(".rail-bars .mark-decision")).toHaveLength(0);
-    expect(rail().querySelectorAll(".rail-bars .mark-rule")).toHaveLength(2);
     expect(screen.queryByRole("article")).toBeNull();
   });
 
@@ -1757,7 +1016,8 @@ describe("comments on hunks", () => {
   it("removes a comment that's emptied, and c opens one on the focused hunk", async () => {
     renderReview({ view: withoutDecisions });
     await loaded();
-    await userEvent.keyboard("jc");
+    await userEvent.click(cardOf(h.routeImports));
+    await userEvent.keyboard("c");
     const field = within(mainArea()).getByRole("textbox", { name: /^Comment on (old )?line \d+$/ });
     expect(document.activeElement).toBe(field);
     await userEvent.type(field, "x");
@@ -1963,16 +1223,4 @@ describe("outside the pull request", () => {
     await loaded();
     expect((await openDetails()).querySelector(".checkout-note")).toBeNull();
   });
-});
-
-it("lists every file's bars in the rail, and goes to a part from it", async () => {
-  renderReview();
-  await loaded();
-  // No steps: one list of bars, always shown, then the mechanical changes.
-  expect(rail().querySelectorAll(".rail-bars")).toHaveLength(1);
-  expect(rail().querySelector(".rail-bars[hidden]")).toBeNull();
-  await userEvent.click(
-    within(rail()).getByRole("button", { name: /^src\/services\/receipts\.ts, lines 26/ }),
-  );
-  expect(focusedLabel()).toMatch(RETRY);
 });
