@@ -137,6 +137,7 @@ Each stage measures itself on [delphi-code #2](https://github.com/markdorofeev/d
 | 34 | [Grouping the map's files](34-map-grouping.md) | 33 | Grouping and the contract index in `web/src/pages/review/` |
 | 36 | [A directory tree beside the code](36-tree-rail.md) | 35 | The tree rail and the Overview's directory boxes in `web/src/pages/review/` |
 | 37 | [No reasons on a part's divider](37-off-screen-reasons.md) | 36 | The contract divider in `web/src/diff/HunkCard.tsx` and `web/src/pages/review/` |
+| 38 | [Contract from path rules only](38-path-rules-only.md) | 37 | `src/domain/review/risk-rules.ts`, `PIPELINE_VERSION` |
 
 Implement the responsive layout first, navigation simplification second, and measured analysis changes last. The first two changes work with existing cached analyses; analysis changes require a pipeline version bump.
 
