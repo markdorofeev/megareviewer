@@ -86,6 +86,18 @@ const SECURITY_WORDS = new Set([
   "sso",
 ]);
 
+/** A file a test imports to stand in for real code: fakes.py, mock-session.ts, stub_hosts.py. */
+const TEST_HELPER = /(^|[._-])(fakes?|mocks?|stubs?|fixtures?)([._-]|$)/i;
+
+/**
+ * Test code: tests, and helpers named for what they fake. A test that saves a token or a fake on
+ * a keychain path checks or stands in for credential code; it isn't credential code itself, so the
+ * credential and security-path rules leave it alone. Removed and skipped tests still count.
+ */
+const isTestCode = (path: string): boolean => isTestFile(path) || TEST_HELPER.test(basename(path));
+
+const SECURITY_PATH = "auth or security path";
+
 /** A rule on one path: the reason when it matches, else null. */
 type PathRule = (path: string) => string | null;
 
@@ -136,8 +148,47 @@ const PATH_RULES: readonly PathRule[] = [
       : null;
   },
   (path) =>
-    pathWords(path).some((word) => SECURITY_WORDS.has(word)) ? "auth or security path" : null,
+    !isTestCode(path) && pathWords(path).some((word) => SECURITY_WORDS.has(word))
+      ? SECURITY_PATH
+      : null,
 ];
+
+/** Languages whose lines can be plain text or markup, as a page's copy is. */
+const MARKUP = new Set([".tsx", ".jsx", ".vue", ".svelte", ".html", ".astro"]);
+
+/**
+ * Lines that do nothing: blank, a comment, an import, a string on its own, an UPPER_CASE constant
+ * set to a literal, a closing bracket, and in markup, a tag with only literal attributes or plain
+ * text. Anything else might, so it isn't inert: a check, a return, a call, an expression in braces.
+ */
+const INERT: readonly RegExp[] = [
+  /^\s*$/,
+  /^\s*(?:#|\/\/|\/\*|\*|<!--)/,
+  /^\s*[rbfu]?(["'`]).*\1\s*,?\s*$/i,
+  /^\s*(?:export\s+)?(?:const\s+)?[A-Z][A-Z0-9_]*\s*(?::\s*\w+\s*)?=\s*(?:["'`(]|-?\d|True\b|False\b|None\b|true\b|false\b|null\b)[^()]*$/,
+  /^\s*[)\]}]+[,;]?\s*$/,
+];
+const INERT_MARKUP: readonly RegExp[] = [
+  /^\s*<\/?[A-Za-z][\w.]*(?:\s+[\w:-]+(?:="[^"]*")?)*\s*\/?>\s*$/,
+  // Text, unless it starts like a statement: `return`, `throw`, `else` are code without brackets.
+  /^(?!\s*(?:return|throw|await|yield|break|continue|else|case|default|export|const|let|var|async|function|import)\b)\s*[^<>{}()=;]*(?:\{" "\})?\s*$/,
+];
+
+/**
+ * Every changed line of a hunk is inert, so a security path alone doesn't make it contract: the
+ * keychain module's constants, or a credentials guide's copy, change no behavior. Other rules
+ * still apply to it.
+ */
+const inertOnly = (hunk: Hunk, file: FileChange): boolean => {
+  const patterns = MARKUP.has(extension(file.path)) ? [...INERT, ...INERT_MARKUP] : INERT;
+  return [...textOf(hunk, "add"), ...textOf(hunk, "del")].every(
+    (line) => IMPORT.test(line) || patterns.some((pattern) => pattern.test(line)),
+  );
+};
+
+/** An import names a module; it runs nothing, so a risky module imported isn't a risky call. */
+const IMPORT =
+  /^\s*(?:import\b|from\s+[\w.]+\s+import\b|export\s.*\bfrom\s|(?:const|let|var)\s.*=\s*require\s*\()/;
 
 const DANGEROUS_CALLS: readonly { readonly pattern: RegExp; readonly label: string }[] = [
   { pattern: /(?<![\w$])eval\s*\(/, label: "eval()" },
@@ -237,10 +288,37 @@ const calledNames = (line: string): string[] =>
     name === undefined || /^(?:test(?:_|[A-Z])|set[A-Z])/.test(name) ? [] : [name],
   );
 
+/**
+ * Names a line defines: `def save_token(`, `class SavedToken`, `function saveSecret(`,
+ * `const loadToken = async () =>`, `func SaveToken(`, and a method like `async forgetToken(host) {`.
+ */
+const DEFINITIONS: readonly RegExp[] = [
+  /\b(?:def|class|function|func|fn|interface|type|struct)\s+([A-Za-z_$][\w$]*)/g,
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function\b|[A-Za-z_$][\w$]*\s*=>)/g,
+  /^\s*(?:(?:public|private|protected|static|async|override)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^={]*)?\{\s*$/g,
+];
+
+const definedNames = (line: string): string[] =>
+  DEFINITIONS.flatMap((pattern) =>
+    [...line.matchAll(pattern)].flatMap(([, name]) => (name === undefined ? [] : [name])),
+  ).filter((name) => !/^(?:if|for|while|switch|catch|return)$/.test(name));
+
+/** Every name the file's hunks define, on any line: what a call in the file may be calling. */
+const definedInFile = (file: FileChange): ReadonlySet<string> =>
+  new Set(file.hunks.flatMap((hunk) => hunk.lines.flatMap((line) => definedNames(line.text))));
+
+/**
+ * The credential names a changed line defines, or calls when the file doesn't define them. A
+ * module calling its own helper is the helper's change, read where it's defined; a call into
+ * another file is where this code starts handling the credential.
+ */
 const namesWhere =
   (fits: (words: readonly string[]) => boolean) =>
-  (line: string): string[] =>
-    calledNames(line).filter((name) => fits(pathWords(name)));
+  (line: string, defined: ReadonlySet<string>): string[] => {
+    const own = definedNames(line);
+    const calls = calledNames(line).filter((name) => !defined.has(name) || own.includes(name));
+    return [...own, ...calls].filter((name) => fits(pathWords(name)));
+  };
 
 /**
  * Credential handling an ordinary path doesn't name, found by the shape of the names a hunk
@@ -250,7 +328,7 @@ const namesWhere =
  * ask for more attention.
  */
 const CREDENTIAL_RULES: readonly {
-  readonly found: (line: string) => string[];
+  readonly found: (line: string, defined: ReadonlySet<string>) => string[];
   readonly reason: string;
 }[] = [
   {
@@ -282,14 +360,22 @@ const CREDENTIAL_RULES: readonly {
   },
 ];
 
-/** A rule on one hunk of a file: the reason when it matches, else null. */
-type HunkRule = (hunk: Hunk, file: FileChange) => string | null;
+/**
+ * A rule on one hunk of a file, or a part of one: the reason when it matches, else null. `whole`
+ * is the hunk the part is from, the hunk itself when it isn't split.
+ */
+type HunkRule = (hunk: Hunk, file: FileChange, whole: Hunk) => string | null;
+
+const removedTests = (hunk: Hunk): number =>
+  count(textOf(hunk, "del"), TEST_DECLARATIONS) - count(textOf(hunk, "add"), TEST_DECLARATIONS);
 
 const HUNK_RULES: readonly HunkRule[] = [
-  (hunk) => {
+  (hunk, file) => {
+    if (isTestCode(file.path)) return null;
+    const defined = definedInFile(file);
     const changed = [...textOf(hunk, "add"), ...textOf(hunk, "del")];
     const reasons = CREDENTIAL_RULES.flatMap(({ found, reason }) => {
-      const names = [...new Set(changed.flatMap(found))];
+      const names = [...new Set(changed.flatMap((line) => found(line, defined)))];
       return names.length === 0 ? [] : [`${reason} (${names.join(", ")})`];
     });
     return reasons.length === 0 ? null : reasons.join("; ");
@@ -297,17 +383,19 @@ const HUNK_RULES: readonly HunkRule[] = [
   (hunk) => {
     const added = textOf(hunk, "add");
     const labels = DANGEROUS_CALLS.filter(({ pattern }) =>
-      added.some((line) => pattern.test(line)),
+      added.some((line) => !IMPORT.test(line) && pattern.test(line)),
     ).map(({ label }) => label);
     return labels.length === 0 ? null : `adds ${labels.join(", ")}`;
   },
-  (hunk, file) => {
+  (hunk, file, whole) => {
     if (!isTestFile(file.path)) return null;
     if (file.status === "deleted") return "removes tests";
-    // An edited test deletes and adds its declaration line; only a net loss removes a test.
-    const removed =
-      count(textOf(hunk, "del"), TEST_DECLARATIONS) - count(textOf(hunk, "add"), TEST_DECLARATIONS);
-    return removed > 0 ? "removes tests" : null;
+    // An edited test deletes and adds its declaration line; only a net loss removes a test. A
+    // split part can hold a renamed test's old line without its new one, so the loss is counted
+    // over the whole hunk, and said on the parts that delete a test.
+    return removedTests(whole) > 0 && count(textOf(hunk, "del"), TEST_DECLARATIONS) > 0
+      ? "removes tests"
+      : null;
   },
   (hunk, file) =>
     isTestFile(file.path) && count(textOf(hunk, "add"), TEST_SKIPS) > 0 ? "skips tests" : null,
@@ -341,11 +429,18 @@ export const pathReasons = (file: FileChange): string[] => {
 
 /**
  * The contract rules' reasons for a hunk, or for a part of one: a part's own lines name only the
- * definitions it changes, so its reasons don't repeat its hunk's other parts.
+ * definitions it changes, so its reasons don't repeat its hunk's other parts. `whole` is the hunk
+ * a part is from, for the rules that need all of it.
  */
-export const ruleReasons = (hunk: Hunk, file: FileChange): string[] => [
-  ...new Set([...pathReasons(file), ...HUNK_RULES.flatMap((rule) => rule(hunk, file) ?? [])]),
-];
+export const ruleReasons = (hunk: Hunk, file: FileChange, whole: Hunk = hunk): string[] => {
+  const inert = inertOnly(hunk, file);
+  return [
+    ...new Set([
+      ...pathReasons(file).filter((reason) => reason !== SECURITY_PATH || !inert),
+      ...HUNK_RULES.flatMap((rule) => rule(hunk, file, whole) ?? []),
+    ]),
+  ];
+};
 
 /**
  * Risk for every hunk without a mechanical proof, from deterministic rules. A hunk any rule

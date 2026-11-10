@@ -144,7 +144,8 @@ export const partIndex = (analysis: Analysis) => {
     };
     const found = parts.get(id);
     if (assessed.source !== "rule" || found?.place == null) return assessed;
-    return partRisk(assessed, ruleReasons(found.hunk, found.file));
+    const whole = found.file.hunks.find((hunk) => hunk.id === hunkId) ?? found.hunk;
+    return partRisk(assessed, ruleReasons(found.hunk, found.file, whole));
   };
   const items = (ids: readonly PartId[]): PartItem[] =>
     ids.flatMap((id) => {

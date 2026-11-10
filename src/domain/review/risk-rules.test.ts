@@ -136,15 +136,13 @@ describe("classifyByRules", () => {
     ["+node.insertAdjacentHTML('beforeend', html);", "adds insertAdjacentHTML"],
     ["+document.writeln(x);", "adds document.write()"],
     ["+<div dangerouslySetInnerHTML={{ __html: x }} />", "adds dangerouslySetInnerHTML"],
-    ['+import { exec } from "node:child_process";', "adds child_process"],
     ["+const agent = new Agent({ rejectUnauthorized: false });", "adds rejectUnauthorized: false"],
     ['+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";', "adds NODE_TLS_REJECT_UNAUTHORIZED"],
     ["+requests.get(url, verify=False)", "adds verify=False"],
     ["+cfg := &tls.Config{InsecureSkipVerify: true}", "adds InsecureSkipVerify"],
     ["+  git commit --no-verify -m wip", "adds --no-verify"],
-    ["+import subprocess", "adds subprocess"],
     ["+    found = subprocess.run(['security', 'find-generic-password'])", "adds subprocess"],
-    ["+from subprocess import Popen", "adds subprocess"],
+    ["+const out = child_process.execSync(command);", "adds child_process"],
     ["+os.system(command)", "adds os.system()"],
     ["+pipe = os.popen(command)", "adds os.popen()"],
     ["+run(command, shell=True)", "adds shell=True"],
@@ -162,6 +160,10 @@ describe("classifyByRules", () => {
     "+cfg := &tls.Config{InsecureSkipVerify: false}",
     "+const noVerify = flags['--no-verifyx'];",
     "+import subprocessing",
+    "+import subprocess",
+    "+from subprocess import run",
+    '+import { exec } from "node:child_process";',
+    '+const { exec } = require("child_process");',
     "+chaos.system(x)",
     "+run(command, shell=False)",
   ])("leaves an added %s as logic", (line) => {
@@ -195,6 +197,37 @@ describe("classifyByRules", () => {
       "-  @Test",
     ])("marks a hunk that deletes %s as removing tests", (line) => {
       expect(reasonOf("src/a.test.ts", lines(line, "-  expect(x).toBe(1);"))).toBe("removes tests");
+    });
+
+    it("counts a split part's deleted test against its whole hunk", () => {
+      const test = file("tests/test_picker.py", [
+        {
+          id: h(1),
+          body: lines(
+            "-def test_only_configured_hosts_are_offered(self):",
+            "-    pass",
+            "+def test_saved_tokens_come_first(self):",
+            "+    pass",
+            "+def test_only_hosts_with_credentials_are_offered(self):",
+            "+    pass",
+          ),
+        },
+      ]);
+      const [whole] = test.hunks;
+      if (whole === undefined) throw new Error("no hunk");
+      // The part holding only the deleted test: one fewer there, two more in the hunk.
+      const part = { ...whole, lines: whole.lines.slice(0, 2) };
+      expect(ruleReasons(part, test, whole)).toEqual([]);
+      const net = file("tests/test_picker.py", [
+        { id: h(2), body: lines("-def test_a(self):", "-def test_c(self):", "+def test_b(self):") },
+      ]);
+      const [loses] = net.hunks;
+      if (loses === undefined) throw new Error("no hunk");
+      expect(ruleReasons({ ...loses, lines: loses.lines.slice(0, 2) }, net, loses)).toEqual([
+        "removes tests",
+      ]);
+      // A part without a deleted test isn't the one that removes it.
+      expect(ruleReasons({ ...loses, lines: loses.lines.slice(2) }, net, loses)).toEqual([]);
     });
 
     it("doesn't count a renamed test", () => {
@@ -424,9 +457,116 @@ describe("credential handling in ordinary paths", () => {
     expect(reasonOf("src/service.py", lines(text))).toBeNull();
   });
 
-  it("keeps security paths in tests and guides contract", () => {
-    expect(reasonOf("tests/fake_keychain.py")).toBe("auth or security path");
+  describe("a security path's inert changes", () => {
+    it.each([
+      [
+        "delphi_code/infrastructure/keychain.py",
+        lines(
+          "+import shutil",
+          "+import subprocess",
+          "+from ..domain.errors import Failure, FailureKind",
+          "+",
+          '+KEYCHAIN_SERVICE = "delphi-code"',
+          "+KEYCHAIN_TIMEOUT_SECONDS = 30",
+          "+KEYCHAIN_MISSING_MESSAGE = (",
+          '+    "Saving a token needs the macOS keychain; "',
+          '+    "set the token in the environment instead"',
+          "+)",
+          "+# Tokens never go to disk.",
+        ),
+      ],
+      [
+        "web/src/picker/CredentialsGuide.tsx",
+        lines(
+          '+import { Link } from "@tanstack/react-router";',
+          "+",
+          "         <li>",
+          "+          <li>",
+          '+            Paste a token on the{" "}',
+          '+            <Link to="/setup" className="underline underline-offset-4">',
+          "+              Setup page",
+          "+            </Link>",
+          "+          </li>",
+        ),
+      ],
+    ])("leaves %s alone", (path, body) => {
+      expect(reasonOf(path, body)).toBeNull();
+    });
+
+    it.each([
+      "+  if (!session) return;",
+      "+    return None",
+      "+SECRET_KEY = os.environ['SECRET_KEY']",
+      "+const token = 1;",
+      "-    raise Unauthorized()",
+      "+            <Link to={next}>",
+      "+            {token}",
+      "+    return",
+      "+  else",
+    ])("keeps %s contract", (line) => {
+      expect(reasonOf("src/auth/guard.tsx", lines(line))).toBe("auth or security path");
+    });
+
+    it("keeps plain text contract outside markup", () => {
+      expect(reasonOf("src/auth/session.py", lines("+    return None"))).toBe(
+        "auth or security path",
+      );
+    });
+  });
+
+  it("keeps a guide on a security path contract", () => {
     expect(reasonOf("docs/credentials.md")).toBe("auth or security path");
+  });
+
+  it.each([
+    "tests/fake_keychain.py",
+    "src/auth/session.test.ts",
+    "src/testing/fake_keychain.py",
+    "web/src/auth/mock-session.ts",
+  ])("leaves test code on a security path alone: %s", (path) => {
+    expect(reasonOf(path)).toBeNull();
+  });
+
+  it("leaves credential calls in tests and test helpers alone", () => {
+    expect(
+      reasonOf(
+        "tests/test_picker.py",
+        lines(
+          "+        hosts.save_token(SavedToken('github.com', 'x'))",
+          "+    clone_credentials()",
+        ),
+      ),
+    ).toBeNull();
+    expect(reasonOf("tests/fakes.py", lines("+    def save_token(self, token):"))).toBeNull();
+  });
+
+  it("counts a call only outside the file that defines it", () => {
+    const hosts = file("app/hosts.py", [
+      {
+        id: h(1),
+        body: lines("+def _saved_token(self):", "+    return saved_secret(self.domain)"),
+      },
+      { id: h(2), body: lines("+def with_token(self):", "+    return self._saved_token()") },
+      { id: h(3), body: lines(" def accounts(self):", "+    _authorization_for(self)") },
+      { id: h(4), body: lines("+def _authorization_for(self):", "+    pass") },
+    ]);
+    expect(classifyByRules([hosts], new Set()).map((one) => one.reason)).toEqual([
+      // The definition counts, and so does a call to code this file doesn't define.
+      "changes credential storage (_saved_token, saved_secret)",
+      "No contract rule matched.",
+      "No contract rule matched.",
+      "changes authorization (_authorization_for)",
+    ]);
+  });
+
+  it.each([
+    ["+class SavedToken:", "changes credential storage (SavedToken)"],
+    ["+export function saveSecret(value: string) {", "changes credential storage (saveSecret)"],
+    ["+  async forgetSavedToken(host) {", "changes credential storage (forgetSavedToken)"],
+    ["+const loadToken = async () => {", "changes credential storage (loadToken)"],
+    ["+func SaveToken(t string) error {", "changes credential storage (SaveToken)"],
+  ])("raises a definition: %s", (text, reason) => {
+    expect(reasonOf("src/service.ts", lines(text))).toBe(reason);
   });
 });
 
