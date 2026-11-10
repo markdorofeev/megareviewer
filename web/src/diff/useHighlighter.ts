@@ -106,11 +106,14 @@ export const useHighlighter = (
   const entry = language === null || !enabled ? null : highlightHunk(highlighter, hunk, language);
   const [ready, setReady] = useState<{ readonly entry: Entry; readonly tokens: LineTokens }>();
 
+  // Always subscribe: a highlight can finish between the render and this effect, which runs a task
+  // later, and then nothing else would draw it. A result the render already showed changes nothing.
   useEffect(() => {
-    if (entry === null || entry.value !== null) return;
+    if (entry === null) return;
     let current = true;
     void entry.promise.then((tokens) => {
-      if (current) setReady({ entry, tokens });
+      if (current)
+        setReady((previous) => (previous?.entry === entry ? previous : { entry, tokens }));
     });
     return () => {
       current = false;
