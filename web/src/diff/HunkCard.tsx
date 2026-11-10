@@ -32,15 +32,26 @@ export const FileStatusBadge = ({ status }: { readonly status: FileChange["statu
   <span className={`file-status status-${status}`}>{status}</span>
 );
 
+/** A path with its directory muted, so the file's name stands out and its place still shows. */
+const SplitPath = ({ path }: { readonly path: string }) => {
+  const cut = path.lastIndexOf("/") + 1;
+  return (
+    <>
+      {cut > 0 && <span className="file-directory">{path.slice(0, cut)}</span>}
+      <span className="file-name">{path.slice(cut)}</span>
+    </>
+  );
+};
+
 export const FilePath = ({ file }: { readonly file: Pick<FileChange, "path" | "oldPath"> }) => (
   <span className="file-path">
     {file.oldPath !== null && file.oldPath !== file.path ? (
       <>
         {file.oldPath} <span aria-hidden="true">→</span>
-        <span className="visually-hidden">renamed to</span> {file.path}
+        <span className="visually-hidden">renamed to</span> <SplitPath path={file.path} />
       </>
     ) : (
-      file.path
+      <SplitPath path={file.path} />
     )}
   </span>
 );

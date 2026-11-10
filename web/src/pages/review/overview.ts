@@ -12,6 +12,7 @@ import {
   type RiskClass,
   type TourStep,
 } from "../../../../src/domain/review/index.ts";
+import { byTreePath, directoryOf } from "./tree.ts";
 
 // The overview: a layered diagram of the changed files. It imports only domain code, so
 // `pnpm measure` prints its rows with the page's own rules.
@@ -21,16 +22,18 @@ export type EdgeUse = "import" | "call" | "type" | "request";
 
 export interface OverviewNode {
   /**
-   * The file's path, `group:<directory>` for a group of files, or `outside:<path or directory/>`
-   * for files outside the pull request.
+   * `group:<directory>` for a directory's files, the file's path for a file of a directory opened
+   * in place, or `outside:<path or directory/>` for files outside the pull request.
    */
   readonly key: string;
   /** "outside": files the pull request doesn't change that use what it changes. */
   readonly kind: "file" | "group" | "outside";
-  /** The files it stands for: one, or a group's. */
+  /** The files it stands for, in the order the page shows them: one, or a directory's. */
   readonly paths: readonly string[];
   /** The file's name with as many parent directories as make it unique; a group's directory. */
   readonly label: string;
+  /** Its contract parts, as the files' cards count them. */
+  readonly contract: number;
   readonly added: number;
   readonly deleted: number;
   /** The highest risk class of its hunks. */
@@ -67,25 +70,19 @@ export interface OverviewEdge {
 export interface FileOverview {
   readonly rows: readonly (readonly OverviewNode[])[];
   readonly edges: readonly OverviewEdge[];
-  /** Files no edge touches, docs, and tests that link to nothing. */
+  /** Nodes no edge touches. */
   readonly strip: readonly OverviewNode[];
   /** Each file's place: its node, its group, its strip item, or the first node it's a badge on. */
   readonly placeOf: ReadonlyMap<string, string>;
-  /** Whether files are grouped by directory, because there are too many to show one by one. */
-  readonly grouped: boolean;
 }
 
-/** Above this many file nodes, files group by directory. */
-export const MAX_FILE_NODES = 40;
 /** Above this many files outside the pull request, they group by directory. */
 export const MAX_OUTSIDE_NODES = 10;
 
 const RISK_RANK: Readonly<Record<RiskClass, number>> = { mechanical: 0, logic: 1, contract: 2 };
 const USES: readonly EdgeUse[] = ["import", "call", "type", "request"];
 
-// Repository paths are always "/"-separated.
 const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
-const dirname = (path: string): string => path.slice(0, Math.max(path.lastIndexOf("/"), 0));
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 const isDoc = (path: string): boolean => /\.(md|mdx|rst|adoc)$/i.test(path);
@@ -94,9 +91,10 @@ const isDoc = (path: string): boolean => /\.(md|mdx|rst|adoc)$/i.test(path);
 const HELPER_NAME =
   /(^|[/_.-])(fakes?|mocks?|stubs?|fixtures?|testing|test[_-]?(utils?|helpers?|support))([/_.-]|$)/i;
 
-/** Up to three leading directories: what a group of files is, as in the tour's areas. */
-const area = (path: string): string => dirname(path).split("/").slice(0, 3).join("/");
-const groupKey = (directory: string): string => `group:${directory}`;
+/** Up to three leading directories: what a group of files outside the pull request is. */
+const area = (path: string): string => directoryOf(path).split("/").slice(0, 3).join("/");
+/** A directory's box. */
+export const groupKey = (directory: string): string => `group:${directory}`;
 
 /**
  * Each path's name plus as many parent directories as it takes to tell it from the others:
@@ -223,87 +221,29 @@ const cycles = (keys: readonly string[], out: (key: string) => readonly string[]
 interface Link {
   readonly uses: Set<EdgeUse>;
   readonly symbols: Set<string>;
+  /** How many pairs of files it joins. */
+  pairs: number;
 }
 
-/**
- * The overview of the changed files with a hunk to review. Code files are nodes; tests and test
- * helpers (files with a helper's name only tests link to) are badges on the nodes they link to;
- * docs, tests that link to nothing and nodes no edge touches sit in the strip.
- *
- * Edges come from imports, from calls and type uses between files, and from requests a file sends
- * to the routes another file adds, so a test's requests put its badge on the routes. A node's row
- * is one more than its lowest caller's; a cycle is broken at the edge into its file earliest in
- * tour order.
- * Rows are ordered by the mean position of each node's callers, then of its callees, then of its
- * callers again, with tour order on ties. Above 40 nodes, files group by directory, three levels
- * deep, except the groups in `expanded`.
- *
- * Files outside the pull request that use what it changes, read from a local checkout, are faded
- * nodes one row below the lowest file they use, which joins the diagram if nothing else linked it.
- * Above 10 of them, they group by directory. Tests and helpers in the pull request have no node,
- * so their outside callers show only on their cards.
- */
-/** What the overview reads of an analysis. */
-export type OverviewInput = Pick<
-  Analysis,
-  "files" | "parts" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated"
-> &
-  Partial<Pick<Analysis, "unchangedCallers">>;
+const newLink = (): Link => ({ uses: new Set(), symbols: new Set(), pairs: 0 });
 
-export const fileOverview = (
-  analysis: OverviewInput,
-  steps: readonly TourStep[],
-  expanded: ReadonlySet<string> = new Set(),
-): FileOverview => {
+/** Files with a hunk to review, and the links between them: imports, calls, type uses, requests. */
+const linksBetweenFiles = (
+  analysis: Pick<OverviewInput, "files" | "proofs" | "callGraph" | "fileLinks">,
+) => {
   const mechanical = new Set(analysis.proofs.flatMap((proof) => proof.hunkId ?? []));
-  const riskOf = new Map(analysis.risk.map((one) => [one.hunkId, one.riskClass]));
-  const tourOrder = [...new Set(steps.flatMap((step) => step.partIds))];
-  const rank = new Map(tourOrder.map((id, at) => [id, at]));
-  const rankOf = (id: PartId) => rank.get(id) ?? tourOrder.length;
-  const generated = new Set(analysis.generated);
-
-  // The files with a hunk to review, and what the nodes show of each.
   const files = analysis.files.filter((file) =>
     file.hunks.some((hunk) => !mechanical.has(hunk.id)),
   );
   const pathOfHunk = new Map(
     files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, file.path] as const)),
   );
-  const fileFacts = new Map(
-    files.map((file) => {
-      const lines = file.hunks.flatMap((hunk) => hunk.lines);
-      const toReview = piecesOf(file, partsByHunk(analysis.parts))
-        .map((piece) => piece.id)
-        .filter((id) => !mechanical.has(hunkIdOf(id)))
-        .sort((a, b) => rankOf(a) - rankOf(b));
-      const risk = file.hunks
-        .map(
-          (hunk): RiskClass =>
-            mechanical.has(hunk.id) ? "mechanical" : (riskOf.get(hunk.id) ?? "logic"),
-        )
-        .reduce((a, b) => (RISK_RANK[b] > RISK_RANK[a] ? b : a), "mechanical");
-      return [
-        file.path,
-        {
-          added: lines.filter((line) => line.kind === "add").length,
-          deleted: lines.filter((line) => line.kind === "del").length,
-          partIds: toReview,
-          risk,
-          rank: toReview.reduce((least, id) => Math.min(least, rankOf(id)), Infinity),
-        },
-      ] as const;
-    }),
-  );
-  const fileRank = (path: string) => fileFacts.get(path)?.rank ?? Infinity;
-  const byRank = (a: string, b: string) => fileRank(a) - fileRank(b) || compare(a, b);
-  const paths = files.map((file) => file.path).sort(byRank);
-
-  // Links between those files: imports, calls, type uses and requests.
+  const known = new Set(files.map((file) => file.path));
   const links = new Map<string, Map<string, Link>>();
   const link = (from: string, to: string, use: EdgeUse, symbol?: string) => {
-    if (from === to || !fileFacts.has(from) || !fileFacts.has(to)) return;
+    if (from === to || !known.has(from) || !known.has(to)) return;
     const out = links.get(from) ?? new Map<string, Link>();
-    const one = out.get(to) ?? { uses: new Set<EdgeUse>(), symbols: new Set<string>() };
+    const one = out.get(to) ?? { ...newLink(), pairs: 1 };
     one.uses.add(use);
     if (symbol !== undefined) one.symbols.add(symbol);
     out.set(to, one);
@@ -315,6 +255,94 @@ export const fileOverview = (
     const to = pathOfHunk.get(hunkIdOf(hint.toPartId));
     if (from !== undefined && to !== undefined) link(from, to, hint.use, hint.symbol);
   }
+  return { mechanical, files, pathOfHunk, links };
+};
+
+/**
+ * For each changed file, the files it calls, imports, uses types from or sends requests to: the
+ * links the overview draws, file by file. The rail shows them for the file in view.
+ */
+export const fileNeighbors = (
+  analysis: Pick<OverviewInput, "files" | "proofs" | "callGraph" | "fileLinks">,
+): ReadonlyMap<string, ReadonlySet<string>> =>
+  new Map([...linksBetweenFiles(analysis).links].map(([from, out]) => [from, new Set(out.keys())]));
+
+/** What the overview reads of an analysis. */
+export type OverviewInput = Pick<
+  Analysis,
+  "files" | "parts" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated"
+> &
+  Partial<Pick<Analysis, "unchangedCallers">>;
+
+/**
+ * The overview of the changed files with a hunk to review, by directory. Each directory is a node
+ * holding its code, its docs and its tests that link to nothing, except the directories in
+ * `expanded`, whose files are nodes of their own. Tests and test helpers (files with a helper's name
+ * only tests link to) are badges on the nodes they link to; nodes no edge touches sit in the strip.
+ *
+ * Edges come from imports, from calls and type uses between files, and from requests a file sends
+ * to the routes another file adds, so a test's requests put its badge on the routes; between two
+ * nodes they merge into one. A node's row is one more than its lowest caller's. Two nodes that link
+ * each other keep the edge joining more pairs of files pointing down; any other cycle, or a tie, is
+ * broken at the edges into its node earliest in tour order. Rows are ordered by the mean position
+ * of each node's callers, then of its callees, then of its callers again, with tour order on ties.
+ *
+ * Files outside the pull request that use what it changes, read from a local checkout, are faded
+ * nodes one row below the lowest node they use, which joins the diagram if nothing else linked it.
+ * Above 10 of them, they group by directory. Tests and helpers in the pull request have no node,
+ * so their outside callers show only on their cards.
+ */
+export const fileOverview = (
+  analysis: OverviewInput,
+  steps: readonly TourStep[],
+  expanded: ReadonlySet<string> = new Set(),
+  /** A file's contract parts as the page counts them; else its parts in contract hunks. */
+  contractOf?: (path: string) => number,
+): FileOverview => {
+  const { mechanical, files, pathOfHunk, links } = linksBetweenFiles(analysis);
+  const riskOf = new Map(analysis.risk.map((one) => [one.hunkId, one.riskClass]));
+  const tourOrder = [...new Set(steps.flatMap((step) => step.partIds))];
+  const rank = new Map(tourOrder.map((id, at) => [id, at]));
+  const rankOf = (id: PartId) => rank.get(id) ?? tourOrder.length;
+  const generated = new Set(analysis.generated);
+
+  // What the nodes show of each file with a hunk to review.
+  const fileFacts = new Map(
+    files.map((file) => {
+      const lines = file.hunks.flatMap((hunk) => hunk.lines);
+      const toReview = piecesOf(file, partsByHunk(analysis.parts))
+        .map((piece) => piece.id)
+        .filter((id) => !mechanical.has(hunkIdOf(id)))
+        .sort((a, b) => rankOf(a) - rankOf(b));
+      const byHunks = file.hunks
+        .map(
+          (hunk): RiskClass =>
+            mechanical.has(hunk.id) ? "mechanical" : (riskOf.get(hunk.id) ?? "logic"),
+        )
+        .reduce((a, b) => (RISK_RANK[b] > RISK_RANK[a] ? b : a), "mechanical");
+      const contract =
+        contractOf?.(file.path) ??
+        toReview.filter((id) => riskOf.get(hunkIdOf(id)) === "contract").length;
+      // The page's count is per part, so a file whose contract hunk splits into logic parts is logic.
+      const risk: RiskClass =
+        contract > 0 ? "contract" : byHunks === "contract" ? "logic" : byHunks;
+      return [
+        file.path,
+        {
+          added: lines.filter((line) => line.kind === "add").length,
+          deleted: lines.filter((line) => line.kind === "del").length,
+          partIds: toReview,
+          risk,
+          contract,
+          rank: toReview.reduce((least, id) => Math.min(least, rankOf(id)), Infinity),
+        },
+      ] as const;
+    }),
+  );
+  const fileRank = (path: string) => fileFacts.get(path)?.rank ?? Infinity;
+  const byRank = (a: string, b: string) => fileRank(a) - fileRank(b) || compare(a, b);
+  const paths = files.map((file) => file.path).sort(byRank);
+
   const linkedFrom = (path: string) => [...(links.get(path)?.keys() ?? [])];
   const linkersOf = (path: string) => paths.filter((other) => links.get(other)?.has(path) === true);
 
@@ -360,21 +388,14 @@ export const fileOverview = (
     for (const path of reached) testsOn.set(path, [...(testsOn.get(path) ?? []), test]);
   }
 
-  // Nodes: code files, or above the limit, groups of them by directory.
-  const grouped = code.length > MAX_FILE_NODES;
+  // Nodes: directories, each holding its code, docs and tests that reach no code, or a file of a
+  // directory opened in place.
+  const unlinkedTests = [...testLike].filter((test) => (badgesOf.get(test) ?? []).length === 0);
   const members = new Map<string, string[]>();
-  for (const path of code) {
-    const directory = area(path);
-    const key = grouped && !expanded.has(groupKey(directory)) ? groupKey(directory) : path;
+  for (const path of [...code, ...docs, ...unlinkedTests].sort(byTreePath)) {
+    const box = groupKey(directoryOf(path));
+    const key = expanded.has(box) ? path : box;
     members.set(key, [...(members.get(key) ?? []), path]);
-  }
-  // A group of one file is that file.
-  for (const [key, inIt] of [...members]) {
-    const [only] = inIt;
-    if (key.startsWith("group:") && inIt.length === 1 && only !== undefined) {
-      members.delete(key);
-      members.set(only, [only]);
-    }
   }
   const nodeOf = new Map<string, string>();
   for (const [key, inIt] of members) for (const path of inIt) nodeOf.set(path, key);
@@ -390,9 +411,10 @@ export const fileOverview = (
       const b = nodeOf.get(to);
       if (a === undefined || b === undefined || a === b) continue;
       const byTo = nodeLinks.get(a) ?? new Map<string, Link>();
-      const merged = byTo.get(b) ?? { uses: new Set<EdgeUse>(), symbols: new Set<string>() };
+      const merged = byTo.get(b) ?? newLink();
       for (const use of one.uses) merged.uses.add(use);
       for (const symbol of one.symbols) merged.symbols.add(symbol);
+      merged.pairs += one.pairs;
       byTo.set(b, merged);
       nodeLinks.set(a, byTo);
     }
@@ -412,7 +434,7 @@ export const fileOverview = (
         uses: 0,
         partIds: new Set<PartId>(),
       };
-      const one = known.targets.get(target) ?? { uses: new Set(), symbols: new Set() };
+      const one = known.targets.get(target) ?? newLink();
       one.uses.add(use.use);
       one.symbols.add(symbol);
       known.targets.set(target, one);
@@ -442,7 +464,7 @@ export const fileOverview = (
     const byTo = new Map<string, Link>();
     for (const path of inIt) {
       for (const [to, one] of outsideOf.get(path)?.targets ?? []) {
-        const merged = byTo.get(to) ?? { uses: new Set<EdgeUse>(), symbols: new Set<string>() };
+        const merged = byTo.get(to) ?? newLink();
         for (const use of one.uses) merged.uses.add(use);
         for (const symbol of one.symbols) merged.symbols.add(symbol);
         byTo.set(to, merged);
@@ -457,17 +479,25 @@ export const fileOverview = (
   ]);
   const inDiagram = keys.filter((key) => touched.has(key));
 
-  // Break cycles at the edge into the node earliest in tour order, until there are none.
+  // Break cycles until there are none. Two nodes that link each other keep the edge joining more
+  // pairs of files pointing down, so the directory with more calls into the other sits above it.
+  // Otherwise, and on a tie, the edges into the node earliest in tour order point up.
   const back = new Set<string>();
   const edgeKey = (from: string, to: string) => `${from}\u0000${to}`;
   const forward = (key: string) =>
     [...(nodeLinks.get(key)?.keys() ?? [])].filter((to) => !back.has(edgeKey(key, to)));
+  const pairs = (from: string, to: string) => nodeLinks.get(from)?.get(to)?.pairs ?? 0;
   for (
     let found = cycles(inDiagram, forward);
     found.length > 0;
     found = cycles(inDiagram, forward)
   ) {
     for (const component of found) {
+      const [a, b, more] = component;
+      if (a !== undefined && b !== undefined && more === undefined && pairs(a, b) !== pairs(b, a)) {
+        back.add(pairs(a, b) < pairs(b, a) ? edgeKey(a, b) : edgeKey(b, a));
+        continue;
+      }
       const [first] = [...component].sort(keyOrder);
       for (const from of component) {
         if (first !== undefined && forward(from).includes(first)) back.add(edgeKey(from, first));
@@ -552,6 +582,7 @@ export const fileOverview = (
           : (outsideLabels.get(only) ?? only),
       added: 0,
       deleted: 0,
+      contract: 0,
       risk: "logic",
       generated: false,
       entries: [],
@@ -574,6 +605,7 @@ export const fileOverview = (
       label: group ? `${key.slice("group:".length) || "."}/` : (labels.get(key) ?? key),
       added: facts.reduce((sum, one) => sum + one.added, 0),
       deleted: facts.reduce((sum, one) => sum + one.deleted, 0),
+      contract: facts.reduce((sum, one) => sum + one.contract, 0),
       risk: facts
         .map((one) => one.risk)
         .reduce((a, b) => (RISK_RANK[b] > RISK_RANK[a] ? b : a), "mechanical"),
@@ -587,13 +619,7 @@ export const fileOverview = (
     };
   };
   const rows = rowKeys.map((row, at) => row.map((key) => node(key, at)));
-  const strip = [
-    ...keys.filter((key) => !touched.has(key)),
-    ...docs,
-    ...[...testLike].filter((test) => (badgesOf.get(test) ?? []).length === 0),
-  ]
-    .sort(keyOrder)
-    .map((key) => node(key, -1));
+  const strip = keys.filter((key) => !touched.has(key)).map((key) => node(key, -1));
 
   const placeOf = new Map<string, string>();
   for (const one of [...rows.flat(), ...strip]) {
@@ -621,7 +647,7 @@ export const fileOverview = (
       }),
     ),
   );
-  return { rows, edges, strip, placeOf, grouped };
+  return { rows, edges, strip, placeOf };
 };
 
 /**

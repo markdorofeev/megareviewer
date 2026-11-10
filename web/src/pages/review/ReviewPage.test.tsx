@@ -444,12 +444,17 @@ describe("map", () => {
       "src/services/receipts.ts",
       "package.json",
     ]);
-    // Nothing beside or above the code: no rail, jump field, grouping switch or contract list.
-    expect(screen.queryByRole("complementary")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Show Map|Jump to/ })).toBeNull();
+    // Beside the code, only the tree of its files, in the same order; nothing above it.
+    const rail = screen.getByRole("navigation", { name: "Changed files" });
+    expect(
+      within(rail)
+        .getAllByRole("button")
+        .map((row) => row.title),
+    ).toEqual(["src/routes/orders.ts", "src/services/receipts.ts", "package.json"]);
+    expect(screen.queryByRole("button", { name: /Jump to/ })).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
     expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(document.querySelector(".review-body.map")?.children).toHaveLength(1);
+    expect(document.querySelector(".review-body.map")?.children).toHaveLength(2);
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
     expect(
       within(mainArea())
@@ -618,11 +623,11 @@ const openOverview = async () => {
 /** The diagram's file nodes by row, as their labels. */
 const overviewRows = () => {
   const rows = new Map<string, string[]>();
-  for (const node of overviewBox().querySelectorAll<HTMLElement>(
-    ".overview-diagram .overview-node",
+  for (const box of overviewBox().querySelectorAll<HTMLElement>(
+    ".overview-diagram .overview-node-box",
   )) {
-    const label = node.querySelector(".overview-label")?.textContent ?? "";
-    rows.set(node.style.top, [...(rows.get(node.style.top) ?? []), label]);
+    const label = box.querySelector(".overview-label")?.textContent ?? "";
+    rows.set(box.style.top, [...(rows.get(box.style.top) ?? []), label]);
   }
   return [...rows.values()];
 };
@@ -636,55 +641,58 @@ const pressed = (name: string) =>
   screen.getByRole("button", { name }).getAttribute("aria-pressed") === "true";
 
 describe("overview", () => {
-  it("draws the changed files from the entry down, with unlinked ones in the strip", async () => {
+  it("draws the changed directories from the entry down, with unlinked ones in the strip", async () => {
     renderReview();
     await loaded();
     await openOverview();
     expect(overviewRows()).toEqual([
-      ["orders.ts"],
-      ["receipts.ts"],
+      ["src/routes/"],
+      ["src/services/"],
       ["email-receipts.ts", "email-receipts.test.ts"],
     ]);
+    expect(nodeOf("group:src/routes").getAttribute("aria-label")).toMatch(
+      /^src\/routes\/, 1 file, /,
+    );
     const strip = within(overviewBox()).getByRole("region", { name: "Not linked" });
-    expect(within(strip).getByRole("button", { name: /^package\.json, contract/ })).toBeTruthy();
+    expect(within(strip).getByRole("button", { name: /^\.\/, 1 file, \d+ contract/ })).toBeTruthy();
     // Proved-mechanical files aren't in it: the map lists them with their proofs.
     expect(overviewBox().querySelector('[data-key="pnpm-lock.yaml"]')).toBeNull();
   });
 
-  it("opens a file's first hunk in the map on a click, and Esc goes back to its node", async () => {
+  it("opens a directory's first file in the map on a click, and Esc goes back to it", async () => {
     renderReview();
     await loaded();
     await openOverview();
-    await userEvent.click(nodeOf("src/services/receipts.ts"));
+    await userEvent.click(nodeOf("group:src/services"));
     expect(pressed("Map")).toBe(true);
-    expect(scrolledTo().at(-1)).toBe(`hunk-${p.cache}`);
+    expect(scrolledTo().at(-1)).toBe("file-src/services/receipts.ts");
     await userEvent.keyboard("{Escape}");
     expect(pressed("Overview")).toBe(true);
-    expect(focusedKey()).toBe("src/services/receipts.ts");
+    expect(focusedKey()).toBe("group:src/services");
   });
 
   it("moves between files with the arrows, and Enter opens one", async () => {
     renderReview();
     await loaded();
     await openOverview();
-    nodeOf("src/routes/orders.ts").focus();
+    nodeOf("group:src/routes").focus();
     await userEvent.keyboard("{ArrowDown}");
-    expect(focusedKey()).toBe("src/services/receipts.ts");
+    expect(focusedKey()).toBe("group:src/services");
     await userEvent.keyboard("{ArrowDown}");
     expect(focusedKey()).toBe("outside:src/jobs/email-receipts.ts");
     await userEvent.keyboard("{ArrowDown}");
-    expect(focusedKey()).toBe("package.json");
+    expect(focusedKey()).toBe("group:");
     await userEvent.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}");
-    expect(focusedKey()).toBe("src/routes/orders.ts");
-    // A focused file names its flows and what it reaches, for the keyboard.
+    expect(focusedKey()).toBe("group:src/routes");
+    // A focused directory names its files, flows and what it reaches, for the keyboard.
     expect(
       screen.getByText(
-        "src/routes/orders.ts · read in The receipt endpoint · reaches receipts.ts (cachedReceipt).",
+        "src/routes/: orders.ts · read in The receipt endpoint · reaches src/services/ (cachedReceipt).",
       ),
     ).toBeTruthy();
     await userEvent.keyboard("{Enter}");
     expect(pressed("Map")).toBe(true);
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptRoute}`);
+    expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
   });
 
   it("names what an edge carries", async () => {
@@ -694,7 +702,7 @@ describe("overview", () => {
     const edge = overviewBox().querySelector(".overview-edge");
     expect(edge?.classList.contains("call")).toBe(true);
     expect(edge?.querySelector("title")?.textContent).toBe(
-      "orders.ts imports, calls receipts.ts: cachedReceipt",
+      "src/routes/ imports, calls src/services/: cachedReceipt",
     );
   });
   it("names what an edge carries on hover, and lights the hovered file's edges", async () => {
@@ -705,17 +713,17 @@ describe("overview", () => {
     if (edge === null) throw new Error("no edge");
     await userEvent.hover(edge);
     expect(overviewBox().querySelector(".overview-detail")?.textContent).toBe(
-      "orders.ts imports, calls receipts.ts: cachedReceipt",
+      "src/routes/ imports, calls src/services/: cachedReceipt",
     );
     await userEvent.unhover(edge);
-    await userEvent.hover(nodeOf("src/services/receipts.ts"));
+    await userEvent.hover(nodeOf("group:src/services"));
     expect(edge.classList.contains("lit")).toBe(true);
-    await userEvent.unhover(nodeOf("src/services/receipts.ts"));
-    expect(screen.getByText(/^Hover or focus a file/)).toBeTruthy();
+    await userEvent.unhover(nodeOf("group:src/services"));
+    expect(screen.getByText(/^Hover or focus a directory/)).toBeTruthy();
   });
 
   // It renders the large fixture's map first, which takes about 9 s on CI's runners.
-  it("groups a large PR's files by directory, and opens a group in place", async () => {
+  it("draws a large PR by directory, and opens a directory in place", async () => {
     renderReview({ view: largeAnalysisView });
     await screen.findByRole("heading", {
       level: 1,
@@ -730,7 +738,7 @@ describe("overview", () => {
       ["src/module4/"],
       ["src/module5/"],
     ]);
-    await userEvent.click(nodeOf("group:src/module1"));
+    await userEvent.click(screen.getByRole("button", { name: "Show the files of src/module1/" }));
     expect(overviewBox().querySelector('[data-key="group:src/module1"]')).toBeNull();
     expect(nodeOf("src/module1/part7.ts")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Collapse src/module1/" }));
@@ -746,13 +754,13 @@ describe("layouts", () => {
     expect(focusedLabel()).toMatch(IMPORTS);
     await userEvent.keyboard("v");
     expect(pressed("Overview")).toBe(true);
-    expect(focusedKey()).toBe("src/routes/orders.ts");
+    expect(focusedKey()).toBe("group:src/routes");
 
     await userEvent.keyboard("{ArrowDown}");
     await userEvent.keyboard("v");
     expect(pressed("Map")).toBe(true);
-    expect(scrolledTo().at(-1)).toBe(`hunk-${p.cache}`);
-    expect(focusedLabel()).toMatch(CACHE);
+    expect(scrolledTo().at(-1)).toBe("file-src/services/receipts.ts");
+    expect(focusedLabel()).toBe("src/services/receipts.ts");
   });
 
   it("remember the choice for every PR, and read a stored call tree as the overview", async () => {
@@ -1190,10 +1198,10 @@ describe("outside the pull request", () => {
     expect(outside.getAttribute("aria-label")).toBe("email-receipts.ts, outside the PR · 1 use");
     act(() => outside.focus());
     expect(overviewBox().querySelector(".overview-detail")?.textContent).toBe(
-      "src/jobs/email-receipts.ts · outside the pull request · uses receipts.ts (renderReceipt).",
+      "src/jobs/email-receipts.ts · outside the pull request · uses src/services/ (renderReceipt).",
     );
     expect(overviewBox().querySelector(".overview-legend")?.textContent).toContain(
-      "Faded files are outside the pull request, under the files whose changes they use.",
+      "Faded files are outside the pull request, under the code whose changes they use.",
     );
     await userEvent.click(outside);
     expect(pressed("Map")).toBe(true);

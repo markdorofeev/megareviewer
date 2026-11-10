@@ -435,8 +435,116 @@ details.warnings ul {
   align-items: start;
 }
 
+.review-body.map {
+  grid-template-columns: 272px minmax(0, 1fr);
+}
+
 .intent-dialog {
   width: min(960px, 100%);
+}
+
+/* The changed files as a directory tree beside the code */
+
+.tree-rail {
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: var(--space-1) var(--space-1) var(--space-4) 0;
+  overscroll-behavior: contain;
+  font-size: var(--text-sm);
+}
+
+.tree-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree-list .tree-list {
+  margin-left: var(--space-2);
+  padding-left: var(--space-1);
+  border-left: 1px solid var(--color-border);
+}
+
+.tree-heading,
+.tree-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 2px var(--space-1);
+}
+
+.tree-heading {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.tree-heading-label,
+.tree-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-file {
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-file:hover {
+  background: var(--color-surface-subtle);
+}
+
+.tree-file:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.tree-file.current {
+  background: var(--color-accent-subtle);
+  font-weight: 600;
+}
+
+.tree-file.other {
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+.tree-arrow {
+  flex: none;
+  width: 1ch;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.tree-contract {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.tree-contract-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-danger);
 }
 
 /* Map: every changed file in one scroll */
@@ -698,8 +806,46 @@ details.warnings ul {
   cursor: pointer;
 }
 
-.overview-diagram .overview-node {
+/* The box a node's buttons sit in: the node fills it, the expand button sits in its corner. */
+.overview-node-box {
+  position: relative;
+  display: grid;
+}
+
+.overview-diagram .overview-node-box {
   position: absolute;
+}
+
+.overview-node-box > .overview-node {
+  width: 100%;
+  height: 100%;
+}
+
+.overview-expand {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.overview-expand:hover,
+.overview-expand:focus-visible {
+  border-color: currentColor;
+  opacity: 1;
+}
+
+.overview-node.group .overview-node-head {
+  padding-right: 22px;
 }
 
 .overview-node.risk-contract {
@@ -726,10 +872,10 @@ details.warnings ul {
   opacity: 0.75;
 }
 
-.overview-node.group {
-  box-shadow:
-    3px 3px 0 -1px var(--color-surface-subtle),
-    3px 3px 0 0 var(--color-border-strong);
+/* The directory of the file last in view in the code. */
+.overview-node.current {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .overview-node:hover,
@@ -1092,9 +1238,29 @@ details.warnings ul {
   overflow-wrap: anywhere;
 }
 
+.rail-toggle {
+  display: none;
+}
+
 @media (max-width: 1024px) {
-  .review-header {
+  .review-header,
+  .review-body.map {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail-toggle {
+    display: block;
+    flex: none;
+  }
+
+  .review-body.map > .tree-rail {
+    display: none;
+    position: static;
+    max-height: 50vh;
+  }
+
+  .review-body.map.rail-open > .tree-rail {
+    display: block;
   }
 
   .review-actions {

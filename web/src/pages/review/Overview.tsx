@@ -10,11 +10,12 @@ const PAD = 16;
 const MIN_WIDTH = 120;
 const MAX_WIDTH = 300;
 /** Roughly what a character takes: of the label, of the line under it, of a badge. */
-const LABEL_CHAR = 7.8;
+const LABEL_CHAR = 8.6;
 const META_CHAR = 6.6;
 const BADGE_CHAR = 6.7;
-/** The padding beside the label. */
+/** The padding beside the label, and the expand button beside a directory's. */
 const LABEL_ROOM = 32;
+const EXPAND_ROOM = 24;
 const TEXT_ROOM = 20;
 /** The widest a node grows to fit its text; past it, the text is cut with an ellipsis. */
 const MAX_FIT = 380;
@@ -23,14 +24,21 @@ const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1)
 
 const uses = (count: number): string => (count === 1 ? "1 use" : `${count} uses`);
 
+const files = (count: number): string => (count === 1 ? "1 file" : `${count} files`);
+
 const metaText = (
-  node: Pick<OverviewNode, "kind" | "paths" | "added" | "deleted" | "entries" | "uses">,
+  node: Pick<
+    OverviewNode,
+    "kind" | "paths" | "added" | "deleted" | "contract" | "entries" | "uses"
+  >,
 ) =>
   node.kind === "outside"
-    ? `${node.paths.length > 1 ? `${node.paths.length} files · ` : ""}outside the PR · ${uses(node.uses)}`
-    : `${node.kind === "group" ? `${node.paths.length} files · ` : ""}+${node.added} −${node.deleted}${
-        node.entries.length > 0 ? ` · ${node.entries.join(", ")}` : ""
-      }`;
+    ? `${node.paths.length > 1 ? `${files(node.paths.length)} · ` : ""}outside the PR · ${uses(node.uses)}`
+    : [
+        node.kind === "group" ? files(node.paths.length) : `+${node.added} −${node.deleted}`,
+        ...(node.contract > 0 ? [`${node.contract} contract`] : []),
+        ...node.entries,
+      ].join(" · ");
 
 /**
  * Wider with more lines changed, up to a maximum, and at least wide enough for its label, entries
@@ -43,7 +51,9 @@ export const nodeWidth = (node: OverviewNode): number => {
   );
   const fit = Math.min(
     Math.max(
-      node.label.length * LABEL_CHAR + LABEL_ROOM,
+      node.label.length * LABEL_CHAR +
+        LABEL_ROOM +
+        (node.kind === "group" && node.paths.length > 1 ? EXPAND_ROOM : 0),
       metaText(node).length * META_CHAR + TEXT_ROOM,
       badges + TEXT_ROOM,
     ),
@@ -84,16 +94,16 @@ const layout = (rows: FileOverview["rows"], backEdges: boolean) => {
 };
 
 /**
- * Solid for a call, dash-dot for a request, dashed for an import only, dotted for a type. From
- * outside the pull request, faded.
+ * Dash-dot for a request, which crosses into another process, even merged with calls; else solid
+ * for a call, dashed for an import only, dotted for a type. From outside the pull request, faded.
  */
 const edgeStyle = (edge: OverviewEdge): string =>
   edge.outside
     ? "outside"
-    : edge.uses.includes("call")
-      ? "call"
-      : edge.uses.includes("request")
-        ? "request"
+    : edge.uses.includes("request")
+      ? "request"
+      : edge.uses.includes("call")
+        ? "call"
         : edge.uses.every((use) => use === "import")
           ? "import"
           : "type";
@@ -187,17 +197,23 @@ const describeEdge = (edge: OverviewEdge, labelOf: (key: string) => string): str
   return `${labelOf(edge.from)} ${uses} ${labelOf(edge.to)}${symbols}`;
 };
 
+/** A file's box, or a directory's, with a button that opens the directory in place. */
 const NodeButton = ({
   node,
   box,
   active,
+  current,
   onOpen,
+  onExpand,
   onFocus,
 }: {
   readonly node: OverviewNode;
   readonly box?: Box;
   readonly active: boolean;
+  /** It holds the file last in view in the code. */
+  readonly current: boolean;
   readonly onOpen: (node: OverviewNode) => void;
+  readonly onExpand: (node: OverviewNode) => void;
   readonly onFocus: (node: OverviewNode | null) => void;
 }) => {
   const group = node.kind === "group";
@@ -207,45 +223,73 @@ const NodeButton = ({
       ? [node.label, metaText(node)]
       : [
           node.label,
-          group ? `${node.paths.length} files` : null,
+          group ? files(node.paths.length) : null,
+          node.contract > 0 ? `${node.contract} contract` : null,
           ...node.entries,
           node.risk,
           node.generated ? "generated" : null,
+          current ? "in view in the code" : null,
         ]
   )
     .filter((part) => part !== null)
     .join(", ");
+  const classes = [
+    "overview-node",
+    outside ? "outside" : `risk-${node.risk}`,
+    node.generated && "generated",
+    group && "group",
+    active && "active",
+    current && "current",
+  ];
   return (
-    <button
-      type="button"
-      className={`overview-node ${outside ? "outside" : `risk-${node.risk}`}${node.generated ? " generated" : ""}${group ? " group" : ""}${active ? " active" : ""}`}
-      data-key={node.key}
-      aria-label={name}
-      title={node.paths.length === 1 ? node.paths[0] : undefined}
+    <div
+      className="overview-node-box"
       style={
         box === undefined
           ? { width: nodeWidth(node) }
           : { left: box.x, top: box.y, width: box.width, height: NODE_HEIGHT }
       }
-      onClick={() => onOpen(node)}
-      onFocus={() => onFocus(node)}
-      onMouseEnter={() => onFocus(node)}
-      onMouseLeave={() => onFocus(null)}
     >
-      <span className="overview-node-head">
-        <span className="overview-label">{node.label}</span>
-      </span>
-      <span className="overview-meta">{metaText(node)}</span>
-      {node.badges.length > 0 && (
-        <span className="overview-badges">
-          {node.badges.map((test) => (
-            <span key={test} className="overview-badge">
-              {basename(test)}
-            </span>
-          ))}
+      <button
+        type="button"
+        className={classes.filter(Boolean).join(" ")}
+        data-key={node.key}
+        aria-label={name}
+        aria-current={current ? "location" : undefined}
+        title={group ? node.label : node.paths.length === 1 ? node.paths[0] : undefined}
+        onClick={() => onOpen(node)}
+        onFocus={() => onFocus(node)}
+        onMouseEnter={() => onFocus(node)}
+        onMouseLeave={() => onFocus(null)}
+      >
+        <span className="overview-node-head">
+          <span className="overview-label">{node.label}</span>
         </span>
+        <span className="overview-meta">{metaText(node)}</span>
+        {node.badges.length > 0 && (
+          <span className="overview-badges">
+            {node.badges.map((test) => (
+              <span key={test} className="overview-badge">
+                {basename(test)}
+              </span>
+            ))}
+          </span>
+        )}
+      </button>
+      {group && node.paths.length > 1 && (
+        <button
+          type="button"
+          className="overview-expand"
+          aria-label={`Show the files of ${node.label}`}
+          title="Show its files"
+          onClick={() => onExpand(node)}
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+            <path d="M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z" fill="currentColor" />
+          </svg>
+        </button>
       )}
-    </button>
+    </div>
   );
 };
 
@@ -260,12 +304,17 @@ type Hovered =
 export const Overview = ({
   overview,
   focusKey,
+  currentPath,
   onOpen,
+  onExpand,
   onCollapse,
   expandedGroups,
   onFocusNode,
 }: {
   readonly overview: FileOverview;
+  /** The file last in view in the code: its directory is outlined. */
+  readonly currentPath: string | null;
+  readonly onExpand: (groupKey: string) => void;
   /** A file to focus, at its place: its node, or one it's a badge on. A counter tells requests apart. */
   readonly focusKey: { readonly key: string; readonly n: number } | null;
   readonly onOpen: (node: OverviewNode) => void;
@@ -308,7 +357,7 @@ export const Overview = ({
     if (focusKey === null || focused.current === focusKey.n) return;
     const key = overview.placeOf.get(focusKey.key) ?? focusKey.key;
     const node = box.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`);
-    if (node === null || node === undefined || key.startsWith("group:")) return;
+    if (node === null || node === undefined) return;
     focused.current = focusKey.n;
     node.focus();
     node.scrollIntoView?.({ block: "nearest", inline: "nearest" });
@@ -347,10 +396,13 @@ export const Overview = ({
     if (node !== null) onFocusNode(node.key);
     setHovered(node === null ? null : { kind: "node", node });
   };
+  const currentKey = currentPath === null ? null : (overview.placeOf.get(currentPath) ?? null);
   const nodeProps = (node: OverviewNode) => ({
     node,
     active: hoveredNode === node.key,
+    current: currentKey === node.key,
     onOpen,
+    onExpand: (one: OverviewNode) => onExpand(one.key),
     onFocus: onNodeFocus,
   });
 
@@ -362,11 +414,12 @@ export const Overview = ({
       onKeyDown={onKeyDown}
     >
       <p className="overview-legend muted">
-        Files that nothing in the pull request calls are on top; each file sits below its callers.
-        Solid lines are calls, dash-dot ones HTTP requests to a route, dashed ones imports, dotted
-        ones types. Tests show on the files they call.
+        Each box is a directory. Directories that nothing in the pull request calls are on top; each
+        sits below its callers. Solid lines are calls, dash-dot ones HTTP requests to a route,
+        dashed ones imports, dotted ones types. Tests show on the directories they call. The
+        outlined box holds the file last in view in the code.
         {overview.edges.some((edge) => edge.outside) &&
-          " Faded files are outside the pull request, under the files whose changes they use."}
+          " Faded files are outside the pull request, under the code whose changes they use."}
       </p>
       {expandedGroups.length > 0 && (
         <p className="overview-expanded">
@@ -448,7 +501,7 @@ export const Overview = ({
       )}
       <p className="overview-detail" aria-live="polite">
         {hovered === null
-          ? "Hover or focus a file to see its flows and tests."
+          ? "Hover or focus a directory to see its files, flows and tests."
           : hovered.kind === "edge"
             ? describeEdge(hovered.edge, labelOf)
             : nodeDetail(hovered.node, overview.edges, labelOf)}
@@ -475,9 +528,7 @@ const nodeDetail = (
     return `${where} · outside the pull request · uses ${out.join(", ")}.`;
   }
   const parts = [
-    node.kind === "group"
-      ? `${node.label}: ${node.paths.length} files, Enter expands`
-      : node.paths[0],
+    node.kind === "group" ? `${node.label}: ${node.paths.map(basename).join(", ")}` : node.paths[0],
     node.flows.length > 0 ? `read in ${node.flows.join("; ")}` : "in no flow",
     ...(out.length > 0 ? [`reaches ${out.join(", ")}`] : []),
     ...(node.badges.length > 0 ? [`tested in ${node.badges.map(basename).join(", ")}`] : []),

@@ -18,9 +18,10 @@ import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
-import { MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
+import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
 import {
   commentsInParts,
+  contractParts,
   decisionPlaces,
   type Layout,
   mapFiles,
@@ -31,7 +32,7 @@ import {
   trailingProofs,
 } from "./model.ts";
 import { Overview } from "./Overview.tsx";
-import { fileOverview, type OverviewNode } from "./overview.ts";
+import { fileNeighbors, fileOverview, type OverviewNode } from "./overview.ts";
 import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
@@ -39,7 +40,10 @@ import { ShortcutsDialog } from "./ShortcutsDialog.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
 import { type ShortcutAction, useShortcuts } from "./shortcuts.ts";
 import { useStoredState } from "./storage.ts";
+import { TreeRail } from "./TreeRail.tsx";
+import { fileTree } from "./tree.ts";
 import { UsageFooter } from "./UsageFooter.tsx";
+import { useFileInView } from "./useFileInView.ts";
 import { useVerdicts } from "./useVerdicts.ts";
 
 const NO_COMMENTS: readonly HunkComment[] = [];
@@ -171,14 +175,31 @@ const Review = ({
     () => decisionPlaces(analysis.decisions, order, index),
     [analysis.decisions, order, index],
   );
-  // Groups of files the reviewer opened in the overview, when it groups them by directory.
+  const contractOf = useMemo(() => {
+    const counts = new Map(files.map((group) => [group.file.path, contractParts(group, index)]));
+    return (path: string) => counts.get(path) ?? 0;
+  }, [files, index]);
+  const tree = useMemo(
+    () =>
+      fileTree(
+        files.map((group) => group.file.path),
+        contractOf,
+      ),
+    [files, contractOf],
+  );
+  const neighbors = useMemo(() => fileNeighbors(analysis), [analysis]);
+  // Directories the reviewer opened in the overview, to see their files.
   const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([]);
   const overview = useMemo(
-    () => fileOverview(analysis, steps, new Set(expandedGroups)),
-    [analysis, steps, expandedGroups],
+    () => fileOverview(analysis, steps, new Set(expandedGroups), contractOf),
+    [analysis, steps, expandedGroups, contractOf],
   );
 
   const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);
+  const filePaths = useMemo(() => files.map((group) => group.file.path), [files]);
+  const fileInView = useFileInView(filePaths, layout === "map" && analysis.stages.prep === "done");
+  // At 1024px or less the rail is behind a button.
+  const [railOpen, setRailOpen] = useState(false);
   const unchanged = useMemo(() => {
     const byPart = new Map<PartId, UnchangedCallers[]>();
     for (const one of analysis.unchangedCallers) {
@@ -257,12 +278,9 @@ const Review = ({
     },
     [places],
   );
-  /** Focuses a file's place in the overview: its node, its group, or a node it's a badge on. */
+  /** Focuses a file's place in the overview: its directory, its node, or a node it's a badge on. */
   const focusInOverview = (path: string) => {
-    const place = overview.placeOf.get(path);
-    if (place === undefined) return;
-    // A file in a closed group opens the group, so its own node takes the focus.
-    if (place.startsWith("group:")) setExpandedGroups((previous) => [...previous, place]);
+    if (!overview.placeOf.has(path)) return;
     setOverviewFocus((previous) => ({ key: path, n: (previous?.n ?? 0) + 1 }));
   };
   /** Shows a hunk: scrolls to it in the map, focuses its file in the overview. */
@@ -296,31 +314,34 @@ const Review = ({
     const [first] = ids;
     if (first !== undefined) showHunk(first);
   };
+  /** The overview opens on the file the reviewer is on: the card holding the focus, else in view. */
   const openOverview = () => {
-    const current = currentHunk();
+    const focused = document.activeElement?.closest<HTMLElement>(".main-area.map .file-card");
+    const path = focused?.dataset.path ?? fileInView;
     setLayout(() => "overview");
     setOpenedFrom(null);
-    if (current !== null) showHunk(current, "overview");
+    if (path !== null) focusInOverview(path);
   };
-  /** Opens a node's code in the map, or a group in place. */
+  /** Opens a directory's or a file's first file in the map; outside, the code the node uses. */
   const openNode = (node: OverviewNode) => {
-    if (node.kind === "group") {
-      setExpandedGroups((previous) => [...previous, node.key]);
-      return;
-    }
-    const [first] = node.partIds;
+    const [path] = node.kind === "outside" ? [] : node.paths;
+    const first =
+      path === undefined
+        ? node.partIds[0]
+        : files.find((group) => group.file.path === path)?.partIds[0];
     if (first === undefined) return;
     setLayout(() => "map");
     setOpenedFrom(node.key);
     setFocusedHunkId(first);
-    showHunk(first, "map");
+    if (path === undefined) showHunk(first, "map");
+    else scrollTo(fileAnchor(path));
   };
   const switchLayout = () => {
     if (layout === "map") return openOverview();
     const node = [...overview.rows.flat(), ...overview.strip].find(
       (one) => one.key === overviewAt.current,
     );
-    if (node !== undefined && node.kind === "file") return openNode(node);
+    if (node !== undefined && node.kind !== "outside") return openNode(node);
     setLayout(() => "map");
   };
 
@@ -504,25 +525,38 @@ const Review = ({
           />
         }
         tools={
-          <fieldset className="layout-toggle">
-            <legend className="visually-hidden">Layout</legend>
-            <button
-              type="button"
-              className="button"
-              aria-pressed={layout === "map"}
-              onClick={() => layout !== "map" && switchLayout()}
-            >
-              Map
-            </button>
-            <button
-              type="button"
-              className="button"
-              aria-pressed={layout === "overview"}
-              onClick={() => layout !== "overview" && switchLayout()}
-            >
-              Overview
-            </button>
-          </fieldset>
+          <>
+            {layout === "map" && (
+              <button
+                type="button"
+                className="button rail-toggle"
+                aria-expanded={railOpen}
+                aria-controls="review-tree-rail"
+                onClick={() => setRailOpen(!railOpen)}
+              >
+                {railOpen ? "Hide files" : "Show files"}
+              </button>
+            )}
+            <fieldset className="layout-toggle">
+              <legend className="visually-hidden">Layout</legend>
+              <button
+                type="button"
+                className="button"
+                aria-pressed={layout === "map"}
+                onClick={() => layout !== "map" && switchLayout()}
+              >
+                Map
+              </button>
+              <button
+                type="button"
+                className="button"
+                aria-pressed={layout === "overview"}
+                onClick={() => layout !== "overview" && switchLayout()}
+              >
+                Overview
+              </button>
+            </fieldset>
+          </>
         }
         canPublish={!isAuthor || analysis.decisions.length > 0 || hunkComments.length > 0}
         reanalyzing={reanalyze.pending}
@@ -576,7 +610,13 @@ const Review = ({
           </p>
         </section>
       ) : layout === "map" ? (
-        <div className="review-body map">
+        <div className={`review-body map${railOpen ? " rail-open" : ""}`}>
+          <TreeRail
+            tree={tree}
+            current={fileInView}
+            neighbors={neighbors}
+            onGo={(path) => scrollTo(fileAnchor(path))}
+          />
           <MapLayout
             analysis={analysis}
             files={files}
@@ -593,7 +633,9 @@ const Review = ({
           <Overview
             overview={overview}
             focusKey={overviewFocus}
+            currentPath={fileInView}
             onOpen={openNode}
+            onExpand={(key) => setExpandedGroups((previous) => [...previous, key])}
             expandedGroups={expandedGroups}
             onCollapse={(key) =>
               setExpandedGroups((previous) => previous.filter((other) => other !== key))

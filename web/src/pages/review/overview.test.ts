@@ -12,7 +12,15 @@ import {
   type TourStep,
   TourStepId,
 } from "../../../../src/domain/review/index.ts";
-import { type FileOverview, fileOverview, type OverviewInput, uniqueLabels } from "./overview.ts";
+import {
+  type FileOverview,
+  fileNeighbors,
+  fileOverview,
+  groupKey,
+  type OverviewInput,
+  uniqueLabels,
+} from "./overview.ts";
+import { directoryOf } from "./tree.ts";
 
 const h = (n: number) => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
 
@@ -90,16 +98,21 @@ const tourOf = (files: readonly FileChange[]): TourStep[] => [
   ),
 ];
 
+/** The overview with every directory opened in place, so each file is a node of its own. */
+const opened = (analysis: OverviewInput, steps: readonly TourStep[]): FileOverview =>
+  fileOverview(
+    analysis,
+    steps,
+    new Set(analysis.files.map((one) => groupKey(directoryOf(one.path)))),
+  );
+
 const rowsOf = (overview: FileOverview) =>
   overview.rows.map((row) => row.map((node) => node.label));
 
-describe("fileOverview", () => {
+describe("fileOverview with every directory opened", () => {
   it("puts a chain in one row per file, from the file nothing calls", () => {
     const files = [file("c.py", [3]), file("a.py", [1]), file("b.py", [2])];
-    const overview = fileOverview(
-      input(files, { callGraph: [call(1, 2), call(2, 3)] }),
-      tourOf(files),
-    );
+    const overview = opened(input(files, { callGraph: [call(1, 2), call(2, 3)] }), tourOf(files));
     expect(rowsOf(overview)).toEqual([["a.py"], ["b.py"], ["c.py"]]);
     expect(overview.edges.map((edge) => [edge.from, edge.to, edge.uses, edge.back])).toEqual([
       ["a.py", "b.py", ["call"], false],
@@ -110,7 +123,7 @@ describe("fileOverview", () => {
   it("puts a file one row below its lowest caller, in a diamond", () => {
     // a calls b and d; b calls c; c calls d. d sits under c, not beside b.
     const files = [file("a.py", [1]), file("b.py", [2]), file("c.py", [3]), file("d.py", [4])];
-    const overview = fileOverview(
+    const overview = opened(
       input(files, { callGraph: [call(1, 2), call(1, 4), call(2, 3), call(3, 4)] }),
       tourOf(files),
     );
@@ -120,23 +133,20 @@ describe("fileOverview", () => {
   it("breaks a cycle at the edge into the file earliest in tour order", () => {
     const files = [file("a.py", [1]), file("b.py", [2]), file("c.py", [3])];
     const callGraph = [call(1, 2), call(2, 3), call(3, 1)];
-    const overview = fileOverview(input(files, { callGraph }), tourOf(files));
+    const overview = opened(input(files, { callGraph }), tourOf(files));
     expect(rowsOf(overview)).toEqual([["a.py"], ["b.py"], ["c.py"]]);
     expect(overview.edges.filter((edge) => edge.back).map((edge) => [edge.from, edge.to])).toEqual([
       ["c.py", "a.py"],
     ]);
     // Read from c first, the cycle opens at c instead.
-    const fromC = fileOverview(input(files, { callGraph }), [step(1, "From c", [3, 1, 2])]);
+    const fromC = opened(input(files, { callGraph }), [step(1, "From c", [3, 1, 2])]);
     expect(rowsOf(fromC)).toEqual([["c.py"], ["a.py"], ["b.py"]]);
   });
 
   it("orders a row by its callers' positions, so edges cross less", () => {
     // Read in this order, the second row would be y, x; x's caller is left of y's.
     const files = [file("a.py", [1]), file("b.py", [2]), file("y.py", [3]), file("x.py", [4])];
-    const overview = fileOverview(
-      input(files, { callGraph: [call(1, 4), call(2, 3)] }),
-      tourOf(files),
-    );
+    const overview = opened(input(files, { callGraph: [call(1, 4), call(2, 3)] }), tourOf(files));
     expect(rowsOf(overview)).toEqual([
       ["a.py", "b.py"],
       ["x.py", "y.py"],
@@ -145,7 +155,7 @@ describe("fileOverview", () => {
 
   it("merges imports, calls and type uses into one edge per pair", () => {
     const files = [file("a.py", [1]), file("b.py", [2])];
-    const overview = fileOverview(
+    const overview = opened(
       input(files, {
         fileLinks: [{ from: "a.py", to: "b.py" }],
         callGraph: [call(1, 2, "run"), { ...call(1, 2, "Thing"), use: "type" }],
@@ -175,7 +185,7 @@ describe("fileOverview", () => {
       ...call(from, to, symbol),
       use: "request",
     });
-    const overview = fileOverview(
+    const overview = opened(
       input(files, {
         callGraph: [
           call(1, 2),
@@ -207,7 +217,7 @@ describe("fileOverview", () => {
       file("src/testing/fake_clock.py", [5]),
       file("tests/test_lonely.py", [6]),
     ];
-    const overview = fileOverview(
+    const overview = opened(
       input(files, {
         callGraph: [call(1, 2), call(3, 1), call(3, 4), call(4, 2), call(3, 5)],
       }),
@@ -224,7 +234,7 @@ describe("fileOverview", () => {
 
   it("keeps code only tests call as a node, unless its name says it's a helper", () => {
     const files = [file("app/prices.py", [1]), file("tests/test_prices.py", [2])];
-    const overview = fileOverview(input(files, { callGraph: [call(2, 1)] }), tourOf(files));
+    const overview = opened(input(files, { callGraph: [call(2, 1)] }), tourOf(files));
     expect(overview.strip.map((node) => [node.label, node.badges])).toEqual([
       ["prices.py", ["tests/test_prices.py"]],
     ]);
@@ -232,7 +242,7 @@ describe("fileOverview", () => {
 
   it("shows a generated file as a faded node, not hidden", () => {
     const files = [file("web/Page.tsx", [1]), file("web/api/schema.d.ts", [2])];
-    const overview = fileOverview(
+    const overview = opened(
       input(files, {
         callGraph: [{ ...call(1, 2), use: "type" }],
         generated: ["web/api/schema.d.ts"],
@@ -253,7 +263,7 @@ describe("fileOverview", () => {
       file("web/Guide.tsx", [4]),
       file("web/Guide.test.tsx", [5]),
     ];
-    const overview = fileOverview(input(files, { callGraph: [call(1, 2)] }), tourOf(files));
+    const overview = opened(input(files, { callGraph: [call(1, 2)] }), tourOf(files));
     expect(overview.strip.map((node) => [node.key, node.row])).toEqual([
       ["CONTRIBUTING.md", -1],
       ["web/Guide.tsx", -1],
@@ -266,7 +276,7 @@ describe("fileOverview", () => {
     const proofs: MechanicalProof[] = [
       { hunkId: h(3), path: "pnpm-lock.yaml", kind: "generated", detail: "lockfile" },
     ];
-    const overview = fileOverview(input(files, { proofs, callGraph: [call(1, 2)] }), tourOf(files));
+    const overview = opened(input(files, { proofs, callGraph: [call(1, 2)] }), tourOf(files));
     expect([...overview.placeOf.keys()].sort()).toEqual(["a.py", "b.py"]);
   });
 
@@ -276,7 +286,7 @@ describe("fileOverview", () => {
       { hunkId: h(1), riskClass: "logic", reason: "", source: "rule" },
       { hunkId: h(2), riskClass: "contract", reason: "", source: "rule" },
     ];
-    const overview = fileOverview(input(files, { risk, callGraph: [call(1, 3)] }), [
+    const overview = opened(input(files, { risk, callGraph: [call(1, 3)] }), [
       step(1, "Second hunk first", [2, 1, 3]),
     ]);
     const [a] = overview.rows[0] ?? [];
@@ -316,7 +326,7 @@ describe("fileOverview", () => {
         merged: [],
       }),
     );
-    const overview = fileOverview(input([routes], { parts }), steps);
+    const overview = opened(input([routes], { parts }), steps);
     const [node] = [...overview.rows.flat(), ...overview.strip];
     expect(node?.entries).toEqual(["2 routes"]);
     expect(node?.partIds).toEqual([part(1), part(2)]);
@@ -341,7 +351,7 @@ describe("fileOverview", () => {
       step(4, "Command: main in cli.py", [5], [5]),
     ];
     const callGraph = [call(1, 6), call(2, 6), call(4, 6), call(5, 6)];
-    const overview = fileOverview(input(files, { callGraph }), steps);
+    const overview = opened(input(files, { callGraph }), steps);
     const entries = new Map(overview.rows.flat().map((node) => [node.label, node.entries]));
     expect(Object.fromEntries(entries)).toEqual({
       "routes.py": ["GET /a"],
@@ -363,7 +373,7 @@ describe("fileOverview", () => {
       codeTitle,
     });
     const steps = [titled(3, "Page: Setup", [4]), titled(4, "Command: main in cli.py", [5])];
-    const overview = fileOverview(input(files, { callGraph: [call(4, 6), call(5, 6)] }), steps);
+    const overview = opened(input(files, { callGraph: [call(4, 6), call(5, 6)] }), steps);
     const entries = new Map(overview.rows.flat().map((node) => [node.label, node.entries]));
     expect(entries.get("Setup.tsx")).toEqual(["Page: Setup"]);
     expect(entries.get("cli.py")).toEqual(["Command: main"]);
@@ -385,29 +395,6 @@ describe("fileOverview", () => {
       "a/x/same.py",
       "b/x/same.py",
     ]);
-  });
-
-  it("groups files by directory above 40 nodes, and expands a group in place", () => {
-    const files = Array.from({ length: 45 }, (_, at) =>
-      file(`src/module${at % 3}/part${at}.ts`, [at + 1]),
-    );
-    const callGraph = files.slice(0, -1).map((_, at) => call(at + 1, at + 2));
-    const overview = fileOverview(input(files, { callGraph }), tourOf(files));
-    expect(overview.grouped).toBe(true);
-    // module0 → module1 → module2 → module0: the cycle opens at module0, read first.
-    expect(rowsOf(overview)).toEqual([["src/module0/"], ["src/module1/"], ["src/module2/"]]);
-    expect(overview.rows[0]?.[0]?.paths).toHaveLength(15);
-    expect(overview.placeOf.get("src/module1/part4.ts")).toBe("group:src/module1");
-
-    const opened = fileOverview(
-      input(files, { callGraph }),
-      tourOf(files),
-      new Set(["group:src/module1"]),
-    );
-    const keys = opened.rows.flat().map((node) => node.key);
-    expect(keys).toContain("src/module1/part4.ts");
-    expect(keys).toContain("group:src/module0");
-    expect(keys).not.toContain("group:src/module1");
   });
 
   it("places every file with a hunk to review exactly once, over random pull requests", () => {
@@ -473,7 +460,7 @@ const usedBy = (n: number, symbol: string, paths: readonly string[]): UnchangedC
 describe("fileOverview outside the pull request", () => {
   it("puts each caller file one row below the file it uses, with an outside edge", () => {
     const files = [file("app/main.py", [1]), file("app/store.py", [2])];
-    const overview = fileOverview(
+    const overview = opened(
       input(files, {
         callGraph: [call(1, 2)],
         unchangedCallers: [
@@ -506,7 +493,7 @@ describe("fileOverview outside the pull request", () => {
 
   it("brings a file nothing in the pull request links into the diagram", () => {
     const files = [file("app/store.py", [1])];
-    const overview = fileOverview(
+    const overview = opened(
       input(files, { unchangedCallers: [usedBy(1, "save", ["jobs/sync.py"])] }),
       tourOf(files),
     );
@@ -520,7 +507,7 @@ describe("fileOverview outside the pull request", () => {
       ...Array.from({ length: 10 }, (_, at) => `jobs/nightly/job${at}.py`),
       "scripts/one.py",
     ];
-    const overview = fileOverview(
+    const overview = opened(
       input(files, { unchangedCallers: [usedBy(1, "save", paths)] }),
       tourOf(files),
     );
@@ -533,7 +520,7 @@ describe("fileOverview outside the pull request", () => {
 
   it("leaves out callers of tests and helpers, which have no node", () => {
     const files = [file("app/store.py", [1]), file("tests/test_store.py", [2])];
-    const overview = fileOverview(
+    const overview = opened(
       input(files, {
         callGraph: [call(2, 1)],
         unchangedCallers: [usedBy(2, "make_store", ["tests/test_other.py"])],
@@ -541,5 +528,130 @@ describe("fileOverview outside the pull request", () => {
       tourOf(files),
     );
     expect(overview.edges.some((edge) => edge.outside)).toBe(false);
+  });
+});
+
+describe("fileOverview by directory", () => {
+  const contract = (n: number): RiskAssessment => ({
+    hunkId: h(n),
+    riskClass: "contract",
+    reason: "",
+    source: "rule",
+  });
+
+  it("makes each directory a box with its files, contract parts, highest risk and tests", () => {
+    const files = [
+      file("api/routes.py", [1]),
+      file("api/models.py", [2]),
+      file("svc/run.py", [3]),
+      file("docs/guide.md", [4]),
+      file("tests/test_api.py", [5]),
+    ];
+    const analysis = input(files, {
+      risk: [contract(1)],
+      callGraph: [call(1, 3), call(1, 2), call(5, 1)],
+    });
+    const overview = fileOverview(analysis, tourOf(files));
+    expect(rowsOf(overview)).toEqual([["api/"], ["svc/"]]);
+    expect(overview.rows[0]?.[0]).toMatchObject({
+      key: "group:api",
+      kind: "group",
+      paths: ["api/models.py", "api/routes.py"],
+      contract: 1,
+      risk: "contract",
+      badges: ["tests/test_api.py"],
+    });
+    expect(overview.strip.map((node) => node.label)).toEqual(["docs/"]);
+    expect(overview.placeOf.get("api/routes.py")).toBe("group:api");
+    expect(overview.placeOf.get("tests/test_api.py")).toBe("group:api");
+
+    // The page counts contract per part, so a hunk the rules marked can hold no contract part.
+    const counted = fileOverview(analysis, tourOf(files), new Set(), () => 0);
+    expect(counted.rows[0]?.[0]).toMatchObject({ contract: 0, risk: "logic" });
+  });
+
+  it("merges the links between two directories into one edge, keeping its request", () => {
+    const files = [
+      file("web/Page.tsx", [1]),
+      file("web/client.ts", [2]),
+      file("api/routes.py", [3]),
+      file("api/models.py", [4]),
+    ];
+    const overview = fileOverview(
+      input(files, {
+        callGraph: [
+          call(1, 2),
+          { ...call(2, 3, "GET /items"), use: "request" },
+          { ...call(1, 4, "Item"), use: "type" },
+        ],
+      }),
+      tourOf(files),
+    );
+    expect(overview.edges).toEqual([
+      {
+        from: "group:web",
+        to: "group:api",
+        uses: ["type", "request"],
+        symbols: ["GET /items", "Item"],
+        back: false,
+        outside: false,
+      },
+    ]);
+  });
+
+  it("draws upward the edge joining fewer files when two directories call each other", () => {
+    const files = [
+      file("http/app.py", [1]),
+      file("http/models.py", [2]),
+      file("http/routes/items.py", [3]),
+    ];
+    const registers = { from: "http/app.py", to: "http/routes/items.py" };
+    // routes calls two files of http; http imports one of routes.
+    const heavier = fileOverview(
+      input(files, { fileLinks: [registers], callGraph: [call(3, 2), call(3, 1)] }),
+      tourOf(files),
+    );
+    expect(rowsOf(heavier)).toEqual([["http/routes/"], ["http/"]]);
+    expect(heavier.edges.filter((edge) => edge.back).map((edge) => edge.from)).toEqual([
+      "group:http",
+    ]);
+    // On a tie, the edge into the directory read first points up, as for files.
+    const tied = fileOverview(
+      input(files, { fileLinks: [registers], callGraph: [call(3, 2)] }),
+      tourOf(files),
+    );
+    expect(rowsOf(tied)).toEqual([["http/"], ["http/routes/"]]);
+  });
+
+  it("opens a directory in place to its files", () => {
+    const files = [file("api/routes.py", [1]), file("api/models.py", [2]), file("svc/run.py", [3])];
+    const overview = fileOverview(
+      input(files, { callGraph: [call(1, 3), call(2, 3)] }),
+      tourOf(files),
+      new Set([groupKey("api")]),
+    );
+    expect(overview.rows.flat().map((node) => node.key)).toEqual([
+      "api/routes.py",
+      "api/models.py",
+      "group:svc",
+    ]);
+    expect(overview.placeOf.get("api/models.py")).toBe("api/models.py");
+  });
+});
+
+describe("fileNeighbors", () => {
+  it("lists the files each file links to, without files that are all mechanical", () => {
+    const files = [file("a.py", [1]), file("b.py", [2]), file("c.lock", [3])];
+    const neighbors = fileNeighbors(
+      input(files, {
+        callGraph: [call(1, 2), call(2, 3)],
+        fileLinks: [{ from: "b.py", to: "a.py" }],
+        proofs: [{ hunkId: h(3), path: "c.lock", kind: "generated", detail: "lockfile" }],
+      }),
+    );
+    expect(Object.fromEntries([...neighbors].map(([from, to]) => [from, [...to]]))).toEqual({
+      "a.py": ["b.py"],
+      "b.py": ["a.py"],
+    });
   });
 });

@@ -223,17 +223,17 @@ test.describe("without the model", () => {
     await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
     await expect(page.getByRole("article")).toHaveCount(0);
 
-    // A click on the route's file in the overview opens its code in the map.
+    // A click on the route's directory in the overview opens its first file in the map.
     await page.getByRole("button", { name: "Overview", exact: true }).click();
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
-    await overview.getByRole("button", { name: /^orders\.ts, / }).click();
+    await overview.getByRole("button", { name: /^src\/routes\/, / }).click();
     await expect(page.getByRole("button", { name: "Map", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    await expect(page.locator(".hunk-card:focus")).toHaveAttribute(
+    await expect(page.locator(".file-card:focus")).toHaveAttribute(
       "aria-label",
-      /^src\/routes\/orders\.ts/,
+      "src/routes/orders.ts",
     );
 
     await page.getByRole("button", { name: "Publish…" }).click();

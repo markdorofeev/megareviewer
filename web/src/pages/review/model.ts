@@ -20,6 +20,9 @@ import {
   TourStepId,
 } from "../../../../src/domain/review/index.ts";
 import { commentPlace, type HunkItem } from "../../diff/index.ts";
+import { byTreePath } from "./tree.ts";
+
+export { byTreePath };
 
 /** The page's two layouts: one scroll of the changed files, or an overview of them. */
 export type Layout = "map" | "overview";
@@ -196,26 +199,6 @@ export interface FileGroup {
 }
 
 /**
- * Paths as a directory tree lists them: at each level, directories before files, then by name,
- * ignoring case first.
- */
-export const byTreePath = (a: string, b: string): number => {
-  const left = a.split("/");
-  const right = b.split("/");
-  for (let at = 0; at < Math.min(left.length, right.length); at++) {
-    const x = left[at] ?? "";
-    const y = right[at] ?? "";
-    if (x === y) continue;
-    const xIsDirectory = at < left.length - 1;
-    const yIsDirectory = at < right.length - 1;
-    if (xIsDirectory !== yIsDirectory) return xIsDirectory ? -1 : 1;
-    const folded = x.toLowerCase().localeCompare(y.toLowerCase(), "en");
-    return folded !== 0 ? folded : x < y ? -1 : 1;
-  }
-  return left.length - right.length;
-};
-
-/**
  * The map's files, those with a part to review, in path order: each file once, with all its parts
  * in the file's order, mechanical ones in place.
  */
@@ -226,6 +209,12 @@ export const mapFiles = (analysis: Analysis, index: PartIndex): FileGroup[] =>
       const ids = index.partsInFile(file);
       return ids.every((id) => index.mechanical.has(id)) ? [] : [{ file, partIds: ids }];
     });
+
+/** A file's contract parts, as its card counts them: mechanical parts never are. */
+export const contractParts = (group: FileGroup, index: PartIndex): number =>
+  index
+    .items(group.partIds)
+    .filter((item) => !index.mechanical.has(item.id) && item.risk.riskClass === "contract").length;
 
 /**
  * How many lines lie between two parts of one file that its card shows one after the other, on the

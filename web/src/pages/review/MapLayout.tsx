@@ -9,7 +9,7 @@ import {
   MechanicalGroup,
 } from "../../diff/index.ts";
 import { type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
-import { type FileGroup, gapBetween } from "./model.ts";
+import { contractParts, type FileGroup, gapBetween } from "./model.ts";
 
 export const MECHANICAL_ANCHOR = "mechanical-changes";
 
@@ -96,9 +96,7 @@ const FileCard = ({
   const items = deps.index.items(group.partIds);
   const added = items.reduce((sum, item) => sum + lineCounts(item.hunk).added, 0);
   const deleted = items.reduce((sum, item) => sum + lineCounts(item.hunk).deleted, 0);
-  const contract = items.filter(
-    (item) => !deps.index.mechanical.has(item.id) && item.risk.riskClass === "contract",
-  ).length;
+  const contract = contractParts(group, deps.index);
   // A path rule holds for every part of the file, so its reason is said once, here.
   const fileReasons = contract > 0 ? pathReasons(group.file) : [];
   return (
@@ -106,6 +104,7 @@ const FileCard = ({
       id={fileAnchor(group.file.path)}
       className={contract > 0 ? "file-card risk-contract" : "file-card"}
       aria-label={group.file.path}
+      data-path={group.file.path}
       tabIndex={-1}
     >
       <header className="file-card-header">
