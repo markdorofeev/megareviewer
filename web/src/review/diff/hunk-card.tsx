@@ -55,13 +55,6 @@ const samePlace = (a: LinePlace, b: LinePlace) => a.side === b.side && a.line ==
 const placeLabel = (place: LinePlace) =>
   `Comment on ${place.side === "old" ? "old " : ""}line ${place.line}`;
 
-// Spelled out because Tailwind only generates the classes it finds whole in the source.
-const RISK_BAR = {
-  contract: "bg-risk-contract-solid",
-  logic: "bg-risk-logic-solid",
-  mechanical: "bg-risk-mechanical-solid",
-} as const;
-
 export interface HunkCardProps {
   /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
   readonly id?: PartId;
@@ -87,8 +80,8 @@ export interface HunkCardProps {
   /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
   readonly afterHeader?: ReactNode;
   /**
-   * One of several parts on a file's card, which names the file: the header shows only a proof,
-   * and the risk is the color of a bar beside the lines.
+   * One of several parts on a file's card, which names the file and counts its contract parts:
+   * the header shows only a proof, and the part shows no risk of its own.
    */
   readonly inFile?: boolean;
 }
@@ -151,15 +144,6 @@ export const HunkCard = memo(function HunkCard({
       tabIndex={0}
       onFocus={() => onFocus?.(id)}
     >
-      {inFile && risk !== null && (
-        <span
-          data-slot="part-risk"
-          data-risk={risk.riskClass}
-          className={cn("absolute inset-y-0 left-0 z-[2] w-1", RISK_BAR[risk.riskClass])}
-        >
-          <span className="sr-only">{risk.riskClass}</span>
-        </span>
-      )}
       {header && (
         <header
           data-slot="hunk-header"

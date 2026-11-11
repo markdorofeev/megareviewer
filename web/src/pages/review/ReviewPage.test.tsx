@@ -891,7 +891,7 @@ describe("parts of a split hunk", () => {
 });
 
 describe("navigation", () => {
-  it("count a file's contract parts on its card, and mark each with a bar, not a reason", async () => {
+  it("count a file's contract parts on its card, and mark no part by its risk", async () => {
     renderReview();
     await loaded();
     const orders = fileCardOf("src/routes/orders.ts");
@@ -902,11 +902,9 @@ describe("navigation", () => {
     expect(orders.querySelector("[data-slot=hunk-contract-reason]")).toBeNull();
     expect(cardOf(h.receiptRoute).querySelector("[data-slot=hunk-header]")).toBeNull();
     expect(cardOf(h.routeImports).querySelector("[data-slot=hunk-header]")).toBeNull();
-    // The risk is a bar beside the lines, not a badge on the line.
+    // The file's count says a part is contract; the part itself carries no badge or bar.
     expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: "contract" })).toBeNull();
-    const bar = cardOf(h.receiptRoute).querySelector("[data-slot=part-risk][data-risk=contract]");
-    expect(bar?.textContent).toBe("contract");
-    expect(bar?.getAttribute("title")).toBeNull();
+    expect(cardOf(h.receiptRoute).querySelector("[data-slot=part-risk]")).toBeNull();
   });
 
   it("name a file on its card without a status for modified, a part count or a Reviewed mark", async () => {

@@ -98,13 +98,11 @@ describe("HunkCard", () => {
     ).toEqual(["{ items: ", " }"]);
   });
 
-  it("tells each part's risk by a bar and a word, on a file's card", () => {
+  it("shows no risk on a part of a file's card", () => {
     renderWith(<Cards inFile />);
-    const bar = screen
-      .getByRole("region", { name: firstName })
-      .querySelector("[data-slot=part-risk]");
-    expect(bar?.getAttribute("data-risk")).toBe("contract");
-    expect(bar?.textContent).toBe("contract");
+    const part = screen.getByRole("region", { name: firstName });
+    expect(part.querySelector("[data-slot=part-risk]")).toBeNull();
+    expect(part.textContent).not.toContain("contract");
     // On a file's card the file is named once, by the card: a part has no header of its own.
     expect(screen.getByRole("region", { name: firstName }).querySelector("header")).toBeNull();
   });
