@@ -78,7 +78,7 @@ describe("Bitbucket review threads", () => {
 
   it("can't apply without write permission", async () => {
     const exchanges = bitbucketThreadExchanges.map((exchange) =>
-      exchange.request.url.includes("/user/permissions/")
+      exchange.request.url.includes("/permissions/repositories")
         ? {
             ...exchange,
             response: { ...exchange.response, body: { values: [{ permission: "read" }] } },

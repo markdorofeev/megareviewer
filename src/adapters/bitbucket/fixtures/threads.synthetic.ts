@@ -113,7 +113,7 @@ export const bitbucketThreadExchanges: Exchange[] = [
   {
     request: {
       method: "GET",
-      url: `${API}/user/permissions/repositories?q=${encodeURIComponent('repository.full_name="atlassian/bitbucket-upload-file"').replaceAll("%20", "+")}`,
+      url: `${API}/user/workspaces/atlassian/permissions/repositories?q=${encodeURIComponent('repository.full_name="atlassian/bitbucket-upload-file"').replaceAll("%20", "+")}`,
       accept: "application/json",
     },
     response: { status: 200, headers: JSON_HEADERS, body: { values: [{ permission: "write" }] } },

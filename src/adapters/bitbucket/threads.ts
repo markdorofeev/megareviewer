@@ -133,7 +133,8 @@ export const createBitbucketReviewThreads = (options: BitbucketThreadsOptions): 
         client.json(
           "your permission on the repository",
           BitbucketPage(BitbucketRepositoryPermission),
-          `${API}/user/permissions/repositories?${new URLSearchParams({ q: `repository.full_name="${fullName}"` })}`,
+          // `/user/permissions/repositories` was removed and answers 404.
+          `${API}/user/workspaces/${encodeURIComponent(ref.repo.owner)}/permissions/repositories?${new URLSearchParams({ q: `repository.full_name="${fullName}"` })}`,
         ),
       ]);
       if (!comments.ok) return comments;
