@@ -861,6 +861,8 @@ describe("parts of a split hunk", () => {
     expect(within(cache).queryByText("Related parts")).toBeNull();
     // No lines lie between the two parts of one hunk, so no fold either.
     expect(placeOf(p.retry).nextElementSibling).toBe(placeOf(p.cache));
+    // Nor a divider: the lines run on as in the diff.
+    expect(placeOf(p.cache).classList.contains("border-t")).toBe(false);
   });
 
   it("put a decision's card on the first part on the page, and link the other to it", async () => {

@@ -1,6 +1,7 @@
 import { Fragment, memo, type ReactNode, useEffect } from "react";
 import type { MechanicalProof, PartId } from "../../../../src/domain/diff/index.ts";
 import { type Analysis, pathReasons } from "../../../../src/domain/review/index.ts";
+import { cn } from "../../lib/utils.ts";
 import {
   FileNotices,
   FilePath,
@@ -33,17 +34,26 @@ const Stable = memo(
   (previous, next) => previous.signature === next.signature,
 );
 
-/** A part's place on its file's card: its anchor, and its lines, drawn again only when they change. */
+/**
+ * A part's place on its file's card: its anchor, and its lines, drawn again only when they change.
+ * A part that goes on from the line before it has no border, so the lines run on as in the diff.
+ */
 const MapPart = ({
   id,
+  joined,
   deps,
   signatureOf,
 }: {
   readonly id: PartId;
+  readonly joined: boolean;
   readonly deps: HunkDeps;
   readonly signatureOf: (id: PartId) => string;
 }) => (
-  <div id={hunkAnchor(id)} className="scroll-mt-24 border-t first:border-t-0" data-hunk-id={id}>
+  <div
+    id={hunkAnchor(id)}
+    className={cn("scroll-mt-24", !joined && "border-t first:border-t-0")}
+    data-hunk-id={id}
+  >
     <Stable signature={signatureOf(id)} render={() => <HunkView id={id} deps={deps} />} />
   </div>
 );
@@ -141,7 +151,7 @@ const FileCard = ({
         return (
           <Fragment key={id}>
             {gap !== null && <GapRow lines={gap} />}
-            <MapPart id={id} deps={deps} signatureOf={signatureOf} />
+            <MapPart id={id} joined={gap === 0} deps={deps} signatureOf={signatureOf} />
           </Fragment>
         );
       })}
