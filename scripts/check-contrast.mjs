@@ -62,6 +62,9 @@ const PAIRS = [
   ["Severity major", "severity-major", "severity-major-bg", 4.5],
   ["Input border (non-text)", "input", "background", 3],
   ["Focus ring (non-text)", "ring", "background", 3],
+  // hunk: a selected tab or toggle is told by its border on the muted track.
+  ["Selected segment border (non-text)", "muted-foreground", "muted", 3],
+  ["Pressed toggle border (non-text)", "muted-foreground", "background", 3],
   // hunk: risk classes. A bar on its own tint is under 3:1 for logic in light, so bars sit on
   // background or card only.
   ["Contract label on its tint", "risk-contract", "risk-contract-bg", 4.5],

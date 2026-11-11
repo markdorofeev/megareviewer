@@ -14,8 +14,72 @@
 
 /* hunk: scan web/src only; from the repo root Tailwind would also read src/, docs and fixtures. */
 @import "tailwindcss" source("../");
+/* hunk: the enter and exit animations shadcn's popups use (animate-in, fade-in-0, zoom-in-95). */
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+
+/* hunk: shadcn's state variants from shadcn/dist/tailwind.css (4.22.1, MIT), which the Base UI
+   components use: Base UI marks state with data-open, data-checked, data-orientation and so on. */
+@custom-variant data-open {
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-closed {
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-checked {
+  &:where([data-state="checked"]),
+  &:where([data-checked]:not([data-checked="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-unchecked {
+  &:where([data-state="unchecked"]),
+  &:where([data-unchecked]:not([data-unchecked="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-selected {
+  &:where([data-selected="true"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-disabled {
+  &:where([data-disabled="true"]),
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-active {
+  &:where([data-state="active"]),
+  &:where([data-active]:not([data-active="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Light (default)                                                    */
@@ -247,6 +311,15 @@
     --duration-fast: 0ms;
     --duration-base: 0ms;
     --duration-slow: 0ms;
+  }
+  /* hunk: also stop animations and transitions that don't read the duration tokens: popups'
+     enter and exit, spinners, skeleton pulses. Unlayered, so it wins over every utility. */
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0ms;
+    animation-iteration-count: 1;
+    transition-duration: 0ms;
   }
 }
 

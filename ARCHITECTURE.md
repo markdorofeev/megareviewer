@@ -77,7 +77,7 @@ flowchart LR
 |---|---|---|
 | CLI | Checks credentials, starts the server, opens the browser | Node 22.13+, TypeScript |
 | Local server | Serves the UI and the API, runs the analysis pipeline, holds all credentials | Hono |
-| Web UI | PR picker, review page, publishing | Vite, React, Tailwind CSS, Shiki |
+| Web UI | PR picker, review page, publishing | Vite, React, Tailwind CSS, shadcn/ui on Base UI, Shiki |
 | Connectors | Git hosts, tickets, model calls, the local checkout | Octokit, Bitbucket REST, Jira REST, `@anthropic-ai/sdk`, the `git` command |
 | Code analysis | Parse changed files for mechanical proofs and call-graph hints | `web-tree-sitter` |
 | Store | Cached analyses and review state | SQLite via built-in `node:sqlite`, plain SQL migrations |
@@ -222,7 +222,7 @@ The page opens on the code because the intro in front of it, an intent panel and
 
 Comments on hunk lines are drafts in the browser's local storage until they're sent with the publish request, which checks that each is on a line the diff shows. A `hunk_comments` table with its own routes was the plan; the drafts belong to one reviewer in one browser, and the posted-comment records already make publishing safe to retry.
 
-**Design system.** The UI is moving to Indigo Calm: Tailwind CSS v4 utilities over its tokens, in `web/src/styles/globals.css`, kept as the design handed it over, with Geist and Geist Mono served from the package. It has a light and a dark theme, and a diff palette safe for color blindness, blue and orange for green and red, chosen apart from the theme; both are kept per browser, and `web/public/theme.js` sets them before the first paint. That's a file rather than an inline script because the server's CSP allows scripts from `'self'` only. Tailwind and its native compiler are build tools, so the package still installs with no dependencies.
+**Design system.** The UI is moving to Indigo Calm: Tailwind CSS v4 utilities over its tokens, in `web/src/styles/globals.css`, kept as the design handed it over, with Geist and Geist Mono served from the package. It has a light and a dark theme, and a diff palette safe for color blindness, blue and orange for green and red, chosen apart from the theme; both are kept per browser, and `web/public/theme.js` sets them before the first paint. That's a file rather than an inline script because the server's CSP allows scripts from `'self'` only. Its primitives are shadcn/ui's Base UI components, copied into `web/src/ui` and owned here: the shadcn CLI generated them in a scratch project rather than in this repository, where it would rewrite the stylesheet and install unpinned versions, and a `hunk:` comment marks every change from upstream. Those changes map them onto the type scale, the radius steps and the base layer's 2 px focus outline, and tell a selected tab or pressed toggle by a 3:1 border as well as its fill. Base UI, cva, lucide icons, Sonner and react-resizable-panels come with them. Tailwind, its native compiler and these libraries are build tools or bundled into the UI, so the package still installs with no dependencies.
 
 The new system runs beside the old one until the review page moves over: its own page, `/design-system.html`, served by `pnpm dev:web` and left out of builds, so Tailwind's preflight can't change the current page. Mapping Indigo Calm's values onto the plain CSS tokens was the alternative, smaller and with no new dependencies; Tailwind was chosen to take the design system whole, with its components and contrast check, instead of keeping a translation of it.
 
