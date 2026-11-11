@@ -51,6 +51,17 @@
   },
   "overrides": [
     {
+      "includes": ["web/src/review/diff/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "useFocusableInteractive": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["web/src/styles/globals.css"],
       "formatter": { "enabled": false }
     },

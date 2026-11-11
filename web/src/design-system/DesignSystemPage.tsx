@@ -3,6 +3,7 @@ import { type DiffPalette, type ThemePreference, useTheme } from "../lib/theme.t
 import { cn } from "../lib/utils.ts";
 import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
+import { DomainComponents } from "./DomainComponents.tsx";
 import { Primitives } from "./Primitives.tsx";
 
 const THEMES: readonly { readonly value: ThemePreference; readonly label: string }[] = [
@@ -113,6 +114,10 @@ export const DesignSystemPage = () => {
           <section className="flex flex-col gap-3">
             <h2 className="text-heading font-semibold">Primitives</h2>
             <Primitives />
+          </section>
+          <section className="flex flex-col gap-3">
+            <h2 className="text-heading font-semibold">Review components</h2>
+            <DomainComponents />
           </section>
         </main>
         <Toaster />

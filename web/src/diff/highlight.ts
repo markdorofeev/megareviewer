@@ -11,7 +11,7 @@ export interface Highlighter {
 type LanguageModule = Promise<{ readonly default: readonly LanguageRegistration[] }>;
 
 // Each grammar is its own chunk, loaded the first time a file needs it.
-const GRAMMARS: Readonly<Record<string, () => LanguageModule>> = {
+export const GRAMMARS: Readonly<Record<string, () => LanguageModule>> = {
   c: () => import("shiki/langs/c.mjs"),
   cpp: () => import("shiki/langs/cpp.mjs"),
   csharp: () => import("shiki/langs/csharp.mjs"),
