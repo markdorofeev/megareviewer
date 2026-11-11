@@ -142,6 +142,14 @@ Each stage measures itself on [delphi-code #2](https://github.com/markdorofeev/d
 
 Implement the responsive layout first, navigation simplification second, and measured analysis changes last. The first two changes work with existing cached analyses; analysis changes require a pipeline version bump.
 
+## Sixth slice: the conversation on the PR
+
+The page shows only the reviewer's own drafts. This slice brings the PR's existing review threads onto the code, so the reviewer can reply, resolve and apply suggestions without going to the host.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 40 | [Review threads on the code](40-review-threads.md) | 23, 36 | `ReviewThreads` port and adapters, `src/domain/review/thread.ts`, thread routes, `web/src/review/thread/` |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
