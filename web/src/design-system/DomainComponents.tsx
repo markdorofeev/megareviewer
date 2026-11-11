@@ -31,7 +31,6 @@ import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 import {
   BINARY_FILE,
   generatedFile,
-  NETWORK_ERROR_FILE,
   PENDING_COMMENTS,
   PULL_REQUEST,
   RENAMED_FILE,
@@ -150,7 +149,7 @@ export const DomainComponents = () => {
         </div>
       </Group>
 
-      <Group title="A draft on a line: Edit to change it, or click the other line to write one">
+      <Group title="A draft on a line: click a line to write one, Edit to change it">
         <DraftDemo />
       </Group>
 
@@ -349,15 +348,15 @@ const AuthorPanel = () => (
 
 /** Drafts on a hunk's lines, kept in memory, as the review page keeps them in local storage. */
 const DraftDemo = () => {
-  const [hunk] = NETWORK_ERROR_FILE.hunks;
+  const hunk = RETRY_FILE.hunks[1];
   const [comments, setComments] = useState<readonly LineComment[]>([
     {
       side: "new",
-      line: 8,
-      body: "Only these codes? `EPIPE` is a network error too.",
+      line: 44,
+      body: "`ECONNRESET` and `ETIMEDOUT` aren't the only network errors.",
       severity: "major",
       suggestion: [
-        '  return error instanceof Error && /^E(CONNRESET|TIMEDOUT|PIPE)$/.test(String(Reflect.get(error, "code")));',
+        '  return /^E(CONNRESET|TIMEDOUT|PIPE)$/.test(Reflect.get(error, "code") ?? "");',
       ],
     },
   ]);
@@ -367,7 +366,7 @@ const DraftDemo = () => {
     <div className="max-w-4xl overflow-hidden rounded-lg border">
       <HunkCard
         hunk={hunk}
-        file={NETWORK_ERROR_FILE}
+        file={RETRY_FILE}
         risk={null}
         comments={comments}
         openComment={open}

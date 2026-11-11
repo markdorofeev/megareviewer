@@ -10,7 +10,8 @@ import { z } from "zod";
 // - every control and grid has an accessible name, from Chrome's own accessibility tree;
 // - ARIA references point at elements that exist, ids are unique, nothing focusable is hidden;
 // - text meets 4.5:1 (3:1 when large) against what's behind it;
-// - every target covers 24 × 24 px, or has no other target within that square (WCAG 2.5.8);
+// - every target covers 24 × 24 px, or has no other target within that square, or is inline:
+//   a link in a sentence, or as tall as its line of code (WCAG 2.5.8);
 // - tabbing through the page shows a 2 px outline on every stop and never gets stuck.
 
 const NAMED_ROLES = new Set([
@@ -199,7 +200,13 @@ export const pageProblems = (page: Page): Promise<string[]> =>
       const rect = element.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0 || element.closest("[aria-hidden=true]"))
         return false;
-      // An inline link in a sentence is exempt.
+      // An inline link in a sentence is exempt, and so is a target as tall as the line of text it's
+      // on, such as a diff line's number (WCAG 2.5.8's inline exception).
+      if (element instanceof HTMLElement && element.dataset.inlineTarget !== undefined) {
+        const row = element.closest("[role=row]");
+        if (row !== null && rect.height <= Number.parseFloat(getComputedStyle(row).lineHeight))
+          return false;
+      }
       return !(element.tagName === "A" && getComputedStyle(element).display === "inline");
     });
     for (const [index, element] of targets.entries()) {

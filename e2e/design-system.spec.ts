@@ -167,7 +167,15 @@ test("the checks catch what they look for", async ({ page }) => {
       <span style="display: inline-flex; gap: 2px">
         <button type="button" style="width: 12px; height: 12px; padding: 0">a</button>
         <button type="button" style="width: 12px; height: 12px; padding: 0">b</button>
-      </span>`;
+      </span>
+      <div role="row" style="line-height: 20px">
+        <button type="button" data-inline-target style="display: block; height: 20px; padding: 0">7</button>
+        <button type="button" data-inline-target style="display: block; height: 20px; padding: 0">8</button>
+      </div>
+      <div role="row" style="line-height: 10px">
+        <button type="button" data-inline-target style="display: block; height: 20px; padding: 0">9</button>
+        <button type="button" data-inline-target style="display: block; height: 20px; padding: 0">10</button>
+      </div>`;
     document.querySelector("main")?.prepend(planted);
   });
   const found = [...(await unnamedControls(page)), ...(await pageProblems(page))].join("\n");
@@ -177,4 +185,7 @@ test("the checks catch what they look for", async ({ page }) => {
   expect(found).toContain('aria-labelledby="planted-missing"');
   expect(found).toContain('focusable inside aria-hidden: <button> "hidden but focusable"');
   expect(found).toMatch(/target 12×12 px with others within 24 px: <button> "a"/);
+  // A target as tall as its line of code is inline; one taller than its line isn't.
+  expect(found).not.toMatch(/<button> "[78]"/);
+  expect(found).toMatch(/with others within 24 px: <button> "9"/);
 });

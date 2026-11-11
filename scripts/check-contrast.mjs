@@ -52,9 +52,21 @@ const PAIRS = [
   ["− marker", "diff-del-fg", "diff-del-gutter", 4.5],
   ["Line numbers", "diff-gutter-fg", "diff-gutter-bg", 4.5],
   ["Hunk header", "diff-hunk-fg", "diff-hunk-bg", 4.5],
-  ["Keyword on removed word", "syntax-keyword", "diff-del-word", 4.5],
-  ["String on removed word", "syntax-string", "diff-del-word", 4.5],
-  ["Comment on added word", "syntax-comment", "diff-add-word", 4.5],
+  // hunk: every syntax color on every line and word tint, since a changed word can be any token.
+  ...[
+    "syntax-keyword",
+    "syntax-string",
+    "syntax-function",
+    "syntax-comment",
+    "syntax-number",
+  ].flatMap((token) =>
+    ["diff-add-bg", "diff-add-word", "diff-del-bg", "diff-del-word"].map((surface) => [
+      `${token} on ${surface}`,
+      token,
+      surface,
+      4.5,
+    ]),
+  ),
   ["Approved badge", "review-approved", "review-approved-bg", 4.5],
   ["Changes requested badge", "review-changes", "review-changes-bg", 4.5],
   ["Pending badge", "review-pending", "review-pending-bg", 4.5],

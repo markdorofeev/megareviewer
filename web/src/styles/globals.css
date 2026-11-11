@@ -268,10 +268,11 @@
   --severity-nit: #A1A1AA;
   --severity-info: #A5B4FC;
 
-  /* syntax (map Shiki css-variables theme to these) */
-  --syntax-keyword: #C4B5FD;
-  --syntax-string: #7DD3C0;
-  --syntax-function: #93C5FD;
+  /* syntax (map Shiki css-variables theme to these). hunk: keyword, string and function lifted
+     from #C4B5FD, #7DD3C0 and #93C5FD to 4.5:1 on an added word's #286142. */
+  --syntax-keyword: #D2C7FD;
+  --syntax-string: #94DBCB;
+  --syntax-function: #AAD1FD;
   --syntax-comment: #CCCCD1;
   --syntax-number: #FCD34D;
 

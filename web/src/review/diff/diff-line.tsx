@@ -167,6 +167,8 @@ export const DiffLine = memo(function DiffLine({
           type="button"
           aria-label={numberButton.label}
           onClick={numberButton.onClick}
+          // As tall as a line of code: WCAG 2.5.8's inline exception, as for a link in a sentence.
+          data-inline-target
           className={cn(
             "h-full w-full pr-2 text-right hover:bg-primary hover:text-primary-foreground focus-visible:-outline-offset-2",
             // Under the mouse the whole cell fills, square and full height, so it and the row's
