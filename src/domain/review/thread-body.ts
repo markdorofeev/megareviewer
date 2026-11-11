@@ -16,6 +16,8 @@ export type Span =
       readonly kind: "image" | "video";
       readonly text: string;
       readonly url: string | null;
+      /** The size the host gave it, so the page can keep its place before it loads. */
+      readonly size?: { readonly width: number; readonly height: number };
     };
 
 /**
@@ -26,6 +28,15 @@ const MEDIA =
   /<img\b[^>]*>|!\[([^\]\n]*)\]\(([^)\s]*)\)|(?<=^|\n)[ \t]*(https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]+)[ \t]*(?=\n|$)/gi;
 const ALT = /\balt\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
 const SRC = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+const WIDTH = /\bwidth\s*=\s*["']?(\d{1,5})["']?/i;
+const HEIGHT = /\bheight\s*=\s*["']?(\d{1,5})["']?/i;
+
+/** An `<img>` tag's width and height, when it gives both. */
+const sizeOf = (tag: string): { width: number; height: number } | undefined => {
+  const width = Number(WIDTH.exec(tag)?.[1] ?? 0);
+  const height = Number(HEIGHT.exec(tag)?.[1] ?? 0);
+  return width > 0 && height > 0 ? { width, height } : undefined;
+};
 
 const quoted = (pattern: RegExp, tag: string): string | undefined =>
   pattern
@@ -34,7 +45,11 @@ const quoted = (pattern: RegExp, tag: string): string | undefined =>
     .find((one) => one !== undefined);
 
 /** A media span, its URL kept only when the host's own store has it. */
-const media = (kind: "image" | "video", alt: string, url: string | undefined): Span => ({
+const media = (
+  kind: "image" | "video",
+  alt: string,
+  url: string | undefined,
+): Extract<Span, { kind: "image" | "video" }> => ({
   kind,
   text: alt.trim(),
   url: url !== undefined && attachmentHost(url) !== null ? url : null,
@@ -53,7 +68,9 @@ const withImages = (text: string): Span[] => {
     const [whole, markdownAlt, markdownUrl, videoUrl] = match;
     if (videoUrl !== undefined) spans.push(media("video", "", videoUrl));
     else if (whole.startsWith("<")) {
-      spans.push(media("image", quoted(ALT, whole) ?? "", quoted(SRC, whole)));
+      const image = media("image", quoted(ALT, whole) ?? "", quoted(SRC, whole));
+      const size = sizeOf(whole);
+      spans.push(size === undefined ? image : { ...image, size });
     } else spans.push(media("image", markdownAlt ?? "", markdownUrl));
     at = index + whole.length;
   }

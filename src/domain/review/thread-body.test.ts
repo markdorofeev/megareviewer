@@ -61,11 +61,11 @@ describe("parseSpans", () => {
     const asset = "https://github.com/user-attachments/assets/771a3d24-9ce2-4554-96da-50a773965ff5";
     expect(
       parseSpans(
-        `see <img width="819" alt="Screenshot 16 45" src="${asset}" /> and ![diagram](https://evil.test/a.png) or <IMG src=x>`,
+        `see <img width="819" height="401" alt="Screenshot 16 45" src="${asset}" /> and ![diagram](https://evil.test/a.png) or <IMG src=x>`,
       ),
     ).toEqual([
       { kind: "text", text: "see " },
-      { kind: "image", text: "Screenshot 16 45", url: asset },
+      { kind: "image", text: "Screenshot 16 45", url: asset, size: { width: 819, height: 401 } },
       { kind: "text", text: " and " },
       { kind: "image", text: "diagram", url: null },
       { kind: "text", text: " or " },

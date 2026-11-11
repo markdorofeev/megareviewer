@@ -142,6 +142,17 @@ describe("ReviewThreadView", () => {
     expect(article.textContent).not.toContain("<img");
   });
 
+  it("opens an image full screen, and closes it with Esc", async () => {
+    show({ thread: withBody(`<img alt="Screenshot" src="${asset}">`), mediaUrl });
+    await userEvent.click(screen.getByRole("button", { name: "Open Screenshot full screen" }));
+    const viewer = await screen.findByRole("dialog", { name: "Screenshot" });
+    expect(within(viewer).getByRole("img", { name: "Screenshot" }).getAttribute("src")).toBe(
+      mediaUrl(asset),
+    );
+    await userEvent.keyboard("{Escape}");
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("names an image from anywhere else, and one that fails to load", () => {
     show({
       thread: withBody(
