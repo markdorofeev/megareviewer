@@ -118,7 +118,7 @@ describe("FileTree as the rail", () => {
       "hosting_services.py▲3 contract",
     );
     expect(row("domain/hosting_services.py").textContent).not.toContain("contract");
-    expect(within(rail).getByTitle("delphi_code/").textContent).toBe("▾delphi_code/▲4 contract");
+    expect(within(rail).getByTitle("delphi_code/").textContent).toBe("delphi_code/▲4 contract");
   });
 
   it("highlights the file in view, arrows its callers and callees, and mutes the rest", () => {

@@ -78,6 +78,12 @@ const PAIRS = [
   ["Gap text", "muted-foreground", "surface-subtle", 4.5],
   ["Muted text on directory hover", "muted-foreground", "accent", 4.5],
   ["Active row bar (non-text)", "primary", "surface-subtle", 3],
+  // hunk: the tree's file icons, on the rail and on the active or hovered row.
+  ...["syntax-function", "syntax-number", "syntax-string", "syntax-keyword"].flatMap((token) => [
+    [`File icon ${token} on background (non-text)`, token, "background", 3],
+    [`File icon ${token} on active row (non-text)`, token, "surface-subtle", 3],
+  ]),
+  ["Directory name on hover", "foreground", "accent", 4.5],
   // hunk: the focused diff line's 3px bar, over the gutter of each kind of line.
   ["Focused line bar on diff-gutter-bg (non-text)", "ring", "diff-gutter-bg", 3],
   ["Focused line bar on diff-add-gutter (non-text)", "ring", "diff-add-gutter", 3],

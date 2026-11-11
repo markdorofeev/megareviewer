@@ -1,3 +1,4 @@
+import { ChevronDownIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShortcuts } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
@@ -6,6 +7,7 @@ import { ScrollArea } from "../../ui/scroll-area.tsx";
 import { FileStatusChip } from "../diff/file-path.tsx";
 import { EmptyState } from "../shell/empty-state.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
+import { FileIcon } from "./file-icon.tsx";
 import { type FileEntry, type FileOrder, filterFiles, sortFiles } from "./files.ts";
 import { fileTree, nameOf, type TreeEntry, treeOrder } from "./paths.ts";
 import { ARROWS, type Neighbors, type Relation, relationOf } from "./relations.ts";
@@ -111,6 +113,8 @@ export const FileTree = ({
       }
       // A filter opens every directory, so a match is never hidden.
       const open = query.trim() !== "" || !closed.has(entry.path);
+      const Folder = open ? FolderOpenIcon : FolderIcon;
+      const indent = depth * 12 + 4;
       return (
         <li key={entry.path}>
           <button
@@ -118,22 +122,31 @@ export const FileTree = ({
             title={`${entry.path}/`}
             aria-expanded={open}
             onClick={() => toggle(entry.path)}
-            className="flex min-h-6 w-full items-center gap-1 rounded-md pr-2 text-left font-mono text-code-compact text-muted-foreground hover:bg-accent"
-            style={{ paddingLeft: `${depth * 12 + 4}px` }}
+            className="flex min-h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left font-medium hover:bg-accent"
+            style={{ paddingLeft: `${indent}px` }}
           >
-            <span
+            <ChevronDownIcon
               aria-hidden="true"
               className={cn(
-                "w-3 transition-transform duration-(--duration-fast) ease-standard",
+                "size-3 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-standard",
                 !open && "-rotate-90",
               )}
-            >
-              ▾
-            </span>
+            />
+            <Folder aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate">{entry.label}</span>
             {entry.contract > 0 && <ContractCount count={entry.contract} />}
           </button>
-          {open && <ul>{entries(entry.children, depth + 1)}</ul>}
+          {open && (
+            <div className="relative">
+              {/* A guide under the chevron, so a file's directory is read down its line. */}
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 w-px bg-border"
+                style={{ left: `${indent + 6}px` }}
+              />
+              <ul>{entries(entry.children, depth + 1)}</ul>
+            </div>
+          )}
         </li>
       );
     });
@@ -196,7 +209,7 @@ export const ContractCount = ({ count }: { readonly count: number }) => (
 );
 
 /**
- * A file's row: an arrow saying how it relates to the active file, its name (its directory muted
+ * A file's row: an arrow saying how it relates to the active file, its type's icon, its name (its directory muted
  * when the row isn't under it), its status when it isn't modified, its contract parts and its
  * counts. A click selects it.
  */
@@ -240,6 +253,7 @@ export const FileRow = ({
           </>
         )}
       </span>
+      <FileIcon path={entry.path} />
       <span
         className={cn(
           "min-w-0 flex-1 truncate",
