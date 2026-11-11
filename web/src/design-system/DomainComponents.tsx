@@ -354,7 +354,6 @@ const DraftDemo = () => {
       side: "new",
       line: 44,
       body: "`ECONNRESET` and `ETIMEDOUT` aren't the only network errors.",
-      severity: "major",
       suggestion: [
         '  return /^E(CONNRESET|TIMEDOUT|PIPE)$/.test(Reflect.get(error, "code") ?? "");',
       ],

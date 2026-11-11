@@ -4,7 +4,6 @@ import {
   memo,
   type ReactNode,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -29,14 +28,7 @@ import { StatusBadge } from "../../ui/status-badge.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { Toggle } from "../../ui/toggle.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
-import {
-  CHIP,
-  CommentCard,
-  SEVERITY_MARK,
-  SeverityChip,
-  SuggestionDiff,
-  ThreadBody,
-} from "../thread/index.ts";
+import { CHIP, CommentCard, SeverityChip, SuggestionDiff, ThreadBody } from "../thread/index.ts";
 import { DiffLine } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { languageOf } from "./languages.ts";
@@ -379,14 +371,12 @@ export const HunkCard = memo(function HunkCard({
   );
 });
 
-const SEVERITIES: readonly Severity[] = ["minor", "major", "blocking"];
-
-/** What the comment box edits: the text, its severity and its suggested lines. */
+/** What the comment box keeps: the text, a severity from before the box lost its picker, and the suggested lines. */
 type CommentDraft = Pick<LineComment, "body" | "severity" | "suggestion">;
 
 /**
- * A draft under a line, in one of two states. Editing: its text, saved as it's typed, a severity,
- * none by default, and on head-side lines a suggested change, starting from the lines it's on.
+ * A draft under a line, in one of two states. Editing: its text, saved as it's typed, and on
+ * head-side lines a suggested change, starting from the lines it's on.
  * Saved: the draft as its comment will read, with Edit and Discard. It stays open while the reviewer
  * selects code, and closes on Add comment, Cancel, Esc, Discard or a click on its own line.
  */
@@ -417,7 +407,6 @@ const CommentRow = ({
 }) => {
   const row = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
-  const severityId = useId();
   useEffect(() => {
     if (editing) field.current?.focus();
   }, [editing]);
@@ -533,30 +522,8 @@ const CommentRow = ({
               onSubmitShortcut={close}
               className="min-h-14 bg-background"
             />
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <div role="group" aria-labelledby={severityId} className="flex items-center gap-1">
-                <span id={severityId} className="mr-1 text-caption text-muted-foreground">
-                  Severity
-                </span>
-                {SEVERITIES.map((level) => (
-                  <Toggle
-                    key={level}
-                    variant="outline"
-                    size="sm"
-                    pressed={severity === level}
-                    onPressedChange={(pressed) => {
-                      const { severity: _, ...rest } = draft;
-                      onChange?.(pressed ? { ...rest, severity: level } : rest);
-                    }}
-                  >
-                    <span aria-hidden="true" className={SEVERITY_MARK[level].color}>
-                      {SEVERITY_MARK[level].glyph}
-                    </span>
-                    {level}
-                  </Toggle>
-                ))}
-              </div>
-              {place.side === "new" && (
+            {place.side === "new" && (
+              <div className="flex flex-wrap items-center gap-2">
                 <Toggle
                   variant="outline"
                   size="sm"
@@ -568,8 +535,8 @@ const CommentRow = ({
                 >
                   Suggest a change
                 </Toggle>
-              )}
-            </div>
+              </div>
+            )}
             {suggestion !== undefined && (
               <>
                 <Textarea

@@ -309,7 +309,7 @@ describe("HunkCard", () => {
     });
   });
 
-  it("gives the comment box a severity and a suggestion that starts from its lines", async () => {
+  it("gives the comment box a suggestion that starts from its lines, and no severity picker", async () => {
     const user = userEvent.setup();
     const onComment = vi.fn();
     const comment = { side: "new" as const, line: 42, startLine: 40, body: "Simplify" };
@@ -323,8 +323,8 @@ describe("HunkCard", () => {
       />,
     );
     expect(screen.getByText("Lines 40–42")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "major" }));
-    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { ...comment, severity: "major" });
+    expect(screen.queryByRole("group", { name: "Severity" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(minor|major|blocking)$/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Suggest a change" }));
     expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, {
       ...comment,
@@ -350,9 +350,14 @@ describe("HunkCard", () => {
     const preview = document.querySelector("[data-slot=line-comment] [data-slot=suggestion-diff]");
     expect(preview?.querySelectorAll("[data-kind=del]")).toHaveLength(3);
     expect(preview?.querySelector("[data-kind=add]")?.textContent).toContain("a");
-    expect(screen.getByRole("group", { name: "Severity" })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "minor" }));
-    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { ...comment, suggestion: ["a"] });
+    // A draft written before the picker went keeps its severity as its text changes.
+    await user.type(screen.getByRole("textbox", { name: "Comment on lines 40–42" }), "!");
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, {
+      ...comment,
+      body: "Simplify!",
+      severity: "minor",
+      suggestion: ["a"],
+    });
   });
 
   it("puts the host's threads under the line they're on", () => {

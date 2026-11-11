@@ -5,7 +5,6 @@ export {
   CHIP,
   type ReviewThreadProps,
   ReviewThreadView,
-  SEVERITY_MARK,
   SeverityChip,
   threadPlace,
 } from "./review-thread.tsx";

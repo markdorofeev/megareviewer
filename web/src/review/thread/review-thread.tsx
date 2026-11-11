@@ -17,8 +17,8 @@ import { absoluteTime, initialsOf, relativeTime } from "./people.ts";
 import { SuggestionDiff } from "./suggestion-diff.tsx";
 import { ThreadBody } from "./thread-body.tsx";
 
-/** A severity's glyph and color, for its chip and for the options that pick it. */
-export const SEVERITY_MARK: Readonly<
+/** A severity's glyph and color, for its chip. */
+const SEVERITY_MARK: Readonly<
   Record<Severity, { readonly glyph: string; readonly color: string }>
 > = {
   blocking: { glyph: "■", color: "text-severity-blocker" },
