@@ -22,6 +22,9 @@ export interface AppliedSuggestions {
   readonly paths: readonly string[];
 }
 
+/** Attachments kept in memory at most, all together: a few screen recordings. */
+export const MAX_CACHED_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+
 /** "Apply suggestion from code review", or "Apply 3 suggestions from code review". */
 export const applyMessage = (count: number): string =>
   count === 1 ? "Apply suggestion from code review" : `Apply ${count} suggestions from code review`;
@@ -69,6 +72,30 @@ export const createThreadUseCases = (deps: AppDeps) => {
       return err(appError("host-not-configured", `${host} isn't configured`));
     }
     return ok({ analysis: analysis.value, threads });
+  };
+
+  // Attachments recently served, newest last: a video player asks for one in many ranges as it
+  // seeks, and an attachment's URL names its content, so it never changes.
+  const attachments = new Map<string, Promise<Result<Attachment, UseCaseError>>>();
+  /** The sizes of those that arrived, by URL. */
+  const sizes = new Map<string, number>();
+  const cachedBytes = () => [...sizes.values()].reduce((sum, size) => sum + size, 0);
+  const remember = (url: string, attachment: Promise<Result<Attachment, UseCaseError>>) => {
+    attachments.set(url, attachment);
+    void attachment.then((result) => {
+      if (attachments.get(url) !== attachment) return;
+      // A failure isn't kept, so the next request asks the host again.
+      if (!result.ok) {
+        attachments.delete(url);
+        return;
+      }
+      sizes.set(url, result.value.bytes.byteLength);
+      for (const oldest of attachments.keys()) {
+        if (cachedBytes() <= MAX_CACHED_ATTACHMENT_BYTES || oldest === url) break;
+        attachments.delete(oldest);
+        sizes.delete(oldest);
+      }
+    });
   };
 
   /** One apply per analysis at a time, so a double click can't commit twice. */
@@ -178,8 +205,18 @@ export const createThreadUseCases = (deps: AppDeps) => {
     async getAttachment(id: AnalysisId, url: string): Promise<Result<Attachment, UseCaseError>> {
       const found = await threadsFor(id);
       if (!found.ok) return found;
-      const attachment = await found.value.threads.getAttachment(url);
-      return attachment.ok ? attachment : err(fromHostError(attachment.error));
+      const known = attachments.get(url);
+      if (known !== undefined) {
+        // Newest last again.
+        attachments.delete(url);
+        attachments.set(url, known);
+        return known;
+      }
+      const fetching = found.value.threads
+        .getAttachment(url)
+        .then((attachment) => (attachment.ok ? attachment : err(fromHostError(attachment.error))));
+      remember(url, fetching);
+      return fetching;
     },
 
     async getThreads(id: AnalysisId): Promise<Result<ThreadList, UseCaseError>> {

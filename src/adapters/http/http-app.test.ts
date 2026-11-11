@@ -705,6 +705,22 @@ describe("GET /api/analyses/:id/attachment", () => {
     expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([137, 80]);
   });
 
+  it("serves a byte range, so a video can seek", async () => {
+    const { app } = await seeded();
+    const ranged = await app.request(path(ATTACHMENT, TOKEN), {
+      headers: { host: HOST, range: "bytes=1-" },
+    });
+    expect(ranged.status).toBe(206);
+    expect(ranged.headers.get("content-range")).toBe("bytes 1-1/2");
+    expect(ranged.headers.get("accept-ranges")).toBe("bytes");
+    expect([...new Uint8Array(await ranged.arrayBuffer())]).toEqual([80]);
+    const past = await app.request(path(ATTACHMENT, TOKEN), {
+      headers: { host: HOST, range: "bytes=5-" },
+    });
+    expect(past.status).toBe(416);
+    expect(past.headers.get("content-range")).toBe("bytes */2");
+  });
+
   it("refuses a missing token, a URL that isn't the host's, and one that isn't https", async () => {
     const { app, request } = await seeded();
     expect((await app.request(path(ATTACHMENT), { headers: { host: HOST } })).status).toBe(401);

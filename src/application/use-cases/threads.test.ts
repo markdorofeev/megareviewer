@@ -18,7 +18,7 @@ import {
   smallFeatureThreadList,
 } from "../testing/index.ts";
 import { createUseCases } from "./create-use-cases.ts";
-import { applyMessage } from "./threads.ts";
+import { applyMessage, MAX_CACHED_ATTACHMENT_BYTES } from "./threads.ts";
 
 const { ref, headSha } = smallFeature.pullRequest;
 
@@ -96,6 +96,49 @@ describe("getAttachment", () => {
       ok: false,
       error: { code: "not-found" },
     });
+  });
+});
+
+describe("getAttachment's memory", () => {
+  const url = (n: number) => `https://github.com/user-attachments/assets/${n}`;
+
+  it("asks the host once per attachment, but again after a failure", async () => {
+    const { useCases, threads, id } = await setup();
+    threads.setAttachment(url(1), { contentType: "video/mp4", bytes: new Uint8Array([1]) });
+    let asked = 0;
+    const original = threads.getAttachment.bind(threads);
+    threads.getAttachment = (one) => {
+      asked += 1;
+      return original(one);
+    };
+    threads.failNext("getAttachment", {
+      kind: "network",
+      message: "down",
+      retryAfterSeconds: null,
+    });
+    expect((await useCases.getAttachment(id, url(1))).ok).toBe(false);
+    expect((await useCases.getAttachment(id, url(1))).ok).toBe(true);
+    expect((await useCases.getAttachment(id, url(1))).ok).toBe(true);
+    expect(asked).toBe(2);
+  });
+
+  it("forgets the oldest past 100 MB", async () => {
+    const { useCases, threads, id } = await setup();
+    const big = new Uint8Array(MAX_CACHED_ATTACHMENT_BYTES / 2);
+    for (const n of [1, 2, 3])
+      threads.setAttachment(url(n), { contentType: "video/mp4", bytes: big });
+    let asked: string[] = [];
+    const original = threads.getAttachment.bind(threads);
+    threads.getAttachment = (one) => {
+      asked.push(one);
+      return original(one);
+    };
+    for (const n of [1, 2, 3]) await useCases.getAttachment(id, url(n));
+    asked = [];
+    await useCases.getAttachment(id, url(3));
+    await useCases.getAttachment(id, url(2));
+    await useCases.getAttachment(id, url(1));
+    expect(asked).toEqual([url(1)]);
   });
 });
 
