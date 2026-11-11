@@ -1,5 +1,4 @@
 import type { FileChange, Hunk, PartId } from "../../../../src/domain/diff/index.ts";
-import type { ExpandDirection } from "../../review/index.ts";
 import type { PartIndex } from "./model.ts";
 
 // The unchanged lines a file's card folds away: above its first part, between two parts, and below
@@ -87,55 +86,9 @@ export const foldsOf = (partIds: readonly PartId[], index: PartIndex): Fold[] =>
   return folds;
 };
 
-/** How much of a fold is open: lines from its top, under the part before, and from its bottom. */
-export interface Opened {
-  readonly top: number;
-  readonly bottom: number;
-}
-
-export const CLOSED: Opened = { top: 0, bottom: 0 };
-
-/**
- * Opens `step` more lines of a fold: "down" from its top, "up" from its bottom, as the arrows
- * point from the fold row; "all" the rest. A fold with no part before it opens only up, and one
- * with no part after it only down. Without its size, "up" and "all" wait for the file.
- */
-export const openMore = (
-  opened: Opened,
-  direction: ExpandDirection,
-  step: number,
-  size: number | null,
-): Opened => {
-  if (direction === "all")
-    return size === null ? { top: Number.MAX_SAFE_INTEGER, bottom: 0 } : { top: size, bottom: 0 };
-  const left =
-    size === null ? Number.MAX_SAFE_INTEGER : Math.max(0, size - opened.top - opened.bottom);
-  const more = Math.min(step, left);
-  return direction === "down"
-    ? { ...opened, top: opened.top + more }
-    : { ...opened, bottom: opened.bottom + more };
-};
-
-/** The head line numbers a fold shows open, above and below its row, and how many stay folded. */
-export const openRanges = (
-  fold: Fold,
-  opened: Opened,
-  fileLines: number,
-): {
-  readonly top: readonly number[];
-  readonly hidden: number;
-  readonly bottom: readonly number[];
-} => {
-  const size = foldSize(fold, fileLines) ?? 0;
-  const top = Math.min(opened.top, size);
-  const bottom = Math.min(opened.bottom, size - top);
-  const range = (from: number, count: number) => Array.from({ length: count }, (_, i) => from + i);
-  return {
-    top: range(fold.start, top),
-    hidden: size - top - bottom,
-    bottom: range(fold.start + size - bottom, bottom),
-  };
-};
+/** The head line numbers a fold holds, once the file says how long it is. */
+export const foldLines = (fold: Fold, fileLines: number): number[] =>
+  Array.from({ length: foldSize(fold, fileLines) ?? 0 }, (_, i) => fold.start + i);
 
 /** A file's text as its lines, without the empty one after a final newline, or a line's CR. */
 export const fileLines = (content: string): string[] => {

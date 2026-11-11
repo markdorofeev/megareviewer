@@ -1,16 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FileChange, Hunk } from "../../../../src/domain/diff/index.ts";
 import { fixtureAnalysisView } from "../../../dev/fixtures/index.ts";
-import {
-  CLOSED,
-  canOpen,
-  type Fold,
-  fileLines,
-  foldSize,
-  foldsOf,
-  openMore,
-  openRanges,
-} from "./folds.ts";
+import { canOpen, type Fold, fileLines, foldLines, foldSize, foldsOf } from "./folds.ts";
 import { partIndex } from "./model.ts";
 
 const analysis = fixtureAnalysisView.analysis;
@@ -106,32 +97,14 @@ describe("canOpen", () => {
   });
 });
 
-describe("opening", () => {
-  const fold: Fold = { before: null, after: null, start: 11, end: 60, offset: 3 };
-
-  it("opens a step from either end, never past the fold, or all of it", () => {
-    const down = openMore(CLOSED, "down", 20, 50);
-    expect(down).toEqual({ top: 20, bottom: 0 });
-    const both = openMore(openMore(down, "up", 20, 50), "up", 20, 50);
-    expect(both).toEqual({ top: 20, bottom: 30 });
-    expect(openMore(CLOSED, "all", 20, 50)).toEqual({ top: 50, bottom: 0 });
-  });
-
-  it("opens below the last part before the file's length is known", () => {
-    expect(openMore(CLOSED, "down", 20, null)).toEqual({ top: 20, bottom: 0 });
-    const all = openMore(CLOSED, "all", 20, null);
+describe("foldLines", () => {
+  it("gives a fold's head lines, below the last part once the file's length is known", () => {
+    const fold: Fold = { before: null, after: null, start: 11, end: 14, offset: 3 };
+    expect(foldLines(fold, 100)).toEqual([11, 12, 13, 14]);
     const below: Fold = { ...fold, end: null };
-    expect(openRanges(below, all, 14)).toEqual({ top: [11, 12, 13, 14], hidden: 0, bottom: [] });
     expect(foldSize(below, null)).toBeNull();
-    expect(foldSize(below, 5)).toBe(0);
-  });
-
-  it("gives the open lines above and below the row, and how many stay folded", () => {
-    expect(openRanges(fold, { top: 2, bottom: 1 }, 100)).toEqual({
-      top: [11, 12],
-      hidden: 47,
-      bottom: [60],
-    });
+    expect(foldLines(below, 12)).toEqual([11, 12]);
+    expect(foldLines(below, 5)).toEqual([]);
   });
 });
 

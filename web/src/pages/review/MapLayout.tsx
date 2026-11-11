@@ -7,7 +7,6 @@ import {
 } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import {
-  EXPAND_STEP,
   FileNotices,
   FilePath,
   FileStatusChip,
@@ -15,7 +14,7 @@ import {
   MechanicalGroup,
 } from "../../review/index.ts";
 import { FoldView, useFileText } from "./FoldView.tsx";
-import { CLOSED, canOpen, type Fold, foldSize, foldsOf, type Opened, openMore } from "./folds.ts";
+import { canOpen, type Fold, foldsOf } from "./folds.ts";
 import { type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
 import { contractParts, type FileGroup, gapBetween } from "./model.ts";
 
@@ -100,13 +99,12 @@ const FileCard = ({
   // A path rule holds for every part of the file, so its reason is said once, here.
   const fileReasons = contract > 0 ? pathReasons(group.file) : [];
   const { text, load } = useFileText(analysisId, group.file.path);
-  const [opened, setOpened] = useState<ReadonlyMap<string, Opened>>(new Map());
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const folds = useMemo(
     () => (canOpen(group.file) ? foldsOf(group.partIds, deps.index) : []),
     [group, deps.index],
   );
   const foldKey = (fold: Fold) => `${fold.after ?? ""}>${fold.before ?? ""}`;
-  const fileLength = text.status === "ready" ? text.lines.length : null;
   const foldView = (fold: Fold) => {
     const key = foldKey(fold);
     const next = fold.before ?? fold.after;
@@ -118,23 +116,13 @@ const FileCard = ({
         fold={fold}
         file={group.file}
         hunkId={neighbor.hunk.id}
-        opened={opened.get(key) ?? CLOSED}
+        opened={opened.has(key)}
         text={text}
         above={fold.after !== null}
         below={fold.before !== null}
-        onOpen={(direction) => {
+        onOpen={() => {
           load();
-          setOpened((previous) =>
-            new Map(previous).set(
-              key,
-              openMore(
-                previous.get(key) ?? CLOSED,
-                direction,
-                EXPAND_STEP,
-                foldSize(fold, fileLength),
-              ),
-            ),
-          );
+          setOpened((previous) => new Set(previous).add(key));
         }}
       />
     );

@@ -14,7 +14,6 @@ export {
 } from "./diff/hunk-card.tsx";
 export {
   CollapsedHunk,
-  EXPAND_STEP,
   type ExpandDirection,
   HunkHeader,
 } from "./diff/hunk-header.tsx";

@@ -916,38 +916,31 @@ describe("navigation", () => {
     expect(within(orders).queryByRole("checkbox")).toBeNull();
     // The line between the imports and the route is a fold.
     const gap = orders.querySelector("[data-slot=file-gap]");
-    expect(gap?.textContent).toBe("1 line unchangedShow all");
+    expect(gap?.textContent).toBe("1 line unchanged");
     expect(gap?.querySelector("[data-slot=unfold-icon]")).not.toBeNull();
   });
 
-  it("open a card's folds, a step or all at once, fetching the file once", async () => {
+  it("open a card's folds whole on a click, fetching the file once", async () => {
     const user = userEvent.setup();
     const { requests } = renderReview();
     await loaded();
     const orders = fileCardOf("src/routes/orders.ts");
     const folds = () =>
-      [...orders.querySelectorAll("[data-slot=file-gap] > span:nth-of-type(1)")].map(
-        (label) => label.textContent,
-      );
+      [...orders.querySelectorAll("[data-slot=file-gap]")].map((gap) => gap.textContent);
     const fileRequests = () => requests.filter((request) => request.url.includes("/files/"));
     expect(folds()).toEqual(["1 line unchanged", "4 lines unchanged", "Unchanged lines below"]);
     expect(fileRequests()).toEqual([]);
 
     // Below the last part the file's length isn't known until it's fetched.
-    await user.click(
-      within(orders).getByRole("button", { name: "Show 20 more lines below the previous change" }),
-    );
-    await waitFor(() => expect(within(orders).getByText("// unchanged line 54")).toBeTruthy());
-    expect(within(orders).queryByText("// unchanged line 55")).toBeNull();
-    expect(folds()).toEqual(["1 line unchanged", "4 lines unchanged", "10 lines unchanged"]);
+    await user.click(within(orders).getByRole("button", { name: "Unchanged lines below" }));
+    await waitFor(() => expect(within(orders).getByText("// unchanged line 64")).toBeTruthy());
+    expect(folds()).toEqual(["1 line unchanged", "4 lines unchanged"]);
     // Both numbers: the PR removed 6 lines above it.
     const row = within(orders).getByText("// unchanged line 35").closest("[role=row]");
     expect(row?.textContent).toMatch(/^2935/);
 
-    const between = orders.querySelectorAll("[data-slot=file-gap]")[1];
-    if (!(between instanceof HTMLElement)) throw new Error("no fold between the parts");
-    await user.click(within(between).getByRole("button", { name: "Show all" }));
-    expect(folds()).toEqual(["1 line unchanged", "10 lines unchanged"]);
+    await user.click(within(orders).getByRole("button", { name: "4 lines unchanged" }));
+    expect(folds()).toEqual(["1 line unchanged"]);
     expect(within(orders).getByText("// unchanged line 25")).toBeTruthy();
     expect(fileRequests().map((request) => request.url)).toEqual([
       `/api/analyses/${id}/files/head/src%2Froutes%2Forders.ts`,
@@ -964,11 +957,10 @@ describe("navigation", () => {
     });
     await loaded();
     const orders = fileCardOf("src/routes/orders.ts");
-    const between = orders.querySelectorAll("[data-slot=file-gap]")[1];
-    if (!(between instanceof HTMLElement)) throw new Error("no fold between the parts");
-    await user.click(within(between).getByRole("button", { name: "Show all" }));
+    await user.click(within(orders).getByRole("button", { name: "4 lines unchanged" }));
     expect((await within(orders).findByRole("alert")).textContent).toMatch(/GitHub returned 500/);
-    expect(within(between).getByRole("button", { name: "Show all" })).toBeTruthy();
+    // Clicking again tries again.
+    expect(within(orders).getByRole("button", { name: "4 lines unchanged" })).toBeTruthy();
   });
 });
 
