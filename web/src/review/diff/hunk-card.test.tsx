@@ -165,7 +165,7 @@ describe("HunkCard", () => {
     selection?.removeAllRanges();
   });
 
-  it("closes the open comment box with a click on its own line, or with Close", async () => {
+  it("closes the open comment box with a click on its own line, Cancel or Esc", async () => {
     const user = userEvent.setup();
     const onOpenComment = vi.fn();
     renderWith(
@@ -180,8 +180,112 @@ describe("HunkCard", () => {
     expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
     expect(onOpenComment).not.toHaveBeenCalledWith(second.hunk.id, { side: "new", line: 41 });
     onOpenComment.mockClear();
-    await user.click(screen.getByRole("button", { name: /^Close/ }));
+    await user.click(screen.getByRole("button", { name: /^Cancel/ }));
     expect(onOpenComment).toHaveBeenCalledWith(second.hunk.id, null);
+    onOpenComment.mockClear();
+    screen.getByRole("textbox", { name: "Comment on line 41" }).focus();
+    await user.keyboard("{Escape}");
+    expect(onOpenComment).toHaveBeenCalledWith(second.hunk.id, null);
+  });
+
+  const draft = { side: "new" as const, line: 41, body: "Name it `count`." };
+
+  it("stays open when the focus leaves it, so the reviewer can select code", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    renderWith(
+      <Cards
+        cards={[second]}
+        comments={[draft]}
+        openComment={draft}
+        onOpenComment={onOpenComment}
+        onComment={vi.fn()}
+      />,
+    );
+    const field = screen.getByRole("textbox", { name: "Comment on line 41" });
+    await user.click(field);
+    const header = screen.getByRole("region").querySelector("header");
+    if (header === null) throw new Error("no header");
+    await user.click(header);
+    expect(document.activeElement).not.toBe(field);
+    expect(onOpenComment).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "Comment on line 41" })).toBeTruthy();
+  });
+
+  it("shows a draft as a comment once it's added, with Edit and Discard", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    const onComment = vi.fn();
+    const comment = { ...draft, severity: "major" as const, suggestion: ["count"] };
+    const props = { cards: [second], comments: [comment], onOpenComment, onComment };
+    const { rerender } = renderWith(<Cards {...props} openComment={comment} />);
+    expect(
+      screen.getByRole("textbox", { name: "Comment on line 41" }).getAttribute("placeholder"),
+    ).toBe("Leave a comment");
+    await user.click(screen.getByRole("button", { name: /^Add comment/ }));
+    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
+    expect(onComment).not.toHaveBeenCalled();
+
+    rerender(
+      <HighlighterContext.Provider value={pendingHighlighter()}>
+        <Cards {...props} openComment={null} />
+      </HighlighterContext.Provider>,
+    );
+    const saved = document.querySelector<HTMLElement>("[data-slot=line-comment]");
+    if (saved === null) throw new Error("no draft");
+    expect(within(saved).queryByRole("textbox")).toBeNull();
+    expect(within(saved).getByText("Draft · posts with your review")).toBeTruthy();
+    expect(saved.querySelector("[data-slot=severity]")?.textContent).toBe("▲major");
+    expect(saved.querySelector("[data-slot=thread-body]")?.textContent).toBe("Name it count.");
+    expect(saved.querySelector("[data-kind=del]")?.textContent).toContain("b");
+    expect(saved.querySelector("[data-kind=add]")?.textContent).toContain("count");
+
+    await user.click(within(saved).getByRole("button", { name: "Edit" }));
+    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41 });
+    rerender(
+      <HighlighterContext.Provider value={pendingHighlighter()}>
+        <Cards {...props} openComment={comment} />
+      </HighlighterContext.Provider>,
+    );
+    const field = screen.getByRole("textbox", { name: "Comment on line 41" });
+    expect((field as HTMLTextAreaElement).value).toBe("Name it `count`.");
+    expect(document.activeElement).toBe(field);
+  });
+
+  it("removes a draft with Discard, from either state", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    const onComment = vi.fn();
+    const props = { cards: [second], comments: [draft], onOpenComment, onComment };
+    const { rerender } = renderWith(<Cards {...props} />);
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41, body: "" });
+    onComment.mockClear();
+    rerender(
+      <HighlighterContext.Provider value={pendingHighlighter()}>
+        <Cards {...props} openComment={draft} />
+      </HighlighterContext.Provider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41, body: "" });
+    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
+  });
+
+  it("removes a draft with no text when it's added", async () => {
+    const user = userEvent.setup();
+    const onComment = vi.fn();
+    const empty = { ...draft, body: "  ", severity: "minor" as const };
+    renderWith(
+      <Cards
+        cards={[second]}
+        comments={[empty]}
+        openComment={empty}
+        onOpenComment={vi.fn()}
+        onComment={onComment}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /^Add comment/ }));
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41, body: "" });
   });
 
   it("extends the open comment into a range with ⇧-click on the same side", async () => {
@@ -242,6 +346,11 @@ describe("HunkCard", () => {
     expect(
       (screen.getByRole("textbox", { name: "Suggested lines" }) as HTMLTextAreaElement).value,
     ).toBe("a");
+    // The suggestion's preview: the lines it replaces, then its own.
+    const preview = document.querySelector("[data-slot=line-comment] [data-slot=suggestion-diff]");
+    expect(preview?.querySelectorAll("[data-kind=del]")).toHaveLength(3);
+    expect(preview?.querySelector("[data-kind=add]")?.textContent).toContain("a");
+    expect(screen.getByRole("group", { name: "Severity" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "minor" }));
     expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { ...comment, suggestion: ["a"] });
   });

@@ -17,27 +17,30 @@ import { absoluteTime, initialsOf, relativeTime } from "./people.ts";
 import { SuggestionDiff } from "./suggestion-diff.tsx";
 import { ThreadBody } from "./thread-body.tsx";
 
-const SEVERITY: Readonly<Record<Severity, { readonly glyph: string; readonly className: string }>> =
-  {
-    blocking: {
-      glyph: "■",
-      className: "text-severity-blocker bg-review-changes-bg border-severity-blocker/25",
-    },
-    major: {
-      glyph: "▲",
-      className: "text-severity-major bg-severity-major-bg border-severity-major/25",
-    },
-    minor: {
-      glyph: "●",
-      className: "text-severity-minor bg-review-pending-bg border-severity-minor/25",
-    },
-  };
+/** A severity's glyph and color, for its chip and for the options that pick it. */
+export const SEVERITY_MARK: Readonly<
+  Record<Severity, { readonly glyph: string; readonly color: string }>
+> = {
+  blocking: { glyph: "■", color: "text-severity-blocker" },
+  major: { glyph: "▲", color: "text-severity-major" },
+  minor: { glyph: "●", color: "text-severity-minor" },
+};
 
-const CHIP = "inline-flex items-center gap-1 rounded-sm border px-1.5 text-caption font-medium";
+const SEVERITY_CHIP: Readonly<Record<Severity, string>> = {
+  blocking: "bg-review-changes-bg border-severity-blocker/25",
+  major: "bg-severity-major-bg border-severity-major/25",
+  minor: "bg-review-pending-bg border-severity-minor/25",
+};
+
+export const CHIP =
+  "inline-flex items-center gap-1 rounded-sm border px-1.5 text-caption font-medium";
 
 export const SeverityChip = ({ severity }: { readonly severity: Severity }) => (
-  <span data-slot="severity" className={cn(CHIP, SEVERITY[severity].className)}>
-    <span aria-hidden="true">{SEVERITY[severity].glyph}</span>
+  <span
+    data-slot="severity"
+    className={cn(CHIP, SEVERITY_MARK[severity].color, SEVERITY_CHIP[severity])}
+  >
+    <span aria-hidden="true">{SEVERITY_MARK[severity].glyph}</span>
     {severity}
   </span>
 );

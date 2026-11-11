@@ -4,6 +4,7 @@ import {
   memo,
   type ReactNode,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -16,7 +17,11 @@ import type {
   PartId,
   UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
-import type { RiskAssessment, Severity } from "../../../../src/domain/review/index.ts";
+import {
+  parseBody,
+  type RiskAssessment,
+  type Severity,
+} from "../../../../src/domain/review/index.ts";
 import { RISK_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
@@ -24,9 +29,17 @@ import { StatusBadge } from "../../ui/status-badge.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { Toggle } from "../../ui/toggle.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
-import { CommentCard } from "../thread/index.ts";
+import {
+  CHIP,
+  CommentCard,
+  SEVERITY_MARK,
+  SeverityChip,
+  SuggestionDiff,
+  ThreadBody,
+} from "../thread/index.ts";
 import { DiffLine } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
+import { languageOf } from "./languages.ts";
 import { hunkLocation, lineCounts } from "./lines.ts";
 import { viewLines } from "./rows.ts";
 import { useHunkTokens, useNearViewport } from "./syntax.ts";
@@ -173,9 +186,6 @@ export const HunkCard = memo(function HunkCard({
     card.scrollIntoView({ block: "start" });
   }, [focused]);
 
-  // Pressing on a line moves the focus out of an open comment box, which closes it before the
-  // click lands; what was open at the press says whether the click closes or opens.
-  const openAtPress = useRef<LinePlace | null>(null);
   const counts = lineCounts(hunk);
   const header = !inFile || proofs.length > 0;
   const commentable = onOpenComment !== undefined && onComment !== undefined;
@@ -184,8 +194,7 @@ export const HunkCard = memo(function HunkCard({
    * comment into a range on the same side.
    */
   const toggleComment = (place: LinePlace, extend: boolean) => {
-    const from = openAtPress.current ?? openComment;
-    openAtPress.current = null;
+    const from = openComment;
     if (from !== null && from.side === place.side && from.line === place.line) {
       onOpenComment?.(id, null);
       return;
@@ -297,9 +306,6 @@ export const HunkCard = memo(function HunkCard({
                   {...(place === null || !commentable
                     ? {}
                     : {
-                        onRowPress: () => {
-                          openAtPress.current = openComment;
-                        },
                         onRowClick: (event: MouseEvent<HTMLDivElement>) => {
                           // Selecting code isn't asking to comment.
                           if (window.getSelection()?.isCollapsed === false) return;
@@ -310,30 +316,42 @@ export const HunkCard = memo(function HunkCard({
                         },
                       })}
                 />
-                {place !== null && commentAt != null && (comment !== undefined || open) && (
-                  <CommentRow
-                    place={commentAt}
-                    comment={comment}
-                    focus={open}
-                    shown={(start, end) => linesShown(hunk, start, end)}
-                    rangeNote={rangeNote}
-                    onChange={
-                      onComment === undefined
-                        ? undefined
-                        : (next) =>
-                            onComment(id, {
-                              side: commentAt.side,
-                              line: commentAt.line,
-                              ...(commentAt.startLine === undefined
-                                ? {}
-                                : { startLine: commentAt.startLine }),
-                              ...next,
-                            })
-                    }
-                    onDone={() => onOpenComment?.(id, null)}
-                    pinned={inFile}
-                  />
-                )}
+                {place !== null &&
+                  commentAt != null &&
+                  (comment !== undefined || (open && onComment !== undefined)) && (
+                    <CommentRow
+                      place={commentAt}
+                      comment={comment}
+                      editing={open && onComment !== undefined}
+                      shown={(start, end) => linesShown(hunk, start, end)}
+                      language={languageOf(file)}
+                      rangeNote={rangeNote}
+                      onChange={
+                        onComment === undefined
+                          ? undefined
+                          : (next) =>
+                              onComment(id, {
+                                side: commentAt.side,
+                                line: commentAt.line,
+                                ...(commentAt.startLine === undefined
+                                  ? {}
+                                  : { startLine: commentAt.startLine }),
+                                ...next,
+                              })
+                      }
+                      onEdit={() =>
+                        onOpenComment?.(id, {
+                          side: commentAt.side,
+                          line: commentAt.line,
+                          ...(commentAt.startLine === undefined
+                            ? {}
+                            : { startLine: commentAt.startLine }),
+                        })
+                      }
+                      onDone={() => onOpenComment?.(id, null)}
+                      pinned={inFile}
+                    />
+                  )}
                 {threads !== null && (
                   <div
                     role="row"
@@ -367,35 +385,42 @@ const SEVERITIES: readonly Severity[] = ["minor", "major", "blocking"];
 type CommentDraft = Pick<LineComment, "body" | "severity" | "suggestion">;
 
 /**
- * The comment box under a line: a draft saved as it's typed, removed when emptied. It picks a
- * severity, none by default, and on head-side lines can suggest a change, starting from the lines
- * it's on.
+ * A draft under a line, in one of two states. Editing: its text, saved as it's typed, a severity,
+ * none by default, and on head-side lines a suggested change, starting from the lines it's on.
+ * Saved: the draft as its comment will read, with Edit and Discard. It stays open while the reviewer
+ * selects code, and closes on Add comment, Cancel, Esc, Discard or a click on its own line.
  */
 const CommentRow = ({
   place,
   comment,
-  focus,
+  editing,
   shown,
+  language,
   rangeNote,
   onChange,
+  onEdit,
   onDone,
   pinned,
 }: {
   readonly place: LinePlace;
   readonly comment: LineComment | undefined;
-  readonly focus: boolean;
+  readonly editing: boolean;
   /** The text of head-side lines the hunk shows, to start a suggestion from. */
   readonly shown: (start: number, end: number) => readonly string[] | null;
+  readonly language: string | null;
   readonly rangeNote: string | undefined;
   readonly onChange?: (draft: CommentDraft) => void;
+  readonly onEdit: () => void;
   readonly onDone: () => void;
   /** On a file's card, where the lines scroll sideways and the box stays in view. */
   readonly pinned: boolean;
 }) => {
+  const row = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+  const severityId = useId();
   useEffect(() => {
-    if (focus) field.current?.focus();
-  }, [focus]);
+    if (editing) field.current?.focus();
+  }, [editing]);
   const label = placeLabel(place);
   const body = comment?.body ?? "";
   const severity = comment?.severity;
@@ -407,28 +432,94 @@ const CommentRow = ({
   };
   const startingLines =
     place.side === "new" ? shown(place.startLine ?? place.line, place.line) : null;
+  const range = place.startLine === undefined ? null : `Lines ${place.startLine}–${place.line}`;
+
+  /** The focus goes back to the card the box was on, which takes the page's keys. */
+  const leave = () =>
+    row.current?.closest<HTMLElement>("[data-slot=hunk-card]")?.focus({ preventScroll: true });
+  const discard = () => {
+    if (editing) leave();
+    onChange?.({ body: "" });
+    if (editing) onDone();
+  };
+  // The text is saved as it's typed, so closing keeps it; a draft with nothing to say goes.
+  const close = () => {
+    leave();
+    if (body.trim() === "" && suggestion === undefined) onChange?.({ body: "" });
+    onDone();
+  };
+
+  const preview = (lines: readonly string[]) => (
+    <SuggestionDiff
+      title="Suggested change"
+      removed={startingLines}
+      added={lines}
+      language={language}
+    />
+  );
+
   return (
     <div
+      ref={row}
       role="row"
       data-slot="line-comment"
+      data-editing={editing || undefined}
       className={cn("px-3 py-2 font-sans", pinned && PINNED)}
-      // The box closes when the focus leaves it, not when it moves between its own controls.
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) onDone();
-      }}
     >
-      <CommentCard role="cell" state="draft" className="flex max-w-3xl flex-col gap-2">
-        {onChange === undefined ? (
-          <p className="text-body whitespace-pre-wrap">
-            <span className="sr-only">{label}: </span>
-            {severity !== undefined && <span className="font-medium">{severity}: </span>}
-            {body}
-          </p>
+      <CommentCard
+        role="cell"
+        state="draft"
+        className="flex max-w-3xl flex-col gap-2"
+        onKeyDown={
+          editing
+            ? (event) => {
+                // Esc closes the box without leaving the page's view.
+                if (event.key !== "Escape") return;
+                event.stopPropagation();
+                close();
+              }
+            : undefined
+        }
+      >
+        {!editing ? (
+          <>
+            <header className="flex flex-wrap items-center gap-2">
+              <span className="sr-only">{label}: </span>
+              <span
+                className={cn(
+                  CHIP,
+                  "border-review-pending/25 bg-review-pending-bg text-review-pending",
+                )}
+              >
+                {onChange === undefined
+                  ? "Posted with your review"
+                  : "Draft · posts with your review"}
+              </span>
+              {severity !== undefined && <SeverityChip severity={severity} />}
+              {range !== null && (
+                <span className="text-caption text-muted-foreground">{range}</span>
+              )}
+            </header>
+            {body.trim() !== "" && (
+              <ThreadBody blocks={parseBody(body).blocks} suggestion={preview} />
+            )}
+            {suggestion !== undefined && preview(suggestion)}
+            {onChange !== undefined && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" onClick={onEdit}>
+                  Edit
+                </Button>
+                <Button variant="ghost" size="sm" onClick={discard}>
+                  Discard
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           <>
-            {place.startLine !== undefined && (
+            {range !== null && (
               <p className="text-caption text-muted-foreground">
-                Lines {place.startLine}–{place.line}
+                {range}
                 {rangeNote === undefined ? "" : `. ${rangeNote}`}
               </p>
             )}
@@ -436,21 +527,17 @@ const CommentRow = ({
               ref={field}
               rows={2}
               aria-label={label}
-              placeholder="What should change here?"
+              placeholder="Leave a comment"
               value={body}
-              onChange={(event) => onChange({ ...draft, body: event.target.value })}
-              onKeyDown={(event) => {
-                // Esc leaves the box without leaving the page's view.
-                if (event.key === "Escape") {
-                  event.stopPropagation();
-                  field.current?.blur();
-                }
-              }}
+              onChange={(event) => onChange?.({ ...draft, body: event.target.value })}
+              onSubmitShortcut={close}
               className="min-h-14 bg-background"
             />
-            <div className="flex flex-wrap items-center gap-2">
-              <fieldset className="flex items-center gap-1">
-                <legend className="sr-only">Severity</legend>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div role="group" aria-labelledby={severityId} className="flex items-center gap-1">
+                <span id={severityId} className="mr-1 text-caption text-muted-foreground">
+                  Severity
+                </span>
                 {SEVERITIES.map((level) => (
                   <Toggle
                     key={level}
@@ -459,17 +546,16 @@ const CommentRow = ({
                     pressed={severity === level}
                     onPressedChange={(pressed) => {
                       const { severity: _, ...rest } = draft;
-                      onChange(pressed ? { ...rest, severity: level } : rest);
+                      onChange?.(pressed ? { ...rest, severity: level } : rest);
                     }}
                   >
+                    <span aria-hidden="true" className={SEVERITY_MARK[level].color}>
+                      {SEVERITY_MARK[level].glyph}
+                    </span>
                     {level}
                   </Toggle>
                 ))}
-              </fieldset>
-              <Button variant="ghost" size="sm" className="order-last ml-auto" onClick={onDone}>
-                Close
-                <KeyHint id="close" />
-              </Button>
+              </div>
               {place.side === "new" && (
                 <Toggle
                   variant="outline"
@@ -477,7 +563,7 @@ const CommentRow = ({
                   pressed={suggestion !== undefined}
                   onPressedChange={(pressed) => {
                     const { suggestion: _, ...rest } = draft;
-                    onChange(pressed ? { ...rest, suggestion: startingLines ?? [""] } : rest);
+                    onChange?.(pressed ? { ...rest, suggestion: startingLines ?? [""] } : rest);
                   }}
                 >
                   Suggest a change
@@ -485,15 +571,31 @@ const CommentRow = ({
               )}
             </div>
             {suggestion !== undefined && (
-              <Textarea
-                aria-label="Suggested lines"
-                value={suggestion.join("\n")}
-                onChange={(event) =>
-                  onChange({ ...draft, suggestion: event.target.value.split("\n") })
-                }
-                className="min-h-14 bg-background font-mono text-code-compact"
-              />
+              <>
+                <Textarea
+                  aria-label="Suggested lines"
+                  value={suggestion.join("\n")}
+                  onChange={(event) =>
+                    onChange?.({ ...draft, suggestion: event.target.value.split("\n") })
+                  }
+                  className="min-h-14 bg-background font-mono text-code-compact"
+                />
+                {preview(suggestion)}
+              </>
             )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={close}>
+                Add comment
+                <KeyHint id="submit" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={close}>
+                Cancel
+                <KeyHint id="close" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={discard}>
+                Discard
+              </Button>
+            </div>
           </>
         )}
       </CommentCard>

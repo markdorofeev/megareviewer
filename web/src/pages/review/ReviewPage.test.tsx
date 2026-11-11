@@ -882,11 +882,10 @@ describe("parts of a split hunk", () => {
     );
     renderReview();
     await loaded();
-    expect(
-      within(cardOf(p.cache)).getByRole("textbox", { name: "Comment on line 45" }),
-    ).toBeTruthy();
-    // The retry part holds the decision's card, whose own box isn't a line's.
-    expect(within(cardOf(p.retry)).queryByRole("textbox", { name: /^Comment on line/ })).toBeNull();
+    expect(cardOf(p.cache).querySelector("[data-slot=line-comment]")?.textContent).toContain(
+      "Evict these.",
+    );
+    expect(cardOf(p.retry).querySelector("[data-slot=line-comment]")).toBeNull();
   });
 });
 
@@ -1063,6 +1062,11 @@ describe("comments on hunks", () => {
     unmount();
     const again = renderReview({ view: withoutDecisions });
     await loaded();
+    // It's back as the comment it will be, until it's edited.
+    const saved = mainArea().querySelector<HTMLElement>("[data-slot=line-comment]");
+    if (saved === null) throw new Error("no draft");
+    expect(within(saved).getByText("Why this?")).toBeTruthy();
+    await userEvent.click(within(saved).getByRole("button", { name: "Edit" }));
     const field = within(mainArea()).getByRole<HTMLTextAreaElement>("textbox", {
       name: `Comment on line ${line}`,
     });

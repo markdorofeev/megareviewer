@@ -13,7 +13,10 @@ import {
   DiffViewer,
   EmptyState,
   FileTree,
+  HunkCard,
   KeyHint,
+  type LineComment,
+  type LinePlace,
   PrHeader,
   ReviewSubmitPanel,
   type ReviewThreadProps,
@@ -28,6 +31,7 @@ import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 import {
   BINARY_FILE,
   generatedFile,
+  NETWORK_ERROR_FILE,
   PENDING_COMMENTS,
   PULL_REQUEST,
   RENAMED_FILE,
@@ -144,6 +148,10 @@ export const DomainComponents = () => {
             </CommentCard>
           ))}
         </div>
+      </Group>
+
+      <Group title="A draft on a line: Edit to change it, or click the other line to write one">
+        <DraftDemo />
       </Group>
 
       <Group title="Review threads">
@@ -338,6 +346,46 @@ const AuthorPanel = () => (
     onSubmit={() => undefined}
   />
 );
+
+/** Drafts on a hunk's lines, kept in memory, as the review page keeps them in local storage. */
+const DraftDemo = () => {
+  const [hunk] = NETWORK_ERROR_FILE.hunks;
+  const [comments, setComments] = useState<readonly LineComment[]>([
+    {
+      side: "new",
+      line: 8,
+      body: "Only these codes? `EPIPE` is a network error too.",
+      severity: "major",
+      suggestion: [
+        '  return error instanceof Error && /^E(CONNRESET|TIMEDOUT|PIPE)$/.test(String(Reflect.get(error, "code")));',
+      ],
+    },
+  ]);
+  const [open, setOpen] = useState<LinePlace | null>(null);
+  if (hunk === undefined) return null;
+  return (
+    <div className="max-w-4xl overflow-hidden rounded-lg border">
+      <HunkCard
+        hunk={hunk}
+        file={NETWORK_ERROR_FILE}
+        risk={null}
+        comments={comments}
+        openComment={open}
+        onOpenComment={(_, place) => setOpen(place)}
+        onComment={(_, comment) => {
+          const same = (other: LineComment) =>
+            other.side === comment.side && other.line === comment.line;
+          const empty =
+            comment.body === "" &&
+            comment.severity === undefined &&
+            comment.suggestion === undefined;
+          const rest = comments.filter((other) => !same(other));
+          setComments(empty ? rest : [...rest, comment]);
+        }}
+      />
+    </div>
+  );
+};
 
 /** A thread on made-up data: replies and resolving answer after a moment, as a host would. */
 const ThreadDemo = ({

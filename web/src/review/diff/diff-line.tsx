@@ -127,11 +127,7 @@ export interface DiffLineProps {
     readonly label: string;
     readonly onClick: (event: MouseEvent<HTMLButtonElement>) => void;
   };
-  /**
-   * A press and a click anywhere on the row, e.g. to comment on it. The press comes before the
-   * focus moves, so a handler can tell what was open then.
-   */
-  readonly onRowPress?: (event: MouseEvent<HTMLDivElement>) => void;
+  /** A click anywhere on the row, e.g. to comment on it. */
   readonly onRowClick?: (event: MouseEvent<HTMLDivElement>) => void;
 }
 
@@ -147,7 +143,6 @@ export const DiffLine = memo(function DiffLine({
   onComment,
   onGutterClick,
   numberButton,
-  onRowPress,
   onRowClick,
   cellRole = "gridcell",
 }: DiffLineProps) {
@@ -212,7 +207,6 @@ export const DiffLine = memo(function DiffLine({
     <div
       role="row"
       id={id}
-      onMouseDown={onRowPress}
       onClick={onRowClick}
       aria-selected={selected || undefined}
       data-line={line.key}

@@ -33,6 +33,16 @@ const fileDiff = (path: string, hunks: readonly (readonly string[])[]): string =
     "",
   ].join("\n");
 
+/** One changed line, for a draft on it. */
+export const NETWORK_ERROR_FILE = one(
+  fileDiff("src/http/network-error.ts", [
+    hunk(8, 8, " export function isNetworkError(error: unknown): boolean {", [
+      "-  return false;",
+      '+  return error instanceof Error && NETWORK_CODES.has(Reflect.get(error, "code"));',
+    ]),
+  ]),
+);
+
 export const RETRY_FILE = one(
   fileDiff("src/http/retry.ts", [
     hunk(12, 12, ' import { sleep } from "./sleep";', [
