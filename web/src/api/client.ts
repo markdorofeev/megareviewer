@@ -1,17 +1,20 @@
 import type { z } from "zod";
 import {
+  type ApplySuggestionsRequest,
   ErrorResponse,
   type JsonRoute,
   type PublicationPreviewRequest,
   type PublishRequest,
   type PutVerdictRequest,
+  type ReplyRequest,
+  type ResolveRequest,
   type RouteName,
   routePath,
   routes,
   type StartAnalysisRequest,
   TOKEN_HEADER,
 } from "../../../contracts/index.ts";
-import type { AnalysisId, DecisionId } from "../../../src/domain/review/index.ts";
+import type { AnalysisId, DecisionId, ThreadId } from "../../../src/domain/review/index.ts";
 import { err, ok, type Result } from "../../../src/domain/shared/index.ts";
 import type { ApiError } from "./errors.ts";
 
@@ -75,6 +78,13 @@ export const createApiClient = (options: ApiClientOptions) => {
     previewPublication: (id: AnalysisId, body: PublicationPreviewRequest) =>
       send(routes.previewPublication, { id }, body),
     publish: (id: AnalysisId, body: PublishRequest) => send(routes.publish, { id }, body),
+    getThreads: (id: AnalysisId) => send(routes.getThreads, { id }),
+    replyToThread: (id: AnalysisId, threadId: ThreadId, body: ReplyRequest) =>
+      send(routes.replyToThread, { id, threadId }, body),
+    resolveThread: (id: AnalysisId, threadId: ThreadId, body: ResolveRequest) =>
+      send(routes.resolveThread, { id, threadId }, body),
+    applySuggestions: (id: AnalysisId, body: ApplySuggestionsRequest) =>
+      send(routes.applySuggestions, { id }, body),
   } satisfies Record<RouteName, unknown>;
 };
 

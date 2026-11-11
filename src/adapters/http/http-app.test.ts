@@ -23,6 +23,7 @@ import {
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeReviewThreads,
   FakeTicketSource,
   FixedClock,
   InMemoryAnalysisStore,
@@ -30,6 +31,7 @@ import {
   RecordingLogger,
   smallFeature,
   smallFeatureAnalysis,
+  smallFeatureThreadList,
 } from "../../application/testing/index.ts";
 import { createUseCases } from "../../application/use-cases/index.ts";
 import { type Analysis, AnalysisId } from "../../domain/review/index.ts";
@@ -51,6 +53,8 @@ const setupApp = (
   const clock = new FixedClock("2026-10-21T10:00:00Z");
   const github = new FakeGitHost({ host: "github", fixtures: allFixtures, clock });
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: allFixtures, clock });
+  const threads = new FakeReviewThreads({ host: "github", clock, gitHost: github });
+  threads.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);
   const store = options.store ?? new InMemoryAnalysisStore();
   const events = options.events ?? createAnalysisEvents();
   const logger = new RecordingLogger();
@@ -63,6 +67,7 @@ const setupApp = (
       store,
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
+      threads: { github: threads },
       parser: new FakeCodeParser(),
       events,
       clock,
@@ -116,7 +121,7 @@ const setupApp = (
     return { status: response.status, body: null, error };
   };
 
-  return { app, clock, github, bitbucket, store, events, logger, useCases, request, call };
+  return { app, clock, github, bitbucket, threads, store, events, logger, useCases, request, call };
 };
 
 const { id } = smallFeatureAnalysis;
@@ -634,6 +639,54 @@ describe("the request log", () => {
       { method: "GET", path: "/api/status", status: 401, durationMs: expect.any(Number) },
     ]);
     expect(JSON.stringify(logger.entries)).not.toContain(TOKEN);
+  });
+});
+
+describe("the thread routes", () => {
+  it("read, reply, resolve and apply", async () => {
+    const { call, threads } = await seeded();
+    const list = await call("getThreads", { params: { id } });
+    expect(list.body?.threads).toHaveLength(smallFeatureThreadList.threads.length);
+    const reply = await call("replyToThread", {
+      params: { id, threadId: "PRRT_cache" },
+      body: { body: "Capped." },
+    });
+    expect(reply.body?.body).toBe("Capped.");
+    const resolved = await call("resolveThread", {
+      params: { id, threadId: "PRRT_cache" },
+      body: { resolved: true },
+    });
+    expect(resolved.body).toEqual({ resolved: true });
+    const applied = await call("applySuggestions", {
+      params: { id },
+      body: { commentIds: ["PRRC_ttl1"] },
+    });
+    expect(applied.body?.paths).toEqual(["src/services/receipts.ts"]);
+    expect(threads.commits).toHaveLength(1);
+  });
+
+  it("rejects an empty reply, no suggestions and a malformed thread ID", async () => {
+    const { call } = await seeded();
+    const bad = [
+      await call("replyToThread", { params: { id, threadId: "PRRT_cache" }, body: { body: "  " } }),
+      await call("applySuggestions", { params: { id }, body: { commentIds: [] } }),
+      await call("resolveThread", { params: { id, threadId: "a b" }, body: { resolved: true } }),
+    ];
+    expect(bad.map((one) => one.error?.code)).toEqual([
+      "bad-request",
+      "bad-request",
+      "bad-request",
+    ]);
+  });
+
+  it("answers stale-analysis when the PR moved", async () => {
+    const { call, github } = await seeded();
+    github.setHeadSha(ref, "2".repeat(40));
+    const applied = await call("applySuggestions", {
+      params: { id },
+      body: { commentIds: ["PRRC_ttl1"] },
+    });
+    expect(applied.error?.code).toBe("stale-analysis");
   });
 });
 

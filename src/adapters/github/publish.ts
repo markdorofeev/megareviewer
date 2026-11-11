@@ -17,6 +17,9 @@ export interface ReviewRequest {
     readonly path: string;
     readonly line: number;
     readonly side: Side;
+    /** A range's first line, on the same side. */
+    readonly start_line?: number;
+    readonly start_side?: Side;
     readonly body: string;
   }[];
 }
@@ -58,10 +61,11 @@ export const planReview = (
       commit_id: headSha,
       event: postsSummary ? EVENTS[publication.verdict] : "COMMENT",
       ...(postsSummary ? { body: publication.summary } : {}),
-      comments: comments.map(({ path, line, side, body }) => ({
+      comments: comments.map(({ path, line, startLine, side, body }) => ({
         path,
         line,
         side: SIDES[side],
+        ...(startLine === undefined ? {} : { start_line: startLine, start_side: SIDES[side] }),
         body,
       })),
     },

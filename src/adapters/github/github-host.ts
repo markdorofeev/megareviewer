@@ -1,9 +1,8 @@
-import { Octokit } from "@octokit/rest";
 import { z } from "zod";
-import type { Clock, FileAt, GitHost, Logger } from "../../application/ports/index.ts";
+import type { FileAt, GitHost } from "../../application/ports/index.ts";
 import type { CommentKey, HostError, HostUser, RepoRef } from "../../domain/review/index.ts";
-import { err, ok, type Result } from "../../domain/shared/index.ts";
-import { fromOctokitError, invalidResponse, timedOut } from "./errors.ts";
+import { ok, type Result } from "../../domain/shared/index.ts";
+import { createGitHubClient, type GitHubClientOptions } from "./client.ts";
 import { byUpdatedAtDesc, toHostUser, toPullRequest, toSummaries } from "./map.ts";
 import { matchComments, planReview, SUMMARY } from "./publish.ts";
 import {
@@ -18,16 +17,7 @@ import {
   GitHubUser,
 } from "./schemas.ts";
 
-export interface GitHubHostOptions {
-  readonly token: string;
-  /** megareviewer's version, for the user-agent. */
-  readonly version: string;
-  readonly clock: Clock;
-  readonly logger: Logger;
-  readonly fetch?: typeof fetch;
-  /** How long a read may take before it fails as a network error. */
-  readonly requestTimeoutMs?: number;
-}
+export type GitHubHostOptions = GitHubClientOptions;
 
 const DIFF = "application/vnd.github.diff";
 const RAW = "application/vnd.github.raw";
@@ -36,8 +26,6 @@ const MAX_COMMITS = 250;
 const SEARCH_PAGE_SIZE = 50;
 /** Files per GraphQL query: each is an alias, so one request reads them all. */
 const FILES_PER_QUERY = 25;
-/** A stalled read is abandoned after this, so it can be retried. */
-export const REQUEST_TIMEOUT_MS = 60_000;
 
 /** Reads `count` files, each named by a "sha:path" variable so paths are never interpolated. */
 const blobsQuery = (count: number): string => {
@@ -52,53 +40,9 @@ const blobsQuery = (count: number): string => {
   return `query ($owner: String!, $repo: String!, ${variables}) {\n  repository(owner: $owner, name: $repo) {\n    ${objects}\n  }\n}`;
 };
 
-/** Octokit's per-request options: the signal that enforces the deadline. */
-interface RequestOptions {
-  readonly signal?: AbortSignal;
-}
-
 export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
   const { clock, logger } = options;
-  const timeoutMs = options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
-  const octokit = new Octokit({
-    auth: options.token,
-    userAgent: `megareviewer/${options.version}`,
-    request: options.fetch === undefined ? {} : { fetch: options.fetch },
-    // Octokit logs every request, failed ones as errors. Failures come back as HostErrors for
-    // the caller to report, so only its warnings (deprecated endpoints) are more than detail.
-    log: {
-      debug: (message) => logger.debug(message),
-      info: (message) => logger.debug(message),
-      warn: (message) => logger.warn(message),
-      error: (message) => logger.debug(message),
-    },
-  });
-
-  /**
-   * Sends a request and parses what it returns. Octokit's errors become HostErrors. A read that
-   * takes longer than the timeout fails as a network error; `deadline: false` is for a post,
-   * where giving up wouldn't stop GitHub from completing it.
-   */
-  const read = async <T>(
-    what: string,
-    schema: z.ZodType<T>,
-    send: (request: RequestOptions) => Promise<unknown>,
-    { deadline = true }: { deadline?: boolean } = {},
-  ): Promise<Result<T, HostError>> => {
-    const controller = deadline ? new AbortController() : null;
-    const timer = controller === null ? null : setTimeout(() => controller.abort(), timeoutMs);
-    let data: unknown;
-    try {
-      data = await send(controller === null ? {} : { signal: controller.signal });
-    } catch (error) {
-      if (controller?.signal.aborted) return err(timedOut(timeoutMs));
-      return err(fromOctokitError(error, clock.now()));
-    } finally {
-      if (timer !== null) clearTimeout(timer);
-    }
-    const parsed = schema.safeParse(data);
-    return parsed.success ? ok(parsed.data) : err(invalidResponse(what, parsed.error));
-  };
+  const { octokit, read } = createGitHubClient(options);
 
   /** One file through the REST API, which gives files of any size; null when it isn't there. */
   const fileOverRest = async (

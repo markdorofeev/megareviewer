@@ -53,6 +53,7 @@ const setup = () => {
     store: new InMemoryAnalysisStore(),
     fileCache,
     checkouts: new FakeLocalCheckouts(),
+    threads: {},
     parser: new FakeCodeParser(),
     events: createAnalysisEvents(),
     clock: new FixedClock(),

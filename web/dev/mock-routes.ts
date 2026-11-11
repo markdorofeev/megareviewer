@@ -18,12 +18,14 @@ import {
   type DecisionVerdict,
   type PublicationReceipt,
   parsePullRequestUrl,
+  type ReviewThread,
   StageName,
 } from "../../src/domain/review/index.ts";
 import {
   fixtureAnalysisView,
   fixturePullRequests,
   fixtureStatus,
+  fixtureThreads,
   largeAnalysisView,
 } from "./fixtures/index.ts";
 import { analysisFailed, analysisInProgress } from "./progress.ts";
@@ -148,6 +150,8 @@ export const createMockApi = (
   let timer: ReturnType<typeof setInterval> | null = null;
   const verdicts = new Map<DecisionId, DecisionVerdict>();
   let publication: PublicationReceipt | null = null;
+  let threads: ReviewThread[] = structuredClone([...fixtureThreads.threads]);
+  let replies = 0;
   const listeners = new Set<(event: MockEvent) => void>();
 
   const analysis = () =>
@@ -322,6 +326,58 @@ export const createMockApi = (
         };
       }
       return success(publication);
+    },
+    getThreads: ({ id }) =>
+      findAnalysis(id) ?? success({ threads, canApply: fixtureThreads.canApply }),
+    replyToThread: (params, body) => {
+      const missing = findAnalysis(params.id);
+      if (missing !== null) return missing;
+      const request = routes.replyToThread.request.safeParse(body);
+      if (!request.success) {
+        return failure("bad-request", issuesOf("body", request.error.issues).join("; "));
+      }
+      const thread = threads.find((one) => one.id === params.threadId);
+      if (thread === undefined) return failure("not-found", `No thread ${params.threadId}`);
+      replies += 1;
+      const comment = {
+        id: `PRRC_mock${replies}`,
+        author: fixtureStatus.hosts.github.user ?? { id: "you", name: "You" },
+        body: request.data.body,
+        createdAt: now(),
+        originalCommit: fixture.key.headSha,
+      };
+      threads = threads.map((one) =>
+        one === thread ? { ...one, comments: [...one.comments, comment] } : one,
+      );
+      return success(comment);
+    },
+    resolveThread: (params, body) => {
+      const missing = findAnalysis(params.id);
+      if (missing !== null) return missing;
+      const request = routes.resolveThread.request.safeParse(body);
+      if (!request.success) {
+        return failure("bad-request", issuesOf("body", request.error.issues).join("; "));
+      }
+      const { resolved } = request.data;
+      threads = threads.map((one) =>
+        one.id === params.threadId
+          ? { ...one, resolved, resolvedBy: resolved ? fixtureStatus.hosts.github.user : null }
+          : one,
+      );
+      return success({ resolved });
+    },
+    applySuggestions: ({ id }, body) => {
+      const missing = findAnalysis(id) ?? requireComplete();
+      if (missing !== null) return missing;
+      const request = routes.applySuggestions.request.safeParse(body);
+      if (!request.success) {
+        return failure("bad-request", issuesOf("body", request.error.issues).join("; "));
+      }
+      const ids = new Set(request.data.commentIds);
+      const paths = threads
+        .filter((thread) => thread.comments.some((comment) => ids.has(comment.id)))
+        .map((thread) => thread.path);
+      return success({ sha: "c".repeat(40), paths: [...new Set(paths)] });
     },
   };
 

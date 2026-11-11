@@ -13,6 +13,10 @@ import {
   PullRequestSummary,
   StageName,
   StageStatus,
+  ThreadComment,
+  ThreadCommentId,
+  ThreadId,
+  ThreadList,
   Verdict,
 } from "../src/domain/review/index.ts";
 
@@ -107,6 +111,34 @@ export type AnalysisDoneEvent = z.infer<typeof AnalysisDoneEvent>;
 export const FileContentResponse = z.object({ content: z.string().nullable() }).readonly();
 export type FileContentResponse = z.infer<typeof FileContentResponse>;
 
+/** The PR's review threads, read live from the host. */
+export const ThreadsResponse = ThreadList;
+export type ThreadsResponse = z.infer<typeof ThreadsResponse>;
+
+export const ReplyRequest = z.object({ body: z.string().trim().min(1) }).readonly();
+export type ReplyRequest = z.infer<typeof ReplyRequest>;
+
+export const ResolveRequest = z.object({ resolved: z.boolean() }).readonly();
+export type ResolveRequest = z.infer<typeof ResolveRequest>;
+export const ResolveResponse = ResolveRequest;
+export type ResolveResponse = z.infer<typeof ResolveResponse>;
+
+/** The suggestions to commit, by the IDs of the comments that make them. */
+export const ApplySuggestionsRequest = z
+  .object({ commentIds: z.array(ThreadCommentId).min(1).max(100).readonly() })
+  .readonly();
+export type ApplySuggestionsRequest = z.infer<typeof ApplySuggestionsRequest>;
+
+export const ApplySuggestionsResponse = z
+  .object({
+    /** The new commit, when the host says. */
+    sha: z.string().nullable(),
+    /** The files it changed. */
+    paths: z.array(z.string()).readonly(),
+  })
+  .readonly();
+export type ApplySuggestionsResponse = z.infer<typeof ApplySuggestionsResponse>;
+
 // Errors
 
 export const ErrorCode = z.enum([
@@ -149,6 +181,7 @@ const VerdictParams = z.object({ id: AnalysisId, decisionId: DecisionId }).reado
 const FileParams = z
   .object({ id: AnalysisId, side: z.enum(["base", "head"]), path: z.string().min(1) })
   .readonly();
+const ThreadParams = z.object({ id: AnalysisId, threadId: ThreadId }).readonly();
 const NoParams = z.object({}).readonly();
 
 export interface JsonRoute {
@@ -228,6 +261,41 @@ export const routes = {
     params: AnalysisParams,
     request: PublishRequest,
     response: PublicationReceipt,
+  },
+  /** The PR's review threads, live from the host: not part of the analysis. */
+  getThreads: {
+    method: "GET",
+    path: "/api/analyses/:id/threads",
+    params: AnalysisParams,
+    request: null,
+    response: ThreadsResponse,
+  },
+  /** Posts a reply at once; never retried. */
+  replyToThread: {
+    method: "POST",
+    path: "/api/analyses/:id/threads/:threadId/replies",
+    params: ThreadParams,
+    request: ReplyRequest,
+    response: ThreadComment,
+  },
+  /** Resolves or reopens a thread at once; never retried. */
+  resolveThread: {
+    method: "PUT",
+    path: "/api/analyses/:id/threads/:threadId/resolved",
+    params: ThreadParams,
+    request: ResolveRequest,
+    response: ResolveResponse,
+  },
+  /**
+   * Commits suggestions on the PR's branch in one commit, on the analysis's head. Answers
+   * stale-analysis when the PR has new commits since, as publishing does.
+   */
+  applySuggestions: {
+    method: "POST",
+    path: "/api/analyses/:id/suggestions/apply",
+    params: AnalysisParams,
+    request: ApplySuggestionsRequest,
+    response: ApplySuggestionsResponse,
   },
 } as const satisfies Record<string, JsonRoute>;
 

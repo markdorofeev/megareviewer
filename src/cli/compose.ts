@@ -5,10 +5,10 @@ import { setTimeout as sleep } from "node:timers/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig as loadAnthropicConfig } from "@anthropic-ai/sdk/core/credentials";
 import type { Hono } from "hono";
-import { createBitbucketHost } from "../adapters/bitbucket/index.ts";
+import { createBitbucketHost, createBitbucketReviewThreads } from "../adapters/bitbucket/index.ts";
 import { createClaudeAnalysisModel } from "../adapters/claude/index.ts";
 import { createGitCheckouts } from "../adapters/git/index.ts";
-import { createGitHubHost } from "../adapters/github/index.ts";
+import { createGitHubHost, createGitHubReviewThreads } from "../adapters/github/index.ts";
 import { createHttpApp } from "../adapters/http/index.ts";
 import { createJiraTicketSource, createUnconfiguredTicketSource } from "../adapters/jira/index.ts";
 import { openSqliteAnalysisStore, type SqliteAnalysisStore } from "../adapters/sqlite/index.ts";
@@ -19,9 +19,10 @@ import type {
   Clock,
   GitHost,
   Logger,
+  ReviewThreads,
   TicketSource,
 } from "../application/ports/index.ts";
-import { retryingGitHost } from "../application/retries/index.ts";
+import { retryingGitHost, retryingReviewThreads } from "../application/retries/index.ts";
 import { type AppDeps, createUseCases, type UseCases } from "../application/use-cases/index.ts";
 import type { HostKind } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
@@ -75,6 +76,32 @@ export const createHosts = (
     }),
     ...(bitbucket !== null && {
       bitbucket: retrying(createBitbucketHost({ ...bitbucket, clock, logger })),
+    }),
+  };
+};
+
+/** The conversation on PRs' code, for the configured hosts; reads retried as the hosts' are. */
+export const createReviewThreads = (
+  config: Pick<Config, "github" | "bitbucket">,
+  options: { readonly version: string; readonly clock: Clock; readonly logger: Logger },
+): Partial<Record<HostKind, ReviewThreads>> => {
+  const { github, bitbucket } = config;
+  const { clock, logger } = options;
+  const retrying = (threads: ReviewThreads) => retryingReviewThreads(threads, { sleep, logger });
+  return {
+    ...(github !== null && {
+      github: retrying(
+        createGitHubReviewThreads({ token: github.token, version: options.version, clock, logger }),
+      ),
+    }),
+    ...(bitbucket !== null && {
+      bitbucket: retrying(
+        createBitbucketReviewThreads({
+          username: bitbucket.username,
+          password: bitbucket.password,
+          logger,
+        }),
+      ),
     }),
   };
 };
@@ -180,6 +207,7 @@ export const compose = async (
       await assemble(
         {
           hosts: createHosts(config, { version: options.version, clock, logger }),
+          threads: createReviewThreads(config, { version: options.version, clock, logger }),
           tickets: createTicketSource(config, logger),
           model: modelConfigured ? claude : unconfiguredModel(claude.version),
           modelEnabled: options.ai,

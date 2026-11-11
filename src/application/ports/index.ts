@@ -31,4 +31,5 @@ export {
   MAX_CHECKOUT_FILE_BYTES,
 } from "./local-checkout.ts";
 export type { LogFields, Logger } from "./logger.ts";
+export type { ReviewThreads, SuggestionCommit } from "./review-threads.ts";
 export type { TicketLookup, TicketSource } from "./ticket-source.ts";

@@ -9,12 +9,15 @@ import type {
   GitHost,
   LocalCheckouts,
   Logger,
+  ReviewThreads,
   TicketSource,
 } from "../ports/index.ts";
 
 export interface AppDeps {
   /** Only the configured hosts. */
   readonly hosts: Partial<Record<HostKind, GitHost>>;
+  /** The conversation on PRs' code, for the configured hosts. */
+  readonly threads: Partial<Record<HostKind, ReviewThreads>>;
   readonly tickets: TicketSource;
   readonly model: AnalysisModel;
   /** Whether the model passes run. Off, the analysis is built by deterministic code alone. */

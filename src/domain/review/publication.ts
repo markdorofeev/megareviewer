@@ -3,6 +3,8 @@ import { type Hunk, HunkId, hunkIdOf } from "../diff/index.ts";
 import type { Analysis } from "./analysis.ts";
 import type { DecisionId, DecisionVerdict, Verdict } from "./decision.ts";
 import { HttpUrl, Timestamp } from "./primitives.ts";
+import { Severity } from "./thread.ts";
+import { composeBody } from "./thread-body.ts";
 
 export const PublicationVerdict = z.enum(["approve", "request_changes", "comment"]);
 export type PublicationVerdict = z.infer<typeof PublicationVerdict>;
@@ -18,15 +20,25 @@ export const CommentKey = z
   )
   .brand<"CommentKey">();
 
-/** A comment the reviewer wrote on one line of a hunk: new is a head-side line, old a base one. */
+/**
+ * A comment the reviewer wrote on lines of a hunk: new is a head-side line, old a base one. It's
+ * on `line`, or on `startLine` to `line` for a range.
+ */
 export const HunkComment = z
   .object({
     hunkId: HunkId,
     side: z.enum(["new", "old"]),
     line: z.number().int().positive(),
+    startLine: z.number().int().positive().optional(),
     body: z.string(),
+    severity: Severity.optional(),
+    /** The lines that replace the commented ones; posted as a ```suggestion block. */
+    suggestion: z.array(z.string()).readonly().optional(),
   })
-  .readonly();
+  .readonly()
+  .refine((comment) => comment.startLine === undefined || comment.startLine < comment.line, {
+    message: "startLine must come before line",
+  });
 export type HunkComment = z.infer<typeof HunkComment>;
 
 /** Whether a hunk shows the line a comment is on, on that side. */
@@ -43,6 +55,8 @@ export const PublicationComment = z
     key: CommentKey,
     path: z.string().min(1),
     line: z.number().int().positive(),
+    /** The first line of a range ending at `line`; hosts that can't anchor one quote it. */
+    startLine: z.number().int().positive().optional(),
     /** new: `line` is a head-side line number; old: a base-side one. */
     side: z.enum(["new", "old"]),
     body: z.string().min(1),
@@ -124,16 +138,20 @@ export const buildPublication = (input: {
   const hunkOf = new Map(
     analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
   );
-  const written = (input.hunkComments ?? []).filter((comment) => comment.body.trim() !== "");
-  for (const comment of written) {
+  for (const comment of input.hunkComments ?? []) {
     const hunk = hunkOf.get(comment.hunkId);
-    if (hunk === undefined) continue;
+    // A severity alone says nothing; a suggestion does, even an empty one, which deletes lines.
+    if (hunk === undefined || (comment.body.trim() === "" && comment.suggestion === undefined)) {
+      continue;
+    }
+    const body = composeBody(comment);
     comments.push({
       key: CommentKey.parse(`hunk:${comment.hunkId}:${comment.side}:${comment.line}`),
       path: hunk.path,
       line: comment.line,
+      ...(comment.startLine === undefined ? {} : { startLine: comment.startLine }),
       side: comment.side,
-      body: comment.body.trim(),
+      body,
     });
   }
 

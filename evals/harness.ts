@@ -50,6 +50,7 @@ export const analyzeCase = async (
       store,
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
+      threads: {},
       parser: options.parser,
       events,
       clock: systemClock,

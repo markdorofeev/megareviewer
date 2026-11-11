@@ -1,6 +1,6 @@
 import type { HostError } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
-import type { GitHost, Logger } from "../ports/index.ts";
+import type { GitHost, Logger, ReviewThreads } from "../ports/index.ts";
 
 /** The wait before each retry: three retries, so four attempts in all. */
 export const RETRY_DELAYS_MS: readonly number[] = [1000, 2000, 4000];
@@ -16,8 +16,9 @@ export interface RetryOptions {
  * aren't retried. Publishing is passed through untouched, because a post that failed on the
  * network may still have been posted.
  */
-export const retryingGitHost = (host: GitHost, { sleep, logger }: RetryOptions): GitHost => {
-  const retried = async <T>(
+const retrier =
+  (host: string, { sleep, logger }: RetryOptions) =>
+  async <T>(
     what: string,
     attempt: () => Promise<Result<T, HostError>>,
   ): Promise<Result<T, HostError>> => {
@@ -25,7 +26,7 @@ export const retryingGitHost = (host: GitHost, { sleep, logger }: RetryOptions):
     for (const delayMs of RETRY_DELAYS_MS) {
       if (result.ok || result.error.kind !== "network") return result;
       logger.warn(`Retrying ${what} after a network error`, {
-        host: host.host,
+        host,
         error: result.error.message,
         delayMs,
       });
@@ -35,6 +36,9 @@ export const retryingGitHost = (host: GitHost, { sleep, logger }: RetryOptions):
     return result;
   };
 
+export const retryingGitHost = (host: GitHost, options: RetryOptions): GitHost => {
+  const retried = retrier(host.host, options);
+
   return {
     host: host.host,
     currentUser: () => retried("the current user", () => host.currentUser()),
@@ -42,5 +46,23 @@ export const retryingGitHost = (host: GitHost, { sleep, logger }: RetryOptions):
     getFiles: (repo, files) => retried(`${files.length} files`, () => host.getFiles(repo, files)),
     listPullRequests: () => retried("the pull request list", () => host.listPullRequests()),
     publish: (ref, publication, options) => host.publish(ref, publication, options),
+  };
+};
+
+/**
+ * Retries reading threads after a network failure, as for the host's other reads. Replying,
+ * resolving and committing are passed through untouched: each may have happened anyway.
+ */
+export const retryingReviewThreads = (
+  threads: ReviewThreads,
+  options: RetryOptions,
+): ReviewThreads => {
+  const retried = retrier(threads.host, options);
+  return {
+    host: threads.host,
+    getThreads: (ref) => retried("the review threads", () => threads.getThreads(ref)),
+    reply: (ref, threadId, body) => threads.reply(ref, threadId, body),
+    setResolved: (ref, threadId, resolved) => threads.setResolved(ref, threadId, resolved),
+    applySuggestions: (ref, commit) => threads.applySuggestions(ref, commit),
   };
 };

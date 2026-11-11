@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { smallFeatureAnalysis, smallFeaturePublication } from "../src/application/testing/index.ts";
+import {
+  smallFeatureAnalysis,
+  smallFeaturePublication,
+  smallFeatureThreadList,
+} from "../src/application/testing/index.ts";
 import { CommentKey, DecisionId } from "../src/domain/review/index.ts";
 import {
   AnalysisDoneEvent,
@@ -61,6 +65,10 @@ const responses: Record<RouteName, unknown> = {
   putVerdict: verdict,
   previewPublication: smallFeaturePublication,
   publish: receipt,
+  getThreads: smallFeatureThreadList,
+  replyToThread: smallFeatureThreadList.threads[0]?.comments[1],
+  resolveThread: { resolved: true },
+  applySuggestions: { sha: "c".repeat(40), paths: ["src/services/receipts.ts"] },
 };
 
 const requests: Partial<Record<RouteName, unknown>> = {
@@ -68,6 +76,9 @@ const requests: Partial<Record<RouteName, unknown>> = {
   putVerdict: { verdict: "approved", comment: "" },
   previewPublication: { summary: "Looks good." },
   publish: { summary: "Looks good.", allowStale: false },
+  replyToThread: { body: "Capped it." },
+  resolveThread: { resolved: false },
+  applySuggestions: { commentIds: ["PRRC_ttl1", "PRRC_charset1"] },
 };
 
 const routeNames = Object.keys(routes).filter((name): name is RouteName => name in routes);

@@ -7,6 +7,7 @@ import {
   type Decision,
   DecisionId,
   type DecisionVerdict,
+  HunkComment,
   hunkHasLine,
   type Verdict,
 } from "./index.ts";
@@ -237,6 +238,40 @@ describe("comments on hunks", () => {
     });
     expect(publication.comments).toEqual([]);
     expect(publication.summary).not.toContain("on the code");
+  });
+
+  it("writes a severity and a suggestion into the body, and keeps a range", () => {
+    const publication = buildPublication({
+      analysis: withoutDecisions,
+      verdicts: [],
+      summary: "",
+      isAuthor: false,
+      hunkComments: [
+        {
+          hunkId: target.id,
+          side: "new",
+          line: added + 1,
+          startLine: added,
+          body: "Name it",
+          severity: "minor",
+          suggestion: ["const total = 1;"],
+        },
+        // A suggestion says something without text; a severity alone doesn't.
+        { hunkId: target.id, side: "new", line: added, body: "", suggestion: [] },
+        { hunkId: target.id, side: "old", line: deleted, body: " ", severity: "major" },
+      ],
+    });
+    expect(publication.comments.map(({ body, startLine }) => ({ body, startLine }))).toEqual([
+      { body: "**minor:** Name it\n\n```suggestion\nconst total = 1;\n```", startLine: added },
+      { body: "```suggestion\n```", startLine: undefined },
+    ]);
+  });
+
+  it("refuses a range that ends before it starts", () => {
+    expect(
+      HunkComment.safeParse({ hunkId: target.id, side: "new", line: 3, startLine: 3, body: "x" })
+        .success,
+    ).toBe(false);
   });
 
   it("uses the reviewer's verdict, except on their own PR", () => {

@@ -97,7 +97,11 @@ export const createReviewUseCases = (deps: AppDeps) => {
     // A comment on a line the diff doesn't show would land on the wrong line, or fail on the host.
     const misplaced = review.hunkComments.find((comment) => {
       const hunk = hunks.get(comment.hunkId);
-      return hunk === undefined || !hunkHasLine(hunk, comment.side, comment.line);
+      return (
+        hunk === undefined ||
+        !hunkHasLine(hunk, comment.side, comment.line) ||
+        (comment.startLine !== undefined && !hunkHasLine(hunk, comment.side, comment.startLine))
+      );
     });
     if (misplaced !== undefined) {
       return err(

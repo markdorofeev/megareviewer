@@ -11,6 +11,10 @@ export {
   type LocalCheckoutContractSetup,
 } from "./contracts/local-checkout-contract.ts";
 export {
+  describeReviewThreadsContract,
+  type ReviewThreadsContractSetup,
+} from "./contracts/review-threads-contract.ts";
+export {
   describeTicketSourceContract,
   type TicketSourceContractSetup,
 } from "./contracts/ticket-source-contract.ts";
@@ -27,6 +31,11 @@ export {
   FakeLocalCheckout,
   FakeLocalCheckouts,
 } from "./fake-local-checkout.ts";
+export {
+  type FakeCommit,
+  FakeReviewThreads,
+  type ReviewThreadsMethod,
+} from "./fake-review-threads.ts";
 export { FakeTicketSource } from "./fake-ticket-source.ts";
 export { FixedClock } from "./fixed-clock.ts";
 export { createFixtureFetch, type RecordedExchange } from "./fixture-fetch.ts";

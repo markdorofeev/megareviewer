@@ -30,8 +30,11 @@ export interface ClientOptions {
 }
 
 export interface JsonRequest {
-  readonly method?: "GET" | "POST";
+  readonly method?: "GET" | "POST" | "DELETE";
+  /** Sent as JSON. */
   readonly body?: unknown;
+  /** Sent as a form instead, for the endpoints that take one. */
+  readonly form?: URLSearchParams;
   readonly call?: CallKind;
 }
 
@@ -47,6 +50,8 @@ export interface BitbucketClient {
   text(url: string, accept: string): Promise<Result<string, HostError>>;
   /** Every item of a paginated list, following `next` for at most MAX_PAGES pages. */
   pages<T>(what: string, item: z.ZodType<T>, url: string): Promise<Result<T[], HostError>>;
+  /** A write whose answer has no body worth reading: its Location header, if any. */
+  send(url: string, request: JsonRequest): Promise<Result<string | null, HostError>>;
 }
 
 export const createBitbucketClient = (options: ClientOptions): BitbucketClient => {
@@ -67,7 +72,7 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
     let target = url;
     for (let hop = 0; ; hop += 1) {
       const toApi = new URL(target).origin === API_ORIGIN;
-      const hasBody = request.body !== undefined;
+      const hasBody = request.body !== undefined || request.form !== undefined;
       let response: Response;
       try {
         response = await options.fetch(target, {
@@ -77,9 +82,17 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
           headers: {
             accept,
             ...(toApi ? { authorization } : {}),
-            ...(hasBody ? { "content-type": "application/json" } : {}),
+            ...(request.form !== undefined
+              ? { "content-type": "application/x-www-form-urlencoded" }
+              : request.body !== undefined
+                ? { "content-type": "application/json" }
+                : {}),
           },
-          ...(hasBody ? { body: JSON.stringify(request.body) } : {}),
+          ...(request.form !== undefined
+            ? { body: request.form.toString() }
+            : request.body !== undefined
+              ? { body: JSON.stringify(request.body) }
+              : {}),
         });
       } catch (error) {
         // fetch throws a TypeError when it can't connect. Anything else is a bug.
@@ -171,6 +184,12 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
   return {
     json,
     pages,
+
+    send: (url, request) =>
+      call(url, "application/json", request, async (response) => {
+        await response.arrayBuffer();
+        return ok(response.headers.get("location"));
+      }),
 
     text: (url, accept) =>
       // Bitbucket sends files and diffs in the repository's encoding, with no charset.

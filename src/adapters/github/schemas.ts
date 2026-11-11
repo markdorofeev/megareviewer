@@ -99,3 +99,79 @@ export const GitHubErrorBody = z.object({
   message: z.string(),
   errors: z.array(z.union([z.string(), z.object({ message: z.string().optional() })])).optional(),
 });
+
+/** A comment's or resolver's account: null when it was deleted. `name` only for users. */
+const GraphqlActor = z.object({ login: z.string().min(1), name: z.string().nullish() }).nullable();
+
+export const GitHubThreadComment = z.object({
+  id: z.string().min(1),
+  body: z.string(),
+  createdAt: Timestamp,
+  author: GraphqlActor,
+  /** null when the commit is gone, e.g. after a force push. */
+  originalCommit: z.object({ oid: Sha }).nullable(),
+});
+export type GitHubThreadComment = z.infer<typeof GitHubThreadComment>;
+
+export const GitHubReviewThread = z.object({
+  id: z.string().min(1),
+  isResolved: z.boolean(),
+  isOutdated: z.boolean(),
+  path: z.string().min(1),
+  line: z.number().int().positive().nullable(),
+  startLine: z.number().int().positive().nullable(),
+  originalLine: z.number().int().positive().nullable(),
+  diffSide: z.enum(["LEFT", "RIGHT"]),
+  viewerCanResolve: z.boolean(),
+  viewerCanUnresolve: z.boolean(),
+  viewerCanReply: z.boolean(),
+  resolvedBy: GraphqlActor,
+  comments: z.object({ nodes: z.array(GitHubThreadComment) }),
+});
+export type GitHubReviewThread = z.infer<typeof GitHubReviewThread>;
+
+export const GitHubThreadPage = z.object({
+  repository: z.object({
+    pullRequest: z.object({
+      viewerCanUpdate: z.boolean(),
+      reviewThreads: z.object({
+        pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
+        nodes: z.array(GitHubReviewThread),
+      }),
+    }),
+  }),
+});
+export type GitHubThreadPage = z.infer<typeof GitHubThreadPage>;
+
+export const GitHubThreadReply = z.object({
+  addPullRequestReviewThreadReply: z.object({ comment: GitHubThreadComment }),
+});
+
+/** What resolving or reopening returns. Nothing in it is read. */
+export const GitHubThreadResolution = z.object({});
+
+/** The PR's source branch: its repository is null when the fork was deleted. */
+export const GitHubPullRequestHead = z.object({
+  head: z.object({
+    ref: z.string().min(1),
+    sha: Sha,
+    repo: z.object({ name: z.string().min(1), owner: Account }).nullable(),
+  }),
+});
+
+/** Directory listings by alias, for the modes of the files a commit changes. */
+export const GitHubTrees = z.object({
+  repository: z.record(
+    z.string(),
+    z
+      .object({
+        entries: z.array(z.object({ name: z.string(), mode: z.number().int() })).optional(),
+      })
+      .nullable(),
+  ),
+});
+
+/** A blob, tree or commit just created: only its SHA is read. */
+export const GitHubGitObject = z.object({ sha: Sha });
+
+export const GitHubGitCommit = z.object({ sha: Sha, tree: z.object({ sha: Sha }) });

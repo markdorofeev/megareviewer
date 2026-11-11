@@ -9,11 +9,13 @@ import {
   FakeAnalysisModel,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeReviewThreads,
   FakeTicketSource,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   type PullRequestFixture,
   smallFeature,
+  smallFeatureThreadList,
 } from "../../application/testing/index.ts";
 import { parsePullRequestUrl, pullRequestUrl, Sha } from "../../domain/review/index.ts";
 import { err } from "../../domain/shared/index.ts";
@@ -70,6 +72,7 @@ const badRequest = (message: string): ErrorResponse => ({
 export const controlRoutes = (options: {
   readonly github: FakeGitHost;
   readonly bitbucket: FakeGitHost;
+  readonly threads: readonly FakeReviewThreads[];
   readonly sessionToken: string;
   readonly allowedHosts: readonly string[];
 }): Hono => {
@@ -94,6 +97,7 @@ export const controlRoutes = (options: {
       }
       await next();
     })
+    .get("/commits", (c) => c.json({ commits: options.threads.flatMap((one) => one.commits) }))
     .get("/publications", (c) =>
       c.json({ attempts: [...hosts.github.publishAttempts, ...hosts.bitbucket.publishAttempts] }),
     )
@@ -130,6 +134,7 @@ export interface FakeApp {
   readonly composition: Composition;
   readonly github: FakeGitHost;
   readonly bitbucket: FakeGitHost;
+  readonly threads: { readonly github: FakeReviewThreads; readonly bitbucket: FakeReviewThreads };
   /** The API and UI like the real CLI's, plus the control routes. */
   app(port: number): Hono;
 }
@@ -147,9 +152,16 @@ export const createFakeApp = async (options: {
   const clock = systemClock;
   const github = new FakeGitHost({ host: "github", fixtures: fakeFixtures, clock });
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: fakeFixtures, clock });
+  const threads = {
+    github: new FakeReviewThreads({ host: "github", clock, gitHost: github }),
+    bitbucket: new FakeReviewThreads({ host: "bitbucket", clock, gitHost: bitbucket }),
+  };
+  // small-feature has a conversation on its code; the other fixtures have none.
+  threads.github.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);
   const composition = await assemble(
     {
       hosts: { github, bitbucket },
+      threads,
       tickets: new FakeTicketSource({
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
@@ -173,11 +185,13 @@ export const createFakeApp = async (options: {
     composition,
     github,
     bitbucket,
+    threads,
     app: (port) => {
       const real = composition.app(port);
       const control = controlRoutes({
         github,
         bitbucket,
+        threads: [threads.github, threads.bitbucket],
         sessionToken: composition.sessionToken,
         allowedHosts: allowedHosts(port),
       });

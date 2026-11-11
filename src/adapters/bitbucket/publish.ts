@@ -14,9 +14,18 @@ export interface CommentRequest {
     | { readonly path: string; readonly from: number };
 }
 
-/** `to` anchors on a line of the new file, `from` on one of the old file. */
-export const inlineComment = ({ path, line, side, body }: PublicationComment): CommentRequest => ({
-  content: { raw: body },
+/**
+ * `to` anchors on a line of the new file, `from` on one of the old file. Bitbucket can't anchor a
+ * range, so a range's comment goes on its last line and says which lines it's about.
+ */
+export const inlineComment = ({
+  path,
+  line,
+  startLine,
+  side,
+  body,
+}: PublicationComment): CommentRequest => ({
+  content: { raw: startLine === undefined ? body : `_Lines ${startLine}–${line}:_\n\n${body}` },
   inline: side === "new" ? { path, to: line } : { path, from: line },
 });
 

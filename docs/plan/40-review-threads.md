@@ -1,6 +1,6 @@
 # Stage 40: Review threads on the code
 
-**Status:** Not started
+**Status:** In progress (on main)
 **Depends on:** 23 (line comments), 36
 **Owns:** A `ReviewThreads` port and its GitHub and Bitbucket adapters, `src/domain/review/thread.ts`, the thread routes in `src/adapters/http/` and `contracts/`, `web/src/review/thread/`, and the thread wiring in `web/src/pages/review/` (`HunkView.tsx`, `ReviewPage.tsx`)
 

@@ -69,6 +69,31 @@ export {
   raiseByRules,
   ruleReasons,
 } from "./risk-rules.ts";
+export {
+  ReviewThread,
+  Severity,
+  ThreadComment,
+  ThreadCommentId,
+  ThreadId,
+  ThreadList,
+  ThreadPermissions,
+  threadLines,
+} from "./thread.ts";
+export {
+  applyEdits,
+  type BodyBlock,
+  composeBody,
+  type EditProblem,
+  editsOverlap,
+  type LineEdit,
+  type ParsedBody,
+  parseBlocks,
+  parseBody,
+  parseSpans,
+  type Span,
+  splitSeverity,
+  suggestionOf,
+} from "./thread-body.ts";
 export { extractTicketKeys } from "./ticket-keys.ts";
 export { Tour, TourStep, TourStepId } from "./tour.ts";
 export {
