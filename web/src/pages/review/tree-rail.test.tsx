@@ -143,6 +143,34 @@ describe("FileTree as the rail", () => {
     }
   });
 
+  it("opens the directories down to the file that comes into view, and leaves the others closed", async () => {
+    const { rerender } = renderRail("CONTRIBUTING.md");
+    await userEvent.click(screen.getByTitle("delphi_code/"));
+    await userEvent.click(screen.getByTitle("web/src/"));
+    expect(screen.queryByTitle("delphi_code/http_api/")).toBeNull();
+
+    rerender(
+      <FileTree
+        files={entries}
+        activePath="delphi_code/http_api/routes/hosting_services.py"
+        neighbors={neighbors}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTitle("delphi_code/").getAttribute("aria-expanded")).toBe("true");
+    expect(row("routes/hosting_services.py").getAttribute("aria-current")).toBe("location");
+    expect(screen.getByTitle("web/src/").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps closed the directory of the file in view when the reviewer closes it", async () => {
+    renderRail("delphi_code/infrastructure/keychain.py");
+    await userEvent.click(screen.getByTitle("delphi_code/infrastructure/"));
+    expect(screen.getByTitle("delphi_code/infrastructure/").getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+    expect(screen.queryByTitle("delphi_code/infrastructure/keychain.py")).toBeNull();
+  });
+
   it("goes to a file's card on a click", async () => {
     const onGo = vi.fn();
     renderRail(null, onGo);

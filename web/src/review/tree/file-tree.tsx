@@ -55,6 +55,16 @@ export const FileTree = ({
   }, [activePath]);
   const [query, setQuery] = useState("");
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  // When the file in view changes, open the directories down to it, so its row is drawn and
+  // highlighted. Done while rendering rather than in an effect, so the row exists by the time
+  // the effect above scrolls to it. Only on a change: the reviewer can still close the
+  // directory they're reading in, and it stays closed until another file comes into view.
+  const [openedFor, setOpenedFor] = useState(activePath);
+  if (openedFor !== activePath) {
+    setOpenedFor(activePath);
+    const shut = [...closed].filter((dir) => activePath?.startsWith(`${dir}/`));
+    if (shut.length > 0) setClosed(new Set([...closed].filter((dir) => !shut.includes(dir))));
+  }
   const filter = useRef<HTMLInputElement>(null);
   useShortcuts({ filterTree: () => filter.current?.focus() });
 
