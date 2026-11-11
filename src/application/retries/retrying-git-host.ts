@@ -61,6 +61,7 @@ export const retryingReviewThreads = (
   return {
     host: threads.host,
     getThreads: (ref) => retried("the review threads", () => threads.getThreads(ref)),
+    getAttachment: (url) => retried("an attachment", () => threads.getAttachment(url)),
     reply: (ref, threadId, body) => threads.reply(ref, threadId, body),
     setResolved: (ref, threadId, resolved) => threads.setResolved(ref, threadId, resolved),
     applySuggestions: (ref, commit) => threads.applySuggestions(ref, commit),

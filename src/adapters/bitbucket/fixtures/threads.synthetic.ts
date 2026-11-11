@@ -177,6 +177,16 @@ export const bitbucketThreadExchanges: Exchange[] = [
   },
 ];
 
+export const BITBUCKET_ATTACHMENT =
+  "https://bitbucket.org/atlassian/bitbucket-upload-file/images/1-shot.png";
+
+export const bitbucketAttachmentExchanges: Exchange[] = [
+  {
+    request: { method: "GET", url: BITBUCKET_ATTACHMENT },
+    response: { status: 200, headers: { "content-type": "image/png" }, body: "PNGDATA" },
+  },
+];
+
 /** The branch moved after the PR was read: Bitbucket refuses the commit. */
 export const refusedCommit: Exchange = {
   request: { method: "POST", url: `${REPO}/src` },

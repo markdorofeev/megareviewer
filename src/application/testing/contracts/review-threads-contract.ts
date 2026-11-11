@@ -22,6 +22,8 @@ export interface ReviewThreadsContractSetup {
   commit: SuggestionCommit;
   /** The same commit on a head the branch has moved past. */
   staleCommit: SuggestionCommit;
+  /** An image in the host's attachment store. */
+  attachment: string;
 }
 
 /** Every ReviewThreads implementation must pass this suite. */
@@ -60,6 +62,16 @@ export const describeReviewThreadsContract = (
       const threads = s.threads();
       expect(await threads.setResolved(s.pr, s.thread, true)).toEqual({ ok: true, value: null });
       expect(await threads.setResolved(s.pr, s.thread, false)).toEqual({ ok: true, value: null });
+    });
+
+    it("fetches an attachment from the host's store, and nothing from anywhere else", async () => {
+      const threads = s.threads();
+      const found = await threads.getAttachment(s.attachment);
+      if (!found.ok) throw new Error(`getAttachment failed: ${found.error.message}`);
+      expect(found.value.contentType).toMatch(/^image\//);
+      expect(found.value.bytes.byteLength).toBeGreaterThan(0);
+      const foreign = await threads.getAttachment("https://evil.test/pixel.png");
+      expect(!foreign.ok && foreign.error.kind).toBe("not-found");
     });
 
     it("commits suggestions on the head", async () => {

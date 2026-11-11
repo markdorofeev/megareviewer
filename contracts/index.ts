@@ -6,6 +6,7 @@ export {
   ApplySuggestionsRequest,
   ApplySuggestionsResponse,
   analysisEventsRoute,
+  attachmentRoute,
   ERROR_STATUS,
   ErrorCode,
   ErrorResponse,

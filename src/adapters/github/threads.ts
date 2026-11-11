@@ -7,7 +7,8 @@ import type {
   ThreadComment,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import { createGitHubClient, type GitHubClientOptions } from "./client.ts";
+import { fetchAttachment } from "./attachments.ts";
+import { createGitHubClient, type GitHubClientOptions, REQUEST_TIMEOUT_MS } from "./client.ts";
 import {
   GitHubGitCommit,
   GitHubGitObject,
@@ -155,6 +156,14 @@ export const createGitHubReviewThreads = (
 
   return {
     host: "github",
+
+    getAttachment: (url) =>
+      fetchAttachment(url, {
+        token: options.token,
+        userAgent: `megareviewer/${options.version}`,
+        fetch: options.fetch ?? globalThis.fetch,
+        timeoutMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
+      }),
 
     async getThreads(ref) {
       const threads: ReviewThread[] = [];

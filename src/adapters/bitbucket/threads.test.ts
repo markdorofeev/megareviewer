@@ -7,7 +7,9 @@ import {
 } from "../../application/testing/index.ts";
 import type { PullRequestRef } from "../../domain/review/index.ts";
 import {
+  BITBUCKET_ATTACHMENT,
   BITBUCKET_THREADS_HEAD,
+  bitbucketAttachmentExchanges,
   bitbucketThreadExchanges,
   refusedCommit,
 } from "./fixtures/threads.synthetic.ts";
@@ -33,7 +35,8 @@ const commit = {
 };
 
 describeReviewThreadsContract("bitbucket", () => ({
-  threads: () => threadsWith(createFixtureFetch(bitbucketThreadExchanges)),
+  threads: () =>
+    threadsWith(createFixtureFetch([...bitbucketThreadExchanges, ...bitbucketAttachmentExchanges])),
   pr,
   thread: "101",
   resolvedThread: "201",
@@ -41,6 +44,7 @@ describeReviewThreadsContract("bitbucket", () => ({
   replyBody: "Thanks!",
   commit,
   staleCommit: { ...commit, headSha: "0".repeat(40) },
+  attachment: BITBUCKET_ATTACHMENT,
 }));
 
 describe("Bitbucket review threads", () => {

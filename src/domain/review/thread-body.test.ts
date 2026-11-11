@@ -57,23 +57,36 @@ describe("parseSpans", () => {
     expect(parseSpans("a ` b ``c")).toEqual([{ kind: "text", text: "a ` b ``c" }]);
   });
 
-  it("names images instead of showing their tags, and never in code", () => {
+  it("reads images, keeping only the URLs of the host's own attachments", () => {
+    const asset = "https://github.com/user-attachments/assets/771a3d24-9ce2-4554-96da-50a773965ff5";
     expect(
       parseSpans(
-        'see <img width="819" alt="Screenshot 16 45" src="https://github.com/user-attachments/assets/1" /> and ![diagram](https://x.test/a.png) or <IMG src=x>',
+        `see <img width="819" alt="Screenshot 16 45" src="${asset}" /> and ![diagram](https://evil.test/a.png) or <IMG src=x>`,
       ),
     ).toEqual([
       { kind: "text", text: "see " },
-      { kind: "image", text: "Screenshot 16 45" },
+      { kind: "image", text: "Screenshot 16 45", url: asset },
       { kind: "text", text: " and " },
-      { kind: "image", text: "diagram" },
+      { kind: "image", text: "diagram", url: null },
       { kind: "text", text: " or " },
-      { kind: "image", text: "" },
+      { kind: "image", text: "", url: null },
     ]);
     expect(parseSpans("`<img alt='x' src=y>`")).toEqual([
       { kind: "code", text: "<img alt='x' src=y>" },
     ]);
-    expect(parseSpans("<img alt='single' src=y>")).toEqual([{ kind: "image", text: "single" }]);
+    expect(parseSpans(`<img alt='single' src='${asset}'>`)).toEqual([
+      { kind: "image", text: "single", url: asset },
+    ]);
+  });
+
+  it("reads a GitHub attachment alone on a line as a video, and leaves it as text inside a sentence", () => {
+    const asset = "https://github.com/user-attachments/assets/0f9a-12";
+    expect(parseSpans(`Repro:\n${asset}\nafter`)).toEqual([
+      { kind: "text", text: "Repro:\n" },
+      { kind: "video", text: "", url: asset },
+      { kind: "text", text: "\nafter" },
+    ]);
+    expect(parseSpans(`see ${asset} here`)).toEqual([{ kind: "text", text: `see ${asset} here` }]);
   });
 
   it("keeps HTML and links as text", () => {

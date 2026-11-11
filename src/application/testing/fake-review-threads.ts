@@ -1,19 +1,31 @@
-import type {
-  HostError,
-  HostKind,
-  HostUser,
-  PullRequestRef,
-  ReviewThread,
-  ThreadComment,
-  ThreadId,
-  ThreadList,
+import {
+  attachmentHost,
+  type HostError,
+  type HostKind,
+  type HostUser,
+  type PullRequestRef,
+  type ReviewThread,
+  type ThreadComment,
+  type ThreadId,
+  type ThreadList,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { Clock, GitHost, ReviewThreads, SuggestionCommit } from "../ports/index.ts";
+import type {
+  Attachment,
+  Clock,
+  GitHost,
+  ReviewThreads,
+  SuggestionCommit,
+} from "../ports/index.ts";
 import { FixedClock } from "./fixed-clock.ts";
 import { fixtureReviewers } from "./fixtures/index.ts";
 
-export type ReviewThreadsMethod = "getThreads" | "reply" | "setResolved" | "applySuggestions";
+export type ReviewThreadsMethod =
+  | "getThreads"
+  | "reply"
+  | "setResolved"
+  | "applySuggestions"
+  | "getAttachment";
 
 /** A commit the fake made on a PR's branch. */
 export interface FakeCommit extends SuggestionCommit {
@@ -46,6 +58,7 @@ export class FakeReviewThreads implements ReviewThreads {
     | (GitHost & { setHeadSha(ref: PullRequestRef, sha: string): void })
     | null;
   private readonly failures = new Map<ReviewThreadsMethod, HostError[]>();
+  private readonly attachments = new Map<string, Attachment>();
   private nextId = 1;
 
   constructor(options: {
@@ -67,6 +80,18 @@ export class FakeReviewThreads implements ReviewThreads {
       canApply: list.canApply,
     });
     if (headSha !== undefined) this.heads.set(prKey(ref), headSha);
+  }
+
+  /** Stores an attachment at `url`, which must be one of this host's attachment URLs. */
+  setAttachment(url: string, attachment: Attachment): void {
+    this.attachments.set(url, attachment);
+  }
+
+  async getAttachment(url: string): Promise<Result<Attachment, HostError>> {
+    const failure = this.fail("getAttachment");
+    if (failure !== null) return failure;
+    const found = attachmentHost(url) === this.host ? this.attachments.get(url) : undefined;
+    return found === undefined ? err(notFound(`attachment ${url}`)) : ok(found);
   }
 
   /** The next call to `method` fails with `error`. Failures queue up per method. */

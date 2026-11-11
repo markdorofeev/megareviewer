@@ -69,6 +69,8 @@ export interface ReviewThreadProps {
   readonly onRemoveFromBatch?: (commentId: string) => void;
   /** Applies this one suggestion on its own. */
   readonly onApply?: (commentId: string) => void;
+  /** Where an image or video pasted into a comment loads from; without it, they're named. */
+  readonly mediaUrl?: (url: string) => string;
   /** Open with the reply field focused. */
   readonly replying?: boolean;
   /** A reply already in the field, posting or failed: for showing those states on made-up data. */
@@ -117,6 +119,7 @@ export const ReviewThreadView = ({
   onRemoveFromBatch,
   onApply,
   replying = false,
+  mediaUrl,
   initialReply,
   className,
 }: ReviewThreadProps) => {
@@ -249,7 +252,11 @@ export const ReviewThreadView = ({
             </time>
             {severity !== null && <SeverityChip severity={severity} />}
           </header>
-          <ThreadBody blocks={blocks} suggestion={suggestionView(comment)} />
+          <ThreadBody
+            blocks={blocks}
+            suggestion={suggestionView(comment)}
+            {...(mediaUrl === undefined ? {} : { mediaUrl })}
+          />
         </div>
       </div>
     );

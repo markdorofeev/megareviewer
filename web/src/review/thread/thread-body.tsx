@@ -1,6 +1,7 @@
 import { ImageIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import type { BodyBlock, Span } from "../../../../src/domain/review/index.ts";
+import { cn } from "../../lib/utils.ts";
 import { languageOf } from "../diff/languages.ts";
 import { CodeLine, useCodeTokens } from "./code-lines.tsx";
 
@@ -36,24 +37,83 @@ const CodeBlock = ({
 };
 
 /**
- * One run of a paragraph. An image is named, never loaded: its host's CDN would learn who's
- * looking, and the page's CSP blocks it anyway.
+ * An image or video from the host's own attachments, loaded through the local server; when it
+ * can't be, it's named instead.
  */
-const SpanView = ({ span }: { readonly span: Span }) => {
-  if (span.kind === "code") {
-    return (
-      <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">{span.text}</code>
-    );
-  }
-  if (span.kind === "image") {
+const Media = ({
+  kind,
+  alt,
+  src,
+}: {
+  readonly kind: "image" | "video";
+  readonly alt: string;
+  readonly src: string;
+}) => {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
     return (
       <span
         data-slot="thread-image"
         className="inline-flex items-center gap-1 rounded-sm border bg-muted px-1 text-caption text-muted-foreground"
       >
         <ImageIcon aria-hidden="true" className="size-3" />
-        {span.text === "" ? "Image" : `Image: ${span.text}`}
-        <span className="sr-only">, not loaded; see it on the host</span>
+        {kind === "image" ? "Image" : "Video"}
+        {alt === "" ? "" : `: ${alt}`} couldn't be loaded
+      </span>
+    );
+  }
+  const className = "block max-h-[28rem] max-w-full rounded-md border bg-muted";
+  return kind === "image" ? (
+    <img
+      data-slot="thread-media"
+      src={src}
+      alt={alt === "" ? "Image from the comment" : alt}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={cn(className, "h-auto w-auto")}
+    />
+  ) : (
+    // biome-ignore lint/a11y/useMediaCaption: a reviewer's screen recording has no captions to give.
+    <video
+      data-slot="thread-media"
+      src={src}
+      controls
+      preload="metadata"
+      onError={() => setFailed(true)}
+      className={className}
+    />
+  );
+};
+
+/**
+ * One run of a paragraph. An image or video the host keeps loads through the local server; one
+ * from anywhere else is only named, so a PR's author can't learn who's reviewing.
+ */
+const SpanView = ({
+  span,
+  mediaUrl,
+}: {
+  readonly span: Span;
+  readonly mediaUrl: ((url: string) => string) | undefined;
+}) => {
+  if ((span.kind === "image" || span.kind === "video") && span.url !== null && mediaUrl) {
+    return <Media kind={span.kind} alt={span.text} src={mediaUrl(span.url)} />;
+  }
+  if (span.kind === "code") {
+    return (
+      <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">{span.text}</code>
+    );
+  }
+  if (span.kind === "image" || span.kind === "video") {
+    const what = span.kind === "image" ? "Image" : "Video";
+    return (
+      <span
+        data-slot="thread-image"
+        className="inline-flex items-center gap-1 rounded-sm border bg-muted px-1 text-caption text-muted-foreground"
+      >
+        <ImageIcon aria-hidden="true" className="size-3" />
+        {span.text === "" ? what : `${what}: ${span.text}`}
+        <span className="sr-only">, not loaded: it isn't in the host's own attachments</span>
       </span>
     );
   }
@@ -67,9 +127,12 @@ const SpanView = ({ span }: { readonly span: Span }) => {
 export const ThreadBody = ({
   blocks,
   suggestion,
+  mediaUrl,
 }: {
   readonly blocks: readonly BodyBlock[];
   readonly suggestion: (lines: readonly string[]) => ReactNode;
+  /** Where an attachment loads from; without it, attachments are only named. */
+  readonly mediaUrl?: (url: string) => string;
 }) => (
   <div data-slot="thread-body" className="flex flex-col gap-2 text-body break-words">
     {blocks.map((block, at) => {
@@ -86,6 +149,7 @@ export const ThreadBody = ({
               // biome-ignore lint/suspicious/noArrayIndexKey: spans have no identity but their place.
               key={`${span.kind}:${index}`}
               span={span}
+              mediaUrl={mediaUrl}
             />
           ))}
         </p>

@@ -38,6 +38,7 @@ import { type Analysis, AnalysisId } from "../../domain/review/index.ts";
 import { createHttpApp } from "./index.ts";
 
 const TOKEN = "session-token-0123456789abcdef";
+const ATTACHMENT = "https://github.com/user-attachments/assets/771a3d24";
 const HOST = "127.0.0.1:4823";
 const ALLOWED_HOSTS = [HOST, "localhost:4823"];
 
@@ -55,6 +56,7 @@ const setupApp = (
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: allFixtures, clock });
   const threads = new FakeReviewThreads({ host: "github", clock, gitHost: github });
   threads.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);
+  threads.setAttachment(ATTACHMENT, { contentType: "image/png", bytes: new Uint8Array([137, 80]) });
   const store = options.store ?? new InMemoryAnalysisStore();
   const events = options.events ?? createAnalysisEvents();
   const logger = new RecordingLogger();
@@ -687,6 +689,29 @@ describe("the thread routes", () => {
       body: { commentIds: ["PRRC_ttl1"] },
     });
     expect(applied.error?.code).toBe("stale-analysis");
+  });
+});
+
+describe("GET /api/analyses/:id/attachment", () => {
+  const path = (url: string, token?: string) =>
+    `/api/analyses/${id}/attachment?${new URLSearchParams({ url, ...(token === undefined ? {} : { token }) })}`;
+
+  it("serves the host's attachment with its type, taking the token in the query", async () => {
+    const { app } = await seeded();
+    const response = await app.request(path(ATTACHMENT, TOKEN), { headers: { host: HOST } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("cache-control")).toBe("private, max-age=3600");
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([137, 80]);
+  });
+
+  it("refuses a missing token, a URL that isn't the host's, and one that isn't https", async () => {
+    const { app, request } = await seeded();
+    expect((await app.request(path(ATTACHMENT), { headers: { host: HOST } })).status).toBe(401);
+    expect((await request(path("https://evil.test/pixel.png"))).status).toBe(404);
+    expect((await request(path("http://github.com/user-attachments/assets/1"))).status).toBe(400);
+    expect((await request(`/api/analyses/${id}/attachment`)).status).toBe(400);
+    expect((await request(path(ATTACHMENT).replace(id, "nope"))).status).toBe(400);
   });
 });
 

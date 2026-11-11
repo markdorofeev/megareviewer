@@ -422,6 +422,7 @@ const Review = ({
       covered={covered}
       canApply={canApply}
       batch={batchState}
+      mediaUrl={(url) => client.attachmentUrl(analysisId, url)}
       onReply={(body) => threads.reply(thread.id, body)}
       onResolve={(resolved) => threads.resolve(thread.id, resolved)}
       onAddToBatch={(id) => setBatchIds((previous) => [...previous, id])}

@@ -230,6 +230,23 @@ export const threadExchanges: Exchange[] = [
   },
 ];
 
+export const ATTACHMENT =
+  "https://github.com/user-attachments/assets/771a3d24-9ce2-4554-96da-50a773965ff5";
+const SIGNED =
+  "https://github-production-user-asset-6210df.s3.amazonaws.com/1/771a3d24.png?X-Amz-Signature=abc";
+
+/** An attachment redirects to a signed URL, which serves the file. */
+export const attachmentExchanges: Exchange[] = [
+  {
+    request: { method: "GET", url: ATTACHMENT },
+    response: { status: 302, headers: { location: SIGNED }, body: null },
+  },
+  {
+    request: { method: "GET", url: SIGNED },
+    response: { status: 200, headers: { "content-type": "image/png" }, body: "PNGDATA" },
+  },
+];
+
 /** The branch moved between reading the PR and moving it: GitHub refuses the fast-forward. */
 export const refusedRefUpdate: Exchange = {
   request: {

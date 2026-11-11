@@ -6,7 +6,8 @@ import type {
   ThreadComment,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
-import { API, createBitbucketClient } from "./client.ts";
+import { fetchAttachment } from "./attachments.ts";
+import { API, createBitbucketClient, REQUEST_TIMEOUT_MS } from "./client.ts";
 import { toHostUser } from "./map.ts";
 import {
   BitbucketPage,
@@ -112,6 +113,14 @@ export const createBitbucketReviewThreads = (options: BitbucketThreadsOptions): 
 
   return {
     host: "bitbucket",
+
+    getAttachment: (url) =>
+      fetchAttachment(url, {
+        authorization: `Basic ${Buffer.from(`${options.username}:${options.password}`).toString("base64")}`,
+        userAgent: "megareviewer",
+        fetch: options.fetch ?? globalThis.fetch,
+        timeoutMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
+      }),
 
     async getThreads(ref) {
       const fullName = `${ref.repo.owner}/${ref.repo.repo}`;

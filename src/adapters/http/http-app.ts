@@ -3,6 +3,7 @@ import type { AnalysisEvents } from "../../application/events/index.ts";
 import type { Logger } from "../../application/ports/index.ts";
 import type { UseCases } from "../../application/use-cases/index.ts";
 import { errorResponse, registerApiRoutes } from "./api-routes.ts";
+import { registerAttachmentRoute } from "./attachments.ts";
 import { registerEventsRoute } from "./events.ts";
 import { hostCheck, requestLog, securityHeaders, sessionToken } from "./middleware.ts";
 import { registerStaticFiles } from "./static-files.ts";
@@ -31,6 +32,7 @@ export const createHttpApp = (options: HttpAppOptions): Hono => {
 
   registerApiRoutes(app, useCases);
   registerEventsRoute(app, { useCases, events, logger });
+  registerAttachmentRoute(app, useCases);
   if (options.staticDir !== null) registerStaticFiles(app, options.staticDir);
 
   app.notFound((c) =>

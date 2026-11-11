@@ -1,36 +1,61 @@
 import { err, ok, type Result } from "../shared/index.ts";
+import { attachmentHost } from "./attachments.ts";
 import { Severity } from "./thread.ts";
 
 // A comment body is untrusted host content. It's read into a few kinds of block, and everything
 // else stays literal text: no HTML, no links, no images.
 
-/** A run of text in a paragraph: plain, a code span, or an image, whose `text` is its alt text. */
-export interface Span {
-  readonly kind: "text" | "code" | "image";
-  readonly text: string;
-}
-
-/** An image as hosts paste one: an HTML `<img>` tag, or Markdown's `![alt](url)`. */
-const IMAGE = /<img\b[^>]*>|!\[([^\]\n]*)\]\([^)\s]*\)/gi;
-const ALT = /\balt\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+/**
+ * A run of text in a paragraph: plain, a code span, or an image or video, whose `text` is its alt
+ * text. `url` is where the host keeps it, null when it isn't in the host's own store and so is
+ * never fetched.
+ */
+export type Span =
+  | { readonly kind: "text" | "code"; readonly text: string }
+  | {
+      readonly kind: "image" | "video";
+      readonly text: string;
+      readonly url: string | null;
+    };
 
 /**
- * A text span's images as image spans, so the page can name them without loading them: an image
- * from the host's CDN would tell the host who's looking, and the CSP blocks it anyway.
+ * An image as hosts paste one, an HTML `<img>` tag or Markdown's `![alt](url)`, or a video as
+ * GitHub pastes one: its attachment's URL alone on a line.
+ */
+const MEDIA =
+  /<img\b[^>]*>|!\[([^\]\n]*)\]\(([^)\s]*)\)|(?<=^|\n)[ \t]*(https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]+)[ \t]*(?=\n|$)/gi;
+const ALT = /\balt\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+const SRC = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+
+const quoted = (pattern: RegExp, tag: string): string | undefined =>
+  pattern
+    .exec(tag)
+    ?.slice(1)
+    .find((one) => one !== undefined);
+
+/** A media span, its URL kept only when the host's own store has it. */
+const media = (kind: "image" | "video", alt: string, url: string | undefined): Span => ({
+  kind,
+  text: alt.trim(),
+  url: url !== undefined && attachmentHost(url) !== null ? url : null,
+});
+
+/**
+ * A text span's images and videos as spans of their own. The page shows those the host keeps,
+ * through the local server, and only names the others.
  */
 const withImages = (text: string): Span[] => {
   const spans: Span[] = [];
   let at = 0;
-  for (const match of text.matchAll(IMAGE)) {
+  for (const match of text.matchAll(MEDIA)) {
     const index = match.index ?? 0;
     if (index > at) spans.push({ kind: "text", text: text.slice(at, index) });
-    const alt = match[0].startsWith("<")
-      ? ALT.exec(match[0])
-          ?.slice(1)
-          .find((one) => one !== undefined)
-      : match[1];
-    spans.push({ kind: "image", text: (alt ?? "").trim() });
-    at = index + match[0].length;
+    const [whole, markdownAlt, markdownUrl, videoUrl] = match;
+    if (videoUrl !== undefined) spans.push(media("video", "", videoUrl));
+    else if (whole.startsWith("<")) {
+      spans.push(media("image", quoted(ALT, whole) ?? "", quoted(SRC, whole)));
+    } else spans.push(media("image", markdownAlt ?? "", markdownUrl));
+    at = index + whole.length;
   }
   if (at < text.length) spans.push({ kind: "text", text: text.slice(at) });
   return spans;

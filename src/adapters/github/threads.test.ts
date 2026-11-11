@@ -7,7 +7,13 @@ import {
   RecordingLogger,
 } from "../../application/testing/index.ts";
 import type { PullRequestRef } from "../../domain/review/index.ts";
-import { refusedRefUpdate, THREADS_HEAD, threadExchanges } from "./fixtures/threads.synthetic.ts";
+import {
+  ATTACHMENT,
+  attachmentExchanges,
+  refusedRefUpdate,
+  THREADS_HEAD,
+  threadExchanges,
+} from "./fixtures/threads.synthetic.ts";
 import unauthorizedExchanges from "./fixtures/unauthorized.synthetic.json" with { type: "json" };
 import { createGitHubReviewThreads } from "./index.ts";
 
@@ -35,7 +41,7 @@ const commit = {
 };
 
 describeReviewThreadsContract("github", () => ({
-  threads: () => threadsWith(createFixtureFetch(threadExchanges)),
+  threads: () => threadsWith(createFixtureFetch([...threadExchanges, ...attachmentExchanges])),
   pr,
   thread: "PRRT_kwDOAbc1",
   resolvedThread: "PRRT_kwDOAbc2",
@@ -43,6 +49,7 @@ describeReviewThreadsContract("github", () => ({
   replyBody: "Thanks!",
   commit,
   staleCommit: { ...commit, headSha: "0".repeat(40) },
+  attachment: ATTACHMENT,
 }));
 
 /** A fetch that counts its calls and fails each with a dropped connection. */
@@ -130,6 +137,52 @@ describe("GitHub review threads", () => {
       expect(!result.ok && result.error.kind).toBe("network");
       expect(dropping.calls()).toBe(1);
     }
+  });
+
+  it("sends the token to github.com only, not to where an attachment redirects", async () => {
+    const seen: { url: string; authorization: string | null }[] = [];
+    const recorded = createFixtureFetch(attachmentExchanges);
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+      seen.push({
+        url: String(input),
+        authorization: new Headers(init?.headers).get("authorization"),
+      });
+      return recorded(input, init);
+    };
+    const result = await threadsWith(fetch).getAttachment(ATTACHMENT);
+    expect(result.ok && new TextDecoder().decode(result.value.bytes)).toBe("PNGDATA");
+    expect(seen.map((one) => one.authorization)).toEqual(["Bearer test-token", null]);
+  });
+
+  it("refuses an attachment that isn't an image or a video, or is too large", async () => {
+    const serving = (headers: Record<string, string>) =>
+      createFixtureFetch([
+        {
+          request: { method: "GET", url: ATTACHMENT },
+          response: { status: 200, headers, body: "x" },
+        },
+      ]);
+    const svg = await threadsWith(serving({ "content-type": "image/svg+xml" })).getAttachment(
+      ATTACHMENT,
+    );
+    expect(!svg.ok && svg.error.kind).toBe("rejected");
+    const huge = await threadsWith(
+      serving({ "content-type": "video/mp4", "content-length": String(26 * 1024 * 1024) }),
+    ).getAttachment(ATTACHMENT);
+    expect(!huge.ok && huge.error.kind).toBe("too-large");
+    const missing = await threadsWith(
+      createFixtureFetch([
+        {
+          request: { method: "GET", url: ATTACHMENT },
+          response: { status: 404, headers: {}, body: null },
+        },
+      ]),
+    ).getAttachment(ATTACHMENT);
+    expect(!missing.ok && missing.error.kind).toBe("not-found");
+    const dropped = await threadsWith(async () => {
+      throw new TypeError("fetch failed");
+    }).getAttachment(ATTACHMENT);
+    expect(!dropped.ok && dropped.error.kind).toBe("network");
   });
 
   it("reports rejected credentials", async () => {

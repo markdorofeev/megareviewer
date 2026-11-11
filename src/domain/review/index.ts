@@ -13,6 +13,7 @@ export {
   StageName,
   StageStatus,
 } from "./analysis.ts";
+export { attachmentHost } from "./attachments.ts";
 export { type CodeTourInput, codeTour, looksGenerated } from "./code-tour.ts";
 export {
   Decision,

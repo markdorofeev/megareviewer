@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import {
   type ApplySuggestionsRequest,
+  attachmentRoute,
   ErrorResponse,
   type JsonRoute,
   type PublicationPreviewRequest,
@@ -13,6 +14,7 @@ import {
   routes,
   type StartAnalysisRequest,
   TOKEN_HEADER,
+  TOKEN_QUERY_PARAM,
 } from "../../../contracts/index.ts";
 import type { AnalysisId, DecisionId, ThreadId } from "../../../src/domain/review/index.ts";
 import { err, ok, type Result } from "../../../src/domain/shared/index.ts";
@@ -65,7 +67,7 @@ export const createApiClient = (options: ApiClientOptions) => {
     return parsed.success ? ok(parsed.data) : err({ code: "internal", message: VERSION_MISMATCH });
   };
 
-  return {
+  const routeCalls = {
     getStatus: () => send(routes.getStatus, {}),
     listPullRequests: () => send(routes.listPullRequests, {}),
     startAnalysis: (body: StartAnalysisRequest) => send(routes.startAnalysis, {}, body),
@@ -86,6 +88,16 @@ export const createApiClient = (options: ApiClientOptions) => {
     applySuggestions: (id: AnalysisId, body: ApplySuggestionsRequest) =>
       send(routes.applySuggestions, { id }, body),
   } satisfies Record<RouteName, unknown>;
+
+  return {
+    ...routeCalls,
+    /**
+     * Where the page loads an image or video pasted into the PR's comments: the local server,
+     * which fetches it from the host. For `src`, so the token goes in the query.
+     */
+    attachmentUrl: (id: AnalysisId, url: string): string =>
+      `${routePath(attachmentRoute.path, { id })}?${new URLSearchParams({ url, [TOKEN_QUERY_PARAM]: options.token })}`,
+  };
 };
 
 export type ApiClient = ReturnType<typeof createApiClient>;

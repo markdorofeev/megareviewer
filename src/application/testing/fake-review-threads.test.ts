@@ -12,9 +12,12 @@ const commit = {
   files: [{ path: "src/services/receipts.ts", content: "changed\n" }],
 };
 
+const ATTACHMENT = "https://github.com/user-attachments/assets/0a1b2c3d";
+
 const seeded = () => {
   const threads = new FakeReviewThreads({ host: "github" });
   threads.setThreads(ref, smallFeatureThreadList, headSha);
+  threads.setAttachment(ATTACHMENT, { contentType: "image/png", bytes: new Uint8Array([1]) });
   return threads;
 };
 
@@ -27,6 +30,7 @@ describeReviewThreadsContract("fake", () => ({
   replyBody: "Capped at 1,000 entries.",
   commit,
   staleCommit: { ...commit, headSha: "0".repeat(40) },
+  attachment: ATTACHMENT,
 }));
 
 describe("FakeReviewThreads", () => {

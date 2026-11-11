@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -119,26 +119,52 @@ describe("ReviewThreadView", () => {
     expect(article.textContent).toContain("[click](javascript:alert(1))");
   });
 
-  it("names a pasted image without loading it", () => {
+  const withBody = (body: string) =>
+    thread({
+      comments: [
+        { id: "i", author: sam, body, createdAt: "2026-10-21T09:00:00Z", originalCommit: null },
+      ],
+    });
+  const asset = "https://github.com/user-attachments/assets/771a3d24";
+  const mediaUrl = (url: string) => `/api/analyses/a_1/attachment?url=${encodeURIComponent(url)}`;
+
+  it("shows the host's images and videos through the local server", () => {
     show({
-      thread: thread({
-        comments: [
-          {
-            id: "i",
-            author: sam,
-            body: 'another comment with image\n\n<img width="819" alt="Screenshot 16 45" src="https://github.com/user-attachments/assets/1" />',
-            createdAt: "2026-10-21T09:00:00Z",
-            originalCommit: null,
-          },
-        ],
-      }),
+      thread: withBody(`with image\n\n<img alt="Screenshot 16 45" src="${asset}" />\n\n${asset}`),
+      mediaUrl,
     });
     const article = screen.getByRole("article");
-    expect(article.querySelector("img")).toBeNull();
-    expect(article.querySelector("[data-slot=thread-image]")?.textContent).toBe(
-      "Image: Screenshot 16 45, not loaded; see it on the host",
-    );
+    const image = screen.getByRole("img", { name: "Screenshot 16 45" });
+    expect(image.getAttribute("src")).toBe(mediaUrl(asset));
+    const video = article.querySelector("video");
+    expect(video?.getAttribute("src")).toBe(mediaUrl(asset));
+    expect(video?.hasAttribute("controls")).toBe(true);
     expect(article.textContent).not.toContain("<img");
+  });
+
+  it("names an image from anywhere else, and one that fails to load", () => {
+    show({
+      thread: withBody(
+        `<img alt="pixel" src="https://evil.test/p.png"> <img alt="gone" src="${asset}">`,
+      ),
+      mediaUrl,
+    });
+    const article = screen.getByRole("article");
+    expect(article.querySelectorAll("img")).toHaveLength(1);
+    expect(article.querySelector("[data-slot=thread-image]")?.textContent).toContain(
+      "Image: pixel",
+    );
+    const gone = screen.getByRole("img", { name: "gone" });
+    fireEvent.error(gone);
+    expect(article.querySelectorAll("img")).toHaveLength(0);
+    expect(article.textContent).toContain("Image: gone couldn't be loaded");
+  });
+
+  it("only names attachments when it has nowhere to load them from", () => {
+    show({ thread: withBody(`<img alt="shot" src="${asset}">`) });
+    const article = screen.getByRole("article");
+    expect(article.querySelector("img")).toBeNull();
+    expect(article.querySelector("[data-slot=thread-image]")?.textContent).toContain("Image: shot");
   });
 
   it("replies with ⌘↵, keeping the text when posting fails", async () => {

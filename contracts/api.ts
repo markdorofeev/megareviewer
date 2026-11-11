@@ -309,6 +309,18 @@ export const analysisEventsRoute = {
   events: { updated: AnalysisUpdatedEvent, done: AnalysisDoneEvent },
 } as const;
 
+/**
+ * An image or video pasted into the PR's comments, served by the local server from the host's
+ * own attachment store. The answer is the file, not JSON. `<img>` and `<video>` can't set headers,
+ * so this route, like the events one, takes the token in the query.
+ */
+export const attachmentRoute = {
+  method: "GET",
+  path: "/api/analyses/:id/attachment",
+  params: AnalysisParams,
+  query: z.object({ url: z.url({ protocol: /^https$/ }) }).readonly(),
+} as const;
+
 /** Fills a route path's `:name` segments with URL-encoded params. */
 export const routePath = (path: string, params: Readonly<Record<string, string>>): string =>
   path.replace(/:([A-Za-z]+)/g, (_, name: string) => {

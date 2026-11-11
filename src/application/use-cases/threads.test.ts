@@ -83,6 +83,22 @@ describe("getThreads", () => {
   });
 });
 
+describe("getAttachment", () => {
+  it("fetches an attachment through the PR's host", async () => {
+    const { useCases, threads, id } = await setup();
+    const url = "https://github.com/user-attachments/assets/1a2b";
+    threads.setAttachment(url, { contentType: "video/mp4", bytes: new Uint8Array([1]) });
+    expect(await useCases.getAttachment(id, url)).toMatchObject({
+      ok: true,
+      value: { contentType: "video/mp4" },
+    });
+    expect(await useCases.getAttachment(id, "https://evil.test/a.png")).toMatchObject({
+      ok: false,
+      error: { code: "not-found" },
+    });
+  });
+});
+
 describe("replyToThread and resolveThread", () => {
   it("posts a trimmed reply and resolves", async () => {
     const { useCases, id } = await setup();

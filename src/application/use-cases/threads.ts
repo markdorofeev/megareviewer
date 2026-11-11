@@ -12,7 +12,7 @@ import {
   threadLines,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { ReviewThreads } from "../ports/index.ts";
+import type { Attachment, ReviewThreads } from "../ports/index.ts";
 import { hostFor } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
@@ -174,6 +174,14 @@ export const createThreadUseCases = (deps: AppDeps) => {
   };
 
   return {
+    /** An image or video pasted into the PR's comments, from its host's own store. */
+    async getAttachment(id: AnalysisId, url: string): Promise<Result<Attachment, UseCaseError>> {
+      const found = await threadsFor(id);
+      if (!found.ok) return found;
+      const attachment = await found.value.threads.getAttachment(url);
+      return attachment.ok ? attachment : err(fromHostError(attachment.error));
+    },
+
     async getThreads(id: AnalysisId): Promise<Result<ThreadList, UseCaseError>> {
       const found = await threadsFor(id);
       if (!found.ok) return found;

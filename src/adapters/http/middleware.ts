@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { MiddlewareHandler } from "hono";
 import {
   analysisEventsRoute,
+  attachmentRoute,
   ERROR_STATUS,
   type ErrorResponse,
   TOKEN_HEADER,
@@ -50,11 +51,18 @@ export const hostCheck = (allowedHosts: readonly string[]): MiddlewareHandler =>
   };
 };
 
-const EVENTS_PATH = new RegExp(`^${analysisEventsRoute.path.replace(/:[A-Za-z]+/g, "[^/]+")}$`);
+const pathPattern = (path: string): RegExp =>
+  new RegExp(`^${path.replace(/:[A-Za-z]+/g, "[^/]+")}$`);
+/** Routes the browser loads without a script, which can't send a header. */
+const QUERY_TOKEN_PATHS = [
+  pathPattern(analysisEventsRoute.path),
+  pathPattern(attachmentRoute.path),
+];
 
 /**
- * Every /api request carries the session token in a header. Only the events route may put it
- * in the query string instead, because EventSource can't set headers.
+ * Every /api request carries the session token in a header. Only the events and attachment routes
+ * may put it in the query string instead, because EventSource, `<img>` and `<video>` can't set
+ * headers.
  */
 export const sessionToken = (token: string): MiddlewareHandler => {
   const expected = Buffer.from(token);
@@ -64,7 +72,8 @@ export const sessionToken = (token: string): MiddlewareHandler => {
     return actual.length === expected.length && timingSafeEqual(actual, expected);
   };
   return async (c, next) => {
-    const queryAllowed = c.req.method === "GET" && EVENTS_PATH.test(c.req.path);
+    const queryAllowed =
+      c.req.method === "GET" && QUERY_TOKEN_PATHS.some((path) => path.test(c.req.path));
     if (
       !matches(c.req.header(TOKEN_HEADER)) &&
       !(queryAllowed && matches(c.req.query(TOKEN_QUERY_PARAM)))
