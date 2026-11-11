@@ -114,6 +114,12 @@
   --syntax-function: #1D4ED8;
   --syntax-comment: #5B5B66;
   --syntax-number: #92400E;
+
+  /* hunk: risk classes (contract, logic, mechanical), added for megareviewer. Always paired with a
+     glyph and a label. The color-blind palette needs no overrides. */
+  --risk-contract: #8B006F;   --risk-contract-bg: #FBEEF7;   --risk-contract-border: #EBC2DF;   --risk-contract-solid: #9E1C80;
+  --risk-logic: #2F757C;      --risk-logic-bg: #EAF4F5;      --risk-logic-border: #BCDCE0;      --risk-logic-solid: #1E9DBA;
+  --risk-mechanical: #766A59; --risk-mechanical-bg: #F5F3EF; --risk-mechanical-border: #E2DCD2; --risk-mechanical-solid: #968A78;
 }
 
 /* ------------------------------------------------------------------ */
@@ -202,6 +208,11 @@
   --syntax-function: #93C5FD;
   --syntax-comment: #B4B4BC;
   --syntax-number: #FCD34D;
+
+  /* hunk: risk classes */
+  --risk-contract: #EF7BCC;   --risk-contract-bg: #2A1024;   --risk-contract-border: #5A2550;   --risk-contract-solid: #D9479F;
+  --risk-logic: #7BE3F5;      --risk-logic-bg: #0B2329;      --risk-logic-border: #1D4A55;      --risk-logic-solid: #1F93B8;
+  --risk-mechanical: #B6A996; --risk-mechanical-bg: #1C1A17; --risk-mechanical-border: #38342D; --risk-mechanical-solid: #7D7364;
 }
 
 /* ------------------------------------------------------------------ */
@@ -304,6 +315,19 @@
   --color-syntax-function: var(--syntax-function);
   --color-syntax-comment: var(--syntax-comment);
   --color-syntax-number: var(--syntax-number);
+  /* hunk: risk classes */
+  --color-risk-contract: var(--risk-contract);
+  --color-risk-contract-bg: var(--risk-contract-bg);
+  --color-risk-contract-border: var(--risk-contract-border);
+  --color-risk-contract-solid: var(--risk-contract-solid);
+  --color-risk-logic: var(--risk-logic);
+  --color-risk-logic-bg: var(--risk-logic-bg);
+  --color-risk-logic-border: var(--risk-logic-border);
+  --color-risk-logic-solid: var(--risk-logic-solid);
+  --color-risk-mechanical: var(--risk-mechanical);
+  --color-risk-mechanical-bg: var(--risk-mechanical-bg);
+  --color-risk-mechanical-border: var(--risk-mechanical-border);
+  --color-risk-mechanical-solid: var(--risk-mechanical-solid);
 
   --font-sans: var(--hunk-font-sans);
   --font-mono: var(--hunk-font-mono);

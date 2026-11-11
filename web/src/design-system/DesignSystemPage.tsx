@@ -7,6 +7,25 @@ const THEMES: readonly { readonly value: ThemePreference; readonly label: string
   { value: "dark", label: "Dark" },
   { value: "system", label: "System" },
 ];
+// Spelled out because Tailwind only generates the classes it finds whole in the source.
+const RISKS = [
+  {
+    risk: "contract",
+    tint: "border-risk-contract-border bg-risk-contract-bg text-risk-contract",
+    bar: "bg-risk-contract-solid",
+  },
+  {
+    risk: "logic",
+    tint: "border-risk-logic-border bg-risk-logic-bg text-risk-logic",
+    bar: "bg-risk-logic-solid",
+  },
+  {
+    risk: "mechanical",
+    tint: "border-risk-mechanical-border bg-risk-mechanical-bg text-risk-mechanical",
+    bar: "bg-risk-mechanical-solid",
+  },
+] as const;
+
 const PALETTES: readonly { readonly value: DiffPalette; readonly label: string }[] = [
   { value: "default", label: "Default" },
   { value: "cb", label: "Color-blind safe" },
@@ -48,6 +67,21 @@ export const DesignSystemPage = () => {
           <p>UI 13/20, the body default.</p>
           <p className="text-caption text-muted-foreground">Caption 12/16</p>
           <code className="text-code">{"const ok = a !== b && f => g; // no ligatures"}</code>
+        </section>
+        <section className="flex flex-col gap-3">
+          <h2 className="text-heading font-semibold">Risk</h2>
+          <div className="flex gap-3">
+            {RISKS.map(({ risk, tint, bar }) => (
+              <div key={risk} className="flex items-stretch gap-2">
+                <span className={cn("w-1 rounded-full", bar)} />
+                <span
+                  className={cn("rounded-md border px-2 py-0.5 text-caption font-medium", tint)}
+                >
+                  {risk}
+                </span>
+              </div>
+            ))}
+          </div>
         </section>
         <section className="flex flex-col gap-3">
           <h2 className="text-heading font-semibold">Diff</h2>
