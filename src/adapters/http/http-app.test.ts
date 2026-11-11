@@ -331,6 +331,23 @@ describe("GET /api/analyses/:id", () => {
   });
 });
 
+describe("GET /api/analyses/:id/files/:side/:path", () => {
+  it("serves a changed file, its path one encoded segment", async () => {
+    const { call, request } = await seeded();
+    const params = { id, side: "head", path: "src/services/receipts.ts" };
+    const { body } = await call("getFileContent", { params });
+    expect(body).toEqual({ content: smallFeature.headFiles["src/services/receipts.ts"] });
+    const unencoded = await request(`/api/analyses/${id}/files/head/src/services/receipts.ts`);
+    expect(unencoded.status).toBe(404);
+  });
+
+  it("rejects an unknown side", async () => {
+    const { call } = await seeded();
+    const params = { id, side: "middle", path: "config/app.yaml" };
+    expect((await call("getFileContent", { params })).error?.code).toBe("bad-request");
+  });
+});
+
 describe("POST /api/analyses/:id/retry", () => {
   it("re-runs a failed analysis", async () => {
     const { call } = await seeded(failed);

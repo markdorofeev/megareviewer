@@ -56,6 +56,7 @@ const responses: Record<RouteName, unknown> = {
     isAuthor: false,
     stale: false,
   },
+  getFileContent: { content: "export const total = 1;\n" },
   retryAnalysis: { analysisId: smallFeatureAnalysis.id },
   putVerdict: verdict,
   previewPublication: smallFeaturePublication,

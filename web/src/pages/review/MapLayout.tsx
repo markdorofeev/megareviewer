@@ -1,14 +1,21 @@
-import { Fragment, memo, type ReactNode, useEffect } from "react";
+import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from "react";
 import type { MechanicalProof, PartId } from "../../../../src/domain/diff/index.ts";
-import { type Analysis, pathReasons } from "../../../../src/domain/review/index.ts";
+import {
+  type Analysis,
+  type AnalysisId,
+  pathReasons,
+} from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import {
+  EXPAND_STEP,
   FileNotices,
   FilePath,
   FileStatusChip,
   lineCounts,
   MechanicalGroup,
 } from "../../review/index.ts";
+import { FoldView, useFileText } from "./FoldView.tsx";
+import { CLOSED, canOpen, type Fold, foldSize, foldsOf, type Opened, openMore } from "./folds.ts";
 import { type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
 import { contractParts, type FileGroup, gapBetween } from "./model.ts";
 
@@ -58,36 +65,13 @@ const MapPart = ({
   </div>
 );
 
-/** Arrows apart from a line: lines folded away here. */
-const UnfoldIcon = () => (
-  <svg
-    data-slot="unfold-icon"
-    className="shrink-0"
-    viewBox="0 0 16 16"
-    width="16"
-    height="16"
-    aria-hidden="true"
-    focusable="false"
-  >
-    <path
-      d="M8 1.5v4M5.5 3.5 8 1l2.5 2.5M8 14.5v-4M5.5 12.5 8 15l2.5-2.5M2 8h12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-/** The unchanged lines between two parts on a card, folded: how many, under an unfold icon. */
+/** The unchanged lines between two parts of a file that can't be opened: how many. */
 const GapRow = ({ lines }: { readonly lines: number }) =>
   lines === 0 ? null : (
     <div
       data-slot="file-gap"
       className="flex h-8 items-center gap-2 border-t bg-surface-subtle px-3 text-muted-foreground"
     >
-      <UnfoldIcon />
       <span>
         {lines} {lines === 1 ? "line" : "lines"} unchanged
       </span>
@@ -99,10 +83,12 @@ const GapRow = ({ lines }: { readonly lines: number }) =>
  * own when it has something to say, the lines between them folded.
  */
 const FileCard = ({
+  analysisId,
   group,
   deps,
   signatureOf,
 }: {
+  readonly analysisId: AnalysisId;
   readonly group: FileGroup;
   readonly deps: HunkDeps;
   readonly signatureOf: (id: PartId) => string;
@@ -113,6 +99,46 @@ const FileCard = ({
   const contract = contractParts(group, deps.index);
   // A path rule holds for every part of the file, so its reason is said once, here.
   const fileReasons = contract > 0 ? pathReasons(group.file) : [];
+  const { text, load } = useFileText(analysisId, group.file.path);
+  const [opened, setOpened] = useState<ReadonlyMap<string, Opened>>(new Map());
+  const folds = useMemo(
+    () => (canOpen(group.file) ? foldsOf(group.partIds, deps.index) : []),
+    [group, deps.index],
+  );
+  const foldKey = (fold: Fold) => `${fold.after ?? ""}>${fold.before ?? ""}`;
+  const fileLength = text.status === "ready" ? text.lines.length : null;
+  const foldView = (fold: Fold) => {
+    const key = foldKey(fold);
+    const next = fold.before ?? fold.after;
+    const neighbor = next === null ? undefined : deps.index.parts.get(next);
+    if (neighbor === undefined) return null;
+    return (
+      <FoldView
+        key={key}
+        fold={fold}
+        file={group.file}
+        hunkId={neighbor.hunk.id}
+        opened={opened.get(key) ?? CLOSED}
+        text={text}
+        above={fold.after !== null}
+        below={fold.before !== null}
+        onOpen={(direction) => {
+          load();
+          setOpened((previous) =>
+            new Map(previous).set(
+              key,
+              openMore(
+                previous.get(key) ?? CLOSED,
+                direction,
+                EXPAND_STEP,
+                foldSize(fold, fileLength),
+              ),
+            ),
+          );
+        }}
+      />
+    );
+  };
   return (
     <section
       id={fileAnchor(group.file.path)}
@@ -148,13 +174,21 @@ const FileCard = ({
       {group.partIds.map((id, at) => {
         const previous = group.partIds[at - 1];
         const gap = previous === undefined ? null : gapBetween(previous, id, deps.index);
+        const fold = folds.find((one) => one.before === id);
         return (
           <Fragment key={id}>
-            {gap !== null && <GapRow lines={gap} />}
-            <MapPart id={id} joined={gap === 0} deps={deps} signatureOf={signatureOf} />
+            {fold === undefined ? gap !== null && <GapRow lines={gap} /> : foldView(fold)}
+            {/* After a fold its row or its opened lines lead in, so the part needs no border. */}
+            <MapPart
+              id={id}
+              joined={gap === 0 || fold !== undefined}
+              deps={deps}
+              signatureOf={signatureOf}
+            />
           </Fragment>
         );
       })}
+      {folds.filter((fold) => fold.before === null).map(foldView)}
     </section>
   );
 };
@@ -202,7 +236,13 @@ export const MapLayout = ({
     <section className="flex min-w-0 flex-col gap-4" aria-label="Changes">
       {before}
       {files.map((group) => (
-        <FileCard key={group.file.path} group={group} deps={deps} signatureOf={signatureOf} />
+        <FileCard
+          key={group.file.path}
+          analysisId={analysis.id}
+          group={group}
+          deps={deps}
+          signatureOf={signatureOf}
+        />
       ))}
       <div
         id={MECHANICAL_ANCHOR}

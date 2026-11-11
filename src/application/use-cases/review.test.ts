@@ -154,6 +154,41 @@ describe("getAnalysisView", () => {
   });
 });
 
+describe("getFileContent", () => {
+  it("serves a changed file at the head or base commit, fetching it once", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    const head = await useCases.getFileContent(id, "head", "config/app.yaml");
+    expect(head).toEqual(ok({ content: smallFeature.headFiles["config/app.yaml"] }));
+    const base = await useCases.getFileContent(id, "base", "config/app.yaml");
+    expect(base).toEqual(ok({ content: smallFeature.baseFiles["config/app.yaml"] }));
+    await useCases.getFileContent(id, "head", "config/app.yaml");
+    expect(github.getFilesCalls).toHaveLength(2);
+  });
+
+  it("serves only the PR's own files, on the side they're on", async () => {
+    const { useCases, seeded } = setup();
+    await seeded;
+    for (const [side, path] of [
+      ["head", "package.json"],
+      ["base", "src/services/receipts.ts"],
+    ] as const) {
+      const result = await useCases.getFileContent(id, side, path);
+      expect(result.ok || result.error.code).toBe("not-found");
+    }
+    const missing = await useCases.getFileContent(missingId, "head", "config/app.yaml");
+    expect(missing.ok || missing.error.code).toBe("not-found");
+  });
+
+  it("says when the host fails", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    github.failNext("getFiles", network);
+    const result = await useCases.getFileContent(id, "head", "config/app.yaml");
+    expect(result).toEqual(err({ code: "host-error", message: "socket hang up" }));
+  });
+});
+
 describe("recordVerdict", () => {
   it("saves the verdict with the current time", async () => {
     const { useCases, store, seeded } = setup();

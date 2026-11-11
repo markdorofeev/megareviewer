@@ -5,11 +5,13 @@ import {
   ERROR_STATUS,
   type ErrorCode,
   type ErrorResponse,
+  type FileContentResponse,
   type RouteName,
   routes,
   TOKEN_HEADER,
   TOKEN_QUERY_PARAM,
 } from "../../contracts/index.ts";
+import type { FileChange } from "../../src/domain/diff/index.ts";
 import {
   buildPublication,
   type DecisionId,
@@ -80,6 +82,30 @@ const failure = (code: ErrorCode, message: string): MockResponse => {
 };
 
 const success = (body: unknown): MockResponse => ({ status: 200, body });
+
+/** Lines the fixtures don't have past a file's last change. */
+const MOCK_TAIL_LINES = 30;
+
+/**
+ * A file the fixtures only have the diff of: the diff's lines where it has them, and made-up
+ * unchanged lines around them.
+ */
+const mockContent = (file: FileChange, side: "base" | "head"): string => {
+  const known = new Map<number, string>();
+  for (const hunk of file.hunks) {
+    for (const line of hunk.lines) {
+      const at = side === "head" ? line.newLine : line.oldLine;
+      if (at !== null && (side === "head" ? line.kind !== "del" : line.kind !== "add")) {
+        known.set(at, line.text);
+      }
+    }
+  }
+  const last = Math.max(0, ...known.keys()) + MOCK_TAIL_LINES;
+  return Array.from(
+    { length: last },
+    (_, index) => known.get(index + 1) ?? `// unchanged line ${index + 1}`,
+  ).join("\n");
+};
 
 const patternOf = (path: string): RegExp =>
   new RegExp(`^${path.replace(/:([A-Za-z]+)/g, "(?<$1>[^/]+)")}$`);
@@ -216,6 +242,16 @@ export const createMockApi = (
       return success(response);
     },
     getAnalysis: ({ id }) => findAnalysis(id) ?? success(view()),
+    getFileContent: ({ id, side, path }) => {
+      const missing = findAnalysis(id);
+      if (missing !== null) return missing;
+      const file = fixture.files.find((one) => one.path === path);
+      if (file === undefined || (side !== "base" && side !== "head")) {
+        return failure("not-found", `No changed ${side} file ${path} in analysis ${id}`);
+      }
+      const response: FileContentResponse = { content: mockContent(file, side) };
+      return success(response);
+    },
     retryAnalysis: ({ id }) => {
       const missing = findAnalysis(id);
       if (missing !== null) return missing;

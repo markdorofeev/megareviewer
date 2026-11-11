@@ -239,6 +239,43 @@ export const useHunkTokens = (
   return entry?.value ?? (ready?.entry === entry ? ready.tokens : null);
 };
 
+/**
+ * Tokens for each of a file's lines, highlighted whole so a string or comment over several lines
+ * colors right: null until they're ready, and for files in languages that can't be highlighted. A
+ * line whose tokens don't spell it stays plain.
+ */
+export const useFileTokens = (
+  lines: readonly string[] | null,
+  file: Pick<FileChange, "path" | "language">,
+): readonly (readonly SyntaxToken[] | null)[] | null => {
+  const highlighter = useContext(HighlighterContext);
+  const language = languageOf(file);
+  const [result, setResult] = useState<{
+    readonly lines: readonly string[];
+    readonly tokens: readonly (readonly SyntaxToken[] | null)[];
+  } | null>(null);
+  useEffect(() => {
+    if (language === null || lines === null) return;
+    let current = true;
+    void highlighter.highlight(lines.join("\n"), language).then((tokens) => {
+      if (!current || tokens === null) return;
+      setResult({
+        lines,
+        tokens: lines.map((text, at) => {
+          const line = tokens[at];
+          return line !== undefined && line.map((token) => token.text).join("") === text
+            ? line
+            : null;
+        }),
+      });
+    });
+    return () => {
+      current = false;
+    };
+  }, [highlighter, language, lines]);
+  return result?.lines === lines ? result.tokens : null;
+};
+
 /** Tokens for every hunk of a file, for the DiffViewer: null until all are ready. */
 export const useSyntax = (file: FileChange): readonly (HunkTokens | null)[] | null => {
   const highlighter = useContext(HighlighterContext);

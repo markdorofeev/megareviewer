@@ -12,7 +12,12 @@ export {
   type LineComment,
   type LinePlace,
 } from "./diff/hunk-card.tsx";
-export { CollapsedHunk, type ExpandDirection, HunkHeader } from "./diff/hunk-header.tsx";
+export {
+  CollapsedHunk,
+  EXPAND_STEP,
+  type ExpandDirection,
+  HunkHeader,
+} from "./diff/hunk-header.tsx";
 export { hunkLocation, lineCounts } from "./diff/lines.ts";
 export {
   FileNotices,
@@ -25,9 +30,12 @@ export {
   createShikiHighlighter,
   type Highlighter,
   HighlighterContext,
+  type SyntaxToken,
+  useFileTokens,
   useHunkTokens,
   useSyntax,
 } from "./diff/syntax.ts";
+export { type UnchangedLine, UnchangedLines } from "./diff/unchanged-lines.tsx";
 export { CommentComposer } from "./pr/comment-composer.tsx";
 export { PrHeader, type PrSummary, type PrTab } from "./pr/pr-header.tsx";
 export {

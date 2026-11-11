@@ -17,6 +17,8 @@ import { hostFor } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 
+const MAX_CACHED_BYTES = 1024 * 1024;
+
 /** Checking costs an API call and the UI refetches the view on every event. */
 const STALE_CHECK_TTL_MS = 60_000;
 
@@ -36,6 +38,11 @@ const isAuthorOf = async (host: GitHost | undefined, analysis: Analysis): Promis
   const user = await host.currentUser();
   return user.ok && user.value.id === analysis.pullRequest.author.id;
 };
+
+/** A file at a commit: null when it isn't there. */
+export interface FileContent {
+  readonly content: string | null;
+}
 
 /** What the reviewer adds when publishing, beyond decision verdicts. */
 export interface ReviewInput {
@@ -158,6 +165,43 @@ export const createReviewUseCases = (deps: AppDeps) => {
   };
 
   return {
+    /**
+     * A changed file's content at the PR's head commit, or at its base for "base", so the page can
+     * open the unchanged lines between and around its changes. Only the PR's own files: the route
+     * reads the repository through the reviewer's credentials, and nothing else needs it.
+     */
+    async getFileContent(
+      id: AnalysisId,
+      side: "base" | "head",
+      path: string,
+    ): Promise<Result<FileContent, UseCaseError>> {
+      const analysis = await getAnalysis(id);
+      if (!analysis.ok) return analysis;
+      const { pullRequest, files, key } = analysis.value;
+      const file = files.find((one) =>
+        side === "head"
+          ? one.status !== "deleted" && one.path === path
+          : one.status !== "added" && (one.oldPath ?? one.path) === path,
+      );
+      if (pullRequest === null || file === undefined || file.binary) {
+        return err(appError("not-found", `No changed ${side} file ${path} in analysis ${id}`));
+      }
+      const { repo } = key.ref;
+      const at = { sha: side === "head" ? pullRequest.headSha : pullRequest.baseSha, path };
+      const cached = await deps.fileCache.get(repo, at);
+      if (cached !== null) return ok({ content: cached.content });
+      const host = hostFor(deps, repo.host);
+      if (!host.ok) return host;
+      const fetched = await host.value.getFiles(repo, [at]);
+      if (!fetched.ok) return err(fromHostError(fetched.error));
+      const content = fetched.value[0] ?? null;
+      // As Collect does, a file over 1 MB isn't kept.
+      if (content === null || new TextEncoder().encode(content).byteLength <= MAX_CACHED_BYTES) {
+        await deps.fileCache.put(repo, at, content);
+      }
+      return ok({ content });
+    },
+
     async getAnalysisView(id: AnalysisId): Promise<Result<AnalysisView, UseCaseError>> {
       const analysis = await getAnalysis(id);
       if (!analysis.ok) return analysis;

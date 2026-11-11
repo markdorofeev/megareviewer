@@ -7,6 +7,7 @@ export {
   ERROR_STATUS,
   ErrorCode,
   ErrorResponse,
+  FileContentResponse,
   HostStatus,
   type JsonRoute,
   PublicationPreviewRequest,

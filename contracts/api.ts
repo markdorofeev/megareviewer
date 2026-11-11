@@ -103,6 +103,10 @@ export type AnalysisUpdatedEvent = z.infer<typeof AnalysisUpdatedEvent>;
 export const AnalysisDoneEvent = z.object({}).readonly();
 export type AnalysisDoneEvent = z.infer<typeof AnalysisDoneEvent>;
 
+/** A changed file at the PR's base or head commit; null when it isn't there. */
+export const FileContentResponse = z.object({ content: z.string().nullable() }).readonly();
+export type FileContentResponse = z.infer<typeof FileContentResponse>;
+
 // Errors
 
 export const ErrorCode = z.enum([
@@ -142,6 +146,9 @@ export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 const AnalysisParams = z.object({ id: AnalysisId }).readonly();
 const VerdictParams = z.object({ id: AnalysisId, decisionId: DecisionId }).readonly();
+const FileParams = z
+  .object({ id: AnalysisId, side: z.enum(["base", "head"]), path: z.string().min(1) })
+  .readonly();
 const NoParams = z.object({}).readonly();
 
 export interface JsonRoute {
@@ -183,6 +190,14 @@ export const routes = {
     params: AnalysisParams,
     request: null,
     response: AnalysisView,
+  },
+  /** A changed file's content, to open the unchanged lines around its changes. */
+  getFileContent: {
+    method: "GET",
+    path: "/api/analyses/:id/files/:side/:path",
+    params: FileParams,
+    request: null,
+    response: FileContentResponse,
   },
   /** Re-runs a failed analysis; a new head SHA gives a new analysis ID. */
   retryAnalysis: {

@@ -76,6 +76,7 @@ const PAIRS = [
   ["Contract count on active row", "risk-contract", "surface-subtle", 4.5],
   ["Contract count on background", "risk-contract", "background", 4.5],
   ["Gap text", "muted-foreground", "surface-subtle", 4.5],
+  ["Error on a fold", "destructive", "surface-subtle", 4.5],
   ["Muted text on directory hover", "muted-foreground", "accent", 4.5],
   ["Active row bar (non-text)", "primary", "surface-subtle", 3],
   // hunk: the tree's file icons, on the rail and on the active or hovered row.

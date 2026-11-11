@@ -13,6 +13,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     retryAnalysis: runner.retryAnalysis,
     recoverInterruptedAnalyses: runner.recoverInterruptedAnalyses,
     getAnalysisView: review.getAnalysisView,
+    getFileContent: review.getFileContent,
     recordVerdict: review.recordVerdict,
     previewPublication: review.previewPublication,
     publishReview: review.publishReview,
