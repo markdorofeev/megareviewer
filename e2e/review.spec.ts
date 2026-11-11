@@ -224,7 +224,11 @@ test.describe("without the model", () => {
     await expect(page.getByRole("article")).toHaveCount(0);
 
     // A click on the route's directory in the overview opens its first file in the map.
-    await page.getByRole("button", { name: "Overview", exact: true }).click();
+    // The rail has its own Tree · Overview switch; this is the page's layout switch.
+    await page
+      .getByRole("group", { name: "Layout" })
+      .getByRole("button", { name: "Overview", exact: true })
+      .click();
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
     await overview.getByRole("button", { name: /^src\/routes\/, / }).click();
     await expect(page.getByRole("button", { name: "Map", exact: true })).toHaveAttribute(
@@ -255,7 +259,11 @@ for (const width of [720, 1024, 1440]) {
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: "Publish…" })).toBeInViewport();
-    await page.getByRole("button", { name: "Overview", exact: true }).click();
+    // The rail has its own Tree · Overview switch; this is the page's layout switch.
+    await page
+      .getByRole("group", { name: "Layout" })
+      .getByRole("button", { name: "Overview", exact: true })
+      .click();
     await expect(page.locator(".overview-scroll")).toBeVisible();
     expect(await overflows()).toBe(false);
   });
