@@ -63,6 +63,7 @@ export const threadExchanges: Exchange[] = [
           nodes: [
             thread({
               id: "PRRT_kwDOAbc1",
+              startLine: 1146,
               // Out of order, as a page can be: the adapter sorts by time.
               comments: {
                 nodes: [

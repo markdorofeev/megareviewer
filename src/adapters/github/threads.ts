@@ -93,7 +93,11 @@ export const toThread = (thread: GitHubReviewThread): ReviewThread | null => {
     path: thread.path,
     side: thread.diffSide === "LEFT" ? "old" : "new",
     line: thread.line,
-    startLine: thread.startLine,
+    // GitHub gives a one-line thread a start line equal to its line.
+    startLine:
+      thread.startLine !== null && thread.line !== null && thread.startLine < thread.line
+        ? thread.startLine
+        : null,
     originalLine: thread.originalLine,
     resolved: thread.isResolved,
     resolvedBy: thread.resolvedBy === null ? null : toUser(thread.resolvedBy),

@@ -1,6 +1,6 @@
 # Stage 40: Review threads on the code
 
-**Status:** In progress (on main): built and tested on fakes; the live checks in the Definition of done are left
+**Status:** In progress (on main): built, and checked live on delphi-code #2; applying a batch on scratch PRs is left
 **Depends on:** 23 (line comments), 36
 **Owns:** A `ReviewThreads` port and its GitHub and Bitbucket adapters, `src/domain/review/thread.ts`, the thread routes in `src/adapters/http/` and `contracts/`, `web/src/review/thread/`, and the thread wiring in `web/src/pages/review/` (`HunkView.tsx`, `ReviewPage.tsx`)
 
@@ -83,7 +83,7 @@ A fork's PR branch lives in the fork. The adapter pushes to the source repositor
 ## Definition of done
 
 - [x] `pnpm check` passes, including `pnpm check:contrast` for the thread border, the chips and the suggestion diff.
-- [ ] On delphi-code #2, with comments left on GitHub by hand, every thread shows on its line or under "Earlier comments", and replying and resolving show up on GitHub.
+- [x] On delphi-code #2, with comments left on GitHub by hand, every thread shows on its line or under "Earlier comments", and replying and resolving show up on GitHub.
 - [ ] Applying a batch on a scratch PR makes one commit on GitHub and one on Bitbucket.
 - [x] ARCHITECTURE.md: the host table gets the thread rows; Publish says replies post at once; and the decisions above are recorded with the alternatives rejected.
 
@@ -103,4 +103,6 @@ A fork's PR branch lives in the fork. The adapter pushes to the source repositor
 - **The composer's controls are in the line comment box** (`CommentRow` in `hunk-card.tsx`): it closes when the focus leaves the box, no longer when it leaves the text field, so Tab reaches the severity and the suggestion toggle.
 - **Fixtures are synthetic** (`threads.synthetic.ts` in each adapter's fixtures), built from the adapters' own query strings so GraphQL bodies match. The open issues above still stand: Bitbucket's suggestion format, `/resolve` and `resolution`, and `inline.outdated` need a recorded response.
 - **The fake app and the mock API have threads:** small-feature (`smallFeatureThreads`) on the fake hosts, and `web/dev/fixtures/threads.ts` for `pnpm dev:web:mock`. `GET /__fake/commits` lists the commits the fake hosts made.
-- **Left from the Definition of done:** threads on delphi-code #2 with comments left on GitHub by hand, and a batch applied on a scratch PR on GitHub and on Bitbucket. Both write to real repositories, so they wait for the owner.
+- **Live on delphi-code #2 (2026-11-11):** three comments left by hand, one with a suggestion and one with a pasted image, each showed under its line, with the suggestion's diff and buttons. A reply sent with `r` and ⌘↵, resolving and reopening with `e` all showed up on GitHub. It found one bug: GitHub gives a one-line thread a `startLine` equal to its `line`, which read as "lines 30–30"; the adapter now drops it.
+- **Pasted images show as their `<img …>` tag,** since bodies are text. Turning an image tag into a short "image: alt text" placeholder, without loading it, is a small follow-up.
+- **Left from the Definition of done:** a batch applied on a scratch PR on GitHub and on Bitbucket. It pushes to real repositories, so it waits for the owner.

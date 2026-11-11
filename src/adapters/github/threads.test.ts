@@ -73,6 +73,8 @@ describe("GitHub review threads", () => {
       { id: "sindresorhus", name: "sindresorhus" },
     ]);
     expect(first?.can).toEqual({ reply: true, resolve: true });
+    // GitHub's start line equals the line on a one-line thread.
+    expect(first?.startLine).toBeNull();
     expect(resolved).toMatchObject({
       side: "old",
       resolved: true,
