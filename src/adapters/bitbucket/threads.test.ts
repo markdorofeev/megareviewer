@@ -118,6 +118,27 @@ describe("Bitbucket review threads", () => {
     expect(calls).toBe(1);
   });
 
+  it("reads a repository file linked by its raw URL through the API, which takes the token", async () => {
+    const requests: { url: string; authorization: string | null }[] = [];
+    const recording: typeof fetch = async (input, init) => {
+      requests.push({
+        url: String(input),
+        authorization: new Headers(init?.headers).get("authorization"),
+      });
+      return new Response("PNGDATA", { headers: { "content-type": "image/png" } });
+    };
+    const result = await threadsWith(recording).getAttachment(
+      "https://bitbucket.org/atlassian/bitbucket-upload-file/raw/51b7da02ca1b/docs/a%20shot.png",
+    );
+    expect(result.ok && result.value.contentType).toBe("image/png");
+    expect(requests).toEqual([
+      {
+        url: "https://api.bitbucket.org/2.0/repositories/atlassian/bitbucket-upload-file/src/51b7da02ca1b/docs/a%20shot.png",
+        authorization: `Basic ${btoa("lee:token")}`,
+      },
+    ]);
+  });
+
   it("reports rejected credentials", async () => {
     const rejecting = bitbucketThreadExchanges.map((exchange) => ({
       ...exchange,

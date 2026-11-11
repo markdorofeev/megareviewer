@@ -24,7 +24,11 @@ export const attachmentHost = (url: string): HostKind | null => {
   ) {
     return "github";
   }
-  if (hostname === "bitbucket.org" && /^\/[^/]+\/[^/]+\/images\/[^/]+$/.test(pathname)) {
+  // A file in the repository at a ref is Bitbucket's to serve too, whoever linked it.
+  if (
+    hostname === "bitbucket.org" &&
+    /^\/[^/]+\/[^/]+\/(images\/[^/]+|raw\/[^/]+\/.*[^/])$/.test(pathname)
+  ) {
     return "bitbucket";
   }
   return null;

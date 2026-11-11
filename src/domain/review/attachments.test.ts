@@ -7,6 +7,7 @@ describe("attachmentHost", () => {
     ["https://user-images.githubusercontent.com/1/abc.png", "github"],
     ["https://private-user-images.githubusercontent.com/1/abc.png?jwt=x", "github"],
     ["https://bitbucket.org/acme/shop/images/1234-shot.png", "bitbucket"],
+    ["https://bitbucket.org/acme/shop/raw/51b7da02ca1b/docs/shot.png", "bitbucket"],
   ] as const)("knows %s is %s's", (url, host) => {
     expect(attachmentHost(url)).toBe(host);
   });
@@ -20,6 +21,8 @@ describe("attachmentHost", () => {
     "https://github.com:8443/user-attachments/assets/771a3d24",
     "https://user-images.githubusercontent.com/",
     "https://bitbucket.org/acme/shop/src/main/a.png",
+    "https://bitbucket.org/acme/shop/raw/51b7da02ca1b",
+    "https://bitbucket.org/acme/shop/raw/51b7da02ca1b/",
     "https://evil.test/a.png",
     "not a url",
   ])("fetches nothing from %s", (url) => {

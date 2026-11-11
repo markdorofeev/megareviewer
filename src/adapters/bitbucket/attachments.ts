@@ -12,6 +12,22 @@ const hostError = (kind: HostErrorKind, message: string): HostError => ({
   retryAfterSeconds: null,
 });
 
+/** Where the reviewer's credentials may go; a redirect anywhere else is followed without them. */
+const BITBUCKET_ORIGINS = new Set(["https://bitbucket.org", "https://api.bitbucket.org"]);
+const RAW_FILE = /^\/([^/]+)\/([^/]+)\/raw\/(.+)$/;
+
+/**
+ * A repository file's `/raw/` URL, as the API's `src` URL for the same ref and path: the site
+ * answers a token with its sign-in page, the API with the file.
+ */
+const viaApi = (url: string): string => {
+  const { pathname } = new URL(url);
+  const raw = RAW_FILE.exec(pathname);
+  if (raw === null) return url;
+  const [, workspace, repo, refAndPath] = raw;
+  return `https://api.bitbucket.org/2.0/repositories/${workspace}/${repo}/src/${refAndPath}`;
+};
+
 const STATUS: Readonly<Record<number, HostErrorKind>> = {
   401: "unauthorized",
   403: "forbidden",
@@ -19,8 +35,8 @@ const STATUS: Readonly<Record<number, HostErrorKind>> = {
 };
 
 /**
- * An attachment from Bitbucket's own store. The credentials go to bitbucket.org only; a
- * redirect elsewhere, as to a CDN, is followed without them.
+ * An attachment from Bitbucket's own store, or a file in a repository. The credentials go to
+ * Bitbucket only; a redirect elsewhere, as to a CDN, is followed without them.
  */
 export const fetchAttachment = async (
   url: string,
@@ -38,10 +54,10 @@ export const fetchAttachment = async (
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs);
   try {
-    let target = url;
+    let target = viaApi(url);
     let response: Response;
     for (let hop = 0; ; hop += 1) {
-      const toBitbucket = new URL(target).origin === "https://bitbucket.org";
+      const toBitbucket = BITBUCKET_ORIGINS.has(new URL(target).origin);
       response = await options.fetch(target, {
         redirect: "manual",
         signal: controller.signal,
