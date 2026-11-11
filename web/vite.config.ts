@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { mockApi } from "./dev/index.ts";
@@ -7,7 +8,7 @@ import { mockApi } from "./dev/index.ts";
 // (`pnpm dev:fake --port 4999` or `pnpm dev:server`), on MEGAREVIEWER_DEV_PORT if set.
 export default defineConfig(({ mode }) => ({
   root: fileURLToPath(new URL(".", import.meta.url)),
-  plugins: [react(), ...(mode === "mock" ? [mockApi()] : [])],
+  plugins: [react(), tailwindcss(), ...(mode === "mock" ? [mockApi()] : [])],
   build: {
     outDir: fileURLToPath(new URL("../dist/web", import.meta.url)),
     emptyOutDir: true,

@@ -11,8 +11,14 @@
       "!!**/playwright-report",
       "!**/fixtures/**/*.json",
       "!.idea",
-      "!!.claude"
+      "!!.claude",
+      "!!hunk-design-system"
     ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "formatter": {
     "indentStyle": "space",
@@ -44,6 +50,10 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["web/src/styles/globals.css"],
+      "formatter": { "enabled": false }
+    },
     {
       "includes": ["src/cli/**", "scripts/**", "evals/**"],
       "linter": {

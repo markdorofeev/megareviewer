@@ -1,0 +1,355 @@
+/*
+ * Hunk design system: Indigo Calm tokens
+ * Single source of truth for every color, font, radius, shadow and duration.
+ * Components must use the Tailwind utilities generated from @theme below
+ * (bg-diff-add-bg, text-review-approved, ...) and never raw hex values.
+ *
+ * Target: Tailwind CSS v4 + shadcn/ui (Base UI primitives).
+ * Theme switches:
+ *   <html class="dark">                      dark theme (shadcn / next-themes convention)
+ *   <html data-diff-palette="cb">            color-blind-safe diff palette (blue / orange)
+ *   both can be combined.
+ * All text pairs pass WCAG 2.x AA (>= 4.5:1); see reference/contrast-pairs.json.
+ */
+
+/* hunk: scan web/src only; from the repo root Tailwind would also read src/, docs and fixtures. */
+@import "tailwindcss" source("../");
+
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------------ */
+/* Light (default)                                                    */
+/* ------------------------------------------------------------------ */
+:root {
+  color-scheme: light;
+
+  /* shape, type, motion */
+  --radius: 0.5rem;
+  --hunk-font-sans: "Geist", "Geist Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --hunk-font-mono: "Geist Mono", "Geist Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --duration-instant: 0ms;
+  --duration-fast: 100ms;
+  --duration-base: 150ms;
+  --duration-slow: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* elevation */
+  --elevation-sm: 0 1px 2px rgb(24 24 27 / 0.06);
+  --elevation-md: 0 4px 12px rgb(24 24 27 / 0.08), 0 1px 2px rgb(24 24 27 / 0.06);
+  --elevation-lg: 0 16px 40px rgb(24 24 27 / 0.14), 0 2px 6px rgb(24 24 27 / 0.06);
+
+  /* shadcn/ui core */
+  --background: #FFFFFF;
+  --foreground: #18181B;
+  --card: #FFFFFF;
+  --card-foreground: #18181B;
+  --popover: #FFFFFF;
+  --popover-foreground: #18181B;
+  --primary: #4F46E5;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F4F4F6;
+  --secondary-foreground: #18181B;
+  --muted: #F4F4F6;
+  --muted-foreground: #5B5B66;
+  --accent: #F4F4F6;
+  --accent-foreground: #18181B;
+  --destructive: #B42323;
+  --border: #E4E4E7;
+  --input: #8B8B94;
+  --ring: #4F46E5;
+
+  /* surface */
+  --surface-subtle: #FAFAFA;
+
+  /* diff */
+  --diff-add-bg: #EAF7EE;
+  --diff-add-word: #CCEFD7;
+  --diff-add-gutter: #DDF3E4;
+  --diff-add-fg: #15703A;
+  --diff-del-bg: #FDEEEE;
+  --diff-del-word: #FADADA;
+  --diff-del-gutter: #FBE0E0;
+  --diff-del-fg: #B42323;
+  --diff-mod-fg: #9A6700;
+  --diff-hunk-bg: #EEF0FD;
+  --diff-hunk-fg: #4338CA;
+  --diff-gutter-bg: #FAFAFA;
+  --diff-gutter-fg: #71717A;
+
+  /* comments and suggestions */
+  --thread-bg: #FFFFFF;
+  --thread-border: #E4E4E7;
+  --thread-marker: #4F46E5;
+  --suggestion-bg: #F7F7FE;
+
+  /* review states */
+  --review-approved: #15703A;
+  --review-approved-bg: #EAF7EE;
+  --review-changes: #B42323;
+  --review-changes-bg: #FDEEEE;
+  --review-pending: #9A6700;
+  --review-pending-bg: #FDF6E3;
+  --review-commented: #5B5B66;
+  --review-commented-bg: #F4F4F6;
+
+  /* CI status */
+  --ci-success: #15703A;
+  --ci-failure: #B42323;
+  --ci-running: #4F46E5;
+  --ci-running-bg: #EEF0FD;
+  --ci-queued: #5B5B66;
+  --ci-skipped: #71717A;
+
+  /* severity */
+  --severity-blocker: #B42323;
+  --severity-major: #C2410C;
+  --severity-major-bg: #FFF1E8;
+  --severity-minor: #9A6700;
+  --severity-nit: #5B5B66;
+  --severity-info: #4F46E5;
+
+  /* syntax (map Shiki css-variables theme to these) */
+  --syntax-keyword: #6D28D9;
+  --syntax-string: #0E6E5C;
+  --syntax-function: #1D4ED8;
+  --syntax-comment: #5B5B66;
+  --syntax-number: #92400E;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark                                                               */
+/* ------------------------------------------------------------------ */
+.dark {
+  color-scheme: dark;
+
+  --elevation-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --elevation-md: 0 4px 12px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --elevation-lg: 0 16px 40px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.06);
+
+  /* shadcn/ui core */
+  --background: #0B0B0F;
+  --foreground: #EDEDEF;
+  --card: #111116;
+  --card-foreground: #EDEDEF;
+  --popover: #16161C;
+  --popover-foreground: #EDEDEF;
+  --primary: #8B8EF9;
+  --primary-foreground: #0B0B0F;
+  --secondary: #1B1B21;
+  --secondary-foreground: #EDEDEF;
+  --muted: #1B1B21;
+  --muted-foreground: #A1A1AA;
+  --accent: #1F1F26;
+  --accent-foreground: #EDEDEF;
+  --destructive: #F87171;
+  --border: #26262E;
+  --input: #63636E;
+  --ring: #8B8EF9;
+
+  /* surface */
+  --surface-subtle: #111116;
+
+  /* diff */
+  --diff-add-bg: #0F2418;
+  --diff-add-word: #17432A;
+  --diff-add-gutter: #143A24;
+  --diff-add-fg: #4ADE80;
+  --diff-del-bg: #2A1215;
+  --diff-del-word: #521B20;
+  --diff-del-gutter: #3D171B;
+  --diff-del-fg: #F87171;
+  --diff-mod-fg: #FBBF24;
+  --diff-hunk-bg: #16172B;
+  --diff-hunk-fg: #A5B4FC;
+  --diff-gutter-bg: #111116;
+  --diff-gutter-fg: #8A8A94;
+
+  /* comments and suggestions */
+  --thread-bg: #111116;
+  --thread-border: #26262E;
+  --thread-marker: #8B8EF9;
+  --suggestion-bg: #14152A;
+
+  /* review states */
+  --review-approved: #4ADE80;
+  --review-approved-bg: #0F2418;
+  --review-changes: #F87171;
+  --review-changes-bg: #2A1215;
+  --review-pending: #FBBF24;
+  --review-pending-bg: #2A2008;
+  --review-commented: #A1A1AA;
+  --review-commented-bg: #1B1B21;
+
+  /* CI status */
+  --ci-success: #4ADE80;
+  --ci-failure: #F87171;
+  --ci-running: #A5B4FC;
+  --ci-running-bg: #16172B;
+  --ci-queued: #A1A1AA;
+  --ci-skipped: #8A8A94;
+
+  /* severity */
+  --severity-blocker: #F87171;
+  --severity-major: #FB923C;
+  --severity-major-bg: #2A160A;
+  --severity-minor: #FBBF24;
+  --severity-nit: #A1A1AA;
+  --severity-info: #A5B4FC;
+
+  /* syntax (map Shiki css-variables theme to these) */
+  --syntax-keyword: #C4B5FD;
+  --syntax-string: #7DD3C0;
+  --syntax-function: #93C5FD;
+  --syntax-comment: #B4B4BC;
+  --syntax-number: #FCD34D;
+}
+
+/* ------------------------------------------------------------------ */
+/* Color-blind-safe diff palette (blue = added, orange = removed)     */
+/* Opt-in user preference; markers (+ / −) stay in place.             */
+/* ------------------------------------------------------------------ */
+[data-diff-palette="cb"] {
+  --diff-add-bg: #EAF2FD;
+  --diff-add-word: #CFE2FA;
+  --diff-add-gutter: #DCEAFB;
+  --diff-add-fg: #0B5CAD;
+  --diff-del-bg: #FDF1E7;
+  --diff-del-word: #F8DCC2;
+  --diff-del-gutter: #FAE6D3;
+  --diff-del-fg: #A3510A;
+}
+
+.dark[data-diff-palette="cb"],
+.dark [data-diff-palette="cb"] {
+  --diff-add-bg: #0F1B2E;
+  --diff-add-word: #1A3558;
+  --diff-add-gutter: #15284A;
+  --diff-add-fg: #60A5FA;
+  --diff-del-bg: #2A1A0C;
+  --diff-del-word: #4A2C10;
+  --diff-del-gutter: #3A230D;
+  --diff-del-fg: #FDBA74;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Tailwind v4 theme mapping                                          */
+/* ------------------------------------------------------------------ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-diff-add-bg: var(--diff-add-bg);
+  --color-diff-add-word: var(--diff-add-word);
+  --color-diff-add-gutter: var(--diff-add-gutter);
+  --color-diff-add-fg: var(--diff-add-fg);
+  --color-diff-del-bg: var(--diff-del-bg);
+  --color-diff-del-word: var(--diff-del-word);
+  --color-diff-del-gutter: var(--diff-del-gutter);
+  --color-diff-del-fg: var(--diff-del-fg);
+  --color-diff-mod-fg: var(--diff-mod-fg);
+  --color-diff-hunk-bg: var(--diff-hunk-bg);
+  --color-diff-hunk-fg: var(--diff-hunk-fg);
+  --color-diff-gutter-bg: var(--diff-gutter-bg);
+  --color-diff-gutter-fg: var(--diff-gutter-fg);
+  --color-thread-bg: var(--thread-bg);
+  --color-thread-border: var(--thread-border);
+  --color-thread-marker: var(--thread-marker);
+  --color-suggestion-bg: var(--suggestion-bg);
+  --color-review-approved: var(--review-approved);
+  --color-review-approved-bg: var(--review-approved-bg);
+  --color-review-changes: var(--review-changes);
+  --color-review-changes-bg: var(--review-changes-bg);
+  --color-review-pending: var(--review-pending);
+  --color-review-pending-bg: var(--review-pending-bg);
+  --color-review-commented: var(--review-commented);
+  --color-review-commented-bg: var(--review-commented-bg);
+  --color-ci-success: var(--ci-success);
+  --color-ci-failure: var(--ci-failure);
+  --color-ci-running: var(--ci-running);
+  --color-ci-running-bg: var(--ci-running-bg);
+  --color-ci-queued: var(--ci-queued);
+  --color-ci-skipped: var(--ci-skipped);
+  --color-severity-blocker: var(--severity-blocker);
+  --color-severity-major: var(--severity-major);
+  --color-severity-major-bg: var(--severity-major-bg);
+  --color-severity-minor: var(--severity-minor);
+  --color-severity-nit: var(--severity-nit);
+  --color-severity-info: var(--severity-info);
+  --color-syntax-keyword: var(--syntax-keyword);
+  --color-syntax-string: var(--syntax-string);
+  --color-syntax-function: var(--syntax-function);
+  --color-syntax-comment: var(--syntax-comment);
+  --color-syntax-number: var(--syntax-number);
+
+  --font-sans: var(--hunk-font-sans);
+  --font-mono: var(--hunk-font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px); /* 4px: badges, kbd, word highlight */
+  --radius-md: calc(var(--radius) - 2px); /* 6px: buttons, inputs, tree rows */
+  --radius-lg: var(--radius);             /* 8px: cards, threads, file containers */
+  --radius-xl: calc(var(--radius) + 4px); /* 12px: dialogs, popovers, command palette */
+
+  --text-title: 1.25rem;          --text-title--line-height: 1.75rem;      /* 20/28 */
+  --text-heading: 1rem;           --text-heading--line-height: 1.5rem;     /* 16/24 */
+  --text-body: 0.875rem;          --text-body--line-height: 1.375rem;      /* 14/22 */
+  --text-ui: 0.8125rem;           --text-ui--line-height: 1.25rem;         /* 13/20 */
+  --text-caption: 0.75rem;        --text-caption--line-height: 1rem;       /* 12/16 */
+  --text-code: 0.8125rem;         --text-code--line-height: 1.25rem;       /* 13/20 */
+  --text-code-compact: 0.75rem;   --text-code-compact--line-height: 1.125rem; /* 12/18 */
+  --text-code-comfy: 0.875rem;    --text-code-comfy--line-height: 1.375rem;   /* 14/22 */
+  --text-kbd: 0.6875rem;          --text-kbd--line-height: 1rem;           /* 11/16 */
+
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+
+  --ease-standard: var(--motion-ease);
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                               */
+/* ------------------------------------------------------------------ */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-ui antialiased;
+  }
+  code, kbd, pre, samp {
+    @apply font-mono;
+    font-variant-ligatures: none; /* show => and !== exactly as typed */
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}

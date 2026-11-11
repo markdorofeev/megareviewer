@@ -77,7 +77,7 @@ flowchart LR
 |---|---|---|
 | CLI | Checks credentials, starts the server, opens the browser | Node 22.13+, TypeScript |
 | Local server | Serves the UI and the API, runs the analysis pipeline, holds all credentials | Hono |
-| Web UI | PR picker, review page, publishing | Vite, React, Shiki |
+| Web UI | PR picker, review page, publishing | Vite, React, Tailwind CSS, Shiki |
 | Connectors | Git hosts, tickets, model calls, the local checkout | Octokit, Bitbucket REST, Jira REST, `@anthropic-ai/sdk`, the `git` command |
 | Code analysis | Parse changed files for mechanical proofs and call-graph hints | `web-tree-sitter` |
 | Store | Cached analyses and review state | SQLite via built-in `node:sqlite`, plain SQL migrations |
@@ -221,6 +221,10 @@ The page opens on the code because the intro in front of it, an intent panel and
 **Publish.** Sends the review to the PR's host with a verdict (approve or request changes). Rejected decisions and comments become inline comments on their hunks, and comments the reviewer wrote on hunk lines go on those lines. Without decisions, the reviewer picks the verdict. The user confirms before anything is posted. Publish is offered only when there's something to post: a decision, a comment on a hunk line, or a verdict the reviewer can give. The author can't give one, so on their own PR without the model and without comments it isn't shown: it would post only a line saying the PR was reviewed.
 
 Comments on hunk lines are drafts in the browser's local storage until they're sent with the publish request, which checks that each is on a line the diff shows. A `hunk_comments` table with its own routes was the plan; the drafts belong to one reviewer in one browser, and the posted-comment records already make publishing safe to retry.
+
+**Design system.** The UI is moving to Indigo Calm: Tailwind CSS v4 utilities over its tokens, in `web/src/styles/globals.css`, kept as the design handed it over, with Geist and Geist Mono served from the package. It has a light and a dark theme, and a diff palette safe for color blindness, blue and orange for green and red, chosen apart from the theme; both are kept per browser, and `web/public/theme.js` sets them before the first paint. That's a file rather than an inline script because the server's CSP allows scripts from `'self'` only. Tailwind and its native compiler are build tools, so the package still installs with no dependencies.
+
+The new system runs beside the old one until the review page moves over: its own page, `/design-system.html`, served by `pnpm dev:web` and left out of builds, so Tailwind's preflight can't change the current page. Mapping Indigo Calm's values onto the plain CSS tokens was the alternative, smaller and with no new dependencies; Tailwind was chosen to take the design system whole, with its components and contrast check, instead of keeping a translation of it.
 
 ## Storage
 
