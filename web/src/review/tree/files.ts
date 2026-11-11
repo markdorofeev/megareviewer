@@ -9,6 +9,8 @@ export interface FileEntry {
   readonly deletions: number;
   /** Contract parts in the file. */
   readonly contract: number;
+  /** Unresolved review threads on the file. */
+  readonly threads?: number;
 }
 
 export type FileOrder = "path" | "size";

@@ -7,27 +7,35 @@ import type {
   PartId,
   UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
-import type { RiskAssessment } from "../../../../src/domain/review/index.ts";
+import type { RiskAssessment, Severity } from "../../../../src/domain/review/index.ts";
 import { RISK_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
+import { Toggle } from "../../ui/toggle.tsx";
 import { DiffLine } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { hunkLocation, lineCounts } from "./lines.ts";
 import { viewLines } from "./rows.ts";
 import { useHunkTokens, useNearViewport } from "./syntax.ts";
 
-/** Where a comment on a hunk goes: a head-side ("new") or base-side ("old") line. */
+/**
+ * Where a comment on a hunk goes: a head-side ("new") or base-side ("old") line, or the lines from
+ * `startLine` to `line`.
+ */
 export interface LinePlace {
   readonly side: "new" | "old";
   readonly line: number;
+  readonly startLine?: number;
 }
 
-/** A comment the reviewer is writing on one line of this hunk. */
+/** A comment the reviewer is writing on lines of this hunk. */
 export interface LineComment extends LinePlace {
   readonly body: string;
+  readonly severity?: Severity;
+  /** The lines that replace the commented ones. */
+  readonly suggestion?: readonly string[];
 }
 
 /** Comments go on a deleted line's old number, and on any other line's new one. */
@@ -59,7 +67,25 @@ export interface HunkItem {
 const samePlace = (a: LinePlace, b: LinePlace) => a.side === b.side && a.line === b.line;
 
 const placeLabel = (place: LinePlace) =>
-  `Comment on ${place.side === "old" ? "old " : ""}line ${place.line}`;
+  place.startLine === undefined
+    ? `Comment on ${place.side === "old" ? "old " : ""}line ${place.line}`
+    : `Comment on ${place.side === "old" ? "old " : ""}lines ${place.startLine}–${place.line}`;
+
+/** The new-side text of lines `start` to `end` that a hunk shows, or null if it misses one. */
+const linesShown = (hunk: Hunk, start: number, end: number): readonly string[] | null => {
+  const texts = new Map(
+    hunk.lines.flatMap((line) =>
+      line.kind !== "del" && line.newLine !== null ? [[line.newLine, line.text] as const] : [],
+    ),
+  );
+  const lines: string[] = [];
+  for (let at = start; at <= end; at += 1) {
+    const text = texts.get(at);
+    if (text === undefined) return null;
+    lines.push(text);
+  }
+  return lines;
+};
 
 export interface HunkCardProps {
   /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
@@ -85,6 +111,10 @@ export interface HunkCardProps {
   readonly onComment?: (id: PartId, comment: LineComment) => void;
   /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
   readonly afterHeader?: ReactNode;
+  /** The host's threads on a line, shown under it. */
+  readonly threadsAt?: (place: LinePlace) => ReactNode;
+  /** Said in the comment box when a range is chosen, e.g. that a host can't anchor one. */
+  readonly rangeNote?: string;
   /**
    * One of several parts on a file's card, which names the file and counts its contract parts:
    * the header shows only a proof, and the part shows no risk of its own.
@@ -109,6 +139,8 @@ export const HunkCard = memo(function HunkCard({
   onOpenComment,
   onComment,
   afterHeader,
+  threadsAt,
+  rangeNote,
   inFile = false,
 }: HunkCardProps) {
   const id = givenId ?? hunk.id;
@@ -213,6 +245,8 @@ export const HunkCard = memo(function HunkCard({
             const comment =
               place === null ? undefined : comments.find((one) => samePlace(one, place));
             const open = place !== null && openComment !== null && samePlace(openComment, place);
+            const commentAt = open ? openComment : comment;
+            const threads = place === null ? null : (threadsAt?.(place) ?? null);
             return (
               <Fragment key={line.key}>
                 <DiffLine
@@ -224,23 +258,63 @@ export const HunkCard = memo(function HunkCard({
                       : {
                           side: place.side,
                           label: placeLabel(place),
-                          onClick: () => onOpenComment?.(id, place),
+                          onClick: (event) => {
+                            // ⇧-click extends the open comment into a range on the same side.
+                            const from = openComment;
+                            if (
+                              event.shiftKey &&
+                              from !== null &&
+                              from.side === place.side &&
+                              from.line !== place.line
+                            ) {
+                              const first = Math.min(from.startLine ?? from.line, place.line);
+                              const last = Math.max(from.line, place.line);
+                              onOpenComment?.(id, {
+                                side: place.side,
+                                line: last,
+                                startLine: first,
+                              });
+                              return;
+                            }
+                            onOpenComment?.(id, place);
+                          },
                         }
                   }
                 />
-                {place !== null && (comment !== undefined || open) && (
+                {place !== null && commentAt != null && (comment !== undefined || open) && (
                   <CommentRow
-                    place={place}
-                    body={comment?.body ?? ""}
+                    place={commentAt}
+                    comment={comment}
                     focus={open}
+                    shown={(start, end) => linesShown(hunk, start, end)}
+                    rangeNote={rangeNote}
                     onChange={
                       onComment === undefined
                         ? undefined
-                        : (body) => onComment(id, { ...place, body })
+                        : (next) =>
+                            onComment(id, {
+                              side: commentAt.side,
+                              line: commentAt.line,
+                              ...(commentAt.startLine === undefined
+                                ? {}
+                                : { startLine: commentAt.startLine }),
+                              ...next,
+                            })
                     }
                     onDone={() => onOpenComment?.(id, null)}
                     pinned={inFile}
                   />
+                )}
+                {threads !== null && (
+                  <div
+                    role="row"
+                    data-slot="line-threads"
+                    className={cn("px-3 py-2 font-sans", inFile && PINNED)}
+                  >
+                    <div role="cell" className="flex max-w-3xl flex-col gap-2">
+                      {threads}
+                    </div>
+                  </div>
                 )}
               </Fragment>
             );
@@ -258,19 +332,33 @@ export const HunkCard = memo(function HunkCard({
   );
 });
 
-/** The comment box under a line: a draft saved as it's typed, removed when emptied. */
+const SEVERITIES: readonly Severity[] = ["minor", "major", "blocking"];
+
+/** What the comment box edits: the text, its severity and its suggested lines. */
+type CommentDraft = Pick<LineComment, "body" | "severity" | "suggestion">;
+
+/**
+ * The comment box under a line: a draft saved as it's typed, removed when emptied. It picks a
+ * severity, none by default, and on head-side lines can suggest a change, starting from the lines
+ * it's on.
+ */
 const CommentRow = ({
   place,
-  body,
+  comment,
   focus,
+  shown,
+  rangeNote,
   onChange,
   onDone,
   pinned,
 }: {
   readonly place: LinePlace;
-  readonly body: string;
+  readonly comment: LineComment | undefined;
   readonly focus: boolean;
-  readonly onChange?: (body: string) => void;
+  /** The text of head-side lines the hunk shows, to start a suggestion from. */
+  readonly shown: (start: number, end: number) => readonly string[] | null;
+  readonly rangeNote: string | undefined;
+  readonly onChange?: (draft: CommentDraft) => void;
   readonly onDone: () => void;
   /** On a file's card, where the lines scroll sideways and the box stays in view. */
   readonly pinned: boolean;
@@ -280,6 +368,16 @@ const CommentRow = ({
     if (focus) field.current?.focus();
   }, [focus]);
   const label = placeLabel(place);
+  const body = comment?.body ?? "";
+  const severity = comment?.severity;
+  const suggestion = comment?.suggestion;
+  const draft: CommentDraft = {
+    body,
+    ...(severity === undefined ? {} : { severity }),
+    ...(suggestion === undefined ? {} : { suggestion }),
+  };
+  const startingLines =
+    place.side === "new" ? shown(place.startLine ?? place.line, place.line) : null;
   return (
     <div
       role="row"
@@ -288,31 +386,85 @@ const CommentRow = ({
         "border-y border-l-3 border-l-review-pending bg-thread-bg px-3 py-2 font-sans",
         pinned && PINNED,
       )}
+      // The box closes when the focus leaves it, not when it moves between its own controls.
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) onDone();
+      }}
     >
-      <div role="cell">
+      <div role="cell" className="flex max-w-3xl flex-col gap-2">
         {onChange === undefined ? (
           <p className="text-body whitespace-pre-wrap">
             <span className="sr-only">{label}: </span>
+            {severity !== undefined && <span className="font-medium">{severity}: </span>}
             {body}
           </p>
         ) : (
-          <Textarea
-            ref={field}
-            rows={2}
-            aria-label={label}
-            placeholder="What should change here?"
-            value={body}
-            onChange={(event) => onChange(event.target.value)}
-            onBlur={onDone}
-            onKeyDown={(event) => {
-              // Esc leaves the box without leaving the page's view.
-              if (event.key === "Escape") {
-                event.stopPropagation();
-                field.current?.blur();
-              }
-            }}
-            className="min-h-14 max-w-3xl bg-background"
-          />
+          <>
+            {place.startLine !== undefined && (
+              <p className="text-caption text-muted-foreground">
+                Lines {place.startLine}–{place.line}
+                {rangeNote === undefined ? "" : `. ${rangeNote}`}
+              </p>
+            )}
+            <Textarea
+              ref={field}
+              rows={2}
+              aria-label={label}
+              placeholder="What should change here?"
+              value={body}
+              onChange={(event) => onChange({ ...draft, body: event.target.value })}
+              onKeyDown={(event) => {
+                // Esc leaves the box without leaving the page's view.
+                if (event.key === "Escape") {
+                  event.stopPropagation();
+                  field.current?.blur();
+                }
+              }}
+              className="min-h-14 bg-background"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <fieldset className="flex items-center gap-1">
+                <legend className="sr-only">Severity</legend>
+                {SEVERITIES.map((level) => (
+                  <Toggle
+                    key={level}
+                    variant="outline"
+                    size="sm"
+                    pressed={severity === level}
+                    onPressedChange={(pressed) => {
+                      const { severity: _, ...rest } = draft;
+                      onChange(pressed ? { ...rest, severity: level } : rest);
+                    }}
+                  >
+                    {level}
+                  </Toggle>
+                ))}
+              </fieldset>
+              {place.side === "new" && (
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={suggestion !== undefined}
+                  onPressedChange={(pressed) => {
+                    const { suggestion: _, ...rest } = draft;
+                    onChange(pressed ? { ...rest, suggestion: startingLines ?? [""] } : rest);
+                  }}
+                >
+                  Suggest a change
+                </Toggle>
+              )}
+            </div>
+            {suggestion !== undefined && (
+              <Textarea
+                aria-label="Suggested lines"
+                value={suggestion.join("\n")}
+                onChange={(event) =>
+                  onChange({ ...draft, suggestion: event.target.value.split("\n") })
+                }
+                className="min-h-14 bg-background font-mono text-code-compact"
+              />
+            )}
+          </>
         )}
       </div>
     </div>

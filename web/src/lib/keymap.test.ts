@@ -55,6 +55,15 @@ describe("shortcutFor", () => {
     expect(shortcutFor(press("Escape"), ALL, off)).toBe("close");
   });
 
+  it("gives r to a thread and to a decision, each in its own scope", () => {
+    expect(shortcutFor(press("r"), ["replyThread", "resolveThread", "addToBatch"], ON)).toBe(
+      "replyThread",
+    );
+    expect(shortcutFor(press("r"), ["rejectDecision"], ON)).toBe("rejectDecision");
+    expect(shortcutFor(press("e"), ALL, ON)).toBe("resolveThread");
+    expect(shortcutFor(press("b"), ALL, ON)).toBe("addToBatch");
+  });
+
   it("only runs the shortcuts asked for", () => {
     expect(shortcutFor(press("n"), ["help"], ON)).toBeNull();
   });

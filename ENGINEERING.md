@@ -33,6 +33,9 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Unchanged caller | Code outside the PR that calls a definition the PR changes, or names it as a type. Read from a checkout |
 | Analysis | All of the above for one PR at one head SHA and pipeline version |
 | Publication | The review sent back to the git host |
+| Review thread | A conversation the host keeps on lines of a file: its comments, whether it's resolved or outdated. Read live, never part of an analysis |
+| Severity | How much a comment matters: *minor*, *major* or *blocking*, carried in its body |
+| Suggestion | The lines a comment proposes in place of the ones it's on; applied suggestions become one commit on the PR's branch |
 
 ### Bounded contexts
 

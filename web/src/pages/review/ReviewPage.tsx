@@ -7,6 +7,7 @@ import {
   type DecisionId,
   HunkComment,
   pullRequestUrl,
+  type ReviewThread,
 } from "../../../../src/domain/review/index.ts";
 import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from "../../api/index.ts";
 import { Link } from "../../app/Link.tsx";
@@ -21,11 +22,16 @@ import {
   KeyHint,
   type LineComment,
   type LinePlace,
+  languageOf,
+  ReviewThreadView,
   ShortcutsDialog,
   TreeSkeleton,
+  threadPlace,
+  WARNING,
 } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
+import { ApplyDialog } from "./ApplyDialog.tsx";
 import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
@@ -54,9 +60,19 @@ import { parseRailForm, Rail } from "./Rail.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { Segmented } from "./Segmented.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
-import { useStoredState } from "./storage.ts";
+import { parseStrings, useStoredState } from "./storage.ts";
+import {
+  applyLabel,
+  type BatchEntry,
+  batchProblem,
+  coveredLines,
+  placeKey,
+  placeThreads,
+  suggestionsIn,
+} from "./threads.ts";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
+import { useThreads } from "./useThreads.ts";
 import { useVerdicts } from "./useVerdicts.ts";
 
 const NO_COMMENTS: readonly HunkComment[] = [];
@@ -143,6 +159,9 @@ const PAGE_SHORTCUTS: readonly ShortcutId[] = [
   "openFile",
   "approveDecision",
   "rejectDecision",
+  "replyThread",
+  "resolveThread",
+  "addToBatch",
   "toggleLayout",
   "openReview",
   "close",
@@ -191,6 +210,13 @@ const CheckoutNote = ({ analysis }: { readonly analysis: AnalysisView["analysis"
 };
 
 const NO_UNCHANGED: readonly UnchangedCallers[] = [];
+const NO_IDS: readonly string[] = [];
+
+/** Bitbucket can't anchor a comment on a range of lines. */
+const RANGE_NOTES = {
+  github: undefined,
+  bitbucket: "Bitbucket can't anchor a range, so the comment goes on the last line and names them.",
+} as const;
 
 // A number per analysis object, so a hunk's signature changes when the analysis does.
 const epochs = new WeakMap<object, number>();
@@ -317,20 +343,126 @@ const Review = ({
         const same = (other: HunkComment) =>
           other.hunkId === hunkId && other.side === comment.side && other.line === comment.line;
         const written = { hunkId, ...comment };
-        if (!previous.some(same)) return comment.body === "" ? previous : [...previous, written];
-        return comment.body === ""
+        // A draft with nothing in it is removed; a severity or a suggestion is something.
+        const empty =
+          comment.body === "" && comment.severity === undefined && comment.suggestion === undefined;
+        if (!previous.some(same)) return empty ? previous : [...previous, written];
+        return empty
           ? previous.filter((other) => !same(other))
           : previous.map((other) => (same(other) ? written : other));
       }),
     [setHunkComments],
   );
   const openCommentOn = useCallback(
-    (partId: PartId, place: LinePlace | null) =>
-      setOpenComment(place === null ? null : { partId, place }),
-    [],
+    (partId: PartId, place: LinePlace | null) => {
+      setOpenComment((previous) => {
+        // Extending a comment into a range takes its draft along to the range's last line.
+        if (place?.startLine !== undefined && previous !== null && previous.partId === partId) {
+          const hunkId = hunkIdOf(partId);
+          const from = previous.place;
+          setHunkComments((comments) =>
+            comments.map((comment) =>
+              comment.hunkId === hunkId && comment.side === from.side && comment.line === from.line
+                ? { ...comment, line: place.line, startLine: place.startLine }
+                : comment,
+            ),
+          );
+        }
+        return place === null ? null : { partId, place };
+      });
+    },
+    [setHunkComments],
   );
 
   const verdicts = useVerdicts(analysisId, view.verdicts);
+
+  // The host's conversation on the code, read live, beside the analysis.
+  const threads = useThreads(analysisId, analysis.stages.prep === "done");
+  const placement = useMemo(
+    () => placeThreads(threads.list?.threads ?? null, files, index),
+    [threads.list, files, index],
+  );
+  const suggestions = useMemo(() => suggestionsIn(threads.list?.threads ?? null), [threads.list]);
+  const [batchIds, setBatchIds] = useStoredState(
+    `suggestion-batch:${analysisId}`,
+    NO_IDS,
+    parseStrings,
+  );
+  // A suggestion applied or gone since leaves the batch.
+  const batch = useMemo(
+    () => batchIds.flatMap((id) => suggestions.get(id) ?? []),
+    [batchIds, suggestions],
+  );
+  const [applying, setApplying] = useState<readonly BatchEntry[] | null>(null);
+  const authorId = analysis.pullRequest?.author.id ?? null;
+  const canApply = threads.list?.canApply === true && complete;
+  const batchState = useMemo(
+    () => ({
+      has: (id: string) => batch.some((entry) => entry.commentId === id),
+      problem: (id: string) => batchProblem(suggestions.get(id), batch),
+    }),
+    [batch, suggestions],
+  );
+  const coveredOf = (entry: BatchEntry): readonly string[] | null => {
+    const group = files.find((one) => one.file.path === entry.path);
+    for (const id of group?.partIds ?? []) {
+      const hunk = index.parts.get(id)?.hunk;
+      const lines = hunk === undefined ? null : coveredLines(hunk, entry.start, entry.end);
+      if (lines !== null) return lines;
+    }
+    return null;
+  };
+  const threadView = (thread: ReviewThread, covered: readonly string[] | null) => (
+    <ReviewThreadView
+      key={thread.id}
+      thread={thread}
+      authorId={authorId}
+      now={Date.now()}
+      language={languageOf({ path: thread.path, language: null })}
+      covered={covered}
+      canApply={canApply}
+      batch={batchState}
+      onReply={(body) => threads.reply(thread.id, body)}
+      onResolve={(resolved) => threads.resolve(thread.id, resolved)}
+      onAddToBatch={(id) => setBatchIds((previous) => [...previous, id])}
+      onRemoveFromBatch={(id) => setBatchIds((previous) => previous.filter((one) => one !== id))}
+      onApply={(id) => {
+        const entry = suggestions.get(id);
+        if (entry !== undefined) setApplying([entry]);
+      }}
+    />
+  );
+  const threadsAt = (id: PartId, place: LinePlace): ReactNode => {
+    const here = placement.onLine.get(id)?.get(placeKey(place));
+    if (here === undefined) return null;
+    const hunk = index.parts.get(id)?.hunk;
+    return here.map((thread) => {
+      const start = thread.startLine ?? place.line;
+      return threadView(
+        thread,
+        hunk === undefined ? null : coveredLines(hunk, Math.min(start, place.line), place.line),
+      );
+    });
+  };
+  const earlierThreads = (path: string): ReactNode => {
+    const earlier = placement.earlier.get(path);
+    if (earlier === undefined) return null;
+    return earlier.map((thread) => (
+      <div key={thread.id} className="flex flex-col gap-1">
+        <span className="text-caption text-muted-foreground">
+          {thread.outdated
+            ? `Was on ${thread.side === "old" ? "old " : ""}line ${thread.originalLine ?? "?"}; the code has changed since`
+            : `On ${threadPlace(thread)}, which the diff doesn't show`}
+        </span>
+        {threadView(thread, null)}
+      </div>
+    ));
+  };
+  const openThreads = (path: string) => placement.open.get(path) ?? 0;
+  const treeWithThreads = useMemo(
+    () => treeFiles.map((file) => ({ ...file, threads: placement.open.get(file.path) ?? 0 })),
+    [treeFiles, placement],
+  );
 
   const scrollTo = (id: string) =>
     setScrollRequest((previous) => ({ id, n: (previous?.n ?? 0) + 1 }));
@@ -493,7 +625,7 @@ const Review = ({
       },
       help: () => setShowShortcuts(true),
     },
-    !publishing && !showShortcuts && !showDetails,
+    !publishing && !showShortcuts && !showDetails && applying === null,
   );
 
   const prUrl = analysis.pullRequest?.url ?? pullRequestUrl(analysis.key.ref);
@@ -557,8 +689,12 @@ const Review = ({
       readOnly,
       highlight.has(id),
       openComment?.partId === id ? `${openComment.place.side}${openComment.place.line}` : "",
-      ...commentsOf(id).map((comment) => `${comment.side}${comment.line}${comment.body}`),
+      ...commentsOf(id).map((comment) => JSON.stringify(comment)),
     ];
+    // A part with threads draws again when they or the batch change.
+    if (placement.onLine.has(id)) {
+      parts.push(epochOf(placement), canApply, batchIds.join(","));
+    }
     for (const decision of places.cards.get(id) ?? NO_DECISIONS) {
       const draft = verdicts.draftOf(decision.id);
       parts.push(decision.id, draft.verdict, draft.comment, verdicts.statusOf(decision.id));
@@ -576,6 +712,12 @@ const Review = ({
     onComment: readOnly ? undefined : writeComment,
     onFocusHunk: focusHunk,
     decisionsOn,
+    threadsAt,
+    earlierThreads,
+    openThreads,
+    ...(RANGE_NOTES[analysis.key.ref.repo.host] === undefined
+      ? {}
+      : { rangeNote: RANGE_NOTES[analysis.key.ref.repo.host] }),
   };
   const before = (
     <>
@@ -616,6 +758,11 @@ const Review = ({
         }
         tools={
           <>
+            {batch.length > 0 && canApply && (
+              <Button variant="outline" size="sm" onClick={() => setApplying(batch)}>
+                {applyLabel(batch.length)}
+              </Button>
+            )}
             {layout === "map" && (
               <Button
                 variant="outline"
@@ -684,6 +831,17 @@ const Review = ({
         </div>
       )}
 
+      {threads.error !== null && (
+        <div role="status" className={cn(WARNING, "flex flex-wrap items-center gap-3")}>
+          <span>
+            <span aria-hidden="true">⚠ </span>
+            Couldn't read the comments on the pull request. {errorMessage(threads.error)}
+          </span>
+          <Button variant="outline" size="sm" onClick={threads.reload}>
+            Try again
+          </Button>
+        </div>
+      )}
       {analysis.stages.prep !== "done" ? (
         <section aria-busy={analysis.status === "running"}>
           <p className="text-muted-foreground">
@@ -703,7 +861,7 @@ const Review = ({
           <Rail form={railForm} onForm={(form) => setRailForm(() => form)}>
             {mini === null ? (
               <FileTree
-                files={treeFiles}
+                files={treeWithThreads}
                 activePath={fileInView}
                 neighbors={neighbors}
                 onSelect={(path) => scrollTo(fileAnchor(path))}
@@ -726,6 +884,24 @@ const Review = ({
             files={files}
             deps={deps}
             before={before}
+            after={
+              placement.elsewhere.length > 0 && (
+                <section
+                  aria-label="Comments on other files"
+                  className="flex flex-col gap-2 rounded-lg border bg-surface-subtle p-3"
+                >
+                  <h2 className="text-caption font-medium text-muted-foreground">
+                    Comments on files without a card here
+                  </h2>
+                  {placement.elsewhere.map((thread) => (
+                    <div key={thread.id} className="flex flex-col gap-1">
+                      <span className="font-mono text-code-compact">{thread.path}</span>
+                      {threadView(thread, null)}
+                    </div>
+                  ))}
+                </section>
+              )
+            }
             trailingProofs={trailing}
             mechanicalCount={mechanical}
             scrollRequest={scrollRequest}
@@ -765,6 +941,20 @@ const Review = ({
             setPublishing(false);
             void refetch();
           }}
+        />
+      )}
+      {applying !== null && (
+        <ApplyDialog
+          entries={applying}
+          covered={coveredOf}
+          onApply={threads.apply}
+          onApplied={(ids) => setBatchIds((previous) => previous.filter((id) => !ids.includes(id)))}
+          reanalyzing={reanalyze.pending}
+          onReanalyze={async () => {
+            const result = await reanalyze.run({ url: prUrl });
+            if (result.ok) open(result.value.analysisId);
+          }}
+          onClose={() => setApplying(null)}
         />
       )}
       <ShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} ids={PAGE_SHORTCUTS} />

@@ -1,4 +1,5 @@
 import { type FileChange, parseUnifiedDiff } from "../../../src/domain/diff/index.ts";
+import type { ReviewThread } from "../../../src/domain/review/index.ts";
 import type { FileEntry, PendingComment, PrSummary } from "../review/index.ts";
 
 // Made-up data for the preview: an example repository, PR and people, none of them real.
@@ -129,3 +130,80 @@ export const PENDING_COMMENTS: readonly PendingComment[] = [
     excerpt: "Why stop treating AbortError as a network error?",
   },
 ];
+
+const sam = { id: "sam-example", name: "Sam Example" };
+const dana = { id: "dana-kim", name: "Dana Kim" };
+const thread = (fields: Partial<ReviewThread>): ReviewThread => ({
+  id: "PRRT_demo",
+  path: "src/http/retry.ts",
+  side: "new",
+  line: 16,
+  startLine: null,
+  originalLine: 16,
+  resolved: false,
+  resolvedBy: null,
+  outdated: false,
+  can: { reply: true, resolve: true },
+  comments: [],
+  ...fields,
+});
+
+/** One thread in each state the review page shows. */
+export const THREADS = {
+  open: thread({
+    comments: [
+      {
+        id: "c_open1",
+        author: sam,
+        body: "**major:** Five attempts at `1, 2, 4, 8 s` is 15 s before failing.\n\nCheckout times out at 10 s:\n\n```ts\nconst CHECKOUT_TIMEOUT_MS = 10_000;\n```",
+        createdAt: "2026-10-21T09:40:00Z",
+        originalCommit: null,
+      },
+      {
+        id: "c_open2",
+        author: dana,
+        body: "Good catch. I'll cap the total at 8 s.",
+        createdAt: "2026-10-21T09:52:00Z",
+        originalCommit: null,
+      },
+    ],
+  }),
+  resolved: thread({
+    resolved: true,
+    resolvedBy: dana,
+    comments: [
+      {
+        id: "c_resolved1",
+        author: sam,
+        body: "**minor:** Does this need to be exported?",
+        createdAt: "2026-10-20T15:00:00Z",
+        originalCommit: null,
+      },
+    ],
+  }),
+  outdated: thread({
+    outdated: true,
+    line: null,
+    originalLine: 12,
+    comments: [
+      {
+        id: "c_outdated1",
+        author: sam,
+        body: "**blocking:** AbortError isn't a network error; don't retry it.",
+        createdAt: "2026-10-19T11:00:00Z",
+        originalCommit: null,
+      },
+    ],
+  }),
+  suggestion: thread({
+    comments: [
+      {
+        id: "c_suggestion1",
+        author: sam,
+        body: "Name what it counts:\n\n```suggestion\nconst MAX_ATTEMPTS = 3;\n```",
+        createdAt: "2026-10-21T08:00:00Z",
+        originalCommit: null,
+      },
+    ],
+  }),
+} as const satisfies Record<string, ReviewThread>;

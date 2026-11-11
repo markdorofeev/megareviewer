@@ -125,7 +125,7 @@ export interface DiffLineProps {
   readonly numberButton?: {
     readonly side: "old" | "new";
     readonly label: string;
-    readonly onClick: () => void;
+    readonly onClick: (event: MouseEvent<HTMLButtonElement>) => void;
   };
 }
 

@@ -1,4 +1,4 @@
-import { ChevronDownIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import { ChevronDownIcon, FolderIcon, FolderOpenIcon, MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShortcuts } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
@@ -218,6 +218,15 @@ export const ContractCount = ({ count }: { readonly count: number }) => (
   </span>
 );
 
+/** A file's unresolved review threads: a speech bubble and a count, said in words to readers. */
+export const ThreadCount = ({ count }: { readonly count: number }) => (
+  <span data-slot="thread-count" className="tabular inline-flex items-center gap-0.5 text-caption">
+    <MessageSquare aria-hidden="true" className="size-3" />
+    {count}
+    <span className="sr-only"> open {count === 1 ? "thread" : "threads"}</span>
+  </span>
+);
+
 /**
  * A file's row: an arrow saying how it relates to the active file, its type's icon, its name (its directory muted
  * when the row isn't under it), its status when it isn't modified, its contract parts and its
@@ -279,6 +288,7 @@ export const FileRow = ({
       </span>
       {entry.status !== undefined && <FileStatusChip status={entry.status} />}
       {entry.contract > 0 && <ContractCount count={entry.contract} />}
+      {entry.threads !== undefined && entry.threads > 0 && <ThreadCount count={entry.threads} />}
       {entry.additions !== undefined && entry.deletions !== undefined && (
         <span className="tabular font-mono text-code-compact">
           <span className="text-diff-add-fg">+{entry.additions}</span>{" "}

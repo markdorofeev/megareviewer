@@ -23,6 +23,14 @@ export interface HunkDeps {
   readonly onFocusHunk: (id: PartId) => void;
   /** The decision cards and links that go under a part's divider. */
   readonly decisionsOn: (id: PartId) => ReactNode;
+  /** The host's threads on a line of a part, shown under it. */
+  readonly threadsAt: (id: PartId, place: LinePlace) => ReactNode;
+  /** A file's threads its card can't put on a line, under "Earlier comments". */
+  readonly earlierThreads: (path: string) => ReactNode;
+  /** A file's unresolved threads. */
+  readonly openThreads: (path: string) => number;
+  /** Said when the reviewer picks a range, e.g. that the host can't anchor one. */
+  readonly rangeNote?: string;
 }
 
 export const hunkAnchor = (id: PartId): string => `hunk-${id}`;
@@ -60,6 +68,8 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       onOpenComment={deps.onOpenComment}
       onComment={deps.onComment}
       afterHeader={deps.decisionsOn(id)}
+      threadsAt={(place) => deps.threadsAt(id, place)}
+      {...(deps.rangeNote === undefined ? {} : { rangeNote: deps.rangeNote })}
     />
   );
 };

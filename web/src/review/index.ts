@@ -18,6 +18,7 @@ export {
   type ExpandDirection,
   HunkHeader,
 } from "./diff/hunk-header.tsx";
+export { languageOf } from "./diff/languages.ts";
 export { hunkLocation, lineCounts } from "./diff/lines.ts";
 export {
   FileNotices,
@@ -47,7 +48,18 @@ export { DANGER, WARNING } from "./shell/banners.ts";
 export { DiffSkeleton, EmptyState, TreeSkeleton } from "./shell/empty-state.tsx";
 export { KeyHint } from "./shell/key-hint.tsx";
 export { ShortcutsDialog } from "./shell/shortcuts-dialog.tsx";
-export { ContractCount, FileRow, FileTree } from "./tree/file-tree.tsx";
+export {
+  type BatchState,
+  initialsOf,
+  type ReviewThreadProps,
+  ReviewThreadView,
+  relativeTime,
+  SeverityChip,
+  SuggestionDiff,
+  ThreadBody,
+  threadPlace,
+} from "./thread/index.ts";
+export { ContractCount, FileRow, FileTree, ThreadCount } from "./tree/file-tree.tsx";
 export type { FileEntry } from "./tree/files.ts";
 export {
   byTreePath,

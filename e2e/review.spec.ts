@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { z } from "zod";
-import { expect, PR, publishAttempts, TOKEN, test } from "./fake-server.ts";
+import { expect, PR, publishAttempts, suggestionCommits, TOKEN, test } from "./fake-server.ts";
 
 const SMALL_FEATURE_TITLE = "Add receipt download endpoint";
 
@@ -215,13 +215,58 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
   expect(await publishAttempts(server)).toHaveLength(1);
 });
 
+test("replies, resolves, and applies two suggestions in one commit", async ({ page, server }) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+  const changes = page.getByRole("region", { name: "Changes" });
+
+  const cache = changes.getByRole("article", { name: "Thread on line 4", exact: true });
+  await expect(cache.getByText("major")).toBeVisible();
+  await cache.focus();
+  await page.keyboard.press("r");
+  const reply = cache.getByRole("textbox", { name: "Reply to the thread on line 4" });
+  await expect(reply).toBeFocused();
+  await reply.fill("Capped at 1,000 entries.");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(cache.getByText("Capped at 1,000 entries.")).toBeVisible();
+  await expect(reply).toHaveValue("");
+  await cache.getByRole("button", { name: /^Resolve/ }).click();
+  await expect(
+    changes.getByRole("article", { name: "Thread on line 4, resolved", exact: true }),
+  ).toBeVisible();
+
+  const ttl = changes.getByRole("article", { name: "Thread on line 3", exact: true });
+  await ttl.getByRole("button", { name: /^Add to batch/ }).click();
+  const charset = changes.getByRole("article", { name: "Thread on line 39", exact: true });
+  await charset.getByRole("button", { name: /^Add to batch/ }).click();
+  await page.getByRole("button", { name: "Apply 2 suggestions" }).click();
+  const dialog = page.getByRole("dialog", { name: "Apply 2 suggestions" });
+  await expect(dialog.getByRole("region", { name: "src/services/receipts.ts" })).toBeVisible();
+  await expect(dialog.getByRole("region", { name: "src/routes/orders.ts" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Apply 2 suggestions" }).click();
+  const applied = page.getByRole("dialog", { name: "Suggestions applied" });
+  await expect(applied.getByText(/Committed/)).toBeVisible();
+
+  const commits = await suggestionCommits(server);
+  expect(commits).toHaveLength(1);
+  expect(commits[0]?.headSha).toBe("ec7f8e0489e3011a207691eeef6ad1840f4a9259");
+  expect(commits[0]?.message).toBe("Apply 2 suggestions from code review");
+  expect(commits[0]?.files.map((file) => file.path).sort()).toEqual([
+    "src/routes/orders.ts",
+    "src/services/receipts.ts",
+  ]);
+  // The branch moved, so the page offers the new head.
+  await expect(applied.getByRole("button", { name: "Analyze the new head" })).toBeVisible();
+});
+
 test.describe("without the model", () => {
   test.use({ ai: false });
 
   test("opens a file from the overview and publishes", async ({ page, server }) => {
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
     await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
-    await expect(page.getByRole("article")).toHaveCount(0);
+    // No decisions without the model; the host's threads are still there.
+    await expect(page.locator("[data-slot=decision]")).toHaveCount(0);
+    await expect(page.locator("[data-slot=review-thread]").first()).toBeVisible();
 
     // A click on the route's directory in the overview opens its first file in the map.
     // The rail has its own Tree · Overview switch; this is the page's layout switch.

@@ -13,6 +13,7 @@ import {
   lineCounts,
   MechanicalGroup,
   PINNED,
+  ThreadCount,
 } from "../../review/index.ts";
 import { FoldView, useFileText } from "./FoldView.tsx";
 import { canOpen, type Fold, foldsOf } from "./folds.ts";
@@ -102,6 +103,8 @@ const FileCard = ({
   const contract = contractParts(group, deps.index);
   // A path rule holds for every part of the file, so its reason is said once, here.
   const fileReasons = contract > 0 ? pathReasons(group.file) : [];
+  const openThreads = deps.openThreads(group.file.path);
+  const earlier = deps.earlierThreads(group.file.path);
   const { text, load } = useFileText(analysisId, group.file.path);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const folds = useMemo(
@@ -157,6 +160,11 @@ const FileCard = ({
               {contract} contract ·{" "}
             </span>
           )}
+          {openThreads > 0 && (
+            <span data-slot="count-threads" className="font-medium">
+              <ThreadCount count={openThreads} /> ·{" "}
+            </span>
+          )}
           <span className="font-mono text-code-compact">
             <span className="text-diff-add-fg">+{added}</span>{" "}
             <span className="text-diff-del-fg">−{deleted}</span>
@@ -186,6 +194,16 @@ const FileCard = ({
           {folds.filter((fold) => fold.before === null).map(foldView)}
         </div>
       </div>
+      {earlier !== null && (
+        <section
+          data-slot="earlier-comments"
+          aria-label={`Earlier comments on ${group.file.path}`}
+          className="flex flex-col gap-2 border-t bg-surface-subtle px-3 py-2"
+        >
+          <h3 className="text-caption font-medium text-muted-foreground">Earlier comments</h3>
+          {earlier}
+        </section>
+      )}
     </section>
   );
 };
@@ -196,6 +214,7 @@ export const MapLayout = ({
   files,
   deps,
   before,
+  after,
   trailingProofs,
   mechanicalCount,
   scrollRequest,
@@ -206,6 +225,8 @@ export const MapLayout = ({
   readonly deps: HunkDeps;
   /** Shown before the first file, e.g. decisions on no hunk. */
   readonly before: ReactNode;
+  /** Shown after the last file, e.g. threads on files without a card. */
+  readonly after?: ReactNode;
   readonly trailingProofs: readonly MechanicalProof[];
   readonly mechanicalCount: number;
   readonly scrollRequest: ScrollRequest | null;
@@ -241,6 +262,7 @@ export const MapLayout = ({
           signatureOf={signatureOf}
         />
       ))}
+      {after}
       <div
         id={MECHANICAL_ANCHOR}
         className="flex scroll-mt-2 flex-col gap-4 -outline-offset-2"

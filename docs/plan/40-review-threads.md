@@ -1,6 +1,6 @@
 # Stage 40: Review threads on the code
 
-**Status:** In progress (on main)
+**Status:** In progress (on main): built and tested on fakes; the live checks in the Definition of done are left
 **Depends on:** 23 (line comments), 36
 **Owns:** A `ReviewThreads` port and its GitHub and Bitbucket adapters, `src/domain/review/thread.ts`, the thread routes in `src/adapters/http/` and `contracts/`, `web/src/review/thread/`, and the thread wiring in `web/src/pages/review/` (`HunkView.tsx`, `ReviewPage.tsx`)
 
@@ -82,10 +82,10 @@ A fork's PR branch lives in the fork. The adapter pushes to the source repositor
 
 ## Definition of done
 
-- [ ] `pnpm check` passes, including `pnpm check:contrast` for the thread border, the chips and the suggestion diff.
+- [x] `pnpm check` passes, including `pnpm check:contrast` for the thread border, the chips and the suggestion diff.
 - [ ] On delphi-code #2, with comments left on GitHub by hand, every thread shows on its line or under "Earlier comments", and replying and resolving show up on GitHub.
 - [ ] Applying a batch on a scratch PR makes one commit on GitHub and one on Bitbucket.
-- [ ] ARCHITECTURE.md: the host table gets the thread rows; Publish says replies post at once; and the decisions above are recorded with the alternatives rejected.
+- [x] ARCHITECTURE.md: the host table gets the thread rows; Publish says replies post at once; and the decisions above are recorded with the alternatives rejected.
 
 ## Open issues
 
@@ -94,4 +94,13 @@ A fork's PR branch lives in the fork. The adapter pushes to the source repositor
 
 ## Notes for later stages
 
-_None yet._
+- **GitHub replies use GraphQL.** `addPullRequestReviewThreadReply` takes the thread's node ID, so replying needs no lookup of the first comment's REST ID. Resolving was GraphQL already.
+- **`viewerCanUpdate` is per PR,** so every thread of a PR has the same say on applying. Bitbucket's `canApply` reads the permission on the PR's own repository, not a fork's; for a fork's PR the host decides when the commit is made.
+- **The removed side of a suggestion comes from the diff's lines,** not from `file_contents`: the page has the lines it shows, and a suggestion is almost always on them. When a part doesn't show every covered line, only the suggestion's lines are drawn. Applying reads `file_contents` as planned.
+- **A file keeps its mode:** the GitHub adapter reads the head tree's entries for the changed files' directories in one GraphQL query, so an executable stays one.
+- **`[` and `]` between threads aren't built.** Waiting for reviewers to ask for them, as the task said.
+- **A range isn't highlighted on its lines;** the comment box says "Lines 31–33". ⇧-click on a second line number of the same side makes the range, on the map's own cards rather than the diff viewer's grid, which the page doesn't use.
+- **The composer's controls are in the line comment box** (`CommentRow` in `hunk-card.tsx`): it closes when the focus leaves the box, no longer when it leaves the text field, so Tab reaches the severity and the suggestion toggle.
+- **Fixtures are synthetic** (`threads.synthetic.ts` in each adapter's fixtures), built from the adapters' own query strings so GraphQL bodies match. The open issues above still stand: Bitbucket's suggestion format, `/resolve` and `resolution`, and `inline.outdated` need a recorded response.
+- **The fake app and the mock API have threads:** small-feature (`smallFeatureThreads`) on the fake hosts, and `web/dev/fixtures/threads.ts` for `pnpm dev:web:mock`. `GET /__fake/commits` lists the commits the fake hosts made.
+- **Left from the Definition of done:** threads on delphi-code #2 with comments left on GitHub by hand, and a batch applied on a scratch PR on GitHub and on Bitbucket. Both write to real repositories, so they wait for the owner.

@@ -148,6 +148,80 @@ describe("HunkCard", () => {
     expect(screen.getByRole("button", { name: "Comment on line 14" })).toBeTruthy();
   });
 
+  it("extends the open comment into a range with ⇧-click on the same side", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    renderWith(
+      <Cards
+        cards={[second]}
+        openComment={{ side: "new", line: 40 }}
+        onOpenComment={onOpenComment}
+        onComment={vi.fn()}
+      />,
+    );
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByRole("button", { name: "Comment on line 42" }));
+    await user.keyboard("{/Shift}");
+    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, {
+      side: "new",
+      line: 42,
+      startLine: 40,
+    });
+  });
+
+  it("gives the comment box a severity and a suggestion that starts from its lines", async () => {
+    const user = userEvent.setup();
+    const onComment = vi.fn();
+    const comment = { side: "new" as const, line: 42, startLine: 40, body: "Simplify" };
+    const { rerender } = renderWith(
+      <Cards
+        cards={[second]}
+        comments={[comment]}
+        openComment={comment}
+        onOpenComment={vi.fn()}
+        onComment={onComment}
+      />,
+    );
+    expect(screen.getByText("Lines 40–42")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "major" }));
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { ...comment, severity: "major" });
+    await user.click(screen.getByRole("button", { name: "Suggest a change" }));
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, {
+      ...comment,
+      suggestion: ["a", "b", "c"],
+    });
+    rerender(
+      <HighlighterContext.Provider value={pendingHighlighter()}>
+        <Cards
+          cards={[second]}
+          comments={[{ ...comment, severity: "minor", suggestion: ["a"] }]}
+          openComment={comment}
+          onOpenComment={vi.fn()}
+          onComment={onComment}
+          rangeNote="Bitbucket can't anchor a range."
+        />
+      </HighlighterContext.Provider>,
+    );
+    expect(screen.getByText(/Bitbucket can't anchor a range/)).toBeTruthy();
+    expect(
+      (screen.getByRole("textbox", { name: "Suggested lines" }) as HTMLTextAreaElement).value,
+    ).toBe("a");
+    await user.click(screen.getByRole("button", { name: "minor" }));
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { ...comment, suggestion: ["a"] });
+  });
+
+  it("puts the host's threads under the line they're on", () => {
+    renderWith(
+      <Cards
+        cards={[second]}
+        threadsAt={(place) => (place.line === 41 ? <p>A thread</p> : null)}
+      />,
+    );
+    const rows = screen.getAllByRole("row");
+    const at = rows.findIndex((row) => row.textContent === "A thread");
+    expect(rows[at - 1]?.textContent).toContain("b");
+  });
+
   it("swaps in syntax tokens when they're ready", async () => {
     const highlighter: Highlighter = {
       highlight: async (code) => code.split("\n").map((text) => [{ text, type: "keyword" }]),

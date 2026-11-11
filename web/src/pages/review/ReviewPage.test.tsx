@@ -1098,7 +1098,8 @@ describe("comments on hunks", () => {
     expect(document.activeElement).toBe(field);
     await userEvent.type(field, "x");
     await userEvent.clear(field);
-    await userEvent.tab();
+    // Tab moves to the box's severity; Esc leaves the box.
+    await userEvent.keyboard("{Escape}");
     expect(within(mainArea()).queryByRole("textbox", { name: /^Comment on/ })).toBeNull();
     expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");
   });
@@ -1297,5 +1298,56 @@ describe("outside the pull request", () => {
     renderReview();
     await loaded();
     expect((await openDetails()).querySelector("[data-slot=checkout-note]")).toBeNull();
+  });
+});
+
+describe("review threads", () => {
+  it("puts threads under their lines, the others under Earlier comments, and counts open ones", async () => {
+    renderReview();
+    await loaded();
+    const onLine = await within(mainArea()).findByRole("article", { name: "Thread on line 29" });
+    expect(onLine.closest("[data-slot=line-threads]")).not.toBeNull();
+    const earlier = within(mainArea()).getByRole("region", {
+      name: "Earlier comments on src/routes/orders.ts",
+    });
+    expect(earlier.textContent).toContain("Was on line 58; the code has changed since");
+    expect(within(earlier).getByRole("article").dataset.state).toBe("outdated");
+    const elsewhere = within(mainArea()).getByRole("region", { name: "Comments on other files" });
+    expect(elsewhere.textContent).toContain("src/lib/money.ts");
+    const card = mainArea().querySelector(
+      '[data-slot=file-card][data-path="src/services/receipts.ts"]',
+    );
+    expect(card?.querySelector("[data-slot=count-threads]")?.textContent).toContain(
+      "2 open threads",
+    );
+  });
+
+  it("warns when the threads can't be read, and keeps the code", async () => {
+    renderReview({
+      respond: (request) =>
+        request.url.endsWith("/threads")
+          ? failure(502, "host-error", "GitHub answered 502")
+          : undefined,
+    });
+    await loaded();
+    const warning = await screen.findByText(/Couldn't read the comments on the pull request/);
+    expect(warning.textContent).toContain("GitHub answered 502");
+    expect(fileCards().length).toBeGreaterThan(0);
+  });
+
+  it("collects a suggestion in the batch and applies it in one commit", async () => {
+    const { requests } = renderReview();
+    await loaded();
+    const thread = await within(mainArea()).findByRole("article", { name: "Thread on line 29" });
+    await userEvent.click(within(thread).getByRole("button", { name: /^Add to batch/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Apply 1 suggestion" }));
+    const dialog = await screen.findByRole("dialog", { name: "Apply 1 suggestion" });
+    expect(dialog.textContent).toContain("src/services/receipts.ts");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Apply 1 suggestion" }));
+    expect(await within(dialog).findByText(/Committed/)).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Analyze the new head" })).toBeTruthy();
+    const apply = requests.find((request) => request.url.endsWith("/suggestions/apply"));
+    expect(apply?.body).toEqual({ commentIds: ["PRRC_attempts1"] });
+    expect(screen.queryByRole("button", { name: "Apply 1 suggestion" })).toBeNull();
   });
 });
