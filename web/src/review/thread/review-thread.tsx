@@ -12,6 +12,7 @@ import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
+import { CommentCard } from "./comment-card.tsx";
 import { initialsOf, relativeTime } from "./people.ts";
 import { SuggestionDiff } from "./suggestion-diff.tsx";
 import { ThreadBody } from "./thread-body.tsx";
@@ -265,20 +266,15 @@ export const ReviewThreadView = ({
   const [first, ...replies] = thread.comments;
   const resolvedBy = thread.resolvedBy?.name;
   return (
-    <article
+    <CommentCard
+      as="article"
+      state={state}
       data-slot="review-thread"
-      data-state={state}
       aria-label={`Thread on ${threadPlace(thread)}${thread.resolved ? ", resolved" : ""}`}
       onKeyDown={onKeyDown}
-      // biome-ignore lint/a11y/noNoninteractiveTabindex: the thread takes the focus for r, e and b.
+      // The thread takes the focus for r, e and b.
       tabIndex={0}
-      className={cn(
-        "rounded-md border border-l-3 bg-thread-bg px-3 font-sans -outline-offset-2",
-        state === "open" && "border-l-thread-marker",
-        state === "resolved" && "border-l-review-approved",
-        state === "outdated" && "border-l-muted-foreground",
-        className,
-      )}
+      className={cn("py-0 -outline-offset-2", className)}
     >
       {!open ? (
         <div className="flex min-h-9 flex-wrap items-center gap-2 py-1">
@@ -388,6 +384,6 @@ export const ReviewThreadView = ({
           )}
         </>
       )}
-    </article>
+    </CommentCard>
   );
 };

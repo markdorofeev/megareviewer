@@ -1,3 +1,4 @@
+export { CommentCard, type CommentState } from "./comment-card.tsx";
 export { initialsOf, relativeTime } from "./people.ts";
 export {
   type BatchState,

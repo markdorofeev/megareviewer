@@ -24,6 +24,7 @@ import { StatusBadge } from "../../ui/status-badge.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { Toggle } from "../../ui/toggle.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
+import { CommentCard } from "../thread/index.ts";
 import { DiffLine } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { hunkLocation, lineCounts } from "./lines.ts";
@@ -410,16 +411,13 @@ const CommentRow = ({
     <div
       role="row"
       data-slot="line-comment"
-      className={cn(
-        "border-y border-l-3 border-l-review-pending bg-thread-bg px-3 py-2 font-sans",
-        pinned && PINNED,
-      )}
+      className={cn("px-3 py-2 font-sans", pinned && PINNED)}
       // The box closes when the focus leaves it, not when it moves between its own controls.
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) onDone();
       }}
     >
-      <div role="cell" className="flex max-w-3xl flex-col gap-2">
+      <CommentCard role="cell" state="draft" className="flex max-w-3xl flex-col gap-2">
         {onChange === undefined ? (
           <p className="text-body whitespace-pre-wrap">
             <span className="sr-only">{label}: </span>
@@ -498,7 +496,7 @@ const CommentRow = ({
             )}
           </>
         )}
-      </div>
+      </CommentCard>
     </div>
   );
 };

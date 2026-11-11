@@ -50,6 +50,8 @@ export { KeyHint } from "./shell/key-hint.tsx";
 export { ShortcutsDialog } from "./shell/shortcuts-dialog.tsx";
 export {
   type BatchState,
+  CommentCard,
+  type CommentState,
   initialsOf,
   type ReviewThreadProps,
   ReviewThreadView,

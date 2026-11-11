@@ -5,7 +5,9 @@ import { useShortcuts } from "../lib/keymap.ts";
 import { VERDICT_STATUS } from "../lib/status.ts";
 import {
   CollapsedHunk,
+  CommentCard,
   CommentComposer,
+  type CommentState,
   type Density,
   DiffSkeleton,
   DiffViewer,
@@ -35,6 +37,13 @@ import {
 } from "./fixtures.ts";
 
 const DENSITIES: readonly Density[] = ["compact", "default", "comfy"];
+
+const CARD_STATES: readonly (readonly [CommentState, string])[] = [
+  ["draft", "A draft: the reviewer's own, posted with the review."],
+  ["open", "An open thread."],
+  ["resolved", "A resolved thread."],
+  ["outdated", "An outdated thread: the code has changed since."],
+];
 
 /** The review page's components on made-up data, in each of their states. */
 export const DomainComponents = () => {
@@ -125,6 +134,16 @@ export const DomainComponents = () => {
           defaultValue="This fails on purpose, to show the error state."
           onSubmit={() => Promise.reject(new Error("offline"))}
         />
+      </Group>
+
+      <Group title="Comment card">
+        <div className="flex max-w-3xl flex-col gap-2">
+          {CARD_STATES.map(([state, text]) => (
+            <CommentCard key={state} state={state}>
+              <p className="text-body">{text}</p>
+            </CommentCard>
+          ))}
+        </div>
       </Group>
 
       <Group title="Review threads">

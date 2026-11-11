@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { RISK_STATUS, VERDICT_STATUS } from "../lib/status.ts";
 import {
+  CommentCard,
   CommentComposer,
   DiffViewer,
   FileTree,
@@ -156,17 +157,14 @@ const DiffScreen = () => {
           }}
         />
         {drafts.map((draft) => (
-          <article
-            key={draft.id}
-            className="flex flex-col gap-1 rounded-lg border border-l-3 border-l-review-pending bg-thread-bg p-3"
-          >
+          <CommentCard as="article" state="draft" key={draft.id} className="flex flex-col gap-1">
             <header className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
               <span className="font-medium text-foreground">You</span>
               <span className="font-mono">{draft.where}</span>
               <StatusBadge status={VERDICT_STATUS.pending} label="Draft" />
             </header>
             <p className="text-body">{draft.body}</p>
-          </article>
+          </CommentCard>
         ))}
         {composing !== null && (
           <CommentComposer
