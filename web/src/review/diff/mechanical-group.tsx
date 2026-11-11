@@ -8,7 +8,7 @@ import type {
 import type { RiskAssessment } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
-import { FilePath, FileStatusBadge } from "./file-path.tsx";
+import { FilePath, FileStatusChip } from "./file-path.tsx";
 import { HunkCard } from "./hunk-card.tsx";
 import { hunkLocation, lineCounts } from "./lines.ts";
 import { mechanicalRows } from "./mechanical.ts";
@@ -252,7 +252,7 @@ export const FileNotices = ({ files }: { readonly files: readonly FileChange[] }
         {notices.map(({ key, file, text }) => (
           <li key={key} className="flex flex-wrap items-center gap-2">
             <FilePath file={file} />
-            <FileStatusBadge status={file.status} />
+            <FileStatusChip status={file.status} />
             <span>{text}</span>
           </li>
         ))}

@@ -4,7 +4,7 @@ import { type Analysis, pathReasons } from "../../../../src/domain/review/index.
 import {
   FileNotices,
   FilePath,
-  FileStatusBadge,
+  FileStatusChip,
   lineCounts,
   MechanicalGroup,
 } from "../../review/index.ts";
@@ -118,8 +118,7 @@ const FileCard = ({
         className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-t-lg border-b bg-card px-3 py-2"
       >
         <FilePath file={group.file} className="min-w-0 flex-1" />
-        {/* Nearly every file is modified, so only the other statuses are worth a badge. */}
-        {group.file.status !== "modified" && <FileStatusBadge status={group.file.status} />}
+        <FileStatusChip status={group.file.status} />
         <span className="tabular flex flex-wrap items-center gap-x-1.5 text-caption">
           {fileReasons.length > 0 && (
             <span className="text-muted-foreground">{fileReasons.join("; ")} · </span>

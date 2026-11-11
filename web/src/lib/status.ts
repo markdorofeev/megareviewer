@@ -47,10 +47,18 @@ export const RISK_STATUS: Readonly<Record<RiskClass, StatusStyle>> = {
   },
 };
 
-/** A file's status as the letter a tree or file header shows, named in full for screen readers. */
-export const FILE_STATUS: Readonly<Record<FileStatus, StatusStyle>> = {
-  added: { label: "Added", glyph: "A", className: "text-diff-add-fg" },
-  modified: { label: "Modified", glyph: "M", className: "text-diff-mod-fg" },
-  deleted: { label: "Deleted", glyph: "D", className: "text-diff-del-fg" },
-  renamed: { label: "Renamed", glyph: "R", className: "text-diff-hunk-fg" },
+/**
+ * A file's status as a word, said only when it isn't the usual one: nearly every file is
+ * modified, so a modified file says nothing.
+ */
+export const FILE_STATUS: Readonly<
+  Record<FileStatus, { readonly label: string; readonly className: string } | null>
+> = {
+  added: { label: "new", className: "text-diff-add-fg bg-diff-add-bg border-diff-add-fg/25" },
+  modified: null,
+  deleted: { label: "deleted", className: "text-diff-del-fg bg-diff-del-bg border-diff-del-fg/25" },
+  renamed: {
+    label: "renamed",
+    className: "text-diff-hunk-fg bg-diff-hunk-bg border-diff-hunk-fg/25",
+  },
 };

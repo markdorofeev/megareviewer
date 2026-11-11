@@ -3,7 +3,7 @@
 
 export { type Density, DiffLine } from "./diff/diff-line.tsx";
 export { type DiffView, DiffViewer, type DiffViewerProps } from "./diff/diff-viewer.tsx";
-export { FilePath, FileStatusBadge, UnchangedUses } from "./diff/file-path.tsx";
+export { FilePath, FileStatusChip, UnchangedUses } from "./diff/file-path.tsx";
 export {
   commentPlace,
   HunkCard,

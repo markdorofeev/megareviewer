@@ -72,11 +72,11 @@ afterEach(() => {
 });
 
 describe("HunkCard", () => {
-  it("shows the file, its status, the section heading, its counts and its risk in the header", () => {
+  it("shows the file, the section heading, its counts and its risk in the header, and no status for a modified file", () => {
     renderWith(<Cards />);
     const header = screen.getByRole("region", { name: firstName }).querySelector("header");
     expect(header?.textContent).toBe(
-      "src/routes/orders.tsMmodifiedexport const ordersRouter = Router();+1 −1▲Contract: Changes the response shape.",
+      "src/routes/orders.tsexport const ordersRouter = Router();+1 −1▲Contract: Changes the response shape.",
     );
   });
 
@@ -253,7 +253,7 @@ describe("HunkCard", () => {
       />,
     );
     expect(screen.getByRole("region").querySelector("header")?.textContent).toMatch(
-      /^src\/token\.ts →renamed to src\/credentials\.tsRrenamed/,
+      /^src\/token\.ts →renamed to src\/credentials\.tsrenamed/,
     );
   });
 });

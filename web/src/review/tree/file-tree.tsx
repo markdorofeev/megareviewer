@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShortcuts } from "../../lib/keymap.ts";
-import { FILE_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Input } from "../../ui/input.tsx";
 import { ScrollArea } from "../../ui/scroll-area.tsx";
+import { FileStatusChip } from "../diff/file-path.tsx";
 import { EmptyState } from "../shell/empty-state.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
 import { type FileEntry, type FileOrder, filterFiles, sortFiles } from "./files.ts";
@@ -197,7 +197,8 @@ export const ContractCount = ({ count }: { readonly count: number }) => (
 
 /**
  * A file's row: an arrow saying how it relates to the active file, its name (its directory muted
- * when the row isn't under it), its contract parts, its counts and its status. A click selects it.
+ * when the row isn't under it), its status when it isn't modified, its contract parts and its
+ * counts. A click selects it.
  */
 export const FileRow = ({
   entry,
@@ -215,7 +216,6 @@ export const FileRow = ({
   readonly directory?: string;
   readonly onSelect: (path: string) => void;
 }) => {
-  const status = entry.status === undefined ? null : FILE_STATUS[entry.status];
   const arrow = ARROWS[relation];
   const active = relation === "current";
   return (
@@ -226,7 +226,6 @@ export const FileRow = ({
       title={entry.path}
       onClick={() => onSelect(entry.path)}
       className={cn(
-        // surface-subtle rather than accent: the modified letter is under 4.5:1 on accent.
         "flex min-h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left hover:bg-surface-subtle",
         active && "bg-surface-subtle font-medium shadow-[inset_3px_0_0_var(--primary)]",
         relation === "other" && "text-muted-foreground",
@@ -254,19 +253,12 @@ export const FileRow = ({
           </span>
         )}
       </span>
+      {entry.status !== undefined && <FileStatusChip status={entry.status} />}
       {entry.contract > 0 && <ContractCount count={entry.contract} />}
       {entry.additions !== undefined && entry.deletions !== undefined && (
         <span className="tabular font-mono text-code-compact">
           <span className="text-diff-add-fg">+{entry.additions}</span>{" "}
           <span className="text-diff-del-fg">−{entry.deletions}</span>
-        </span>
-      )}
-      {status !== null && (
-        <span
-          className={cn("w-3 text-center font-mono text-caption font-semibold", status.className)}
-        >
-          <span aria-hidden="true">{status.glyph}</span>
-          <span className="sr-only">{status.label}</span>
         </span>
       )}
     </button>

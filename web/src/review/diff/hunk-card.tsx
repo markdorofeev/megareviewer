@@ -14,7 +14,7 @@ import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { DiffLine } from "./diff-line.tsx";
-import { FilePath, FileStatusBadge, UnchangedUses } from "./file-path.tsx";
+import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { hunkLocation, lineCounts } from "./lines.ts";
 import { viewLines } from "./rows.ts";
 import { useHunkTokens, useNearViewport } from "./syntax.ts";
@@ -168,7 +168,7 @@ export const HunkCard = memo(function HunkCard({
           {!inFile && (
             <>
               <FilePath file={file} />
-              <FileStatusBadge status={file.status} />
+              <FileStatusChip status={file.status} />
               {hunk.sectionHeading !== null && (
                 <code className="font-mono text-code-compact text-diff-hunk-fg">
                   {hunk.sectionHeading}

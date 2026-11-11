@@ -185,11 +185,11 @@ describe("FileNotices", () => {
         .getAllByRole("listitem")
         .map((row) => row.textContent),
     ).toEqual([
-      "assets/logo.pngMmodifiedbinary file changed",
-      "assets/new.pngAaddedbinary file added",
-      "scripts/deploy.shMmodifiedmode 100644 → 100755",
-      ".keepAaddedempty file added",
-      "old.txtDdeletedempty file deleted",
+      "assets/logo.pngbinary file changed",
+      "assets/new.pngnewbinary file added",
+      "scripts/deploy.shmode 100644 → 100755",
+      ".keepnewempty file added",
+      "old.txtdeletedempty file deleted",
     ]);
   });
 
@@ -208,7 +208,7 @@ describe("FileNotices", () => {
     if (file === undefined) throw new Error("no file");
     expect(firstHunk(file)).toBeTruthy();
     render(<FileNotices files={[file]} />);
-    expect(screen.getByRole("listitem").textContent).toBe("run.shMmodifiedmode 100644 → 100755");
+    expect(screen.getByRole("listitem").textContent).toBe("run.shmode 100644 → 100755");
   });
 
   it("renders nothing when every file has lines to show or a proof", () => {

@@ -11,11 +11,11 @@ import {
 } from "react";
 import type { FileChange, Hunk } from "../../../../src/domain/diff/index.ts";
 import { isMac, type ShortcutId, shortcutFor, useSingleKeyShortcuts } from "../../lib/keymap.ts";
-import { FILE_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group.tsx";
 import { type Density, DiffLine, EmptyHalf, ROW_HEIGHT } from "./diff-line.tsx";
+import { FileStatusChip } from "./file-path.tsx";
 import { CollapsedHunk, type ExpandDirection, HunkHeader } from "./hunk-header.tsx";
 import {
   linesOf,
@@ -242,7 +242,6 @@ export const DiffViewer = ({
     return <SplitLine row={row} focus={focus} selected={selected} lineProps={lineProps} />;
   };
 
-  const status = FILE_STATUS[file.status];
   const slash = file.path.lastIndexOf("/");
   const body = (() => {
     if (file.binary) return <Notice>Binary file, not shown.</Notice>;
@@ -331,10 +330,6 @@ export const DiffViewer = ({
             ▾
           </span>
         </Button>
-        <span className={cn("w-3 font-mono text-caption font-semibold", status.className)}>
-          <span aria-hidden="true">{status.glyph}</span>
-          <span className="sr-only">{status.label}</span>
-        </span>
         <h3 className="min-w-0 flex-1 truncate font-mono text-code">
           {file.oldPath !== null && file.oldPath !== file.path && (
             <span className="text-muted-foreground">{file.oldPath} → </span>
@@ -342,6 +337,7 @@ export const DiffViewer = ({
           <span className="text-muted-foreground">{file.path.slice(0, slash + 1)}</span>
           {file.path.slice(slash + 1)}
         </h3>
+        <FileStatusChip status={file.status} />
         <span className="tabular font-mono text-code-compact">
           <span className="text-diff-add-fg">+{file.additions}</span>{" "}
           <span className="text-diff-del-fg">−{file.deletions}</span>

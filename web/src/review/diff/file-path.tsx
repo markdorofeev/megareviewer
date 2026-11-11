@@ -6,7 +6,6 @@ import {
 } from "../../../../src/domain/diff/index.ts";
 import { FILE_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
-import { StatusBadge } from "../../ui/status-badge.tsx";
 
 /** A path with its directory muted, so the file's name stands out and its place still shows. */
 const SplitPath = ({ path }: { readonly path: string }) => {
@@ -40,16 +39,21 @@ export const FilePath = ({
   </span>
 );
 
-/** A file's status as a badge: its letter and its word. */
-export const FileStatusBadge = ({ status }: { readonly status: FileChange["status"] }) => (
-  <StatusBadge
-    status={{
-      ...FILE_STATUS[status],
-      className: cn(FILE_STATUS[status].className, "border-border"),
-    }}
-    label={status}
-  />
-);
+/** A file's status as a word chip: new, deleted or renamed. Nothing for a modified file. */
+export const FileStatusChip = ({ status }: { readonly status: FileChange["status"] }) => {
+  const style = FILE_STATUS[status];
+  return style === null ? null : (
+    <span
+      data-slot="file-status"
+      className={cn(
+        "shrink-0 rounded-full border px-1.5 text-caption font-medium leading-4",
+        style.className,
+      )}
+    >
+      {style.label}
+    </span>
+  );
+};
 
 const places = (count: number, noun: "place" | "test"): string =>
   `${count} ${noun}${count === 1 ? "" : "s"}`;

@@ -87,9 +87,12 @@ describe("FileTree", () => {
   it("says a file's status and contract parts in words", () => {
     render(<FileTree files={files} activePath="src/http/retry.ts" onSelect={() => undefined} />);
     const deleted = screen.getByTitle("src/auth/session.ts");
-    expect(deleted.textContent).toContain("Deleted");
+    expect(deleted.textContent).toContain("deleted");
     expect(deleted.textContent).toContain("2 contract");
-    expect(screen.getByTitle("src/http/retry.ts").getAttribute("aria-current")).toBe("location");
+    // A modified file says nothing about its status.
+    const modified = screen.getByTitle("src/http/retry.ts");
+    expect(modified.textContent).not.toMatch(/modified|deleted|new|renamed/);
+    expect(modified.getAttribute("aria-current")).toBe("location");
   });
 });
 
