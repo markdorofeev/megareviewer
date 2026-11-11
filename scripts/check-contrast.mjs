@@ -81,6 +81,10 @@ const PAIRS = [
   ["Gap text", "muted-foreground", "surface-subtle", 4.5],
   ["Muted text on directory hover", "muted-foreground", "accent", 4.5],
   ["Active row bar (non-text)", "primary", "surface-subtle", 3],
+  // hunk: the focused diff line's 3px bar, over the gutter of each kind of line.
+  ["Focused line bar on diff-gutter-bg (non-text)", "ring", "diff-gutter-bg", 3],
+  ["Focused line bar on diff-add-gutter (non-text)", "ring", "diff-add-gutter", 3],
+  ["Focused line bar on diff-del-gutter (non-text)", "ring", "diff-del-gutter", 3],
   // hunk: a selected tab or toggle is told by its border on the muted track.
   ["Selected segment border (non-text)", "muted-foreground", "muted", 3],
   ["Pressed toggle border (non-text)", "muted-foreground", "background", 3],

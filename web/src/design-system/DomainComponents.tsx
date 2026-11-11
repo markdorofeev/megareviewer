@@ -80,8 +80,9 @@ export const DomainComponents = () => {
         <LongDiff />
       </Group>
 
-      <Group title="Diff viewer: deferred, binary, renamed, loading">
+      <Group title="Diff viewer: deferred, collapsed, binary, renamed, loading">
         <DiffViewer file={generatedFile(400)} deferred="Generated file, 200 lines changed." />
+        <DiffViewer file={RETRY_FILE} defaultCollapsed />
         <DiffViewer file={BINARY_FILE} />
         <DiffViewer file={RENAMED_FILE} />
         <DiffSkeleton />

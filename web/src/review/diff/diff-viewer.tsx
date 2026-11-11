@@ -65,6 +65,12 @@ export interface DiffViewerProps {
   readonly expanding?: ReadonlySet<Hunk["id"]>;
   /** More controls for the file header, after the view switch. */
   readonly actions?: ReactNode;
+  /** Starts folded to its header. */
+  readonly defaultCollapsed?: boolean;
+  /** The line, by its `hunkId:index` key, that starts with the focus. */
+  readonly defaultFocus?: string;
+  /** The other end of a starting selection, from `defaultFocus`. */
+  readonly defaultAnchor?: string;
 }
 
 type Row = UnifiedRow | SideBySideRow;
@@ -87,6 +93,9 @@ export const DiffViewer = ({
   onExpand,
   expanding,
   actions,
+  defaultCollapsed = false,
+  defaultFocus,
+  defaultAnchor,
 }: DiffViewerProps) => {
   const [ownView, setOwnView] = useState<DiffView>("unified");
   const view = viewProp ?? ownView;
@@ -95,7 +104,7 @@ export const DiffViewer = ({
     onViewChange?.(next);
   };
   const wrap = wrapProp ?? view === "split";
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [loaded, setLoaded] = useState(deferred === undefined);
   const [singleKeys] = useSingleKeyShortcuts();
 
@@ -117,8 +126,8 @@ export const DiffViewer = ({
     return map;
   }, [rows]);
 
-  const [focus, setFocus] = useState<string | null>(null);
-  const [anchor, setAnchor] = useState<string | null>(null);
+  const [focus, setFocus] = useState<string | null>(defaultFocus ?? null);
+  const [anchor, setAnchor] = useState<string | null>(defaultAnchor ?? null);
   const selected = useMemo(
     () =>
       focus !== null && anchor !== null ? selectedRange(lines, anchor, focus) : new Set<string>(),
@@ -301,7 +310,8 @@ export const DiffViewer = ({
 
   return (
     <section aria-label={file.path} className="overflow-clip rounded-lg border bg-card">
-      <header className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-card px-3 py-1.5">
+      {/* A page with its own sticky header sets --diff-sticky-top to its height. */}
+      <header className="sticky top-[var(--diff-sticky-top,0px)] z-10 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-card px-3 py-1.5">
         <Button
           variant="ghost"
           size="icon-xs"

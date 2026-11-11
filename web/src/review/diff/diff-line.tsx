@@ -174,9 +174,11 @@ export const DiffLine = memo(function DiffLine({
         DENSITY[density],
         kind.row,
         // A tint over the row's own, so a selected added line still reads as added.
+        // Above the gutters, which are positioned and would paint over them otherwise.
         selected &&
-          "before:pointer-events-none before:absolute before:inset-0 before:bg-primary/10",
-        focused && "shadow-[inset_3px_0_0_var(--ring)]",
+          "before:pointer-events-none before:absolute before:inset-0 before:z-[1] before:bg-primary/15",
+        focused &&
+          "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px] after:bg-ring",
       )}
     >
       {layout !== "split-new" && gutter(line.oldNo, "old")}

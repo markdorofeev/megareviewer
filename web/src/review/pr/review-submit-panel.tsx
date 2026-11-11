@@ -93,7 +93,7 @@ export const ReviewSubmitPanel = ({
     </Button>
   );
   const body = (
-    <PanelBody
+    <ReviewSubmitForm
       // The title names the dialog, so it's the Sheet's or the Popover's own.
       title={
         narrow ? (
@@ -132,7 +132,8 @@ export const ReviewSubmitPanel = ({
   );
 };
 
-const PanelBody = ({
+/** The panel's form on its own, for a page that shows it in place. */
+export const ReviewSubmitForm = ({
   title,
   pending,
   decided,
