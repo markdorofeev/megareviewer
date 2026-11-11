@@ -199,71 +199,71 @@
   --elevation-lg: 0 16px 40px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.06);
 
   /* shadcn/ui core */
-  --background: #0B0B0F;
+  --background: #1F1F1F;
   --foreground: #EDEDEF;
-  --card: #111116;
+  --card: #262626;
   --card-foreground: #EDEDEF;
-  --popover: #16161C;
+  --popover: #2C2C2C;
   --popover-foreground: #EDEDEF;
   --primary: #8B8EF9;
-  --primary-foreground: #0B0B0F;
-  --secondary: #1B1B21;
+  --primary-foreground: #1F1F1F;
+  --secondary: #303030;
   --secondary-foreground: #EDEDEF;
-  --muted: #1B1B21;
+  --muted: #303030;
   --muted-foreground: #A1A1AA;
-  --accent: #1F1F26;
+  --accent: #353535;
   --accent-foreground: #EDEDEF;
   --destructive: #F87171;
-  --border: #26262E;
-  --input: #63636E;
+  --border: #434343;
+  --input: #6F6F7B;
   --ring: #8B8EF9;
 
   /* surface */
-  --surface-subtle: #111116;
+  --surface-subtle: #262626;
 
   /* diff */
-  --diff-add-bg: #0F2418;
-  --diff-add-word: #17432A;
-  --diff-add-gutter: #143A24;
+  --diff-add-bg: #1D3A28;
+  --diff-add-word: #286142;
+  --diff-add-gutter: #235334;
   --diff-add-fg: #4ADE80;
-  --diff-del-bg: #2A1215;
-  --diff-del-word: #521B20;
-  --diff-del-gutter: #3D171B;
+  --diff-del-bg: #3F1E22;
+  --diff-del-word: #6A282E;
+  --diff-del-gutter: #532328;
   --diff-del-fg: #F87171;
   --diff-mod-fg: #FBBF24;
-  --diff-hunk-bg: #16172B;
+  --diff-hunk-bg: #26283F;
   --diff-hunk-fg: #A5B4FC;
-  --diff-gutter-bg: #111116;
-  --diff-gutter-fg: #8A8A94;
+  --diff-gutter-bg: #262626;
+  --diff-gutter-fg: #8D8D96;
 
   /* comments and suggestions */
-  --thread-bg: #111116;
-  --thread-border: #26262E;
+  --thread-bg: #262626;
+  --thread-border: #434343;
   --thread-marker: #8B8EF9;
-  --suggestion-bg: #14152A;
+  --suggestion-bg: #252640;
 
   /* review states */
   --review-approved: #4ADE80;
-  --review-approved-bg: #0F2418;
+  --review-approved-bg: #1D3A28;
   --review-changes: #F87171;
-  --review-changes-bg: #2A1215;
+  --review-changes-bg: #3F1E22;
   --review-pending: #FBBF24;
-  --review-pending-bg: #2A2008;
+  --review-pending-bg: #3D3012;
   --review-commented: #A1A1AA;
-  --review-commented-bg: #1B1B21;
+  --review-commented-bg: #303030;
 
   /* CI status */
   --ci-success: #4ADE80;
   --ci-failure: #F87171;
   --ci-running: #A5B4FC;
-  --ci-running-bg: #16172B;
+  --ci-running-bg: #26283F;
   --ci-queued: #A1A1AA;
-  --ci-skipped: #8A8A94;
+  --ci-skipped: #8D8D96;
 
   /* severity */
   --severity-blocker: #F87171;
   --severity-major: #FB923C;
-  --severity-major-bg: #2A160A;
+  --severity-major-bg: #402414;
   --severity-minor: #FBBF24;
   --severity-nit: #A1A1AA;
   --severity-info: #A5B4FC;
@@ -272,13 +272,13 @@
   --syntax-keyword: #C4B5FD;
   --syntax-string: #7DD3C0;
   --syntax-function: #93C5FD;
-  --syntax-comment: #B4B4BC;
+  --syntax-comment: #CCCCD1;
   --syntax-number: #FCD34D;
 
   /* hunk: risk classes */
-  --risk-contract: #EF7BCC;   --risk-contract-bg: #2A1024;   --risk-contract-border: #5A2550;   --risk-contract-solid: #D9479F;
-  --risk-logic: #A1A1AA;      --risk-logic-bg: #1B1B21;      --risk-logic-border: #26262E;      --risk-logic-solid: #63636E;
-  --risk-mechanical: #8A8A94; --risk-mechanical-bg: #111116; --risk-mechanical-border: #26262E; --risk-mechanical-solid: #3F3F46;
+  --risk-contract: #EF7BCC;   --risk-contract-bg: #3F1B3A;   --risk-contract-border: #74346A;   --risk-contract-solid: #D9479F;
+  --risk-logic: #A1A1AA;      --risk-logic-bg: #303030;      --risk-logic-border: #434343;      --risk-logic-solid: #6F6F7B;
+  --risk-mechanical: #8D8D96; --risk-mechanical-bg: #262626; --risk-mechanical-border: #434343; --risk-mechanical-solid: #3F3F46;
 }
 
 /* ------------------------------------------------------------------ */
@@ -298,13 +298,13 @@
 
 .dark[data-diff-palette="cb"],
 .dark [data-diff-palette="cb"] {
-  --diff-add-bg: #0F1B2E;
-  --diff-add-word: #1A3558;
-  --diff-add-gutter: #15284A;
-  --diff-add-fg: #60A5FA;
-  --diff-del-bg: #2A1A0C;
-  --diff-del-word: #4A2C10;
-  --diff-del-gutter: #3A230D;
+  --diff-add-bg: #182B49;
+  --diff-add-word: #254B7C;
+  --diff-add-gutter: #1E3969;
+  --diff-add-fg: #61A6FA;
+  --diff-del-bg: #442A13;
+  --diff-del-word: #683E17;
+  --diff-del-gutter: #563413;
   --diff-del-fg: #FDBA74;
 }
 
