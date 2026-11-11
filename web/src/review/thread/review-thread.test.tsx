@@ -119,6 +119,28 @@ describe("ReviewThreadView", () => {
     expect(article.textContent).toContain("[click](javascript:alert(1))");
   });
 
+  it("names a pasted image without loading it", () => {
+    show({
+      thread: thread({
+        comments: [
+          {
+            id: "i",
+            author: sam,
+            body: 'another comment with image\n\n<img width="819" alt="Screenshot 16 45" src="https://github.com/user-attachments/assets/1" />',
+            createdAt: "2026-10-21T09:00:00Z",
+            originalCommit: null,
+          },
+        ],
+      }),
+    });
+    const article = screen.getByRole("article");
+    expect(article.querySelector("img")).toBeNull();
+    expect(article.querySelector("[data-slot=thread-image]")?.textContent).toBe(
+      "Image: Screenshot 16 45, not loaded; see it on the host",
+    );
+    expect(article.textContent).not.toContain("<img");
+  });
+
   it("replies with ⌘↵, keeping the text when posting fails", async () => {
     const { onReply } = show();
     onReply.mockResolvedValueOnce("GitHub answered 502.");

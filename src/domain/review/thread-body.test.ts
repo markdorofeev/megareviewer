@@ -57,6 +57,25 @@ describe("parseSpans", () => {
     expect(parseSpans("a ` b ``c")).toEqual([{ kind: "text", text: "a ` b ``c" }]);
   });
 
+  it("names images instead of showing their tags, and never in code", () => {
+    expect(
+      parseSpans(
+        'see <img width="819" alt="Screenshot 16 45" src="https://github.com/user-attachments/assets/1" /> and ![diagram](https://x.test/a.png) or <IMG src=x>',
+      ),
+    ).toEqual([
+      { kind: "text", text: "see " },
+      { kind: "image", text: "Screenshot 16 45" },
+      { kind: "text", text: " and " },
+      { kind: "image", text: "diagram" },
+      { kind: "text", text: " or " },
+      { kind: "image", text: "" },
+    ]);
+    expect(parseSpans("`<img alt='x' src=y>`")).toEqual([
+      { kind: "code", text: "<img alt='x' src=y>" },
+    ]);
+    expect(parseSpans("<img alt='single' src=y>")).toEqual([{ kind: "image", text: "single" }]);
+  });
+
   it("keeps HTML and links as text", () => {
     expect(parseSpans("<script>alert(1)</script> [x](javascript:alert(1))")).toEqual([
       { kind: "text", text: "<script>alert(1)</script> [x](javascript:alert(1))" },

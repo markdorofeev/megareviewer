@@ -4,11 +4,37 @@ import { Severity } from "./thread.ts";
 // A comment body is untrusted host content. It's read into a few kinds of block, and everything
 // else stays literal text: no HTML, no links, no images.
 
-/** A run of text in a paragraph: plain, or a code span. */
+/** A run of text in a paragraph: plain, a code span, or an image, whose `text` is its alt text. */
 export interface Span {
-  readonly kind: "text" | "code";
+  readonly kind: "text" | "code" | "image";
   readonly text: string;
 }
+
+/** An image as hosts paste one: an HTML `<img>` tag, or Markdown's `![alt](url)`. */
+const IMAGE = /<img\b[^>]*>|!\[([^\]\n]*)\]\([^)\s]*\)/gi;
+const ALT = /\balt\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+
+/**
+ * A text span's images as image spans, so the page can name them without loading them: an image
+ * from the host's CDN would tell the host who's looking, and the CSP blocks it anyway.
+ */
+const withImages = (text: string): Span[] => {
+  const spans: Span[] = [];
+  let at = 0;
+  for (const match of text.matchAll(IMAGE)) {
+    const index = match.index ?? 0;
+    if (index > at) spans.push({ kind: "text", text: text.slice(at, index) });
+    const alt = match[0].startsWith("<")
+      ? ALT.exec(match[0])
+          ?.slice(1)
+          .find((one) => one !== undefined)
+      : match[1];
+    spans.push({ kind: "image", text: (alt ?? "").trim() });
+    at = index + match[0].length;
+  }
+  if (at < text.length) spans.push({ kind: "text", text: text.slice(at) });
+  return spans;
+};
 
 export type BodyBlock =
   | { readonly kind: "paragraph"; readonly spans: readonly Span[] }
@@ -64,7 +90,7 @@ export const parseSpans = (text: string): Span[] => {
       at += run.length;
       continue;
     }
-    if (plain !== "") spans.push({ kind: "text", text: plain });
+    if (plain !== "") spans.push(...withImages(plain));
     plain = "";
     const inner = text.slice(at + run.length, found.index);
     // One space on each side is padding, so a span can start or end with a backtick.
@@ -72,7 +98,7 @@ export const parseSpans = (text: string): Span[] => {
     spans.push({ kind: "code", text: padded ? inner.slice(1, -1) : inner });
     at = found.index + run.length;
   }
-  if (plain !== "") spans.push({ kind: "text", text: plain });
+  if (plain !== "") spans.push(...withImages(plain));
   return spans;
 };
 

@@ -1,5 +1,6 @@
+import { ImageIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import type { BodyBlock } from "../../../../src/domain/review/index.ts";
+import type { BodyBlock, Span } from "../../../../src/domain/review/index.ts";
 import { languageOf } from "../diff/languages.ts";
 import { CodeLine, useCodeTokens } from "./code-lines.tsx";
 
@@ -35,6 +36,31 @@ const CodeBlock = ({
 };
 
 /**
+ * One run of a paragraph. An image is named, never loaded: its host's CDN would learn who's
+ * looking, and the page's CSP blocks it anyway.
+ */
+const SpanView = ({ span }: { readonly span: Span }) => {
+  if (span.kind === "code") {
+    return (
+      <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">{span.text}</code>
+    );
+  }
+  if (span.kind === "image") {
+    return (
+      <span
+        data-slot="thread-image"
+        className="inline-flex items-center gap-1 rounded-sm border bg-muted px-1 text-caption text-muted-foreground"
+      >
+        <ImageIcon aria-hidden="true" className="size-3" />
+        {span.text === "" ? "Image" : `Image: ${span.text}`}
+        <span className="sr-only">, not loaded; see it on the host</span>
+      </span>
+    );
+  }
+  return <span>{span.text}</span>;
+};
+
+/**
  * A comment's blocks as text: paragraphs with code spans, and code blocks colored like the diff.
  * Nothing in a body becomes HTML, a link or an image. `suggestion` draws a suggestion block.
  */
@@ -55,20 +81,13 @@ export const ThreadBody = ({
       }
       return (
         <p key={key} className="whitespace-pre-wrap">
-          {block.spans.map((span, index) =>
-            span.kind === "code" ? (
-              <code
-                // biome-ignore lint/suspicious/noArrayIndexKey: spans have no identity but their place.
-                key={`code:${index}`}
-                className="rounded-sm bg-muted px-1 font-mono text-code-compact"
-              >
-                {span.text}
-              </code>
-            ) : (
+          {block.spans.map((span, index) => (
+            <SpanView
               // biome-ignore lint/suspicious/noArrayIndexKey: spans have no identity but their place.
-              <span key={`text:${index}`}>{span.text}</span>
-            ),
-          )}
+              key={`${span.kind}:${index}`}
+              span={span}
+            />
+          ))}
         </p>
       );
     })}
