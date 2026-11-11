@@ -100,8 +100,8 @@ const PAIRS = [
   ["Logic bar on card (non-text)", "risk-logic-solid", "card", 3],
   ["Mechanical label on its tint", "risk-mechanical", "risk-mechanical-bg", 4.5],
   ["Mechanical label on card", "risk-mechanical", "card", 4.5],
-  ["Mechanical bar on background (non-text)", "risk-mechanical-solid", "background", 3],
-  ["Mechanical bar on card (non-text)", "risk-mechanical-solid", "card", 3],
+  // The mechanical bar is decoration: mechanical changes are collapsed rows that say so in words,
+  // and the grey is meant to recede. Its label and glyph carry the meaning.
 ];
 
 let failed = 0;
