@@ -13,7 +13,7 @@ The target design, under the line a thread is on:
 - a 3 px left border in the thread's state color;
 - per comment: initials, name, an **Author** chip when it's the PR's author, the time relative to now, and a severity chip (`▲ major`) when the comment has one;
 - the body: paragraphs, inline code and code blocks;
-- a **Suggested change** as a small diff of the lines it replaces, with **Add to batch** and **Apply suggestion**;
+- a **Suggested change** as a small diff of the lines it replaces, with **Add to batch** (an **Apply suggestion** button beside it was removed later);
 - replies under the first comment, divided by a rule;
 - a **Reply…** field (`r`) and **Resolve** (`e`).
 

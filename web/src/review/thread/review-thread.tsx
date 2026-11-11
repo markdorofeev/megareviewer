@@ -71,8 +71,6 @@ export interface ReviewThreadProps {
   readonly onResolve?: (resolved: boolean) => Promise<string | null>;
   readonly onAddToBatch?: (commentId: string) => void;
   readonly onRemoveFromBatch?: (commentId: string) => void;
-  /** Applies this one suggestion on its own. */
-  readonly onApply?: (commentId: string) => void;
   /** Where an image or video pasted into a comment loads from; without it, they're named. */
   readonly mediaUrl?: (url: string) => string;
   /** Open with the reply field focused. */
@@ -121,7 +119,7 @@ const groupByAuthor = (
 /**
  * A review thread from the host: its comments grouped by person, with their severities and
  * suggested changes, and one row of actions: Reply (`r`), which opens the field in its place, a
- * lone suggestion's Apply and Add to batch (`b`), and Resolve (`e`). A resolved thread folds to one
+ * lone suggestion's Add to batch (`b`), and Resolve (`e`). A resolved thread folds to one
  * line.
  */
 export const ReviewThreadView = ({
@@ -136,7 +134,6 @@ export const ReviewThreadView = ({
   onResolve,
   onAddToBatch,
   onRemoveFromBatch,
-  onApply,
   replying = false,
   mediaUrl,
   initialReply,
@@ -253,9 +250,6 @@ export const ReviewThreadView = ({
     const problem = batch.problem(comment.id);
     return (
       <>
-        <Button variant="outline" size="sm" onClick={() => onApply?.(comment.id)}>
-          Apply suggestion
-        </Button>
         <Button
           variant="outline"
           size="sm"

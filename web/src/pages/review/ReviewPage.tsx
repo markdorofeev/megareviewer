@@ -427,10 +427,6 @@ const Review = ({
       onResolve={(resolved) => threads.resolve(thread.id, resolved)}
       onAddToBatch={(id) => setBatchIds((previous) => [...previous, id])}
       onRemoveFromBatch={(id) => setBatchIds((previous) => previous.filter((one) => one !== id))}
-      onApply={(id) => {
-        const entry = suggestions.get(id);
-        if (entry !== undefined) setApplying([entry]);
-      }}
     />
   );
   const threadsAt = (id: PartId, place: LinePlace): ReactNode => {

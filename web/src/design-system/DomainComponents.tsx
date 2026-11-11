@@ -412,7 +412,6 @@ const ThreadDemo = ({
         }}
         onAddToBatch={(id) => setBatch([...batch, id])}
         onRemoveFromBatch={(id) => setBatch(batch.filter((one) => one !== id))}
-        onApply={() => toast("Applying one suggestion")}
         {...props}
       />
     </div>

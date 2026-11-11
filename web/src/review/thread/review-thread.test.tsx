@@ -60,7 +60,6 @@ const show = (props: Partial<ReviewThreadProps> = {}) => {
     onResolve: vi.fn(async (_resolved: boolean): Promise<string | null> => null),
     onAddToBatch: vi.fn(),
     onRemoveFromBatch: vi.fn(),
-    onApply: vi.fn(),
   };
   const ui = (extra: Partial<ReviewThreadProps>): ReactNode => (
     <HighlighterContext.Provider value={pending}>
@@ -137,9 +136,9 @@ describe("ReviewThreadView", () => {
       .getAllByRole("button")
       .map((button) => button.textContent);
 
-  it("puts a single suggestion's buttons in the thread's one row of actions", () => {
+  it("puts a single suggestion's Add to batch in the thread's one row of actions", () => {
     show({ thread: suggesting, batch: { has: () => false, problem: () => "Overlaps line 4." } });
-    expect(actions()).toEqual(["Replyr", "Apply suggestion", "Add to batchb", "Resolvee"]);
+    expect(actions()).toEqual(["Replyr", "Add to batchb", "Resolvee"]);
     expect(
       within(
         document.querySelector<HTMLElement>("[data-slot=thread-actions]") ?? document.body,
@@ -157,7 +156,6 @@ describe("ReviewThreadView", () => {
     });
     show({ thread: thread({ comments: [suggestion("s1", "a"), suggestion("s2", "b")] }) });
     expect(actions()).toEqual(["Replyr", "Resolvee"]);
-    expect(screen.getAllByRole("button", { name: "Apply suggestion" })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: /^Add to batch/ })).toHaveLength(2);
   });
 
@@ -343,18 +341,16 @@ describe("ReviewThreadView", () => {
     const article = screen.getByRole("article");
     expect(article.dataset.state).toBe("outdated");
     expect(within(article).getByText("Outdated")).toBeTruthy();
-    expect(within(article).queryByRole("button", { name: /Apply suggestion/ })).toBeNull();
+    expect(within(article).queryByRole("button", { name: /batch/ })).toBeNull();
     // Without the current lines, only what would be added is shown.
     expect(article.querySelectorAll("[data-kind=del]")).toHaveLength(0);
   });
 
-  it("shows a suggestion as a diff of the lines it replaces, with batch and apply", async () => {
-    const { onApply, onAddToBatch, rerender, onRemoveFromBatch } = show({ thread: suggesting });
+  it("shows a suggestion as a diff of the lines it replaces, with Add to batch", async () => {
+    const { onAddToBatch, rerender, onRemoveFromBatch } = show({ thread: suggesting });
     const diff = document.querySelector("[data-slot=suggestion-diff]");
     expect(diff?.querySelector("[data-kind=del]")?.textContent).toContain("const attempts = 3;");
     expect(diff?.querySelector("[data-kind=add]")?.textContent).toContain("const MAX = 3;");
-    await userEvent.click(screen.getByRole("button", { name: "Apply suggestion" }));
-    expect(onApply).toHaveBeenCalledWith("s1");
     await userEvent.click(screen.getByRole("button", { name: /^Add to batch/ }));
     expect(onAddToBatch).toHaveBeenCalledWith("s1");
     rerender({ batch: { has: () => true, problem: () => null } });
