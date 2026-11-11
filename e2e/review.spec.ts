@@ -88,6 +88,50 @@ test("the map moves between the files with the keyboard", async ({ page }) => {
   await expect(focused).toHaveAttribute("aria-label", first);
 });
 
+test("the line under the mouse shows a plus on its number, an unchanged fold's doesn't", async ({
+  page,
+}) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+  const primary = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.backgroundColor = "var(--primary)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return color;
+  });
+  const look = (number: Locator) =>
+    number.evaluate((element) => ({
+      plus: getComputedStyle(element, "::before").content,
+      fill: getComputedStyle(element).backgroundColor,
+    }));
+  const tint = (row: Locator) =>
+    row.evaluate((element) => getComputedStyle(element, "::before").backgroundColor);
+
+  const card = page
+    .locator("[aria-label=Changes] [data-slot=file-card]")
+    .filter({ has: page.locator("[data-slot=file-gap]") })
+    .first();
+  const commentable = card
+    .locator("[role=row]")
+    .filter({ has: page.getByRole("button") })
+    .first();
+  const number = commentable.getByRole("button", { name: /^Comment on/ });
+  await commentable.locator("[role=cell]").last().hover();
+  expect(await look(number)).toEqual({ plus: '"+"', fill: primary });
+  expect(await tint(commentable)).not.toBe("rgba(0, 0, 0, 0)");
+
+  await card.locator("[data-slot=file-gap]").getByRole("button").first().click();
+  const unchanged = card
+    .locator("[role=row]")
+    .filter({ hasNot: page.getByRole("button") })
+    .first();
+  await unchanged.hover();
+  await expect(unchanged.getByRole("button")).toHaveCount(0);
+  expect(await tint(unchanged)).toBe("rgba(0, 0, 0, 0)");
+  expect((await look(number)).plus).toBe("none");
+});
+
 test("mechanical changes are collapsed until expanded", async ({ page }) => {
   await openReview(page, PR.refactorMove, "Tidy up utilities");
   const group = page.getByRole("region", { name: /Mechanical changes/ });

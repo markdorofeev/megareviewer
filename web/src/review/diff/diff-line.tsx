@@ -160,7 +160,9 @@ export const DiffLine = memo(function DiffLine({
       role={cellRole}
       onClick={onGutterClick === undefined ? undefined : (event) => onGutterClick(line, event)}
       className={cn(
-        "tabular relative w-12 shrink-0 select-none pr-2 text-right",
+        "tabular relative w-12 shrink-0 select-none text-right",
+        // The number button takes the padding, so its fill reaches the cell's edges.
+        numberButton?.side === side && value !== null ? "pr-0" : "pr-2",
         kind.gutter,
         onGutterClick !== undefined && "cursor-pointer hover:text-foreground",
       )}
@@ -170,7 +172,18 @@ export const DiffLine = memo(function DiffLine({
           type="button"
           aria-label={numberButton.label}
           onClick={numberButton.onClick}
-          className="h-full w-full rounded-sm pr-0 text-right hover:bg-primary hover:text-primary-foreground focus-visible:-outline-offset-2"
+          className={cn(
+            "h-full w-full pr-2 text-right hover:bg-primary hover:text-primary-foreground focus-visible:-outline-offset-2",
+            // Under the mouse the whole cell fills, square and full height, so it and the row's
+            // tint read as one band; a chip inside the gutter read as apart from the line.
+            onRowClick !== undefined &&
+              "group-hover/line:bg-primary group-hover/line:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground",
+            // A plus beside the number says a click comments; the cell fits it only up to four
+            // digits, so from 10,000 the fill alone says it.
+            onRowClick !== undefined &&
+              value < 10_000 &&
+              "before:mr-1 before:content-none group-hover/line:before:content-['+'] focus-visible:before:content-['+']",
+          )}
         >
           {value}
         </button>
@@ -214,6 +227,10 @@ export const DiffLine = memo(function DiffLine({
         // Above the gutters, which are positioned and would paint over them otherwise.
         selected &&
           "before:pointer-events-none before:absolute before:inset-0 before:z-[1] before:bg-primary/15",
+        // The same tint, fainter, says the row under the mouse can be commented on.
+        !selected &&
+          onRowClick !== undefined &&
+          "hover:before:pointer-events-none hover:before:absolute hover:before:inset-0 hover:before:z-[1] hover:before:bg-primary/8",
         focused &&
           "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px] after:bg-ring",
       )}
