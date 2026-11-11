@@ -530,8 +530,27 @@ describe("createBitbucketHost", () => {
         ["acme/api#7", "reviewer", "2025-12-30T08:15:00.000Z"],
       ]);
       expect(result.value[0]?.url).toBe("https://bitbucket.org/acme/Web-App/pull-requests/42");
+      // Every repository was scanned, so there's nothing to say.
+      expect(notices(logger)).toEqual([]);
+    });
+
+    it("says when the workspace has repositories it didn't scan", async () => {
+      const logger = new RecordingLogger();
+      const truncated = listExchanges.map((recorded) =>
+        recorded.request.url.includes("role=member")
+          ? {
+              ...recorded,
+              response: {
+                ...recorded.response,
+                body: { ...(recorded.response.body as object), next: `${API}/next-page` },
+              },
+            }
+          : recorded,
+      );
+      const result = await hostWith(truncated, { logger }).listPullRequests();
+      expect(result.ok).toBe(true);
       expect(notices(logger)).toMatchObject([
-        { level: "info", fields: { workspace: "acme", repositories: 2, more: false } },
+        { level: "info", fields: { workspace: "acme", scanned: 2 } },
       ]);
     });
 

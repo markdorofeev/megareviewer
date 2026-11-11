@@ -142,14 +142,13 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
       }),
     );
     if (!repos.ok) return repos;
-    logger.info(
-      "Bitbucket can't search for PRs to review across repositories; scanning the most recently updated ones",
-      {
-        workspace: scanned,
-        repositories: repos.value.values.length,
-        more: repos.value.next !== undefined,
-      },
-    );
+    // Said only when it leaves something out: with every repository scanned, the list is whole.
+    if (repos.value.next !== undefined) {
+      logger.info(
+        "Bitbucket can't search for PRs to review across repositories; scanned only the most recently updated ones, so PRs in the others aren't listed",
+        { workspace: scanned, scanned: repos.value.values.length },
+      );
+    }
 
     // `state` is ignored once `q` is set, so it goes in the query. An OR with `author.uuid`
     // returns each PR once per reviewer, which is why authored PRs come from elsewhere.
