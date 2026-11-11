@@ -277,14 +277,7 @@ export const FileRow = ({
       </span>
       <FileIcon path={entry.path} status={entry.status} />
       <span className="min-w-0 flex-1 truncate">
-        <span
-          data-slot="file-name"
-          className={cn(
-            // A muted row stays grey, or a PR of new files would undo the muting; a deleted
-            // name keeps its strikethrough.
-            relation === "other" ? entry.status === "deleted" && "line-through" : mark?.name,
-          )}
-        >
+        <span data-slot="file-name" className={mark?.name}>
           {label === entry.path ? label : nameOf(entry.path)}
         </span>
         {mark !== null && <span className="sr-only">, {mark.label}</span>}
