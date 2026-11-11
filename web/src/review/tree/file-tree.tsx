@@ -261,8 +261,8 @@ export const FileRow = ({
       title={entry.path}
       onClick={() => onSelect(entry.path)}
       className={cn(
-        "flex min-h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left hover:bg-surface-subtle",
-        active && "bg-surface-subtle font-medium shadow-[inset_3px_0_0_var(--primary)]",
+        "flex min-h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left hover:bg-surface-row",
+        active && "bg-surface-row font-medium shadow-[inset_3px_0_0_var(--primary)]",
         relation === "other" && "text-muted-foreground",
       )}
       style={{ paddingLeft: `${depth * 12 + 4}px` }}

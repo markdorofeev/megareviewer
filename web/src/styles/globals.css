@@ -124,6 +124,7 @@
 
   /* surface */
   --surface-subtle: #FAFAFA;
+  --surface-row: #FAFAFA;
 
   /* diff */
   --diff-add-bg: #EAF7EE;
@@ -220,6 +221,7 @@
 
   /* surface */
   --surface-subtle: #1F1F1F;
+  --surface-row: #262626;
 
   /* diff */
   --diff-add-bg: #1D3A28;
@@ -349,6 +351,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-surface-subtle: var(--surface-subtle);
+  --color-surface-row: var(--surface-row);
   --color-diff-add-bg: var(--diff-add-bg);
   --color-diff-add-word: var(--diff-add-word);
   --color-diff-add-gutter: var(--diff-add-gutter);

@@ -75,26 +75,28 @@ const PAIRS = [
   ["Input border (non-text)", "input", "background", 3],
   ["Focus ring (non-text)", "ring", "background", 3],
   // hunk: what the review components put where: counts and headings on the page, cards
-  // and the active tree row (surface-subtle), muted text on gaps between hunks.
+  // and the active or hovered tree row (surface-row), muted text on gaps between hunks.
   ["+ count on background", "diff-add-fg", "background", 4.5],
   ["+ count on card", "diff-add-fg", "card", 4.5],
-  ["+ count on active row", "diff-add-fg", "surface-subtle", 4.5],
+  ["+ count on active row", "diff-add-fg", "surface-row", 4.5],
   ["− count on background", "diff-del-fg", "background", 4.5],
   ["− count on card", "diff-del-fg", "card", 4.5],
-  ["− count on active row", "diff-del-fg", "surface-subtle", 4.5],
+  ["− count on active row", "diff-del-fg", "surface-row", 4.5],
   ["Section heading on background", "diff-hunk-fg", "background", 4.5],
   ["Section heading on card", "diff-hunk-fg", "card", 4.5],
-  ["Section heading on active row", "diff-hunk-fg", "surface-subtle", 4.5],
-  ["Contract count on active row", "risk-contract", "surface-subtle", 4.5],
+  ["Section heading on active row", "diff-hunk-fg", "surface-row", 4.5],
+  ["Contract count on active row", "risk-contract", "surface-row", 4.5],
   ["Contract count on background", "risk-contract", "background", 4.5],
   ["Gap text", "muted-foreground", "surface-subtle", 4.5],
   ["Error on a fold", "destructive", "surface-subtle", 4.5],
   ["Muted text on directory hover", "muted-foreground", "accent", 4.5],
-  ["Active row bar (non-text)", "primary", "surface-subtle", 3],
+  ["Active row bar (non-text)", "primary", "surface-row", 3],
+  ["Text on active row", "foreground", "surface-row", 4.5],
+  ["Muted file name on hovered row", "muted-foreground", "surface-row", 4.5],
   // hunk: the tree's file icons, on the rail and on the active or hovered row.
   ...["syntax-function", "syntax-number", "syntax-string", "syntax-keyword"].flatMap((token) => [
     [`File icon ${token} on background (non-text)`, token, "background", 3],
-    [`File icon ${token} on active row (non-text)`, token, "surface-subtle", 3],
+    [`File icon ${token} on active row (non-text)`, token, "surface-row", 3],
   ]),
   ["Directory name on hover", "foreground", "accent", 4.5],
   // hunk: the focused diff line's 3px bar, over the gutter of each kind of line.
@@ -135,6 +137,13 @@ const PAIRS = [
   // and the grey is meant to recede. Its label and glyph carry the meaning.
 ];
 
+// [label, fill token, surface token]: a fill that marks a row has to differ from what it sits on,
+// or only its bar is left. In dark, the active row's fill once matched the page.
+const FILLS = [
+  ["Active tree row on background", "surface-row", "background"],
+  ["Active tree row on card", "surface-row", "card"],
+];
+
 let failed = 0;
 for (const [name, theme] of [
   ["light", light],
@@ -152,8 +161,16 @@ for (const [name, theme] of [
       );
     }
   }
+  for (const [label, fill, surface] of FILLS) {
+    if (!theme[fill] || !theme[surface])
+      throw new Error(`Missing token ${fill} or ${surface} in ${name}`);
+    if (theme[fill].toLowerCase() === theme[surface].toLowerCase()) {
+      failed++;
+      console.error(`FAIL ${name.padEnd(8)} ${label}: --${fill} is --${surface}'s color`);
+    }
+  }
 }
 if (failed) process.exit(1);
 console.log(
-  `All ${PAIRS.length * 4} contrast checks pass (light, dark, color-blind light, color-blind dark).`,
+  `All ${(PAIRS.length + FILLS.length) * 4} contrast checks pass (light, dark, color-blind light, color-blind dark).`,
 );
