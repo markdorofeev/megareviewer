@@ -29,7 +29,7 @@ export const Rail = ({
     id="review-tree-rail"
     data-form={form}
     aria-label="Files"
-    className="sticky top-0 flex max-h-screen min-h-0 flex-col gap-2 self-start overflow-hidden py-1 pr-1"
+    className="sticky top-0 flex h-screen min-h-0 flex-col gap-2 self-start overflow-hidden py-1 pr-1"
   >
     <Segmented legend="Show the files as" options={FORMS} value={form} onChange={onForm} />
     {children}
