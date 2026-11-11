@@ -74,14 +74,14 @@ test("analyzes a PR picked from the list", async ({ page }) => {
 test("the map moves between the files with the keyboard", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
   const files = await page
-    .locator(".map .file-card")
+    .locator("[aria-label=Changes] [data-slot=file-card]")
     .evaluateAll((cards) => cards.map((card) => card.getAttribute("aria-label") ?? ""));
   // In path order, as a directory tree lists them.
   expect(files).toEqual(["config/app.yaml", "src/routes/orders.ts", "src/services/receipts.ts"]);
   const [first, second] = files;
   if (first === undefined || second === undefined) throw new Error("expected two files");
-  await page.locator(".map .file-card-header").first().click();
-  const focused = page.locator(".map .file-card:focus");
+  await page.locator("[aria-label=Changes] [data-slot=file-card-header]").first().click();
+  const focused = page.locator("[aria-label=Changes] [data-slot=file-card]:focus");
   await page.keyboard.press("n");
   await expect(focused).toHaveAttribute("aria-label", second);
   await page.keyboard.press("p");
@@ -93,11 +93,11 @@ test("mechanical changes are collapsed until expanded", async ({ page }) => {
   const group = page.getByRole("region", { name: /Mechanical changes/ });
   const toggles = group.getByRole("button", { expanded: false });
   await expect(toggles.first()).toBeVisible();
-  await expect(group.locator(".hunk-card")).toHaveCount(0);
+  await expect(group.locator("[data-slot=hunk-card]")).toHaveCount(0);
 
   await toggles.first().click();
   await expect(group.getByRole("button", { expanded: true })).toHaveCount(1);
-  await expect(group.locator(".hunk-card")).toHaveCount(1);
+  await expect(group.locator("[data-slot=hunk-card]")).toHaveCount(1);
 });
 
 test("verdicts and comments persist across a reload", async ({ page }) => {
@@ -126,7 +126,7 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
 
   await page.getByRole("button", { name: "Publish…" }).click();
   const dialog = page.getByRole("dialog", { name: "Publish the review" });
-  await expect(dialog.getByText("Request changes", { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/^Verdict: ✕Request changes$/)).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "1 inline comment" })).toBeVisible();
   await expect(dialog.getByText("src/routes/orders.ts:")).toBeVisible();
   await dialog.getByRole("button", { name: "Publish", exact: true }).click();
@@ -235,7 +235,7 @@ test.describe("without the model", () => {
       "aria-pressed",
       "true",
     );
-    await expect(page.locator(".file-card:focus")).toHaveAttribute(
+    await expect(page.locator("[data-slot=file-card]:focus")).toHaveAttribute(
       "aria-label",
       "src/routes/orders.ts",
     );
@@ -264,7 +264,7 @@ for (const width of [720, 1024, 1440]) {
       .getByRole("group", { name: "Layout" })
       .getByRole("button", { name: "Overview", exact: true })
       .click();
-    await expect(page.locator(".overview-scroll")).toBeVisible();
+    await expect(page.locator("[data-slot=overview-scroll]")).toBeVisible();
     expect(await overflows()).toBe(false);
   });
 }

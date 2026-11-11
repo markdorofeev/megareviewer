@@ -1,8 +1,10 @@
-import "./picker.css";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import type { StatusResponse } from "../../../../contracts/index.ts";
 import { errorMessage, useApi, useMutation, usePullRequests } from "../../api/index.ts";
 import { navigate, reviewPath } from "../../app/router.ts";
+import { cn } from "../../lib/utils.ts";
+import { DANGER } from "../../review/index.ts";
+import { Button } from "../../ui/button.tsx";
 import { HOST_NAMES, PullRequestList } from "./PullRequestList.tsx";
 import { SetupStatus } from "./SetupStatus.tsx";
 import { UrlForm } from "./UrlForm.tsx";
@@ -10,6 +12,8 @@ import { UrlForm } from "./UrlForm.tsx";
 const isTextField = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+
+const BANNER = cn(DANGER, "lg:col-span-2");
 
 /** Where an analysis was started from: the URL form, or a row, by its PR's URL. */
 type StartSource = { readonly from: "form" } | { readonly from: "row"; readonly url: string };
@@ -60,9 +64,11 @@ export const PickerPage = ({
   const nowMs = now();
 
   return (
-    <div className="picker">
-      <section className="analyze" aria-labelledby="analyze-heading">
-        <h1 id="analyze-heading">Review a pull request</h1>
+    <div className="mx-auto flex max-w-5xl flex-col gap-6">
+      <section aria-labelledby="analyze-heading" className="flex flex-col gap-3">
+        <h1 id="analyze-heading" className="text-title font-semibold tracking-[-0.01em]">
+          Review a pull request
+        </h1>
         <UrlForm
           inputRef={urlField}
           pending={start.pending && source?.from === "form"}
@@ -75,19 +81,19 @@ export const PickerPage = ({
 
       {/* Arrow keys move between rows; the handler only reacts to keys from row buttons. */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: the rows inside are buttons. */}
-      <div className="pr-lists" ref={lists} onKeyDown={moveFocus}>
+      <div className="grid gap-6 lg:grid-cols-2" ref={lists} onKeyDown={moveFocus}>
         {error !== null && (
-          <p className="banner danger" role="alert">
+          <p className={BANNER} role="alert">
             Couldn't list pull requests. {errorMessage(error)}
           </p>
         )}
         {pullRequests?.errors.map((failure) => (
-          <p key={failure.host} className="banner danger" role="alert">
+          <p key={failure.host} className={BANNER} role="alert">
             Couldn't list {HOST_NAMES[failure.host]} pull requests: {failure.message}
           </p>
         ))}
         {source?.from === "row" && start.error !== null && (
-          <p className="banner danger" role="alert">
+          <p className={BANNER} role="alert">
             Couldn't start the analysis. {errorMessage(start.error)}
           </p>
         )}
@@ -95,9 +101,9 @@ export const PickerPage = ({
           title="Waiting for your review"
           empty="Nothing is waiting for your review."
           action={
-            <button type="button" className="button" onClick={refresh} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
               {loading ? "Refreshing…" : "Refresh"}
-            </button>
+            </Button>
           }
           items={items?.filter((item) => item.role === "reviewer") ?? null}
           nowMs={nowMs}

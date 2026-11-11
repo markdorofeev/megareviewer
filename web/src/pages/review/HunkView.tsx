@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { PartId, UnchangedCallers } from "../../../../src/domain/diff/index.ts";
-import { CollapsedHunk, HunkCard, type LineComment, type LinePlace } from "../../diff/index.ts";
+import { HunkCard, type LineComment, type LinePlace, MechanicalHunk } from "../../review/index.ts";
 import type { PartIndex } from "./model.ts";
 
 /** What a part on the page needs. */
@@ -28,7 +28,7 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
   const { hunk, file, risk, proofs = [] } = item;
   if (proofs.length > 0) {
     return (
-      <CollapsedHunk
+      <MechanicalHunk
         hunk={hunk}
         file={file}
         risk={risk}

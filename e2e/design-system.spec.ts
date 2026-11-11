@@ -104,7 +104,7 @@ test("works from the keyboard", async ({ page }) => {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   });
-  const active = screens.locator("nav [aria-current=true]");
+  const active = screens.locator("nav [aria-current]");
   await expect(active).toHaveAttribute("title", "src/http/retry.ts");
   await page.keyboard.press("n");
   await expect(active).toHaveAttribute("title", "src/util/sleep.ts");

@@ -1,4 +1,4 @@
-import type { DiffLine, Hunk } from "../../../src/domain/diff/index.ts";
+import type { DiffLine, Hunk } from "../../../../src/domain/diff/index.ts";
 
 /** A diff line as shown: its text without a trailing carriage return. */
 export interface DisplayLine {

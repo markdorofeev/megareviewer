@@ -1,5 +1,6 @@
 // hunk: shadcn base-nova, mapped to Indigo Calm: type scale (text-ui, text-caption), radius
-// (controls md, popups xl), the base layer's 2px focus outline instead of ring-3, no dark: overrides.
+// (controls md, popups xl), the base layer's 2px focus outline instead of ring-3, no dark: overrides,
+// and a scrim of the background token instead of black.
 
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
@@ -28,7 +29,7 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
     <SheetPrimitive.Backdrop
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/10 transition-opacity duration-(--duration-base) data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs",
+        "fixed inset-0 z-50 bg-background/70 transition-opacity duration-(--duration-base) data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs",
         className,
       )}
       {...props}

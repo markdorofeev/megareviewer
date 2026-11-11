@@ -2,14 +2,12 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import type { FileChange, MechanicalProof } from "../../../src/domain/diff/index.ts";
-import type { RiskAssessment } from "../../../src/domain/review/index.ts";
-import { FileNotices } from "./FileNotices.tsx";
-import type { Highlighter } from "./highlight.ts";
-import { MechanicalGroup } from "./MechanicalGroup.tsx";
+import type { FileChange, MechanicalProof } from "../../../../src/domain/diff/index.ts";
+import type { RiskAssessment } from "../../../../src/domain/review/index.ts";
 import { mechanicalRows } from "./mechanical.ts";
+import { FileNotices, MechanicalGroup } from "./mechanical-group.tsx";
+import { type Highlighter, HighlighterContext } from "./syntax.ts";
 import { firstHunk, modifiedFile, parseFiles } from "./testing.ts";
-import { HighlighterContext } from "./useHighlighter.ts";
 
 const pendingHighlighter: Highlighter = { highlight: () => new Promise(() => {}) };
 const wrapper = ({ children }: { readonly children: ReactNode }) => (
@@ -64,6 +62,9 @@ const LOCKFILE_ROW = "pnpm-lock.yaml — lockfile (pnpm-lock.yaml) (+700 −0)";
 const STRINGS_ROW = "src/strings.ts — whitespace only: trailing whitespace (+1 −1)";
 const RENAME_ROW = "docs/setup.md → docs/getting-started.md — renamed, content unchanged";
 
+/** A row's text without its toggle's ▾, which is decoration. */
+const text = (element: Element) => element.textContent?.replace("▾", "");
+
 describe("mechanicalRows", () => {
   it("orders rows by file and hunk, whatever the order of the proofs", () => {
     expect(mechanicalRows(files, proofs).map((row) => row.summary)).toEqual([
@@ -95,16 +96,15 @@ describe("MechanicalGroup", () => {
   it("shows one collapsed row per mechanical hunk and a row per pure rename", () => {
     renderGroup();
     const group = screen.getByRole("region", { name: "Mechanical changes 3" });
-    expect(
-      within(group)
-        .getAllByRole("listitem")
-        .map((row) => row.textContent),
-    ).toEqual([LOCKFILE_ROW, STRINGS_ROW, RENAME_ROW]);
-    expect(
-      within(group)
-        .getAllByRole("button", { expanded: false })
-        .map((button) => button.textContent),
-    ).toEqual([LOCKFILE_ROW, STRINGS_ROW]);
+    expect(within(group).getAllByRole("listitem").map(text)).toEqual([
+      LOCKFILE_ROW,
+      STRINGS_ROW,
+      RENAME_ROW,
+    ]);
+    expect(within(group).getAllByRole("button", { expanded: false }).map(text)).toEqual([
+      LOCKFILE_ROW,
+      STRINGS_ROW,
+    ]);
     expect(within(group).queryAllByRole("region")).toEqual([]);
   });
 
@@ -119,7 +119,7 @@ describe("MechanicalGroup", () => {
     expect(card.querySelector("header")?.textContent).toContain(
       "✓ whitespace only: trailing whitespace",
     );
-    expect(within(card).getByRole("button", { name: "mechanical" })).toBeTruthy();
+    expect(within(card).getByText("Mechanical")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: STRINGS_ROW }));
     expect(screen.queryByRole("region", { name: "src/strings.ts, lines 3–4" })).toBeNull();
@@ -130,10 +130,9 @@ describe("MechanicalGroup", () => {
     renderGroup();
     await user.click(screen.getByRole("button", { name: LOCKFILE_ROW }));
     const card = screen.getByRole("region", { name: "pnpm-lock.yaml, lines 1–701" });
-    // A header row, then the lines.
-    expect(within(card).getAllByRole("row")).toHaveLength(501);
+    expect(within(card).getAllByRole("row")).toHaveLength(500);
     await user.click(within(card).getByRole("button", { name: "Show all 701 lines" }));
-    expect(within(card).getAllByRole("row")).toHaveLength(702);
+    expect(within(card).getAllByRole("row")).toHaveLength(701);
     expect(within(card).queryByRole("button", { name: /Show all/ })).toBeNull();
   });
 
@@ -148,7 +147,7 @@ describe("MechanicalGroup", () => {
 
   it("has no expand toggle when nothing can expand", () => {
     renderGroup(proofs.slice(0, 1));
-    expect(screen.getByRole("listitem").textContent).toBe(RENAME_ROW);
+    expect(text(screen.getByRole("listitem"))).toBe(RENAME_ROW);
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -186,11 +185,11 @@ describe("FileNotices", () => {
         .getAllByRole("listitem")
         .map((row) => row.textContent),
     ).toEqual([
-      "assets/logo.pngmodifiedbinary file changed",
-      "assets/new.pngaddedbinary file added",
-      "scripts/deploy.shmodifiedmode 100644 → 100755",
-      ".keepaddedempty file added",
-      "old.txtdeletedempty file deleted",
+      "assets/logo.pngMmodifiedbinary file changed",
+      "assets/new.pngAaddedbinary file added",
+      "scripts/deploy.shMmodifiedmode 100644 → 100755",
+      ".keepAaddedempty file added",
+      "old.txtDdeletedempty file deleted",
     ]);
   });
 
@@ -209,7 +208,7 @@ describe("FileNotices", () => {
     if (file === undefined) throw new Error("no file");
     expect(firstHunk(file)).toBeTruthy();
     render(<FileNotices files={[file]} />);
-    expect(screen.getByRole("listitem").textContent).toBe("run.shmodifiedmode 100644 → 100755");
+    expect(screen.getByRole("listitem").textContent).toBe("run.shMmodifiedmode 100644 → 100755");
   });
 
   it("renders nothing when every file has lines to show or a proof", () => {

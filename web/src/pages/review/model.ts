@@ -18,8 +18,8 @@ import {
   type TourStep,
   TourStepId,
 } from "../../../../src/domain/review/index.ts";
-import { commentPlace, type HunkItem } from "../../diff/index.ts";
-import { byTreePath } from "./tree.ts";
+import { commentPlace, type HunkItem } from "../../review/index.ts";
+import { byTreePath } from "../../review/tree/paths.ts";
 
 export { byTreePath };
 

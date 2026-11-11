@@ -12,7 +12,7 @@ import {
   type RiskClass,
   type TourStep,
 } from "../../../../src/domain/review/index.ts";
-import { byTreePath, directoryOf } from "./tree.ts";
+import { byTreePath, directoryOf } from "../../review/tree/paths.ts";
 
 // The overview: a layered diagram of the changed files. It imports only domain code, so
 // `pnpm measure` prints its rows with the page's own rules.

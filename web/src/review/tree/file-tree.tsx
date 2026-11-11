@@ -1,13 +1,14 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useShortcuts } from "../../lib/keymap.ts";
 import { FILE_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
-import { fileTree, nameOf, type TreeEntry, treeOrder } from "../../pages/review/tree.ts";
 import { Input } from "../../ui/input.tsx";
 import { ScrollArea } from "../../ui/scroll-area.tsx";
 import { EmptyState } from "../shell/empty-state.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
 import { type FileEntry, type FileOrder, filterFiles, sortFiles } from "./files.ts";
+import { fileTree, nameOf, type TreeEntry, treeOrder } from "./paths.ts";
+import { ARROWS, type Neighbors, type Relation, relationOf } from "./relations.ts";
 
 export interface FileTreeProps {
   readonly files: readonly FileEntry[];
@@ -19,6 +20,11 @@ export interface FileTreeProps {
   readonly order?: FileOrder;
   /** n and p select the next and previous file, in the order shown. One tree per page has it. */
   readonly navigate?: boolean;
+  /**
+   * The links between files. With them, the active file's callers and callees carry arrows and
+   * the other files are muted, as in the rail beside the code.
+   */
+  readonly neighbors?: Neighbors;
   readonly className?: string;
 }
 
@@ -30,8 +36,21 @@ export const FileTree = ({
   mode = "tree",
   order = "path",
   navigate = false,
+  neighbors,
   className,
 }: FileTreeProps) => {
+  const nav = useRef<HTMLElement>(null);
+  // Keep the active file in sight when the list is longer than its box.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the active file changes.
+  useEffect(() => {
+    const box = nav.current?.querySelector<HTMLElement>("[data-slot=scroll-area-viewport]");
+    const row = nav.current?.querySelector<HTMLElement>("[aria-current]");
+    if (box === null || box === undefined || row === null || row === undefined) return;
+    const top = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 40) {
+      box.scrollTop = Math.max(0, top - box.clientHeight / 3);
+    }
+  }, [activePath]);
   const [query, setQuery] = useState("");
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const filter = useRef<HTMLInputElement>(null);
@@ -72,7 +91,13 @@ export const FileTree = ({
         entry={entry}
         label={label}
         depth={depth}
-        active={entry.path === activePath}
+        relation={
+          neighbors === undefined
+            ? entry.path === activePath
+              ? "current"
+              : "none"
+            : relationOf(entry.path, activePath, neighbors)
+        }
         onSelect={onSelect}
       />
     </li>
@@ -90,6 +115,7 @@ export const FileTree = ({
         <li key={entry.path}>
           <button
             type="button"
+            title={`${entry.path}/`}
             aria-expanded={open}
             onClick={() => toggle(entry.path)}
             className="flex min-h-6 w-full items-center gap-1 rounded-md pr-2 text-left font-mono text-code-compact text-muted-foreground hover:bg-accent"
@@ -113,7 +139,11 @@ export const FileTree = ({
     });
 
   return (
-    <nav aria-label="Changed files" className={cn("flex min-h-0 flex-col gap-2", className)}>
+    <nav
+      ref={nav}
+      aria-label="Changed files"
+      className={cn("flex min-h-0 flex-col gap-2", className)}
+    >
       <div className="relative px-1">
         <Input
           ref={filter}
@@ -157,7 +187,7 @@ export const FileTree = ({
   );
 };
 
-const ContractCount = ({ count }: { readonly count: number }) => (
+export const ContractCount = ({ count }: { readonly count: number }) => (
   <span className="tabular flex items-center gap-1 text-caption font-medium text-risk-contract">
     <span aria-hidden="true">▲</span>
     {count}
@@ -165,33 +195,52 @@ const ContractCount = ({ count }: { readonly count: number }) => (
   </span>
 );
 
-const FileRow = ({
+/**
+ * A file's row: an arrow saying how it relates to the active file, its name (its directory muted
+ * when the row isn't under it), its contract parts, its counts and its status. A click selects it.
+ */
+export const FileRow = ({
   entry,
   label,
-  depth,
-  active,
+  depth = 0,
+  relation = "none",
+  directory,
   onSelect,
 }: {
-  readonly entry: FileEntry;
+  readonly entry: Pick<FileEntry, "path" | "contract"> & Partial<FileEntry>;
   readonly label: string;
-  readonly depth: number;
-  readonly active: boolean;
+  readonly depth?: number;
+  readonly relation?: Relation;
+  /** Shown muted after the name, for a row outside its directory's heading. */
+  readonly directory?: string;
   readonly onSelect: (path: string) => void;
 }) => {
-  const status = FILE_STATUS[entry.status];
+  const status = entry.status === undefined ? null : FILE_STATUS[entry.status];
+  const arrow = ARROWS[relation];
+  const active = relation === "current";
   return (
     <button
       type="button"
-      aria-current={active ? "true" : undefined}
+      data-relation={relation}
+      aria-current={active ? "location" : undefined}
       title={entry.path}
       onClick={() => onSelect(entry.path)}
       className={cn(
         // surface-subtle rather than accent: the modified letter is under 4.5:1 on accent.
-        "flex min-h-6 w-full items-center gap-2 rounded-md pr-2 text-left hover:bg-surface-subtle",
-        active && "bg-surface-subtle shadow-[inset_3px_0_0_var(--primary)]",
+        "flex min-h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left hover:bg-surface-subtle",
+        active && "bg-surface-subtle font-medium shadow-[inset_3px_0_0_var(--primary)]",
+        relation === "other" && "text-muted-foreground",
       )}
-      style={{ paddingLeft: `${depth * 12 + 20}px` }}
+      style={{ paddingLeft: `${depth * 12 + 4}px` }}
     >
+      <span className="w-3 shrink-0 text-center text-primary">
+        {arrow !== null && (
+          <>
+            <span aria-hidden="true">{arrow.mark}</span>
+            <span className="sr-only">{arrow.text}, </span>
+          </>
+        )}
+      </span>
       <span
         className={cn(
           "min-w-0 flex-1 truncate",
@@ -199,18 +248,27 @@ const FileRow = ({
         )}
       >
         {label === entry.path ? label : nameOf(entry.path)}
+        {directory !== undefined && (
+          <span className="ml-1.5 font-mono text-code-compact text-muted-foreground">
+            {directory}/
+          </span>
+        )}
       </span>
       {entry.contract > 0 && <ContractCount count={entry.contract} />}
-      <span className="tabular font-mono text-code-compact">
-        <span className="text-diff-add-fg">+{entry.additions}</span>{" "}
-        <span className="text-diff-del-fg">−{entry.deletions}</span>
-      </span>
-      <span
-        className={cn("w-3 text-center font-mono text-caption font-semibold", status.className)}
-      >
-        <span aria-hidden="true">{status.glyph}</span>
-        <span className="sr-only">{status.label}</span>
-      </span>
+      {entry.additions !== undefined && entry.deletions !== undefined && (
+        <span className="tabular font-mono text-code-compact">
+          <span className="text-diff-add-fg">+{entry.additions}</span>{" "}
+          <span className="text-diff-del-fg">−{entry.deletions}</span>
+        </span>
+      )}
+      {status !== null && (
+        <span
+          className={cn("w-3 text-center font-mono text-caption font-semibold", status.className)}
+        >
+          <span aria-hidden="true">{status.glyph}</span>
+          <span className="sr-only">{status.label}</span>
+        </span>
+      )}
     </button>
   );
 };

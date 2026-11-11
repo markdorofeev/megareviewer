@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Segmented } from "./Segmented.tsx";
 
 /** What the rail beside the code shows: the tree of files, or a miniature of the overview. */
 export type RailForm = "tree" | "overview";
@@ -6,9 +7,9 @@ export type RailForm = "tree" | "overview";
 export const parseRailForm = (stored: unknown): RailForm | undefined =>
   stored === "tree" || stored === "overview" ? stored : undefined;
 
-const FORMS: readonly { readonly form: RailForm; readonly name: string }[] = [
-  { form: "tree", name: "Tree" },
-  { form: "overview", name: "Overview" },
+const FORMS: readonly { readonly value: RailForm; readonly label: string }[] = [
+  { value: "tree", label: "Tree" },
+  { value: "overview", label: "Overview" },
 ];
 
 /**
@@ -24,21 +25,13 @@ export const Rail = ({
   readonly onForm: (form: RailForm) => void;
   readonly children: ReactNode;
 }) => (
-  <aside id="review-tree-rail" className={`tree-rail form-${form}`} aria-label="Files">
-    <fieldset className="layout-toggle rail-switch">
-      <legend className="visually-hidden">Show the files as</legend>
-      {FORMS.map((one) => (
-        <button
-          key={one.form}
-          type="button"
-          className="button"
-          aria-pressed={form === one.form}
-          onClick={() => onForm(one.form)}
-        >
-          {one.name}
-        </button>
-      ))}
-    </fieldset>
+  <aside
+    id="review-tree-rail"
+    data-form={form}
+    aria-label="Files"
+    className="sticky top-0 flex max-h-screen min-h-0 flex-col gap-2 self-start overflow-hidden py-1 pr-1"
+  >
+    <Segmented legend="Show the files as" options={FORMS} value={form} onChange={onForm} />
     {children}
   </aside>
 );

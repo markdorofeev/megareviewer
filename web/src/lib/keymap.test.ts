@@ -83,9 +83,11 @@ describe("chordKeys", () => {
     expect(chordKeys(shortcut("extendUp").chords[0] ?? { key: "" }, true)).toEqual(["⇧", "↑"]);
   });
 
-  it("gives every shortcut a distinct chord", () => {
+  it("gives every shortcut a distinct chord within where it works", () => {
     const seen = KEYMAP.flatMap((entry) =>
-      entry.chords.map((chord) => `${chord.mod ?? false} ${chord.shift ?? false} ${chord.key}`),
+      entry.chords.map(
+        (chord) => `${entry.scope} ${chord.mod ?? false} ${chord.shift ?? false} ${chord.key}`,
+      ),
     );
     expect(new Set(seen).size).toBe(seen.length);
   });

@@ -1,6 +1,11 @@
 import { type FormEvent, type Ref, useId, useState } from "react";
 import { parsePullRequestUrl } from "../../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage } from "../../api/index.ts";
+import { cn } from "../../lib/utils.ts";
+import { Button } from "../../ui/button.tsx";
+import { Input } from "../../ui/input.tsx";
+import { Kbd } from "../../ui/kbd.tsx";
+import { Label } from "../../ui/label.tsx";
 
 const UNSUPPORTED = errorMessage({ code: "unsupported-url", message: "" });
 
@@ -33,13 +38,13 @@ export const UrlForm = ({
   };
 
   return (
-    <form className="url-form" onSubmit={submit} noValidate>
-      <label htmlFor={`${id}-url`}>Pull request URL</label>
-      <div className="url-form-row">
-        <input
+    <form className="flex flex-col gap-1.5" onSubmit={submit} noValidate>
+      <Label htmlFor={`${id}-url`}>Pull request URL</Label>
+      <div className="flex gap-2">
+        <Input
           ref={inputRef}
           id={`${id}-url`}
-          className="input"
+          className="h-9 flex-1"
           type="url"
           inputMode="url"
           autoComplete="off"
@@ -50,14 +55,26 @@ export const UrlForm = ({
           aria-invalid={!empty && !valid}
           aria-describedby={`${id}-hint`}
         />
-        <button type="submit" className="button primary" disabled={!valid || pending}>
+        <Button type="submit" size="lg" disabled={!valid || pending}>
           {pending ? "Starting…" : "Analyze"}
-        </button>
+        </Button>
       </div>
-      <p id={`${id}-hint`} className={problem === null ? "hint" : "hint field-error"} role="status">
-        {problem ?? (
+      <p
+        id={`${id}-hint`}
+        className={cn(
+          "text-caption",
+          problem === null ? "text-muted-foreground" : "text-destructive",
+        )}
+        role="status"
+      >
+        {problem === null ? (
           <>
-            Paste a GitHub or Bitbucket Cloud pull request link. Press <kbd>/</kbd> to focus.
+            Paste a GitHub or Bitbucket Cloud pull request link. Press <Kbd>/</Kbd> to focus.
+          </>
+        ) : (
+          <>
+            <span aria-hidden="true">✕ </span>
+            {problem}
           </>
         )}
       </p>

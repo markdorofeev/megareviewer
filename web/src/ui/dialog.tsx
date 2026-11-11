@@ -1,5 +1,6 @@
 // hunk: shadcn base-nova, mapped to Indigo Calm: type scale (text-ui, text-caption), radius
-// (controls md, popups xl), the base layer's 2px focus outline instead of ring-3, no dark: overrides.
+// (controls md, popups xl), the base layer's 2px focus outline instead of ring-3, no dark: overrides,
+// and a scrim of the background token instead of black.
 "use client";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
@@ -29,7 +30,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-(--duration-fast) supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-background/70 duration-(--duration-fast) supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
       {...props}

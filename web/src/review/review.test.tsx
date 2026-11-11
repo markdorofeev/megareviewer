@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { modifiedFile } from "../diff/testing.ts";
+import { modifiedFile } from "./diff/testing.ts";
 import { DiffViewer, FileTree, KeyHint, ReviewSubmitPanel, type ViewLine } from "./index.ts";
 
 const FILE = modifiedFile("src/retry.ts", [
@@ -89,7 +89,7 @@ describe("FileTree", () => {
     const deleted = screen.getByTitle("src/auth/session.ts");
     expect(deleted.textContent).toContain("Deleted");
     expect(deleted.textContent).toContain("2 contract");
-    expect(screen.getByTitle("src/http/retry.ts").getAttribute("aria-current")).toBe("true");
+    expect(screen.getByTitle("src/http/retry.ts").getAttribute("aria-current")).toBe("location");
   });
 });
 

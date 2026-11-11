@@ -29,13 +29,21 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
     usage.reduce((total, entry) => total + pick(entry), 0);
 
   return (
-    <footer className="usage-footer">
-      <button type="button" className="usage" aria-describedby={`${id}-breakdown`}>
+    <footer className="group relative flex justify-end">
+      <button
+        type="button"
+        className="peer tabular min-h-6 rounded-sm text-caption text-muted-foreground hover:text-foreground"
+        aria-describedby={`${id}-breakdown`}
+      >
         Usage: {formatTokens(sum(inputOf))} tokens in ·{" "}
         {formatTokens(sum((u) => u.cacheReadTokens))} cache read ·{" "}
         {formatTokens(sum((u) => u.outputTokens))} out · {formatCost(sum((u) => u.costUsd))}
       </button>
-      <table id={`${id}-breakdown`} className="usage-breakdown" role="tooltip">
+      <table
+        id={`${id}-breakdown`}
+        role="tooltip"
+        className="tabular absolute right-0 bottom-full mb-2 hidden rounded-xl bg-popover p-3 text-caption text-popover-foreground shadow-md ring-1 ring-foreground/10 group-hover:table peer-focus-visible:table [&_td]:px-2 [&_td]:text-right [&_th]:px-2 [&_th]:text-left [&_thead_th]:font-medium [&_thead_th]:text-muted-foreground"
+      >
         <thead>
           <tr>
             <th scope="col">Pass</th>

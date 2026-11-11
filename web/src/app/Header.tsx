@@ -1,5 +1,19 @@
 import type { StatusResponse } from "../../../contracts/index.ts";
 import { type ApiError, errorMessage } from "../api/index.ts";
+import { type ThemePreference, useTheme } from "../lib/theme.ts";
+import { cn } from "../lib/utils.ts";
+import { Button } from "../ui/button.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu.tsx";
 import { Link } from "./Link.tsx";
 
 interface Indicator {
@@ -34,6 +48,56 @@ export const statusIndicator = (
   return { tone: "ok", label: "Ready", detail: version };
 };
 
+const TONE: Readonly<Record<Indicator["tone"], string>> = {
+  ok: "bg-review-approved",
+  warning: "bg-review-pending",
+  danger: "bg-destructive",
+  muted: "bg-muted-foreground",
+};
+
+const THEMES: readonly { readonly value: ThemePreference; readonly label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
+
+/** The theme and the diff palette, two preferences kept per browser. */
+const DisplayMenu = () => {
+  const { theme, diffPalette, setTheme, setDiffPalette } = useTheme();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+        Display
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Theme</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={theme}
+            onValueChange={(value) => {
+              const chosen = THEMES.find((option) => option.value === value);
+              if (chosen !== undefined) setTheme(chosen.value);
+            }}
+          >
+            {THEMES.map((option) => (
+              <DropdownMenuRadioItem key={option.value} value={option.value}>
+                {option.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={diffPalette === "cb"}
+          onCheckedChange={(checked) => setDiffPalette(checked ? "cb" : "default")}
+        >
+          Color-blind safe diff
+        </DropdownMenuCheckboxItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
 export const Header = ({
   status,
   error,
@@ -43,14 +107,21 @@ export const Header = ({
 }) => {
   const indicator = statusIndicator(status, error);
   return (
-    <header className="app-header">
-      <Link to="/" className="brand">
+    <header className="flex h-12 items-center justify-between gap-4 border-b bg-surface-subtle px-4 sm:px-6">
+      <Link to="/" className="text-heading font-semibold text-foreground hover:no-underline">
         megareviewer
       </Link>
-      <span className="status-indicator" role="status" title={indicator.detail}>
-        <span className={`status-dot tone-${indicator.tone}`} aria-hidden="true" />
-        {indicator.label}
-      </span>
+      <div className="flex items-center gap-2">
+        <span
+          role="status"
+          title={indicator.detail}
+          className="flex items-center gap-2 text-muted-foreground"
+        >
+          <span aria-hidden="true" className={cn("size-2 rounded-full", TONE[indicator.tone])} />
+          {indicator.label}
+        </span>
+        <DisplayMenu />
+      </div>
     </header>
   );
 };

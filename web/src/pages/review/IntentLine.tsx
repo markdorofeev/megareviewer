@@ -1,4 +1,6 @@
+import { InfoIcon } from "lucide-react";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
+import { Button } from "../../ui/button.tsx";
 
 const HEADING = /^#{1,6}\s+/;
 
@@ -63,54 +65,56 @@ export const IntentLine = ({
   const description = pullRequest === null ? "" : firstSentence(pullRequest.description);
 
   return (
-    <div className="intent-line">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-body">
       {intent !== null ? (
-        <p className="intent-text">
-          <span className={`intent-label${mismatches.length === 0 ? " agrees" : ""}`}>
+        <p className="min-w-0">
+          <span
+            className={mismatches.length === 0 ? "font-medium text-review-approved" : "font-medium"}
+          >
             {mismatches.length > 0 || intent.stated === null
               ? "From the code:"
               : "✓ Does what was asked:"}
           </span>{" "}
-          <span className="model-text">{plainIntent(intent.inferred.summary)}</span>
+          <span data-slot="model-text" className="whitespace-pre-line">
+            {plainIntent(intent.inferred.summary)}
+          </span>
         </p>
       ) : modelOn && analysis.status === "running" ? (
-        <p className="intent-text muted" aria-busy="true">
+        <p className="text-muted-foreground" aria-busy="true">
           Working out the intent…
         </p>
       ) : pullRequest !== null ? (
-        <p className="intent-text">
+        <p className="min-w-0">
           {description === "" ? (
-            <span className="muted">The pull request has no description.</span>
+            <span className="text-muted-foreground">The pull request has no description.</span>
           ) : (
-            <span className="pr-description-line">{description}</span>
+            <span>{description}</span>
           )}
         </p>
       ) : null}
       {(intent !== null || pullRequest !== null) && (
-        <button
-          type="button"
-          className="details-button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           aria-label="Details"
           title="Details"
           onClick={onDetails}
+          className="rounded-full text-muted-foreground"
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="8" cy="8" r="6.5" />
-            <path d="M8 7.25v4" />
-            <circle className="details-dot" cx="8" cy="4.9" r="0.4" />
-          </svg>
-        </button>
+          <InfoIcon aria-hidden="true" />
+        </Button>
       )}
       {mismatch !== undefined && (
         <button
           type="button"
-          className="mismatch-chip"
+          data-slot="mismatch-chip"
           title={mismatch.description}
           onClick={() => onMismatch(at)}
+          className="flex min-h-6 max-w-full items-center gap-1.5 rounded-full border border-review-changes/25 bg-review-changes-bg px-2 text-caption font-medium text-review-changes hover:border-review-changes"
         >
           <span aria-hidden="true">⚠</span>
-          <span className="mismatch-chip-text model-text">{mismatch.description}</span>
-          <span className="mismatch-chip-count">
+          <span className="min-w-0 truncate">{mismatch.description}</span>
+          <span className="tabular shrink-0 font-normal">
             {at + 1} of {mismatches.length}
           </span>
         </button>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 // so a hint can't name a key that does something else. Single-key shortcuts never fire while
 // typing, and the reviewer can turn them off (WCAG 2.1.4); shortcuts with a modifier stay on.
 
-export type ShortcutScope = "global" | "diff" | "tree" | "decision" | "composer";
+export type ShortcutScope = "global" | "diff" | "overview" | "tree" | "decision" | "composer";
 
 export type ShortcutId =
   | "nextFile"
@@ -17,6 +17,8 @@ export type ShortcutId =
   | "approveDecision"
   | "rejectDecision"
   | "toggleSplit"
+  | "moveFile"
+  | "openFile"
   | "toggleLayout"
   | "filterTree"
   | "openReview"
@@ -60,7 +62,7 @@ export const KEYMAP: readonly Shortcut[] = [
   {
     id: "comment",
     chords: [{ key: "c" }],
-    action: "Comment on the focused line or selection",
+    action: "Comment on the selected decision, or on the focused change",
     scope: "diff",
   },
   {
@@ -77,6 +79,18 @@ export const KEYMAP: readonly Shortcut[] = [
   },
   { id: "toggleSplit", chords: [{ key: "u" }], action: "Unified or split diff", scope: "diff" },
   { id: "toggleLayout", chords: [{ key: "v" }], action: "Map or overview", scope: "global" },
+  {
+    id: "moveFile",
+    chords: [{ key: "ArrowLeft" }, { key: "ArrowRight" }, { key: "ArrowUp" }, { key: "ArrowDown" }],
+    action: "Move between files",
+    scope: "overview",
+  },
+  {
+    id: "openFile",
+    chords: [{ key: "Enter" }],
+    action: "Open the file's code in the map, or a group of files in place",
+    scope: "overview",
+  },
   { id: "filterTree", chords: [{ key: "/" }], action: "Filter the files", scope: "tree" },
   {
     id: "openReview",
@@ -90,7 +104,12 @@ export const KEYMAP: readonly Shortcut[] = [
     action: "Send the comment or review",
     scope: "composer",
   },
-  { id: "close", chords: [{ key: "Escape" }], action: "Close or cancel", scope: "global" },
+  {
+    id: "close",
+    chords: [{ key: "Escape" }],
+    action: "Close, clear the highlight, or go back to the overview",
+    scope: "global",
+  },
   {
     id: "help",
     chords: [{ key: "?", shift: true }],

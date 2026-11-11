@@ -1,5 +1,5 @@
 import type { FileStatus } from "../../../../src/domain/diff/index.ts";
-import { byTreePath } from "../../pages/review/tree.ts";
+import { byTreePath } from "./paths.ts";
 
 /** A changed file as the tree lists it. */
 export interface FileEntry {

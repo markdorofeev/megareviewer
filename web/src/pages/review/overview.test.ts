@@ -12,6 +12,7 @@ import {
   type TourStep,
   TourStepId,
 } from "../../../../src/domain/review/index.ts";
+import { directoryOf } from "../../review/tree/paths.ts";
 import {
   type FileOverview,
   fileNeighbors,
@@ -20,7 +21,6 @@ import {
   type OverviewInput,
   uniqueLabels,
 } from "./overview.ts";
-import { directoryOf } from "./tree.ts";
 
 const h = (n: number) => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
 

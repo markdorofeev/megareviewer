@@ -30,7 +30,6 @@ const renderApp = (path: string, options: { fetch?: typeof fetch; token?: string
       token={token}
       fetch={options.fetch ?? mockFetch(createMockApi())}
       openEventStream={noStream}
-      playgrounds={{ "../styles/playground.tsx": async () => ({ default: () => <p>Tokens</p> }) }}
     />,
   );
   return token;
@@ -71,11 +70,6 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: "Add order receipts endpoint" }),
     ).toBeTruthy();
-  });
-
-  it("shows playgrounds", async () => {
-    renderApp("/dev/styles");
-    expect(await screen.findByText("Tokens")).toBeTruthy();
   });
 
   it("shows not-found with a link home for unknown paths", () => {

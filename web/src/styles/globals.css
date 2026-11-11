@@ -447,6 +447,13 @@
   }
 }
 
+/* hunk: links read as links in running text; components that style their own links override it. */
+@layer base {
+  a {
+    @apply text-primary underline-offset-2 hover:underline;
+  }
+}
+
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }

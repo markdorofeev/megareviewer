@@ -4,7 +4,6 @@ import { AnalysisId } from "../../../src/domain/review/index.ts";
 export type Route =
   | { readonly page: "picker" }
   | { readonly page: "review"; readonly analysisId: AnalysisId }
-  | { readonly page: "playground"; readonly name: string }
   | { readonly page: "not-found" };
 
 const NOT_FOUND: Route = { page: "not-found" };
@@ -19,16 +18,14 @@ const segment = (pathname: string, prefix: string): string | null => {
   }
 };
 
-/** Playgrounds exist only in dev builds. */
-export const matchRoute = (pathname: string, options: { readonly dev: boolean }): Route => {
+export const matchRoute = (pathname: string): Route => {
   if (pathname === "/") return { page: "picker" };
   const review = segment(pathname, "review");
   if (review !== null) {
     const analysisId = AnalysisId.safeParse(review);
     return analysisId.success ? { page: "review", analysisId: analysisId.data } : NOT_FOUND;
   }
-  const playground = options.dev ? segment(pathname, "dev") : null;
-  return playground === null ? NOT_FOUND : { page: "playground", name: playground };
+  return NOT_FOUND;
 };
 
 export const reviewPath = (analysisId: AnalysisId): string =>

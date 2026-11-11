@@ -25,7 +25,11 @@ export const fileInView = (
 
 /** The cards' tops, or null before the page is laid out (and in tests, which have no layout). */
 const cardTops = (): CardTop[] | null => {
-  const cards = [...document.querySelectorAll<HTMLElement>(".main-area.map .file-card[data-path]")];
+  const cards = [
+    ...document.querySelectorAll<HTMLElement>(
+      "[aria-label=Changes] [data-slot=file-card][data-path]",
+    ),
+  ];
   const rects = cards.map((card) => card.getBoundingClientRect());
   if (rects.every((rect) => rect.height === 0)) return null;
   return cards.map((card, at) => ({ path: card.dataset.path ?? "", top: rects[at]?.top ?? 0 }));

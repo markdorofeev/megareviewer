@@ -7,7 +7,7 @@ import {
   FileStatusBadge,
   lineCounts,
   MechanicalGroup,
-} from "../../diff/index.ts";
+} from "../../review/index.ts";
 import { type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
 import { contractParts, type FileGroup, gapBetween } from "./model.ts";
 
@@ -43,7 +43,7 @@ const MapPart = ({
   readonly deps: HunkDeps;
   readonly signatureOf: (id: PartId) => string;
 }) => (
-  <div id={hunkAnchor(id)} className="map-hunk" data-hunk-id={id}>
+  <div id={hunkAnchor(id)} className="scroll-mt-24 border-t first:border-t-0" data-hunk-id={id}>
     <Stable signature={signatureOf(id)} render={() => <HunkView id={id} deps={deps} />} />
   </div>
 );
@@ -51,7 +51,8 @@ const MapPart = ({
 /** Arrows apart from a line: lines folded away here. */
 const UnfoldIcon = () => (
   <svg
-    className="unfold-icon"
+    data-slot="unfold-icon"
+    className="shrink-0"
     viewBox="0 0 16 16"
     width="16"
     height="16"
@@ -72,7 +73,10 @@ const UnfoldIcon = () => (
 /** The unchanged lines between two parts on a card, folded: how many, under an unfold icon. */
 const GapRow = ({ lines }: { readonly lines: number }) =>
   lines === 0 ? null : (
-    <div className="file-gap folded">
+    <div
+      data-slot="file-gap"
+      className="flex h-8 items-center gap-2 border-t bg-surface-subtle px-3 text-muted-foreground"
+    >
       <UnfoldIcon />
       <span>
         {lines} {lines === 1 ? "line" : "lines"} unchanged
@@ -102,22 +106,34 @@ const FileCard = ({
   return (
     <section
       id={fileAnchor(group.file.path)}
-      className={contract > 0 ? "file-card risk-contract" : "file-card"}
+      data-slot="file-card"
+      data-risk={contract > 0 ? "contract" : undefined}
+      className="scroll-mt-2 rounded-lg border bg-card -outline-offset-2"
       aria-label={group.file.path}
       data-path={group.file.path}
       tabIndex={-1}
     >
-      <header className="file-card-header">
-        <FilePath file={group.file} />
+      <header
+        data-slot="file-card-header"
+        className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-t-lg border-b bg-card px-3 py-2"
+      >
+        <FilePath file={group.file} className="min-w-0 flex-1" />
         {/* Nearly every file is modified, so only the other statuses are worth a badge. */}
         {group.file.status !== "modified" && <FileStatusBadge status={group.file.status} />}
-        <span className="hunk-counts">
+        <span className="tabular flex flex-wrap items-center gap-x-1.5 text-caption">
           {fileReasons.length > 0 && (
-            <span className="file-card-reason">{fileReasons.join("; ")} · </span>
+            <span className="text-muted-foreground">{fileReasons.join("; ")} · </span>
           )}
-          {contract > 0 && <span className="count-contract">{contract} contract · </span>}
-          <span className="count-added">+{added}</span>{" "}
-          <span className="count-deleted">−{deleted}</span>
+          {contract > 0 && (
+            <span data-slot="count-contract" className="font-medium text-risk-contract">
+              <span aria-hidden="true">▲ </span>
+              {contract} contract ·{" "}
+            </span>
+          )}
+          <span className="font-mono text-code-compact">
+            <span className="text-diff-add-fg">+{added}</span>{" "}
+            <span className="text-diff-del-fg">−{deleted}</span>
+          </span>
         </span>
       </header>
       {group.partIds.map((id, at) => {
@@ -161,23 +177,31 @@ export const MapLayout = ({
     const target = document.getElementById(scrollRequest.id);
     if (target === null) return;
     // A part's lines or collapsed row take the focus, so a, r and c act on what's shown.
+    // A part's place holds its card or its collapsed row; a file card or a decision is itself.
     const focusable =
-      target.querySelector<HTMLElement>(":scope > .hunk-card, :scope > div > .mechanical-toggle") ??
-      target;
-    const decision = target.classList.contains("decision");
+      (target.dataset.hunkId === undefined
+        ? null
+        : target.querySelector<HTMLElement>(
+            "[data-slot=hunk-card], [data-slot=mechanical-toggle]",
+          )) ?? target;
+    const decision = target.dataset.slot === "decision";
     target.scrollIntoView({ block: decision ? "center" : "start" });
     focusable.focus({ preventScroll: true });
   }, [scrollRequest]);
 
   return (
-    <section className="main-area map" aria-label="Changes">
+    <section className="flex min-w-0 flex-col gap-4" aria-label="Changes">
       {before}
       {files.map((group) => (
         <FileCard key={group.file.path} group={group} deps={deps} signatureOf={signatureOf} />
       ))}
-      <div id={MECHANICAL_ANCHOR} className="map-mechanical" tabIndex={-1}>
+      <div
+        id={MECHANICAL_ANCHOR}
+        className="flex scroll-mt-2 flex-col gap-4 -outline-offset-2"
+        tabIndex={-1}
+      >
         {mechanicalCount === 0 && analysis.stages.prep === "done" && (
-          <p className="muted">No mechanical changes in this pull request.</p>
+          <p className="text-muted-foreground">No mechanical changes in this pull request.</p>
         )}
         <MechanicalGroup files={analysis.files} proofs={trailingProofs} risk={analysis.risk} />
         <FileNotices files={analysis.files} />

@@ -1,4 +1,8 @@
+import { LayoutGridIcon } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { cn } from "../../lib/utils.ts";
+import { Button } from "../../ui/button.tsx";
+import { EDGE_LINE, NODE_OUTSIDE, NODE_RISK } from "./diagram-styles.ts";
 import type { FileOverview, OverviewEdge, OverviewNode } from "./overview.ts";
 import {
   anchors,
@@ -62,17 +66,10 @@ const NodeButton = ({
   )
     .filter((part) => part !== null)
     .join(", ");
-  const classes = [
-    "overview-node",
-    outside ? "outside" : `risk-${node.risk}`,
-    node.generated && "generated",
-    group && "group",
-    active && "active",
-    current && "current",
-  ];
   return (
     <div
-      className="overview-node-box"
+      data-slot="overview-node-box"
+      className={cn("grid", box === undefined ? "relative" : "absolute")}
       style={
         box === undefined
           ? { width: nodeWidth(node) }
@@ -81,7 +78,20 @@ const NodeButton = ({
     >
       <button
         type="button"
-        className={classes.filter(Boolean).join(" ")}
+        data-slot="overview-node"
+        data-risk={outside ? "outside" : node.risk}
+        data-generated={node.generated || undefined}
+        data-active={active || undefined}
+        data-current={current || undefined}
+        className={cn(
+          "grid h-full w-full content-start gap-0.5 overflow-hidden rounded-md border px-2 py-1 text-left text-caption",
+          outside ? NODE_OUTSIDE : NODE_RISK[node.risk],
+          // Generated files are dashed, and say so in their name; the text keeps its contrast.
+          node.generated && "border-dashed",
+          active && "border-primary",
+          // The directory of the file last in view in the code.
+          current && "shadow-[0_0_0_2px_var(--background),0_0_0_4px_var(--primary)]",
+        )}
         data-key={node.key}
         aria-label={name}
         aria-current={current ? "location" : undefined}
@@ -91,14 +101,22 @@ const NodeButton = ({
         onMouseEnter={() => onFocus(node)}
         onMouseLeave={() => onFocus(null)}
       >
-        <span className="overview-node-head">
-          <span className="overview-label">{node.label}</span>
+        <span className={cn("flex min-w-0 items-baseline gap-2", group && "pr-6")}>
+          <span
+            data-slot="overview-label"
+            className="min-w-0 truncate font-mono text-code-compact font-semibold"
+          >
+            {node.label}
+          </span>
         </span>
-        <span className="overview-meta">{metaText(node)}</span>
+        <span className="truncate">{metaText(node)}</span>
         {node.badges.length > 0 && (
-          <span className="overview-badges">
+          <span className="flex gap-1 overflow-hidden">
             {node.badges.map((test) => (
-              <span key={test} className="overview-badge">
+              <span
+                key={test}
+                className="shrink-0 rounded-sm border border-current px-1 font-mono text-kbd"
+              >
                 {basename(test)}
               </span>
             ))}
@@ -106,17 +124,16 @@ const NodeButton = ({
         )}
       </button>
       {group && node.paths.length > 1 && (
-        <button
-          type="button"
-          className="overview-expand"
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="absolute top-1 right-1 text-current"
           aria-label={`Show the files of ${node.label}`}
           title="Show its files"
           onClick={() => onExpand(node)}
         >
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-            <path d="M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z" fill="currentColor" />
-          </svg>
-        </button>
+          <LayoutGridIcon aria-hidden="true" />
+        </Button>
       )}
     </div>
   );
@@ -237,12 +254,12 @@ export const Overview = ({
 
   return (
     <section
-      className="overview"
+      className="flex min-w-0 flex-col gap-3"
       aria-label="Overview of the changed files"
       ref={box}
       onKeyDown={onKeyDown}
     >
-      <p className="overview-legend muted">
+      <p data-slot="overview-legend" className="text-muted-foreground">
         Each box is a directory. Directories that nothing in the pull request calls are on top; each
         sits below its callers. Solid lines are calls, dash-dot ones HTTP requests to a route,
         dashed ones imports, dotted ones types. Tests show on the directories they call. The
@@ -251,23 +268,26 @@ export const Overview = ({
           " Faded files are outside the pull request, under the code whose changes they use."}
       </p>
       {expandedGroups.length > 0 && (
-        <p className="overview-expanded">
+        <p className="flex flex-wrap gap-2">
           {expandedGroups.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className="button quiet"
-              onClick={() => onCollapse(key)}
-            >
+            <Button key={key} variant="outline" size="sm" onClick={() => onCollapse(key)}>
               Collapse {key.slice("group:".length)}/
-            </button>
+            </Button>
           ))}
         </p>
       )}
       {overview.rows.length > 0 ? (
-        <div className="overview-scroll">
-          <div className="overview-diagram" style={{ width, height }}>
-            <svg className="overview-edges" width={width} height={height} aria-hidden="true">
+        <div
+          data-slot="overview-scroll"
+          className="overflow-x-auto rounded-lg border bg-surface-subtle"
+        >
+          <div data-slot="overview-diagram" className="relative mx-auto" style={{ width, height }}>
+            <svg
+              className="absolute inset-0 overflow-visible"
+              width={width}
+              height={height}
+              aria-hidden="true"
+            >
               <defs>
                 <marker
                   id={`${id}-arrow`}
@@ -278,7 +298,7 @@ export const Overview = ({
                   markerHeight="7"
                   orient="auto-start-reverse"
                 >
-                  <path d="M 0 0 L 8 4 L 0 8 z" className="overview-arrow" />
+                  <path d="M 0 0 L 8 4 L 0 8 z" className="fill-input" />
                 </marker>
               </defs>
               {overview.edges.map((edge) => {
@@ -299,12 +319,24 @@ export const Overview = ({
                   // biome-ignore lint/a11y/noStaticElementInteractions: a hovered edge names what it carries; for the keyboard, the focused file's detail names its edges.
                   <g
                     key={`${edge.from}>${edge.to}`}
-                    className={`overview-edge ${edgeStyle(edge)}${lit ? " lit" : ""}${dim ? " dim" : ""}`}
+                    data-slot="overview-edge"
+                    data-style={edgeStyle(edge)}
+                    data-lit={lit || undefined}
+                    data-dim={dim || undefined}
+                    className={cn(dim && "opacity-30")}
                     onMouseEnter={() => setHovered({ kind: "edge", edge })}
                     onMouseLeave={() => setHovered(null)}
                   >
-                    <path d={d} className="overview-edge-hit" />
-                    <path d={d} className="overview-edge-line" markerEnd={`url(#${id}-arrow)`} />
+                    <path d={d} className="fill-none stroke-transparent [stroke-width:10]" />
+                    <path
+                      d={d}
+                      className={cn(
+                        "fill-none stroke-input [stroke-width:1.5]",
+                        EDGE_LINE[edgeStyle(edge)],
+                        lit && "stroke-primary [stroke-width:2]",
+                      )}
+                      markerEnd={`url(#${id}-arrow)`}
+                    />
                     <title>{describeEdge(edge, labelOf)}</title>
                   </g>
                 );
@@ -316,19 +348,19 @@ export const Overview = ({
           </div>
         </div>
       ) : (
-        <p className="muted">No changed file calls or imports another.</p>
+        <p className="text-muted-foreground">No changed file calls or imports another.</p>
       )}
       {overview.strip.length > 0 && (
-        <section className="overview-strip" aria-label="Not linked">
-          <h3>Not linked</h3>
-          <div className="overview-strip-nodes">
+        <section aria-label="Not linked" className="flex flex-col gap-2">
+          <h3 className="text-caption font-medium text-muted-foreground">Not linked</h3>
+          <div className="flex flex-wrap gap-2">
             {overview.strip.map((node) => (
               <NodeButton key={node.key} {...nodeProps(node)} />
             ))}
           </div>
         </section>
       )}
-      <p className="overview-detail" aria-live="polite">
+      <p data-slot="overview-detail" className="min-h-5 text-muted-foreground" aria-live="polite">
         {hovered === null
           ? "Hover or focus a directory to see its files, flows and tests."
           : hovered.kind === "edge"

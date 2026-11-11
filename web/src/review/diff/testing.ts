@@ -1,4 +1,4 @@
-import { type FileChange, type Hunk, parseUnifiedDiff } from "../../../src/domain/diff/index.ts";
+import { type FileChange, type Hunk, parseUnifiedDiff } from "../../../../src/domain/diff/index.ts";
 
 /** Files parsed from diff lines, for tests. A line `\r` stays in the text, as in a real diff. */
 export const parseFiles = (lines: readonly string[]): readonly FileChange[] => {

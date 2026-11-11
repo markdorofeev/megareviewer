@@ -1,6 +1,6 @@
+import { directoryOf } from "../../review/tree/paths.ts";
 import { boxDirectory, type FileOverview, type OverviewNode, uniqueLabels } from "./overview.ts";
 import { layout } from "./overview-layout.ts";
-import { directoryOf } from "./tree.ts";
 
 // The overview as a miniature in the rail: the full overview's boxes, scaled to the rail's width,
 // with directories grouped by their leading segments when the diagram is too wide to read there.

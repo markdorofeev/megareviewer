@@ -7,6 +7,14 @@ import type {
   PublicationVerdict,
 } from "../../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage, useApi, useMutation } from "../../api/index.ts";
+import { type StatusStyle, VERDICT_STATUS } from "../../lib/status.ts";
+import { cn } from "../../lib/utils.ts";
+import { DANGER, WARNING } from "../../review/index.ts";
+import { Button } from "../../ui/button.tsx";
+import { Label } from "../../ui/label.tsx";
+import { RadioGroup, RadioGroupItem } from "../../ui/radio-group.tsx";
+import { StatusBadge } from "../../ui/status-badge.tsx";
+import { Textarea } from "../../ui/textarea.tsx";
 import { Dialog } from "./Dialog.tsx";
 
 /** The preview refreshes once typing in the summary pauses for this long. */
@@ -17,6 +25,21 @@ const VERDICT_NAMES: Readonly<Record<PublicationVerdict, string>> = {
   request_changes: "Request changes",
   comment: "Comment",
 };
+
+const VERDICT_OPTIONS = ["approve", "request_changes", "comment"] as const;
+
+const PUBLICATION_STATUS: Readonly<Record<PublicationVerdict, StatusStyle>> = {
+  approve: { ...VERDICT_STATUS.approved, label: "Approve" },
+  request_changes: { ...VERDICT_STATUS.rejected, label: "Request changes" },
+  comment: {
+    label: "Comment",
+    glyph: "•",
+    className: "text-review-commented bg-review-commented-bg border-review-commented/25",
+  },
+};
+
+/** Text as it will be posted: its own line breaks, never HTML. */
+const POSTED = "whitespace-pre-wrap break-words";
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
@@ -92,117 +115,126 @@ export const PublishDialog = ({
   };
 
   return (
-    <Dialog title="Publish the review" onClose={onClose} className="publish-dialog">
-      <label htmlFor={`${id}-summary`}>Summary</label>
-      <textarea
-        id={`${id}-summary`}
-        className="input summary-field"
-        rows={4}
-        data-autofocus
-        placeholder="What you'd like the author to know overall (optional)"
-        value={summary}
-        onChange={(event) => setSummary(event.target.value)}
-      />
+    <Dialog title="Publish the review" onClose={onClose} className="sm:max-w-2xl">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`${id}-summary`}>Summary</Label>
+        <Textarea
+          id={`${id}-summary`}
+          rows={4}
+          data-autofocus
+          placeholder="What you'd like the author to know overall (optional)"
+          value={summary}
+          onChange={(event) => setSummary(event.target.value)}
+        />
+      </div>
 
       {chooseVerdict && !isAuthor && (
-        <fieldset className="verdict-choice">
-          <legend>Verdict</legend>
-          {(["approve", "request_changes", "comment"] as const).map((option) => (
-            <label key={option}>
-              <input
-                type="radio"
-                name={`${id}-verdict`}
-                checked={chosen === option}
-                onChange={() => setChosen(option)}
-              />
-              {VERDICT_NAMES[option]}
-            </label>
-          ))}
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1.5 font-medium">Verdict</legend>
+          <RadioGroup
+            value={chosen}
+            onValueChange={(value) => {
+              const option = VERDICT_OPTIONS.find((each) => each === value);
+              if (option !== undefined) setChosen(option);
+            }}
+            className="flex flex-wrap gap-4"
+          >
+            {VERDICT_OPTIONS.map((option) => (
+              <Label key={option}>
+                <RadioGroupItem value={option} />
+                {VERDICT_NAMES[option]}
+              </Label>
+            ))}
+          </RadioGroup>
         </fieldset>
       )}
 
-      <section className="preview" aria-labelledby={`${id}-preview`} aria-busy={preview === null}>
-        <h3 id={`${id}-preview`}>What will be posted</h3>
+      <section
+        aria-labelledby={`${id}-preview`}
+        aria-busy={preview === null}
+        className="flex flex-col gap-2 rounded-lg border bg-surface-subtle p-3"
+      >
+        <h3 id={`${id}-preview`} className="font-semibold">
+          What will be posted
+        </h3>
         {previewError !== null ? (
-          <p className="banner danger" role="alert">
+          <p className={DANGER} role="alert">
             Couldn't build the preview. {errorMessage(previewError)}
           </p>
         ) : preview === null ? (
-          <p className="muted">Building the preview…</p>
+          <p className="text-muted-foreground">Building the preview…</p>
         ) : (
           <>
-            <p>
-              Verdict:{" "}
-              <strong className={`publication-verdict ${preview.verdict}`}>
-                {VERDICT_NAMES[preview.verdict]}
-              </strong>
+            <p className="flex items-center gap-2">
+              Verdict: <StatusBadge status={PUBLICATION_STATUS[preview.verdict]} />
             </p>
             {isAuthor && preview.verdict === "comment" && (
-              <p className="muted">
+              <p className="text-muted-foreground">
                 You opened this pull request, so the review is posted as a comment: hosts don't let
                 authors approve their own pull requests or request changes on them.
               </p>
             )}
             {pendingCount > 0 && (
-              <p className="banner warning">
+              <p className={WARNING}>
                 {plural(pendingCount, "decision isn't", "decisions aren't")} reviewed yet. The
                 summary lists {pendingCount === 1 ? "it" : "them"} as not reviewed.
               </p>
             )}
-            <h4>{plural(preview.comments.length, "inline comment", "inline comments")}</h4>
+            <h4 className="font-medium">
+              {plural(preview.comments.length, "inline comment", "inline comments")}
+            </h4>
             {preview.comments.length > 0 && (
-              <ul className="preview-comments">
+              <ul className="flex flex-col gap-1.5">
                 {preview.comments.map((comment) => (
-                  <li key={comment.key}>
-                    <code>
+                  <li
+                    key={comment.key}
+                    className="rounded-md border-l-3 border-l-review-pending bg-background px-2 py-1"
+                  >
+                    <code className="font-mono text-code-compact text-muted-foreground">
                       {comment.path}:{comment.line}
                       {comment.side === "old" ? " (old side)" : ""}
                     </code>
-                    <p className="posted-text">{comment.body}</p>
+                    <p className={POSTED}>{comment.body}</p>
                   </li>
                 ))}
               </ul>
             )}
-            <h4>Summary comment</h4>
-            <p className="posted-text">{preview.summary}</p>
+            <h4 className="font-medium">Summary comment</h4>
+            <p className={POSTED}>{preview.summary}</p>
           </>
         )}
       </section>
 
       {confirmStale ? (
-        <div className="banner warning" role="alert">
+        <div className={cn(WARNING, "flex flex-col gap-2")} role="alert">
           <p>This PR changed since the analysis. Publish anyway?</p>
-          <div className="dialog-actions">
-            <button type="button" className="button" onClick={() => setConfirmStale(false)}>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmStale(false)}>
               Cancel
-            </button>
-            <button type="button" className="button primary" onClick={() => void send(true)}>
-              Publish anyway
-            </button>
+            </Button>
+            <Button onClick={() => void send(true)}>Publish anyway</Button>
           </div>
         </div>
       ) : (
         <>
           {publish.error !== null && (
-            <div className="banner danger" role="alert">
+            <div className={DANGER} role="alert">
               <p>Couldn't publish. {errorMessage(publish.error)}</p>
-              <p className="muted">
+              <p className="text-muted-foreground">
                 Retrying is safe: comments that were already posted aren't posted again.
               </p>
             </div>
           )}
-          <div className="dialog-actions">
-            <button type="button" className="button" onClick={onClose}>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="button"
-              className="button primary"
+            </Button>
+            <Button
               disabled={publish.pending || preview === null}
               onClick={() => void send(allowStale)}
             >
               {publish.pending ? "Publishing…" : publish.error !== null ? "Retry" : "Publish"}
-            </button>
+            </Button>
           </div>
         </>
       )}

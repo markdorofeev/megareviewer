@@ -1,76 +1,50 @@
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef } from "react";
-
-const FOCUSABLE =
-  'a[href], button:not(:disabled), textarea:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])';
+import { type ReactNode, useRef } from "react";
+import { cn } from "../../lib/utils.ts";
+import {
+  DialogContent,
+  DialogHeader,
+  Dialog as DialogRoot,
+  DialogTitle,
+} from "../../ui/dialog.tsx";
 
 /**
- * A modal dialog: focus moves in when it opens, stays inside while it's open, and goes back to
- * where it was when it closes. Escape closes it.
+ * A modal dialog, open while it's shown: focus moves in when it opens, stays inside, and goes back
+ * when it closes; Escape and the close button call `onClose`. An element with `data-autofocus`
+ * takes the focus first.
  */
 export const Dialog = ({
   title,
   onClose,
   children,
-  className = "",
+  className,
+  returnFocus = () => true,
 }: {
   readonly title: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
   readonly className?: string;
+  /** Whether closing gives the focus back to where it was; false when the close moved it. */
+  readonly returnFocus?: () => boolean;
 }) => {
-  const id = useId();
-  const dialog = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const previous = document.activeElement;
-    const first =
-      dialog.current?.querySelector<HTMLElement>("[data-autofocus]") ??
-      dialog.current?.querySelector<HTMLElement>(FOCUSABLE);
-    first?.focus();
-    return () => {
-      if (previous instanceof HTMLElement) previous.focus();
-    };
-  }, []);
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = [...(dialog.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
-    const first = focusable[0];
-    const last = focusable.at(-1);
-    if (first === undefined || last === undefined) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
-
+  const popup = useRef<HTMLDivElement>(null);
   return (
-    <div className="dialog-backdrop">
-      <div
-        ref={dialog}
-        className={`dialog ${className}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${id}-title`}
-        onKeyDown={onKeyDown}
+    <DialogRoot
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        ref={popup}
+        className={cn("max-h-[90vh] overflow-y-auto sm:max-w-lg", className)}
+        initialFocus={() => popup.current?.querySelector<HTMLElement>("[data-autofocus]") ?? true}
+        finalFocus={() => returnFocus()}
       >
-        <div className="dialog-header">
-          <h2 id={`${id}-title`}>{title}</h2>
-          <button type="button" className="button quiet" aria-label="Close" onClick={onClose}>
-            ✕
-          </button>
-        </div>
+        <DialogHeader className="pr-8">
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </DialogRoot>
   );
 };

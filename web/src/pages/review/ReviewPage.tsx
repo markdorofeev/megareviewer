@@ -1,4 +1,3 @@
-import "./review.css";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
 import { hunkIdOf, type PartId, type UnchangedCallers } from "../../../../src/domain/diff/index.ts";
@@ -12,7 +11,21 @@ import {
 import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from "../../api/index.ts";
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
-import { commentPlace, type LineComment, type LinePlace } from "../../diff/index.ts";
+import { type ShortcutHandlers, type ShortcutId, useShortcuts } from "../../lib/keymap.ts";
+import { cn } from "../../lib/utils.ts";
+import {
+  commentPlace,
+  DANGER,
+  DiffSkeleton,
+  FileTree,
+  KeyHint,
+  type LineComment,
+  type LinePlace,
+  ShortcutsDialog,
+  TreeSkeleton,
+} from "../../review/index.ts";
+import { Button } from "../../ui/button.tsx";
+import { Skeleton } from "../../ui/skeleton.tsx";
 import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
@@ -39,12 +52,9 @@ import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { parseRailForm, Rail } from "./Rail.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
-import { ShortcutsDialog } from "./ShortcutsDialog.tsx";
+import { Segmented } from "./Segmented.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
-import { type ShortcutAction, useShortcuts } from "./shortcuts.ts";
 import { useStoredState } from "./storage.ts";
-import { TreeRail } from "./TreeRail.tsx";
-import { fileTree } from "./tree.ts";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
 import { useVerdicts } from "./useVerdicts.ts";
@@ -72,9 +82,9 @@ const ReviewLoader = ({
   if (view === null) {
     if (error?.code === "not-found") {
       return (
-        <div className="narrow">
-          <h1>Analysis not found</h1>
-          <p>{errorMessage(error)}</p>
+        <div className="mx-auto flex max-w-2xl flex-col gap-3 py-12">
+          <h1 className="text-title font-semibold tracking-[-0.01em]">Analysis not found</h1>
+          <p className="text-body">{errorMessage(error)}</p>
           <p>
             <Link to="/">Pick a pull request to review</Link>
           </p>
@@ -83,13 +93,13 @@ const ReviewLoader = ({
     }
     if (error !== null) {
       return (
-        <div className="narrow">
-          <p className="banner danger" role="alert">
+        <div className="mx-auto flex max-w-2xl flex-col items-start gap-3 py-12">
+          <p className={DANGER} role="alert">
             Couldn't load the analysis. {errorMessage(error)}
           </p>
-          <button type="button" className="button" onClick={() => void refetch()}>
+          <Button variant="outline" onClick={() => void refetch()}>
             Try again
-          </button>
+          </Button>
         </div>
       );
     }
@@ -99,31 +109,69 @@ const ReviewLoader = ({
 };
 
 const ReviewSkeleton = () => (
-  <div className="review-page" role="status" aria-busy="true" aria-label="Loading the analysis">
-    <div className="skeleton skeleton-title" />
-    <div className="review-body map">
-      <div className="skeleton skeleton-main" />
+  <div
+    className="mx-auto flex max-w-[1600px] flex-col gap-4"
+    role="status"
+    aria-busy="true"
+    aria-label="Loading the analysis"
+  >
+    <Skeleton className="h-7 w-2/3" />
+    <Skeleton className="h-4 w-1/2" />
+    <div className={MAP_GRID}>
+      <TreeSkeleton />
+      <DiffSkeleton />
     </div>
   </div>
 );
 
+/** The map's two columns: the rail beside the code, or only the code at 1024px or less. */
+const MAP_GRID = "grid items-start gap-5 lg:grid-cols-[17rem_minmax(0,1fr)]";
+
 const NO_DECISIONS: readonly Decision[] = [];
+
+const LAYOUTS: readonly { readonly value: Layout; readonly label: string }[] = [
+  { value: "map", label: "Map" },
+  { value: "overview", label: "Overview" },
+];
+
+/** The shortcuts the review page has, for its `?` dialog. */
+const PAGE_SHORTCUTS: readonly ShortcutId[] = [
+  "nextFile",
+  "previousFile",
+  "comment",
+  "moveFile",
+  "openFile",
+  "approveDecision",
+  "rejectDecision",
+  "toggleLayout",
+  "openReview",
+  "close",
+  "help",
+];
 /** Why callers outside the pull request aren't shown, when no checkout was read. */
 const CheckoutNote = ({ analysis }: { readonly analysis: AnalysisView["analysis"] }) => {
   const { checkout, pullRequest } = analysis;
   if (checkout === "read" || pullRequest === null) return null;
   const { ref, headSha } = pullRequest;
   return (
-    <p className="checkout-note muted">
+    <p data-slot="checkout-note" className="text-muted-foreground">
       Code outside the pull request that calls what it changes isn't shown:{" "}
       {checkout === "missing-commit" ? (
         <>
-          the local checkout doesn't have the head commit <code>{headSha.slice(0, 7)}</code>. Run{" "}
-          <code>git fetch</code> in it
+          the local checkout doesn't have the head commit{" "}
+          <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">
+            {headSha.slice(0, 7)}
+          </code>
+          . Run{" "}
+          <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">git fetch</code> in
+          it
           {ref.repo.host === "github" && (
             <>
-              , or <code>git fetch origin pull/{ref.number}/head</code> for a pull request from a
-              fork
+              , or{" "}
+              <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">
+                git fetch origin pull/{ref.number}/head
+              </code>{" "}
+              for a pull request from a fork
             </>
           )}
           , then open the pull request again.
@@ -131,7 +179,11 @@ const CheckoutNote = ({ analysis }: { readonly analysis: AnalysisView["analysis"
       ) : (
         <>
           megareviewer didn't run in a checkout of {ref.repo.owner}/{ref.repo.repo}. Start it in
-          one, or pass <code>--checkout &lt;dir&gt;</code>, then open the pull request again.
+          one, or pass{" "}
+          <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">
+            --checkout &lt;dir&gt;
+          </code>
+          , then open the pull request again.
         </>
       )}
     </p>
@@ -182,15 +234,18 @@ const Review = ({
     const counts = new Map(files.map((group) => [group.file.path, contractParts(group, index)]));
     return (path: string) => counts.get(path) ?? 0;
   }, [files, index]);
-  const tree = useMemo(
+  const neighbors = useMemo(() => fileNeighbors(analysis), [analysis]);
+  const treeFiles = useMemo(
     () =>
-      fileTree(
-        files.map((group) => group.file.path),
-        contractOf,
-      ),
+      files.map(({ file }) => ({
+        path: file.path,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+        contract: contractOf(file.path),
+      })),
     [files, contractOf],
   );
-  const neighbors = useMemo(() => fileNeighbors(analysis), [analysis]);
   // Directories the reviewer opened in the overview, to see their files.
   const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([]);
   const overview = useMemo(
@@ -235,6 +290,7 @@ const Review = ({
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const detailsReturnFocus = useRef(true);
   const [showDetails, setShowDetails] = useState(false);
   const commentField = useRef<HTMLTextAreaElement | null>(null);
   const setCommentField = useCallback((field: HTMLTextAreaElement | null) => {
@@ -330,7 +386,9 @@ const Review = ({
   };
   /** The overview opens on the file the reviewer is on: the card holding the focus, else in view. */
   const openOverview = () => {
-    const focused = document.activeElement?.closest<HTMLElement>(".main-area.map .file-card");
+    const focused = document.activeElement?.closest<HTMLElement>(
+      "[aria-label=Changes] [data-slot=file-card]",
+    );
     const path = focused?.dataset.path ?? fileInView;
     setLayout(() => "overview");
     setOpenedFrom(null);
@@ -372,7 +430,9 @@ const Review = ({
    * the window is scrolled to.
    */
   const moveFile = (direction: 1 | -1) => {
-    const cards = [...document.querySelectorAll<HTMLElement>(".main-area.map .file-card")];
+    const cards = [
+      ...document.querySelectorAll<HTMLElement>("[aria-label=Changes] [data-slot=file-card]"),
+    ];
     const focused = cards.findIndex((card) => card.contains(document.activeElement));
     const target =
       focused !== -1
@@ -388,50 +448,53 @@ const Review = ({
     const current = verdicts.draftOf(id).verdict;
     verdicts.setVerdict(id, current === verdict ? "pending" : verdict);
   };
-  const onShortcut = (action: ShortcutAction) => {
+  const commentOnFocused = () => {
+    if (selectedDecision !== null && commentField.current !== null) {
+      commentField.current.focus();
+      return;
+    }
+    // Without a decision selected, comment on the hunk's first changed line.
     const current = currentHunk();
-    switch (action) {
-      case "next-file":
-        return moveFile(1);
-      case "previous-file":
-        return moveFile(-1);
-      case "approve":
-        if (selectedDecision !== null) toggleVerdict(selectedDecision, "approved");
-        return;
-      case "reject":
-        if (selectedDecision !== null) toggleVerdict(selectedDecision, "rejected");
-        return;
-      case "toggle-layout":
-        return switchLayout();
-      case "comment": {
-        if (selectedDecision !== null && commentField.current !== null) {
-          commentField.current.focus();
-          return;
-        }
-        // Without a decision selected, comment on the hunk's first changed line.
-        const found = current === null ? undefined : index.parts.get(current);
-        const line = found?.hunk.lines.find((one) => one.kind !== "context");
-        if (readOnly || found === undefined || line === undefined) return;
-        const place = commentPlace(line);
-        if (place !== null && current !== null) setOpenComment({ partId: current, place });
-        return;
-      }
-      case "escape": {
-        if (highlight.size > 0) return setHighlight(new Set());
-        if (layout === "map" && openedFrom !== null) {
-          // Back to the overview, on the file the map was opened from.
-          setLayout(() => "overview");
-          setOverviewFocus((previous) => ({ key: openedFrom, n: (previous?.n ?? 0) + 1 }));
-          setOpenedFrom(null);
-        }
-        return;
-      }
-      case "help":
-        setShowShortcuts(true);
-        return;
+    const found = current === null ? undefined : index.parts.get(current);
+    const line = found?.hunk.lines.find((one) => one.kind !== "context");
+    if (readOnly || found === undefined || line === undefined) return;
+    const place = commentPlace(line);
+    if (place !== null && current !== null) setOpenComment({ partId: current, place });
+  };
+  const onEscape = () => {
+    if (highlight.size > 0) return setHighlight(new Set());
+    if (layout === "map" && openedFrom !== null) {
+      // Back to the overview, on the file the map was opened from.
+      setLayout(() => "overview");
+      setOverviewFocus((previous) => ({ key: openedFrom, n: (previous?.n ?? 0) + 1 }));
+      setOpenedFrom(null);
     }
   };
-  useShortcuts(!publishing && !showShortcuts && !showDetails, layout, onShortcut);
+  const canPublish = !isAuthor || analysis.decisions.length > 0 || hunkComments.length > 0;
+  // The overview handles its own arrows and Enter, on the file that has the focus.
+  const mapOnly: ShortcutHandlers = {
+    nextFile: () => moveFile(1),
+    previousFile: () => moveFile(-1),
+    approveDecision: () => {
+      if (selectedDecision !== null) toggleVerdict(selectedDecision, "approved");
+    },
+    rejectDecision: () => {
+      if (selectedDecision !== null) toggleVerdict(selectedDecision, "rejected");
+    },
+    comment: commentOnFocused,
+    close: onEscape,
+  };
+  useShortcuts(
+    {
+      ...(layout === "map" ? mapOnly : {}),
+      toggleLayout: () => switchLayout(),
+      openReview: () => {
+        if (canPublish) void openPublish();
+      },
+      help: () => setShowShortcuts(true),
+    },
+    !publishing && !showShortcuts && !showDetails,
+  );
 
   const prUrl = analysis.pullRequest?.url ?? pullRequestUrl(analysis.key.ref);
   const reanalyze = useMutation(client.startAnalysis);
@@ -473,7 +536,7 @@ const Review = ({
     const mentions = places.mentions.get(id) ?? NO_DECISIONS;
     if (cards.length === 0 && mentions.length === 0) return null;
     return (
-      <div className="hunk-decisions">
+      <div className="flex flex-col gap-2 border-b bg-surface-subtle p-3">
         {cards.map(card)}
         {mentions.map((decision) => (
           <DecisionMention key={decision.id} decision={decision} onGo={stable.goToDecision} />
@@ -517,16 +580,18 @@ const Review = ({
   const before = (
     <>
       {modelOn && analysis.status === "running" && analysis.stages.decisions !== "done" && (
-        <p className="muted">Finding the decisions the code makes…</p>
+        <p className="text-muted-foreground">Finding the decisions the code makes…</p>
       )}
       {analysis.stages.decisions === "done" &&
         !complete &&
         publication === null &&
         analysis.decisions.length > 0 && (
-          <p className="muted">You can give verdicts once the analysis is complete.</p>
+          <p className="text-muted-foreground">
+            You can give verdicts once the analysis is complete.
+          </p>
         )}
       {places.unplaced.length > 0 && (
-        <section className="unplaced-decisions" aria-label="Decisions on no change shown here">
+        <section className="flex flex-col gap-2" aria-label="Decisions on no change shown here">
           {places.unplaced.map(card)}
         </section>
       )}
@@ -534,7 +599,7 @@ const Review = ({
   );
 
   return (
-    <div className={`review-page layout-${layout}`}>
+    <div data-layout={layout} className="mx-auto flex max-w-[1600px] flex-col gap-4">
       <ReviewHeader
         view={view}
         intent={
@@ -543,44 +608,37 @@ const Review = ({
             modelOn={modelOn}
             mismatchAt={mismatchAt}
             onMismatch={goToMismatch}
-            onDetails={() => setShowDetails(true)}
+            onDetails={() => {
+              detailsReturnFocus.current = true;
+              setShowDetails(true);
+            }}
           />
         }
         tools={
           <>
             {layout === "map" && (
-              <button
-                type="button"
-                className="button rail-toggle"
+              <Button
+                variant="outline"
+                size="sm"
+                className="lg:hidden"
                 aria-expanded={railOpen}
                 aria-controls="review-tree-rail"
                 onClick={() => setRailOpen(!railOpen)}
               >
                 {railOpen ? "Hide files" : "Show files"}
-              </button>
+              </Button>
             )}
-            <fieldset className="layout-toggle">
-              <legend className="visually-hidden">Layout</legend>
-              <button
-                type="button"
-                className="button"
-                aria-pressed={layout === "map"}
-                onClick={() => layout !== "map" && switchLayout()}
-              >
-                Map
-              </button>
-              <button
-                type="button"
-                className="button"
-                aria-pressed={layout === "overview"}
-                onClick={() => layout !== "overview" && switchLayout()}
-              >
-                Overview
-              </button>
-            </fieldset>
+            <Segmented
+              legend="Layout"
+              options={LAYOUTS}
+              value={layout}
+              onChange={(next) => {
+                if (next !== layout) switchLayout();
+              }}
+            />
           </>
         }
-        canPublish={!isAuthor || analysis.decisions.length > 0 || hunkComments.length > 0}
+        canPublish={canPublish}
         reanalyzing={reanalyze.pending}
         reanalyzeError={reanalyze.error}
         onReanalyze={async () => {
@@ -592,15 +650,15 @@ const Review = ({
 
       {!complete && <ProgressStrip stages={analysis.stages} filesFetched={analysis.filesFetched} />}
       {analysis.error !== null && (
-        <div className="banner danger failed-banner" role="alert">
+        <div className={cn(DANGER, "flex flex-col items-start gap-2")} role="alert">
           <p>
             The analysis failed at the {stageName(analysis.error.stage).toLowerCase()} stage:{" "}
             {analysis.error.message}
           </p>
           {retry.error !== null && <p>Couldn't retry. {errorMessage(retry.error)}</p>}
-          <button
-            type="button"
-            className="button"
+          <Button
+            variant="outline"
+            size="sm"
             disabled={retry.pending}
             onClick={async () => {
               const result = await retry.run(analysisId);
@@ -608,38 +666,48 @@ const Review = ({
             }}
           >
             {retry.pending ? "Retrying…" : "Retry"}
-          </button>
+          </Button>
         </div>
       )}
       {verdicts.failure !== null && (
-        <div className="banner danger verdict-failure" role="alert">
+        <div
+          className={cn(DANGER, "flex flex-wrap items-center justify-between gap-2")}
+          role="alert"
+        >
           <p>
             Couldn't save your {verdicts.failure.what} on “{failureTitle}”.{" "}
             {verdicts.failure.message}
           </p>
-          <button type="button" className="button quiet" onClick={verdicts.dismissFailure}>
+          <Button variant="ghost" size="sm" onClick={verdicts.dismissFailure}>
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
 
       {analysis.stages.prep !== "done" ? (
-        <section className="main-area" aria-busy={analysis.status === "running"}>
-          <p className="muted">
+        <section aria-busy={analysis.status === "running"}>
+          <p className="text-muted-foreground">
             {analysis.status === "running"
               ? "Reading the diff…"
               : "The diff couldn't be read, so there are no changes to show."}
           </p>
         </section>
       ) : layout === "map" ? (
-        <div className={`review-body map${railOpen ? " rail-open" : ""}`}>
+        <div
+          className={cn(
+            MAP_GRID,
+            "[&>aside]:hidden lg:[&>aside]:flex",
+            railOpen && "[&>aside]:flex",
+          )}
+        >
           <Rail form={railForm} onForm={(form) => setRailForm(() => form)}>
             {mini === null ? (
-              <TreeRail
-                tree={tree}
-                current={fileInView}
+              <FileTree
+                files={treeFiles}
+                activePath={fileInView}
                 neighbors={neighbors}
-                onGo={(path) => scrollTo(fileAnchor(path))}
+                onSelect={(path) => scrollTo(fileAnchor(path))}
+                className="min-h-0 flex-1"
               />
             ) : (
               <MiniOverview
@@ -665,7 +733,7 @@ const Review = ({
           />
         </div>
       ) : (
-        <div className="review-body overview-body">
+        <div>
           <Overview
             overview={overview}
             focusKey={overviewFocus}
@@ -699,12 +767,13 @@ const Review = ({
           }}
         />
       )}
-      {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+      <ShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} ids={PAGE_SHORTCUTS} />
       {showDetails && (
         <Dialog
           title={analysis.intent === null ? "What was asked" : "Intent"}
           onClose={() => setShowDetails(false)}
-          className="intent-dialog"
+          className="sm:max-w-4xl"
+          returnFocus={() => detailsReturnFocus.current}
         >
           {analysis.intent !== null ? (
             <IntentPanel
@@ -712,6 +781,8 @@ const Review = ({
               tickets={analysis.tickets}
               missingTicketKeys={analysis.missingTicketKeys}
               onSelectMismatch={(at) => {
+                // The code takes the focus, so closing doesn't hand it back to Details.
+                detailsReturnFocus.current = false;
                 setShowDetails(false);
                 goToMismatch(at);
               }}
@@ -728,8 +799,8 @@ const Review = ({
           <CheckoutNote analysis={analysis} />
         </Dialog>
       )}
-      <p className="shortcut-hint muted">
-        Press <kbd>?</kbd> for keyboard shortcuts.
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
+        Press <KeyHint id="help" /> for keyboard shortcuts.
       </p>
     </div>
   );

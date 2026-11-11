@@ -1,6 +1,6 @@
 import { type MouseEvent, memo } from "react";
-import type { CharRange } from "../../diff/intra-line.ts";
 import { cn } from "../../lib/utils.ts";
+import type { CharRange } from "./intra-line.ts";
 import type { LineKind, ViewLine } from "./rows.ts";
 import type { SyntaxToken, SyntaxTokenType } from "./syntax.ts";
 
@@ -116,6 +116,17 @@ export interface DiffLineProps {
   readonly onComment?: (line: ViewLine) => void;
   /** A gutter click; shift-click extends the selection. */
   readonly onGutterClick?: (line: ViewLine, event: MouseEvent) => void;
+  /**
+   * Makes one side's line number a button in the tab order, e.g. "Comment on line 12", for
+   * places without the grid's keyboard. It replaces the hover button.
+   */
+  /** "cell" inside a table, as on a part's card; "gridcell" inside the viewer's grid. */
+  readonly cellRole?: "gridcell" | "cell";
+  readonly numberButton?: {
+    readonly side: "old" | "new";
+    readonly label: string;
+    readonly onClick: () => void;
+  };
 }
 
 /** One line of a diff: the old and new numbers, the + / − marker, and the code. */
@@ -129,13 +140,16 @@ export const DiffLine = memo(function DiffLine({
   selected = false,
   onComment,
   onGutterClick,
+  numberButton,
+  cellRole = "gridcell",
 }: DiffLineProps) {
   const kind = KIND[line.kind];
   const number = line.newNo ?? line.oldNo;
   const gutter = (value: number | null, side: "old" | "new") => (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the grid's ↑ and ↓, with shift, do the same.
+    // biome-ignore lint/a11y/noStaticElementInteractions: a cell of the grid; only the grid clicks it.
     <span
-      role="gridcell"
+      role={cellRole}
       onClick={onGutterClick === undefined ? undefined : (event) => onGutterClick(line, event)}
       className={cn(
         "tabular relative w-12 shrink-0 select-none pr-2 text-right",
@@ -143,7 +157,19 @@ export const DiffLine = memo(function DiffLine({
         onGutterClick !== undefined && "cursor-pointer hover:text-foreground",
       )}
     >
-      {side === "new" && onComment !== undefined && (
+      {numberButton?.side === side && value !== null ? (
+        <button
+          type="button"
+          aria-label={numberButton.label}
+          onClick={numberButton.onClick}
+          className="h-full w-full rounded-sm pr-0 text-right hover:bg-primary hover:text-primary-foreground focus-visible:-outline-offset-2"
+        >
+          {value}
+        </button>
+      ) : (
+        (value ?? "")
+      )}
+      {side === "new" && onComment !== undefined && numberButton === undefined && (
         <button
           type="button"
           tabIndex={-1}
@@ -157,7 +183,6 @@ export const DiffLine = memo(function DiffLine({
           <span aria-hidden="true">+</span>
         </button>
       )}
-      {value ?? ""}
     </span>
   );
 
@@ -194,7 +219,7 @@ export const DiffLine = memo(function DiffLine({
         {kind.marker}
       </span>
       <span
-        role="gridcell"
+        role={cellRole}
         className={cn(
           "pr-4",
           wrap ? "min-w-0 flex-1 whitespace-pre-wrap break-all" : "whitespace-pre",
@@ -205,12 +230,21 @@ export const DiffLine = memo(function DiffLine({
           <span
             // biome-ignore lint/suspicious/noArrayIndexKey: the line's segments never reorder.
             key={index}
+            data-changed={segment.changed || undefined}
             className={cn(
               segment.type !== null && SYNTAX[segment.type],
               segment.changed && cn(kind.word, "rounded-sm"),
             )}
           >
             {segment.text}
+          </span>
+        ))}
+        {line.notes.map((note) => (
+          <span
+            key={note}
+            className="ml-2 rounded-sm border px-1 align-middle font-sans text-caption text-muted-foreground"
+          >
+            {note}
           </span>
         ))}
       </span>

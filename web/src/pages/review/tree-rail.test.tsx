@@ -1,8 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { TreeRail } from "./TreeRail.tsx";
-import { byTreePath, fileTree, type TreeEntry, treeOrder } from "./tree.ts";
+import { FileTree } from "../../review/index.ts";
+import { byTreePath, fileTree, type TreeEntry, treeOrder } from "../../review/tree/paths.ts";
 import { fileInView } from "./useFileInView.ts";
 
 // delphi-code #2's code files: two hosting_services.py, a chain web/src/, files at the top level.
@@ -83,56 +83,69 @@ const neighbors = new Map<string, ReadonlySet<string>>([
   ],
 ]);
 
+/** File rows only: directory headings are buttons too, titled with a trailing slash. */
 const row = (name: string, at = 0): HTMLElement => {
-  const found = screen.getAllByRole("button").filter((button) => button.title.endsWith(name));
+  const found = screen
+    .getAllByRole("button")
+    .filter((button) => !button.title.endsWith("/") && button.title.endsWith(name));
   const one = found[at];
   if (one === undefined) throw new Error(`no row for ${name}`);
   return one;
 };
 
-describe("TreeRail", () => {
+const entries = paths.map((path) => ({
+  path,
+  status: "modified" as const,
+  additions: 1,
+  deletions: 0,
+  contract: contract[path] ?? 0,
+}));
+
+const renderRail = (current: string | null, onGo = vi.fn()) =>
+  render(<FileTree files={entries} activePath={current} neighbors={neighbors} onSelect={onGo} />);
+
+describe("FileTree as the rail", () => {
   it("shows directory headings with their totals, and a row per file with its contract parts", () => {
-    render(<TreeRail tree={tree} current={null} neighbors={neighbors} onGo={() => {}} />);
+    renderRail(null);
     const rail = screen.getByRole("navigation", { name: "Changed files" });
     expect(within(rail).getByText("web/src/")).toBeTruthy();
-    expect(within(rail).getAllByRole("button")).toHaveLength(paths.length);
-    expect(row("routes/hosting_services.py").textContent).toBe("hosting_services.py3 contract");
-    expect(row("domain/hosting_services.py").textContent).toBe("hosting_services.py");
-    expect(within(rail).getByTitle("delphi_code/").textContent).toBe("delphi_code/4 contract");
+    expect(
+      within(rail)
+        .getAllByRole("button")
+        .filter((button) => !button.title.endsWith("/")),
+    ).toHaveLength(paths.length);
+    expect(row("routes/hosting_services.py").textContent).toContain(
+      "hosting_services.py▲3 contract",
+    );
+    expect(row("domain/hosting_services.py").textContent).not.toContain("contract");
+    expect(within(rail).getByTitle("delphi_code/").textContent).toBe("▾delphi_code/▲4 contract");
   });
 
   it("highlights the file in view, arrows its callers and callees, and mutes the rest", () => {
-    render(
-      <TreeRail
-        tree={tree}
-        current="delphi_code/http_api/routes/hosting_services.py"
-        neighbors={neighbors}
-        onGo={() => {}}
-      />,
-    );
+    renderRail("delphi_code/http_api/routes/hosting_services.py");
     const current = row("routes/hosting_services.py");
     expect(current.getAttribute("aria-current")).toBe("location");
-    expect(current.className).toContain("current");
-    expect(row("app.py").textContent).toBe("↑calls the file in view, app.py");
+    expect(current.dataset.relation).toBe("current");
+    expect(row("app.py").textContent).toMatch(/^↑calls the file in view, app\.py/);
     expect(row("domain/hosting_services.py").textContent).toContain("↓called by the file in view");
     expect(row("keychain.py").textContent).toContain("↓");
     for (const name of ["setup.tsx", "ConnectionsSection.tsx", "CONTRIBUTING.md"]) {
-      expect(row(name).className).toContain("other");
+      expect(row(name).dataset.relation).toBe("other");
       expect(row(name).getAttribute("aria-current")).toBeNull();
     }
   });
 
   it("mutes nothing and draws no arrows without a file in view", () => {
-    render(<TreeRail tree={tree} current={null} neighbors={neighbors} onGo={() => {}} />);
+    renderRail(null);
     for (const button of screen.getAllByRole("button")) {
-      expect(button.className).not.toContain("other");
+      expect(button.dataset.relation === "other").toBe(false);
       expect(button.textContent).not.toMatch(/[↑↓↕]/);
     }
   });
 
   it("goes to a file's card on a click", async () => {
     const onGo = vi.fn();
-    render(<TreeRail tree={tree} current={null} neighbors={neighbors} onGo={onGo} />);
+    renderRail(null, onGo);
     await userEvent.click(row("keychain.py"));
     expect(onGo).toHaveBeenCalledWith("delphi_code/infrastructure/keychain.py");
   });

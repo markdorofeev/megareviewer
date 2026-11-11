@@ -18,7 +18,7 @@ import {
 import { mockFetch } from "../../../dev/mock-fetch.ts";
 import { createMockApi } from "../../../dev/mock-routes.ts";
 import { analysisFailed, analysisInProgress } from "../../../dev/progress.ts";
-import { type Highlighter, HighlighterContext } from "../../diff/index.ts";
+import { type Highlighter, HighlighterContext } from "../../review/index.ts";
 import { testApi } from "../../testing/api.tsx";
 import { fakeFetch, jsonResponse, type RecordedRequest } from "../../testing/fetch.ts";
 import { ReviewPage } from "./ReviewPage.tsx";
@@ -82,14 +82,16 @@ const renderReview = (
 const loaded = () =>
   screen.findByRole("heading", { level: 1, name: "Add order receipts endpoint" });
 const mainArea = () => {
-  const main = document.querySelector<HTMLElement>(".main-area");
+  const main = document.querySelector<HTMLElement>('[aria-label="Changes"]');
   if (main === null) throw new Error("no main area");
   return main;
 };
 /** The step headings in the map, in order. */
 /** The map's file cards, by path, in page order. */
 const fileCards = () =>
-  [...mainArea().querySelectorAll(".file-card")].map((card) => card.getAttribute("aria-label"));
+  [...mainArea().querySelectorAll("[data-slot=file-card]")].map((card) =>
+    card.getAttribute("aria-label"),
+  );
 /** A hunk's place in the map: its card, or its collapsed row. */
 const placeOf = (hunkId: PartId) => {
   const place = document.getElementById(`hunk-${hunkId}`);
@@ -99,7 +101,7 @@ const placeOf = (hunkId: PartId) => {
 /** The card of a step's parts from one file, named by its path. */
 const fileCardOf = (path: string) => screen.getByRole("region", { name: path });
 const cardOf = (hunkId: PartId) => {
-  const card = placeOf(hunkId).querySelector<HTMLElement>(":scope > .hunk-card");
+  const card = placeOf(hunkId).querySelector<HTMLElement>("[data-slot=hunk-card]");
   if (card === null) throw new Error(`no card for ${hunkId}`);
   return card;
 };
@@ -358,17 +360,17 @@ describe("intent", () => {
     await loaded();
     await userEvent.click(screen.getByRole("button", { name: /^SHOP-142/ }));
     expect(focusedLabel()).toMatch(ROUTE);
-    expect(cardOf(h.receiptRoute).classList.contains("highlighted")).toBe(true);
+    expect(cardOf(h.receiptRoute).dataset.highlighted === "true").toBe(true);
     const next = screen.getByRole("button", { name: /^Caches receipts forever\./ });
     expect(next.textContent).toContain("2 of 2");
 
     await userEvent.click(next);
     // The split hunk's first part on the page.
     expect(focusedLabel()).toMatch(RETRY);
-    expect(cardOf(h.receiptRoute).classList.contains("highlighted")).toBe(false);
-    expect(cardOf(p.retry).classList.contains("highlighted")).toBe(true);
+    expect(cardOf(h.receiptRoute).dataset.highlighted === "true").toBe(false);
+    expect(cardOf(p.retry).dataset.highlighted === "true").toBe(true);
     await userEvent.keyboard("{Escape}");
-    expect(cardOf(p.cache).classList.contains("highlighted")).toBe(false);
+    expect(cardOf(p.cache).dataset.highlighted === "true").toBe(false);
   });
 
   it("shows stated and inferred intent side by side in the details when they disagree", async () => {
@@ -401,7 +403,7 @@ describe("intent", () => {
     renderReview({ view: withIntent({ mismatches: [] }) });
     await loaded();
     expect(screen.getByText("✓ Does what was asked:")).toBeTruthy();
-    expect(document.querySelector(".mismatch-chip")).toBeNull();
+    expect(document.querySelector("[data-slot=mismatch-chip]")).toBeNull();
     const intent = await openDetails();
     expect(within(intent).queryByRole("heading", { name: "Inferred from the code" })).toBeNull();
     await userEvent.click(within(intent).getByText(/^Details/));
@@ -448,12 +450,14 @@ describe("map", () => {
     expect(
       within(rail)
         .getAllByRole("button")
-        .map((row) => row.title),
+        .flatMap((row) => (row.title.endsWith("/") ? [] : [row.title])),
     ).toEqual(["src/routes/orders.ts", "src/services/receipts.ts", "package.json"]);
     expect(screen.queryByRole("button", { name: /Jump to/ })).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
     expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(document.querySelector(".review-body.map")?.children).toHaveLength(2);
+    expect(document.querySelector("[data-layout=map] > div:last-of-type")?.children).toHaveLength(
+      2,
+    );
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
     expect(
       within(mainArea())
@@ -520,9 +524,9 @@ describe("decisions", () => {
 
     await userEvent.click(back);
     expect(scrolledTo().at(-1)).toBe("decision-d5");
-    expect(decisionCard(DAYJS).classList.contains("selected")).toBe(true);
-    expect(cardOf(h.dependency).classList.contains("highlighted")).toBe(true);
-    expect(cardOf(h.receiptFormatting).classList.contains("highlighted")).toBe(true);
+    expect(decisionCard(DAYJS).dataset.selected === "true").toBe(true);
+    expect(cardOf(h.dependency).dataset.highlighted === "true").toBe(true);
+    expect(cardOf(h.receiptFormatting).dataset.highlighted === "true").toBe(true);
   });
 
   it("save a verdict at once, given on the card", async () => {
@@ -627,9 +631,9 @@ const openOverview = async () => {
 const overviewRows = () => {
   const rows = new Map<string, string[]>();
   for (const box of overviewBox().querySelectorAll<HTMLElement>(
-    ".overview-diagram .overview-node-box",
+    "[data-slot=overview-diagram] [data-slot=overview-node-box]",
   )) {
-    const label = box.querySelector(".overview-label")?.textContent ?? "";
+    const label = box.querySelector("[data-slot=overview-label]")?.textContent ?? "";
     rows.set(box.style.top, [...(rows.get(box.style.top) ?? []), label]);
   }
   return [...rows.values()];
@@ -702,8 +706,8 @@ describe("overview", () => {
     renderReview();
     await loaded();
     await openOverview();
-    const edge = overviewBox().querySelector(".overview-edge");
-    expect(edge?.classList.contains("call")).toBe(true);
+    const edge = overviewBox().querySelector("[data-slot=overview-edge]");
+    expect(edge?.getAttribute("data-style") === "call").toBe(true);
     expect(edge?.querySelector("title")?.textContent).toBe(
       "src/routes/ imports, calls src/services/: cachedReceipt",
     );
@@ -712,15 +716,15 @@ describe("overview", () => {
     renderReview();
     await loaded();
     await openOverview();
-    const edge = overviewBox().querySelector(".overview-edge");
+    const edge = overviewBox().querySelector("[data-slot=overview-edge]");
     if (edge === null) throw new Error("no edge");
     await userEvent.hover(edge);
-    expect(overviewBox().querySelector(".overview-detail")?.textContent).toBe(
+    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toBe(
       "src/routes/ imports, calls src/services/: cachedReceipt",
     );
     await userEvent.unhover(edge);
     await userEvent.hover(nodeOf("group:src/services"));
-    expect(edge.classList.contains("lit")).toBe(true);
+    expect(edge.hasAttribute("data-lit")).toBe(true);
     await userEvent.unhover(nodeOf("group:src/services"));
     expect(screen.getByText(/^Hover or focus a directory/)).toBeTruthy();
   });
@@ -809,7 +813,7 @@ describe("keyboard shortcuts", () => {
     expect(reject(ENDPOINT).getAttribute("aria-pressed")).toBe("true");
 
     await userEvent.click(approve(OWNERSHIP));
-    expect(decisionCard(OWNERSHIP).classList.contains("selected")).toBe(true);
+    expect(decisionCard(OWNERSHIP).dataset.selected === "true").toBe(true);
     await userEvent.keyboard("r");
     expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
 
@@ -831,13 +835,17 @@ describe("keyboard shortcuts", () => {
     const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
     const keysOf = (name: string) =>
       within(within(dialog).getByRole("region", { name }))
-        .getAllByRole("term")
-        .map((term) => term.textContent);
-    expect(keysOf("Map")).toEqual(["n", "p", "a", "r", "c", "Esc"]);
-    expect(keysOf("Overview")).toEqual(["←→↑↓", "Enter"]);
-    expect(keysOf("Both layouts")).toEqual(["v", "?"]);
+        .getAllByRole("definition")
+        .map((keys) => keys.textContent);
+    expect(keysOf("In the code")).toEqual(["n", "p", "c"]);
+    expect(keysOf("In the overview")).toEqual(["←→↑↓", "↵"]);
+    expect(keysOf("On a decision")).toEqual(["a", "r"]);
+    expect(keysOf("Anywhere")).toEqual(["v", "⇧R", "Esc", "?"]);
     await userEvent.keyboard("v");
-    expect(screen.getByRole("button", { name: "Map" }).getAttribute("aria-pressed")).toBe("true");
+    // The page behind the open dialog is inert, so its switch is hidden from the tree.
+    expect(
+      screen.getByRole("button", { name: "Map", hidden: true }).getAttribute("aria-pressed"),
+    ).toBe("true");
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -849,7 +857,7 @@ describe("parts of a split hunk", () => {
     await loaded();
     const cache = cardOf(p.cache);
     // The code names what the part defines.
-    expect(cache.querySelector(".hunk-part")).toBeNull();
+    expect(cache.querySelector("[data-slot=hunk-part]")).toBeNull();
     expect(within(cache).queryByText("Related parts")).toBeNull();
     // No lines lie between the two parts of one hunk, so no fold either.
     expect(placeOf(p.retry).nextElementSibling).toBe(placeOf(p.cache));
@@ -860,7 +868,9 @@ describe("parts of a split hunk", () => {
     await loaded();
     expect(within(cardOf(p.retry)).getByRole("article", { name: RETRIES })).toBeTruthy();
     expect(within(cardOf(p.cache)).queryByRole("article", { name: RETRIES })).toBeNull();
-    expect(cardOf(p.cache).querySelector(".decision-mention")?.textContent).toMatch(RETRIES);
+    expect(cardOf(p.cache).querySelector("[data-slot=decision-mention]")?.textContent).toMatch(
+      RETRIES,
+    );
   });
 
   it("show a comment in the part that holds its line", async () => {
@@ -883,16 +893,16 @@ describe("navigation", () => {
     renderReview();
     await loaded();
     const orders = fileCardOf("src/routes/orders.ts");
-    expect(orders.querySelector(".file-card-header .count-contract")?.textContent).toBe(
-      "1 contract · ",
-    );
+    expect(
+      orders.querySelector("[data-slot=file-card-header] [data-slot=count-contract]")?.textContent,
+    ).toBe("▲ 1 contract · ");
     // A rule's reason quotes the code under it, so the contract part has no divider at all.
-    expect(orders.querySelector(".hunk-contract-reason")).toBeNull();
-    expect(cardOf(h.receiptRoute).querySelector(".hunk-header")).toBeNull();
-    expect(cardOf(h.routeImports).querySelector(".hunk-header")).toBeNull();
+    expect(orders.querySelector("[data-slot=hunk-contract-reason]")).toBeNull();
+    expect(cardOf(h.receiptRoute).querySelector("[data-slot=hunk-header]")).toBeNull();
+    expect(cardOf(h.routeImports).querySelector("[data-slot=hunk-header]")).toBeNull();
     // The risk is a bar beside the lines, not a badge on the line.
     expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: "contract" })).toBeNull();
-    const bar = cardOf(h.receiptRoute).querySelector(".part-risk.risk-contract");
+    const bar = cardOf(h.receiptRoute).querySelector("[data-slot=part-risk][data-risk=contract]");
     expect(bar?.textContent).toBe("contract");
     expect(bar?.getAttribute("title")).toBeNull();
   });
@@ -901,13 +911,13 @@ describe("navigation", () => {
     renderReview();
     await loaded();
     const orders = fileCardOf("src/routes/orders.ts");
-    expect(orders.querySelector(".file-status")).toBeNull();
-    expect(orders.querySelector(".file-card-header")?.textContent).not.toMatch(/part/);
+    expect(orders.querySelector("[data-slot=file-status]")).toBeNull();
+    expect(orders.querySelector("[data-slot=file-card-header]")?.textContent).not.toMatch(/part/);
     expect(within(orders).queryByRole("checkbox")).toBeNull();
     // The line between the imports and the route is a fold.
-    const gap = orders.querySelector(".file-gap.folded");
+    const gap = orders.querySelector("[data-slot=file-gap]");
     expect(gap?.textContent).toBe("1 line unchanged");
-    expect(gap?.querySelector("svg.unfold-icon")).not.toBeNull();
+    expect(gap?.querySelector("[data-slot=unfold-icon]")).not.toBeNull();
   });
 });
 
@@ -938,7 +948,7 @@ describe("without the model", () => {
     // Markup is text, and doesn't start a sentence.
     expect(screen.getByText("Adds receipts. <b>Not bold</b>")).toBeTruthy();
     expect(screen.queryByText(/Moves formatMoney too/)).toBeNull();
-    expect(document.querySelector(".mismatch-chip")).toBeNull();
+    expect(document.querySelector("[data-slot=mismatch-chip]")).toBeNull();
     expect(screen.queryByRole("article")).toBeNull();
   });
 
@@ -1005,7 +1015,10 @@ describe("comments on hunks", () => {
     await userEvent.click(screen.getByRole("button", { name: "Publish…" }));
     const dialog = await screen.findByRole("dialog", { name: "Publish the review" });
     await userEvent.click(within(dialog).getByRole("radio", { name: "Request changes" }));
-    expect(await within(dialog).findByText("Request changes", { selector: "strong" })).toBeTruthy();
+    expect(await within(dialog).findByText("Verdict:")).toBeTruthy();
+    await waitFor(() =>
+      expect(within(dialog).getByText("Verdict:").textContent).toBe("Verdict: ✕Request changes"),
+    );
     expect(within(dialog).getByText("Why this?")).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
     // The view here is fixed, so it never turns published; the request is what matters.
@@ -1054,7 +1067,7 @@ describe("publishing", () => {
       "Check the owner.",
     );
     const dialog = await openDialog();
-    expect(within(dialog).getByText(/^Verdict:/).textContent).toBe("Verdict: Request changes");
+    expect(within(dialog).getByText(/^Verdict:/).textContent).toBe("Verdict: ✕Request changes");
     expect(
       within(dialog).getByText(
         "4 decisions aren't reviewed yet. The summary lists them as not reviewed.",
@@ -1074,7 +1087,7 @@ describe("publishing", () => {
     renderReview({ view: { ...fixture, isAuthor: true } });
     await loaded();
     const dialog = await openDialog();
-    expect(within(dialog).getByText(/^Verdict:/).textContent).toBe("Verdict: Comment");
+    expect(within(dialog).getByText(/^Verdict:/).textContent).toBe("Verdict: •Comment");
     expect(within(dialog).getByText(/^You opened this pull request/)).toBeTruthy();
   });
 
@@ -1176,14 +1189,13 @@ describe("outside the pull request", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     await userEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    const uses = [...card.querySelectorAll(".unchanged-uses > li")];
-    expect(uses.map((use) => use.querySelector(".unchanged-place")?.textContent)).toEqual([
-      "src/jobs/email-receipts.ts:14",
-      "test/jobs/email-receipts.test.ts:31",
-    ]);
-    const used = uses[0]?.querySelector(".unchanged-line.used");
+    const uses = [...card.querySelectorAll("[data-slot=unchanged-use]")];
+    expect(
+      uses.map((use) => use.querySelector("[data-slot=unchanged-place]")?.textContent),
+    ).toEqual(["src/jobs/email-receipts.ts:14", "test/jobs/email-receipts.test.ts:31"]);
+    const used = uses[0]?.querySelector("[data-slot=unchanged-line][data-used]");
     expect(used?.textContent).toBe("14    const text = await renderReceipt(order);");
-    expect(uses[0]?.querySelectorAll(".unchanged-line")).toHaveLength(5);
+    expect(uses[0]?.querySelectorAll("[data-slot=unchanged-line]")).toHaveLength(5);
     // Only the card of the part that changes the definition says so.
     expect(within(cardOf(h.receiptRoute)).queryByText(/Used unchanged/)).toBeNull();
   });
@@ -1193,13 +1205,13 @@ describe("outside the pull request", () => {
     await loaded();
     await openOverview();
     const outside = nodeOf("outside:src/jobs/email-receipts.ts");
-    expect(outside.classList.contains("outside")).toBe(true);
+    expect(outside.getAttribute("data-risk") === "outside").toBe(true);
     expect(outside.getAttribute("aria-label")).toBe("email-receipts.ts, outside the PR · 1 use");
     act(() => outside.focus());
-    expect(overviewBox().querySelector(".overview-detail")?.textContent).toBe(
+    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toBe(
       "src/jobs/email-receipts.ts · outside the pull request · uses src/services/ (renderReceipt).",
     );
-    expect(overviewBox().querySelector(".overview-legend")?.textContent).toContain(
+    expect(overviewBox().querySelector("[data-slot=overview-legend]")?.textContent).toContain(
       "Faded files are outside the pull request, under the code whose changes they use.",
     );
     await userEvent.click(outside);
@@ -1213,14 +1225,14 @@ describe("outside the pull request", () => {
     expect(
       within(await openDetails()).getByText(/didn't run in a checkout of acme\/shop/),
     ).toBeTruthy();
-    expect(document.querySelector(".hunk-outside")).toBeNull();
+    expect(document.querySelector("[data-slot=unchanged-uses]")).toBeNull();
   });
 
   it("says in the details to fetch the head commit when the checkout lacks it", async () => {
     renderReview({ view: withCheckout("missing-commit") });
     await loaded();
     const details = await openDetails();
-    expect(details.querySelector(".checkout-note")?.textContent).toBe(
+    expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toBe(
       "Code outside the pull request that calls what it changes isn't shown: the local checkout doesn't have the head commit 9e8d7c6. Run git fetch in it, or git fetch origin pull/128/head for a pull request from a fork, then open the pull request again.",
     );
   });
@@ -1228,6 +1240,6 @@ describe("outside the pull request", () => {
   it("says nothing about the checkout in the details when one was read", async () => {
     renderReview();
     await loaded();
-    expect((await openDetails()).querySelector(".checkout-note")).toBeNull();
+    expect((await openDetails()).querySelector("[data-slot=checkout-note]")).toBeNull();
   });
 });

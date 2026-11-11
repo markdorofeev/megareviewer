@@ -1,6 +1,6 @@
 import type { FileChange, Hunk } from "../../../../src/domain/diff/index.ts";
-import { type CharRange, intraLineChanges } from "../../diff/intra-line.ts";
-import { displayLines } from "../../diff/lines.ts";
+import { type CharRange, intraLineChanges } from "./intra-line.ts";
+import { displayLines } from "./lines.ts";
 import type { HunkTokens, SyntaxToken } from "./syntax.ts";
 
 // A file's diff as the rows the viewer draws, one list for a virtual scroller: a gap of unchanged
@@ -19,6 +19,8 @@ export interface ViewLine {
   readonly text: string;
   readonly tokens: readonly SyntaxToken[] | null;
   readonly wordRanges: readonly CharRange[];
+  /** What the text can't show: a CRLF ending others in the hunk lack, a missing final newline. */
+  readonly notes: readonly string[];
 }
 
 export interface GapRow {
@@ -56,7 +58,7 @@ export type SideBySideRow = GapRow | HunkRow | SplitRow;
 /** Each hunk's lines as the viewer shows them, with word ranges and the tokens given. */
 export const viewLines = (hunk: Hunk, tokens: HunkTokens | null = null): ViewLine[] => {
   const words = intraLineChanges(hunk.lines);
-  return displayLines(hunk.lines).map(({ line, text }, index) => ({
+  return displayLines(hunk.lines).map(({ line, text, carriageReturn }, index) => ({
     key: `${hunk.id}:${index}`,
     hunkId: hunk.id,
     kind: line.kind,
@@ -65,6 +67,10 @@ export const viewLines = (hunk: Hunk, tokens: HunkTokens | null = null): ViewLin
     text,
     tokens: tokens?.[index] ?? null,
     wordRanges: words.get(index) ?? [],
+    notes: [
+      ...(carriageReturn ? ["CRLF"] : []),
+      ...(line.noNewlineAtEnd ? ["No newline at end of file"] : []),
+    ],
   }));
 };
 

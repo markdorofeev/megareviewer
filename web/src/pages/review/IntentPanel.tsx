@@ -5,6 +5,8 @@ import type {
   StatedIntent,
   Ticket,
 } from "../../../../src/domain/review/index.ts";
+import { cn } from "../../lib/utils.ts";
+import { CHIP } from "./StatedIntent.tsx";
 
 const SOURCE_NAMES: Readonly<Record<Exclude<IntentSourceKind, "ticket">, string>> = {
   description: "Description",
@@ -18,13 +20,23 @@ const MISMATCH_NAMES: Readonly<Record<IntentMismatchKind, string>> = {
   contradicts: "Contradicts",
 };
 
+// Spelled out because Tailwind only generates the classes it finds whole in the source.
+const MISMATCH_TONES: Readonly<Record<IntentMismatchKind, string>> = {
+  contradicts: "text-review-changes bg-review-changes-bg border-review-changes/25",
+  missing: "text-review-pending bg-review-pending-bg border-review-pending/25",
+  unrequested: "text-review-pending bg-review-pending-bg border-review-pending/25",
+};
+
+const MODEL_TEXT = "whitespace-pre-line";
+const HEADING = "text-caption font-medium text-muted-foreground";
+
 const TicketChip = ({ ticketKey, ticket }: { ticketKey: string; ticket: Ticket | undefined }) =>
   ticket === undefined ? (
-    <li className="chip" title="Jira didn't return this ticket, or Jira isn't configured">
+    <li className={CHIP} title="Jira didn't return this ticket, or Jira isn't configured">
       {ticketKey} · not fetched
     </li>
   ) : (
-    <li className="chip">
+    <li className={CHIP}>
       <a href={ticket.url} target="_blank" rel="noreferrer" title={ticket.summary}>
         {ticket.key} · {ticket.status}
       </a>
@@ -42,7 +54,7 @@ const Sources = ({
 }) => (
   <>
     {stated !== null && (
-      <ul className="chips" aria-label="Sources">
+      <ul className="flex flex-wrap gap-2" aria-label="Sources">
         {stated.sources.map((source) =>
           source.kind === "ticket" && source.ref !== null ? (
             <TicketChip
@@ -51,7 +63,7 @@ const Sources = ({
               ticket={ticketOf.get(source.ref)}
             />
           ) : source.kind === "ticket" ? null : (
-            <li key={source.kind} className="chip">
+            <li key={source.kind} className={CHIP}>
               {SOURCE_NAMES[source.kind]}
             </li>
           ),
@@ -59,7 +71,7 @@ const Sources = ({
       </ul>
     )}
     {unfetched.length > 0 && (
-      <ul className="chips" aria-label="Tickets mentioned but not fetched">
+      <ul className="flex flex-wrap gap-2" aria-label="Tickets mentioned but not fetched">
         {unfetched.map((key) => (
           <TicketChip key={key} ticketKey={key} ticket={undefined} />
         ))}
@@ -97,50 +109,56 @@ export const IntentPanel = ({
   const { behaviorChanges } = inferred;
 
   return (
-    <div className="intent-panel">
+    <div className="flex flex-col gap-4 text-body">
       {mismatches.length === 0 ? (
-        <div className="intent-agrees">
+        <div className="flex flex-col gap-2">
           <p>
             {stated === null ? (
-              <span className="intent-label">From the code:</span>
+              <span className="font-medium">From the code:</span>
             ) : (
-              <span className="intent-label agrees">✓ Does what was asked:</span>
+              <span className="font-medium text-review-approved">✓ Does what was asked:</span>
             )}{" "}
-            <span className="model-text">{inferred.summary}</span>
+            <span className={MODEL_TEXT}>{inferred.summary}</span>
           </p>
-          {stated === null && <p className="muted">{NO_STATED_INTENT}</p>}
+          {stated === null && <p className="text-muted-foreground">{NO_STATED_INTENT}</p>}
           {sources}
         </div>
       ) : (
-        <div className="intent-columns">
-          <div className="intent-column">
-            <h3>Stated</h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="flex flex-col gap-2">
+            <h3 className={HEADING}>Stated</h3>
             {stated === null ? (
-              <p className="muted">{NO_STATED_INTENT}</p>
+              <p className="text-muted-foreground">{NO_STATED_INTENT}</p>
             ) : (
-              <p className="model-text">{stated.summary}</p>
+              <p className={MODEL_TEXT}>{stated.summary}</p>
             )}
             {sources}
           </div>
-          <div className="intent-column">
-            <h3>Inferred from the code</h3>
-            <p className="model-text">{inferred.summary}</p>
+          <div className="flex flex-col gap-2">
+            <h3 className={HEADING}>Inferred from the code</h3>
+            <p className={MODEL_TEXT}>{inferred.summary}</p>
           </div>
-          <div className="intent-column">
-            <h3>Mismatches</h3>
-            <ul className="mismatches">
+          <div className="flex flex-col gap-2">
+            <h3 className={HEADING}>Mismatches</h3>
+            <ul className="flex flex-col gap-1.5">
               {mismatches.map((mismatch, index) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: mismatches have no ID and never reorder.
                 <li key={index}>
                   <button
                     type="button"
-                    className="mismatch"
+                    className="flex w-full flex-col items-start gap-1 rounded-md border p-2 text-left hover:bg-accent"
                     onClick={() => onSelectMismatch(index)}
                   >
-                    <span className={`badge mismatch-${mismatch.kind}`}>
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 text-caption font-medium",
+                        MISMATCH_TONES[mismatch.kind],
+                      )}
+                    >
+                      <span aria-hidden="true">⚠ </span>
                       {MISMATCH_NAMES[mismatch.kind]}
                     </span>
-                    <span className="model-text">{mismatch.description}</span>
+                    <span className={MODEL_TEXT}>{mismatch.description}</span>
                   </button>
                 </li>
               ))}
@@ -149,21 +167,23 @@ export const IntentPanel = ({
         </div>
       )}
       {(hiddenStated !== null || behaviorChanges.length > 0) && (
-        <details className="intent-details">
-          <summary>Details{behaviorChanges.length > 0 && ` (${behaviorChanges.length})`}</summary>
+        <details className="flex flex-col gap-2">
+          <summary className="min-h-6 cursor-pointer font-medium">
+            Details{behaviorChanges.length > 0 && ` (${behaviorChanges.length})`}
+          </summary>
           {hiddenStated !== null && (
             <>
-              <h3>Asked</h3>
-              <p className="model-text">{hiddenStated.summary}</p>
+              <h3 className={cn(HEADING, "mt-2")}>Asked</h3>
+              <p className={MODEL_TEXT}>{hiddenStated.summary}</p>
             </>
           )}
           {behaviorChanges.length > 0 && (
             <>
-              <h3>Behavior changes</h3>
-              <ul className="behavior-changes">
+              <h3 className={cn(HEADING, "mt-2")}>Behavior changes</h3>
+              <ul className="list-disc pl-5">
                 {behaviorChanges.map((change, index) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: the list never reorders.
-                  <li key={index} className="model-text">
+                  <li key={index} className={MODEL_TEXT}>
                     {change}
                   </li>
                 ))}

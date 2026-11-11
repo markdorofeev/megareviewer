@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { firstHunk, modifiedFile } from "../../diff/testing.ts";
 import {
   hiddenBefore,
   linesOf,
@@ -9,6 +8,7 @@ import {
   unifiedRows,
   viewLines,
 } from "./rows.ts";
+import { firstHunk, modifiedFile } from "./testing.ts";
 
 const FILE = modifiedFile(
   "src/retry.ts",

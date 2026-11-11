@@ -9,9 +9,10 @@ import {
 } from "../api/index.ts";
 import { PickerPage } from "../pages/picker/index.ts";
 import { ReviewPage } from "../pages/review/index.ts";
+import { Toaster } from "../ui/sonner.tsx";
+import { TooltipProvider } from "../ui/tooltip.tsx";
 import { Header } from "./Header.tsx";
 import { NotFoundPage } from "./NotFoundPage.tsx";
-import { type PlaygroundModules, PlaygroundPage } from "./PlaygroundPage.tsx";
 import { matchRoute, usePathname } from "./router.ts";
 import { TokenScreen } from "./TokenScreen.tsx";
 import type { SessionToken } from "./token.ts";
@@ -20,11 +21,9 @@ export interface AppProps {
   readonly token: SessionToken;
   readonly fetch: typeof fetch;
   readonly openEventStream?: (url: string) => EventStream;
-  /** Dev builds only; see PlaygroundPage. */
-  readonly playgrounds: PlaygroundModules | null;
 }
 
-export const App = ({ token, fetch, openEventStream, playgrounds }: AppProps) => {
+export const App = ({ token, fetch, openEventStream }: AppProps) => {
   const [ended, setEnded] = useState(false);
   const value = token.value;
   const api = useMemo((): Api | null => {
@@ -47,28 +46,27 @@ export const App = ({ token, fetch, openEventStream, playgrounds }: AppProps) =>
   if (api === null) return <TokenScreen reason="missing" />;
   return (
     <ApiContext.Provider value={api}>
-      <Shell playgrounds={playgrounds} />
+      <Shell />
     </ApiContext.Provider>
   );
 };
 
-const Shell = ({ playgrounds }: { readonly playgrounds: PlaygroundModules | null }) => {
-  const route = matchRoute(usePathname(), { dev: playgrounds !== null });
+const Shell = () => {
+  const route = matchRoute(usePathname());
   const status = useStatus();
   return (
-    <>
+    <TooltipProvider>
       <Header status={status.status} error={status.error} />
-      <main className="page">
+      <main className="px-4 py-5 sm:px-6">
         {route.page === "picker" ? (
           <PickerPage status={status.status} />
         ) : route.page === "review" ? (
           <ReviewPage analysisId={route.analysisId} />
-        ) : route.page === "playground" && playgrounds !== null ? (
-          <PlaygroundPage modules={playgrounds} name={route.name} />
         ) : (
           <NotFoundPage />
         )}
       </main>
-    </>
+      <Toaster />
+    </TooltipProvider>
   );
 };

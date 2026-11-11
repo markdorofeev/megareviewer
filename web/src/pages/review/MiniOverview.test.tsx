@@ -112,13 +112,13 @@ describe("MiniOverview", () => {
     expect(Number.parseFloat(first?.style.top ?? "")).toBeLessThan(
       Number.parseFloat(second?.style.top ?? ""),
     );
-    expect(diagram().querySelectorAll("path.mini-edge")).toHaveLength(3);
+    expect(diagram().querySelectorAll("path[data-slot=mini-edge]")).toHaveLength(3);
   });
 
   it("outlines the box holding the file in view, and moves the outline with it", () => {
     const { rerender } = show(paths[1] ?? null);
     const current = () =>
-      [...diagram().querySelectorAll<HTMLElement>(".mini-node.current")].map(
+      [...diagram().querySelectorAll<HTMLElement>("button[data-current]")].map(
         (box) => box.dataset.key,
       );
     expect(current()).toEqual([routes.key]);
@@ -145,7 +145,7 @@ describe("MiniOverview", () => {
     show(paths[5] ?? null, { onOpen });
     const chips = within(screen.getByRole("list", { name: "Not linked" })).getAllByRole("button");
     expect(chips.map((chip) => chip.textContent)).toEqual(["src/domain/ 1 file", "./ 1 file"]);
-    expect(chips[1]?.className).toContain("current");
+    expect(chips[1]?.hasAttribute("data-current")).toBe(true);
     await userEvent.click(chips[0] as HTMLElement);
     expect(onOpen).toHaveBeenCalledWith(webDomain);
   });

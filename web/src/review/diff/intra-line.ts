@@ -1,4 +1,4 @@
-import type { DiffLine } from "../../../src/domain/diff/index.ts";
+import type { DiffLine } from "../../../../src/domain/diff/index.ts";
 
 /** Characters `[start, end)` of a line's text. */
 export interface CharRange {

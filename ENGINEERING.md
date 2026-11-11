@@ -95,6 +95,15 @@ Don't over-apply it. An interface exists only at an I/O boundary or when there's
 - Comments explain why, not what. No dead or commented-out code.
 - **Fail safe toward the reviewer.** When the code is unsure, it shows the reviewer more, never less. A hunk is collapsed only with a mechanical proof. Data is never silently dropped or truncated.
 
+### UI
+
+- **Tokens only.** Colors, type, radius, shadows and durations come from `web/src/styles/globals.css` through Tailwind's utilities (`bg-diff-add-bg`, `text-risk-contract`, `text-ui`). No hex, `rgb()`, palette colors such as `bg-zinc-100`, or inline colors. A color that isn't there is added to the tokens, with its pairs in `pnpm check:contrast`, not to a component.
+- **Primitives from `web/src/ui`.** shadcn/ui on Base UI, owned here; a change from upstream is marked `// hunk:`. No other component library.
+- **Classes with `cn()`,** from `web/src/lib/utils.ts`, and `cva` for a component with more than two variants. Tailwind generates only the classes it finds whole, so a class chosen by a value is spelled out in a map.
+- **Never color alone.** A risk, verdict, status or changed line also has a glyph or a word.
+- **One keymap.** Every shortcut is in `web/src/lib/keymap.ts`, and hints come from it through `KeyHint`.
+- **WCAG 2.2 AA** in light, dark and the color-blind diff: 4.5:1 text, 3:1 for what isn't text, a visible focus, 24 px targets.
+
 ## 7. Testing
 
 | Level | Covers | How |

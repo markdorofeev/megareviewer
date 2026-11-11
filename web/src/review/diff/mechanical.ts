@@ -1,4 +1,4 @@
-import type { FileChange, Hunk, MechanicalProof } from "../../../src/domain/diff/index.ts";
+import type { FileChange, Hunk, MechanicalProof } from "../../../../src/domain/diff/index.ts";
 import { lineCounts } from "./lines.ts";
 
 /** One collapsed row: a mechanical hunk, or a file-level proof such as a pure rename. */
