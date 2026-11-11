@@ -127,6 +127,12 @@ export interface DiffLineProps {
     readonly label: string;
     readonly onClick: (event: MouseEvent<HTMLButtonElement>) => void;
   };
+  /**
+   * A press and a click anywhere on the row, e.g. to comment on it. The press comes before the
+   * focus moves, so a handler can tell what was open then.
+   */
+  readonly onRowPress?: (event: MouseEvent<HTMLDivElement>) => void;
+  readonly onRowClick?: (event: MouseEvent<HTMLDivElement>) => void;
 }
 
 /** One line of a diff: the old and new numbers, the + / − marker, and the code. */
@@ -141,6 +147,8 @@ export const DiffLine = memo(function DiffLine({
   onComment,
   onGutterClick,
   numberButton,
+  onRowPress,
+  onRowClick,
   cellRole = "gridcell",
 }: DiffLineProps) {
   const kind = KIND[line.kind];
@@ -187,15 +195,19 @@ export const DiffLine = memo(function DiffLine({
   );
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the line number is the keyboard's way to the same action.
     <div
       role="row"
       id={id}
+      onMouseDown={onRowPress}
+      onClick={onRowClick}
       aria-selected={selected || undefined}
       data-line={line.key}
       data-kind={line.kind}
       data-focused={focused || undefined}
       className={cn(
         "group/line relative flex min-w-full font-mono",
+        onRowClick !== undefined && "cursor-pointer",
         DENSITY[density],
         kind.row,
         // A tint over the row's own, so a selected added line still reads as added.

@@ -1,4 +1,13 @@
-import { Fragment, memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type MouseEvent,
+  memo,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   DiffLine as DomainLine,
   FileChange,
@@ -14,6 +23,7 @@ import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { Toggle } from "../../ui/toggle.tsx";
+import { KeyHint } from "../shell/key-hint.tsx";
 import { DiffLine } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { hunkLocation, lineCounts } from "./lines.ts";
@@ -162,9 +172,31 @@ export const HunkCard = memo(function HunkCard({
     card.scrollIntoView({ block: "start" });
   }, [focused]);
 
+  // Pressing on a line moves the focus out of an open comment box, which closes it before the
+  // click lands; what was open at the press says whether the click closes or opens.
+  const openAtPress = useRef<LinePlace | null>(null);
   const counts = lineCounts(hunk);
   const header = !inFile || proofs.length > 0;
   const commentable = onOpenComment !== undefined && onComment !== undefined;
+  /**
+   * Opens the comment box on a line, or closes it when it was open there. ⇧ extends the open
+   * comment into a range on the same side.
+   */
+  const toggleComment = (place: LinePlace, extend: boolean) => {
+    const from = openAtPress.current ?? openComment;
+    openAtPress.current = null;
+    if (from !== null && from.side === place.side && from.line === place.line) {
+      onOpenComment?.(id, null);
+      return;
+    }
+    if (extend && from !== null && from.side === place.side) {
+      const first = Math.min(from.startLine ?? from.line, place.line);
+      const last = Math.max(from.line, place.line);
+      onOpenComment?.(id, { side: place.side, line: last, startLine: first });
+      return;
+    }
+    onOpenComment?.(id, place);
+  };
   return (
     <section
       ref={ref}
@@ -258,28 +290,24 @@ export const HunkCard = memo(function HunkCard({
                       : {
                           side: place.side,
                           label: placeLabel(place),
-                          onClick: (event) => {
-                            // ⇧-click extends the open comment into a range on the same side.
-                            const from = openComment;
-                            if (
-                              event.shiftKey &&
-                              from !== null &&
-                              from.side === place.side &&
-                              from.line !== place.line
-                            ) {
-                              const first = Math.min(from.startLine ?? from.line, place.line);
-                              const last = Math.max(from.line, place.line);
-                              onOpenComment?.(id, {
-                                side: place.side,
-                                line: last,
-                                startLine: first,
-                              });
-                              return;
-                            }
-                            onOpenComment?.(id, place);
-                          },
+                          onClick: (event) => toggleComment(place, event.shiftKey),
                         }
                   }
+                  {...(place === null || !commentable
+                    ? {}
+                    : {
+                        onRowPress: () => {
+                          openAtPress.current = openComment;
+                        },
+                        onRowClick: (event: MouseEvent<HTMLDivElement>) => {
+                          // Selecting code isn't asking to comment.
+                          if (window.getSelection()?.isCollapsed === false) return;
+                          // The line number's own click already handled it.
+                          if (event.target instanceof Element && event.target.closest("button"))
+                            return;
+                          toggleComment(place, event.shiftKey);
+                        },
+                      })}
                 />
                 {place !== null && commentAt != null && (comment !== undefined || open) && (
                   <CommentRow
@@ -440,6 +468,10 @@ const CommentRow = ({
                   </Toggle>
                 ))}
               </fieldset>
+              <Button variant="ghost" size="sm" className="order-last ml-auto" onClick={onDone}>
+                Close
+                <KeyHint id="close" />
+              </Button>
               {place.side === "new" && (
                 <Toggle
                   variant="outline"

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -146,6 +146,42 @@ describe("HunkCard", () => {
     await user.click(screen.getByRole("button", { name: "Comment on old line 13" }));
     expect(onOpenComment).toHaveBeenCalledWith(first.hunk.id, { side: "old", line: 13 });
     expect(screen.getByRole("button", { name: "Comment on line 14" })).toBeTruthy();
+  });
+
+  it("opens a comment with a click anywhere on a line, but not when selecting code", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    renderWith(<Cards cards={[second]} onOpenComment={onOpenComment} onComment={vi.fn()} />);
+    const row = screen.getAllByRole("row").find((one) => one.dataset.kind === "add");
+    if (row === undefined) throw new Error("no added line");
+    await user.click(row);
+    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41 });
+    onOpenComment.mockClear();
+    const selection = window.getSelection();
+    selection?.selectAllChildren(row);
+    // A click that ends a drag over the code: the selection is still there.
+    fireEvent.click(row);
+    expect(onOpenComment).not.toHaveBeenCalled();
+    selection?.removeAllRanges();
+  });
+
+  it("closes the open comment box with a click on its own line, or with Close", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    renderWith(
+      <Cards
+        cards={[second]}
+        openComment={{ side: "new", line: 41 }}
+        onOpenComment={onOpenComment}
+        onComment={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Comment on line 41" }));
+    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
+    expect(onOpenComment).not.toHaveBeenCalledWith(second.hunk.id, { side: "new", line: 41 });
+    onOpenComment.mockClear();
+    await user.click(screen.getByRole("button", { name: /^Close/ }));
+    expect(onOpenComment).toHaveBeenCalledWith(second.hunk.id, null);
   });
 
   it("extends the open comment into a range with ⇧-click on the same side", async () => {
