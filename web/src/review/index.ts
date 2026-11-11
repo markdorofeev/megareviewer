@@ -11,6 +11,7 @@ export {
   type HunkItem,
   type LineComment,
   type LinePlace,
+  PINNED,
 } from "./diff/hunk-card.tsx";
 export {
   CollapsedHunk,

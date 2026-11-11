@@ -4,6 +4,7 @@ import type { AnalysisId } from "../../../../src/domain/review/index.ts";
 import { errorMessage, useApi } from "../../api/index.ts";
 import { cn } from "../../lib/utils.ts";
 import {
+  PINNED,
   type SyntaxToken,
   type UnchangedLine,
   UnchangedLines,
@@ -130,6 +131,7 @@ export const FoldView = ({
       data-slot="file-gap"
       className={cn(
         "flex flex-wrap items-center bg-surface-subtle text-muted-foreground",
+        PINNED,
         above && "border-t",
         below ? "border-b" : "rounded-b-lg",
       )}

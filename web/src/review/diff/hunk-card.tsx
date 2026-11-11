@@ -42,6 +42,12 @@ export const commentPlace = (
       ? null
       : { side: "new", line: line.newLine };
 
+/**
+ * Keeps a row that isn't a line, such as a divider or a button, at the visible width of a file
+ * card's lines, which scroll sideways together inside an `@container`.
+ */
+export const PINNED = "sticky left-0 w-[100cqw]";
+
 /** A hunk to show, with its file and risk; a mechanical one has proofs and shows collapsed. */
 export interface HunkItem {
   readonly hunk: Hunk;
@@ -147,7 +153,10 @@ export const HunkCard = memo(function HunkCard({
       {header && (
         <header
           data-slot="hunk-header"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-surface-subtle px-3 py-1.5"
+          className={cn(
+            "flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-surface-subtle px-3 py-1.5",
+            inFile && PINNED,
+          )}
         >
           {!inFile && (
             <>
@@ -178,14 +187,19 @@ export const HunkCard = memo(function HunkCard({
           )}
         </header>
       )}
-      {unchanged.map((one) => (
-        <UnchangedUses key={one.symbol} callers={one} named={unchanged.length > 1} />
-      ))}
-      {afterHeader}
+      {(unchanged.length > 0 || afterHeader != null) && (
+        <div className={cn(inFile && PINNED)}>
+          {unchanged.map((one) => (
+            <UnchangedUses key={one.symbol} callers={one} named={unchanged.length > 1} />
+          ))}
+          {afterHeader}
+        </div>
+      )}
       <div
         role="table"
         aria-label="Lines"
-        className="overflow-x-auto [content-visibility:auto]"
+        // On a file's card the card scrolls its lines sideways, all of them together.
+        className={cn("[content-visibility:auto]", !inFile && "overflow-x-auto")}
         // Off screen, the lines are as tall as they will be, so the scrollbar doesn't jump.
         style={{ containIntrinsicSize: `auto ${shown.length * 20}px` }}
       >
@@ -225,6 +239,7 @@ export const HunkCard = memo(function HunkCard({
                         : (body) => onComment(id, { ...place, body })
                     }
                     onDone={() => onOpenComment?.(id, null)}
+                    pinned={inFile}
                   />
                 )}
               </Fragment>
@@ -233,7 +248,7 @@ export const HunkCard = memo(function HunkCard({
         </div>
       </div>
       {shown.length < lines.length && (
-        <div className="border-t p-2">
+        <div className={cn("border-t p-2", inFile && PINNED)}>
           <Button variant="outline" size="sm" onClick={() => setShowAll(true)}>
             Show all {lines.length} lines
           </Button>
@@ -250,12 +265,15 @@ const CommentRow = ({
   focus,
   onChange,
   onDone,
+  pinned,
 }: {
   readonly place: LinePlace;
   readonly body: string;
   readonly focus: boolean;
   readonly onChange?: (body: string) => void;
   readonly onDone: () => void;
+  /** On a file's card, where the lines scroll sideways and the box stays in view. */
+  readonly pinned: boolean;
 }) => {
   const field = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -266,7 +284,10 @@ const CommentRow = ({
     <div
       role="row"
       data-slot="line-comment"
-      className="border-y border-l-3 border-l-review-pending bg-thread-bg px-3 py-2 font-sans"
+      className={cn(
+        "border-y border-l-3 border-l-review-pending bg-thread-bg px-3 py-2 font-sans",
+        pinned && PINNED,
+      )}
     >
       <div role="cell">
         {onChange === undefined ? (

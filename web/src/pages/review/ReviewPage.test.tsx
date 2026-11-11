@@ -947,6 +947,19 @@ describe("navigation", () => {
     ]);
   });
 
+  it("scroll a card's lines sideways as one, its parts and opened folds together", async () => {
+    const user = userEvent.setup();
+    renderReview();
+    await loaded();
+    const orders = fileCardOf("src/routes/orders.ts");
+    await user.click(within(orders).getByRole("button", { name: "4 lines unchanged" }));
+    await within(orders).findByText("// unchanged line 25");
+    const scrollers = orders.querySelectorAll(".overflow-x-auto");
+    expect([...scrollers].map((one) => one.getAttribute("data-slot"))).toEqual(["file-lines"]);
+    // What isn't a line stays at the visible width while the lines scroll under it.
+    expect(orders.querySelector("[data-slot=file-gap]")?.className).toMatch(/sticky left-0/);
+  });
+
   it("say on the fold when its file can't be fetched", async () => {
     const user = userEvent.setup();
     renderReview({

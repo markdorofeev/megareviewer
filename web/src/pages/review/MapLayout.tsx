@@ -12,6 +12,7 @@ import {
   FileStatusChip,
   lineCounts,
   MechanicalGroup,
+  PINNED,
 } from "../../review/index.ts";
 import { FoldView, useFileText } from "./FoldView.tsx";
 import { canOpen, type Fold, foldsOf } from "./folds.ts";
@@ -69,7 +70,10 @@ const GapRow = ({ lines }: { readonly lines: number }) =>
   lines === 0 ? null : (
     <div
       data-slot="file-gap"
-      className="flex h-8 items-center gap-2 border-t bg-surface-subtle px-3 text-muted-foreground"
+      className={cn(
+        "flex h-8 items-center gap-2 border-t bg-surface-subtle px-3 text-muted-foreground",
+        PINNED,
+      )}
     >
       <span>
         {lines} {lines === 1 ? "line" : "lines"} unchanged
@@ -159,24 +163,29 @@ const FileCard = ({
           </span>
         </span>
       </header>
-      {group.partIds.map((id, at) => {
-        const previous = group.partIds[at - 1];
-        const gap = previous === undefined ? null : gapBetween(previous, id, deps.index);
-        const fold = folds.find((one) => one.before === id);
-        return (
-          <Fragment key={id}>
-            {fold === undefined ? gap !== null && <GapRow lines={gap} /> : foldView(fold)}
-            {/* After a fold its row or its opened lines lead in, so the part needs no border. */}
-            <MapPart
-              id={id}
-              joined={gap === 0 || fold !== undefined}
-              deps={deps}
-              signatureOf={signatureOf}
-            />
-          </Fragment>
-        );
-      })}
-      {folds.filter((fold) => fold.before === null).map(foldView)}
+      {/* One sideways scroll for all the file's lines, so its parts and folds line up. */}
+      <div data-slot="file-lines" className="@container overflow-x-auto rounded-b-lg">
+        <div className="w-max min-w-full">
+          {group.partIds.map((id, at) => {
+            const previous = group.partIds[at - 1];
+            const gap = previous === undefined ? null : gapBetween(previous, id, deps.index);
+            const fold = folds.find((one) => one.before === id);
+            return (
+              <Fragment key={id}>
+                {fold === undefined ? gap !== null && <GapRow lines={gap} /> : foldView(fold)}
+                {/* After a fold its row or its opened lines lead in, so the part needs no border. */}
+                <MapPart
+                  id={id}
+                  joined={gap === 0 || fold !== undefined}
+                  deps={deps}
+                  signatureOf={signatureOf}
+                />
+              </Fragment>
+            );
+          })}
+          {folds.filter((fold) => fold.before === null).map(foldView)}
+        </div>
+      </div>
     </section>
   );
 };

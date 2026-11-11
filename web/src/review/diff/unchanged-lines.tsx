@@ -10,7 +10,10 @@ export interface UnchangedLine {
   readonly tokens: readonly SyntaxToken[] | null;
 }
 
-/** Unchanged lines opened from a fold, drawn as a hunk's context lines are, with both numbers. */
+/**
+ * Unchanged lines opened from a fold, drawn as a hunk's context lines are, with both numbers. On a
+ * file's card, which scrolls them sideways with the parts' lines.
+ */
 export const UnchangedLines = ({
   hunkId,
   lines,
@@ -20,7 +23,7 @@ export const UnchangedLines = ({
   readonly lines: readonly UnchangedLine[];
 }) =>
   lines.length === 0 ? null : (
-    <div role="table" aria-label="Unchanged lines" className="overflow-x-auto">
+    <div role="table" aria-label="Unchanged lines">
       <div className="w-max min-w-full">
         {lines.map(({ oldNo, newNo, text, tokens }) => {
           const line: ViewLine = {
