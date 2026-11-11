@@ -201,7 +201,7 @@
   /* shadcn/ui core */
   --background: #1F1F1F;
   --foreground: #EDEDEF;
-  --card: #262626;
+  --card: #1F1F1F;
   --card-foreground: #EDEDEF;
   --popover: #2C2C2C;
   --popover-foreground: #EDEDEF;
@@ -219,7 +219,7 @@
   --ring: #8B8EF9;
 
   /* surface */
-  --surface-subtle: #262626;
+  --surface-subtle: #1F1F1F;
 
   /* diff */
   --diff-add-bg: #1D3A28;
@@ -233,11 +233,11 @@
   --diff-mod-fg: #FBBF24;
   --diff-hunk-bg: #26283F;
   --diff-hunk-fg: #A5B4FC;
-  --diff-gutter-bg: #262626;
+  --diff-gutter-bg: #1F1F1F;
   --diff-gutter-fg: #8D8D96;
 
   /* comments and suggestions */
-  --thread-bg: #262626;
+  --thread-bg: #1F1F1F;
   --thread-border: #434343;
   --thread-marker: #8B8EF9;
   --suggestion-bg: #252640;
@@ -278,7 +278,7 @@
   /* hunk: risk classes */
   --risk-contract: #EF7BCC;   --risk-contract-bg: #3F1B3A;   --risk-contract-border: #74346A;   --risk-contract-solid: #D9479F;
   --risk-logic: #A1A1AA;      --risk-logic-bg: #303030;      --risk-logic-border: #434343;      --risk-logic-solid: #6F6F7B;
-  --risk-mechanical: #8D8D96; --risk-mechanical-bg: #262626; --risk-mechanical-border: #434343; --risk-mechanical-solid: #3F3F46;
+  --risk-mechanical: #8D8D96; --risk-mechanical-bg: #1F1F1F; --risk-mechanical-border: #434343; --risk-mechanical-solid: #3F3F46;
 }
 
 /* ------------------------------------------------------------------ */
