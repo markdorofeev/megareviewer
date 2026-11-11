@@ -112,6 +112,7 @@ const PAIRS = [
   ["Thread time and labels", "muted-foreground", "thread-bg", 4.5],
   ["Thread error", "destructive", "thread-bg", 4.5],
   ["Resolved label on thread", "review-approved", "thread-bg", 4.5],
+  ["Suggested change title", "primary", "thread-bg", 4.5],
   ["Draft comment bar (non-text)", "review-pending", "thread-bg", 3],
   ["Open thread bar (non-text)", "thread-marker", "thread-bg", 3],
   ["Resolved thread bar (non-text)", "review-approved", "thread-bg", 3],

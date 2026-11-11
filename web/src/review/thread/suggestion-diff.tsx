@@ -44,10 +44,13 @@ export const SuggestionDiff = ({
   removed,
   added,
   language,
+  title,
 }: {
   readonly removed: readonly string[] | null;
   readonly added: readonly string[];
   readonly language: string | null;
+  /** Named inside the box, above the lines, e.g. "Suggested change". */
+  readonly title?: string;
 }) => {
   const oldTokens = useCodeTokens((removed ?? []).join("\n"), removed === null ? null : language);
   const newTokens = useCodeTokens(added.join("\n"), language);
@@ -56,6 +59,11 @@ export const SuggestionDiff = ({
       data-slot="suggestion-diff"
       className="overflow-x-auto rounded-md border font-mono text-code-compact"
     >
+      {title !== undefined && (
+        <p className="border-b px-2 py-1 font-sans text-caption font-medium text-primary">
+          {title}
+        </p>
+      )}
       {(removed ?? []).map((text, at) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: a line's place is its identity.
         <Row key={`del:${at}`} kind="del" text={text} tokens={oldTokens?.[at]} />

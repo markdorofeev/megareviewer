@@ -195,6 +195,31 @@ export const THREADS = {
       },
     ],
   }),
+  grouped: thread({
+    comments: [
+      {
+        id: "c_grouped1",
+        author: sam,
+        body: "**minor:** `attempts` reads as how many have run, not how many may.",
+        createdAt: "2026-10-21T07:10:00Z",
+        originalCommit: null,
+      },
+      {
+        id: "c_grouped2",
+        author: sam,
+        body: "`maxAttempts` would say it.",
+        createdAt: "2026-10-21T07:12:00Z",
+        originalCommit: null,
+      },
+      {
+        id: "c_grouped3",
+        author: dana,
+        body: "Renamed it.",
+        createdAt: "2026-10-21T09:58:00Z",
+        originalCommit: null,
+      },
+    ],
+  }),
   suggestion: thread({
     comments: [
       {

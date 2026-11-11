@@ -265,14 +265,13 @@ test("replies, resolves, and applies two suggestions in one commit", async ({ pa
 
   const cache = changes.getByRole("article", { name: "Thread on line 4", exact: true });
   await expect(cache.getByText("major")).toBeVisible();
-  await cache.focus();
-  await page.keyboard.press("r");
+  await cache.getByRole("button", { name: /^Reply/ }).click();
   const reply = cache.getByRole("textbox", { name: "Reply to the thread on line 4" });
   await expect(reply).toBeFocused();
   await reply.fill("Capped at 1,000 entries.");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(cache.getByText("Capped at 1,000 entries.")).toBeVisible();
-  await expect(reply).toHaveValue("");
+  await expect(reply).toBeHidden();
   await cache.getByRole("button", { name: /^Resolve/ }).click();
   await expect(
     changes.getByRole("article", { name: "Thread on line 4, resolved", exact: true }),

@@ -83,20 +83,98 @@ const show = (props: Partial<ReviewThreadProps> = {}) => {
 };
 
 describe("ReviewThreadView", () => {
-  it("shows each comment's author, Author chip, time and severity, replies after a rule", () => {
+  it("shows each comment's author, Author chip, time and severity, with a rule between people", () => {
     show();
     const article = screen.getByRole("article", { name: "Thread on line 4" });
     expect(article.dataset.state).toBe("open");
     const comments = within(article).getAllByText(/Sam Ortiz|Dana Kim/);
     expect(comments.map((one) => one.textContent)).toEqual(["Sam Ortiz", "Dana Kim"]);
     expect(within(article).getByText("Author")).toBeTruthy();
-    expect(within(article).getByText("5 min ago")).toBeTruthy();
-    expect(within(article).getByText("3 h ago")).toBeTruthy();
+    const time = within(article).getByText("5m ago");
+    expect(time.getAttribute("title")).toMatch(/2026/);
+    expect(within(article).getByText("3h ago")).toBeTruthy();
     expect(article.querySelector("[data-slot=severity]")?.textContent).toBe("▲major");
     expect(within(article).getByText("Cache never evicts.")).toBeTruthy();
-    expect(article.querySelector("[data-slot=thread-replies]")?.textContent).toContain(
-      "Capped it.",
-    );
+    expect(article.querySelectorAll("[data-slot=thread-divider]")).toHaveLength(1);
+  });
+
+  it("gives consecutive comments by one person one header, and a rule only between people", () => {
+    const comment = (id: string, author: typeof sam, body: string) => ({
+      id,
+      author,
+      body,
+      createdAt: "2026-10-21T09:00:00Z",
+      originalCommit: null,
+    });
+    show({
+      thread: thread({
+        comments: [
+          comment("a", sam, "One."),
+          comment("b", sam, "Two."),
+          comment("c", dana, "Three."),
+          comment("d", dana, "Four."),
+        ],
+      }),
+    });
+    const article = screen.getByRole("article");
+    const groups = [...article.querySelectorAll("[data-slot=thread-group]")];
+    expect(
+      groups.map((group) => group.querySelectorAll("[data-slot=thread-comment]").length),
+    ).toEqual([2, 2]);
+    expect(within(article).getAllByText("Sam Ortiz")).toHaveLength(1);
+    expect(within(article).getAllByText("Dana Kim")).toHaveLength(1);
+    expect(within(article).getAllByText("Author")).toHaveLength(1);
+    expect(article.querySelectorAll("[data-slot=thread-divider]")).toHaveLength(1);
+  });
+
+  it("draws no rule in a thread of one comment", () => {
+    show({ thread: suggesting });
+    expect(document.querySelectorAll("[data-slot=thread-divider]")).toHaveLength(0);
+  });
+
+  const actions = () =>
+    within(document.querySelector<HTMLElement>("[data-slot=thread-actions]") ?? document.body)
+      .getAllByRole("button")
+      .map((button) => button.textContent);
+
+  it("puts a single suggestion's buttons in the thread's one row of actions", () => {
+    show({ thread: suggesting, batch: { has: () => false, problem: () => "Overlaps line 4." } });
+    expect(actions()).toEqual(["Replyr", "Apply suggestion", "Add to batchb", "Resolvee"]);
+    expect(
+      within(
+        document.querySelector<HTMLElement>("[data-slot=thread-actions]") ?? document.body,
+      ).getByText("Overlaps line 4."),
+    ).toBeTruthy();
+  });
+
+  it("keeps each suggestion's buttons under it when a thread has several", () => {
+    const suggestion = (id: string, line: string) => ({
+      id,
+      author: sam,
+      body: `${"```"}suggestion\n${line}\n${"```"}`,
+      createdAt: "2026-10-21T09:00:00Z",
+      originalCommit: null,
+    });
+    show({ thread: thread({ comments: [suggestion("s1", "a"), suggestion("s2", "b")] }) });
+    expect(actions()).toEqual(["Replyr", "Resolvee"]);
+    expect(screen.getAllByRole("button", { name: "Apply suggestion" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Add to batch/ })).toHaveLength(2);
+  });
+
+  it("opens the reply field with Reply, and closes it with Cancel", async () => {
+    show();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
+    const field = screen.getByRole("textbox", { name: "Reply to the thread on line 4" });
+    expect(document.activeElement).toBe(field);
+    expect(document.querySelector("[data-slot=thread-actions]")).toBeNull();
+    await userEvent.type(field, "Hm");
+    await userEvent.click(screen.getByRole("button", { name: /^Cancel/ }));
+    expect(screen.queryByRole("textbox")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 
   it("renders HTML and links in a body as text", () => {
@@ -178,9 +256,10 @@ describe("ReviewThreadView", () => {
     expect(article.querySelector("[data-slot=thread-image]")?.textContent).toContain("Image: shot");
   });
 
-  it("replies with ⌘↵, keeping the text when posting fails", async () => {
+  it("replies with ⌘↵, keeping the field and its text when posting fails", async () => {
     const { onReply } = show();
     onReply.mockResolvedValueOnce("GitHub answered 502.");
+    await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
     const field = screen.getByRole("textbox", { name: "Reply to the thread on line 4" });
     await userEvent.type(field, "On it");
     await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
@@ -189,8 +268,13 @@ describe("ReviewThreadView", () => {
       "Not sent: GitHub answered 502.",
     );
     expect((field as HTMLTextAreaElement).value).toBe("On it");
+    field.blur();
+    expect(screen.getByRole("textbox")).toBe(field);
     await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
-    expect((field as HTMLTextAreaElement).value).toBe("");
+    expect(onReply).toHaveBeenCalledTimes(2);
+    // Posted: the field gives way to the row again.
+    await vi.waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
+    expect(actions()).toContain("Replyr");
   });
 
   it("shows a reply that's posting", async () => {
@@ -202,13 +286,14 @@ describe("ReviewThreadView", () => {
           finish = resolve;
         }),
     );
+    await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
     await userEvent.type(screen.getByRole("textbox"), "Sure");
     await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
     expect((screen.getByRole("button", { name: /^Sending/ }) as HTMLButtonElement).disabled).toBe(
       true,
     );
     finish(null);
-    expect(await screen.findByRole("button", { name: /^Reply/ })).toBeTruthy();
+    await vi.waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
   });
 
   it("takes r, e and b while the focus is in the thread", async () => {
@@ -229,6 +314,7 @@ describe("ReviewThreadView", () => {
 
   it("doesn't take a letter typed in the reply field", async () => {
     const { onResolve } = show();
+    await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
     await userEvent.type(screen.getByRole("textbox"), "e");
     expect(onResolve).not.toHaveBeenCalled();
   });
@@ -309,8 +395,7 @@ describe("ReviewThreadView", () => {
 
   it("offers neither reply nor resolve when the host doesn't allow them", () => {
     show({ thread: thread({ can: { reply: false, resolve: false } }) });
-    expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Resolve/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reply|Resolve/ })).toBeNull();
   });
 });
 
@@ -324,6 +409,8 @@ describe("people", () => {
 
   it("says how long ago, then the date", () => {
     expect(relativeTime("2026-10-21T09:59:30Z", NOW)).toBe("just now");
+    expect(relativeTime("2026-10-21T09:55:00Z", NOW)).toBe("5m ago");
+    expect(relativeTime("2026-10-21T08:00:00Z", NOW)).toBe("2h ago");
     expect(relativeTime("2026-10-20T09:00:00Z", NOW)).toBe("yesterday");
     expect(relativeTime("2026-10-14T10:00:00Z", NOW)).toBe("7 days ago");
     expect(relativeTime("2026-01-02T10:00:00Z", NOW)).toMatch(/2026/);

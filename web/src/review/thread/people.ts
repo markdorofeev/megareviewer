@@ -16,12 +16,12 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** "just now", "5 min ago", "3 h ago", "2 days ago", then the date. */
+/** "just now", "5m ago", "3h ago", "yesterday", "2 days ago", then the date. */
 export const relativeTime = (iso: string, now: number): string => {
   const elapsed = Math.max(0, now - Date.parse(iso));
   if (elapsed < MINUTE) return "just now";
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} min ago`;
-  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)} h ago`;
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m ago`;
+  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h ago`;
   const days = Math.floor(elapsed / DAY);
   if (days < 30) return days === 1 ? "yesterday" : `${days} days ago`;
   return new Date(iso).toLocaleDateString(undefined, {
@@ -30,3 +30,7 @@ export const relativeTime = (iso: string, now: number): string => {
     day: "numeric",
   });
 };
+
+/** The date and time in full, for the title of a relative one. */
+export const absoluteTime = (iso: string): string =>
+  new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });

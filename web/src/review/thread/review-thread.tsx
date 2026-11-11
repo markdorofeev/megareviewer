@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { Fragment, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import {
   parseBody,
   type ReviewThread,
@@ -13,7 +13,7 @@ import { Button } from "../../ui/button.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
 import { CommentCard } from "./comment-card.tsx";
-import { initialsOf, relativeTime } from "./people.ts";
+import { absoluteTime, initialsOf, relativeTime } from "./people.ts";
 import { SuggestionDiff } from "./suggestion-diff.tsx";
 import { ThreadBody } from "./thread-body.tsx";
 
@@ -102,9 +102,24 @@ export const threadPlace = (thread: ReviewThread): string => {
     : `${old}line ${line}`;
 };
 
+/** Consecutive comments by one person, read under one header. */
+const groupByAuthor = (
+  comments: readonly ThreadComment[],
+): readonly (readonly ThreadComment[])[] => {
+  const groups: ThreadComment[][] = [];
+  for (const comment of comments) {
+    const last = groups.at(-1);
+    if (last !== undefined && last[0]?.author.id === comment.author.id) last.push(comment);
+    else groups.push([comment]);
+  }
+  return groups;
+};
+
 /**
- * A review thread from the host: its comments with their authors, severities and suggested
- * changes, a reply field (`r`) and Resolve (`e`). A resolved thread folds to one line.
+ * A review thread from the host: its comments grouped by person, with their severities and
+ * suggested changes, and one row of actions: Reply (`r`), which opens the field in its place, a
+ * lone suggestion's Apply and Add to batch (`b`), and Resolve (`e`). A resolved thread folds to one
+ * line.
  */
 export const ReviewThreadView = ({
   thread,
@@ -125,6 +140,8 @@ export const ReviewThreadView = ({
   className,
 }: ReviewThreadProps) => {
   const [open, setOpen] = useState(!thread.resolved);
+  const [composing, setComposing] = useState(initialReply !== undefined);
+  const [focusAsked, setFocusAsked] = useState(0);
   const [reply, setReply] = useState(initialReply?.text ?? "");
   const [posting, setPosting] = useState(initialReply?.status === "posting");
   const [replyError, setReplyError] = useState<string | null>(
@@ -138,24 +155,54 @@ export const ReviewThreadView = ({
   const state = thread.resolved ? "resolved" : thread.outdated ? "outdated" : "open";
   const current = !thread.outdated && thread.line !== null && thread.side === "new";
   const applicable = canApply && current;
+  const canReply = onReply !== undefined && thread.can.reply;
+  const canResolve = onResolve !== undefined && thread.can.resolve;
+  // The field stays while there's something in it to lose: text, a post on its way, or a failure.
+  const fieldShown = canReply && (composing || reply !== "" || posting || replyError !== null);
+
+  const openField = () => {
+    setOpen(true);
+    setComposing(true);
+    setFocusAsked((asked) => asked + 1);
+  };
 
   useEffect(() => {
-    if (replying) {
-      setOpen(true);
-      field.current?.focus();
-    }
+    if (focusAsked > 0) field.current?.focus();
+  }, [focusAsked]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: opens when asked to, not on each render.
+  useEffect(() => {
+    if (replying) openField();
   }, [replying]);
+
+  /** Back to the thread, so r, e and b work again once the field is gone. */
+  const focusThread = () =>
+    field.current?.closest<HTMLElement>("[data-slot=review-thread]")?.focus();
+
+  const cancel = () => {
+    if (posting) return;
+    focusThread();
+    setReply("");
+    setReplyError(null);
+    setComposing(false);
+  };
 
   const send = async () => {
     const body = reply.trim();
     if (body === "" || posting || onReply === undefined) return;
+    const article = field.current?.closest<HTMLElement>("[data-slot=review-thread]");
     setPosting(true);
     setReplyError(null);
     const error = await onReply(body);
     setPosting(false);
     // The text stays after a failure: whether to send it again is the reviewer's call.
-    if (error === null) setReply("");
-    else setReplyError(error);
+    if (error !== null) {
+      setReplyError(error);
+      return;
+    }
+    setReply("");
+    setComposing(false);
+    article?.focus();
   };
 
   const toggleResolved = async () => {
@@ -168,7 +215,10 @@ export const ReviewThreadView = ({
     else setOpen(thread.resolved);
   };
 
-  const firstSuggestion = thread.comments.find((comment) => suggestionOf(comment.body) !== null);
+  const suggesting = thread.comments.filter((comment) => suggestionOf(comment.body) !== null);
+  const [firstSuggestion] = suggesting;
+  // A lone suggestion's buttons join the thread's row; several keep theirs under each.
+  const lone = suggesting.length === 1 && applicable ? firstSuggestion : undefined;
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const id = shortcutFor(event, ["replyThread", "resolveThread", "addToBatch"], {
@@ -176,14 +226,8 @@ export const ReviewThreadView = ({
       singleKeys,
     });
     if (id === null) return;
-    if (id === "replyThread" && onReply !== undefined && thread.can.reply) {
-      // A folded thread draws its field first.
-      if (field.current === null) {
-        setOpen(true);
-        requestAnimationFrame(() => field.current?.focus());
-      } else {
-        field.current.focus();
-      }
+    if (id === "replyThread" && canReply) {
+      openField();
     } else if (id === "resolveThread" && thread.can.resolve) {
       void toggleResolved();
     } else if (
@@ -201,70 +245,93 @@ export const ReviewThreadView = ({
     event.preventDefault();
   };
 
-  const suggestionView = (comment: ThreadComment) => (lines: readonly string[]) => {
-    const own = suggestionOf(comment.body) !== null;
+  const suggestionButtons = (comment: ThreadComment) => {
     const inBatch = batch.has(comment.id);
     const problem = batch.problem(comment.id);
     return (
+      <>
+        <Button variant="outline" size="sm" onClick={() => onApply?.(comment.id)}>
+          Apply suggestion
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-pressed={inBatch}
+          disabled={!inBatch && problem !== null}
+          onClick={() => (inBatch ? onRemoveFromBatch?.(comment.id) : onAddToBatch?.(comment.id))}
+        >
+          {inBatch ? "✓ In batch" : "Add to batch"}
+          <KeyHint id="addToBatch" />
+        </Button>
+        {problem !== null && !inBatch && (
+          <span className="text-caption text-muted-foreground">{problem}</span>
+        )}
+      </>
+    );
+  };
+
+  const suggestionView = (comment: ThreadComment) => (lines: readonly string[]) => {
+    const own = suggestionOf(comment.body) !== null;
+    return (
       <div className="flex flex-col gap-1.5">
-        <span className="text-caption font-medium text-muted-foreground">Suggested change</span>
-        <SuggestionDiff removed={current ? covered : null} added={lines} language={language} />
-        {own && applicable && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              aria-pressed={inBatch}
-              disabled={!inBatch && problem !== null}
-              onClick={() =>
-                inBatch ? onRemoveFromBatch?.(comment.id) : onAddToBatch?.(comment.id)
-              }
-            >
-              {inBatch ? "✓ In batch" : "Add to batch"}
-              <KeyHint id="addToBatch" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => onApply?.(comment.id)}>
-              Apply suggestion
-            </Button>
-            {problem !== null && !inBatch && (
-              <span className="text-caption text-muted-foreground">{problem}</span>
-            )}
-          </div>
+        <SuggestionDiff
+          title="Suggested change"
+          removed={current ? covered : null}
+          added={lines}
+          language={language}
+        />
+        {own && applicable && lone === undefined && (
+          <div className="flex flex-wrap items-center gap-2">{suggestionButtons(comment)}</div>
         )}
       </div>
     );
   };
 
-  const commentView = (comment: ThreadComment) => {
-    const { severity, blocks } = parseBody(comment.body);
+  const groupView = (group: readonly ThreadComment[]) => {
+    const [head] = group;
+    if (head === undefined) return null;
     return (
-      <div key={comment.id} data-slot="thread-comment" className="flex gap-2.5 py-2">
-        <Initials name={comment.author.name} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <header className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="font-medium">{comment.author.name}</span>
-            {authorId !== null && comment.author.id === authorId && (
-              <span className={cn(CHIP, "border-border bg-muted text-muted-foreground")}>
-                Author
-              </span>
-            )}
-            <time dateTime={comment.createdAt} className="text-caption text-muted-foreground">
-              {relativeTime(comment.createdAt, now)}
-            </time>
-            {severity !== null && <SeverityChip severity={severity} />}
-          </header>
-          <ThreadBody
-            blocks={blocks}
-            suggestion={suggestionView(comment)}
-            {...(mediaUrl === undefined ? {} : { mediaUrl })}
-          />
-        </div>
-      </div>
+      <section data-slot="thread-group" className="flex flex-col gap-2">
+        <header className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <Initials name={head.author.name} />
+          <span className="font-medium">{head.author.name}</span>
+          {authorId !== null && head.author.id === authorId && (
+            <span className={cn(CHIP, "border-border bg-muted text-muted-foreground")}>Author</span>
+          )}
+          <time
+            dateTime={head.createdAt}
+            title={absoluteTime(head.createdAt)}
+            className="text-caption text-muted-foreground"
+          >
+            {relativeTime(head.createdAt, now)}
+          </time>
+        </header>
+        {group.map((comment) => {
+          const { severity, blocks } = parseBody(comment.body);
+          return (
+            <div
+              key={comment.id}
+              data-slot="thread-comment"
+              className="flex flex-col items-start gap-1.5"
+            >
+              {severity !== null && <SeverityChip severity={severity} />}
+              <div className="w-full">
+                <ThreadBody
+                  blocks={blocks}
+                  suggestion={suggestionView(comment)}
+                  {...(mediaUrl === undefined ? {} : { mediaUrl })}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </section>
     );
   };
 
-  const [first, ...replies] = thread.comments;
+  const [first] = thread.comments;
   const resolvedBy = thread.resolvedBy?.name;
+  const hasActions = canReply || canResolve || lone !== undefined;
   return (
     <CommentCard
       as="article"
@@ -274,10 +341,10 @@ export const ReviewThreadView = ({
       onKeyDown={onKeyDown}
       // The thread takes the focus for r, e and b.
       tabIndex={0}
-      className={cn("py-0 -outline-offset-2", className)}
+      className={cn("flex flex-col gap-3 -outline-offset-2", !open && "py-1.5", className)}
     >
       {!open ? (
-        <div className="flex min-h-9 flex-wrap items-center gap-2 py-1">
+        <div className="flex min-h-7 flex-wrap items-center gap-2">
           <span className="text-caption text-review-approved">
             <span aria-hidden="true">✓ </span>
             Resolved{resolvedBy === undefined ? "" : ` by ${resolvedBy}`}
@@ -294,7 +361,7 @@ export const ReviewThreadView = ({
       ) : (
         <>
           {(thread.outdated || thread.resolved) && (
-            <div className="flex flex-wrap items-center gap-2 pt-2 text-caption">
+            <div className="flex flex-wrap items-center gap-2 text-caption">
               {thread.outdated && (
                 <span className={cn(CHIP, "border-border bg-muted text-muted-foreground")}>
                   Outdated
@@ -313,54 +380,74 @@ export const ReviewThreadView = ({
               )}
             </div>
           )}
-          {first !== undefined && commentView(first)}
-          {replies.length > 0 && (
-            <div data-slot="thread-replies" className="border-t">
-              {replies.map(commentView)}
-            </div>
+          {groupByAuthor(thread.comments).map((group, at) => (
+            <Fragment key={group[0]?.id ?? at}>
+              {at > 0 && <hr data-slot="thread-divider" />}
+              {groupView(group)}
+            </Fragment>
+          ))}
+          {resolveError !== null && (
+            <p role="alert" className="text-caption text-destructive">
+              ✕ {thread.resolved ? "Not reopened" : "Not resolved"}: {resolveError}
+            </p>
           )}
-          {(onReply !== undefined || onResolve !== undefined) && (
-            <div className="flex flex-col gap-1.5 border-t py-2">
-              {onReply !== undefined && thread.can.reply && (
-                <>
-                  <label htmlFor={fieldId} className="sr-only">
-                    Reply to the thread on {threadPlace(thread)}
-                  </label>
-                  <Textarea
-                    id={fieldId}
-                    ref={field}
-                    rows={1}
-                    value={reply}
-                    placeholder="Reply…"
-                    disabled={posting}
-                    aria-invalid={replyError !== null || undefined}
-                    onChange={(event) => setReply(event.target.value)}
-                    onSubmitShortcut={() => void send()}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        event.stopPropagation();
-                        field.current?.blur();
-                      }
-                    }}
-                    className="min-h-9 bg-background"
-                  />
-                </>
-              )}
+          {fieldShown ? (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={fieldId} className="sr-only">
+                Reply to the thread on {threadPlace(thread)}
+              </label>
+              <Textarea
+                id={fieldId}
+                ref={field}
+                rows={2}
+                value={reply}
+                placeholder="Reply…"
+                disabled={posting}
+                aria-invalid={replyError !== null || undefined}
+                onChange={(event) => setReply(event.target.value)}
+                onSubmitShortcut={() => void send()}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.stopPropagation();
+                    cancel();
+                  }
+                }}
+                className="min-h-14 bg-background"
+              />
               {replyError !== null && (
                 <p role="alert" className="text-caption text-destructive">
                   ✕ Not sent: {replyError} Your reply is still here; send it again when you're
                   ready.
                 </p>
               )}
-              {resolveError !== null && (
-                <p role="alert" className="text-caption text-destructive">
-                  ✕ {thread.resolved ? "Not reopened" : "Not resolved"}: {resolveError}
-                </p>
-              )}
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {onResolve !== undefined && thread.can.resolve && (
+                <Button variant="ghost" size="sm" disabled={posting} onClick={cancel}>
+                  Cancel
+                  <KeyHint id="close" />
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={reply.trim() === "" || posting}
+                  onClick={() => void send()}
+                >
+                  {posting ? "Sending…" : "Reply"}
+                  <KeyHint id="submit" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            hasActions && (
+              <div data-slot="thread-actions" className="flex flex-wrap items-center gap-2">
+                {canReply && (
+                  <Button variant="outline" size="sm" onClick={openField}>
+                    Reply
+                    <KeyHint id="replyThread" />
+                  </Button>
+                )}
+                {lone !== undefined && suggestionButtons(lone)}
+                {canResolve && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     disabled={resolving}
                     onClick={() => void toggleResolved()}
@@ -369,18 +456,8 @@ export const ReviewThreadView = ({
                     <KeyHint id="resolveThread" />
                   </Button>
                 )}
-                {onReply !== undefined && thread.can.reply && (
-                  <Button
-                    size="sm"
-                    disabled={reply.trim() === "" || posting}
-                    onClick={() => void send()}
-                  >
-                    {posting ? "Sending…" : "Reply"}
-                    <KeyHint id="submit" />
-                  </Button>
-                )}
               </div>
-            </div>
+            )
           )}
         </>
       )}

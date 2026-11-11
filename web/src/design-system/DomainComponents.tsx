@@ -148,6 +148,7 @@ export const DomainComponents = () => {
 
       <Group title="Review threads">
         <ThreadDemo label="Open, with a reply" thread={THREADS.open} />
+        <ThreadDemo label="Two comments by one person under one header" thread={THREADS.grouped} />
         <ThreadDemo label="Resolved, folded to one line" thread={THREADS.resolved} />
         <ThreadDemo label="Outdated" thread={THREADS.outdated} />
         <ThreadDemo label="With a suggestion" thread={THREADS.suggestion} />
