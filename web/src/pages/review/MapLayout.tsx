@@ -161,8 +161,12 @@ const FileCard = ({
             </span>
           )}
           {openThreads > 0 && (
-            <span data-slot="count-threads" className="font-medium">
-              <ThreadCount count={openThreads} /> ·{" "}
+            <span
+              data-slot="count-threads"
+              className="inline-flex items-center gap-1.5 font-medium"
+            >
+              <ThreadCount count={openThreads} />
+              <span aria-hidden="true">·</span>
             </span>
           )}
           <span className="font-mono text-code-compact">
