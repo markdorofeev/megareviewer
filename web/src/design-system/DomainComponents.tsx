@@ -29,7 +29,9 @@ import {
 import { Button } from "../ui/button.tsx";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 import {
+  ADDED_FILE,
   BINARY_FILE,
+  DELETED_FILE,
   generatedFile,
   PENDING_COMMENTS,
   PULL_REQUEST,
@@ -95,10 +97,12 @@ export const DomainComponents = () => {
         <LongDiff />
       </Group>
 
-      <Group title="Diff viewer: deferred, collapsed, binary, renamed, loading">
+      <Group title="Diff viewer: deferred, collapsed, binary, new, deleted, renamed, loading">
         <DiffViewer file={generatedFile(400)} deferred="Generated file, 200 lines changed." />
         <DiffViewer file={RETRY_FILE} defaultCollapsed />
         <DiffViewer file={BINARY_FILE} />
+        <DiffViewer file={ADDED_FILE} />
+        <DiffViewer file={DELETED_FILE} />
         <DiffViewer file={RENAMED_FILE} />
         <DiffSkeleton />
       </Group>

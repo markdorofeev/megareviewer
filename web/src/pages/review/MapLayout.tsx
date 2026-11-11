@@ -148,7 +148,7 @@ const FileCard = ({
         data-slot="file-card-header"
         className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-t-lg border-b bg-card px-3 py-2"
       >
-        <FilePath file={group.file} className="min-w-0 flex-1" />
+        <FilePath file={group.file} status={group.file.status} className="min-w-0 flex-1" />
         <FileStatusChip status={group.file.status} />
         <span className="tabular flex flex-wrap items-center gap-x-1.5 text-caption">
           {fileReasons.length > 0 && (

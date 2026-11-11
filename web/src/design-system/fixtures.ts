@@ -71,6 +71,27 @@ rename from src/http/sleep.ts
 rename to src/util/sleep.ts
 `);
 
+export const ADDED_FILE = one(`diff --git a/src/http/backoff.ts b/src/http/backoff.ts
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/src/http/backoff.ts
+@@ -0,0 +1,3 @@
++export const backoff = (attempt: number): number =>
++  Math.min(1000 * 2 ** attempt, 8000);
++
+`);
+
+export const DELETED_FILE = one(`diff --git a/src/http/legacy-retry.ts b/src/http/legacy-retry.ts
+deleted file mode 100644
+index 4444444..0000000
+--- a/src/http/legacy-retry.ts
++++ /dev/null
+@@ -1,2 +0,0 @@
+-export const retry = <T>(run: () => Promise<T>): Promise<T> =>
+-  run().catch(() => run());
+`);
+
 export const BINARY_FILE = one(`diff --git a/docs/flow.png b/docs/flow.png
 index 1111111..2222222 100644
 Binary files a/docs/flow.png and b/docs/flow.png differ

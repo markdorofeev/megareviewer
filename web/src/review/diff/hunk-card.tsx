@@ -226,7 +226,7 @@ export const HunkCard = memo(function HunkCard({
         >
           {!inFile && (
             <>
-              <FilePath file={file} />
+              <FilePath file={file} status={file.status} />
               <FileStatusChip status={file.status} />
               {hunk.sectionHeading !== null && (
                 <code className="font-mono text-code-compact text-diff-hunk-fg">

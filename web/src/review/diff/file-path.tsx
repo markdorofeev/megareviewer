@@ -1,48 +1,67 @@
 import { useId, useState } from "react";
 import {
   type FileChange,
+  type FileStatus,
   isTestFile,
   type UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
 import { FILE_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
+import { FileIcon } from "../tree/file-icon.tsx";
 
 /** A path with its directory muted, so the file's name stands out and its place still shows. */
-const SplitPath = ({ path }: { readonly path: string }) => {
+const SplitPath = ({ path, name }: { readonly path: string; readonly name?: string }) => {
   const cut = path.lastIndexOf("/") + 1;
   return (
     <>
       {cut > 0 && <span className="text-muted-foreground">{path.slice(0, cut)}</span>}
-      <span className="font-medium">{path.slice(cut)}</span>
+      <span data-slot="file-name" className={cn("font-medium", name)}>
+        {path.slice(cut)}
+      </span>
     </>
   );
 };
 
-/** A file's path; a renamed file's old path, an arrow, and its new one. */
+/**
+ * A file's path; a renamed file's old path, an arrow, and its new one. A new or deleted file has
+ * its mark: the status icon before the path, the name in the status color, and the word hidden
+ * after it.
+ */
 export const FilePath = ({
   file,
+  status,
   className,
 }: {
   readonly file: Pick<FileChange, "path" | "oldPath">;
+  readonly status?: FileStatus;
   readonly className?: string;
-}) => (
-  <span data-slot="file-path" className={cn("min-w-0 break-all font-mono text-code", className)}>
-    {file.oldPath !== null && file.oldPath !== file.path ? (
-      <>
-        <span className="text-muted-foreground">{file.oldPath}</span>{" "}
-        <span aria-hidden="true">→</span>
-        <span className="sr-only">renamed to</span> <SplitPath path={file.path} />
-      </>
-    ) : (
-      <SplitPath path={file.path} />
-    )}
-  </span>
-);
+}) => {
+  const style = status === undefined ? null : FILE_STATUS[status];
+  const mark = style?.kind === "mark" ? style : null;
+  return (
+    <span data-slot="file-path" className={cn("min-w-0 break-all font-mono text-code", className)}>
+      {mark !== null && (
+        <FileIcon path={file.path} status={status} className="mr-1 inline-block align-[-2px]" />
+      )}
+      {file.oldPath !== null && file.oldPath !== file.path ? (
+        <>
+          <span className="text-muted-foreground">{file.oldPath}</span>{" "}
+          <span aria-hidden="true">→</span>
+          <span className="sr-only">renamed to</span>{" "}
+          <SplitPath path={file.path} name={mark?.name} />
+        </>
+      ) : (
+        <SplitPath path={file.path} name={mark?.name} />
+      )}
+      {mark !== null && <span className="sr-only">, {mark.label}</span>}
+    </span>
+  );
+};
 
-/** A file's status as a word chip: new, deleted or renamed. Nothing for a modified file. */
-export const FileStatusChip = ({ status }: { readonly status: FileChange["status"] }) => {
+/** A renamed file's status as a word chip. A new or deleted file is marked by `FilePath`. */
+export const FileStatusChip = ({ status }: { readonly status: FileStatus }) => {
   const style = FILE_STATUS[status];
-  return style === null ? null : (
+  return style?.kind !== "chip" ? null : (
     <span
       data-slot="file-status"
       className={cn(

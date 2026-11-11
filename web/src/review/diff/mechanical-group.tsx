@@ -251,7 +251,7 @@ export const FileNotices = ({ files }: { readonly files: readonly FileChange[] }
       <ul className="flex flex-col gap-1">
         {notices.map(({ key, file, text }) => (
           <li key={key} className="flex flex-wrap items-center gap-2">
-            <FilePath file={file} />
+            <FilePath file={file} status={file.status} />
             <FileStatusChip status={file.status} />
             <span>{text}</span>
           </li>

@@ -453,6 +453,30 @@ describe("HunkCard", () => {
     ]);
   });
 
+  it("marks a new file's header by its icon and name, with no chip", () => {
+    const [file] = parseFiles([
+      "diff --git a/src/backoff.ts b/src/backoff.ts",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/src/backoff.ts",
+      "@@ -0,0 +1 @@",
+      "+a",
+    ]);
+    if (file === undefined) throw new Error("no file");
+    const hunk = firstHunk(file);
+    renderWith(
+      <HunkCard
+        hunk={hunk}
+        file={file}
+        risk={{ hunkId: hunk.id, riskClass: "logic", reason: "", source: "model" }}
+      />,
+    );
+    const header = screen.getByRole("region").querySelector("header");
+    expect(header?.querySelector("svg[data-status=added]")).not.toBeNull();
+    expect(header?.querySelector("[data-slot=file-status]")).toBeNull();
+    expect(header?.textContent).toMatch(/^src\/backoff\.ts, new/);
+  });
+
   it("shows a renamed file's old and new paths", () => {
     const [file] = parseFiles([
       "diff --git a/src/token.ts b/src/credentials.ts",

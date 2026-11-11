@@ -186,10 +186,10 @@ describe("FileNotices", () => {
         .map((row) => row.textContent),
     ).toEqual([
       "assets/logo.pngbinary file changed",
-      "assets/new.pngnewbinary file added",
+      "assets/new.png, newbinary file added",
       "scripts/deploy.shmode 100644 → 100755",
-      ".keepnewempty file added",
-      "old.txtdeletedempty file deleted",
+      ".keep, newempty file added",
+      "old.txt, deletedempty file deleted",
     ]);
   });
 

@@ -15,7 +15,7 @@ import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group.tsx";
 import { type Density, DiffLine, EmptyHalf, ROW_HEIGHT } from "./diff-line.tsx";
-import { FileStatusChip } from "./file-path.tsx";
+import { FilePath, FileStatusChip } from "./file-path.tsx";
 import { CollapsedHunk, type ExpandDirection, HunkHeader } from "./hunk-header.tsx";
 import {
   linesOf,
@@ -242,7 +242,6 @@ export const DiffViewer = ({
     return <SplitLine row={row} focus={focus} selected={selected} lineProps={lineProps} />;
   };
 
-  const slash = file.path.lastIndexOf("/");
   const body = (() => {
     if (file.binary) return <Notice>Binary file, not shown.</Notice>;
     if (file.hunks.length === 0)
@@ -330,12 +329,8 @@ export const DiffViewer = ({
             ▾
           </span>
         </Button>
-        <h3 className="min-w-0 flex-1 truncate font-mono text-code">
-          {file.oldPath !== null && file.oldPath !== file.path && (
-            <span className="text-muted-foreground">{file.oldPath} → </span>
-          )}
-          <span className="text-muted-foreground">{file.path.slice(0, slash + 1)}</span>
-          {file.path.slice(slash + 1)}
+        <h3 className="min-w-0 flex-1 truncate">
+          <FilePath file={file} status={file.status} />
         </h3>
         <FileStatusChip status={file.status} />
         <span className="tabular font-mono text-code-compact">

@@ -1,7 +1,14 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { modifiedFile } from "./diff/testing.ts";
-import { DiffViewer, FileTree, KeyHint, ReviewSubmitPanel, type ViewLine } from "./index.ts";
+import {
+  DiffViewer,
+  FilePath,
+  FileTree,
+  KeyHint,
+  ReviewSubmitPanel,
+  type ViewLine,
+} from "./index.ts";
 
 const FILE = modifiedFile("src/retry.ts", [
   "@@ -10,4 +10,4 @@ export function retry",
@@ -70,6 +77,8 @@ describe("FileTree", () => {
   const files = [
     { path: "src/http/retry.ts", status: "modified", additions: 1, deletions: 1, contract: 0 },
     { path: "src/auth/session.ts", status: "deleted", additions: 0, deletions: 9, contract: 2 },
+    { path: "src/http/backoff.ts", status: "added", additions: 7, deletions: 0, contract: 0 },
+    { path: "src/util/sleep.ts", status: "renamed", additions: 0, deletions: 0, contract: 0 },
   ] as const;
 
   it("filters with / and clears with Esc", () => {
@@ -78,10 +87,10 @@ describe("FileTree", () => {
     const filter = screen.getByRole("searchbox", { name: "Filter files" });
     expect(document.activeElement).toBe(filter);
     fireEvent.change(filter, { target: { value: "auth" } });
-    expect(screen.getByText("1 of 2 files")).toBeTruthy();
+    expect(screen.getByText("1 of 4 files")).toBeTruthy();
     expect(screen.queryByTitle("src/http/retry.ts")).toBeNull();
     fireEvent.keyDown(filter, { key: "Escape" });
-    expect(screen.getByText("2 files")).toBeTruthy();
+    expect(screen.getByText("4 files")).toBeTruthy();
   });
 
   it("says a file's status and contract parts in words", () => {
@@ -93,6 +102,83 @@ describe("FileTree", () => {
     const modified = screen.getByTitle("src/http/retry.ts");
     expect(modified.textContent).not.toMatch(/modified|deleted|new|renamed/);
     expect(modified.getAttribute("aria-current")).toBe("location");
+  });
+
+  it("marks a new or deleted file by its icon and name, and a renamed one by a chip", () => {
+    render(<FileTree files={files} activePath={null} onSelect={() => undefined} />);
+    const added = screen.getByTitle("src/http/backoff.ts");
+    expect(added.querySelector("svg")?.getAttribute("data-status")).toBe("added");
+    expect(added.querySelector("[data-slot=file-name]")?.className).toContain("text-diff-add-fg");
+    expect(added.querySelector(".sr-only")?.textContent).toBe(", new");
+    expect(added.querySelector("[data-slot=file-status]")).toBeNull();
+    const deleted = screen.getByTitle("src/auth/session.ts");
+    expect(deleted.querySelector("svg")?.getAttribute("data-status")).toBe("deleted");
+    const name = deleted.querySelector("[data-slot=file-name]")?.className;
+    expect(name).toContain("text-diff-del-fg");
+    expect(name).toContain("line-through");
+    expect(deleted.querySelector("[data-slot=file-status]")).toBeNull();
+    const renamed = screen.getByTitle("src/util/sleep.ts");
+    expect(renamed.querySelector("svg")?.hasAttribute("data-status")).toBe(false);
+    expect(renamed.querySelector("[data-slot=file-status]")?.textContent).toBe("renamed");
+    const modified = screen.getByTitle("src/http/retry.ts");
+    expect(modified.querySelector("svg")?.hasAttribute("data-status")).toBe(false);
+    expect(modified.querySelector("[data-slot=file-status]")).toBeNull();
+  });
+
+  it("keeps a muted row's name grey and only its icon in the status color", () => {
+    render(
+      <FileTree
+        files={files}
+        activePath="src/http/retry.ts"
+        neighbors={new Map([["src/http/retry.ts", new Set(["src/util/sleep.ts"])]])}
+        onSelect={() => undefined}
+      />,
+    );
+    const added = screen.getByTitle("src/http/backoff.ts");
+    expect(added.getAttribute("data-relation")).toBe("other");
+    expect(added.querySelector("svg")?.getAttribute("class")).toContain("text-diff-add-fg");
+    expect(added.querySelector("[data-slot=file-name]")?.className).not.toContain(
+      "text-diff-add-fg",
+    );
+    expect(
+      screen.getByTitle("src/auth/session.ts").querySelector("[data-slot=file-name]")?.className,
+    ).toContain("line-through");
+  });
+});
+
+describe("FilePath", () => {
+  const nameOf = (container: HTMLElement) =>
+    container.querySelector("[data-slot=file-name]")?.className ?? "";
+
+  it("marks a new file with a plus icon, its name in the add color and a hidden word", () => {
+    const { container } = render(
+      <FilePath file={{ path: "src/http/backoff.ts", oldPath: null }} status="added" />,
+    );
+    expect(container.querySelector("svg")?.getAttribute("data-status")).toBe("added");
+    expect(nameOf(container)).toContain("text-diff-add-fg");
+    expect(container.querySelector(".sr-only")?.textContent).toBe(", new");
+    // Only the name is colored; the directory stays muted.
+    expect(container.querySelector(".text-muted-foreground")?.textContent).toBe("src/http/");
+  });
+
+  it("marks a deleted file with a minus icon and its name struck through", () => {
+    const { container } = render(
+      <FilePath file={{ path: "src/auth/session.ts", oldPath: null }} status="deleted" />,
+    );
+    expect(container.querySelector("svg")?.getAttribute("data-status")).toBe("deleted");
+    expect(nameOf(container)).toContain("text-diff-del-fg");
+    expect(nameOf(container)).toContain("line-through");
+    expect(container.querySelector(".sr-only")?.textContent).toBe(", deleted");
+  });
+
+  it("has no icon for a modified or renamed file", () => {
+    const { container } = render(
+      <>
+        <FilePath file={{ path: "src/http/retry.ts", oldPath: null }} status="modified" />
+        <FilePath file={{ path: "src/sleep.ts", oldPath: "src/wait.ts" }} status="renamed" />
+      </>,
+    );
+    expect(container.querySelector("svg")).toBeNull();
   });
 });
 

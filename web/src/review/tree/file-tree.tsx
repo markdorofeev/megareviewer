@@ -1,6 +1,7 @@
 import { ChevronDownIcon, FolderIcon, FolderOpenIcon, MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShortcuts } from "../../lib/keymap.ts";
+import { FILE_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Input } from "../../ui/input.tsx";
 import { ScrollArea } from "../../ui/scroll-area.tsx";
@@ -250,6 +251,8 @@ export const FileRow = ({
 }) => {
   const arrow = ARROWS[relation];
   const active = relation === "current";
+  const style = entry.status === undefined ? null : FILE_STATUS[entry.status];
+  const mark = style?.kind === "mark" ? style : null;
   return (
     <button
       type="button"
@@ -272,14 +275,19 @@ export const FileRow = ({
           </>
         )}
       </span>
-      <FileIcon path={entry.path} />
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate",
-          entry.status === "deleted" && "text-muted-foreground line-through",
-        )}
-      >
-        {label === entry.path ? label : nameOf(entry.path)}
+      <FileIcon path={entry.path} status={entry.status} />
+      <span className="min-w-0 flex-1 truncate">
+        <span
+          data-slot="file-name"
+          className={cn(
+            // A muted row stays grey, or a PR of new files would undo the muting; a deleted
+            // name keeps its strikethrough.
+            relation === "other" ? entry.status === "deleted" && "line-through" : mark?.name,
+          )}
+        >
+          {label === entry.path ? label : nameOf(entry.path)}
+        </span>
+        {mark !== null && <span className="sr-only">, {mark.label}</span>}
         {directory !== undefined && (
           <span className="ml-1.5 font-mono text-code-compact text-muted-foreground">
             {directory}/
