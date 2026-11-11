@@ -10,6 +10,8 @@ export interface CommentComposerProps {
   readonly onSubmit: (body: string) => Promise<void> | void;
   readonly onCancel?: () => void;
   readonly defaultValue?: string;
+  /** Takes the focus when it opens, as it does when the reviewer asked to write. */
+  readonly autoFocus?: boolean;
   readonly className?: string;
 }
 
@@ -19,6 +21,7 @@ export const CommentComposer = ({
   onSubmit,
   onCancel,
   defaultValue = "",
+  autoFocus = true,
   className,
 }: CommentComposerProps) => {
   const [body, setBody] = useState(defaultValue);
@@ -66,7 +69,7 @@ export const CommentComposer = ({
         placeholder="Markdown is fine"
         aria-invalid={state === "error" || undefined}
         disabled={state === "submitting"}
-        autoFocus
+        autoFocus={autoFocus}
       />
       {state === "error" && (
         <p role="alert" className="text-caption text-destructive">

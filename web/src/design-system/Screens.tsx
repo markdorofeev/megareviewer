@@ -8,6 +8,7 @@ import {
   PrHeader,
   ReviewSubmitForm,
   useSyntax,
+  type ViewLine,
 } from "../review/index.ts";
 import { Button } from "../ui/button.tsx";
 import { StatusBadge } from "../ui/status-badge.tsx";
@@ -75,6 +76,7 @@ const OverviewScreen = () => {
           files={TREE_FILES}
           activePath={active}
           onSelect={setActive}
+          navigate
           className="hidden h-[28rem] lg:flex"
         />
         <div className="flex min-w-0 flex-col gap-4">
@@ -96,12 +98,38 @@ const OverviewScreen = () => {
   );
 };
 
+interface Draft {
+  readonly id: number;
+  readonly where: string;
+  readonly body: string;
+}
+
+const placeOf = (lines: readonly ViewLine[]): string => {
+  const numbers = lines.flatMap((line) => {
+    const number = line.newNo ?? line.oldNo;
+    return number === null ? [] : [number];
+  });
+  const first = numbers[0];
+  const last = numbers.at(-1);
+  return `${RETRY_FILE.path}:${first === last ? `${first}` : `${first}–${last}`}`;
+};
+
 const DiffScreen = () => {
   const tokens = useSyntax(RETRY_FILE);
   const hunk = RETRY_FILE.hunks[0];
   // From the old line 14 to new line 15: the changed signature and the line after it.
   const focus = hunk === undefined ? undefined : `${hunk.id}:4`;
   const anchor = hunk === undefined ? undefined : `${hunk.id}:2`;
+  const [drafts, setDrafts] = useState<readonly Draft[]>([
+    {
+      id: 0,
+      where: "src/http/retry.ts:45",
+      body: "Why stop treating AbortError as a network error?",
+    },
+  ]);
+  const [composing, setComposing] = useState<string | null>("src/http/retry.ts:14–15");
+  // The composer on the page from the start doesn't take the focus; one opened with c does.
+  const [opened, setOpened] = useState(false);
   return (
     <>
       <PrHeader
@@ -122,22 +150,36 @@ const DiffScreen = () => {
           tokens={tokens}
           defaultFocus={focus}
           defaultAnchor={anchor}
-          onComment={() => undefined}
+          onComment={(lines) => {
+            setComposing(placeOf(lines));
+            setOpened(true);
+          }}
         />
-        <article className="flex flex-col gap-1 rounded-lg border border-l-3 border-l-review-pending bg-thread-bg p-3">
-          <header className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-            <span className="font-medium text-foreground">You</span>
-            <span className="font-mono">src/http/retry.ts:45</span>
-            <StatusBadge status={VERDICT_STATUS.pending} label="Draft" />
-          </header>
-          <p className="text-body">Why stop treating AbortError as a network error?</p>
-        </article>
-        <CommentComposer
-          anchor="src/http/retry.ts:14–15"
-          defaultValue="Five attempts at 1, 2, 4, 8 s is 15 s before failing."
-          onSubmit={() => undefined}
-          onCancel={() => undefined}
-        />
+        {drafts.map((draft) => (
+          <article
+            key={draft.id}
+            className="flex flex-col gap-1 rounded-lg border border-l-3 border-l-review-pending bg-thread-bg p-3"
+          >
+            <header className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+              <span className="font-medium text-foreground">You</span>
+              <span className="font-mono">{draft.where}</span>
+              <StatusBadge status={VERDICT_STATUS.pending} label="Draft" />
+            </header>
+            <p className="text-body">{draft.body}</p>
+          </article>
+        ))}
+        {composing !== null && (
+          <CommentComposer
+            key={composing}
+            anchor={composing}
+            autoFocus={opened}
+            onSubmit={(body) => {
+              setDrafts([...drafts, { id: drafts.length, where: composing, body }]);
+              setComposing(null);
+            }}
+            onCancel={() => setComposing(null)}
+          />
+        )}
       </div>
     </>
   );

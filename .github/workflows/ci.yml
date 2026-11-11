@@ -48,6 +48,30 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 7
 
+  # The design-system preview's screenshots. Their baselines are macOS's, since fonts render
+  # differently on each platform; the accessibility and keyboard checks run on Linux in `check`.
+  visual:
+    runs-on: macos-latest
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
+      - run: pnpm exec playwright test -c e2e --project design-system --grep "looks as it did"
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-diffs
+          path: e2e/test-results/
+          retention-days: 7
+
   # The oldest Node package.json's engines allow, so nothing newer slips into the server. Building
   # needs the repo's Node; the server tests and the package then run on the oldest one.
   oldest-node:

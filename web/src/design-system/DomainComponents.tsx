@@ -109,6 +109,7 @@ export const DomainComponents = () => {
 
       <Group title="Comment composer">
         <CommentComposer
+          autoFocus={false}
           anchor="src/http/retry.ts:16"
           onSubmit={(body) => {
             toast.success(`Comment saved: ${body}`);
@@ -116,6 +117,7 @@ export const DomainComponents = () => {
           onCancel={() => toast("Cancelled")}
         />
         <CommentComposer
+          autoFocus={false}
           anchor="src/http/retry.ts:45"
           defaultValue="This fails on purpose, to show the error state."
           onSubmit={() => Promise.reject(new Error("offline"))}

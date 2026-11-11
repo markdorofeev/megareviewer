@@ -8,6 +8,7 @@ coverage/
 evals/results/
 test-results/
 playwright-report/
+e2e/.design-system/
 .claude/*
 !.claude/launch.json
 .pnpm-store/

@@ -9,6 +9,7 @@
       "!!evals/cases/*/files",
       "!!**/test-results",
       "!!**/playwright-report",
+      "!!e2e/.design-system",
       "!**/fixtures/**/*.json",
       "!.idea",
       "!!.claude",

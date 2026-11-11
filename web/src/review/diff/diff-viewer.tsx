@@ -40,6 +40,7 @@ const GRID_KEYS: readonly ShortcutId[] = [
   "extendDown",
   "extendUp",
   "comment",
+  "toggleSplit",
 ];
 
 export interface DiffViewerProps {
@@ -187,6 +188,7 @@ export const DiffViewer = ({
     if (id === "extendDown") moveFocus(1, true);
     if (id === "extendUp") moveFocus(-1, true);
     if (id === "comment") comment();
+    if (id === "toggleSplit") setView(view === "split" ? "unified" : "split");
   };
 
   const onGutterClick = useCallback(

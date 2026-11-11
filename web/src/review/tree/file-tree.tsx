@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useShortcuts } from "../../lib/keymap.ts";
 import { FILE_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
-import { fileTree, nameOf, type TreeEntry } from "../../pages/review/tree.ts";
+import { fileTree, nameOf, type TreeEntry, treeOrder } from "../../pages/review/tree.ts";
 import { Input } from "../../ui/input.tsx";
 import { ScrollArea } from "../../ui/scroll-area.tsx";
 import { EmptyState } from "../shell/empty-state.tsx";
@@ -17,6 +17,8 @@ export interface FileTreeProps {
   readonly mode?: "tree" | "flat";
   /** For the flat list: by path, or the most changed first. */
   readonly order?: FileOrder;
+  /** n and p select the next and previous file, in the order shown. One tree per page has it. */
+  readonly navigate?: boolean;
   readonly className?: string;
 }
 
@@ -27,6 +29,7 @@ export const FileTree = ({
   onSelect,
   mode = "tree",
   order = "path",
+  navigate = false,
   className,
 }: FileTreeProps) => {
   const [query, setQuery] = useState("");
@@ -44,6 +47,17 @@ export const FileTree = ({
       ),
     [shown, byPath],
   );
+
+  const shownOrder = useMemo(
+    () => (mode === "tree" ? treeOrder(tree) : sortFiles(shown, order).map((file) => file.path)),
+    [mode, tree, shown, order],
+  );
+  const step = (by: 1 | -1) => {
+    const at = activePath === null ? -1 : shownOrder.indexOf(activePath);
+    const next = shownOrder[Math.min(shownOrder.length - 1, Math.max(0, at + by))];
+    if (next !== undefined) onSelect(next);
+  };
+  useShortcuts({ nextFile: () => step(1), previousFile: () => step(-1) }, navigate);
 
   const toggle = (path: string) => {
     const next = new Set(closed);

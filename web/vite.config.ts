@@ -10,8 +10,14 @@ export default defineConfig(({ mode }) => ({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [react(), tailwindcss(), ...(mode === "mock" ? [mockApi()] : [])],
   build: {
-    outDir: fileURLToPath(new URL("../dist/web", import.meta.url)),
+    // `--mode design-system` builds only the preview page, for the e2e checks; never shipped.
+    outDir: fileURLToPath(
+      new URL(mode === "design-system" ? "../e2e/.design-system" : "../dist/web", import.meta.url),
+    ),
     emptyOutDir: true,
+    ...(mode === "design-system" && {
+      rollupOptions: { input: fileURLToPath(new URL("design-system.html", import.meta.url)) },
+    }),
     assetsDir: "assets",
     // Grammars load lazily, one chunk per language, and the C++ one is about 800 KB. They're
     // read from the local server, so their size never slows a first load.
