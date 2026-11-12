@@ -309,48 +309,26 @@ describe("HunkCard", () => {
     });
   });
 
-  it("gives the comment box a suggestion that starts from its lines, and no severity picker", async () => {
+  it("gives the comment box no severity picker or suggestion editor, and keeps a draft's from before", async () => {
     const user = userEvent.setup();
     const onComment = vi.fn();
     const comment = { side: "new" as const, line: 42, startLine: 40, body: "Simplify" };
-    const { rerender } = renderWith(
+    renderWith(
       <Cards
         cards={[second]}
-        comments={[comment]}
+        comments={[{ ...comment, severity: "minor", suggestion: ["a"] }]}
         openComment={comment}
         onOpenComment={vi.fn()}
         onComment={onComment}
+        rangeNote="Bitbucket can't anchor a range."
       />,
     );
-    expect(screen.getByText("Lines 40–42")).toBeTruthy();
+    expect(screen.getByText(/Bitbucket can't anchor a range/)).toBeTruthy();
     expect(screen.queryByRole("group", { name: "Severity" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^(minor|major|blocking)$/ })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Suggest a change" }));
-    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, {
-      ...comment,
-      suggestion: ["a", "b", "c"],
-    });
-    rerender(
-      <HighlighterContext.Provider value={pendingHighlighter()}>
-        <Cards
-          cards={[second]}
-          comments={[{ ...comment, severity: "minor", suggestion: ["a"] }]}
-          openComment={comment}
-          onOpenComment={vi.fn()}
-          onComment={onComment}
-          rangeNote="Bitbucket can't anchor a range."
-        />
-      </HighlighterContext.Provider>,
-    );
-    expect(screen.getByText(/Bitbucket can't anchor a range/)).toBeTruthy();
-    expect(
-      (screen.getByRole("textbox", { name: "Suggested lines" }) as HTMLTextAreaElement).value,
-    ).toBe("a");
-    // The suggestion's preview: the lines it replaces, then its own.
-    const preview = document.querySelector("[data-slot=line-comment] [data-slot=suggestion-diff]");
-    expect(preview?.querySelectorAll("[data-kind=del]")).toHaveLength(3);
-    expect(preview?.querySelector("[data-kind=add]")?.textContent).toContain("a");
-    // A draft written before the picker went keeps its severity as its text changes.
+    expect(screen.queryByRole("button", { name: "Suggest a change" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Suggested lines" })).toBeNull();
+    // A draft written before the controls went keeps its severity and suggestion as its text changes.
     await user.type(screen.getByRole("textbox", { name: "Comment on lines 40–42" }), "!");
     expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, {
       ...comment,

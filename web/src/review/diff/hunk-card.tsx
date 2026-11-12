@@ -26,7 +26,6 @@ import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
-import { Toggle } from "../../ui/toggle.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
 import { CHIP, CommentCard, SeverityChip, SuggestionDiff, ThreadBody } from "../thread/index.ts";
 import { DiffLine } from "./diff-line.tsx";
@@ -371,12 +370,11 @@ export const HunkCard = memo(function HunkCard({
   );
 });
 
-/** What the comment box keeps: the text, a severity from before the box lost its picker, and the suggested lines. */
+/** What the comment box keeps: the text, and a severity and suggested lines from before the box lost their controls. */
 type CommentDraft = Pick<LineComment, "body" | "severity" | "suggestion">;
 
 /**
- * A draft under a line, in one of two states. Editing: its text, saved as it's typed, and on
- * head-side lines a suggested change, starting from the lines it's on.
+ * A draft under a line, in one of two states. Editing: its text, saved as it's typed.
  * Saved: the draft as its comment will read, with Edit and Discard. It stays open while the reviewer
  * selects code, and closes on Add comment, Cancel, Esc, Discard or a click on its own line.
  */
@@ -395,7 +393,7 @@ const CommentRow = ({
   readonly place: LinePlace;
   readonly comment: LineComment | undefined;
   readonly editing: boolean;
-  /** The text of head-side lines the hunk shows, to start a suggestion from. */
+  /** The text of head-side lines the hunk shows, that a suggestion would replace. */
   readonly shown: (start: number, end: number) => readonly string[] | null;
   readonly language: string | null;
   readonly rangeNote: string | undefined;
@@ -522,34 +520,6 @@ const CommentRow = ({
               onSubmitShortcut={close}
               className="min-h-14 bg-background"
             />
-            {place.side === "new" && (
-              <div className="flex flex-wrap items-center gap-2">
-                <Toggle
-                  variant="outline"
-                  size="sm"
-                  pressed={suggestion !== undefined}
-                  onPressedChange={(pressed) => {
-                    const { suggestion: _, ...rest } = draft;
-                    onChange?.(pressed ? { ...rest, suggestion: startingLines ?? [""] } : rest);
-                  }}
-                >
-                  Suggest a change
-                </Toggle>
-              </div>
-            )}
-            {suggestion !== undefined && (
-              <>
-                <Textarea
-                  aria-label="Suggested lines"
-                  value={suggestion.join("\n")}
-                  onChange={(event) =>
-                    onChange?.({ ...draft, suggestion: event.target.value.split("\n") })
-                  }
-                  className="min-h-14 bg-background font-mono text-code-compact"
-                />
-                {preview(suggestion)}
-              </>
-            )}
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" onClick={close}>
                 Add comment
