@@ -222,7 +222,7 @@ describe("HunkCard", () => {
     expect(
       screen.getByRole("textbox", { name: "Comment on line 41" }).getAttribute("placeholder"),
     ).toBe("Leave a comment");
-    await user.click(screen.getByRole("button", { name: /^Add comment/ }));
+    await user.click(screen.getByRole("button", { name: /^Add to review/ }));
     expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
     expect(onComment).not.toHaveBeenCalled();
 
@@ -302,7 +302,7 @@ describe("HunkCard", () => {
         onComment={onComment}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /^Add comment/ }));
+    await user.click(screen.getByRole("button", { name: /^Add to review/ }));
     expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41, body: "" });
   });
 
@@ -354,6 +354,44 @@ describe("HunkCard", () => {
       severity: "minor",
       suggestion: ["a"],
     });
+  });
+
+  it("heads the comment box with its file and lines, and marks the lines it's on", () => {
+    const comment = { side: "new" as const, line: 42, startLine: 41 };
+    renderWith(
+      <Cards cards={[second]} openComment={comment} onOpenComment={vi.fn()} onComment={vi.fn()} />,
+    );
+    const box = document.querySelector<HTMLElement>("[data-slot=line-comment]");
+    if (box === null) throw new Error("no box");
+    expect(within(box).getByText(/^Commenting on/).textContent).toBe(
+      "Commenting on orders.tslines R41–42",
+    );
+    expect(box.querySelector("[data-slot=key-hint-line]")?.textContent).toBe(
+      "Ctrl↵add to review·Esccancel",
+    );
+    const marked = [...document.querySelectorAll<HTMLElement>("[data-marked]")];
+    // The new side's number, the row's second cell.
+    expect(marked.map((row) => row.children[1]?.textContent)).toEqual(["41", "42"]);
+  });
+
+  it("previews the comment as it will read, and adds it from there with ⌘↵", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    const comment = { side: "new" as const, line: 41, body: "Name it `count`." };
+    renderWith(
+      <Cards
+        cards={[second]}
+        comments={[comment]}
+        openComment={comment}
+        onOpenComment={onOpenComment}
+        onComment={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("tab", { name: "Preview" }));
+    const preview = document.querySelector("[data-slot=comment-preview]");
+    expect(preview?.querySelector("code")?.textContent).toBe("count");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
   });
 
   it("puts the host's threads under the line they're on", () => {

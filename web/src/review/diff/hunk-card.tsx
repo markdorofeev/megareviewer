@@ -25,9 +25,18 @@ import { RISK_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
-import { KeyHint } from "../shell/key-hint.tsx";
-import { CHIP, CommentCard, SeverityChip, SuggestionDiff, ThreadBody } from "../thread/index.ts";
+import { KeyHintLine } from "../shell/key-hint.tsx";
+import {
+  CHIP,
+  CommentCard,
+  lineRef,
+  RefChip,
+  SeverityChip,
+  SuggestionDiff,
+  ThreadBody,
+} from "../thread/index.ts";
 import { DiffLine } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { languageOf } from "./languages.ts";
@@ -70,6 +79,9 @@ export const commentPlace = (
  * card's lines, which scroll sideways together inside an `@container`.
  */
 export const PINNED = "sticky left-0 w-[100cqw]";
+
+/** A comment or thread under a line starts where its code does, past both numbers and the marker. */
+const CODE_INSET = "pr-3 pl-29";
 
 /** A hunk to show, with its file and risk; a mechanical one has proofs and shows collapsed. */
 export interface HunkItem {
@@ -285,6 +297,14 @@ export const HunkCard = memo(function HunkCard({
                 <DiffLine
                   line={line}
                   cellRole="cell"
+                  marked={
+                    place !== null &&
+                    onComment !== undefined &&
+                    openComment !== null &&
+                    openComment.side === place.side &&
+                    place.line >= (openComment.startLine ?? openComment.line) &&
+                    place.line <= openComment.line
+                  }
                   numberButton={
                     place === null || !commentable
                       ? undefined
@@ -317,6 +337,7 @@ export const HunkCard = memo(function HunkCard({
                       shown={(start, end) => linesShown(hunk, start, end)}
                       language={languageOf(file)}
                       rangeNote={rangeNote}
+                      fileName={file.path.split("/").at(-1) ?? file.path}
                       onChange={
                         onComment === undefined
                           ? undefined
@@ -347,7 +368,7 @@ export const HunkCard = memo(function HunkCard({
                   <div
                     role="row"
                     data-slot="line-threads"
-                    className={cn("px-3 py-2 font-sans", inFile && PINNED)}
+                    className={cn(CODE_INSET, "py-2 font-sans", inFile && PINNED)}
                   >
                     <div role="cell" className="flex max-w-3xl flex-col gap-2">
                       {threads}
@@ -374,7 +395,8 @@ export const HunkCard = memo(function HunkCard({
 type CommentDraft = Pick<LineComment, "body" | "severity" | "suggestion">;
 
 /**
- * A draft under a line, in one of two states. Editing: its text, saved as it's typed. Add comment or a
+ * A draft under a line, in one of two states. Editing: its text, saved as it's typed, with a Preview
+ * of it as it will read. Add to review or a
  * click on its own line keeps it; Cancel or Esc puts back the draft as it was when the box opened,
  * none for a new one. It stays open while the reviewer selects code.
  * Saved: the draft as its comment will read, with Edit and Discard.
@@ -386,6 +408,7 @@ const CommentRow = ({
   shown,
   language,
   rangeNote,
+  fileName,
   onChange,
   onEdit,
   onDone,
@@ -398,6 +421,8 @@ const CommentRow = ({
   readonly shown: (start: number, end: number) => readonly string[] | null;
   readonly language: string | null;
   readonly rangeNote: string | undefined;
+  /** The file's name, without its directories, for the box's header. */
+  readonly fileName: string;
   readonly onChange?: (draft: CommentDraft) => void;
   readonly onEdit: () => void;
   readonly onDone: () => void;
@@ -406,8 +431,10 @@ const CommentRow = ({
 }) => {
   const row = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+  const [tab, setTab] = useState<"write" | "preview">("write");
   useEffect(() => {
     if (editing) field.current?.focus();
+    else setTab("write");
   }, [editing]);
   const label = placeLabel(place);
   const body = comment?.body ?? "";
@@ -462,7 +489,7 @@ const CommentRow = ({
       role="row"
       data-slot="line-comment"
       data-editing={editing || undefined}
-      className={cn("px-3 py-2 font-sans", pinned && PINNED)}
+      className={cn(CODE_INSET, "py-2 font-sans", pinned && PINNED)}
     >
       <CommentCard
         role="cell"
@@ -471,6 +498,13 @@ const CommentRow = ({
         onKeyDown={
           editing
             ? (event) => {
+                // ⌘↵ adds it from the Preview tab too; the field handles its own.
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  if (event.defaultPrevented) return;
+                  event.preventDefault();
+                  close();
+                  return;
+                }
                 // Esc closes the box without leaving the page's view.
                 if (event.key !== "Escape") return;
                 event.stopPropagation();
@@ -515,31 +549,59 @@ const CommentRow = ({
           </>
         ) : (
           <>
-            {range !== null && (
-              <p className="text-caption text-muted-foreground">
-                {range}
-                {rangeNote === undefined ? "" : `. ${rangeNote}`}
-              </p>
-            )}
-            <Textarea
-              ref={field}
-              rows={2}
-              aria-label={label}
-              placeholder="Leave a comment"
-              value={body}
-              onChange={(event) => onChange?.({ ...draft, body: event.target.value })}
-              onSubmitShortcut={close}
-              className="min-h-14 bg-background"
-            />
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-muted-foreground">
+              Commenting on <RefChip>{fileName}</RefChip>
+              {place.startLine === undefined ? "line" : "lines"}{" "}
+              <RefChip>{lineRef(place.side, place.startLine ?? null, place.line)}</RefChip>
+              {rangeNote !== undefined && place.startLine !== undefined && <span>{rangeNote}</span>}
+            </p>
+            <Tabs
+              value={tab}
+              onValueChange={(value) => setTab(value === "preview" ? "preview" : "write")}
+            >
+              <TabsList>
+                <TabsTrigger value="write">Write</TabsTrigger>
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+              </TabsList>
+              <TabsContent value="write">
+                <Textarea
+                  ref={field}
+                  rows={2}
+                  aria-label={label}
+                  placeholder="Leave a comment"
+                  value={body}
+                  onChange={(event) => onChange?.({ ...draft, body: event.target.value })}
+                  onSubmitShortcut={close}
+                  className="min-h-14 bg-background"
+                />
+              </TabsContent>
+              <TabsContent
+                value="preview"
+                data-slot="comment-preview"
+                className="min-h-14 rounded-md border px-2.5 py-2"
+              >
+                {body.trim() === "" ? (
+                  <p className="text-caption text-muted-foreground">Nothing to preview</p>
+                ) : (
+                  <ThreadBody blocks={parseBody(body).blocks} suggestion={preview} />
+                )}
+              </TabsContent>
+            </Tabs>
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={close}>
-                Add comment
-                <KeyHint id="submit" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={cancel}>
-                Cancel
-                <KeyHint id="close" />
-              </Button>
+              <KeyHintLine
+                hints={[
+                  { id: "submit", action: "add to review" },
+                  { id: "close", action: "cancel" },
+                ]}
+              />
+              <div className="ml-auto flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={cancel}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={close}>
+                  Add to review
+                </Button>
+              </div>
             </div>
           </>
         )}

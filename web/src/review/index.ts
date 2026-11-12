@@ -46,7 +46,7 @@ export {
 } from "./pr/review-submit-panel.tsx";
 export { DANGER, WARNING } from "./shell/banners.ts";
 export { DiffSkeleton, EmptyState, TreeSkeleton } from "./shell/empty-state.tsx";
-export { KeyHint } from "./shell/key-hint.tsx";
+export { KeyHint, KeyHintLine } from "./shell/key-hint.tsx";
 export { ShortcutsDialog } from "./shell/shortcuts-dialog.tsx";
 export {
   type BatchState,

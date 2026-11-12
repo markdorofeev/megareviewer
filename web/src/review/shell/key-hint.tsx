@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import {
   chordKeys,
   isCharacterKey,
@@ -34,3 +34,32 @@ export const KeyHint = ({ id, className }: KeyHintProps) => {
     </KbdGroup>
   );
 };
+
+/**
+ * A field's keys in words under it, e.g. "⌘↵ add to review · Esc cancel", in place of hints on
+ * its buttons. Only for keys with a modifier or Esc, which stay on when single keys are off.
+ */
+export const KeyHintLine = ({
+  hints,
+  className,
+}: {
+  readonly hints: readonly { readonly id: ShortcutId; readonly action: string }[];
+  readonly className?: string;
+}) => (
+  <p
+    aria-hidden="true"
+    data-slot="key-hint-line"
+    className={cn(
+      "flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-muted-foreground",
+      className,
+    )}
+  >
+    {hints.map(({ id, action }, at) => (
+      <Fragment key={id}>
+        {at > 0 && <span>·</span>}
+        <KeyHint id={id} />
+        <span>{action}</span>
+      </Fragment>
+    ))}
+  </p>
+);

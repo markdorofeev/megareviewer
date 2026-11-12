@@ -10,9 +10,10 @@ import {
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
-import { KeyHint } from "../shell/key-hint.tsx";
+import { KeyHintLine } from "../shell/key-hint.tsx";
 import { CommentCard } from "./comment-card.tsx";
 import { absoluteTime, initialsOf, relativeTime } from "./people.ts";
+import { lineRef, RefChip } from "./place-ref.tsx";
 import { SuggestionDiff } from "./suggestion-diff.tsx";
 import { ThreadBody } from "./thread-body.tsx";
 
@@ -323,6 +324,7 @@ export const ReviewThreadView = ({
   };
 
   const [first] = thread.comments;
+  const line = thread.line ?? thread.originalLine;
   const resolvedBy = thread.resolvedBy?.name;
   const hasActions = canReply || canResolve || lone !== undefined;
   return (
@@ -352,26 +354,39 @@ export const ReviewThreadView = ({
         </div>
       ) : (
         <>
-          {(thread.outdated || thread.resolved) && (
-            <div className="flex flex-wrap items-center gap-2 text-caption">
-              {thread.outdated && (
-                <span className={cn(CHIP, "border-border bg-muted text-muted-foreground")}>
-                  Outdated
+          <div
+            data-slot="thread-header"
+            className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-muted-foreground"
+          >
+            {line !== null && (
+              <>
+                {thread.startLine !== null && thread.line !== null ? "Lines" : "Line"}{" "}
+                <RefChip>
+                  {lineRef(thread.side, thread.line === null ? null : thread.startLine, line)}
+                </RefChip>
+                <span>·</span>
+              </>
+            )}
+            <span>
+              {thread.comments.length} {thread.comments.length === 1 ? "comment" : "comments"}
+            </span>
+            {thread.outdated && (
+              <span className={cn(CHIP, "border-border bg-muted text-muted-foreground")}>
+                Outdated
+              </span>
+            )}
+            {thread.resolved && (
+              <>
+                <span className="text-review-approved">
+                  <span aria-hidden="true">✓ </span>
+                  Resolved{resolvedBy === undefined ? "" : ` by ${resolvedBy}`}
                 </span>
-              )}
-              {thread.resolved && (
-                <>
-                  <span className="text-review-approved">
-                    <span aria-hidden="true">✓ </span>
-                    Resolved{resolvedBy === undefined ? "" : ` by ${resolvedBy}`}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={() => setOpen(false)} aria-expanded>
-                    Hide
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
+                <Button variant="ghost" size="sm" onClick={() => setOpen(false)} aria-expanded>
+                  Hide
+                </Button>
+              </>
+            )}
+          </div>
           {groupByAuthor(thread.comments).map((group, at) => (
             <Fragment key={group[0]?.id ?? at}>
               {at > 0 && <hr data-slot="thread-divider" />}
@@ -384,7 +399,8 @@ export const ReviewThreadView = ({
             </p>
           )}
           {fieldShown ? (
-            <div className="flex flex-col gap-1.5">
+            // Under a rule, lined up with the comments' text.
+            <div data-slot="thread-reply" className="flex flex-col gap-1.5 border-t pt-3 pl-8.5">
               <label htmlFor={fieldId} className="sr-only">
                 Reply to the thread on {threadPlace(thread)}
               </label>
@@ -412,19 +428,25 @@ export const ReviewThreadView = ({
                   ready.
                 </p>
               )}
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button variant="ghost" size="sm" disabled={posting} onClick={cancel}>
-                  Cancel
-                  <KeyHint id="close" />
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={reply.trim() === "" || posting}
-                  onClick={() => void send()}
-                >
-                  {posting ? "Sending…" : "Reply"}
-                  <KeyHint id="submit" />
-                </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <KeyHintLine
+                  hints={[
+                    { id: "submit", action: "reply" },
+                    { id: "close", action: "cancel" },
+                  ]}
+                />
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant="ghost" size="sm" disabled={posting} onClick={cancel}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={reply.trim() === "" || posting}
+                    onClick={() => void send()}
+                  >
+                    {posting ? "Sending…" : "Reply"}
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (

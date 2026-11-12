@@ -302,6 +302,28 @@ describe("ReviewThreadView", () => {
     await vi.waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
   });
 
+  it("names its lines and counts its comments at the top", () => {
+    show({ thread: thread({ startLine: 2 }) });
+    const header = screen.getByRole("article").querySelector("[data-slot=thread-header]");
+    expect(header?.textContent).toBe("Lines R2–4·2 comments");
+  });
+
+  it("names an outdated thread's line as it was", () => {
+    show({ thread: thread({ line: null, originalLine: 7, side: "old", outdated: true }) });
+    const header = screen.getByRole("article").querySelector("[data-slot=thread-header]");
+    expect(header?.textContent).toContain("Line L7");
+  });
+
+  it("puts the reply field under a rule, with its keys in words and no Reply and resolve", async () => {
+    show();
+    await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
+    const reply = screen.getByRole("article").querySelector("[data-slot=thread-reply]");
+    expect(reply?.querySelector("[data-slot=key-hint-line]")?.textContent).toBe(
+      "Ctrl↵reply·Esccancel",
+    );
+    expect(screen.queryByRole("button", { name: /resolve/i })).toBeNull();
+  });
+
   it("has no letter shortcuts of its own", async () => {
     const { onResolve, onAddToBatch } = show({ thread: suggesting });
     const article = screen.getByRole("article");

@@ -112,6 +112,8 @@ export interface DiffLineProps {
   readonly wrap?: boolean;
   readonly focused?: boolean;
   readonly selected?: boolean;
+  /** A line an open comment box is on, marked by a bar at its edge. */
+  readonly marked?: boolean;
   /** Shows a comment button in the gutter on hover and focus. */
   readonly onComment?: (line: ViewLine) => void;
   /** A gutter click; shift-click extends the selection. */
@@ -140,6 +142,7 @@ export const DiffLine = memo(function DiffLine({
   wrap = false,
   focused = false,
   selected = false,
+  marked = false,
   onComment,
   onGutterClick,
   numberButton,
@@ -214,6 +217,7 @@ export const DiffLine = memo(function DiffLine({
       data-line={line.key}
       data-kind={line.kind}
       data-focused={focused || undefined}
+      data-marked={marked || undefined}
       className={cn(
         "group/line relative flex min-w-full font-mono",
         onRowClick !== undefined && "cursor-pointer",
@@ -227,7 +231,7 @@ export const DiffLine = memo(function DiffLine({
         !selected &&
           onRowClick !== undefined &&
           "hover:before:pointer-events-none hover:before:absolute hover:before:inset-0 hover:before:z-[1] hover:before:bg-primary/8",
-        focused &&
+        (focused || marked) &&
           "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px] after:bg-ring",
       )}
     >
