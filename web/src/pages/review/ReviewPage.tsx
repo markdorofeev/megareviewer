@@ -149,6 +149,7 @@ const PAGE_SHORTCUTS: readonly ShortcutId[] = [
   "nextFile",
   "previousFile",
   "comment",
+  "openCall",
   "moveFile",
   "openFile",
   "approveDecision",
@@ -559,6 +560,22 @@ const Review = ({
     const place = commentPlace(line);
     if (place !== null && current !== null) setOpenComment({ partId: current, place });
   };
+  /**
+   * Opens the code a call runs: the call after the open one on the focused line, or the first,
+   * or else on the focused part or file.
+   */
+  const openCallOnFocused = () => {
+    const focused = document.activeElement;
+    if (!(focused instanceof HTMLElement)) return;
+    const scope =
+      focused.closest("[role=row]") ??
+      focused.closest("[data-slot=hunk-card]") ??
+      focused.closest("[data-slot=file-card]");
+    const found = [...(scope?.querySelectorAll<HTMLElement>("[data-slot=call]") ?? [])];
+    const open = found.findIndex((call) => call.hasAttribute("data-popup-open"));
+    const next = found[(open + 1) % found.length];
+    if (next !== undefined) callPeek.open(next.id);
+  };
   const onEscape = () => {
     if (highlight.size > 0) return setHighlight(new Set());
     if (layout === "map" && openedFrom !== null) {
@@ -581,6 +598,7 @@ const Review = ({
       if (selectedDecision !== null) toggleVerdict(selectedDecision, "rejected");
     },
     comment: commentOnFocused,
+    openCall: openCallOnFocused,
     close: onEscape,
   };
   useShortcuts(

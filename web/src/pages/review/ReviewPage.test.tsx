@@ -495,6 +495,19 @@ describe("map", () => {
     expect(calls(h.receiptFormatting)).toEqual(["formatMoney"]);
   });
 
+  it("opens the code of the call on the focused line with o", async () => {
+    renderReview();
+    await loaded();
+    const call = placeOf(h.receiptRoute).querySelector("[data-slot=call]");
+    const number = call?.closest("[role=row]")?.querySelector("button");
+    if (!(number instanceof HTMLElement)) throw new Error("no line number beside the call");
+    number.focus();
+    await userEvent.keyboard("o");
+    const peek = await screen.findByLabelText("Code cachedReceipt runs");
+    expect(within(peek).getByRole("table", { name: "Lines of cachedReceipt" })).toBeTruthy();
+    expect(document.activeElement).toBe(number);
+  });
+
   it("still works when storage throws", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
@@ -874,7 +887,7 @@ describe("keyboard shortcuts", () => {
       within(within(dialog).getByRole("region", { name }))
         .getAllByRole("definition")
         .map((keys) => keys.textContent);
-    expect(keysOf("In the code")).toEqual(["n", "p", "c"]);
+    expect(keysOf("In the code")).toEqual(["n", "p", "c", "o"]);
     expect(keysOf("In the overview")).toEqual(["←→↑↓", "↵"]);
     expect(keysOf("On a decision")).toEqual(["a", "r"]);
     expect(keysOf("Anywhere")).toEqual(["v", "⇧R", "Esc", "?"]);

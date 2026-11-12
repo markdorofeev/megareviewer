@@ -14,6 +14,7 @@ export type ShortcutId =
   | "extendDown"
   | "extendUp"
   | "comment"
+  | "openCall"
   | "approveDecision"
   | "rejectDecision"
   | "toggleSplit"
@@ -63,6 +64,12 @@ export const KEYMAP: readonly Shortcut[] = [
     id: "comment",
     chords: [{ key: "c" }],
     action: "Comment on the selected decision, or on the focused change",
+    scope: "diff",
+  },
+  {
+    id: "openCall",
+    chords: [{ key: "o" }],
+    action: "Show the code a call on the focused line runs; again for the next call",
     scope: "diff",
   },
   {
