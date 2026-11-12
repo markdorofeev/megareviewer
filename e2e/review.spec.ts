@@ -89,6 +89,30 @@ test("the map moves between the files with the keyboard", async ({ page }) => {
   await expect(focused).toHaveAttribute("aria-label", first);
 });
 
+test("a call shows the code it runs while the pointer is on it or on its card", async ({
+  page,
+}) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+  const call = page.locator("[data-slot=call]", { hasText: "renderReceipt" }).first();
+  const card = page.getByLabel("Code renderReceipt runs");
+  await call.hover();
+  await expect(card).toBeVisible();
+  await expect(card.getByRole("table", { name: "Lines of renderReceipt" })).toContainText(
+    "renderReceipt",
+  );
+  // The pointer crosses to the card, and the card stays while it's there.
+  await card.hover();
+  await page.waitForTimeout(600);
+  await expect(card).toBeVisible();
+  await page.mouse.move(0, 0);
+  await expect(card).toBeHidden();
+  // Go to file goes to the part on the map, and the card closes.
+  await call.hover();
+  await card.getByRole("button", { name: "Go to file" }).click();
+  await expect(card).toBeHidden();
+  await expect(page.locator("[data-slot=hunk-card]:focus")).toContainText("renderReceipt");
+});
+
 test("the line under the mouse shows a plus on its number, an unchanged fold's doesn't", async ({
   page,
 }) => {
