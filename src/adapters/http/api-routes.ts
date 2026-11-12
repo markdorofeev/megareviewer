@@ -105,6 +105,10 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
       useCases.replyToThread(params.id, params.threadId, body.body),
     resolveThread: ({ params, body }) =>
       useCases.resolveThread(params.id, params.threadId, body.resolved),
+    postComment: async ({ params, body }) => {
+      const posted = await useCases.postComment(params.id, body);
+      return posted.ok ? ok({}) : posted;
+    },
   };
   register(app, routes.getStatus, handlers.getStatus);
   register(app, routes.listPullRequests, handlers.listPullRequests);
@@ -118,4 +122,5 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   register(app, routes.getThreads, handlers.getThreads);
   register(app, routes.replyToThread, handlers.replyToThread);
   register(app, routes.resolveThread, handlers.resolveThread);
+  register(app, routes.postComment, handlers.postComment);
 };

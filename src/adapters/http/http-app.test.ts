@@ -661,6 +661,22 @@ describe("the thread routes", () => {
     expect(resolved.body).toEqual({ resolved: true });
   });
 
+  it("posts one comment on a line at once", async () => {
+    const { call } = await seeded();
+    const hunk = smallFeatureAnalysis.files
+      .flatMap((file) => file.hunks)
+      .find((one) => one.lines.some((line) => line.kind === "add"));
+    const line = hunk?.lines.find((one) => one.kind === "add")?.newLine;
+    if (hunk === undefined || line == null) throw new Error("small-feature has an added line");
+    const posted = await call("postComment", {
+      params: { id },
+      body: { hunkId: hunk.id, side: "new", line, body: "Why 600?" },
+    });
+    expect(posted.body).toEqual({});
+    const list = await call("getThreads", { params: { id } });
+    expect(list.body?.threads.at(-1)?.comments[0]?.body).toBe("Why 600?");
+  });
+
   it("rejects an empty reply and a malformed thread ID", async () => {
     const { call } = await seeded();
     const bad = [

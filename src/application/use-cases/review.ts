@@ -2,10 +2,10 @@ import {
   type Analysis,
   type AnalysisId,
   buildPublication,
+  commentFits,
   type DecisionId,
   type DecisionVerdict,
   type HunkComment,
-  hunkHasLine,
   type Publication,
   type PublicationReceipt,
   type PublicationVerdict,
@@ -94,15 +94,7 @@ export const createReviewUseCases = (deps: AppDeps) => {
     const hunks = new Map(
       analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
     );
-    // A comment on a line the diff doesn't show would land on the wrong line, or fail on the host.
-    const misplaced = review.hunkComments.find((comment) => {
-      const hunk = hunks.get(comment.hunkId);
-      return (
-        hunk === undefined ||
-        !hunkHasLine(hunk, comment.side, comment.line) ||
-        (comment.startLine !== undefined && !hunkHasLine(hunk, comment.side, comment.startLine))
-      );
-    });
+    const misplaced = review.hunkComments.find((comment) => !commentFits(hunks, comment));
     if (misplaced !== undefined) {
       return err(
         appError(

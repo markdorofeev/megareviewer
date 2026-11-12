@@ -132,8 +132,21 @@ describe("retryingReviewThreads", () => {
     const { fake, threads, delays } = threadSetup();
     fake.failNext("reply", networkError);
     fake.failNext("setResolved", networkError);
+    fake.failNext("comment", networkError);
     expect(await threads.reply(ref, "PRRT_cache", "x")).toEqual({ ok: false, error: networkError });
     expect(await threads.setResolved(ref, "PRRT_cache", true)).toEqual({
+      ok: false,
+      error: networkError,
+    });
+    expect(
+      await threads.comment(ref, {
+        path: "src/a.ts",
+        side: "new" as const,
+        line: 1,
+        body: "x",
+        headSha: "h",
+      }),
+    ).toEqual({
       ok: false,
       error: networkError,
     });

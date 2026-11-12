@@ -5,7 +5,7 @@ import {
   type ThreadId,
   ThreadList,
 } from "../../../domain/review/index.ts";
-import type { ReviewThreads } from "../../ports/index.ts";
+import type { NewThread, ReviewThreads } from "../../ports/index.ts";
 
 export interface ReviewThreadsContractSetup {
   threads(): ReviewThreads;
@@ -18,6 +18,8 @@ export interface ReviewThreadsContractSetup {
   outdatedThread: ThreadId;
   /** The reply `reply` posts to `thread`. */
   replyBody: string;
+  /** A comment on a line the PR's diff shows. */
+  newThread: NewThread;
   /** An image in the host's attachment store. */
   attachment: string;
 }
@@ -52,6 +54,10 @@ export const describeReviewThreadsContract = (
       if (!result.ok) throw new Error(`reply failed: ${result.error.message}`);
       expect(ThreadComment.parse(result.value)).toEqual(result.value);
       expect(result.value.body).toBe(s.replyBody);
+    });
+
+    it("starts a thread with a comment on a line", async () => {
+      expect(await s.threads().comment(s.pr, s.newThread)).toEqual({ ok: true, value: null });
     });
 
     it("resolves a thread and reopens it", async () => {

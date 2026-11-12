@@ -15,7 +15,12 @@ import {
   TOKEN_HEADER,
   TOKEN_QUERY_PARAM,
 } from "../../../contracts/index.ts";
-import type { AnalysisId, DecisionId, ThreadId } from "../../../src/domain/review/index.ts";
+import type {
+  AnalysisId,
+  DecisionId,
+  HunkComment,
+  ThreadId,
+} from "../../../src/domain/review/index.ts";
 import { err, ok, type Result } from "../../../src/domain/shared/index.ts";
 import type { ApiError } from "./errors.ts";
 
@@ -84,6 +89,7 @@ export const createApiClient = (options: ApiClientOptions) => {
       send(routes.replyToThread, { id, threadId }, body),
     resolveThread: (id: AnalysisId, threadId: ThreadId, body: ResolveRequest) =>
       send(routes.resolveThread, { id, threadId }, body),
+    postComment: (id: AnalysisId, body: HunkComment) => send(routes.postComment, { id }, body),
   } satisfies Record<RouteName, unknown>;
 
   return {

@@ -20,6 +20,8 @@ export interface HunkDeps {
   readonly onOpenComment: (id: PartId, place: LinePlace | null) => void;
   /** Without it, comments are read-only: the review is published. */
   readonly onComment?: (id: PartId, comment: LineComment) => void;
+  /** Posts a comment on its own, now; without it, comments only go with the review. */
+  readonly onCommentNow?: (id: PartId, comment: LineComment) => Promise<string | null>;
   readonly onFocusHunk: (id: PartId) => void;
   /** The decision cards and links that go under a part's divider. */
   readonly decisionsOn: (id: PartId) => ReactNode;
@@ -67,6 +69,7 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       openComment={deps.openComment?.partId === id ? deps.openComment.place : null}
       onOpenComment={deps.onOpenComment}
       onComment={deps.onComment}
+      {...(deps.onCommentNow === undefined ? {} : { onCommentNow: deps.onCommentNow })}
       afterHeader={deps.decisionsOn(id)}
       threadsAt={(place) => deps.threadsAt(id, place)}
       {...(deps.rangeNote === undefined ? {} : { rangeNote: deps.rangeNote })}

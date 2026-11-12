@@ -127,6 +127,23 @@ export const bitbucketThreadExchanges: Exchange[] = [
     },
   },
   {
+    request: {
+      method: "POST",
+      url: `${PR}/comments`,
+      body: { content: { raw: "Retry once more?" }, inline: { path: "pipe/pipe.py", to: 42 } },
+    },
+    response: {
+      status: 201,
+      headers: JSON_HEADERS,
+      body: comment({
+        id: 106,
+        content: { raw: "Retry once more?" },
+        created_on: "2026-01-03T09:05:00.000000+00:00",
+        inline: { path: "pipe/pipe.py", to: 42 },
+      }),
+    },
+  },
+  {
     request: { method: "POST", url: `${PR}/comments/101/resolve` },
     response: { status: 200, headers: JSON_HEADERS, body: { type: "comment_resolution" } },
   },

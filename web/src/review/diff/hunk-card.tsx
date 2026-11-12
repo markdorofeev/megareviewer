@@ -136,6 +136,11 @@ export interface HunkCardProps {
   readonly openComment?: LinePlace | null;
   readonly onOpenComment?: (id: PartId, place: LinePlace | null) => void;
   readonly onComment?: (id: PartId, comment: LineComment) => void;
+  /**
+   * Posts a comment on its own, now, rather than with the review: an error message, or null once
+   * it's posted. Without it, comments only go with the review.
+   */
+  readonly onCommentNow?: (id: PartId, comment: LineComment) => Promise<string | null>;
   /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
   readonly afterHeader?: ReactNode;
   /** The host's threads on a line, shown under it. */
@@ -165,6 +170,7 @@ export const HunkCard = memo(function HunkCard({
   openComment = null,
   onOpenComment,
   onComment,
+  onCommentNow,
   afterHeader,
   threadsAt,
   rangeNote,
@@ -361,6 +367,19 @@ export const HunkCard = memo(function HunkCard({
                         })
                       }
                       onDone={() => onOpenComment?.(id, null)}
+                      {...(onCommentNow === undefined
+                        ? {}
+                        : {
+                            onPostNow: (draft: CommentDraft) =>
+                              onCommentNow(id, {
+                                side: commentAt.side,
+                                line: commentAt.line,
+                                ...(commentAt.startLine === undefined
+                                  ? {}
+                                  : { startLine: commentAt.startLine }),
+                                ...draft,
+                              }),
+                          })}
                       pinned={inFile}
                     />
                   )}
@@ -412,6 +431,7 @@ const CommentRow = ({
   onChange,
   onEdit,
   onDone,
+  onPostNow,
   pinned,
 }: {
   readonly place: LinePlace;
@@ -426,15 +446,23 @@ const CommentRow = ({
   readonly onChange?: (draft: CommentDraft) => void;
   readonly onEdit: () => void;
   readonly onDone: () => void;
+  /** Posts the draft on its own, now: an error message, or null once it's posted. */
+  readonly onPostNow?: (draft: CommentDraft) => Promise<string | null>;
   /** On a file's card, where the lines scroll sideways and the box stays in view. */
   readonly pinned: boolean;
 }) => {
   const row = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const [tab, setTab] = useState<"write" | "preview">("write");
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   useEffect(() => {
-    if (editing) field.current?.focus();
-    else setTab("write");
+    if (editing) {
+      field.current?.focus();
+      return;
+    }
+    setTab("write");
+    setPostError(null);
   }, [editing]);
   const label = placeLabel(place);
   const body = comment?.body ?? "";
@@ -461,6 +489,21 @@ const CommentRow = ({
   const close = () => {
     leave();
     if (body.trim() === "" && suggestion === undefined) onChange?.({ body: "" });
+    onDone();
+  };
+  /** Posted, the draft goes: it's a thread on the host now. A failure keeps the text. */
+  const postNow = async () => {
+    if (onPostNow === undefined || posting || body.trim() === "") return;
+    setPosting(true);
+    setPostError(null);
+    const error = await onPostNow(draft);
+    setPosting(false);
+    if (error !== null) {
+      setPostError(error);
+      return;
+    }
+    leave();
+    onChange?.({ body: "" });
     onDone();
   };
   const cancel = () => {
@@ -595,14 +638,29 @@ const CommentRow = ({
                 ]}
               />
               <div className="ml-auto flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={cancel}>
+                <Button variant="ghost" size="sm" disabled={posting} onClick={cancel}>
                   Cancel
                 </Button>
-                <Button size="sm" onClick={close}>
+                {onPostNow !== undefined && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={posting || body.trim() === ""}
+                    onClick={() => void postNow()}
+                  >
+                    {posting ? "Posting…" : "Comment now"}
+                  </Button>
+                )}
+                <Button size="sm" disabled={posting} onClick={close}>
                   Add to review
                 </Button>
               </div>
             </div>
+            {postError !== null && (
+              <p role="alert" className="text-caption text-destructive">
+                ✕ Not posted: {postError} Your comment is still here.
+              </p>
+            )}
           </>
         )}
       </CommentCard>

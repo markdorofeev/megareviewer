@@ -24,7 +24,7 @@ export const inlineComment = ({
   startLine,
   side,
   body,
-}: PublicationComment): CommentRequest => ({
+}: Omit<PublicationComment, "key">): CommentRequest => ({
   content: { raw: startLine === undefined ? body : `_Lines ${startLine}–${line}:_\n\n${body}` },
   inline: side === "new" ? { path, to: line } : { path, from: line },
 });

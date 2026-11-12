@@ -10,7 +10,7 @@ interface Exchange {
 }
 
 const API = "https://api.github.com";
-const THREADS_HEAD = "b177d02e3aee907af72dc76aece21faf74be7935";
+export const THREADS_HEAD = "b177d02e3aee907af72dc76aece21faf74be7935";
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 const JSONV3 = "application/vnd.github.v3+json";
 
@@ -138,6 +138,22 @@ export const threadExchanges: Exchange[] = [
       },
     },
   ),
+  {
+    request: {
+      method: "POST",
+      url: `${API}/repos/sindresorhus/is/pulls/210/comments`,
+      body: {
+        commit_id: THREADS_HEAD,
+        path: "source/index.ts",
+        line: 12,
+        side: "RIGHT",
+        start_line: 10,
+        start_side: "RIGHT",
+        body: "Name it for what it checks.",
+      },
+    },
+    response: { status: 201, headers: JSON_HEADERS, body: { id: 3001 } },
+  },
   graphql(
     RESOLVE_MUTATION,
     { threadId: "PRRT_kwDOAbc1" },

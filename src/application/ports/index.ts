@@ -34,6 +34,7 @@ export type { LogFields, Logger } from "./logger.ts";
 export {
   type Attachment,
   MAX_ATTACHMENT_BYTES,
+  type NewThread,
   type ReviewThreads,
 } from "./review-threads.ts";
 export type { TicketLookup, TicketSource } from "./ticket-source.ts";

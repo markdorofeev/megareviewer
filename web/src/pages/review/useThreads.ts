@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AnalysisId, ThreadId, ThreadList } from "../../../../src/domain/review/index.ts";
+import type {
+  AnalysisId,
+  HunkComment,
+  ThreadId,
+  ThreadList,
+} from "../../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage, useApi } from "../../api/index.ts";
 
 export interface Threads {
@@ -11,6 +16,8 @@ export interface Threads {
   /** Posts a reply; an error message, or null once it's posted. */
   readonly reply: (threadId: ThreadId, body: string) => Promise<string | null>;
   readonly resolve: (threadId: ThreadId, resolved: boolean) => Promise<string | null>;
+  /** Posts one comment on lines as a thread of its own, now; an error message, or null. */
+  readonly post: (comment: HunkComment) => Promise<string | null>;
 }
 
 /**
@@ -61,5 +68,15 @@ export const useThreads = (analysisId: AnalysisId, enabled: boolean): Threads =>
     [client, analysisId, reload],
   );
 
-  return { list, error, reload, reply, resolve };
+  const post = useCallback(
+    async (comment: HunkComment) => {
+      const result = await client.postComment(analysisId, comment);
+      if (!result.ok) return errorMessage(result.error);
+      reload();
+      return null;
+    },
+    [client, analysisId, reload],
+  );
+
+  return { list, error, reload, reply, resolve, post };
 };

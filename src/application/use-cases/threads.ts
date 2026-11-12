@@ -1,12 +1,16 @@
-import type {
-  Analysis,
-  AnalysisId,
-  ThreadComment,
-  ThreadId,
-  ThreadList,
+import {
+  type Analysis,
+  type AnalysisId,
+  commentFits,
+  composeBody,
+  type HunkComment,
+  type ThreadComment,
+  type ThreadId,
+  type ThreadList,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { Attachment, ReviewThreads } from "../ports/index.ts";
+import { hostFor } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 
@@ -96,6 +100,53 @@ export const createThreadUseCases = (deps: AppDeps) => {
         body.trim(),
       );
       return reply.ok ? reply : err(fromHostError(reply.error));
+    },
+
+    /**
+     * One comment on lines of the diff, posted now as a thread of its own. Like publishing, it
+     * goes on the head the reviewer looked at or nowhere, since lines are anchored on it.
+     */
+    async postComment(id: AnalysisId, comment: HunkComment): Promise<Result<null, UseCaseError>> {
+      const found = await threadsFor(id);
+      if (!found.ok) return found;
+      const { analysis, threads } = found.value;
+      if (analysis.status !== "complete") {
+        return err(appError("analysis-not-complete", "The analysis isn't complete"));
+      }
+      const hunks = new Map(
+        analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
+      );
+      const hunk = hunks.get(comment.hunkId);
+      if (hunk === undefined || !commentFits(hunks, comment)) {
+        return err(
+          appError(
+            "bad-request",
+            `The comment is on ${comment.side} line ${comment.line} of hunk ${comment.hunkId}, which the diff doesn't show`,
+          ),
+        );
+      }
+      const body = composeBody(comment);
+      if (body === "") return err(appError("bad-request", "The comment has no text"));
+
+      const { ref, headSha } = analysis.key;
+      const host = hostFor(deps, ref.repo.host);
+      if (!host.ok) return host;
+      const current = await host.value.getPullRequest(ref);
+      if (!current.ok) return err(fromHostError(current.error));
+      if (current.value.headSha !== headSha) {
+        return err(
+          appError("stale-analysis", "The pull request has new commits since this analysis"),
+        );
+      }
+      const posted = await threads.comment(ref, {
+        path: hunk.path,
+        side: comment.side,
+        line: comment.line,
+        ...(comment.startLine === undefined ? {} : { startLine: comment.startLine }),
+        body,
+        headSha,
+      });
+      return posted.ok ? ok(null) : err(fromHostError(posted.error));
     },
 
     async resolveThread(

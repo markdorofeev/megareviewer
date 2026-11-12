@@ -166,3 +166,59 @@ describe("replyToThread and resolveThread", () => {
     });
   });
 });
+
+describe("postComment", () => {
+  // A hunk with two added lines, for a range.
+  const hunk = smallFeatureAnalysis.files
+    .flatMap((file) => file.hunks)
+    .find((one) => one.lines.filter((line) => line.kind === "add").length >= 2);
+  const added = hunk?.lines.filter((line) => line.kind === "add").map((line) => line.newLine);
+  const [first, second] = added ?? [];
+  if (hunk === undefined || first == null || second == null) {
+    throw new Error("small-feature has two added lines");
+  }
+  const comment = { hunkId: hunk.id, side: "new" as const, line: second, body: "Why 600?" };
+
+  it("starts a thread on the lines now, on the analysis's head", async () => {
+    const { useCases, id } = await setup();
+    const posted = await useCases.postComment(id, {
+      ...comment,
+      startLine: first,
+      severity: "minor",
+    });
+    expect(posted).toEqual({ ok: true, value: null });
+    const list = await useCases.getThreads(id);
+    expect(list.ok && list.value.threads.at(-1)).toMatchObject({
+      path: hunk.path,
+      side: "new",
+      line: second,
+      startLine: first,
+      comments: [{ body: "**minor:** Why 600?", originalCommit: smallFeature.pullRequest.headSha }],
+    });
+  });
+
+  it("refuses a line the diff doesn't show, a comment with no text and a stale analysis", async () => {
+    const { useCases, github, id } = await setup();
+    expect(await useCases.postComment(id, { ...comment, line: 9_999 })).toMatchObject({
+      ok: false,
+      error: { code: "bad-request" },
+    });
+    expect(await useCases.postComment(id, { ...comment, body: "  " })).toMatchObject({
+      ok: false,
+      error: { code: "bad-request" },
+    });
+    github.setHeadSha(ref, "2".repeat(40));
+    expect(await useCases.postComment(id, comment)).toMatchObject({
+      ok: false,
+      error: { code: "stale-analysis" },
+    });
+    const list = await useCases.getThreads(id);
+    expect(list.ok && list.value.threads.length).toBe(smallFeatureThreadList.threads.length);
+  });
+
+  it("passes the host's refusal on", async () => {
+    const { useCases, threads, id } = await setup();
+    threads.failNext("comment", { kind: "rejected", message: "No.", retryAfterSeconds: null });
+    expect(await useCases.postComment(id, comment)).toMatchObject({ ok: false });
+  });
+});

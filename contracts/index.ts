@@ -5,6 +5,7 @@ export {
   AnalysisView,
   analysisEventsRoute,
   attachmentRoute,
+  CommentPosted,
   ERROR_STATUS,
   ErrorCode,
   ErrorResponse,

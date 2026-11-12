@@ -9,6 +9,7 @@ import { ok, type Result } from "../../domain/shared/index.ts";
 import { fetchAttachment } from "./attachments.ts";
 import { createGitHubClient, type GitHubClientOptions, REQUEST_TIMEOUT_MS } from "./client.ts";
 import {
+  GitHubReviewCommentPosted,
   type GitHubReviewThread,
   type GitHubThreadComment,
   GitHubThreadPage,
@@ -155,6 +156,32 @@ export const createGitHubReviewThreads = (
         write,
       );
       return reply.ok ? ok(toComment(reply.value.addPullRequestReviewThreadReply.comment)) : reply;
+    },
+
+    async comment(ref, comment) {
+      const side = comment.side === "new" ? "RIGHT" : "LEFT";
+      const posted = await read(
+        "the comment",
+        GitHubReviewCommentPosted,
+        async () =>
+          (
+            await octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/comments", {
+              owner: ref.repo.owner,
+              repo: ref.repo.repo,
+              pull_number: ref.number,
+              commit_id: comment.headSha,
+              path: comment.path,
+              line: comment.line,
+              side,
+              ...(comment.startLine === undefined
+                ? {}
+                : { start_line: comment.startLine, start_side: side }),
+              body: comment.body,
+            })
+          ).data,
+        write,
+      );
+      return posted.ok ? ok(null) : posted;
     },
 
     async setResolved(_ref, threadId, resolved) {

@@ -10,11 +10,16 @@ import {
   type ThreadList,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { Attachment, Clock, ReviewThreads } from "../ports/index.ts";
+import type { Attachment, Clock, NewThread, ReviewThreads } from "../ports/index.ts";
 import { FixedClock } from "./fixed-clock.ts";
 import { fixtureReviewers } from "./fixtures/index.ts";
 
-export type ReviewThreadsMethod = "getThreads" | "reply" | "setResolved" | "getAttachment";
+export type ReviewThreadsMethod =
+  | "getThreads"
+  | "reply"
+  | "comment"
+  | "setResolved"
+  | "getAttachment";
 
 const prKey = (ref: PullRequestRef): string =>
   `${ref.repo.host}/${ref.repo.owner}/${ref.repo.repo}#${ref.number}`;
@@ -92,6 +97,36 @@ export class FakeReviewThreads implements ReviewThreads {
     };
     found.replace({ ...found.thread, comments: [...found.thread.comments, comment] });
     return ok(structuredClone(comment));
+  }
+
+  /** A new thread, as the host would list it. */
+  async comment(ref: PullRequestRef, comment: NewThread): Promise<Result<null, HostError>> {
+    const failure = this.fail("comment");
+    if (failure !== null) return failure;
+    const id = this.nextId++;
+    const thread: ReviewThread = {
+      id: `fake_thread_${id}`,
+      path: comment.path,
+      side: comment.side,
+      line: comment.line,
+      startLine: comment.startLine ?? null,
+      originalLine: comment.line,
+      resolved: false,
+      resolvedBy: null,
+      outdated: false,
+      can: { reply: true, resolve: true },
+      comments: [
+        {
+          id: `fake_comment_${id}`,
+          author: { ...this.user },
+          body: comment.body,
+          createdAt: this.clock.now(),
+          originalCommit: comment.headSha,
+        },
+      ],
+    };
+    this.lists.set(prKey(ref), [...(this.lists.get(prKey(ref)) ?? []), thread]);
+    return ok(null);
   }
 
   async setResolved(

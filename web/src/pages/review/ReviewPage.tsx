@@ -365,6 +365,11 @@ const Review = ({
 
   // The host's conversation on the code, read live, beside the analysis.
   const threads = useThreads(analysisId, analysis.stages.prep === "done");
+  const { post } = threads;
+  const postCommentNow = useCallback(
+    (id: PartId, comment: LineComment) => post({ hunkId: hunkIdOf(id), ...comment }),
+    [post],
+  );
   const placement = useMemo(
     () => placeThreads(threads.list?.threads ?? null, files, index),
     [threads.list, files, index],
@@ -659,6 +664,7 @@ const Review = ({
     openComment,
     onOpenComment: openCommentOn,
     onComment: readOnly ? undefined : writeComment,
+    ...(readOnly || !complete ? {} : { onCommentNow: postCommentNow }),
     onFocusHunk: focusHunk,
     decisionsOn,
     threadsAt,

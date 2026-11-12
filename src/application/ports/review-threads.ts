@@ -8,6 +8,18 @@ import type {
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
 
+/** A comment on lines of the PR's diff, posted on its own rather than with a review. */
+export interface NewThread {
+  readonly path: string;
+  readonly side: "old" | "new";
+  readonly line: number;
+  /** The first line of a range ending at `line`; a host that can't anchor one quotes it. */
+  readonly startLine?: number;
+  readonly body: string;
+  /** The commit the lines are read at: the analysis's head. */
+  readonly headSha: string;
+}
+
 /** An image or video pasted into a comment, as its host stores it. */
 export interface Attachment {
   readonly contentType: string;
@@ -31,6 +43,8 @@ export interface ReviewThreads {
     threadId: ThreadId,
     body: string,
   ): Promise<Result<ThreadComment, HostError>>;
+  /** Starts a thread on lines of the diff: one comment, posted now. */
+  comment(ref: PullRequestRef, comment: NewThread): Promise<Result<null, HostError>>;
   setResolved(
     ref: PullRequestRef,
     threadId: ThreadId,

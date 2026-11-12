@@ -394,6 +394,57 @@ describe("HunkCard", () => {
     expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
   });
 
+  it("posts a comment now, and removes the draft once it's posted", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    const onComment = vi.fn();
+    const onCommentNow = vi.fn(async () => null);
+    const comment = { side: "new" as const, line: 41, body: "Why 600?" };
+    renderWith(
+      <Cards
+        cards={[second]}
+        comments={[comment]}
+        openComment={comment}
+        onOpenComment={onOpenComment}
+        onComment={onComment}
+        onCommentNow={onCommentNow}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Comment now" }));
+    expect(onCommentNow).toHaveBeenCalledWith(second.hunk.id, comment);
+    await vi.waitFor(() =>
+      expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, {
+        side: "new",
+        line: 41,
+        body: "",
+      }),
+    );
+    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
+  });
+
+  it("keeps the text and says why when posting now fails, and has no Comment now without it", async () => {
+    const user = userEvent.setup();
+    const onComment = vi.fn();
+    const comment = { side: "new" as const, line: 41, body: "Why 600?" };
+    const props = {
+      cards: [second],
+      comments: [comment],
+      openComment: comment,
+      onOpenComment: vi.fn(),
+      onComment,
+    };
+    const { rerender } = renderWith(
+      <Cards {...props} onCommentNow={async () => "The pull request has new commits."} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Comment now" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Not posted: The pull request has new commits.",
+    );
+    expect(onComment).not.toHaveBeenCalled();
+    rerender(<Cards {...props} />);
+    expect(screen.queryByRole("button", { name: "Comment now" })).toBeNull();
+  });
+
   it("puts the host's threads under the line they're on", () => {
     renderWith(
       <Cards

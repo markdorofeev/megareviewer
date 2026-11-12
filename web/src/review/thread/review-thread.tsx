@@ -5,7 +5,6 @@ import {
   type ReviewThread,
   type Severity,
   splitSeverity,
-  suggestionOf,
   type ThreadComment,
 } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";

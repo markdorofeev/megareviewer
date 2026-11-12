@@ -48,6 +48,22 @@ export const hunkHasLine = (hunk: Hunk, side: HunkComment["side"], line: number)
       ? diffLine.kind !== "del" && diffLine.newLine === line
       : diffLine.kind !== "add" && diffLine.oldLine === line,
   );
+
+/**
+ * Whether a comment's hunk shows its lines, first and last: one on a line the diff doesn't show
+ * would land on the wrong line, or fail on the host.
+ */
+export const commentFits = (
+  hunks: ReadonlyMap<string, Hunk>,
+  comment: Pick<HunkComment, "hunkId" | "side" | "line" | "startLine">,
+): boolean => {
+  const hunk = hunks.get(comment.hunkId);
+  return (
+    hunk !== undefined &&
+    hunkHasLine(hunk, comment.side, comment.line) &&
+    (comment.startLine === undefined || hunkHasLine(hunk, comment.side, comment.startLine))
+  );
+};
 export type CommentKey = z.infer<typeof CommentKey>;
 
 export const PublicationComment = z

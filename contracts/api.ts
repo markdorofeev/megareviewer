@@ -117,6 +117,10 @@ export type ThreadsResponse = z.infer<typeof ThreadsResponse>;
 export const ReplyRequest = z.object({ body: z.string().trim().min(1) }).readonly();
 export type ReplyRequest = z.infer<typeof ReplyRequest>;
 
+/** What posting one comment on its own answers: nothing; the threads are read again. */
+export const CommentPosted = z.object({}).readonly();
+export type CommentPosted = z.infer<typeof CommentPosted>;
+
 export const ResolveRequest = z.object({ resolved: z.boolean() }).readonly();
 export type ResolveRequest = z.infer<typeof ResolveRequest>;
 export const ResolveResponse = ResolveRequest;
@@ -260,6 +264,18 @@ export const routes = {
     params: ThreadParams,
     request: ReplyRequest,
     response: ThreadComment,
+  },
+  /**
+   * Posts one comment on lines of the diff at once, as a thread of its own rather than with the
+   * review; never retried. Answers stale-analysis when the PR has new commits since, as
+   * publishing does.
+   */
+  postComment: {
+    method: "POST",
+    path: "/api/analyses/:id/comments",
+    params: AnalysisParams,
+    request: HunkComment,
+    response: CommentPosted,
   },
   /** Resolves or reopens a thread at once; never retried. */
   resolveThread: {

@@ -4,6 +4,7 @@ import { ok } from "../../domain/shared/index.ts";
 import { fetchAttachment } from "./attachments.ts";
 import { API, createBitbucketClient, REQUEST_TIMEOUT_MS } from "./client.ts";
 import { toHostUser } from "./map.ts";
+import { inlineComment } from "./publish.ts";
 import { BitbucketThreadComment } from "./schemas.ts";
 
 export interface BitbucketThreadsOptions {
@@ -127,6 +128,17 @@ export const createBitbucketReviewThreads = (options: BitbucketThreadsOptions): 
         },
       );
       return comment.ok ? ok(toComment(comment.value)) : comment;
+    },
+
+    async comment(ref, comment) {
+      const posted = await client.json(
+        "the comment",
+        BitbucketThreadComment,
+        `${pullRequestUrl(ref)}/comments`,
+        // Anchored on the PR's current diff, which the use case checks is still the analysis's.
+        { method: "POST", body: inlineComment(comment), call: "publish" },
+      );
+      return posted.ok ? ok(null) : posted;
     },
 
     async setResolved(ref, threadId, resolved) {

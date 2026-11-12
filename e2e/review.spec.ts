@@ -278,6 +278,20 @@ test("replies to a thread and resolves it", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("posts a comment now, and it comes back as a thread", async ({ page }) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+  const changes = page.getByRole("region", { name: "Changes" });
+  const number = changes.getByRole("button", { name: /^Comment on line \d+$/ }).first();
+  const line = await number.textContent();
+  await number.click();
+  const field = changes.getByRole("textbox", { name: `Comment on line ${line}` });
+  await field.fill("Why this, and not a config value?");
+  await changes.getByRole("button", { name: "Comment now" }).click();
+  await expect(field).toBeHidden();
+  const thread = changes.getByRole("article", { name: `Thread on line ${line}`, exact: true });
+  await expect(thread.getByText("Why this, and not a config value?")).toBeVisible();
+});
+
 test.describe("without the model", () => {
   test.use({ ai: false });
 

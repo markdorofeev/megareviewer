@@ -7,7 +7,12 @@ import {
   RecordingLogger,
 } from "../../application/testing/index.ts";
 import type { PullRequestRef } from "../../domain/review/index.ts";
-import { ATTACHMENT, attachmentExchanges, threadExchanges } from "./fixtures/threads.synthetic.ts";
+import {
+  ATTACHMENT,
+  attachmentExchanges,
+  THREADS_HEAD,
+  threadExchanges,
+} from "./fixtures/threads.synthetic.ts";
 import unauthorizedExchanges from "./fixtures/unauthorized.synthetic.json" with { type: "json" };
 import { createGitHubReviewThreads } from "./index.ts";
 
@@ -32,6 +37,14 @@ describeReviewThreadsContract("github", () => ({
   resolvedThread: "PRRT_kwDOAbc2",
   outdatedThread: "PRRT_kwDOAbc3",
   replyBody: "Thanks!",
+  newThread: {
+    path: "source/index.ts",
+    side: "new",
+    line: 12,
+    startLine: 10,
+    body: "Name it for what it checks.",
+    headSha: THREADS_HEAD,
+  },
   attachment: ATTACHMENT,
 }));
 

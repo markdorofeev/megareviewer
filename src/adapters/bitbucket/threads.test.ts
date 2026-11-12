@@ -33,6 +33,13 @@ describeReviewThreadsContract("bitbucket", () => ({
   resolvedThread: "201",
   outdatedThread: "401",
   replyBody: "Thanks!",
+  newThread: {
+    path: "pipe/pipe.py",
+    side: "new",
+    line: 42,
+    body: "Retry once more?",
+    headSha: "b467819f28a4ca3cfbbdb889bd1bc7ba6918522d",
+  },
   attachment: BITBUCKET_ATTACHMENT,
 }));
 

@@ -22,6 +22,13 @@ describeReviewThreadsContract("fake", () => ({
   resolvedThread: "PRRT_rate",
   outdatedThread: "PRRT_outdated",
   replyBody: "Capped at 1,000 entries.",
+  newThread: {
+    path: "src/services/receipts.ts",
+    side: "new",
+    line: 4,
+    body: "Name it for what it counts.",
+    headSha: smallFeature.pullRequest.headSha,
+  },
   attachment: ATTACHMENT,
 }));
 
@@ -51,6 +58,25 @@ describe("FakeReviewThreads", () => {
     });
     expect((await threads.reply(ref, "x", "y")).ok).toBe(false);
     expect((await threads.setResolved(ref, "x", true)).ok).toBe(false);
+  });
+
+  it("lists a new thread with its comment", async () => {
+    const threads = seeded();
+    await threads.comment(ref, {
+      path: "src/a.ts",
+      side: "new",
+      line: 9,
+      startLine: 7,
+      body: "Split this.",
+      headSha: "h",
+    });
+    const list = await threads.getThreads(ref);
+    expect(list.ok && list.value.threads.at(-1)).toMatchObject({
+      path: "src/a.ts",
+      line: 9,
+      startLine: 7,
+      comments: [{ body: "Split this." }],
+    });
   });
 
   it("fails as scripted", async () => {

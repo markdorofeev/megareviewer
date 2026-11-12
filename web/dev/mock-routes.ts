@@ -14,6 +14,7 @@ import {
 import type { FileChange } from "../../src/domain/diff/index.ts";
 import {
   buildPublication,
+  composeBody,
   type DecisionId,
   type DecisionVerdict,
   type PublicationReceipt,
@@ -364,6 +365,45 @@ export const createMockApi = (
           : one,
       );
       return success({ resolved });
+    },
+    postComment: ({ id }, body) => {
+      const missing = findAnalysis(id) ?? requireComplete();
+      if (missing !== null) return missing;
+      const request = routes.postComment.request.safeParse(body);
+      if (!request.success) {
+        return failure("bad-request", issuesOf("body", request.error.issues).join("; "));
+      }
+      const comment = request.data;
+      const hunk = fixture.files
+        .flatMap((file) => file.hunks)
+        .find((one) => one.id === comment.hunkId);
+      if (hunk === undefined) return failure("bad-request", `No hunk ${comment.hunkId}`);
+      replies += 1;
+      threads = [
+        ...threads,
+        {
+          id: `PRRT_mock${replies}`,
+          path: hunk.path,
+          side: comment.side,
+          line: comment.line,
+          startLine: comment.startLine ?? null,
+          originalLine: comment.line,
+          resolved: false,
+          resolvedBy: null,
+          outdated: false,
+          can: { reply: true, resolve: true },
+          comments: [
+            {
+              id: `PRRC_mock${replies}`,
+              author: fixtureStatus.hosts.github.user ?? { id: "you", name: "You" },
+              body: composeBody(comment),
+              createdAt: now(),
+              originalCommit: fixture.key.headSha,
+            },
+          ],
+        },
+      ];
+      return success({});
     },
   };
 

@@ -148,3 +148,6 @@ export const GitHubThreadReply = z.object({
 
 /** What resolving or reopening returns. Nothing in it is read. */
 export const GitHubThreadResolution = z.object({});
+
+/** A review comment just posted. Nothing in it is read: the threads are read again. */
+export const GitHubReviewCommentPosted = z.object({});

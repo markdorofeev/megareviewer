@@ -45,6 +45,7 @@ export { HttpUrl, Sha, Timestamp } from "./primitives.ts";
 export {
   buildPublication,
   CommentKey,
+  commentFits,
   HunkComment,
   hunkHasLine,
   Publication,

@@ -63,6 +63,7 @@ export const retryingReviewThreads = (
     getThreads: (ref) => retried("the review threads", () => threads.getThreads(ref)),
     getAttachment: (url) => retried("an attachment", () => threads.getAttachment(url)),
     reply: (ref, threadId, body) => threads.reply(ref, threadId, body),
+    comment: (ref, comment) => threads.comment(ref, comment),
     setResolved: (ref, threadId, resolved) => threads.setResolved(ref, threadId, resolved),
   };
 };

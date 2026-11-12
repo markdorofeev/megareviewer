@@ -68,6 +68,7 @@ const responses: Record<RouteName, unknown> = {
   getThreads: smallFeatureThreadList,
   replyToThread: smallFeatureThreadList.threads[0]?.comments[1],
   resolveThread: { resolved: true },
+  postComment: {},
 };
 
 const requests: Partial<Record<RouteName, unknown>> = {
@@ -77,6 +78,12 @@ const requests: Partial<Record<RouteName, unknown>> = {
   publish: { summary: "Looks good.", allowStale: false },
   replyToThread: { body: "Capped it." },
   resolveThread: { resolved: false },
+  postComment: {
+    hunkId: "h_0123456789abcdef",
+    side: "new",
+    line: 41,
+    body: "Name it for what it counts.",
+  },
 };
 
 const routeNames = Object.keys(routes).filter((name): name is RouteName => name in routes);

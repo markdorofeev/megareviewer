@@ -1046,6 +1046,28 @@ describe("comments on hunks", () => {
     analysis: { ...analysis, decisions: [], stages: { ...analysis.stages, decisions: "skipped" } },
   };
 
+  it("posts a comment now, as a thread of its own, without keeping a draft", async () => {
+    const { requests } = renderReview({ view: withoutDecisions });
+    await loaded();
+    const [number] = within(mainArea()).getAllByRole("button", { name: /^Comment on line \d+$/ });
+    if (number === undefined) throw new Error("no commentable line");
+    const line = Number(number.textContent);
+    await userEvent.click(number);
+    await userEvent.type(
+      within(mainArea()).getByRole("textbox", { name: `Comment on line ${line}` }),
+      "Why this?",
+    );
+    await userEvent.click(within(mainArea()).getByRole("button", { name: "Comment now" }));
+    await vi.waitFor(() =>
+      expect(
+        within(mainArea()).queryByRole("textbox", { name: `Comment on line ${line}` }),
+      ).toBeNull(),
+    );
+    const posted = requests.find((request) => request.url === `${viewPath}/comments`);
+    expect(posted?.body).toMatchObject({ side: "new", line, body: "Why this?" });
+    expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");
+  });
+
   it("writes a comment from a line number, keeps it, and publishes it with the chosen verdict", async () => {
     const { requests, unmount } = renderReview({ view: withoutDecisions });
     await loaded();
