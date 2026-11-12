@@ -252,23 +252,41 @@ describe("HunkCard", () => {
     expect(document.activeElement).toBe(field);
   });
 
-  it("removes a draft with Discard, from either state", async () => {
+  it("removes a saved draft with Discard, and has no Discard while editing", async () => {
     const user = userEvent.setup();
-    const onOpenComment = vi.fn();
     const onComment = vi.fn();
-    const props = { cards: [second], comments: [draft], onOpenComment, onComment };
+    const props = { cards: [second], comments: [draft], onOpenComment: vi.fn(), onComment };
     const { rerender } = renderWith(<Cards {...props} />);
     await user.click(screen.getByRole("button", { name: "Discard" }));
     expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41, body: "" });
-    onComment.mockClear();
     rerender(
       <HighlighterContext.Provider value={pendingHighlighter()}>
         <Cards {...props} openComment={draft} />
       </HighlighterContext.Provider>,
     );
-    await user.click(screen.getByRole("button", { name: "Discard" }));
-    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41, body: "" });
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+  });
+
+  it("puts back the draft as it was when the box opened on Cancel or Esc", async () => {
+    const user = userEvent.setup();
+    const onOpenComment = vi.fn();
+    const onComment = vi.fn();
+    const props = { cards: [second], onOpenComment, onComment };
+    const edited = { ...draft, body: "Name it `total`." };
+    // Opened on a saved draft, then edited: Cancel brings back the saved text.
+    const { rerender } = renderWith(<Cards {...props} comments={[draft]} openComment={draft} />);
+    rerender(<Cards {...props} comments={[edited]} openComment={draft} />);
+    await user.click(screen.getByRole("button", { name: /^Cancel/ }));
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, draft);
     expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, null);
+
+    // Opened on a line with no draft: Esc removes what was typed.
+    const place = { side: "new" as const, line: 42 };
+    rerender(<Cards {...props} comments={[]} openComment={place} />);
+    rerender(<Cards {...props} comments={[{ ...place, body: "Typed" }]} openComment={place} />);
+    screen.getByRole("textbox", { name: "Comment on line 42" }).focus();
+    await user.keyboard("{Escape}");
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, { ...place, body: "" });
   });
 
   it("removes a draft with no text when it's added", async () => {

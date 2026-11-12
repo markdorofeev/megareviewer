@@ -374,9 +374,10 @@ export const HunkCard = memo(function HunkCard({
 type CommentDraft = Pick<LineComment, "body" | "severity" | "suggestion">;
 
 /**
- * A draft under a line, in one of two states. Editing: its text, saved as it's typed.
- * Saved: the draft as its comment will read, with Edit and Discard. It stays open while the reviewer
- * selects code, and closes on Add comment, Cancel, Esc, Discard or a click on its own line.
+ * A draft under a line, in one of two states. Editing: its text, saved as it's typed. Add comment or a
+ * click on its own line keeps it; Cancel or Esc puts back the draft as it was when the box opened,
+ * none for a new one. It stays open while the reviewer selects code.
+ * Saved: the draft as its comment will read, with Edit and Discard.
  */
 const CommentRow = ({
   place,
@@ -417,6 +418,10 @@ const CommentRow = ({
     ...(severity === undefined ? {} : { severity }),
     ...(suggestion === undefined ? {} : { suggestion }),
   };
+  // The draft as it was when the box opened, which Cancel puts back.
+  const opened = useRef<CommentDraft | null>(null);
+  if (!editing) opened.current = null;
+  else if (opened.current === null) opened.current = draft;
   const startingLines =
     place.side === "new" ? shown(place.startLine ?? place.line, place.line) : null;
   const range = place.startLine === undefined ? null : `Lines ${place.startLine}–${place.line}`;
@@ -424,15 +429,21 @@ const CommentRow = ({
   /** The focus goes back to the card the box was on, which takes the page's keys. */
   const leave = () =>
     row.current?.closest<HTMLElement>("[data-slot=hunk-card]")?.focus({ preventScroll: true });
-  const discard = () => {
-    if (editing) leave();
-    onChange?.({ body: "" });
-    if (editing) onDone();
-  };
+  const discard = () => onChange?.({ body: "" });
   // The text is saved as it's typed, so closing keeps it; a draft with nothing to say goes.
   const close = () => {
     leave();
     if (body.trim() === "" && suggestion === undefined) onChange?.({ body: "" });
+    onDone();
+  };
+  const cancel = () => {
+    leave();
+    const before = opened.current;
+    onChange?.(
+      before === null || (before.body.trim() === "" && before.suggestion === undefined)
+        ? { body: "" }
+        : before,
+    );
     onDone();
   };
 
@@ -463,7 +474,7 @@ const CommentRow = ({
                 // Esc closes the box without leaving the page's view.
                 if (event.key !== "Escape") return;
                 event.stopPropagation();
-                close();
+                cancel();
               }
             : undefined
         }
@@ -525,12 +536,9 @@ const CommentRow = ({
                 Add comment
                 <KeyHint id="submit" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={close}>
+              <Button variant="ghost" size="sm" onClick={cancel}>
                 Cancel
                 <KeyHint id="close" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={discard}>
-                Discard
               </Button>
             </div>
           </>
