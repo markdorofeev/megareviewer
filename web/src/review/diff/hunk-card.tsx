@@ -141,6 +141,11 @@ export interface HunkCardProps {
    * it's posted. Without it, comments only go with the review.
    */
   readonly onCommentNow?: (id: PartId, comment: LineComment) => Promise<string | null>;
+  /**
+   * The review is published: a new comment can only post now, on its own, and a draft that wasn't
+   * posted says so instead of saying it posts with the review.
+   */
+  readonly published?: boolean;
   /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
   readonly afterHeader?: ReactNode;
   /** The host's threads on a line, shown under it. */
@@ -171,6 +176,7 @@ export const HunkCard = memo(function HunkCard({
   onOpenComment,
   onComment,
   onCommentNow,
+  published = false,
   afterHeader,
   threadsAt,
   rangeNote,
@@ -367,6 +373,7 @@ export const HunkCard = memo(function HunkCard({
                         })
                       }
                       onDone={() => onOpenComment?.(id, null)}
+                      published={published}
                       {...(onCommentNow === undefined
                         ? {}
                         : {
@@ -432,6 +439,7 @@ const CommentRow = ({
   onEdit,
   onDone,
   onPostNow,
+  published,
   pinned,
 }: {
   readonly place: LinePlace;
@@ -448,6 +456,8 @@ const CommentRow = ({
   readonly onDone: () => void;
   /** Posts the draft on its own, now: an error message, or null once it's posted. */
   readonly onPostNow?: (draft: CommentDraft) => Promise<string | null>;
+  /** The review is published, so the draft can only post now. */
+  readonly published: boolean;
   /** On a file's card, where the lines scroll sideways and the box stays in view. */
   readonly pinned: boolean;
 }) => {
@@ -545,7 +555,8 @@ const CommentRow = ({
                 if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                   if (event.defaultPrevented) return;
                   event.preventDefault();
-                  close();
+                  if (published) void postNow();
+                  else close();
                   return;
                 }
                 // Esc closes the box without leaving the page's view.
@@ -568,7 +579,9 @@ const CommentRow = ({
               >
                 {onChange === undefined
                   ? "Posted with your review"
-                  : "Draft · posts with your review"}
+                  : published
+                    ? "Draft · not posted"
+                    : "Draft · posts with your review"}
               </span>
               {severity !== undefined && <SeverityChip severity={severity} />}
               {range !== null && (
@@ -614,7 +627,7 @@ const CommentRow = ({
                   placeholder="Leave a comment"
                   value={body}
                   onChange={(event) => onChange?.({ ...draft, body: event.target.value })}
-                  onSubmitShortcut={close}
+                  onSubmitShortcut={published ? () => void postNow() : close}
                   className="min-h-14 bg-background"
                 />
               </TabsContent>
@@ -633,7 +646,7 @@ const CommentRow = ({
             <div className="flex flex-wrap items-center gap-2">
               <KeyHintLine
                 hints={[
-                  { id: "submit", action: "add to review" },
+                  { id: "submit", action: published ? "comment now" : "add to review" },
                   { id: "close", action: "cancel" },
                 ]}
               />
@@ -643,7 +656,7 @@ const CommentRow = ({
                 </Button>
                 {onPostNow !== undefined && (
                   <Button
-                    variant="outline"
+                    variant={published ? "default" : "outline"}
                     size="sm"
                     disabled={posting || body.trim() === ""}
                     onClick={() => void postNow()}
@@ -651,9 +664,11 @@ const CommentRow = ({
                     {posting ? "Posting…" : "Comment now"}
                   </Button>
                 )}
-                <Button size="sm" disabled={posting} onClick={close}>
-                  Add to review
-                </Button>
+                {!published && (
+                  <Button size="sm" disabled={posting} onClick={close}>
+                    Add to review
+                  </Button>
+                )}
               </div>
             </div>
             {postError !== null && (

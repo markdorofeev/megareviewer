@@ -445,6 +445,44 @@ describe("HunkCard", () => {
     expect(screen.queryByRole("button", { name: "Comment now" })).toBeNull();
   });
 
+  it("once the review is published, posts a new comment now, with ⌘↵ too", async () => {
+    const user = userEvent.setup();
+    const onCommentNow = vi.fn(async () => null);
+    const comment = { side: "new" as const, line: 41, body: "One more thing." };
+    renderWith(
+      <Cards
+        cards={[second]}
+        comments={[comment]}
+        openComment={comment}
+        onOpenComment={vi.fn()}
+        onComment={vi.fn()}
+        onCommentNow={onCommentNow}
+        published
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /^Add to review/ })).toBeNull();
+    const box = document.querySelector<HTMLElement>("[data-slot=line-comment]");
+    expect(box?.querySelector("[data-slot=key-hint-line]")?.textContent).toBe(
+      "Ctrl↵comment now·Esccancel",
+    );
+    screen.getByRole("textbox", { name: "Comment on line 41" }).focus();
+    await user.keyboard("{Control>}{Enter}{/Control}");
+    expect(onCommentNow).toHaveBeenCalledWith(second.hunk.id, comment);
+  });
+
+  it("says a draft left after publishing isn't posted", () => {
+    renderWith(
+      <Cards
+        cards={[second]}
+        comments={[{ side: "new", line: 41, body: "Later." }]}
+        onOpenComment={vi.fn()}
+        onComment={vi.fn()}
+        published
+      />,
+    );
+    expect(screen.getByText("Draft · not posted")).toBeTruthy();
+  });
+
   it("puts the host's threads under the line they're on", () => {
     renderWith(
       <Cards

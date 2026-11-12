@@ -545,7 +545,7 @@ const Review = ({
     const current = currentHunk();
     const found = current === null ? undefined : index.parts.get(current);
     const line = found?.hunk.lines.find((one) => one.kind !== "context");
-    if (readOnly || found === undefined || line === undefined) return;
+    if (!complete || found === undefined || line === undefined) return;
     const place = commentPlace(line);
     if (place !== null && current !== null) setOpenComment({ partId: current, place });
   };
@@ -668,8 +668,10 @@ const Review = ({
     commentsOf,
     openComment,
     onOpenComment: openCommentOn,
-    onComment: readOnly ? undefined : writeComment,
-    ...(readOnly || !complete ? {} : { onCommentNow: postCommentNow }),
+    // Line comments stay open once the review is published: they post now, on their own.
+    onComment: complete ? writeComment : undefined,
+    ...(complete ? { onCommentNow: postCommentNow } : {}),
+    published: publication !== null,
     onFocusHunk: focusHunk,
     decisionsOn,
     threadsAt,
@@ -913,6 +915,9 @@ const Review = ({
           onClose={() => setPublishing(false)}
           onPublished={() => {
             setPublishing(false);
+            // The drafts are threads on the host now; read those instead of keeping both.
+            setHunkComments(() => []);
+            threads.reload();
             void refetch();
           }}
         />

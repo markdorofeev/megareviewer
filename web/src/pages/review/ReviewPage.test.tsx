@@ -621,6 +621,32 @@ describe("decisions", () => {
     expect(field.value).toBe("Check the owner.");
     expect(field.readOnly).toBe(true);
   });
+
+  it("keeps line comments open after publishing: they post now", async () => {
+    const published: PublicationReceipt = {
+      url: "https://github.com/acme/shop/pull/128#pullrequestreview-9",
+      publishedAt: "2026-10-22T10:00:00Z",
+      postedCommentIds: {},
+    };
+    const { requests } = renderReview({ view: { ...fixture, publication: published } });
+    await loaded();
+    const [number] = within(mainArea()).getAllByRole("button", { name: /^Comment on line \d+$/ });
+    if (number === undefined) throw new Error("no commentable line");
+    const line = Number(number.textContent);
+    await userEvent.click(number);
+    const box = within(mainArea());
+    await userEvent.type(
+      box.getByRole("textbox", { name: `Comment on line ${line}` }),
+      "Also this.",
+    );
+    expect(box.queryByRole("button", { name: /^Add to review/ })).toBeNull();
+    await userEvent.click(box.getByRole("button", { name: "Comment now" }));
+    await vi.waitFor(() =>
+      expect(
+        requests.find((request) => request.url === `${viewPath}/comments`)?.body,
+      ).toMatchObject({ line, body: "Also this." }),
+    );
+  });
 });
 
 const openOverview = async () => {
@@ -1170,6 +1196,8 @@ describe("publishing", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
+    // The drafts posted with it are threads on the host now.
+    expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");
     expect(requests.find((request) => request.url === `${viewPath}/publication`)?.body).toEqual({
       summary: "",
       allowStale: false,

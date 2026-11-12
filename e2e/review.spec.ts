@@ -185,6 +185,20 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
   ]);
   expect(attempt?.postedKeys).toEqual(["summary", "decision:d2"]);
 
+  // Line comments stay open once it's published: they post now, as threads of their own.
+  const changes = page.getByRole("region", { name: "Changes" });
+  const number = changes.getByRole("button", { name: /^Comment on line \d+$/ }).first();
+  const line = await number.textContent();
+  await number.click();
+  await changes.getByRole("textbox", { name: `Comment on line ${line}` }).fill("One more.");
+  await expect(changes.getByRole("button", { name: /^Add to review/ })).toHaveCount(0);
+  await changes.getByRole("button", { name: "Comment now" }).click();
+  await expect(
+    changes
+      .getByRole("article", { name: `Thread on line ${line}`, exact: true })
+      .getByText("One more."),
+  ).toBeVisible();
+
   // Publishing again returns the receipt and posts nothing.
   const analysisId = page.url().split("/").at(-1);
   const again = await server.request.post(`/api/analyses/${analysisId}/publication`, {
