@@ -1,5 +1,10 @@
 import type { AnalysisView } from "../../../contracts/index.ts";
-import { type FileChange, type HunkId, parseUnifiedDiff } from "../../../src/domain/diff/index.ts";
+import {
+  type CallGraphHint,
+  type FileChange,
+  type HunkId,
+  parseUnifiedDiff,
+} from "../../../src/domain/diff/index.ts";
 import {
   type Analysis,
   type AnalysisKey,
@@ -10,6 +15,7 @@ import {
   TourStepId,
 } from "../../../src/domain/review/index.ts";
 import { fixtureAnalysisView } from "./analysis.ts";
+import { callSitesOf } from "./call-sites.ts";
 
 // A long PR, for checking the review page stays fast: 60 files of 4 hunks each, without the model.
 // Each hunk calls the same hunk of the next file, so the call graph has long chains.
@@ -107,6 +113,17 @@ const risk: RiskAssessment[] = files.flatMap((file, at) =>
   ),
 );
 
+const callGraph: CallGraphHint[] = files.slice(0, -1).flatMap((file, at) =>
+  file.hunks.map((hunk, index) => ({
+    fromPartId: hunk.id,
+    toPartId: hunkAt(at + 1, index),
+    symbol: `step${at + 1}_${index}`,
+    // The first body line, after the context line and the new signature.
+    line: hunk.newStart + 2,
+    use: "call" as const,
+  })),
+);
+
 const analysis: Analysis = {
   ...base,
   id: analysisId(key),
@@ -124,19 +141,11 @@ const analysis: Analysis = {
   missingTicketKeys: [],
   proofs: [],
   parts: [],
-  callGraph: files.slice(0, -1).flatMap((file, at) =>
-    file.hunks.map((hunk, index) => ({
-      fromPartId: hunk.id,
-      toPartId: hunkAt(at + 1, index),
-      symbol: `step${at + 1}_${index}`,
-      // The first body line, after the context line and the new signature.
-      line: hunk.newStart + 2,
-      use: "call" as const,
-    })),
-  ),
+  callGraph,
   fileLinks: files
     .slice(0, -1)
     .map((file, at) => ({ from: file.path, to: files[at + 1]?.path ?? file.path })),
+  callSites: callSitesOf(files, callGraph),
   generated: [],
   checkout: "none",
   unchangedCallers: [],

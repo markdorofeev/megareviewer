@@ -6,6 +6,7 @@ import type { CodeParser, LocalCheckout } from "../src/application/ports/index.t
 import { prep } from "../src/application/use-cases/prep.ts";
 import {
   type CallGraphHint,
+  type CallSite,
   type FileChange,
   type FileLink,
   type HunkPart,
@@ -37,6 +38,7 @@ export interface Measured {
   readonly files: readonly FileChange[];
   readonly risk: readonly RiskAssessment[];
   readonly callGraph: readonly CallGraphHint[];
+  readonly callSites: readonly CallSite[];
   readonly fileLinks: readonly FileLink[];
   readonly generated: readonly string[];
   readonly proofs: readonly MechanicalProof[];
@@ -103,11 +105,13 @@ export const measure = async (
     prepared.parts,
     prepared.callGraph,
     prepared.unchangedCallers,
+    prepared.callSites,
   );
   return {
     files,
     risk,
     callGraph: joined.callGraph,
+    callSites: joined.callSites,
     fileLinks: prepared.fileLinks,
     generated: [...prepared.generated].sort(),
     proofs: prepared.proofs,
@@ -167,6 +171,7 @@ export const counts = (measured: Measured) => {
       measured.unchangedCallers.flatMap((callers) => callers.uses.map((use) => use.path)),
     ).size,
     requestHints: callGraph.filter((hint) => hint.use === "request").length,
+    callSites: measured.callSites.length,
   };
 };
 

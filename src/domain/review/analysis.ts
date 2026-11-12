@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   CallGraphHint,
+  CallSite,
   FileChange,
   FileLink,
   HunkPart,
@@ -100,6 +101,8 @@ export const Analysis = z
     /** The parts of split hunks, in diff order. A hunk with none here is one part. */
     parts: z.array(HunkPart).readonly(),
     callGraph: z.array(CallGraphHint).readonly(),
+    /** Defaults for analyses stored before it existed. */
+    callSites: z.array(CallSite).readonly().default([]),
     /** Changed files an import in another changed file reaches. */
     fileLinks: z.array(FileLink).readonly(),
     /** Paths whose first lines say a tool wrote them. Grouped and faded, never hidden. */

@@ -99,6 +99,26 @@ describe("the fixture analysis", () => {
   });
 });
 
+describe.each([
+  ["fixture", fixtureAnalysisView],
+  ["large fixture", largeAnalysisView],
+])("the %s's call sites", (_, { analysis }) => {
+  it("mark a call's symbol on its line, one per call hint", () => {
+    const lines = analysis.files.flatMap((file) =>
+      file.hunks.flatMap((hunk) => hunk.lines.map((line) => ({ path: file.path, line }))),
+    );
+    for (const site of analysis.callSites) {
+      const { line } = lines.find(
+        ({ path, line }) => path === site.path && line.kind !== "del" && line.newLine === site.line,
+      ) ?? { line: null };
+      expect(line?.text.slice(site.column, site.column + site.length)).toBe(site.symbol);
+    }
+    expect(analysis.callSites).toHaveLength(
+      analysis.callGraph.filter((hint) => hint.use === "call").length,
+    );
+  });
+});
+
 describe("the large fixture analysis", () => {
   const { analysis } = largeAnalysisView;
   const hunks = analysis.files.flatMap((file) => file.hunks);

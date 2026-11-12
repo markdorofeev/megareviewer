@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { hunk } from "../../application/testing/index.ts";
 import {
   buildCallGraphHints,
+  buildCallSites,
   changedDefinitionNames,
   type FileChange,
   type FileSymbols,
@@ -660,5 +661,158 @@ describe("request hints", () => {
   it("reads requests in code only", () => {
     const doc = hunk("docs/api.md", "@@ -1,0 +1,1 @@", ['+Call `client.GET("/api/items")`.']);
     expect(hints([file("api/routes.py", routes), file("docs/api.md", doc)])).toEqual([]);
+  });
+});
+
+describe("buildCallSites", () => {
+  type Use = [name: string, line: number, columns: number[], kind?: Kind];
+  const at = (
+    definitions: [name: string, startLine: number, endLine: number][],
+    uses: Use[],
+    imports: FileSymbols["imports"] = [],
+  ): FileSymbols => ({
+    ...symbols(definitions, [], imports),
+    references: uses.map(([name, line, columns, kind = "name"]) => ({
+      name,
+      line,
+      kind,
+      columns,
+    })),
+  });
+  const text = (uses: Use[]) =>
+    new Map([
+      ["src/text.ts", at([["slugify", 1, 3]], [])],
+      ["src/page.ts", at([], uses, importsSlugify)],
+    ]);
+  const files = [file("src/text.ts", definingHunk), file("src/page.ts", callingHunk)];
+  const site = (line: number, column: number) => ({
+    partId: callingHunk.id,
+    path: "src/page.ts",
+    line,
+    column,
+    length: "slugify".length,
+    symbol: "slugify",
+    toPartIds: [definingHunk.id],
+  });
+
+  it("marks every use, not only the first, at its column", () => {
+    expect(
+      buildCallSites(
+        files,
+        text([
+          ["read", 10, [14]],
+          ["slugify", 10, [2, 30]],
+          ["slugify", 11, [13]],
+        ]),
+      ),
+    ).toEqual([site(10, 2), site(10, 30), site(11, 13)]);
+  });
+
+  it("marks type uses as well as calls", () => {
+    expect(buildCallSites(files, text([["slugify", 11, [13], "type"]]))).toEqual([site(11, 13)]);
+  });
+
+  it("marks nothing for a use without columns", () => {
+    const page = symbols([], [["slugify", 11]], importsSlugify);
+    const byPath = new Map([
+      ["src/text.ts", at([["slugify", 1, 3]], [])],
+      ["src/page.ts", page],
+    ]);
+    expect(buildCallSites(files, byPath)).toEqual([]);
+    expect(buildCallGraphHints(files, byPath)).toHaveLength(1);
+  });
+
+  it("marks nothing in a file whose imports don't reach the definition", () => {
+    const byPath = new Map([
+      ["src/text.ts", at([["slugify", 1, 3]], [])],
+      ["src/page.ts", at([], [["slugify", 11, [13]]])],
+    ]);
+    expect(buildCallSites(files, byPath)).toEqual([]);
+  });
+
+  it("reaches every part that changes the definition, in diff order", () => {
+    const top = hunk("src/text.ts", "@@ -1,1 +1,1 @@", [
+      "-function slugify(a) {",
+      "+function slugify(input) {",
+    ]);
+    const bottom = hunk("src/text.ts", "@@ -9,1 +9,1 @@", ["-  return a;", "+  return input;"]);
+    const byPath = new Map([
+      ["src/text.ts", at([["slugify", 1, 10]], [])],
+      ["src/page.ts", at([], [["slugify", 11, [13]]], importsSlugify)],
+    ]);
+    expect(
+      buildCallSites([file("src/text.ts", top, bottom), file("src/page.ts", callingHunk)], byPath),
+    ).toEqual([{ ...site(11, 13), toPartIds: [top.id, bottom.id] }]);
+  });
+
+  it("has no cap, where hints stop at 10 per hunk", () => {
+    const names = Array.from({ length: 12 }, (_, n) => `f${n}`);
+    const defining = hunk(
+      "src/text.ts",
+      "@@ -0,0 +1,12 @@",
+      names.map((name) => `+function ${name}() {}`),
+    );
+    const calling = hunk("src/page.ts", "@@ -1,0 +1,1 @@", [
+      `+${names.map((name) => `${name}();`).join(" ")}`,
+    ]);
+    const byPath = new Map([
+      [
+        "src/text.ts",
+        at(
+          names.map((name, n) => [name, n + 1, n + 1]),
+          [],
+        ),
+      ],
+      [
+        "src/page.ts",
+        at(
+          [],
+          names.map((name, n): Use => [name, 1, [n * 6]]),
+          [{ module: "./text.ts", names }],
+        ),
+      ],
+    ]);
+    const both = [file("src/text.ts", defining), file("src/page.ts", calling)];
+    expect(buildCallGraphHints(both, byPath)).toHaveLength(10);
+    expect(buildCallSites(both, byPath)).toHaveLength(12);
+  });
+
+  it("doesn't point a part at itself, as a recursive call", () => {
+    const recursive = hunk("src/text.ts", "@@ -0,0 +1,3 @@", [
+      "+function walk(node) {",
+      "+  return walk(node.next);",
+      "+}",
+    ]);
+    const byPath = new Map([["src/text.ts", at([["walk", 1, 3]], [["walk", 2, [9]]])]]);
+    expect(buildCallSites([file("src/text.ts", recursive)], byPath)).toEqual([]);
+  });
+
+  it("points a part at the parts of its own hunk it calls", () => {
+    const routes = hunk("app.py", "@@ -1,0 +1,4 @@", [
+      "+def read():",
+      "+    return load()",
+      "+def load():",
+      "+    pass",
+    ]);
+    const app = at(
+      [
+        ["read", 1, 2],
+        ["load", 3, 4],
+      ],
+      [["load", 2, [11]]],
+    );
+    const parts = splitByDefinition(routes, { head: app.definitions, base: [] });
+    const [read, load] = parts.map((part) => part.id);
+    expect(buildCallSites([file("app.py", routes)], new Map([["app.py", app]]), parts)).toEqual([
+      {
+        partId: read,
+        path: "app.py",
+        line: 2,
+        column: 11,
+        length: 4,
+        symbol: "load",
+        toPartIds: [load],
+      },
+    ]);
   });
 });

@@ -323,8 +323,17 @@ describe("FakeCodeParser", () => {
       { name: "a", kind: "function", startLine: 3, endLine: 5 },
       { name: "c", kind: "variable", startLine: 6, endLine: 7 },
     ]);
-    const references = result.ok ? result.value.references : [];
-    expect(references).toContainEqual({ name: "b", line: 4, kind: "name" });
+    const references = (result.ok ? result.value.references : []).map(({ name, line, kind }) => ({
+      name,
+      line,
+      kind,
+    }));
+    expect(result.ok && result.value.references).toContainEqual({
+      name: "b",
+      line: 4,
+      kind: "name",
+      columns: [9],
+    });
     expect(references).toContainEqual({ name: "a", line: 6, kind: "name" });
     expect(references).not.toContainEqual({ name: "a", line: 3, kind: "name" });
     expect(references).not.toContainEqual({ name: "b", line: 1, kind: "name" });

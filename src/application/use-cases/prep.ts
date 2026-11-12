@@ -1,6 +1,8 @@
 import {
   buildCallGraphHints,
+  buildCallSites,
   type CallGraphHint,
+  type CallSite,
   changedDefinitionNames,
   changedDefinitions,
   type FileDefinitions,
@@ -32,6 +34,8 @@ export interface Prepared {
   readonly parts: readonly HunkPart[];
   /** Hints between parts: the candidates, or a hunk that isn't split. */
   readonly callGraph: readonly CallGraphHint[];
+  /** Every use of what the PR changes, naming candidate parts like the hints. */
+  readonly callSites: readonly CallSite[];
   readonly fileLinks: readonly FileLink[];
   /** Each part's changed definitions, for the tour's entry points. Not stored. */
   readonly definitions: ReadonlyMap<PartId, readonly string[]>;
@@ -131,6 +135,7 @@ export const prep = async (
     proofs,
     parts,
     callGraph: buildCallGraphHints(files, symbolsByPath, parts),
+    callSites: buildCallSites(files, symbolsByPath, parts),
     fileLinks: fileLinks(files, symbolsByPath),
     definitions: changedDefinitionNames(files, symbolsByPath, parts),
     generated,

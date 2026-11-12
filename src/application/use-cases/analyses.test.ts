@@ -194,7 +194,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("15+fake-model/1");
+    expect(analysis.key.pipelineVersion).toBe("16+fake-model/1");
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
     );
@@ -203,6 +203,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.missingTicketKeys).toEqual([]);
     expect(analysis.proofs).toEqual([]);
     expect(analysis.callGraph.map((hint) => hint.symbol)).toContain("renderReceipt");
+    expect(analysis.callSites.map((site) => site.symbol)).toContain("renderReceipt");
     expect(analysis.fileLinks).toEqual([
       { from: "src/routes/orders.ts", to: "src/services/receipts.ts" },
     ]);
@@ -1065,7 +1066,7 @@ describe("without the model", () => {
       decisions: "skipped",
       tour: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("15+no-model");
+    expect(analysis.key.pipelineVersion).toBe("16+no-model");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
@@ -1095,6 +1096,9 @@ describe("without the model", () => {
       ).toEqual([]);
       for (const hint of analysis.callGraph) {
         expect([known.has(hint.fromPartId), known.has(hint.toPartId)]).toEqual([true, true]);
+      }
+      for (const site of analysis.callSites) {
+        expect([site.partId, ...site.toPartIds].filter((id) => !known.has(id))).toEqual([]);
       }
     },
   );
@@ -1149,7 +1153,7 @@ describe("with a local checkout", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
       expect(analysis.key.pipelineVersion).toBe(
-        `15+${modelEnabled ? "fake-model/1" : "no-model"}+checkout`,
+        `16+${modelEnabled ? "fake-model/1" : "no-model"}+checkout`,
       );
       expect(analysis.unchangedCallers).toEqual([
         {
@@ -1226,7 +1230,7 @@ describe("with a local checkout", () => {
       });
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
-      expect(analysis.key.pipelineVersion).toBe("15+no-model");
+      expect(analysis.key.pipelineVersion).toBe("16+no-model");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },

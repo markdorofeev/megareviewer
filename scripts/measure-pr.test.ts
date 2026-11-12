@@ -54,6 +54,7 @@ describe("measure-pr", () => {
     expect(found.hunks).toBe(measured.files.flatMap((file) => file.hunks).length);
     expect(found.callHints).toBe(measured.callGraph.filter((hint) => hint.use === "call").length);
     expect(found.callHints).toBeGreaterThan(0);
+    expect(found.callSites).toBeGreaterThan(0);
     const printed = report(measured);
     expect(printed).toContain("Tour\n  1. [flow] ");
     expect(printed).toContain(`  callHints: ${found.callHints}`);

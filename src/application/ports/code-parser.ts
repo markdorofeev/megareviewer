@@ -23,6 +23,8 @@ export interface SymbolReference {
    * access), as a member after a dot, or as a type.
    */
   readonly kind: "name" | "member" | "type";
+  /** Where each use of the name with this kind starts on the line, in UTF-16 units from 0. */
+  readonly columns: readonly number[];
 }
 
 export interface CodeSymbols {

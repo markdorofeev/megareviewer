@@ -65,7 +65,12 @@ export const findSymbols = (tree: Tree, query: Query): CodeSymbols => {
       if (existing !== undefined && existing.patternIndex < match.patternIndex) continue;
       references.set(reference.node.startIndex, {
         patternIndex: match.patternIndex,
-        reference: { name: reference.node.text, line: startLine(reference.node), kind },
+        reference: {
+          name: reference.node.text,
+          line: startLine(reference.node),
+          kind,
+          columns: [reference.node.startPosition.column],
+        },
       });
     } else if (module !== undefined) {
       const names = captures.flatMap((capture) =>
@@ -88,11 +93,22 @@ export const findSymbols = (tree: Tree, query: Query): CodeSymbols => {
     }
   }
 
+  // One reference per name, kind and line, with the column of each use on it.
   const unique = new Map<string, SymbolReference>();
   for (const [position, { reference }] of references) {
     // A type's name is a type identifier too; it doesn't reference itself.
     if (definitions.has(position)) continue;
-    unique.set(`${reference.line}:${reference.name}:${reference.kind}`, reference);
+    const key = `${reference.line}:${reference.name}:${reference.kind}`;
+    const existing = unique.get(key);
+    unique.set(
+      key,
+      existing === undefined
+        ? reference
+        : {
+            ...existing,
+            columns: [...existing.columns, ...reference.columns].sort((a, b) => a - b),
+          },
+    );
   }
   return {
     definitions: [...definitions.values()]

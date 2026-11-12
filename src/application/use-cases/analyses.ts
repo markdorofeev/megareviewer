@@ -72,6 +72,7 @@ const newAnalysis = (
   proofs: [],
   parts: [],
   callGraph: [],
+  callSites: [],
   fileLinks: [],
   generated: [],
   checkout,

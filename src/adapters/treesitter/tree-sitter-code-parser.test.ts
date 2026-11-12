@@ -260,13 +260,26 @@ interface IStore {}
   ],
 ];
 
+const withoutColumns = (references: readonly SymbolReference[]) =>
+  references.map(({ name, line, kind }) => ({ name, line, kind }));
+
 describe("createTreeSitterCodeParser", () => {
   it.each(cases)("finds %s definitions and references", async (language, source, defs, refs) => {
     const { definitions, references } = await symbolsOf(source, language);
     expect(definitions).toEqual(
       defs.map(([name, kind, startLine, endLine]) => ({ name, kind, startLine, endLine })),
     );
-    expect(references).toEqual(refs.map(([name, line, kind]) => ({ name, line, kind })));
+    expect(withoutColumns(references)).toEqual(
+      refs.map(([name, line, kind]) => ({ name, line, kind })),
+    );
+  });
+
+  it("gives the column of each use on a line, in UTF-16 units", async () => {
+    const source = 'const s = "日本é"; save(save(x), y);\n';
+    const save = (await symbolsOf(source, "typescript")).references.find(
+      (reference) => reference.name === "save",
+    );
+    expect(save?.columns).toEqual([source.indexOf("save"), source.lastIndexOf("save")]);
   });
 
   it("covers every language", () => {
@@ -377,7 +390,7 @@ class A {}
   ])(
     "counts a %s identifier passed as an argument as a use by name",
     async (language, source, refs) => {
-      expect((await symbolsOf(source, language)).references).toEqual(
+      expect(withoutColumns((await symbolsOf(source, language)).references)).toEqual(
         refs.map(([name, line, kind]) => ({ name, line, kind })),
       );
     },
@@ -395,7 +408,7 @@ class A {}
     ],
     ["rust", "fn f() { let s = Store { cache: c }; }\n", [["Store", 1, "name"]]],
   ])("counts a %s call or construction as a use by name", async (language, source, refs) => {
-    expect((await symbolsOf(source, language)).references).toEqual(
+    expect(withoutColumns((await symbolsOf(source, language)).references)).toEqual(
       refs.map(([name, line, kind]) => ({ name, line, kind })),
     );
   });

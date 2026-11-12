@@ -97,9 +97,13 @@ export class FakeCodeParser implements CodeParser {
       IMPORT.test(text.trim())
         ? []
         : [...text.matchAll(IDENTIFIER)]
-            .map((match) => match[0])
-            .filter((name) => name !== defined.get(index + 1) && !(name in KINDS))
-            .map((name) => ({ name, line: index + 1, kind: "name" as const })),
+            .filter(([name]) => name !== defined.get(index + 1) && !(name in KINDS))
+            .map(({ 0: name, index: column }) => ({
+              name,
+              line: index + 1,
+              kind: "name" as const,
+              columns: [column],
+            })),
     );
     return ok({ definitions, references, imports });
   }

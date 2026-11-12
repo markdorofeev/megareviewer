@@ -122,7 +122,16 @@ const stages = async (
 
   await tracker.setStage("prep", "running");
   const prepared = await prep(deps.parser, collected.value, checkout);
-  const { proofs, parts, callGraph, required, definitions, generated, unchangedCallers } = prepared;
+  const {
+    proofs,
+    parts,
+    callGraph,
+    callSites,
+    required,
+    definitions,
+    generated,
+    unchangedCallers,
+  } = prepared;
   const proofRisk = proofs.flatMap((proof) =>
     proof.hunkId === null
       ? []
@@ -146,7 +155,7 @@ const stages = async (
     definitions,
     generated,
   });
-  const joined = joinParts(skeleton, parts, callGraph, unchangedCallers);
+  const joined = joinParts(skeleton, parts, callGraph, unchangedCallers, callSites);
   const prepPatch = {
     proofs,
     ...joined,
@@ -245,7 +254,7 @@ const stages = async (
     logger,
   );
   await tracker.setStage("tour", "done", (analysis) => ({
-    ...joinParts(tour.tour, parts, callGraph, unchangedCallers),
+    ...joinParts(tour.tour, parts, callGraph, unchangedCallers, callSites),
     ...adding(tour)(analysis),
   }));
 

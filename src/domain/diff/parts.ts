@@ -1,4 +1,4 @@
-import type { CallGraphHint, DiffLine, FileChange, Hunk, HunkPart } from "./types.ts";
+import type { CallGraphHint, CallSite, DiffLine, FileChange, Hunk, HunkPart } from "./types.ts";
 import { HunkId, PartId } from "./types.ts";
 
 /** A definition's name and new- or old-side lines, as `CodeParser.symbols` reports them. */
@@ -242,3 +242,17 @@ export const renameHints = (
   }
   return [...kept.values()];
 };
+
+/**
+ * Call sites naming joined parts. A part a site reaches that's now the part it's in is dropped, so
+ * a site never shows the code around it, and a site left reaching nothing goes.
+ */
+export const renameCallSites = (
+  sites: readonly CallSite[],
+  rename: (id: PartId) => PartId,
+): CallSite[] =>
+  sites.flatMap((site) => {
+    const partId = rename(site.partId);
+    const toPartIds = [...new Set(site.toPartIds.map(rename))].filter((id) => id !== partId);
+    return toPartIds.length === 0 ? [] : [{ ...site, partId, toPartIds }];
+  });

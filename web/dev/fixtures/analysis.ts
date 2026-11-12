@@ -1,6 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: these strings are diff lines of TypeScript.
 import type { AnalysisView } from "../../../contracts/index.ts";
 import {
+  type CallGraphHint,
   type FileChange,
   findFormattingProofs,
   findMechanicalProofs,
@@ -20,6 +21,7 @@ import {
   type Ticket,
   TourStepId,
 } from "../../../src/domain/review/index.ts";
+import { callSitesOf } from "./call-sites.ts";
 
 // One complete analysis of a realistic PR: an endpoint that leaks other users' receipts, a retry
 // and a cache worth discussing, a new dependency, and one of each mechanical change. The diff is
@@ -505,6 +507,23 @@ const usage: readonly ModelUsage[] = [
   },
 ];
 
+const callGraph: CallGraphHint[] = [
+  {
+    fromPartId: h.receiptRoute,
+    toPartId: fixtureParts.cache,
+    symbol: "cachedReceipt",
+    line: 20,
+    use: "call",
+  },
+  {
+    fromPartId: h.receiptFormatting,
+    toPartId: h.formatMoneyAdded,
+    symbol: "formatMoney",
+    line: 12,
+    use: "call",
+  },
+];
+
 const analysis: Analysis = {
   id: analysisId(key),
   key,
@@ -524,22 +543,9 @@ const analysis: Analysis = {
   missingTicketKeys: ["SHOP-139"],
   proofs,
   parts,
-  callGraph: [
-    {
-      fromPartId: h.receiptRoute,
-      toPartId: fixtureParts.cache,
-      symbol: "cachedReceipt",
-      line: 20,
-      use: "call",
-    },
-    {
-      fromPartId: h.receiptFormatting,
-      toPartId: h.formatMoneyAdded,
-      symbol: "formatMoney",
-      line: 12,
-      use: "call",
-    },
-  ],
+  callGraph,
+  callSites: callSitesOf(files, callGraph),
+
   fileLinks: [
     { from: "src/routes/orders.ts", to: "src/lib/money.ts" },
     { from: "src/routes/orders.ts", to: "src/services/receipts.ts" },

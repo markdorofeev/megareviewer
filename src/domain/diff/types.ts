@@ -129,6 +129,25 @@ export const CallGraphHint = z
 export type CallGraphHint = z.infer<typeof CallGraphHint>;
 
 /**
+ * A name in part `partId`, at `column` (UTF-16 units from 0) on new-side `line` of `path`, that
+ * reaches definitions the PR changes: by the hints' rules, but every use rather than the first,
+ * with no cap, and every part that changes a reached definition, in diff order. For the code a
+ * call runs, shown where the call is. Requests aren't call sites.
+ */
+export const CallSite = z
+  .object({
+    partId: PartId,
+    path: z.string().min(1),
+    line: z.number().int().positive(),
+    column: z.number().int().nonnegative(),
+    length: z.number().int().positive(),
+    symbol: z.string().min(1),
+    toPartIds: z.array(PartId).min(1).readonly(),
+  })
+  .readonly();
+export type CallSite = z.infer<typeof CallSite>;
+
+/**
  * A use, in a file the PR doesn't change, of a definition the PR changes: a call, or a type use.
  * `excerpt` is at most 5 lines around it, the first being line `excerpt.start`.
  */

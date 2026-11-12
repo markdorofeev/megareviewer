@@ -9,7 +9,7 @@ import {
 import { type Piece, partsByHunk, piecesOf } from "./parts.ts";
 import { type Route, requestsOn, routesFor, routesOn } from "./requests.ts";
 import { isTestFile } from "./test-files.ts";
-import type { CallGraphHint, FileChange, Hunk, HunkPart, PartId } from "./types.ts";
+import type { CallGraphHint, CallSite, FileChange, Hunk, HunkPart, PartId } from "./types.ts";
 
 /** What hints need from `CodeParser.symbols`, for the head version of a file. */
 export interface FileSymbols {
@@ -18,12 +18,16 @@ export interface FileSymbols {
     readonly startLine: number;
     readonly endLine: number;
   }[];
-  readonly references: readonly {
-    readonly name: string;
-    readonly line: number;
-    readonly kind: "name" | "member" | "type";
-  }[];
+  readonly references: readonly Reference[];
   readonly imports: readonly SymbolImport[];
+}
+
+interface Reference {
+  readonly name: string;
+  readonly line: number;
+  readonly kind: "name" | "member" | "type";
+  /** Where each use starts on the line. Without them, a reference makes hints but no call sites. */
+  readonly columns?: readonly number[];
 }
 
 const MAX_HINTS_PER_HUNK = 10;
@@ -37,9 +41,10 @@ interface Located {
   readonly order: number;
 }
 
-/** A piece that changes a definition. */
+/** A definition the PR changes: `at` is the first piece that changes it, `all` every one. */
 interface Change {
   readonly at: Located;
+  readonly all: readonly Located[];
   readonly definition: Definition;
 }
 
@@ -70,39 +75,7 @@ export const buildCallGraphHints = (
   symbolsByPath: ReadonlyMap<string, FileSymbols>,
   parts: readonly HunkPart[] = [],
 ): CallGraphHint[] => {
-  const byHunk = partsByHunk(parts);
-  const hunks = files
-    .flatMap((file) => piecesOf(file, byHunk).map((piece) => ({ file, piece })))
-    .map((entry, order): Located => ({ ...entry, order }));
-
-  const changedBy = new Map<string, Change[]>();
-  for (const at of hunks) {
-    for (const definition of changedDefinitions(at.piece.hunk, symbolsByPath.get(at.file.path))) {
-      const changes = changedBy.get(definition.name) ?? [];
-      // Hunks are in diff order, so the first change to a definition is the one kept.
-      if (!changes.some((change) => change.definition === definition)) {
-        changedBy.set(definition.name, [...changes, { at, definition }]);
-      }
-    }
-  }
-
-  const reaches = new Map(
-    files.map((file) => [
-      file.path,
-      (symbolsByPath.get(file.path)?.imports ?? []).flatMap(
-        (symbolImport) =>
-          (file.language === null ? null : importReach(file.path, file.language, symbolImport)) ??
-          [],
-      ),
-    ]),
-  );
-  const visible = (from: FileChange, kind: "name" | "member", name: string, to: FileChange) =>
-    from.path === to.path ||
-    (canLink(from, to) &&
-      (!resolvesImports(from.language ?? "") ||
-        sharesPackage(from.language ?? "", from.path, to.path) ||
-        (reaches.get(from.path) ?? []).some((reach) => reachesBy(reach, kind, name, to.path))));
-
+  const { hunks, targetsOf } = linking(files, symbolsByPath, parts);
   const routes = hunks.flatMap((at) =>
     at.file.language === null
       ? []
@@ -116,22 +89,11 @@ export const buildCallGraphHints = (
     const lines = new Set(newLines(from.piece.hunk, ["add", "context"]));
     // The first line each symbol is used on, per use and hunk it reaches.
     const firstUse = { call: new Map<Located, Map<string, number>>(), type: new Map() };
-    const own = symbolsByPath.get(from.file.path);
-    for (const { name, line, kind } of own?.references ?? []) {
-      if (!lines.has(line)) continue;
-      // A method that calls a same-named one on another object delegates; it doesn't recurse.
-      const reached = (changedBy.get(name) ?? []).filter(
-        ({ at, definition }) =>
-          visible(from.file, kind === "member" ? "member" : "name", name, at.file) &&
-          !(at.file.path === from.file.path && enclosesLine(definition, line)),
-      );
-      const local = reached.filter(
-        ({ at, definition }) =>
-          at.file.path === from.file.path &&
-          enclosesLine(containerOf(definition, own?.definitions ?? []), line),
-      );
+    for (const reference of symbolsByPath.get(from.file.path)?.references ?? []) {
+      if (!lines.has(reference.line)) continue;
+      const { name, line, kind } = reference;
       const byUse = firstUse[kind === "type" ? "type" : "call"];
-      for (const { at: to } of local.length > 0 ? local : reached) {
+      for (const { at: to } of targetsOf(from, reference)) {
         if (to.piece.id === from.piece.id) continue;
         const uses = byUse.get(to) ?? new Map<string, number>();
         const first = uses.get(name);
@@ -168,6 +130,114 @@ export const buildCallGraphHints = (
         }));
     return [...hints("call"), ...hints("type"), ...requests];
   });
+};
+
+/**
+ * Every use of a name, on a part's added or context lines, that reaches a definition the PR
+ * changes, by the rules of `buildCallGraphHints`: one site per use, reaching every part that changes
+ * a definition it reaches, in diff order, except its own part. Calls and type uses alike; uses
+ * without columns make none. In diff order, then by line and column.
+ */
+export const buildCallSites = (
+  files: readonly FileChange[],
+  symbolsByPath: ReadonlyMap<string, FileSymbols>,
+  parts: readonly HunkPart[] = [],
+): CallSite[] => {
+  const { hunks, targetsOf } = linking(files, symbolsByPath, parts);
+  return hunks.flatMap((from): CallSite[] => {
+    const lines = new Set(newLines(from.piece.hunk, ["add", "context"]));
+    return (symbolsByPath.get(from.file.path)?.references ?? [])
+      .filter((reference) => lines.has(reference.line))
+      .flatMap((reference) => {
+        const reached = [
+          ...new Set(targetsOf(from, reference).flatMap((change) => change.all)),
+        ].filter((to) => to.piece.id !== from.piece.id);
+        if (reached.length === 0) return [];
+        const toPartIds = [
+          ...new Set(reached.sort((a, b) => a.order - b.order).map((to) => to.piece.id)),
+        ];
+        return (reference.columns ?? []).map((column) => ({
+          partId: from.piece.id,
+          path: from.file.path,
+          line: reference.line,
+          column,
+          length: reference.name.length,
+          symbol: reference.name,
+          toPartIds,
+        }));
+      })
+      .sort((a, b) => a.line - b.line || a.column - b.column);
+  });
+};
+
+/**
+ * The pieces of the PR in diff order, and what a reference in one of them reaches: definitions the
+ * PR changes, in its own file or in a file its imports reach, and in its own class when its file
+ * has several of that name.
+ */
+const linking = (
+  files: readonly FileChange[],
+  symbolsByPath: ReadonlyMap<string, FileSymbols>,
+  parts: readonly HunkPart[],
+): {
+  readonly hunks: readonly Located[];
+  readonly targetsOf: (from: Located, reference: Reference) => readonly Change[];
+} => {
+  const byHunk = partsByHunk(parts);
+  const hunks = files
+    .flatMap((file) => piecesOf(file, byHunk).map((piece) => ({ file, piece })))
+    .map((entry, order): Located => ({ ...entry, order }));
+
+  const changedBy = new Map<string, Change[]>();
+  for (const at of hunks) {
+    for (const definition of changedDefinitions(at.piece.hunk, symbolsByPath.get(at.file.path))) {
+      const changes = changedBy.get(definition.name) ?? [];
+      const known = changes.find((change) => change.definition === definition);
+      // Hunks are in diff order, so the first change to a definition is its `at`.
+      changedBy.set(
+        definition.name,
+        known === undefined
+          ? [...changes, { at, all: [at], definition }]
+          : changes.map((change) =>
+              change === known ? { ...known, all: [...known.all, at] } : change,
+            ),
+      );
+    }
+  }
+
+  const reaches = new Map(
+    files.map((file) => [
+      file.path,
+      (symbolsByPath.get(file.path)?.imports ?? []).flatMap(
+        (symbolImport) =>
+          (file.language === null ? null : importReach(file.path, file.language, symbolImport)) ??
+          [],
+      ),
+    ]),
+  );
+  const visible = (from: FileChange, kind: "name" | "member", name: string, to: FileChange) =>
+    from.path === to.path ||
+    (canLink(from, to) &&
+      (!resolvesImports(from.language ?? "") ||
+        sharesPackage(from.language ?? "", from.path, to.path) ||
+        (reaches.get(from.path) ?? []).some((reach) => reachesBy(reach, kind, name, to.path))));
+
+  const targetsOf = (from: Located, { name, line, kind }: Reference): readonly Change[] => {
+    const own = symbolsByPath.get(from.file.path);
+    // A method that calls a same-named one on another object delegates; it doesn't recurse.
+    const reached = (changedBy.get(name) ?? []).filter(
+      ({ at, definition }) =>
+        visible(from.file, kind === "member" ? "member" : "name", name, at.file) &&
+        !(at.file.path === from.file.path && enclosesLine(definition, line)),
+    );
+    const local = reached.filter(
+      ({ at, definition }) =>
+        at.file.path === from.file.path &&
+        enclosesLine(containerOf(definition, own?.definitions ?? []), line),
+    );
+    return local.length > 0 ? local : reached;
+  };
+  return { hunks, targetsOf };
 };
 
 /** The requests a part sends, each to the parts that add a route serving it. */

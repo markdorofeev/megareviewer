@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type CallGraphHint, HunkId, type HunkPart, PartId } from "../diff/index.ts";
+import { type CallGraphHint, type CallSite, HunkId, type HunkPart, PartId } from "../diff/index.ts";
 import { joinParts, type Tour, TourStepId } from "./index.ts";
 
 const a = HunkId.parse("h_000000000000000a");
@@ -89,5 +89,25 @@ describe("joinParts", () => {
       [[], [p(a, 1)]],
     ]);
     expect(joined.callGraph).toEqual([call(b, p(a, 1), 7), call(p(a, 2), p(a, 1), 3)]);
+  });
+
+  it("renames call sites, dropping parts joined into the site's own", () => {
+    const site = (from: PartId, ...to: PartId[]): CallSite => ({
+      partId: from,
+      path: "app.py",
+      line: 3,
+      column: 4,
+      length: 1,
+      symbol: "f",
+      toPartIds: to,
+    });
+    const joined = joinParts(
+      tour([p(a, 1), p(a, 2)], [p(a, 3), p(a, 4)]),
+      candidates,
+      [],
+      [],
+      [site(b, p(a, 2), p(a, 1), p(a, 4)), site(p(a, 1), p(a, 2)), site(p(a, 1), p(a, 2), p(a, 3))],
+    );
+    expect(joined.callSites).toEqual([site(b, p(a, 1), p(a, 2)), site(p(a, 1), p(a, 2))]);
   });
 });
