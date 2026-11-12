@@ -100,8 +100,6 @@ export const PublicationReceipt = z
   .readonly();
 export type PublicationReceipt = z.infer<typeof PublicationReceipt>;
 
-const FOOTER = "_Reviewed with megareviewer_";
-
 /**
  * What publishing sends: the verdict, one inline comment per decision the reviewer rejected or
  * commented on and per comment written on a hunk, and a summary listing every decision. Pure, so
@@ -177,11 +175,11 @@ export const buildPublication = (input: {
     const showComment = comment !== "" && (verdict === "rejected" || !anchored.has(decision.id));
     return `- ${label}${decision.title}${showComment ? ` — ${oneLine(comment)}` : ""}`;
   });
+  // What the reviewer wrote, and the decisions when the model made some: nothing else, so the
+  // dialog can show all of it.
   const summary = [
     input.summary.trim(),
     decisionLines.length > 0 ? `**Decisions**\n${decisionLines.join("\n")}` : "",
-    onCode(comments),
-    FOOTER,
   ]
     .filter((part) => part !== "")
     .join("\n\n");
@@ -231,12 +229,6 @@ const hunkAnchors = (analysis: Analysis): ReadonlyMap<HunkId, Anchor> => {
     }
   }
   return anchors;
-};
-
-/** "2 comments on the code.", counting the comments posted on hunk lines; "" for none. */
-const onCode = (comments: readonly PublicationComment[]): string => {
-  const count = comments.filter((comment) => comment.key.startsWith("hunk:")).length;
-  return count === 0 ? "" : `${count} ${count === 1 ? "comment" : "comments"} on the code.`;
 };
 
 const oneLine = (text: string): string => text.replace(/\s*\n\s*/g, " ");

@@ -84,6 +84,7 @@ const PublishAttempts = z.object({
     z.object({
       publication: z.object({
         verdict: z.string(),
+        summary: z.string(),
         comments: z.array(z.object({ key: z.string(), body: z.string() })),
       }),
       postedKeys: z.array(z.string()),

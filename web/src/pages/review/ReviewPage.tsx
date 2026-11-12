@@ -228,7 +228,7 @@ const Review = ({
   const { client } = useApi();
   // Until the status says otherwise, a missing intent is still coming from the model.
   const modelOn = useStatus().status?.model.enabled !== false;
-  const { analysis, publication, isAuthor } = view;
+  const { analysis, publication } = view;
   const analysisId = analysis.id;
   const complete = analysis.status === "complete";
   const readOnly = publication !== null || !complete;
@@ -558,7 +558,8 @@ const Review = ({
       setOpenedFrom(null);
     }
   };
-  const canPublish = !isAuthor || analysis.decisions.length > 0 || hunkComments.length > 0;
+  // Something to post: decisions the model made, or comments on lines.
+  const canPublish = analysis.decisions.length > 0 || hunkComments.length > 0;
   // The overview handles its own arrows and Enter, on the file that has the focus.
   const mapOnly: ShortcutHandlers = {
     nextFile: () => moveFile(1),
@@ -597,9 +598,6 @@ const Review = ({
     setPublishing(true);
   };
 
-  const pendingCount = analysis.decisions.filter(
-    (decision) => verdicts.draftOf(decision.id).verdict === "pending",
-  ).length;
   // What publishing will post on the code: decided or commented decisions, and line comments.
   const toPost =
     analysis.decisions.filter((decision) => {
@@ -911,10 +909,7 @@ const Review = ({
       {publishing && (
         <PublishDialog
           analysisId={analysisId}
-          isAuthor={isAuthor}
-          pendingCount={pendingCount}
           hunkComments={hunkComments}
-          chooseVerdict={analysis.decisions.length === 0}
           onClose={() => setPublishing(false)}
           onPublished={() => {
             setPublishing(false);

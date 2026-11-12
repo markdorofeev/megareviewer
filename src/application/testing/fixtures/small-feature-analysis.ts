@@ -385,7 +385,7 @@ export const smallFeatureSkeleton: Tour = {
 /** A valid publication for the small-feature PR: a summary and one inline comment. */
 export const smallFeaturePublication: Publication = {
   verdict: "request_changes",
-  summary: "Please drop the rate limit change.\n\n_Reviewed with megareviewer_",
+  summary: "Please drop the rate limit change.",
   comments: [
     {
       key: CommentKey.parse("decision:d3"),

@@ -17,7 +17,8 @@ const openReview = async (page: Page, url: string, title: string) => {
   await page.getByRole("button", { name: "Analyze" }).click();
   await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
+  // The progress strip goes once the analysis is complete.
+  await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
 };
 
 const decision = (page: Page, path: string) => ({
@@ -169,11 +170,9 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
   await allSaved(page, 2);
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish the review" });
-  await expect(dialog.getByText(/^Verdict: ✕Request changes$/)).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "1 inline comment" })).toBeVisible();
-  await expect(dialog.getByText("src/routes/orders.ts:")).toBeVisible();
-  await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish 1 comment" });
+  await expect(dialog.getByText(/^src\/routes\/orders\.ts:/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Publish 1 comment" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("status").filter({ hasText: "Published" })).toBeVisible();
 
@@ -205,8 +204,8 @@ test("a publish that fails part-way posts only the rest on retry", async ({ page
   expect(armed.ok()).toBe(true);
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish the review" });
-  await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish 2 comments" });
+  await dialog.getByRole("button", { name: "Publish 2 comments" }).click();
   await expect(dialog.getByRole("alert")).toContainText("Retrying is safe");
   await dialog.getByRole("button", { name: "Retry" }).click();
   await expect(dialog).toBeHidden();
@@ -250,7 +249,7 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish the review" });
-  await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+  await dialog.getByRole("button", { name: "Publish the review" }).click();
   await expect(dialog.getByRole("alert")).toContainText("Publish anyway?");
   expect(await publishAttempts(server)).toEqual([]);
 
@@ -319,14 +318,25 @@ test.describe("without the model", () => {
       "src/routes/orders.ts",
     );
 
+    // Without decisions, there's something to publish once there's a comment on a line.
+    await expect(page.getByRole("button", { name: /^Publish review…/ })).toHaveCount(0);
+    const changes = page.getByRole("region", { name: "Changes" });
+    const number = changes.getByRole("button", { name: /^Comment on line \d+$/ }).first();
+    const line = await number.textContent();
+    await number.click();
+    await changes.getByRole("textbox", { name: `Comment on line ${line}` }).fill("Why this?");
+    await changes.getByRole("button", { name: /^Add to review/ }).click();
+
     await page.getByRole("button", { name: /^Publish review…/ }).click();
-    const dialog = page.getByRole("dialog", { name: "Publish the review" });
-    await dialog.getByRole("radio", { name: "Approve" }).check();
-    await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Publish 1 comment" });
+    await dialog.getByLabel("Summary").fill("One question.");
+    await dialog.getByRole("button", { name: "Publish 1 comment" }).click();
     await expect(dialog).toBeHidden();
     const [attempt] = await publishAttempts(server);
     expect(attempt?.outcome).toBe("published");
-    expect(attempt?.publication.verdict).toBe("approve");
+    expect(attempt?.publication.verdict).toBe("comment");
+    expect(attempt?.publication.summary).toBe("One question.");
+    expect(attempt?.publication.comments.map((comment) => comment.body)).toEqual(["Why this?"]);
   });
 });
 

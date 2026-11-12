@@ -60,7 +60,8 @@ export const planReview = (
     request: {
       commit_id: headSha,
       event: postsSummary ? EVENTS[publication.verdict] : "COMMENT",
-      ...(postsSummary ? { body: publication.summary } : {}),
+      // A review of only comments, or a verdict, needs no body: an empty summary sends none.
+      ...(postsSummary && publication.summary !== "" ? { body: publication.summary } : {}),
       comments: comments.map(({ path, line, startLine, side, body }) => ({
         path,
         line,

@@ -1027,10 +1027,10 @@ describe("without the model", () => {
     expect(publish.textContent).toContain("1 to post");
   });
 
-  it("offers Publish to a reviewer with nothing but a verdict to give", async () => {
+  it("offers no Publish without decisions or comments, since there's nothing to post", async () => {
     renderReview({ view: withoutModel });
     await loaded();
-    expect(screen.getByRole("button", { name: /^Publish review…/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
   });
 
   it("shows what was asked in full, as text, in the details", async () => {
@@ -1074,7 +1074,7 @@ describe("comments on hunks", () => {
     expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");
   });
 
-  it("writes a comment from a line number, keeps it, and publishes it with the chosen verdict", async () => {
+  it("writes a comment from a line number, keeps it, and publishes it", async () => {
     const { requests, unmount } = renderReview({ view: withoutDecisions });
     await loaded();
     const [number] = within(mainArea()).getAllByRole("button", { name: /^Comment on line \d+$/ });
@@ -1101,22 +1101,15 @@ describe("comments on hunks", () => {
     expect(field.value).toBe("Why this?");
 
     await userEvent.click(screen.getByRole("button", { name: /^Publish review…/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Publish the review" });
-    await userEvent.click(within(dialog).getByRole("radio", { name: "Request changes" }));
-    expect(await within(dialog).findByText("Verdict:")).toBeTruthy();
-    await waitFor(() =>
-      expect(within(dialog).getByText("Verdict:").textContent).toBe("Verdict: ✕Request changes"),
-    );
-    expect(within(dialog).getByText("Why this?")).toBeTruthy();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    const dialog = await screen.findByRole("dialog", { name: "Publish 1 comment" });
+    expect(await within(dialog).findByText("Why this?")).toBeTruthy();
+    expect(within(dialog).queryByRole("radio")).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish 1 comment" }));
     // The view here is fixed, so it never turns published; the request is what matters.
     await waitFor(() =>
       expect(
         again.requests.find((request) => request.url === `${viewPath}/publication`)?.body,
-      ).toMatchObject({
-        verdict: "request_changes",
-        hunkComments: [{ side: "new", line, body: "Why this?" }],
-      }),
+      ).toMatchObject({ hunkComments: [{ side: "new", line, body: "Why this?" }] }),
     );
     expect(requests.some((request) => request.url === `${viewPath}/publication`)).toBe(false);
   });
@@ -1138,14 +1131,14 @@ describe("comments on hunks", () => {
 });
 
 describe("publishing", () => {
-  const openDialog = async () => {
+  const openDialog = async (name = "Publish the review") => {
     await userEvent.click(screen.getByRole("button", { name: /^Publish review…/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Publish the review" });
-    await within(dialog).findByText(/^Verdict:/);
+    const dialog = await screen.findByRole("dialog", { name });
+    await waitFor(() => expect(within(dialog).queryByText("Reading the comments…")).toBeNull());
     return dialog;
   };
 
-  it("previews exactly what will be posted, updating with the summary", async () => {
+  it("shows the comments as they'll post, and what the summary carries, and nothing else", async () => {
     renderReview();
     await loaded();
     await userEvent.click(reject(OWNERSHIP));
@@ -1155,29 +1148,18 @@ describe("publishing", () => {
       ),
       "Check the owner.",
     );
-    const dialog = await openDialog();
-    expect(within(dialog).getByText(/^Verdict:/).textContent).toBe("Verdict: ✕Request changes");
-    expect(
-      within(dialog).getByText(
-        "4 decisions aren't reviewed yet. The summary lists them as not reviewed.",
-      ),
-    ).toBeTruthy();
+    const dialog = await openDialog("Publish 1 comment");
     const comments = within(dialog).getAllByRole("listitem");
     expect(comments).toHaveLength(1);
     expect(comments[0]?.textContent).toBe(
       "src/routes/orders.ts:13**Rejected: Looks up the order by ID without checking that it belongs to the user**\n\nCheck the owner.",
     );
-
-    await userEvent.type(within(dialog).getByLabelText("Summary"), "One blocker.");
-    await waitFor(() => expect(within(dialog).getByText(/^One blocker\./)).toBeTruthy());
-  });
-
-  it("explains a Comment verdict when the reviewer is the author", async () => {
-    renderReview({ view: { ...fixture, isAuthor: true } });
-    await loaded();
-    const dialog = await openDialog();
-    expect(within(dialog).getByText(/^Verdict:/).textContent).toBe("Verdict: •Comment");
-    expect(within(dialog).getByText(/^You opened this pull request/)).toBeTruthy();
+    // The decisions the model made go after the summary, and are shown under its field.
+    expect(within(dialog).getByText(/^\*\*Decisions\*\*/)).toBeTruthy();
+    expect(within(dialog).queryByText(/Verdict|Reviewed with megareviewer|on the code/)).toBeNull();
+    expect(within(dialog).getByLabelText("Summary").getAttribute("placeholder")).toBe(
+      "Summary (optional)",
+    );
   });
 
   it("publishes, closes and shows the link to the review", async () => {
@@ -1185,14 +1167,13 @@ describe("publishing", () => {
     await loaded();
     await userEvent.click(approve(RETRIES));
     const dialog = await openDialog();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(requests.find((request) => request.url === `${viewPath}/publication`)?.body).toEqual({
       summary: "",
       allowStale: false,
       hunkComments: [],
-      verdict: null,
     });
     expect(approve(RETRIES).hasAttribute("disabled")).toBe(true);
   });
@@ -1210,7 +1191,7 @@ describe("publishing", () => {
     });
     await loaded();
     const dialog = await openDialog();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
     expect(
       await within(dialog).findByText("This PR changed since the analysis. Publish anyway?"),
     ).toBeTruthy();
@@ -1218,8 +1199,8 @@ describe("publishing", () => {
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
     const publishes = requests.filter((request) => request.url === `${viewPath}/publication`);
     expect(publishes.map((request) => request.body)).toEqual([
-      { summary: "", allowStale: false, hunkComments: [], verdict: null },
-      { summary: "", allowStale: true, hunkComments: [], verdict: null },
+      { summary: "", allowStale: false, hunkComments: [] },
+      { summary: "", allowStale: true, hunkComments: [] },
     ]);
   });
 
@@ -1234,7 +1215,7 @@ describe("publishing", () => {
     });
     await loaded();
     const dialog = await openDialog();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
     const alert = await within(dialog).findByRole("alert");
     expect(alert.textContent).toContain("The git host returned an error: GitHub returned 502.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
@@ -1248,7 +1229,7 @@ describe("publishing", () => {
       screen.getByLabelText("Comment on: Retries the tax service 3 times with no backoff"),
       "Add jitter",
     );
-    const dialog = await openDialog();
+    const dialog = await openDialog("Publish 1 comment");
     expect(within(dialog).getAllByRole("listitem")[0]?.textContent).toContain("Add jitter");
   });
 

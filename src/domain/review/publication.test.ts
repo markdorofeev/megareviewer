@@ -174,16 +174,12 @@ describe("buildPublication", () => {
           `- ⏳ Not reviewed: ${d2.title}`,
           `- ❌ ${d3.title} — Out of scope. Please revert.`,
           `- ⏳ Not reviewed: ${d4.title}`,
-          "",
-          "_Reviewed with megareviewer_",
         ].join("\n"),
       );
     });
 
-    it("is just the footer without a summary or decisions", () => {
-      expect(publish([], { analysis: withDecisions([]), summary: " " }).summary).toBe(
-        "_Reviewed with megareviewer_",
-      );
+    it("is empty without a summary or decisions: nothing is added", () => {
+      expect(publish([], { analysis: withDecisions([]), summary: " " }).summary).toBe("");
     });
   });
 });
@@ -210,7 +206,7 @@ describe("comments on hunks", () => {
       verdict,
     });
 
-  it("posts each comment on its line and side, and counts them in the summary", () => {
+  it("posts each comment on its line and side, and adds nothing to the summary", () => {
     const publication = withComments([
       { side: "new", line: added, body: "  Why this?  " },
       { side: "old", line: deleted, body: "This was the only check." },
@@ -222,7 +218,7 @@ describe("comments on hunks", () => {
       [`hunk:${target.id}:old:${deleted}`, "old", "This was the only check."],
     ]);
     expect(publication.comments.every((comment) => comment.path === file.path)).toBe(true);
-    expect(publication.summary).toContain("2 comments on the code.");
+    expect(publication.summary).toBe("");
   });
 
   it("leaves out empty comments and comments on unknown hunks", () => {
