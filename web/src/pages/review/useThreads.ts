@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  AnalysisId,
-  ThreadCommentId,
-  ThreadId,
-  ThreadList,
-} from "../../../../src/domain/review/index.ts";
+import type { AnalysisId, ThreadId, ThreadList } from "../../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage, useApi } from "../../api/index.ts";
 
 export interface Threads {
@@ -16,13 +11,6 @@ export interface Threads {
   /** Posts a reply; an error message, or null once it's posted. */
   readonly reply: (threadId: ThreadId, body: string) => Promise<string | null>;
   readonly resolve: (threadId: ThreadId, resolved: boolean) => Promise<string | null>;
-  /** Commits suggestions in one commit; the new commit, or an error. */
-  readonly apply: (
-    commentIds: readonly ThreadCommentId[],
-  ) => Promise<
-    | { readonly ok: true; readonly sha: string | null }
-    | { readonly ok: false; readonly error: ApiError }
-  >;
 }
 
 /**
@@ -73,16 +61,5 @@ export const useThreads = (analysisId: AnalysisId, enabled: boolean): Threads =>
     [client, analysisId, reload],
   );
 
-  const apply = useCallback(
-    async (commentIds: readonly ThreadCommentId[]) => {
-      const result = await client.applySuggestions(analysisId, { commentIds });
-      reload();
-      return result.ok
-        ? ({ ok: true, sha: result.value.sha } as const)
-        : ({ ok: false, error: result.error } as const);
-    },
-    [client, analysisId, reload],
-  );
-
-  return { list, error, reload, reply, resolve, apply };
+  return { list, error, reload, reply, resolve };
 };

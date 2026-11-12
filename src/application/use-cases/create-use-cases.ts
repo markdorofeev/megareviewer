@@ -25,7 +25,6 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     getAttachment: threads.getAttachment,
     replyToThread: threads.replyToThread,
     resolveThread: threads.resolveThread,
-    applySuggestions: threads.applySuggestions,
   };
 };
 

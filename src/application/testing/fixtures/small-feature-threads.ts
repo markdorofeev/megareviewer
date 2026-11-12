@@ -150,4 +150,4 @@ export const smallFeatureThreads: readonly ReviewThread[] = [
   },
 ];
 
-export const smallFeatureThreadList: ThreadList = { threads: smallFeatureThreads, canApply: true };
+export const smallFeatureThreadList: ThreadList = { threads: smallFeatureThreads };

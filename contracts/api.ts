@@ -14,7 +14,6 @@ import {
   StageName,
   StageStatus,
   ThreadComment,
-  ThreadCommentId,
   ThreadId,
   ThreadList,
   Verdict,
@@ -122,22 +121,6 @@ export const ResolveRequest = z.object({ resolved: z.boolean() }).readonly();
 export type ResolveRequest = z.infer<typeof ResolveRequest>;
 export const ResolveResponse = ResolveRequest;
 export type ResolveResponse = z.infer<typeof ResolveResponse>;
-
-/** The suggestions to commit, by the IDs of the comments that make them. */
-export const ApplySuggestionsRequest = z
-  .object({ commentIds: z.array(ThreadCommentId).min(1).max(100).readonly() })
-  .readonly();
-export type ApplySuggestionsRequest = z.infer<typeof ApplySuggestionsRequest>;
-
-export const ApplySuggestionsResponse = z
-  .object({
-    /** The new commit, when the host says. */
-    sha: z.string().nullable(),
-    /** The files it changed. */
-    paths: z.array(z.string()).readonly(),
-  })
-  .readonly();
-export type ApplySuggestionsResponse = z.infer<typeof ApplySuggestionsResponse>;
 
 // Errors
 
@@ -285,17 +268,6 @@ export const routes = {
     params: ThreadParams,
     request: ResolveRequest,
     response: ResolveResponse,
-  },
-  /**
-   * Commits suggestions on the PR's branch in one commit, on the analysis's head. Answers
-   * stale-analysis when the PR has new commits since, as publishing does.
-   */
-  applySuggestions: {
-    method: "POST",
-    path: "/api/analyses/:id/suggestions/apply",
-    params: AnalysisParams,
-    request: ApplySuggestionsRequest,
-    response: ApplySuggestionsResponse,
   },
 } as const satisfies Record<string, JsonRoute>;
 

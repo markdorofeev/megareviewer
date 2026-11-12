@@ -5,7 +5,7 @@ import {
   type ThreadId,
   ThreadList,
 } from "../../../domain/review/index.ts";
-import type { ReviewThreads, SuggestionCommit } from "../../ports/index.ts";
+import type { ReviewThreads } from "../../ports/index.ts";
 
 export interface ReviewThreadsContractSetup {
   threads(): ReviewThreads;
@@ -18,10 +18,6 @@ export interface ReviewThreadsContractSetup {
   outdatedThread: ThreadId;
   /** The reply `reply` posts to `thread`. */
   replyBody: string;
-  /** A commit on the PR's current head. */
-  commit: SuggestionCommit;
-  /** The same commit on a head the branch has moved past. */
-  staleCommit: SuggestionCommit;
   /** An image in the host's attachment store. */
   attachment: string;
 }
@@ -72,16 +68,6 @@ export const describeReviewThreadsContract = (
       expect(found.value.bytes.byteLength).toBeGreaterThan(0);
       const foreign = await threads.getAttachment("https://evil.test/pixel.png");
       expect(!foreign.ok && foreign.error.kind).toBe("not-found");
-    });
-
-    it("commits suggestions on the head", async () => {
-      const result = await s.threads().applySuggestions(s.pr, s.commit);
-      expect(result.ok).toBe(true);
-    });
-
-    it("refuses to commit when the branch has moved", async () => {
-      const result = await s.threads().applySuggestions(s.pr, s.staleCommit);
-      expect(!result.ok && result.error.kind).toBe("rejected");
     });
   });
 };

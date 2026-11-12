@@ -1,3 +1,4 @@
+import { CheckIcon } from "lucide-react";
 import { Fragment, useEffect, useId, useRef, useState } from "react";
 import {
   parseBody,
@@ -45,13 +46,6 @@ export const SeverityChip = ({ severity }: { readonly severity: Severity }) => (
   </span>
 );
 
-/** What the thread does with a suggestion in the batch, and why it can't go in, if it can't. */
-export interface BatchState {
-  readonly has: (commentId: string) => boolean;
-  /** Why the suggestion can't join the batch, e.g. it overlaps one already there; else null. */
-  readonly problem: (commentId: string) => string | null;
-}
-
 export interface ReviewThreadProps {
   readonly thread: ReviewThread;
   /** The PR's author, whose comments carry an Author chip. */
@@ -62,15 +56,10 @@ export interface ReviewThreadProps {
   readonly language: string | null;
   /** The lines the thread covers at the head, which a suggestion replaces; null when unknown. */
   readonly covered: readonly string[] | null;
-  /** The reviewer may push to the PR's branch, so suggestions can be applied. */
-  readonly canApply: boolean;
-  readonly batch: BatchState;
   /** Posts a reply; resolves to an error message, or null once it's posted. */
   readonly onReply?: (body: string) => Promise<string | null>;
   /** Resolves or reopens; resolves to an error message, or null once it's done. */
   readonly onResolve?: (resolved: boolean) => Promise<string | null>;
-  readonly onAddToBatch?: (commentId: string) => void;
-  readonly onRemoveFromBatch?: (commentId: string) => void;
   /** Where an image or video pasted into a comment loads from; without it, they're named. */
   readonly mediaUrl?: (url: string) => string;
   /** Open with the reply field focused. */
@@ -118,9 +107,8 @@ const groupByAuthor = (
 
 /**
  * A review thread from the host: its comments grouped by person, with their severities and
- * suggested changes, and one row of actions: Reply, which opens the field in its place, a
- * lone suggestion's Add to batch, and Resolve. A resolved thread folds to one
- * line.
+ * suggested changes, and a footer lined up with their text: a field to click into to reply, which
+ * opens the real one in its place, and Resolve beside it. A resolved thread folds to one line.
  */
 export const ReviewThreadView = ({
   thread,
@@ -128,12 +116,8 @@ export const ReviewThreadView = ({
   now,
   language,
   covered,
-  canApply,
-  batch,
   onReply,
   onResolve,
-  onAddToBatch,
-  onRemoveFromBatch,
   replying = false,
   mediaUrl,
   initialReply,
@@ -153,7 +137,6 @@ export const ReviewThreadView = ({
   const fieldId = useId();
   const state = thread.resolved ? "resolved" : thread.outdated ? "outdated" : "open";
   const current = !thread.outdated && thread.line !== null && thread.side === "new";
-  const applicable = canApply && current;
   const canReply = onReply !== undefined && thread.can.reply;
   const canResolve = onResolve !== undefined && thread.can.resolve;
   // The field stays while there's something in it to lose: text, a post on its way, or a failure.
@@ -174,7 +157,7 @@ export const ReviewThreadView = ({
     if (replying) openField();
   }, [replying]);
 
-  /** Back to the thread, so r, e and b work again once the field is gone. */
+  /** Back to the thread once the field is gone, so the focus isn't lost. */
   const focusThread = () =>
     field.current?.closest<HTMLElement>("[data-slot=review-thread]")?.focus();
 
@@ -214,48 +197,14 @@ export const ReviewThreadView = ({
     else setOpen(thread.resolved);
   };
 
-  const suggesting = thread.comments.filter((comment) => suggestionOf(comment.body) !== null);
-  const [firstSuggestion] = suggesting;
-  // A lone suggestion's buttons join the thread's row; several keep theirs under each.
-  const lone = suggesting.length === 1 && applicable ? firstSuggestion : undefined;
-
-  const suggestionButtons = (comment: ThreadComment) => {
-    const inBatch = batch.has(comment.id);
-    const problem = batch.problem(comment.id);
-    return (
-      <>
-        <Button
-          variant="outline"
-          size="sm"
-          aria-pressed={inBatch}
-          disabled={!inBatch && problem !== null}
-          onClick={() => (inBatch ? onRemoveFromBatch?.(comment.id) : onAddToBatch?.(comment.id))}
-        >
-          {inBatch ? "✓ In batch" : "Add to batch"}
-        </Button>
-        {problem !== null && !inBatch && (
-          <span className="text-caption text-muted-foreground">{problem}</span>
-        )}
-      </>
-    );
-  };
-
-  const suggestionView = (comment: ThreadComment) => (lines: readonly string[]) => {
-    const own = suggestionOf(comment.body) !== null;
-    return (
-      <div className="flex flex-col gap-1.5">
-        <SuggestionDiff
-          title="Suggested change"
-          removed={current ? covered : null}
-          added={lines}
-          language={language}
-        />
-        {own && applicable && lone === undefined && (
-          <div className="flex flex-wrap items-center gap-2">{suggestionButtons(comment)}</div>
-        )}
-      </div>
-    );
-  };
+  const suggestionView = (lines: readonly string[]) => (
+    <SuggestionDiff
+      title="Suggested change"
+      removed={current ? covered : null}
+      added={lines}
+      language={language}
+    />
+  );
 
   const time = (comment: ThreadComment) => (
     <time
@@ -309,7 +258,7 @@ export const ReviewThreadView = ({
                   <div className="w-full">
                     <ThreadBody
                       blocks={blocks}
-                      suggestion={suggestionView(comment)}
+                      suggestion={suggestionView}
                       {...(mediaUrl === undefined ? {} : { mediaUrl })}
                     />
                   </div>
@@ -326,7 +275,7 @@ export const ReviewThreadView = ({
   const [first] = thread.comments;
   const line = thread.line ?? thread.originalLine;
   const resolvedBy = thread.resolvedBy?.name;
-  const hasActions = canReply || canResolve || lone !== undefined;
+  const hasActions = canReply || canResolve;
   return (
     <CommentCard
       as="article"
@@ -451,21 +400,33 @@ export const ReviewThreadView = ({
             </div>
           ) : (
             hasActions && (
-              <div data-slot="thread-actions" className="flex flex-wrap items-center gap-2">
+              <div data-slot="thread-actions" className="flex items-center gap-2 pl-8.5">
                 {canReply && (
-                  <Button variant="outline" size="sm" onClick={openField}>
-                    Reply
-                  </Button>
+                  // Looks like the field it opens: writing a reply, not an action like Resolve.
+                  <button
+                    type="button"
+                    onClick={openField}
+                    className="h-8 min-w-0 flex-1 cursor-text truncate rounded-md border border-input bg-background px-2.5 text-left text-ui text-muted-foreground hover:border-foreground/40"
+                  >
+                    Reply…
+                  </button>
                 )}
-                {lone !== undefined && suggestionButtons(lone)}
                 {canResolve && (
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={resolving}
                     onClick={() => void toggleResolved()}
+                    className={cn(!canReply && "ml-auto")}
                   >
-                    {thread.resolved ? "Reopen" : "Resolve"}
+                    {thread.resolved ? (
+                      "Reopen"
+                    ) : (
+                      <>
+                        <CheckIcon aria-hidden="true" />
+                        Resolve
+                      </>
+                    )}
                   </Button>
                 )}
               </div>

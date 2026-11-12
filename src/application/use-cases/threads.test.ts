@@ -18,18 +18,15 @@ import {
   smallFeatureThreadList,
 } from "../testing/index.ts";
 import { createUseCases } from "./create-use-cases.ts";
-import { applyMessage, MAX_CACHED_ATTACHMENT_BYTES } from "./threads.ts";
+import { MAX_CACHED_ATTACHMENT_BYTES } from "./threads.ts";
 
-const { ref, headSha } = smallFeature.pullRequest;
+const { ref } = smallFeature.pullRequest;
 
 const setup = async (options: { threads?: readonly ReviewThread[]; noThreads?: boolean } = {}) => {
   const clock = new FixedClock("2026-10-21T10:00:00Z");
   const github = new FakeGitHost({ host: "github", fixtures: allFixtures, clock });
-  const threads = new FakeReviewThreads({ host: "github", clock, gitHost: github });
-  threads.setThreads(ref, {
-    threads: options.threads ?? smallFeatureThreadList.threads,
-    canApply: true,
-  });
+  const threads = new FakeReviewThreads({ host: "github", clock });
+  threads.setThreads(ref, { threads: options.threads ?? smallFeatureThreadList.threads });
   const store = new InMemoryAnalysisStore();
   const fileCache = new InMemoryFileCache();
   const useCases = createUseCases(
@@ -166,106 +163,6 @@ describe("replyToThread and resolveThread", () => {
     expect(await useCases.resolveThread(id, "PRRT_nope", true)).toMatchObject({
       ok: false,
       error: { code: "not-found" },
-    });
-  });
-});
-
-describe("applySuggestions", () => {
-  it("commits the suggestions in one commit on the analysis's head", async () => {
-    const { useCases, threads, id } = await setup();
-    const result = await useCases.applySuggestions(id, ["PRRC_ttl1", "PRRC_charset1"]);
-    if (!result.ok) throw new Error(result.error.message);
-    expect(result.value.paths).toEqual(["src/services/receipts.ts", "src/routes/orders.ts"]);
-    const [commit] = threads.commits;
-    expect(threads.commits).toHaveLength(1);
-    expect(commit?.headSha).toBe(headSha);
-    expect(commit?.message).toBe("Apply 2 suggestions from code review");
-    const receipts = commit?.files.find((file) => file.path === "src/services/receipts.ts");
-    expect(receipts?.content.split("\n")[2]).toBe("const RECEIPT_TTL_MS = 60 * 60 * 1_000;");
-    expect(receipts?.content.split("\n")[3]).toBe(
-      smallFeature.headFiles["src/services/receipts.ts"]?.split("\n")[3],
-    );
-    const orders = commit?.files.find((file) => file.path === "src/routes/orders.ts");
-    expect(orders?.content.split("\n")[38]).toContain("charset=utf-8");
-  });
-
-  it("refuses a stale analysis and commits nothing", async () => {
-    const { useCases, github, threads, id } = await setup();
-    github.setHeadSha(ref, "f".repeat(40));
-    expect(await useCases.applySuggestions(id, ["PRRC_ttl1"])).toMatchObject({
-      ok: false,
-      error: { code: "stale-analysis" },
-    });
-    expect(threads.commits).toEqual([]);
-  });
-
-  it("reads the files from the cache Collect filled before the host", async () => {
-    const { useCases, fileCache, threads, id } = await setup();
-    await fileCache.put(ref.repo, { sha: headSha, path: "src/services/receipts.ts" }, "a\nb\nc\n");
-    const result = await useCases.applySuggestions(id, ["PRRC_ttl1"]);
-    expect(result.ok).toBe(true);
-    expect(threads.commits[0]?.message).toBe(applyMessage(1));
-    expect(threads.commits[0]?.files[0]?.content).toBe(
-      "a\nb\nconst RECEIPT_TTL_MS = 60 * 60 * 1_000;\n",
-    );
-  });
-
-  it("refuses overlapping suggestions, comments without one and outdated ones", async () => {
-    const base = smallFeatureThreadList.threads.find((thread) => thread.id === "PRRT_ttl");
-    if (base === undefined) throw new Error("no fixture thread");
-    const overlapping: ReviewThread = {
-      ...base,
-      id: "PRRT_ttl2",
-      startLine: 2,
-      comments: [{ ...base.comments[0], id: "PRRC_ttl2" } as ReviewThread["comments"][0]],
-    };
-    const { useCases, threads, id } = await setup({
-      threads: [...smallFeatureThreadList.threads, overlapping],
-    });
-    expect(await useCases.applySuggestions(id, ["PRRC_ttl1", "PRRC_ttl2"])).toMatchObject({
-      ok: false,
-      error: { code: "bad-request", message: expect.stringContaining("Two suggestions change") },
-    });
-    expect(await useCases.applySuggestions(id, ["PRRC_cache1"])).toMatchObject({
-      ok: false,
-      error: { code: "bad-request", message: expect.stringContaining("doesn't suggest") },
-    });
-    expect(await useCases.applySuggestions(id, ["PRRC_outdated1"])).toMatchObject({
-      ok: false,
-      error: { code: "bad-request" },
-    });
-    expect(await useCases.applySuggestions(id, ["PRRC_missing"])).toMatchObject({
-      ok: false,
-      error: { code: "bad-request", message: expect.stringContaining("No comment") },
-    });
-    expect(threads.commits).toEqual([]);
-  });
-
-  it("turns the host refusing a moved branch into a stale analysis", async () => {
-    const { useCases, threads, id } = await setup();
-    threads.failNext("applySuggestions", {
-      kind: "rejected",
-      message: "Update is not a fast forward",
-      retryAfterSeconds: null,
-    });
-    expect(await useCases.applySuggestions(id, ["PRRC_ttl1"])).toEqual({
-      ok: false,
-      error: { code: "stale-analysis", message: "Update is not a fast forward" },
-    });
-  });
-
-  it("refuses an analysis that isn't complete, and runs one apply at a time", async () => {
-    const { useCases, store, threads, id } = await setup();
-    const [first, second] = await Promise.all([
-      useCases.applySuggestions(id, ["PRRC_ttl1"]),
-      useCases.applySuggestions(id, ["PRRC_ttl1"]),
-    ]);
-    expect(first).toEqual(second);
-    expect(threads.commits).toHaveLength(1);
-    await store.saveAnalysis({ ...smallFeatureAnalysis, status: "running" });
-    expect(await useCases.applySuggestions(id, ["PRRC_ttl1"])).toMatchObject({
-      ok: false,
-      error: { code: "analysis-not-complete" },
     });
   });
 });

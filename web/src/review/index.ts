@@ -49,7 +49,6 @@ export { DiffSkeleton, EmptyState, TreeSkeleton } from "./shell/empty-state.tsx"
 export { KeyHint, KeyHintLine } from "./shell/key-hint.tsx";
 export { ShortcutsDialog } from "./shell/shortcuts-dialog.tsx";
 export {
-  type BatchState,
   CommentCard,
   type CommentState,
   initialsOf,

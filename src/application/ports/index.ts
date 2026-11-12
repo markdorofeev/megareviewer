@@ -35,6 +35,5 @@ export {
   type Attachment,
   MAX_ATTACHMENT_BYTES,
   type ReviewThreads,
-  type SuggestionCommit,
 } from "./review-threads.ts";
 export type { TicketLookup, TicketSource } from "./ticket-source.ts";

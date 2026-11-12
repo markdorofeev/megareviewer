@@ -327,8 +327,7 @@ export const createMockApi = (
       }
       return success(publication);
     },
-    getThreads: ({ id }) =>
-      findAnalysis(id) ?? success({ threads, canApply: fixtureThreads.canApply }),
+    getThreads: ({ id }) => findAnalysis(id) ?? success({ threads }),
     replyToThread: (params, body) => {
       const missing = findAnalysis(params.id);
       if (missing !== null) return missing;
@@ -365,19 +364,6 @@ export const createMockApi = (
           : one,
       );
       return success({ resolved });
-    },
-    applySuggestions: ({ id }, body) => {
-      const missing = findAnalysis(id) ?? requireComplete();
-      if (missing !== null) return missing;
-      const request = routes.applySuggestions.request.safeParse(body);
-      if (!request.success) {
-        return failure("bad-request", issuesOf("body", request.error.issues).join("; "));
-      }
-      const ids = new Set(request.data.commentIds);
-      const paths = threads
-        .filter((thread) => thread.comments.some((comment) => ids.has(comment.id)))
-        .map((thread) => thread.path);
-      return success({ sha: "c".repeat(40), paths: [...new Set(paths)] });
     },
   };
 

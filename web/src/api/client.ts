@@ -1,6 +1,5 @@
 import type { z } from "zod";
 import {
-  type ApplySuggestionsRequest,
   attachmentRoute,
   ErrorResponse,
   type JsonRoute,
@@ -85,8 +84,6 @@ export const createApiClient = (options: ApiClientOptions) => {
       send(routes.replyToThread, { id, threadId }, body),
     resolveThread: (id: AnalysisId, threadId: ThreadId, body: ResolveRequest) =>
       send(routes.resolveThread, { id, threadId }, body),
-    applySuggestions: (id: AnalysisId, body: ApplySuggestionsRequest) =>
-      send(routes.applySuggestions, { id }, body),
   } satisfies Record<RouteName, unknown>;
 
   return {

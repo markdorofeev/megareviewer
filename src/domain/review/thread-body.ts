@@ -1,4 +1,3 @@
-import { err, ok, type Result } from "../shared/index.ts";
 import { attachmentHost } from "./attachments.ts";
 import { Severity } from "./thread.ts";
 
@@ -230,48 +229,4 @@ export const composeBody = (input: {
   const fence = fenceFor(input.suggestion);
   const block = [`${fence}suggestion`, ...input.suggestion, fence].join("\n");
   return head === "" ? block : `${head}\n\n${block}`;
-};
-
-/** Lines `start` to `end`, 1-based and inclusive, replaced by `lines`. */
-export interface LineEdit {
-  readonly start: number;
-  readonly end: number;
-  readonly lines: readonly string[];
-}
-
-export const editsOverlap = (
-  a: Pick<LineEdit, "start" | "end">,
-  b: Pick<LineEdit, "start" | "end">,
-) => a.start <= b.end && b.start <= a.end;
-
-export type EditProblem =
-  | { readonly kind: "overlap"; readonly at: number }
-  | { readonly kind: "out-of-range"; readonly at: number };
-
-/**
- * A file's content with every edit made. Edits are on the content's own line numbers, so they're
- * made from the last up; two that overlap can't both be made, and the second is refused. The
- * file's line ending and its final newline are kept.
- */
-export const applyEdits = (
-  content: string,
-  edits: readonly LineEdit[],
-): Result<string, EditProblem> => {
-  const newline = content.includes("\r\n") ? "\r\n" : "\n";
-  const endsWithNewline = content.endsWith(newline);
-  const lines = content.split(newline);
-  if (endsWithNewline) lines.pop();
-  for (const [at, edit] of edits.entries()) {
-    if (edit.start < 1 || edit.end < edit.start || edit.end > lines.length) {
-      return err({ kind: "out-of-range", at });
-    }
-    if (edits.slice(0, at).some((earlier) => editsOverlap(earlier, edit))) {
-      return err({ kind: "overlap", at });
-    }
-  }
-  const ordered = [...edits].sort((a, b) => b.start - a.start);
-  for (const edit of ordered)
-    lines.splice(edit.start - 1, edit.end - edit.start + 1, ...edit.lines);
-  const joined = lines.join(newline);
-  return ok(endsWithNewline && lines.length > 0 ? joined + newline : joined);
 };

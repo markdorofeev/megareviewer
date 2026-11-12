@@ -98,21 +98,3 @@ export const publishAttempts = async (server: FakeServer): Promise<PublishAttemp
   expect(response.ok()).toBe(true);
   return PublishAttempts.parse(await response.json()).attempts;
 };
-
-/** The commits the fake hosts made from applied suggestions, as GET /__fake/commits reports them. */
-const Commits = z.object({
-  commits: z.array(
-    z.object({
-      headSha: z.string(),
-      message: z.string(),
-      files: z.array(z.object({ path: z.string(), content: z.string() })),
-    }),
-  ),
-});
-export type FakeCommit = z.infer<typeof Commits>["commits"][number];
-
-export const suggestionCommits = async (server: FakeServer): Promise<FakeCommit[]> => {
-  const response = await server.request.get("/__fake/commits");
-  expect(response.ok()).toBe(true);
-  return Commits.parse(await response.json()).commits;
-};

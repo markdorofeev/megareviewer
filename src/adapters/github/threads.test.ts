@@ -7,13 +7,7 @@ import {
   RecordingLogger,
 } from "../../application/testing/index.ts";
 import type { PullRequestRef } from "../../domain/review/index.ts";
-import {
-  ATTACHMENT,
-  attachmentExchanges,
-  refusedRefUpdate,
-  THREADS_HEAD,
-  threadExchanges,
-} from "./fixtures/threads.synthetic.ts";
+import { ATTACHMENT, attachmentExchanges, threadExchanges } from "./fixtures/threads.synthetic.ts";
 import unauthorizedExchanges from "./fixtures/unauthorized.synthetic.json" with { type: "json" };
 import { createGitHubReviewThreads } from "./index.ts";
 
@@ -31,15 +25,6 @@ const threadsWith = (fetch: typeof globalThis.fetch, logger = new RecordingLogge
     fetch,
   });
 
-const commit = {
-  headSha: THREADS_HEAD,
-  message: "Apply 2 suggestions from code review",
-  files: [
-    { path: "source/index.ts", content: "new source/index.ts\n" },
-    { path: "test/test.ts", content: "new test/test.ts\n" },
-  ],
-};
-
 describeReviewThreadsContract("github", () => ({
   threads: () => threadsWith(createFixtureFetch([...threadExchanges, ...attachmentExchanges])),
   pr,
@@ -47,8 +32,6 @@ describeReviewThreadsContract("github", () => ({
   resolvedThread: "PRRT_kwDOAbc2",
   outdatedThread: "PRRT_kwDOAbc3",
   replyBody: "Thanks!",
-  commit,
-  staleCommit: { ...commit, headSha: "0".repeat(40) },
   attachment: ATTACHMENT,
 }));
 
@@ -66,8 +49,7 @@ describe("GitHub review threads", () => {
   it("reads every page, in domain terms", async () => {
     const result = await threadsWith(createFixtureFetch(threadExchanges)).getThreads(pr);
     if (!result.ok) throw new Error(result.error.message);
-    const { threads, canApply } = result.value;
-    expect(canApply).toBe(true);
+    const { threads } = result.value;
     // A thread with no comments has nothing to show.
     expect(threads.map((thread) => thread.id)).toEqual([
       "PRRT_kwDOAbc1",
@@ -90,41 +72,6 @@ describe("GitHub review threads", () => {
       comments: [{ author: { id: "ghost" } }],
     });
     expect(outdated).toMatchObject({ outdated: true, line: null, originalLine: 776 });
-  });
-
-  it("commits each file's blob in a tree keeping its mode, then moves the branch", async () => {
-    const result = await threadsWith(createFixtureFetch(threadExchanges)).applySuggestions(
-      pr,
-      commit,
-    );
-    expect(result).toEqual({ ok: true, value: { sha: "4".repeat(40) } });
-  });
-
-  it("refuses when GitHub won't fast-forward the branch", async () => {
-    const result = await threadsWith(
-      createFixtureFetch([
-        ...threadExchanges.filter((exchange) => exchange.request.method !== "PATCH"),
-        refusedRefUpdate,
-      ] satisfies RecordedExchange[]),
-    ).applySuggestions(pr, commit);
-    expect(!result.ok && result.error.kind).toBe("rejected");
-    expect(!result.ok && result.error.message).toContain("not a fast forward");
-  });
-
-  it("refuses a PR whose fork was deleted", async () => {
-    const exchanges = threadExchanges.map((exchange) =>
-      exchange.request.url.endsWith("/pulls/210")
-        ? {
-            ...exchange,
-            response: {
-              ...exchange.response,
-              body: { head: { ref: "x", sha: THREADS_HEAD, repo: null } },
-            },
-          }
-        : exchange,
-    );
-    const result = await threadsWith(createFixtureFetch(exchanges)).applySuggestions(pr, commit);
-    expect(!result.ok && result.error.message).toContain("fork was deleted");
   });
 
   it("makes one request for a write that fails on the network", async () => {

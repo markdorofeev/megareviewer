@@ -3,8 +3,6 @@ export {
   AnalysisIdResponse,
   AnalysisUpdatedEvent,
   AnalysisView,
-  ApplySuggestionsRequest,
-  ApplySuggestionsResponse,
   analysisEventsRoute,
   attachmentRoute,
   ERROR_STATUS,

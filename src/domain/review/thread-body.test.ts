@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { threadLines } from "./thread.ts";
 import {
-  applyEdits,
   composeBody,
-  editsOverlap,
   parseBlocks,
   parseBody,
   parseSpans,
@@ -197,57 +194,5 @@ describe("composeBody", () => {
     const body = composeBody({ body: "", suggestion: lines });
     expect(body.startsWith("`````suggestion\n")).toBe(true);
     expect(suggestionOf(body)).toEqual(lines);
-  });
-});
-
-describe("applyEdits", () => {
-  it("replaces lines from the last edit up, keeping the final newline", () => {
-    const result = applyEdits("a\nb\nc\nd\n", [
-      { start: 1, end: 1, lines: ["A", "A2"] },
-      { start: 3, end: 4, lines: ["CD"] },
-    ]);
-    expect(result).toEqual({ ok: true, value: "A\nA2\nb\nCD\n" });
-  });
-
-  it("deletes lines with an empty edit and keeps CRLF and a missing final newline", () => {
-    expect(applyEdits("a\r\nb\r\nc", [{ start: 2, end: 2, lines: [] }])).toEqual({
-      ok: true,
-      value: "a\r\nc",
-    });
-    expect(applyEdits("a\n", [{ start: 1, end: 1, lines: [] }])).toEqual({ ok: true, value: "" });
-  });
-
-  it("refuses overlapping edits, naming the second", () => {
-    expect(
-      applyEdits("a\nb\nc\n", [
-        { start: 1, end: 2, lines: ["x"] },
-        { start: 3, end: 3, lines: ["y"] },
-        { start: 2, end: 3, lines: ["z"] },
-      ]),
-    ).toEqual({ ok: false, error: { kind: "overlap", at: 2 } });
-  });
-
-  it("refuses lines the file doesn't have", () => {
-    expect(applyEdits("a\n", [{ start: 2, end: 2, lines: [] }])).toEqual({
-      ok: false,
-      error: { kind: "out-of-range", at: 0 },
-    });
-    expect(applyEdits("a\nb\n", [{ start: 2, end: 1, lines: [] }])).toEqual({
-      ok: false,
-      error: { kind: "out-of-range", at: 0 },
-    });
-  });
-
-  it("tells overlapping ranges from touching ones", () => {
-    expect(editsOverlap({ start: 1, end: 3 }, { start: 3, end: 5 })).toBe(true);
-    expect(editsOverlap({ start: 1, end: 2 }, { start: 3, end: 5 })).toBe(false);
-  });
-});
-
-describe("threadLines", () => {
-  it("gives a thread's range, its line alone, or nothing", () => {
-    expect(threadLines({ line: 7, startLine: 5 })).toEqual({ start: 5, end: 7 });
-    expect(threadLines({ line: 7, startLine: null })).toEqual({ start: 7, end: 7 });
-    expect(threadLines({ line: null, startLine: 3 })).toBeNull();
   });
 });

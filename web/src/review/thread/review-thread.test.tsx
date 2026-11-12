@@ -58,8 +58,6 @@ const show = (props: Partial<ReviewThreadProps> = {}) => {
   const handlers = {
     onReply: vi.fn(async (_body: string): Promise<string | null> => null),
     onResolve: vi.fn(async (_resolved: boolean): Promise<string | null> => null),
-    onAddToBatch: vi.fn(),
-    onRemoveFromBatch: vi.fn(),
   };
   const ui = (extra: Partial<ReviewThreadProps>): ReactNode => (
     <HighlighterContext.Provider value={pending}>
@@ -69,8 +67,6 @@ const show = (props: Partial<ReviewThreadProps> = {}) => {
         now={NOW}
         language="typescript"
         covered={["const attempts = 3;"]}
-        canApply
-        batch={{ has: () => false, problem: () => null }}
         {...handlers}
         {...props}
         {...extra}
@@ -144,27 +140,18 @@ describe("ReviewThreadView", () => {
       .getAllByRole("button")
       .map((button) => button.textContent);
 
-  it("puts a single suggestion's Add to batch in the thread's one row of actions", () => {
-    show({ thread: suggesting, batch: { has: () => false, problem: () => "Overlaps line 4." } });
-    expect(actions()).toEqual(["Reply", "Add to batch", "Resolve"]);
-    expect(
-      within(
-        document.querySelector<HTMLElement>("[data-slot=thread-actions]") ?? document.body,
-      ).getByText("Overlaps line 4."),
-    ).toBeTruthy();
+  it("ends with a field to click into to reply, and Resolve beside it", async () => {
+    show();
+    expect(actions()).toEqual(["Reply…", "Resolve"]);
+    await userEvent.click(screen.getByRole("button", { name: "Reply…" }));
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "Reply to the thread on line 4" }),
+    );
   });
 
-  it("keeps each suggestion's buttons under it when a thread has several", () => {
-    const suggestion = (id: string, line: string) => ({
-      id,
-      author: sam,
-      body: `${"```"}suggestion\n${line}\n${"```"}`,
-      createdAt: "2026-10-21T09:00:00Z",
-      originalCommit: null,
-    });
-    show({ thread: thread({ comments: [suggestion("s1", "a"), suggestion("s2", "b")] }) });
-    expect(actions()).toEqual(["Reply", "Resolve"]);
-    expect(screen.getAllByRole("button", { name: /^Add to batch/ })).toHaveLength(2);
+  it("has only Resolve for someone who can't reply", () => {
+    show({ thread: thread({ can: { reply: false, resolve: true } }) });
+    expect(actions()).toEqual(["Resolve"]);
   });
 
   it("opens the reply field with Reply, and closes it with Cancel", async () => {
@@ -280,7 +267,7 @@ describe("ReviewThreadView", () => {
     expect(onReply).toHaveBeenCalledTimes(2);
     // Posted: the field gives way to the row again.
     await vi.waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
-    expect(actions()).toContain("Reply");
+    expect(actions()).toContain("Reply…");
   });
 
   it("shows a reply that's posting", async () => {
@@ -325,14 +312,13 @@ describe("ReviewThreadView", () => {
   });
 
   it("has no letter shortcuts of its own", async () => {
-    const { onResolve, onAddToBatch } = show({ thread: suggesting });
+    const { onResolve } = show({ thread: suggesting });
     const article = screen.getByRole("article");
     expect(article.tabIndex).toBe(-1);
     article.focus();
     await userEvent.keyboard("reb");
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(onResolve).not.toHaveBeenCalled();
-    expect(onAddToBatch).not.toHaveBeenCalled();
   });
 
   it("folds a resolved thread to one line saying who resolved it, and reopens", async () => {
@@ -354,39 +340,20 @@ describe("ReviewThreadView", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("Not resolved: Not allowed.");
   });
 
-  it("marks an outdated thread and offers nothing to apply on it", () => {
+  it("marks an outdated thread", () => {
     show({ thread: { ...suggesting, outdated: true, line: null } });
     const article = screen.getByRole("article");
     expect(article.dataset.state).toBe("outdated");
     expect(within(article).getByText("Outdated")).toBeTruthy();
-    expect(within(article).queryByRole("button", { name: /batch/ })).toBeNull();
     // Without the current lines, only what would be added is shown.
     expect(article.querySelectorAll("[data-kind=del]")).toHaveLength(0);
   });
 
-  it("shows a suggestion as a diff of the lines it replaces, with Add to batch", async () => {
-    const { onAddToBatch, rerender, onRemoveFromBatch } = show({ thread: suggesting });
+  it("shows a suggestion as a diff of the lines it replaces, with nothing to apply it", () => {
+    show({ thread: suggesting });
     const diff = document.querySelector("[data-slot=suggestion-diff]");
     expect(diff?.querySelector("[data-kind=del]")?.textContent).toContain("const attempts = 3;");
     expect(diff?.querySelector("[data-kind=add]")?.textContent).toContain("const MAX = 3;");
-    await userEvent.click(screen.getByRole("button", { name: /^Add to batch/ }));
-    expect(onAddToBatch).toHaveBeenCalledWith("s1");
-    rerender({ batch: { has: () => true, problem: () => null } });
-    await userEvent.click(screen.getByRole("button", { name: /In batch/ }));
-    expect(onRemoveFromBatch).toHaveBeenCalledWith("s1");
-  });
-
-  it("says why a suggestion can't join the batch", () => {
-    show({ thread: suggesting, batch: { has: () => false, problem: () => "Overlaps line 4." } });
-    expect(
-      (screen.getByRole("button", { name: /^Add to batch/ }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-    expect(screen.getByText("Overlaps line 4.")).toBeTruthy();
-  });
-
-  it("shows a suggestion read-only to someone who can't push", () => {
-    show({ thread: suggesting, canApply: false });
-    expect(screen.getByText("Suggested change")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Apply|batch/ })).toBeNull();
   });
 

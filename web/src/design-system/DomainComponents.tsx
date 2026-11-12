@@ -164,11 +164,6 @@ export const DomainComponents = () => {
         <ThreadDemo label="Outdated" thread={THREADS.outdated} />
         <ThreadDemo label="With a suggestion" thread={THREADS.suggestion} />
         <ThreadDemo
-          label="With a suggestion, for someone who can't push"
-          thread={THREADS.suggestion}
-          canApply={false}
-        />
-        <ThreadDemo
           label="A reply that's posting"
           thread={THREADS.open}
           initialReply={{ text: "Capped it at 1,000 entries.", status: "posting" }}
@@ -393,34 +388,26 @@ const DraftDemo = () => {
 const ThreadDemo = ({
   label,
   ...props
-}: { readonly label: string } & Pick<ReviewThreadProps, "thread" | "initialReply"> &
-  Partial<Pick<ReviewThreadProps, "canApply">>) => {
-  const [batch, setBatch] = useState<readonly string[]>([]);
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-caption text-muted-foreground">{label}</span>
-      <ReviewThreadView
-        authorId="dana-kim"
-        now={Date.parse("2026-10-21T10:00:00Z")}
-        language="typescript"
-        covered={["const RETRIES = 3;"]}
-        canApply
-        batch={{ has: (id) => batch.includes(id), problem: () => null }}
-        onReply={async (body) => {
-          toast.success(`Replied: ${body}`);
-          return null;
-        }}
-        onResolve={async (resolved) => {
-          toast(resolved ? "Resolved" : "Reopened");
-          return null;
-        }}
-        onAddToBatch={(id) => setBatch([...batch, id])}
-        onRemoveFromBatch={(id) => setBatch(batch.filter((one) => one !== id))}
-        {...props}
-      />
-    </div>
-  );
-};
+}: { readonly label: string } & Pick<ReviewThreadProps, "thread" | "initialReply">) => (
+  <div className="flex flex-col gap-1">
+    <span className="text-caption text-muted-foreground">{label}</span>
+    <ReviewThreadView
+      authorId="dana-kim"
+      now={Date.parse("2026-10-21T10:00:00Z")}
+      language="typescript"
+      covered={["const RETRIES = 3;"]}
+      onReply={async (body) => {
+        toast.success(`Replied: ${body}`);
+        return null;
+      }}
+      onResolve={async (resolved) => {
+        toast(resolved ? "Resolved" : "Reopened");
+        return null;
+      }}
+      {...props}
+    />
+  </div>
+);
 
 const Card = ({ children }: { readonly children: ReactNode }) => (
   <div className="rounded-lg border">{children}</div>

@@ -104,19 +104,3 @@ export const BitbucketThreadComment = z.object({
     .nullish(),
 });
 export type BitbucketThreadComment = z.infer<typeof BitbucketThreadComment>;
-
-export const BitbucketRepositoryPermission = z.object({
-  permission: z.enum(["read", "write", "admin", "none"]).or(z.string()),
-});
-
-/** The PR's source branch and repository, for a commit on it. */
-export const BitbucketPullRequestSource = z.object({
-  source: z.object({
-    branch: Branch,
-    commit: CommitRef,
-    repository: z.object({ full_name: z.string().regex(/^[^/]+\/[^/]+$/) }).nullish(),
-  }),
-  destination: z.object({
-    repository: z.object({ full_name: z.string().regex(/^[^/]+\/[^/]+$/) }),
-  }),
-});

@@ -133,7 +133,6 @@ export type GitHubReviewThread = z.infer<typeof GitHubReviewThread>;
 export const GitHubThreadPage = z.object({
   repository: z.object({
     pullRequest: z.object({
-      viewerCanUpdate: z.boolean(),
       reviewThreads: z.object({
         pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
         nodes: z.array(GitHubReviewThread),
@@ -149,29 +148,3 @@ export const GitHubThreadReply = z.object({
 
 /** What resolving or reopening returns. Nothing in it is read. */
 export const GitHubThreadResolution = z.object({});
-
-/** The PR's source branch: its repository is null when the fork was deleted. */
-export const GitHubPullRequestHead = z.object({
-  head: z.object({
-    ref: z.string().min(1),
-    sha: Sha,
-    repo: z.object({ name: z.string().min(1), owner: Account }).nullable(),
-  }),
-});
-
-/** Directory listings by alias, for the modes of the files a commit changes. */
-export const GitHubTrees = z.object({
-  repository: z.record(
-    z.string(),
-    z
-      .object({
-        entries: z.array(z.object({ name: z.string(), mode: z.number().int() })).optional(),
-      })
-      .nullable(),
-  ),
-});
-
-/** A blob, tree or commit just created: only its SHA is read. */
-export const GitHubGitObject = z.object({ sha: Sha });
-
-export const GitHubGitCommit = z.object({ sha: Sha, tree: z.object({ sha: Sha }) });

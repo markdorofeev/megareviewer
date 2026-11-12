@@ -59,11 +59,10 @@ export const ReviewThread = z
   .readonly();
 export type ReviewThread = z.infer<typeof ReviewThread>;
 
-/** A PR's threads, and whether the current user may push suggestions to its branch. */
+/** A PR's threads. */
 export const ThreadList = z
   .object({
     threads: z.array(ReviewThread).readonly(),
-    canApply: z.boolean(),
   })
   .readonly();
 export type ThreadList = z.infer<typeof ThreadList>;

@@ -2,16 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   createFixtureFetch,
   describeReviewThreadsContract,
-  type RecordedExchange,
   RecordingLogger,
 } from "../../application/testing/index.ts";
 import type { PullRequestRef } from "../../domain/review/index.ts";
 import {
   BITBUCKET_ATTACHMENT,
-  BITBUCKET_THREADS_HEAD,
   bitbucketAttachmentExchanges,
   bitbucketThreadExchanges,
-  refusedCommit,
 } from "./fixtures/threads.synthetic.ts";
 import { createBitbucketReviewThreads } from "./index.ts";
 
@@ -28,12 +25,6 @@ const threadsWith = (fetch: typeof globalThis.fetch) =>
     fetch,
   });
 
-const commit = {
-  headSha: BITBUCKET_THREADS_HEAD,
-  message: "Apply suggestion from code review",
-  files: [{ path: "pipe/pipe.py", content: "retries = 3\n" }],
-};
-
 describeReviewThreadsContract("bitbucket", () => ({
   threads: () =>
     threadsWith(createFixtureFetch([...bitbucketThreadExchanges, ...bitbucketAttachmentExchanges])),
@@ -42,8 +33,6 @@ describeReviewThreadsContract("bitbucket", () => ({
   resolvedThread: "201",
   outdatedThread: "401",
   replyBody: "Thanks!",
-  commit,
-  staleCommit: { ...commit, headSha: "0".repeat(40) },
   attachment: BITBUCKET_ATTACHMENT,
 }));
 
@@ -51,7 +40,6 @@ describe("Bitbucket review threads", () => {
   it("builds threads from inline comments and their chains of replies", async () => {
     const result = await threadsWith(createFixtureFetch(bitbucketThreadExchanges)).getThreads(pr);
     if (!result.ok) throw new Error(result.error.message);
-    expect(result.value.canApply).toBe(true);
     const byId = new Map(result.value.threads.map((thread) => [thread.id, thread]));
     // A general comment isn't on code; a deleted thread with no replies has nothing to show.
     expect([...byId.keys()]).toEqual(["101", "201", "401", "501"]);
@@ -74,37 +62,6 @@ describe("Bitbucket review threads", () => {
     expect(byId.get("501")?.comments.map((comment) => comment.body)).toEqual([
       "Still worth a look.",
     ]);
-  });
-
-  it("can't apply without write permission", async () => {
-    const exchanges = bitbucketThreadExchanges.map((exchange) =>
-      exchange.request.url.includes("/permissions/repositories")
-        ? {
-            ...exchange,
-            response: { ...exchange.response, body: { values: [{ permission: "read" }] } },
-          }
-        : exchange,
-    );
-    const result = await threadsWith(createFixtureFetch(exchanges)).getThreads(pr);
-    expect(result.ok && result.value.canApply).toBe(false);
-  });
-
-  it("commits on the source branch with the head as parent, reading the SHA it made", async () => {
-    const result = await threadsWith(createFixtureFetch(bitbucketThreadExchanges)).applySuggestions(
-      pr,
-      commit,
-    );
-    expect(result).toEqual({ ok: true, value: { sha: "5".repeat(40) } });
-  });
-
-  it("refuses when Bitbucket says the branch moved", async () => {
-    const result = await threadsWith(
-      createFixtureFetch([
-        ...bitbucketThreadExchanges.filter((exchange) => !exchange.request.url.endsWith("/src")),
-        refusedCommit,
-      ] satisfies RecordedExchange[]),
-    ).applySuggestions(pr, commit);
-    expect(!result.ok && result.error.kind).toBe("rejected");
   });
 
   it("makes one request for a write that fails on the network", async () => {

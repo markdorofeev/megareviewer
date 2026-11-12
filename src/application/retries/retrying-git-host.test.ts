@@ -109,7 +109,7 @@ describe("retryingGitHost", () => {
 describe("retryingReviewThreads", () => {
   const threadSetup = () => {
     const fake = new FakeReviewThreads({ host: "github" });
-    fake.setThreads(ref, smallFeatureThreadList, smallFeature.pullRequest.headSha);
+    fake.setThreads(ref, smallFeatureThreadList);
     const delays: number[] = [];
     const threads = retryingReviewThreads(fake, {
       logger: new RecordingLogger(),
@@ -132,18 +132,13 @@ describe("retryingReviewThreads", () => {
     const { fake, threads, delays } = threadSetup();
     fake.failNext("reply", networkError);
     fake.failNext("setResolved", networkError);
-    fake.failNext("applySuggestions", networkError);
     expect(await threads.reply(ref, "PRRT_cache", "x")).toEqual({ ok: false, error: networkError });
     expect(await threads.setResolved(ref, "PRRT_cache", true)).toEqual({
       ok: false,
       error: networkError,
     });
-    const commit = { headSha: smallFeature.pullRequest.headSha, message: "m", files: [] };
-    expect(await threads.applySuggestions(ref, commit)).toEqual({ ok: false, error: networkError });
     expect(delays).toEqual([]);
-    expect(fake.commits).toEqual([]);
     expect((await threads.reply(ref, "PRRT_cache", "x")).ok).toBe(true);
     expect((await threads.setResolved(ref, "PRRT_cache", true)).ok).toBe(true);
-    expect((await threads.applySuggestions(ref, commit)).ok).toBe(true);
   });
 });

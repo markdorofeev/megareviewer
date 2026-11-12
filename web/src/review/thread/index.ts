@@ -2,7 +2,6 @@ export { CommentCard, type CommentState } from "./comment-card.tsx";
 export { initialsOf, relativeTime } from "./people.ts";
 export { lineRef, RefChip } from "./place-ref.tsx";
 export {
-  type BatchState,
   CHIP,
   type ReviewThreadProps,
   ReviewThreadView,

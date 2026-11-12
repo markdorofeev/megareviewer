@@ -1,20 +1,10 @@
 import type { Logger, ReviewThreads } from "../../application/ports/index.ts";
-import type {
-  HostError,
-  PullRequestRef,
-  ReviewThread,
-  ThreadComment,
-} from "../../domain/review/index.ts";
-import { err, ok } from "../../domain/shared/index.ts";
+import type { PullRequestRef, ReviewThread, ThreadComment } from "../../domain/review/index.ts";
+import { ok } from "../../domain/shared/index.ts";
 import { fetchAttachment } from "./attachments.ts";
 import { API, createBitbucketClient, REQUEST_TIMEOUT_MS } from "./client.ts";
 import { toHostUser } from "./map.ts";
-import {
-  BitbucketPage,
-  BitbucketPullRequestSource,
-  BitbucketRepositoryPermission,
-  BitbucketThreadComment,
-} from "./schemas.ts";
+import { BitbucketThreadComment } from "./schemas.ts";
 
 export interface BitbucketThreadsOptions {
   readonly username: string;
@@ -96,12 +86,6 @@ export const toThreads = (comments: readonly BitbucketThreadComment[]): ReviewTh
   return threads;
 };
 
-const rejected = (message: string): HostError => ({
-  kind: "rejected",
-  message,
-  retryAfterSeconds: null,
-});
-
 export const createBitbucketReviewThreads = (options: BitbucketThreadsOptions): ReviewThreads => {
   const client = createBitbucketClient({
     username: options.username,
@@ -123,28 +107,12 @@ export const createBitbucketReviewThreads = (options: BitbucketThreadsOptions): 
       }),
 
     async getThreads(ref) {
-      const fullName = `${ref.repo.owner}/${ref.repo.repo}`;
-      const [comments, permissions] = await Promise.all([
-        client.pages(
-          "the pull request's comments",
-          BitbucketThreadComment,
-          `${pullRequestUrl(ref)}/comments?${new URLSearchParams({ pagelen: "100" })}`,
-        ),
-        client.json(
-          "your permission on the repository",
-          BitbucketPage(BitbucketRepositoryPermission),
-          // `/user/permissions/repositories` was removed and answers 404.
-          `${API}/user/workspaces/${encodeURIComponent(ref.repo.owner)}/permissions/repositories?${new URLSearchParams({ q: `repository.full_name="${fullName}"` })}`,
-        ),
-      ]);
-      if (!comments.ok) return comments;
-      // Unknown is read-only: applying is the host's call anyway.
-      const canApply =
-        permissions.ok &&
-        permissions.value.values.some(
-          ({ permission }) => permission === "write" || permission === "admin",
-        );
-      return ok({ threads: toThreads(comments.value), canApply });
+      const comments = await client.pages(
+        "the pull request's comments",
+        BitbucketThreadComment,
+        `${pullRequestUrl(ref)}/comments?${new URLSearchParams({ pagelen: "100" })}`,
+      );
+      return comments.ok ? ok({ threads: toThreads(comments.value) }) : comments;
     },
 
     async reply(ref, threadId, body) {
@@ -167,43 +135,6 @@ export const createBitbucketReviewThreads = (options: BitbucketThreadsOptions): 
         { method: resolved ? "POST" : "DELETE", call: "publish" },
       );
       return result.ok ? ok(null) : result;
-    },
-
-    async applySuggestions(ref, commit) {
-      const pullRequest = await client.json(
-        "the pull request",
-        BitbucketPullRequestSource,
-        pullRequestUrl(ref),
-      );
-      if (!pullRequest.ok) return pullRequest;
-      const { source, destination } = pullRequest.value;
-      const head = source.commit?.hash;
-      if (head === undefined || !commit.headSha.startsWith(head)) {
-        return err(rejected("The branch has new commits since; nothing was committed."));
-      }
-      // A fork's branch lives in the fork; Bitbucket decides whether the credentials may push.
-      const form = new URLSearchParams({
-        message: commit.message,
-        branch: source.branch.name,
-        // Bitbucket refuses the commit when the branch's tip isn't this parent.
-        parents: commit.headSha,
-      });
-      for (const file of commit.files) form.append(`/${file.path}`, file.content);
-      const created = await client.send(
-        `${repoUrl(source.repository?.full_name ?? destination.repository.full_name)}/src`,
-        { method: "POST", form, call: "publish" },
-      );
-      if (!created.ok) {
-        return created.error.kind === "rejected"
-          ? err(
-              rejected(
-                `The branch has moved since; nothing was committed. ${created.error.message}`,
-              ),
-            )
-          : created;
-      }
-      const sha = created.value?.split("/").at(-1) ?? "";
-      return ok({ sha: /^[0-9a-f]{40}$/.test(sha) ? sha : null });
     },
   };
 };

@@ -1,5 +1,5 @@
 // Written from Bitbucket Cloud's REST docs against atlassian/bitbucket-upload-file#26, as
-// recording would post real comments and push a commit. Bodies keep only the fields the adapter
+// recording would post real comments. Bodies keep only the fields the adapter
 // reads. Open issue: the `resolution` field, the /resolve endpoint and `inline.outdated` need
 // confirming against a recorded response.
 
@@ -12,7 +12,6 @@ interface Exchange {
 const API = "https://api.bitbucket.org/2.0";
 const REPO = `${API}/repositories/atlassian/bitbucket-upload-file`;
 const PR = `${REPO}/pullrequests/26`;
-export const BITBUCKET_THREADS_HEAD = "b467819f28a4ca3cfbbdb889bd1bc7ba6918522d";
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
 const lee = { uuid: "{9b6f3c2e-1a4d-4c8b-8e2f-7d5a0c9b3e14}", display_name: "Lee Park" };
@@ -112,14 +111,6 @@ export const bitbucketThreadExchanges: Exchange[] = [
   },
   {
     request: {
-      method: "GET",
-      url: `${API}/user/workspaces/atlassian/permissions/repositories?q=${encodeURIComponent('repository.full_name="atlassian/bitbucket-upload-file"').replaceAll("%20", "+")}`,
-      accept: "application/json",
-    },
-    response: { status: 200, headers: JSON_HEADERS, body: { values: [{ permission: "write" }] } },
-  },
-  {
-    request: {
       method: "POST",
       url: `${PR}/comments`,
       body: { content: { raw: "Thanks!" }, parent: { id: 101 } },
@@ -143,38 +134,6 @@ export const bitbucketThreadExchanges: Exchange[] = [
     request: { method: "DELETE", url: `${PR}/comments/101/resolve` },
     response: { status: 204, headers: {}, body: null },
   },
-  {
-    request: { method: "GET", url: PR, accept: "application/json" },
-    response: {
-      status: 200,
-      headers: JSON_HEADERS,
-      body: {
-        source: {
-          branch: { name: "fix/cause" },
-          commit: { hash: BITBUCKET_THREADS_HEAD.slice(0, 12) },
-          repository: { full_name: "atlassian/bitbucket-upload-file" },
-        },
-        destination: { repository: { full_name: "atlassian/bitbucket-upload-file" } },
-      },
-    },
-  },
-  {
-    request: {
-      method: "POST",
-      url: `${REPO}/src`,
-      body: new URLSearchParams({
-        message: "Apply suggestion from code review",
-        branch: "fix/cause",
-        parents: BITBUCKET_THREADS_HEAD,
-        "/pipe/pipe.py": "retries = 3\n",
-      }).toString(),
-    },
-    response: {
-      status: 201,
-      headers: { location: `${REPO}/commit/${"5".repeat(40)}` },
-      body: null,
-    },
-  },
 ];
 
 export const BITBUCKET_ATTACHMENT =
@@ -186,13 +145,3 @@ export const bitbucketAttachmentExchanges: Exchange[] = [
     response: { status: 200, headers: { "content-type": "image/png" }, body: "PNGDATA" },
   },
 ];
-
-/** The branch moved after the PR was read: Bitbucket refuses the commit. */
-export const refusedCommit: Exchange = {
-  request: { method: "POST", url: `${REPO}/src` },
-  response: {
-    status: 409,
-    headers: JSON_HEADERS,
-    body: { type: "error", error: { message: "parents: the branch's tip has moved" } },
-  },
-};

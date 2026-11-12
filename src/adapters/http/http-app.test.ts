@@ -54,7 +54,7 @@ const setupApp = (
   const clock = new FixedClock("2026-10-21T10:00:00Z");
   const github = new FakeGitHost({ host: "github", fixtures: allFixtures, clock });
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: allFixtures, clock });
-  const threads = new FakeReviewThreads({ host: "github", clock, gitHost: github });
+  const threads = new FakeReviewThreads({ host: "github", clock });
   threads.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);
   threads.setAttachment(ATTACHMENT, { contentType: "image/png", bytes: new Uint8Array([137, 80]) });
   const store = options.store ?? new InMemoryAnalysisStore();
@@ -645,8 +645,8 @@ describe("the request log", () => {
 });
 
 describe("the thread routes", () => {
-  it("read, reply, resolve and apply", async () => {
-    const { call, threads } = await seeded();
+  it("read, reply and resolve", async () => {
+    const { call } = await seeded();
     const list = await call("getThreads", { params: { id } });
     expect(list.body?.threads).toHaveLength(smallFeatureThreadList.threads.length);
     const reply = await call("replyToThread", {
@@ -659,36 +659,15 @@ describe("the thread routes", () => {
       body: { resolved: true },
     });
     expect(resolved.body).toEqual({ resolved: true });
-    const applied = await call("applySuggestions", {
-      params: { id },
-      body: { commentIds: ["PRRC_ttl1"] },
-    });
-    expect(applied.body?.paths).toEqual(["src/services/receipts.ts"]);
-    expect(threads.commits).toHaveLength(1);
   });
 
-  it("rejects an empty reply, no suggestions and a malformed thread ID", async () => {
+  it("rejects an empty reply and a malformed thread ID", async () => {
     const { call } = await seeded();
     const bad = [
       await call("replyToThread", { params: { id, threadId: "PRRT_cache" }, body: { body: "  " } }),
-      await call("applySuggestions", { params: { id }, body: { commentIds: [] } }),
       await call("resolveThread", { params: { id, threadId: "a b" }, body: { resolved: true } }),
     ];
-    expect(bad.map((one) => one.error?.code)).toEqual([
-      "bad-request",
-      "bad-request",
-      "bad-request",
-    ]);
-  });
-
-  it("answers stale-analysis when the PR moved", async () => {
-    const { call, github } = await seeded();
-    github.setHeadSha(ref, "2".repeat(40));
-    const applied = await call("applySuggestions", {
-      params: { id },
-      body: { commentIds: ["PRRC_ttl1"] },
-    });
-    expect(applied.error?.code).toBe("stale-analysis");
+    expect(bad.map((one) => one.error?.code)).toEqual(["bad-request", "bad-request"]);
   });
 });
 

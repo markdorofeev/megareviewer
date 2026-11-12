@@ -49,6 +49,3 @@ export const useStoredState = <T>(
 
 export const parseBoolean = (stored: unknown): boolean | undefined =>
   typeof stored === "boolean" ? stored : undefined;
-
-export const parseStrings = (stored: unknown): readonly string[] | undefined =>
-  Array.isArray(stored) && stored.every((item) => typeof item === "string") ? stored : undefined;

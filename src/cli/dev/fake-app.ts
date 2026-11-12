@@ -97,7 +97,6 @@ export const controlRoutes = (options: {
       }
       await next();
     })
-    .get("/commits", (c) => c.json({ commits: options.threads.flatMap((one) => one.commits) }))
     .get("/publications", (c) =>
       c.json({ attempts: [...hosts.github.publishAttempts, ...hosts.bitbucket.publishAttempts] }),
     )
@@ -153,8 +152,8 @@ export const createFakeApp = async (options: {
   const github = new FakeGitHost({ host: "github", fixtures: fakeFixtures, clock });
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: fakeFixtures, clock });
   const threads = {
-    github: new FakeReviewThreads({ host: "github", clock, gitHost: github }),
-    bitbucket: new FakeReviewThreads({ host: "bitbucket", clock, gitHost: bitbucket }),
+    github: new FakeReviewThreads({ host: "github", clock }),
+    bitbucket: new FakeReviewThreads({ host: "bitbucket", clock }),
   };
   // small-feature has a conversation on its code; the other fixtures have none.
   threads.github.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);

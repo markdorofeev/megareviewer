@@ -7,7 +7,6 @@ const all = { reply: true, resolve: true };
 
 /** The mock PR's conversation: open, resolved, a suggestion, and one on lines the diff doesn't show. */
 export const fixtureThreads: ThreadList = {
-  canApply: true,
   threads: [
     {
       id: "PRRT_tax",

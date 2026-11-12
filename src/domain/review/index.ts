@@ -81,12 +81,8 @@ export {
   threadLines,
 } from "./thread.ts";
 export {
-  applyEdits,
   type BodyBlock,
   composeBody,
-  type EditProblem,
-  editsOverlap,
-  type LineEdit,
   type ParsedBody,
   parseBlocks,
   parseBody,

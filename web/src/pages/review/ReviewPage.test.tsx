@@ -1339,19 +1339,11 @@ describe("review threads", () => {
     expect(fileCards().length).toBeGreaterThan(0);
   });
 
-  it("collects a suggestion in the batch and applies it in one commit", async () => {
-    const { requests } = renderReview();
+  it("shows a suggestion with nothing to apply it", async () => {
+    renderReview();
     await loaded();
     const thread = await within(mainArea()).findByRole("article", { name: "Thread on line 29" });
-    await userEvent.click(within(thread).getByRole("button", { name: /^Add to batch/ }));
-    await userEvent.click(screen.getByRole("button", { name: "Apply 1 suggestion" }));
-    const dialog = await screen.findByRole("dialog", { name: "Apply 1 suggestion" });
-    expect(dialog.textContent).toContain("src/services/receipts.ts");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Apply 1 suggestion" }));
-    expect(await within(dialog).findByText(/Committed/)).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: "Analyze the new head" })).toBeTruthy();
-    const apply = requests.find((request) => request.url.endsWith("/suggestions/apply"));
-    expect(apply?.body).toEqual({ commentIds: ["PRRC_attempts1"] });
-    expect(screen.queryByRole("button", { name: "Apply 1 suggestion" })).toBeNull();
+    expect(thread.querySelector("[data-slot=suggestion-diff]")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /batch|Apply/ })).toBeNull();
   });
 });

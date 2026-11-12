@@ -32,7 +32,6 @@ export {
   FakeLocalCheckouts,
 } from "./fake-local-checkout.ts";
 export {
-  type FakeCommit,
   FakeReviewThreads,
   type ReviewThreadsMethod,
 } from "./fake-review-threads.ts";
