@@ -17,7 +17,7 @@ const openReview = async (page: Page, url: string, title: string) => {
   await page.getByRole("button", { name: "Analyze" }).click();
   await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Publish…" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
 };
 
 const decision = (page: Page, path: string) => ({
@@ -68,7 +68,7 @@ test("analyzes a PR picked from the list", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Fix crash when refunding store-credit orders", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Publish…" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
 });
 
 test("the map moves between the files with the keyboard", async ({ page }) => {
@@ -168,7 +168,7 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
   await writeComment(page, routes.comment, "Scope this to the order's owner.");
   await allSaved(page, 2);
 
-  await page.getByRole("button", { name: "Publish…" }).click();
+  await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish the review" });
   await expect(dialog.getByText(/^Verdict: ✕Request changes$/)).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "1 inline comment" })).toBeVisible();
@@ -204,7 +204,7 @@ test("a publish that fails part-way posts only the rest on retry", async ({ page
   const armed = await server.request.post("/__fake/fail-publish-comment", { data: { n: 3 } });
   expect(armed.ok()).toBe(true);
 
-  await page.getByRole("button", { name: "Publish…" }).click();
+  await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish the review" });
   await dialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("Retrying is safe");
@@ -231,7 +231,7 @@ test("a failed analysis shows where it failed, and retries", async ({ page }) =>
 
   await failure.getByRole("button", { name: "Retry" }).click();
   await expect(failure).toBeHidden();
-  await expect(page.getByRole("button", { name: "Publish…" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
 });
 
 test("a PR with new commits warns, and publishing asks first", async ({ page, server }) => {
@@ -248,7 +248,7 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
   await page.goto(`/review/${analysisId}`);
   await expect(page.getByRole("status").filter({ hasText: "new commits" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Publish…" }).click();
+  await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish the review" });
   await dialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("Publish anyway?");
@@ -319,7 +319,7 @@ test.describe("without the model", () => {
       "src/routes/orders.ts",
     );
 
-    await page.getByRole("button", { name: "Publish…" }).click();
+    await page.getByRole("button", { name: /^Publish review…/ }).click();
     const dialog = page.getByRole("dialog", { name: "Publish the review" });
     await dialog.getByRole("radio", { name: "Approve" }).check();
     await dialog.getByRole("button", { name: "Publish", exact: true }).click();
@@ -337,7 +337,7 @@ for (const width of [720, 1024, 1440]) {
     const overflows = () =>
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
     expect(await overflows()).toBe(false);
-    await expect(page.getByRole("button", { name: "Publish…" })).toBeInViewport();
+    await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeInViewport();
     // The rail has its own Tree · Overview switch; this is the page's layout switch.
     await page
       .getByRole("group", { name: "Layout" })

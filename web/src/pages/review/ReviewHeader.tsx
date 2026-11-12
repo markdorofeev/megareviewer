@@ -3,7 +3,7 @@ import type { AnalysisView } from "../../../../contracts/index.ts";
 import { pullRequestUrl } from "../../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage } from "../../api/index.ts";
 import { cn } from "../../lib/utils.ts";
-import { KeyHint, WARNING } from "../../review/index.ts";
+import { WARNING } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 
 /** Up to this many warnings show in full; more collapse to a count. */
@@ -11,29 +11,24 @@ const SHOWN_WARNINGS = 2;
 
 /**
  * The PR and its intent in a line, the layout switch, whether the analysis is still current, and
- * the way to publish the review.
+ * whether the review is published. Publishing itself is the floating button, in reach anywhere.
  */
 export const ReviewHeader = ({
   view,
   intent,
   tools,
-  canPublish,
   reanalyzing,
   reanalyzeError,
   onReanalyze,
-  onPublish,
 }: {
   readonly view: AnalysisView;
   /** The intent line, under the title. */
   readonly intent: ReactNode;
-  /** The layout switch, before publishing. */
+  /** The layout switch. */
   readonly tools: ReactNode;
-  /** There's something to post: a decision, a line comment, or a verdict the reviewer can give. */
-  readonly canPublish: boolean;
   readonly reanalyzing: boolean;
   readonly reanalyzeError: ApiError | null;
   readonly onReanalyze: () => void;
-  readonly onPublish: () => void;
 }) => {
   const { analysis, publication, stale } = view;
   const { pullRequest, warnings } = analysis;
@@ -60,7 +55,7 @@ export const ReviewHeader = ({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {tools}
-          {publication !== null ? (
+          {publication !== null && (
             <p role="status" className="flex items-center gap-1 font-medium text-review-approved">
               <span aria-hidden="true">✓</span>{" "}
               {publication.url === null ? (
@@ -76,13 +71,6 @@ export const ReviewHeader = ({
                 </a>
               )}
             </p>
-          ) : (
-            canPublish && (
-              <Button disabled={analysis.status !== "complete"} onClick={onPublish}>
-                Publish…
-                <KeyHint id="openReview" />
-              </Button>
-            )
           )}
         </div>
       </div>

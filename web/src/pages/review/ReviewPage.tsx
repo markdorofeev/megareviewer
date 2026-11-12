@@ -600,6 +600,13 @@ const Review = ({
   const pendingCount = analysis.decisions.filter(
     (decision) => verdicts.draftOf(decision.id).verdict === "pending",
   ).length;
+  // What publishing will post on the code: decided or commented decisions, and line comments.
+  const toPost =
+    analysis.decisions.filter((decision) => {
+      const draft = verdicts.draftOf(decision.id);
+      return draft.verdict !== "pending" || draft.comment.trim() !== "";
+    }).length + hunkComments.length;
+  const publishShown = view.publication === null && canPublish;
   const failureTitle =
     verdicts.failure === null
       ? ""
@@ -696,7 +703,11 @@ const Review = ({
   );
 
   return (
-    <div data-layout={layout} className="mx-auto flex max-w-[1600px] flex-col gap-4">
+    <div
+      data-layout={layout}
+      // Room under the last of the page for the floating Publish button.
+      className={cn("mx-auto flex max-w-[1600px] flex-col gap-4", publishShown && "pb-20")}
+    >
       <ReviewHeader
         view={view}
         intent={
@@ -735,14 +746,12 @@ const Review = ({
             />
           </>
         }
-        canPublish={canPublish}
         reanalyzing={reanalyze.pending}
         reanalyzeError={reanalyze.error}
         onReanalyze={async () => {
           const result = await reanalyze.run({ url: prUrl });
           if (result.ok) open(result.value.analysisId);
         }}
-        onPublish={() => void openPublish()}
       />
 
       {!complete && <ProgressStrip stages={analysis.stages} filesFetched={analysis.filesFetched} />}
@@ -878,6 +887,26 @@ const Review = ({
       )}
 
       <UsageFooter usage={analysis.usage} />
+
+      {publishShown && (
+        // Floats at the bottom right, so the review can be published from anywhere in the scroll.
+        <Button
+          size="lg"
+          data-slot="publish-button"
+          disabled={!complete}
+          onClick={() => void openPublish()}
+          className="fixed right-6 bottom-6 z-40 rounded-full px-4 shadow-lg"
+        >
+          Publish review…
+          {toPost > 0 && (
+            <span className="tabular rounded-full bg-primary-foreground px-1.5 text-caption text-primary">
+              {toPost}
+              <span className="sr-only"> to post</span>
+            </span>
+          )}
+          <KeyHint id="openReview" />
+        </Button>
+      )}
 
       {publishing && (
         <PublishDialog

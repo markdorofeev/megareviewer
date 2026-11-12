@@ -199,7 +199,9 @@ describe("ReviewPage states", () => {
       await screen.findByText("You can give verdicts once the analysis is complete."),
     ).toBeTruthy();
     expect(approve(OWNERSHIP).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: "Publish…" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: /^Publish review…/ }).hasAttribute("disabled")).toBe(
+      true,
+    );
 
     setView(fixture);
     await waitFor(() =>
@@ -610,7 +612,7 @@ describe("decisions", () => {
     });
     await loaded();
     expect(screen.getByRole("link", { name: "Published" }).getAttribute("href")).toBe(receipt.url);
-    expect(screen.queryByRole("button", { name: "Publish…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
     expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
     expect(reject(OWNERSHIP).hasAttribute("disabled")).toBe(true);
     const field = screen.getByLabelText<HTMLTextAreaElement>(
@@ -1010,7 +1012,7 @@ describe("without the model", () => {
   it("offers Publish to the author only once there's something to post", async () => {
     const { unmount } = renderReview({ view: { ...withoutModel, isAuthor: true } });
     await loaded();
-    expect(screen.queryByRole("button", { name: "Publish…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
     window.localStorage.setItem(
       `megareviewer:hunk-comments:${id}`,
       JSON.stringify([{ hunkId: h.receiptRoute, side: "new", line: 12, body: "Check the owner." }]),
@@ -1018,13 +1020,17 @@ describe("without the model", () => {
     unmount();
     renderReview({ view: { ...withoutModel, isAuthor: true } });
     await loaded();
-    expect(screen.getByRole("button", { name: "Publish…" })).toBeTruthy();
+    // It floats, in reach wherever the page is scrolled, and counts what will post.
+    const publish = screen.getByRole("button", { name: /^Publish review…/ });
+    expect(publish.dataset.slot).toBe("publish-button");
+    expect(publish.className).toContain("fixed");
+    expect(publish.textContent).toContain("1 to post");
   });
 
   it("offers Publish to a reviewer with nothing but a verdict to give", async () => {
     renderReview({ view: withoutModel });
     await loaded();
-    expect(screen.getByRole("button", { name: "Publish…" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Publish review…/ })).toBeTruthy();
   });
 
   it("shows what was asked in full, as text, in the details", async () => {
@@ -1094,7 +1100,7 @@ describe("comments on hunks", () => {
     });
     expect(field.value).toBe("Why this?");
 
-    await userEvent.click(screen.getByRole("button", { name: "Publish…" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Publish review…/ }));
     const dialog = await screen.findByRole("dialog", { name: "Publish the review" });
     await userEvent.click(within(dialog).getByRole("radio", { name: "Request changes" }));
     expect(await within(dialog).findByText("Verdict:")).toBeTruthy();
@@ -1133,7 +1139,7 @@ describe("comments on hunks", () => {
 
 describe("publishing", () => {
   const openDialog = async () => {
-    await userEvent.click(screen.getByRole("button", { name: "Publish…" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Publish review…/ }));
     const dialog = await screen.findByRole("dialog", { name: "Publish the review" });
     await within(dialog).findByText(/^Verdict:/);
     return dialog;
