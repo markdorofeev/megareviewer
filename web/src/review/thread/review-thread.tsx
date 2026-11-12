@@ -1,4 +1,4 @@
-import { Fragment, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
 import {
   parseBody,
   type ReviewThread,
@@ -7,7 +7,6 @@ import {
   suggestionOf,
   type ThreadComment,
 } from "../../../../src/domain/review/index.ts";
-import { isMac, shortcutFor, useSingleKeyShortcuts } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
@@ -118,8 +117,8 @@ const groupByAuthor = (
 
 /**
  * A review thread from the host: its comments grouped by person, with their severities and
- * suggested changes, and one row of actions: Reply (`r`), which opens the field in its place, a
- * lone suggestion's Add to batch (`b`), and Resolve (`e`). A resolved thread folds to one
+ * suggested changes, and one row of actions: Reply, which opens the field in its place, a
+ * lone suggestion's Add to batch, and Resolve. A resolved thread folds to one
  * line.
  */
 export const ReviewThreadView = ({
@@ -151,7 +150,6 @@ export const ReviewThreadView = ({
   const [resolveError, setResolveError] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const fieldId = useId();
-  const [singleKeys] = useSingleKeyShortcuts();
   const state = thread.resolved ? "resolved" : thread.outdated ? "outdated" : "open";
   const current = !thread.outdated && thread.line !== null && thread.side === "new";
   const applicable = canApply && current;
@@ -220,31 +218,6 @@ export const ReviewThreadView = ({
   // A lone suggestion's buttons join the thread's row; several keep theirs under each.
   const lone = suggesting.length === 1 && applicable ? firstSuggestion : undefined;
 
-  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    const id = shortcutFor(event, ["replyThread", "resolveThread", "addToBatch"], {
-      mac: isMac(),
-      singleKeys,
-    });
-    if (id === null) return;
-    if (id === "replyThread" && canReply) {
-      openField();
-    } else if (id === "resolveThread" && thread.can.resolve) {
-      void toggleResolved();
-    } else if (
-      id === "addToBatch" &&
-      firstSuggestion !== undefined &&
-      applicable &&
-      batch.problem(firstSuggestion.id) === null
-    ) {
-      if (batch.has(firstSuggestion.id)) onRemoveFromBatch?.(firstSuggestion.id);
-      else onAddToBatch?.(firstSuggestion.id);
-    } else {
-      return;
-    }
-    // Handled here, so the page's own r (reject a decision) doesn't run too.
-    event.preventDefault();
-  };
-
   const suggestionButtons = (comment: ThreadComment) => {
     const inBatch = batch.has(comment.id);
     const problem = batch.problem(comment.id);
@@ -258,7 +231,6 @@ export const ReviewThreadView = ({
           onClick={() => (inBatch ? onRemoveFromBatch?.(comment.id) : onAddToBatch?.(comment.id))}
         >
           {inBatch ? "✓ In batch" : "Add to batch"}
-          <KeyHint id="addToBatch" />
         </Button>
         {problem !== null && !inBatch && (
           <span className="text-caption text-muted-foreground">{problem}</span>
@@ -284,6 +256,16 @@ export const ReviewThreadView = ({
     );
   };
 
+  const time = (comment: ThreadComment) => (
+    <time
+      dateTime={comment.createdAt}
+      title={absoluteTime(comment.createdAt)}
+      className="text-caption text-muted-foreground"
+    >
+      {relativeTime(comment.createdAt, now)}
+    </time>
+  );
+
   const groupView = (group: readonly ThreadComment[]) => {
     const [head] = group;
     if (head === undefined) return null;
@@ -295,15 +277,9 @@ export const ReviewThreadView = ({
           {authorId !== null && head.author.id === authorId && (
             <span className={cn(CHIP, "border-border bg-muted text-muted-foreground")}>Author</span>
           )}
-          <time
-            dateTime={head.createdAt}
-            title={absoluteTime(head.createdAt)}
-            className="text-caption text-muted-foreground"
-          >
-            {relativeTime(head.createdAt, now)}
-          </time>
+          {time(head)}
         </header>
-        {group.map((comment) => {
+        {group.map((comment, at) => {
           const { severity, blocks } = parseBody(comment.body);
           return (
             <div
@@ -311,6 +287,13 @@ export const ReviewThreadView = ({
               data-slot="thread-comment"
               className="flex flex-col items-start gap-1.5"
             >
+              {at > 0 && (
+                // A later comment by the same person: its time and a hairline, without the header again.
+                <div data-slot="thread-comment-start" className="flex w-full items-center gap-2">
+                  {time(comment)}
+                  <span aria-hidden="true" className="h-px flex-1 bg-border" />
+                </div>
+              )}
               {severity !== null && <SeverityChip severity={severity} />}
               <div className="w-full">
                 <ThreadBody
@@ -335,9 +318,8 @@ export const ReviewThreadView = ({
       state={state}
       data-slot="review-thread"
       aria-label={`Thread on ${threadPlace(thread)}${thread.resolved ? ", resolved" : ""}`}
-      onKeyDown={onKeyDown}
-      // The thread takes the focus for r, e and b.
-      tabIndex={0}
+      // Not a tab stop, but the focus comes back to it when the reply field goes.
+      tabIndex={-1}
       className={cn("flex flex-col gap-3 -outline-offset-2", !open && "py-1.5", className)}
     >
       {!open ? (
@@ -438,7 +420,6 @@ export const ReviewThreadView = ({
                 {canReply && (
                   <Button variant="outline" size="sm" onClick={openField}>
                     Reply
-                    <KeyHint id="replyThread" />
                   </Button>
                 )}
                 {lone !== undefined && suggestionButtons(lone)}
@@ -450,7 +431,6 @@ export const ReviewThreadView = ({
                     onClick={() => void toggleResolved()}
                   >
                     {thread.resolved ? "Reopen" : "Resolve"}
-                    <KeyHint id="resolveThread" />
                   </Button>
                 )}
               </div>

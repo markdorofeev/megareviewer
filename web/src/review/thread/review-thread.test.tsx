@@ -97,7 +97,7 @@ describe("ReviewThreadView", () => {
     expect(article.querySelectorAll("[data-slot=thread-divider]")).toHaveLength(1);
   });
 
-  it("gives consecutive comments by one person one header, and a rule only between people", () => {
+  it("gives consecutive comments by one person one header, a time and hairline for each later one, and a rule only between people", () => {
     const comment = (id: string, author: typeof sam, body: string) => ({
       id,
       author,
@@ -124,6 +124,13 @@ describe("ReviewThreadView", () => {
     expect(within(article).getAllByText("Dana Kim")).toHaveLength(1);
     expect(within(article).getAllByText("Author")).toHaveLength(1);
     expect(article.querySelectorAll("[data-slot=thread-divider]")).toHaveLength(1);
+    // Each person's second comment starts with its own time, under the one header.
+    expect(
+      groups.map((group) => group.querySelectorAll("[data-slot=thread-comment-start] time").length),
+    ).toEqual([1, 1]);
+    expect(
+      groups[0]?.querySelectorAll("[data-slot=thread-comment]")[0]?.querySelector("time"),
+    ).toBeNull();
   });
 
   it("draws no rule in a thread of one comment", () => {
@@ -138,7 +145,7 @@ describe("ReviewThreadView", () => {
 
   it("puts a single suggestion's Add to batch in the thread's one row of actions", () => {
     show({ thread: suggesting, batch: { has: () => false, problem: () => "Overlaps line 4." } });
-    expect(actions()).toEqual(["Replyr", "Add to batchb", "Resolvee"]);
+    expect(actions()).toEqual(["Reply", "Add to batch", "Resolve"]);
     expect(
       within(
         document.querySelector<HTMLElement>("[data-slot=thread-actions]") ?? document.body,
@@ -155,7 +162,7 @@ describe("ReviewThreadView", () => {
       originalCommit: null,
     });
     show({ thread: thread({ comments: [suggestion("s1", "a"), suggestion("s2", "b")] }) });
-    expect(actions()).toEqual(["Replyr", "Resolvee"]);
+    expect(actions()).toEqual(["Reply", "Resolve"]);
     expect(screen.getAllByRole("button", { name: /^Add to batch/ })).toHaveLength(2);
   });
 
@@ -272,7 +279,7 @@ describe("ReviewThreadView", () => {
     expect(onReply).toHaveBeenCalledTimes(2);
     // Posted: the field gives way to the row again.
     await vi.waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
-    expect(actions()).toContain("Replyr");
+    expect(actions()).toContain("Reply");
   });
 
   it("shows a reply that's posting", async () => {
@@ -294,27 +301,15 @@ describe("ReviewThreadView", () => {
     await vi.waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
   });
 
-  it("takes r, e and b while the focus is in the thread", async () => {
+  it("has no letter shortcuts of its own", async () => {
     const { onResolve, onAddToBatch } = show({ thread: suggesting });
     const article = screen.getByRole("article");
+    expect(article.tabIndex).toBe(-1);
     article.focus();
-    await userEvent.keyboard("r");
-    expect(document.activeElement).toBe(
-      screen.getByRole("textbox", { name: /^Reply to the thread/ }),
-    );
-    article.focus();
-    await userEvent.keyboard("e");
-    expect(onResolve).toHaveBeenCalledWith(true);
-    article.focus();
-    await userEvent.keyboard("b");
-    expect(onAddToBatch).toHaveBeenCalledWith("s1");
-  });
-
-  it("doesn't take a letter typed in the reply field", async () => {
-    const { onResolve } = show();
-    await userEvent.click(screen.getByRole("button", { name: /^Reply/ }));
-    await userEvent.type(screen.getByRole("textbox"), "e");
+    await userEvent.keyboard("reb");
+    expect(screen.queryByRole("textbox")).toBeNull();
     expect(onResolve).not.toHaveBeenCalled();
+    expect(onAddToBatch).not.toHaveBeenCalled();
   });
 
   it("folds a resolved thread to one line saying who resolved it, and reopens", async () => {

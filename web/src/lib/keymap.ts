@@ -4,14 +4,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 // so a hint can't name a key that does something else. Single-key shortcuts never fire while
 // typing, and the reviewer can turn them off (WCAG 2.1.4); shortcuts with a modifier stay on.
 
-export type ShortcutScope =
-  | "global"
-  | "diff"
-  | "overview"
-  | "tree"
-  | "decision"
-  | "thread"
-  | "composer";
+export type ShortcutScope = "global" | "diff" | "overview" | "tree" | "decision" | "composer";
 
 export type ShortcutId =
   | "nextFile"
@@ -23,9 +16,6 @@ export type ShortcutId =
   | "comment"
   | "approveDecision"
   | "rejectDecision"
-  | "replyThread"
-  | "resolveThread"
-  | "addToBatch"
   | "toggleSplit"
   | "moveFile"
   | "openFile"
@@ -86,21 +76,6 @@ export const KEYMAP: readonly Shortcut[] = [
     chords: [{ key: "r" }],
     action: "Reject the selected decision",
     scope: "decision",
-  },
-  // The thread scope holds while the focus is in a thread, which a decision never contains, so
-  // r replies there and rejects only on a decision.
-  { id: "replyThread", chords: [{ key: "r" }], action: "Reply to the thread", scope: "thread" },
-  {
-    id: "resolveThread",
-    chords: [{ key: "e" }],
-    action: "Resolve or reopen the thread",
-    scope: "thread",
-  },
-  {
-    id: "addToBatch",
-    chords: [{ key: "b" }],
-    action: "Add the thread's suggestion to the batch",
-    scope: "thread",
   },
   { id: "toggleSplit", chords: [{ key: "u" }], action: "Unified or split diff", scope: "diff" },
   { id: "toggleLayout", chords: [{ key: "v" }], action: "Map or overview", scope: "global" },
