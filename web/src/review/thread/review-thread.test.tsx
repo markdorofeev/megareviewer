@@ -97,7 +97,7 @@ describe("ReviewThreadView", () => {
     expect(article.querySelectorAll("[data-slot=thread-divider]")).toHaveLength(1);
   });
 
-  it("gives consecutive comments by one person one header, a time and hairline for each later one, and a rule only between people", () => {
+  it("gives consecutive comments by one person one header, a time for each later one and a line down the run, and a rule only between people", () => {
     const comment = (id: string, author: typeof sam, body: string) => ({
       id,
       author,
@@ -124,13 +124,14 @@ describe("ReviewThreadView", () => {
     expect(within(article).getAllByText("Dana Kim")).toHaveLength(1);
     expect(within(article).getAllByText("Author")).toHaveLength(1);
     expect(article.querySelectorAll("[data-slot=thread-divider]")).toHaveLength(1);
-    // Each person's second comment starts with its own time, under the one header.
+    // Each person's second comment has its own time beside it, and a line runs down the run.
     expect(
-      groups.map((group) => group.querySelectorAll("[data-slot=thread-comment-start] time").length),
+      groups.map((group) => group.querySelectorAll("[data-slot=thread-comment] time").length),
     ).toEqual([1, 1]);
     expect(
       groups[0]?.querySelectorAll("[data-slot=thread-comment]")[0]?.querySelector("time"),
     ).toBeNull();
+    expect(article.querySelectorAll("[data-slot=thread-run]")).toHaveLength(2);
   });
 
   it("draws no rule in a thread of one comment", () => {

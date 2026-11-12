@@ -145,6 +145,7 @@
   --thread-bg: #FFFFFF;
   --thread-border: #E4E4E7;
   --thread-marker: #4F46E5;
+  --thread-run: #C4C4CA;
   --suggestion-bg: #F7F7FE;
 
   /* review states */
@@ -242,6 +243,7 @@
   --thread-bg: #1F1F1F;
   --thread-border: #434343;
   --thread-marker: #8B8EF9;
+  --thread-run: #5E5E66;
   --suggestion-bg: #252640;
 
   /* review states */
@@ -368,6 +370,7 @@
   --color-thread-bg: var(--thread-bg);
   --color-thread-border: var(--thread-border);
   --color-thread-marker: var(--thread-marker);
+  --color-thread-run: var(--thread-run);
   --color-suggestion-bg: var(--suggestion-bg);
   --color-review-approved: var(--review-approved);
   --color-review-approved-bg: var(--review-approved-bg);

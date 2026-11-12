@@ -260,51 +260,64 @@ export const ReviewThreadView = ({
     <time
       dateTime={comment.createdAt}
       title={absoluteTime(comment.createdAt)}
-      className="text-caption text-muted-foreground"
+      className="ml-auto shrink-0 pl-3 text-caption text-muted-foreground"
     >
       {relativeTime(comment.createdAt, now)}
     </time>
   );
 
+  /**
+   * One person's comments in a row: one header, the text lined up with their name, and each later
+   * comment's own time at the right, under the header's. A line under their initials runs down a
+   * run of several, so each reads as a comment of its own rather than a paragraph of the first.
+   */
   const groupView = (group: readonly ThreadComment[]) => {
     const [head] = group;
     if (head === undefined) return null;
     return (
-      <section data-slot="thread-group" className="flex flex-col gap-2">
-        <header className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <Initials name={head.author.name} />
+      <section
+        data-slot="thread-group"
+        className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-2.5 gap-y-0.5"
+      >
+        <Initials name={head.author.name} />
+        <header className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="font-medium">{head.author.name}</span>
           {authorId !== null && head.author.id === authorId && (
             <span className={cn(CHIP, "border-border bg-muted text-muted-foreground")}>Author</span>
           )}
           {time(head)}
         </header>
-        {group.map((comment, at) => {
-          const { severity, blocks } = parseBody(comment.body);
-          return (
-            <div
-              key={comment.id}
-              data-slot="thread-comment"
-              className="flex flex-col items-start gap-1.5"
-            >
-              {at > 0 && (
-                // A later comment by the same person: its time and a hairline, without the header again.
-                <div data-slot="thread-comment-start" className="flex w-full items-center gap-2">
-                  {time(comment)}
-                  <span aria-hidden="true" className="h-px flex-1 bg-border" />
+        {group.length > 1 ? (
+          <span
+            data-slot="thread-run"
+            aria-hidden="true"
+            className="flex justify-center pt-1.5 pb-1"
+          >
+            <span className="w-px bg-thread-run" />
+          </span>
+        ) : (
+          <span aria-hidden="true" />
+        )}
+        <div className="flex min-w-0 flex-col gap-3">
+          {group.map((comment, at) => {
+            const { severity, blocks } = parseBody(comment.body);
+            return (
+              <div key={comment.id} data-slot="thread-comment" className="flex items-baseline">
+                <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+                  {severity !== null && <SeverityChip severity={severity} />}
+                  <div className="w-full">
+                    <ThreadBody
+                      blocks={blocks}
+                      suggestion={suggestionView(comment)}
+                      {...(mediaUrl === undefined ? {} : { mediaUrl })}
+                    />
+                  </div>
                 </div>
-              )}
-              {severity !== null && <SeverityChip severity={severity} />}
-              <div className="w-full">
-                <ThreadBody
-                  blocks={blocks}
-                  suggestion={suggestionView(comment)}
-                  {...(mediaUrl === undefined ? {} : { mediaUrl })}
-                />
+                {at > 0 && time(comment)}
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </section>
     );
   };
