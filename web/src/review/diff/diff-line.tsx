@@ -1,4 +1,4 @@
-import { type MouseEvent, memo } from "react";
+import { Fragment, type MouseEvent, memo, type ReactNode } from "react";
 import { cn } from "../../lib/utils.ts";
 import type { CharRange } from "./intra-line.ts";
 import type { LineKind, ViewLine } from "./rows.ts";
@@ -69,24 +69,38 @@ interface Segment {
   readonly text: string;
   readonly type: SyntaxTokenType | null;
   readonly changed: boolean;
+  /** Where the segment starts in the line's text. */
+  readonly start: number;
 }
 
-/** Splits the tokens at the edges of the word ranges, so both can be styled at once. */
+/**
+ * A range of a line's text that `render` wraps, such as a call that shows the code it runs. Marks
+ * don't overlap.
+ */
+export interface LineMark extends CharRange {
+  readonly render: (code: ReactNode) => ReactNode;
+}
+
+/**
+ * Splits the tokens at the edges of the word ranges, so both can be styled at once, and at the
+ * edges of `cuts`, such as marks, so a segment is in one or none.
+ */
 export const segments = (
   text: string,
   tokens: readonly SyntaxToken[] | null,
   ranges: readonly CharRange[],
+  cuts: readonly CharRange[] = [],
 ): Segment[] => {
   const out: Segment[] = [];
   let offset = 0;
   for (const token of tokens ?? [{ text, type: null }]) {
     const end = offset + token.text.length;
-    const cuts = new Set([offset, end]);
-    for (const range of ranges) {
-      if (range.start > offset && range.start < end) cuts.add(range.start);
-      if (range.end > offset && range.end < end) cuts.add(range.end);
+    const cutAt = new Set([offset, end]);
+    for (const range of [...ranges, ...cuts]) {
+      if (range.start > offset && range.start < end) cutAt.add(range.start);
+      if (range.end > offset && range.end < end) cutAt.add(range.end);
     }
-    const edges = [...cuts].sort((a, b) => a - b);
+    const edges = [...cutAt].sort((a, b) => a - b);
     for (let i = 0; i + 1 < edges.length; i++) {
       const start = edges[i] ?? offset;
       const stop = edges[i + 1] ?? end;
@@ -94,6 +108,7 @@ export const segments = (
         text: text.slice(start, stop),
         type: token.type,
         changed: ranges.some((range) => range.start <= start && stop <= range.end),
+        start,
       });
     }
     offset = end;
@@ -131,6 +146,8 @@ export interface DiffLineProps {
   };
   /** A click anywhere on the row, e.g. to comment on it. */
   readonly onRowClick?: (event: MouseEvent<HTMLDivElement>) => void;
+  /** Ranges of the code to wrap, e.g. calls; a new array each render re-renders the row. */
+  readonly marks?: readonly LineMark[];
 }
 
 /** One line of a diff: the old and new numbers, the + / − marker, and the code. */
@@ -148,6 +165,7 @@ export const DiffLine = memo(function DiffLine({
   numberButton,
   onRowClick,
   cellRole = "gridcell",
+  marks = NO_MARKS,
 }: DiffLineProps) {
   const kind = KIND[line.kind];
   const number = line.newNo ?? line.oldNo;
@@ -255,19 +273,24 @@ export const DiffLine = memo(function DiffLine({
         )}
       >
         <span className="sr-only">{`${kind.label} line ${number ?? ""}: `}</span>
-        {segments(line.text, line.tokens, line.wordRanges).map((segment, index) => (
-          <span
-            // biome-ignore lint/suspicious/noArrayIndexKey: the line's segments never reorder.
-            key={index}
-            data-changed={segment.changed || undefined}
-            className={cn(
-              segment.type !== null && SYNTAX[segment.type],
-              segment.changed && cn(kind.word, "rounded-sm"),
-            )}
-          >
-            {segment.text}
-          </span>
-        ))}
+        {markedCode(
+          segments(line.text, line.tokens, line.wordRanges, marks).map((segment) => ({
+            start: segment.start,
+            element: (
+              <span
+                key={segment.start}
+                data-changed={segment.changed || undefined}
+                className={cn(
+                  segment.type !== null && SYNTAX[segment.type],
+                  segment.changed && cn(kind.word, "rounded-sm"),
+                )}
+              >
+                {segment.text}
+              </span>
+            ),
+          })),
+          marks,
+        )}
         {line.notes.map((note) => (
           <span
             key={note}
@@ -280,6 +303,26 @@ export const DiffLine = memo(function DiffLine({
     </div>
   );
 });
+
+const NO_MARKS: readonly LineMark[] = [];
+
+/** A line's segments as elements, the runs inside a mark wrapped by its `render`. */
+const markedCode = (
+  elements: readonly { readonly start: number; readonly element: ReactNode }[],
+  marks: readonly LineMark[],
+): ReactNode[] => {
+  if (marks.length === 0) return elements.map(({ element }) => element);
+  const runs: { mark: LineMark | null; code: ReactNode[] }[] = [];
+  for (const { start, element } of elements) {
+    const mark = marks.find((one) => start >= one.start && start < one.end) ?? null;
+    const last = runs.at(-1);
+    if (mark !== null && last?.mark === mark) last.code.push(element);
+    else runs.push({ mark, code: [element] });
+  }
+  return runs.flatMap(({ mark, code }) =>
+    mark === null ? code : [<Fragment key={`mark-${mark.start}`}>{mark.render(code)}</Fragment>],
+  );
+};
 
 /** An empty half of a split row, beside a line the other side doesn't have. */
 export const EmptyHalf = ({ density = "default" }: { readonly density?: Density }) => (
