@@ -5,13 +5,19 @@
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import { cn } from "../lib/utils.ts";
 
-function HoverCard({ ...props }: PreviewCardPrimitive.Root.Props) {
+// hunk: generic over the payload, so one card can show what each of many detached triggers carries.
+function HoverCard<Payload>({ ...props }: PreviewCardPrimitive.Root.Props<Payload>) {
   return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />;
 }
 
-function HoverCardTrigger({ ...props }: PreviewCardPrimitive.Trigger.Props) {
+function HoverCardTrigger<Payload>({ ...props }: PreviewCardPrimitive.Trigger.Props<Payload>) {
   return <PreviewCardPrimitive.Trigger data-slot="hover-card-trigger" {...props} />;
 }
+
+// hunk: a handle joins a card to triggers rendered anywhere on the page.
+type HoverCardHandle<Payload> = PreviewCardPrimitive.Handle<Payload>;
+const createHoverCardHandle = <Payload,>(): HoverCardHandle<Payload> =>
+  PreviewCardPrimitive.createHandle<Payload>();
 
 function HoverCardContent({
   className,
@@ -44,4 +50,10 @@ function HoverCardContent({
   );
 }
 
-export { HoverCard, HoverCardContent, HoverCardTrigger };
+export {
+  createHoverCardHandle,
+  HoverCard,
+  HoverCardContent,
+  type HoverCardHandle,
+  HoverCardTrigger,
+};

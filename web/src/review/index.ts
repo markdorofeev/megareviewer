@@ -1,7 +1,15 @@
 // The review page's components on the Indigo Calm design system. Shown on /design-system.html for
 // now; the review page moves to them later.
 
-export { type Density, DiffLine } from "./diff/diff-line.tsx";
+export {
+  type CallPayload,
+  CallPeek,
+  type CallPeekHandle,
+  type CallTarget,
+  CallTrigger,
+  createCallPeekHandle,
+} from "./diff/call-peek.tsx";
+export { type Density, DiffLine, type LineMark } from "./diff/diff-line.tsx";
 export { type DiffView, DiffViewer, type DiffViewerProps } from "./diff/diff-viewer.tsx";
 export { FilePath, FileStatusChip, UnchangedUses } from "./diff/file-path.tsx";
 export {

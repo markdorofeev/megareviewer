@@ -37,7 +37,7 @@ import {
   SuggestionDiff,
   ThreadBody,
 } from "../thread/index.ts";
-import { DiffLine } from "./diff-line.tsx";
+import { DiffLine, type LineMark } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { languageOf } from "./languages.ts";
 import { hunkLocation, lineCounts } from "./lines.ts";
@@ -114,6 +114,8 @@ const linesShown = (hunk: Hunk, start: number, end: number): readonly string[] |
   return lines;
 };
 
+const NO_MARKS: readonly LineMark[] = [];
+
 export interface HunkCardProps {
   /** The part this card shows, which its callbacks name; the hunk's ID when it isn't split. */
   readonly id?: PartId;
@@ -157,6 +159,8 @@ export interface HunkCardProps {
    * the header shows only a proof, and the part shows no risk of its own.
    */
   readonly inFile?: boolean;
+  /** Ranges of the code to wrap, e.g. calls, by new-side line number. */
+  readonly marks?: ReadonlyMap<number, readonly LineMark[]>;
 }
 
 /** One hunk, or one part of a split hunk: its file, place and risk when alone, and its lines. */
@@ -181,6 +185,7 @@ export const HunkCard = memo(function HunkCard({
   threadsAt,
   rangeNote,
   inFile = false,
+  marks,
 }: HunkCardProps) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -309,6 +314,11 @@ export const HunkCard = memo(function HunkCard({
                 <DiffLine
                   line={line}
                   cellRole="cell"
+                  marks={
+                    (line.kind === "del" || line.newNo === null
+                      ? undefined
+                      : marks?.get(line.newNo)) ?? NO_MARKS
+                  }
                   marked={
                     place !== null &&
                     onComment !== undefined &&

@@ -3,6 +3,7 @@ import type { PartId, UnchangedCallers } from "../../../../src/domain/diff/index
 import {
   HunkCard,
   type LineComment,
+  type LineMark,
   type LinePlace,
   MechanicalHunk,
   PINNED,
@@ -35,9 +36,14 @@ export interface HunkDeps {
   readonly openThreads: (path: string) => number;
   /** Said when the reviewer picks a range, e.g. that the host can't anchor one. */
   readonly rangeNote?: string;
+  /** A part's calls into code the PR changes, by new-side line. */
+  readonly marksOf: (id: PartId) => ReadonlyMap<number, readonly LineMark[]> | undefined;
 }
 
 export const hunkAnchor = (id: PartId): string => `hunk-${id}`;
+
+const markProps = (marks: ReadonlyMap<number, readonly LineMark[]> | undefined) =>
+  marks === undefined ? {} : { marks };
 
 /** One part on its file's card: a mechanical one collapsed with its proof, any other its lines. */
 export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: HunkDeps }) => {
@@ -76,6 +82,7 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       afterHeader={deps.decisionsOn(id)}
       threadsAt={(place) => deps.threadsAt(id, place)}
       {...(deps.rangeNote === undefined ? {} : { rangeNote: deps.rangeNote })}
+      {...markProps(deps.marksOf(id))}
     />
   );
 };

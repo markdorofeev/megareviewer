@@ -486,6 +486,15 @@ describe("map", () => {
     expect(within(placeOf(h.formatMoneyRemoved)).getByRole("region")).toBeTruthy();
   });
 
+  it("marks the calls into code the PR changes, on their parts' lines", async () => {
+    renderReview();
+    await loaded();
+    const calls = (id: PartId) =>
+      [...placeOf(id).querySelectorAll("[data-slot=call]")].map((call) => call.textContent);
+    expect(calls(h.receiptRoute)).toEqual(["cachedReceipt"]);
+    expect(calls(h.receiptFormatting)).toEqual(["formatMoney"]);
+  });
+
   it("still works when storage throws", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");

@@ -15,7 +15,9 @@ import { navigate, reviewPath } from "../../app/router.ts";
 import { type ShortcutHandlers, type ShortcutId, useShortcuts } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
 import {
+  CallPeek,
   commentPlace,
+  createCallPeekHandle,
   DANGER,
   DiffSkeleton,
   FileTree,
@@ -31,6 +33,7 @@ import {
 } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
+import { callMarks } from "./calls.tsx";
 import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
@@ -290,6 +293,13 @@ const Review = ({
     return byPart;
   }, [analysis.unchangedCallers]);
   const unchangedOf = useCallback((id: PartId) => unchanged.get(id) ?? NO_UNCHANGED, [unchanged]);
+  // One card for every call on the page, carrying the code of the call under the pointer.
+  const [callPeek] = useState(createCallPeekHandle);
+  const calls = useMemo(
+    () => callMarks(analysis.callSites, index, callPeek),
+    [analysis.callSites, index, callPeek],
+  );
+  const marksOf = useCallback((id: PartId) => calls.get(id), [calls]);
   const [focusedHunkId, setFocusedHunkId] = useState<PartId | null>(null);
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
@@ -673,6 +683,7 @@ const Review = ({
     ...(complete ? { onCommentNow: postCommentNow } : {}),
     published: publication !== null,
     onFocusHunk: focusHunk,
+    marksOf,
     decisionsOn,
     threadsAt,
     earlierThreads,
@@ -923,6 +934,7 @@ const Review = ({
         />
       )}
       <ShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} ids={PAGE_SHORTCUTS} />
+      <CallPeek handle={callPeek} onGoTo={(id) => scrollTo(hunkAnchor(id))} />
       {showDetails && (
         <Dialog
           title={analysis.intent === null ? "What was asked" : "Intent"}
