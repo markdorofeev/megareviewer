@@ -13,6 +13,7 @@ import type { GitHost, PublishOptions } from "../../ports/index.ts";
 
 export interface GitHostContractSetup {
   host(scenario: "ok" | "unauthorized" | "rate-limited"): GitHost;
+  /** A PR that exists and is merged. */
   existingPr: PullRequestRef;
   missingPr: PullRequestRef;
   existingFile: { repo: RepoRef; sha: string; path: string };
@@ -95,6 +96,15 @@ export const describeGitHostContract = (name: string, setup: () => GitHostContra
       }
     });
 
+    it("leaves merged and missing PRs out of the open ones", async () => {
+      const result = await s.host("ok").getOpenPullRequests([s.existingPr, s.missingPr]);
+      expect(result).toEqual({ ok: true, value: [] });
+    });
+
+    it("finds no open PRs among none", async () => {
+      expect(await s.host("ok").getOpenPullRequests([])).toEqual({ ok: true, value: [] });
+    });
+
     it("publishes, calling onPosted once per posted key", async () => {
       const options = recordingOptions(s.publishablePr.headSha);
       const result = await s.host("ok").publish(s.publishablePr.ref, s.publication, options);
@@ -126,6 +136,7 @@ export const describeGitHostContract = (name: string, setup: () => GitHostContra
           { sha: s.existingFile.sha, path: s.existingFile.path },
         ]),
         await host.listPullRequests(),
+        await host.getOpenPullRequests([s.existingPr]),
         await host.publish(s.publishablePr.ref, s.publication, options),
       ];
 

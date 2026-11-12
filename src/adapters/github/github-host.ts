@@ -1,14 +1,30 @@
 import { z } from "zod";
 import type { FileAt, GitHost } from "../../application/ports/index.ts";
-import type { CommentKey, HostError, HostUser, RepoRef } from "../../domain/review/index.ts";
+import type {
+  CommentKey,
+  HostError,
+  HostUser,
+  PullRequestRef,
+  PullRequestSummary,
+  RepoRef,
+} from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
 import { createGitHubClient, type GitHubClientOptions } from "./client.ts";
-import { byUpdatedAtDesc, toHostUser, toPullRequest, toSummaries } from "./map.ts";
+import { graphqlPartialData } from "./errors.ts";
+import {
+  byUpdatedAtDesc,
+  openAlias,
+  toHostUser,
+  toOpenSummaries,
+  toPullRequest,
+  toSummaries,
+} from "./map.ts";
 import { matchComments, planReview, SUMMARY } from "./publish.ts";
 import {
   GitHubBlobs,
   GitHubCommit,
   GitHubComparison,
+  GitHubOpenPullRequests,
   GitHubPullRequest,
   GitHubReview,
   GitHubReviewComment,
@@ -39,6 +55,34 @@ const blobsQuery = (count: number): string => {
     .join("\n    ");
   return `query ($owner: String!, $repo: String!, ${variables}) {\n  repository(owner: $owner, name: $repo) {\n    ${objects}\n  }\n}`;
 };
+
+/** PRs per GraphQL query: each is an alias, so one request reads them all. */
+const PULL_REQUESTS_PER_QUERY = 50;
+
+/** Reads the state of `count` PRs, each named by variables so names are never interpolated. */
+export const openPullRequestsQuery = (count: number): string => {
+  const indexes = Array.from({ length: count }, (_, i) => i);
+  const variables = indexes.map((i) => `$o${i}: String!, $r${i}: String!, $n${i}: Int!`).join(", ");
+  const pullRequests = indexes
+    .map(
+      (i) =>
+        `${openAlias(i)}: repository(owner: $o${i}, name: $r${i}) { pullRequest(number: $n${i}) { state title url updatedAt author { login } } }`,
+    )
+    .join("\n  ");
+  return `query (${variables}) {\n  ${pullRequests}\n}`;
+};
+
+/** The variables of openPullRequestsQuery for `refs`. */
+export const openPullRequestsVariables = (
+  refs: readonly PullRequestRef[],
+): Record<string, string | number> =>
+  Object.fromEntries(
+    refs.flatMap((ref, i) => [
+      [`o${i}`, ref.repo.owner],
+      [`r${i}`, ref.repo.repo],
+      [`n${i}`, ref.number],
+    ]),
+  );
 
 export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
   const { clock, logger } = options;
@@ -223,6 +267,28 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
           ...toSummaries(authored.value, "author"),
         ].sort(byUpdatedAtDesc),
       );
+    },
+
+    async getOpenPullRequests(refs) {
+      const open: PullRequestSummary[] = [];
+      for (let start = 0; start < refs.length; start += PULL_REQUESTS_PER_QUERY) {
+        const chunk = refs.slice(start, start + PULL_REQUESTS_PER_QUERY);
+        const states = await read(
+          `${chunk.length} pull requests' states`,
+          GitHubOpenPullRequests,
+          (request) =>
+            octokit
+              .graphql(openPullRequestsQuery(chunk.length), {
+                ...openPullRequestsVariables(chunk),
+                request,
+              })
+              // A PR or repository that's gone fails only its own alias, which is left out.
+              .catch((error: unknown) => graphqlPartialData(error) ?? Promise.reject(error)),
+        );
+        if (!states.ok) return states;
+        open.push(...toOpenSummaries(chunk, states.value));
+      }
+      return ok(open);
     },
 
     async publish(ref, publication, { headSha, alreadyPosted, onPosted }) {

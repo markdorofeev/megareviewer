@@ -78,6 +78,25 @@ export const GitHubSearchResult = z.object({
 });
 export type GitHubSearchResult = z.infer<typeof GitHubSearchResult>;
 
+/** One alias per PR asked about; null when its repository isn't there or can't be read. */
+export const GitHubOpenPullRequests = z.record(
+  z.string(),
+  z
+    .object({
+      pullRequest: z
+        .object({
+          state: z.string(),
+          title: z.string(),
+          url: HttpUrl,
+          updatedAt: Timestamp,
+          author: Account.nullable(),
+        })
+        .nullable(),
+    })
+    .nullable(),
+);
+export type GitHubOpenPullRequests = z.infer<typeof GitHubOpenPullRequests>;
+
 export const GitHubReview = z.object({
   id: z.number().int(),
   html_url: HttpUrl,

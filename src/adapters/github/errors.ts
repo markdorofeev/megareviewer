@@ -21,6 +21,17 @@ const GraphqlResponseError = z.object({
   errors: z.array(z.object({ type: z.string().optional(), message: z.string() })).min(1),
 });
 
+const GraphqlPartialResponse = GraphqlResponseError.extend({ data: z.unknown() });
+
+/**
+ * The data GitHub answered alongside errors, when it did: a query of many aliases answers
+ * every alias, with null for those that failed.
+ */
+export const graphqlPartialData = (error: unknown): unknown => {
+  const parsed = GraphqlPartialResponse.safeParse(error);
+  return parsed.success ? parsed.data.data : undefined;
+};
+
 export interface GitHubErrorResponse {
   readonly status: number;
   readonly headers: Readonly<Record<string, unknown>>;

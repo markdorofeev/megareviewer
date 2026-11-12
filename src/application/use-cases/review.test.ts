@@ -412,6 +412,74 @@ describe("listPullRequests", () => {
     const list = await useCases.listPullRequests();
     expect(list.items.map((item) => item.url)).not.toContain(bitbucketBugfix.pullRequest.url);
   });
+
+  it("adds a PR opened here that no host lists, as one to review", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    github.unlist(ref);
+
+    const list = await useCases.listPullRequests();
+
+    expect(list.items.filter((item) => item.ref.number === ref.number)).toEqual([
+      expect.objectContaining({ ref, role: "reviewer", url: smallFeature.pullRequest.url }),
+    ]);
+    expect(list.items).toHaveLength(allFixtures.length);
+  });
+
+  it("leaves out a PR opened here that has since been merged or closed", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    github.close(ref);
+
+    const list = await useCases.listPullRequests();
+
+    expect(list.items.map((item) => item.url)).not.toContain(smallFeature.pullRequest.url);
+    expect(github.getOpenPullRequestsCalls).toEqual([[ref]]);
+  });
+
+  it("lists a PR the host lists and that was opened here once, with the host's role", async () => {
+    const { useCases, seeded } = setup({ githubUser: smallFeature.pullRequest.author });
+    await seeded;
+
+    const list = await useCases.listPullRequests();
+
+    expect(list.items.filter((item) => item.url === smallFeature.pullRequest.url)).toEqual([
+      expect.objectContaining({ role: "author" }),
+    ]);
+  });
+
+  it("asks a host only about the PRs opened on it", async () => {
+    const { useCases, github, bitbucket, seeded } = setup();
+    await seeded;
+
+    await useCases.listPullRequests();
+
+    expect(github.getOpenPullRequestsCalls).toEqual([[ref]]);
+    expect(bitbucket.getOpenPullRequestsCalls).toEqual([]);
+  });
+
+  it("reports a failed lookup of opened PRs once, keeping what the host lists", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    github.unlist(ref);
+    github.failNext("getOpenPullRequests", network);
+
+    const list = await useCases.listPullRequests();
+
+    expect(list.errors).toEqual([{ host: "github", message: "socket hang up" }]);
+    expect(list.items).toHaveLength(allFixtures.length - 1);
+  });
+
+  it("reports a failing host once when its lookup fails too", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    github.failNext("listPullRequests", network);
+    github.failNext("getOpenPullRequests", { ...network, message: "timed out" });
+
+    const list = await useCases.listPullRequests();
+
+    expect(list.errors).toEqual([{ host: "github", message: "socket hang up" }]);
+  });
 });
 
 describe("getStatus", () => {

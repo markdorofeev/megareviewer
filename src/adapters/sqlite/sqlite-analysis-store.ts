@@ -15,6 +15,7 @@ import {
   CommentKey,
   DecisionVerdict,
   PublicationReceipt,
+  PullRequestRef,
   type RepoRef,
 } from "../../domain/review/index.ts";
 import { MIGRATIONS, migrate } from "./migrations.ts";
@@ -42,6 +43,12 @@ const VerdictRow = z.object({
 const PostedCommentRow = z.object({ comment_key: z.string(), host_comment_id: z.string() });
 const ReceiptRow = z.object({ receipt: z.string() });
 const FileRow = z.object({ content: z.string().nullable() });
+const RefRow = z.object({
+  host: z.string(),
+  owner: z.string(),
+  repo: z.string(),
+  number: z.number(),
+});
 
 const parseJson = (text: string): unknown => {
   try {
@@ -87,6 +94,11 @@ export const openSqliteAnalysisStore = (
   );
   const selectRecent = db.prepare(
     "SELECT id, payload FROM analyses ORDER BY updated_at DESC, id LIMIT ?",
+  );
+  const selectAnalyzedPullRequests = db.prepare(
+    `SELECT host, owner, repo, number FROM analyses
+     GROUP BY host, owner, repo, number
+     ORDER BY MAX(updated_at) DESC, host, owner, repo, number LIMIT ?`,
   );
   // An upsert, not INSERT OR REPLACE: a replace deletes the row and would cascade to its verdicts.
   const upsertAnalysis = db.prepare(
@@ -191,6 +203,14 @@ export const openSqliteAnalysisStore = (
         .all(limit)
         .map(toAnalysis)
         .filter((analysis) => analysis !== null);
+    },
+
+    async listAnalyzedPullRequests(limit: number) {
+      return selectAnalyzedPullRequests.all(limit).flatMap((raw) => {
+        const { host, owner, repo, number } = RefRow.parse(raw);
+        const ref = PullRequestRef.safeParse({ repo: { host, owner, repo }, number });
+        return ref.success ? [ref.data] : [];
+      });
     },
 
     async getVerdicts(id: AnalysisId) {

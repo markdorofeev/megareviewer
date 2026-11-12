@@ -51,6 +51,7 @@ export const describeAnalysisStoreContract = (
       expect(await store.getAnalysis(a.id)).toBeNull();
       expect(await store.findByKey(a.key)).toBeNull();
       expect(await store.listRecent(10)).toEqual([]);
+      expect(await store.listAnalyzedPullRequests(10)).toEqual([]);
       expect(await store.getVerdicts(a.id)).toEqual([]);
       expect([...(await store.getPostedComments(a.id))]).toEqual([]);
       expect(await store.getPublication(a.id)).toBeNull();
@@ -91,6 +92,26 @@ export const describeAnalysisStoreContract = (
         a.id,
       ]);
       expect((await store.listRecent(2)).map((analysis) => analysis.id)).toEqual([b.id, c.id]);
+    });
+
+    it("lists analyzed PRs once each, most recently analyzed first, up to the limit", async () => {
+      const ref = smallFeatureAnalysis.key.ref;
+      const other = { ...ref, number: ref.number + 1 };
+      const otherKey: AnalysisKey = { ...a.key, ref: other };
+      const onOther: Analysis = {
+        ...a,
+        id: analysisId(otherKey),
+        key: otherKey,
+        updatedAt: "2026-10-21T11:30:00Z",
+      };
+      await store.saveAnalysis(a);
+      await store.saveAnalysis(b);
+      await store.saveAnalysis(c);
+      await store.saveAnalysis(onOther);
+
+      // ref's latest analysis, b at 12:00, is newer than other's at 11:30.
+      expect(await store.listAnalyzedPullRequests(10)).toEqual([ref, other]);
+      expect(await store.listAnalyzedPullRequests(1)).toEqual([ref]);
     });
 
     it("upserts verdicts by decision", async () => {

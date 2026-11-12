@@ -14,7 +14,7 @@ import {
   BitbucketCommitHash,
   BitbucketErrorBody,
   BitbucketPage,
-  BitbucketPullRequest,
+  BitbucketPullRequestWithState,
 } from "../schemas.ts";
 
 /** The format of createFixtureFetch in src/application/testing, which non-test code can't import. */
@@ -27,7 +27,7 @@ const KEPT_HEADERS = /^(x-ratelimit-.*|retry-after|location|content-type)$/;
 
 /** Keep only the fields the adapter reads, so fixtures hold no more than it uses. */
 const BODY_SCHEMAS: [RegExp, z.ZodType][] = [
-  [/\/pullrequests\/\d+$/, BitbucketPullRequest],
+  [/\/pullrequests\/\d+$/, BitbucketPullRequestWithState],
   [/\/pullrequests\/\d+\/commits$/, BitbucketPage(BitbucketCommit)],
   [/\/(commit|merge-base)\/[^/]+$/, BitbucketCommitHash],
 ];
@@ -47,7 +47,7 @@ const NAME_TRAILERS = /^([A-Za-z-]+-by): .*$/gm;
 
 const redact = (path: string, body: unknown): unknown => {
   if (/\/pullrequests\/\d+$/.test(path)) {
-    const pullRequest = BitbucketPullRequest.parse(body);
+    const pullRequest = BitbucketPullRequestWithState.parse(body);
     return { ...pullRequest, author: redactAccount(pullRequest.author) };
   }
   if (path.endsWith("/commits")) {

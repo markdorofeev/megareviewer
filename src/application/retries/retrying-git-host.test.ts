@@ -75,6 +75,15 @@ describe("retryingGitHost", () => {
     expect(result).toEqual({ ok: true, value: [content] });
   });
 
+  it("retries the lookup of opened PRs", async () => {
+    const { fake, host } = setup();
+    fake.failNext("getOpenPullRequests", networkError);
+
+    const result = await host.getOpenPullRequests([ref]);
+
+    expect(result.ok && result.value.map((summary) => summary.ref)).toEqual([ref]);
+  });
+
   it.each([
     ["unauthorized", { kind: "unauthorized", message: "no", retryAfterSeconds: null }],
     ["rate-limited", { kind: "rate-limited", message: "slow down", retryAfterSeconds: 60 }],

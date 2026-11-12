@@ -37,6 +37,7 @@ The pipeline and UI never talk to a host directly. Each host is a connector behi
 | Get diff (unified) | `.../compare/{base}...{head}` at the PR's SHAs, with diff media type, so a push while loading can't mismatch diff and head SHA | `.../diff/{head}..{dest}?topic=true` at the PR's commits: the same three-dot diff the PR's diff endpoint redirects to, pinned the same way |
 | Get files at commits | One GraphQL query per 3 files, 6 at a time (`object(expression: "sha:path")`); `.../contents/{path}?ref={sha}` for a file GraphQL truncates or won't give as text | `.../src/{sha}/{path}`, one request per file, 18 at a time |
 | List PRs to review | Search API (`review-requested:@me`, `author:@me`) | PRs to review: per repo, the 50 most recently updated of the configured workspace. Own PRs: one workspace-wide call |
+| Which PRs opened before are still open | One GraphQL query, a `repository.pullRequest(number)` alias per PR | `.../pullrequests/{id}`, one request per PR, 5 at a time |
 | Publish review | One PR review with inline comments and a verdict | Approve or request changes, plus one call per inline comment |
 | Review threads | GraphQL `pullRequest.reviewThreads`, 100 a page, with each thread's comments | `.../pullrequests/{id}/comments`: an inline comment without a parent starts a thread, `parent.id` chains replies, deleted ones are left out |
 | Reply | GraphQL `addPullRequestReviewThreadReply` on the thread's ID | `POST .../comments` with `parent: {id}` |
@@ -190,7 +191,7 @@ PR content is untrusted. A description or code comment can contain text aimed at
 
 ## UI
 
-**PR picker.** Lists PRs waiting for the user's review and their own open PRs from every configured host, or accepts a pasted PR URL.
+**PR picker.** Lists PRs waiting for the user's review and their own open PRs from every configured host, or accepts a pasted PR URL. PRs opened here before join the ones waiting for review: the 50 most recently analyzed, asked about on their hosts so only open ones show, and listed once, with the host's role, when the host lists them too. The host's list alone left out a PR opened from a pasted URL, one on GitHub once the reviewer had submitted a review, and one on Bitbucket in a repository past the 50 scanned. Keeping every PR opened, whatever its state, saved the requests, and would list merged PRs as waiting. When the lookup fails, the host's error banner says so and its own list still shows.
 
 **Review page.** It opens on the code. The header names the PR once, by its title and a link to it on the host, and holds its intent in one line: the model's summary with `--ai`, or the description's first sentence without it, with its Markdown markers dropped as plain text. An info button, Details, ends that line and opens the full intent in a dialog, which says why nothing outside the PR is shown when no checkout was read. A chip after it, in the rejected-verdict colors with a ⚠, names a mismatch between what was asked and what the code does, and goes to the code it rests on. While the analysis runs, a progress strip sits under the header. The reviewer picks one of two layouts with a switch (`v`), kept per browser:
 

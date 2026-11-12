@@ -26,6 +26,7 @@ import {
   BitbucketPage,
   BitbucketParticipant,
   BitbucketPullRequest,
+  BitbucketPullRequestWithState,
   BitbucketRepository,
 } from "./schemas.ts";
 
@@ -47,6 +48,9 @@ const SCANNED_REPOS = 50;
 const SCAN_CONCURRENCY = 5;
 const FILE_CONCURRENCY = 8;
 const PAGE_SIZE = 50;
+
+/** Failures that say a PR asked about is gone or hidden from the user, so it's left out. */
+const GONE: ReadonlySet<HostError["kind"]> = new Set(["not-found", "forbidden"]);
 
 /** Merge-base failures that a fallback can't fix, because every other call fails the same way. */
 const FATAL: ReadonlySet<HostError["kind"]> = new Set([
@@ -274,6 +278,29 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
       if (!toReview.ok) return toReview;
       if (!own.ok) return own;
       return ok([...toReview.value, ...own.value].sort(byUpdatedAtDesc));
+    },
+
+    async getOpenPullRequests(refs) {
+      // Bitbucket has no lookup of many PRs by id, so it's one request each.
+      const states = await mapLimit(refs, SCAN_CONCURRENCY, (ref) =>
+        client.json(
+          "the pull request's state",
+          BitbucketPullRequestWithState,
+          pullRequestApiUrl(ref),
+        ),
+      );
+      const open: PullRequestSummary[] = [];
+      for (const [index, result] of states.entries()) {
+        const ref = refs[index];
+        if (ref === undefined) continue;
+        if (!result.ok) {
+          if (GONE.has(result.error.kind)) continue;
+          return result;
+        }
+        if (result.value.state === "OPEN")
+          open.push({ ...toSummary(result.value, "reviewer"), ref });
+      }
+      return ok(open);
     },
 
     async publish(ref, publication, { headSha, alreadyPosted, onPosted }) {

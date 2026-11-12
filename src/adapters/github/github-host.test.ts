@@ -12,11 +12,13 @@ import {
   type PullRequestRef,
   type RepoRef,
 } from "../../domain/review/index.ts";
+import { openExchanges } from "./fixtures/open.synthetic.ts";
 import publishExchanges from "./fixtures/publish.synthetic.json" with { type: "json" };
 import rateLimitedExchanges from "./fixtures/rate-limited.synthetic.json" with { type: "json" };
 import readExchanges from "./fixtures/read.json" with { type: "json" };
 import searchExchanges from "./fixtures/search.synthetic.json" with { type: "json" };
 import unauthorizedExchanges from "./fixtures/unauthorized.synthetic.json" with { type: "json" };
+import { openPullRequestsQuery } from "./github-host.ts";
 import { createGitHubHost } from "./index.ts";
 
 const API = "https://api.github.com";
@@ -28,7 +30,12 @@ const HEAD_SHA = "b177d02e3aee907af72dc76aece21faf74be7935";
 const JSONV3 = "application/vnd.github.v3+json";
 const jsonHeaders = { "content-type": "application/json; charset=utf-8" };
 
-const okExchanges: RecordedExchange[] = [...readExchanges, ...searchExchanges, ...publishExchanges];
+const okExchanges: RecordedExchange[] = [
+  ...readExchanges,
+  ...searchExchanges,
+  ...publishExchanges,
+  ...openExchanges,
+];
 
 /** What the adapter logs beyond Octokit's request log. */
 const notices = (logger: RecordingLogger) =>
@@ -461,6 +468,78 @@ describe("createGitHubHost", () => {
       expect(notices(logger)).toMatchObject([
         { level: "warn", fields: { qualifier: "review-requested:@me", total: 80, returned: 2 } },
       ]);
+    });
+  });
+
+  describe("getOpenPullRequests", () => {
+    const graphql = (refs: readonly PullRequestRef[], data: unknown, status = 200) =>
+      exchange("POST", `${API}/graphql`, status, data, {
+        accept: JSONV3,
+        requestBody: {
+          query: openPullRequestsQuery(refs.length),
+          variables: Object.fromEntries(
+            refs.flatMap((ref, i) => [
+              [`o${i}`, ref.repo.owner],
+              [`r${i}`, ref.repo.repo],
+              [`n${i}`, ref.number],
+            ]),
+          ),
+        },
+      });
+    const node = (state: string) => ({
+      pullRequest: {
+        state,
+        title: `A ${state.toLowerCase()} PR`,
+        url: "https://github.com/acme/shop/pull/7",
+        updatedAt: "2026-10-21T10:00:00Z",
+        author: { login: "lee-park" },
+      },
+    });
+    const shop = (number: number): PullRequestRef => ({
+      repo: { host: "github", owner: "acme", repo: "shop" },
+      number,
+    });
+
+    it("returns an open PR as one to review, under the ref asked about", async () => {
+      const refs = [shop(7), shop(8)];
+      const result = await hostWith([
+        graphql(refs, { data: { p0: node("OPEN"), p1: node("CLOSED") } }),
+      ]).getOpenPullRequests(refs);
+
+      expect(result).toEqual({
+        ok: true,
+        value: [
+          {
+            ref: shop(7),
+            url: "https://github.com/acme/shop/pull/7",
+            title: "A open PR",
+            author: { id: "lee-park", name: "lee-park" },
+            updatedAt: "2026-10-21T10:00:00Z",
+            role: "reviewer",
+          },
+        ],
+      });
+    });
+
+    it("leaves out a PR whose repository is gone, keeping the others", async () => {
+      const refs = [{ ...shop(7), repo: { ...shop(7).repo, repo: "gone" } }, shop(8)];
+      const result = await hostWith([
+        graphql(refs, {
+          data: { p0: null, p1: node("OPEN") },
+          errors: [{ type: "NOT_FOUND", path: ["p0"], message: "Could not resolve" }],
+        }),
+      ]).getOpenPullRequests(refs);
+
+      expect(result.ok && result.value.map((summary) => summary.ref)).toEqual([shop(8)]);
+    });
+
+    it("fails when GitHub answers errors without data", async () => {
+      const refs = [shop(7)];
+      const result = await hostWith([
+        graphql(refs, { errors: [{ type: "INTERNAL", message: "Something went wrong" }] }),
+      ]).getOpenPullRequests(refs);
+
+      expect(!result.ok && result.error.kind).toBe("unexpected");
     });
   });
 

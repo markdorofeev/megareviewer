@@ -575,6 +575,45 @@ describe("createBitbucketHost", () => {
     });
   });
 
+  describe("getOpenPullRequests", () => {
+    const recorded = BitbucketPullRequest.parse(readExchanges[0]?.response.body);
+    const other: PullRequestRef = { repo, number: 27 };
+    const gone: PullRequestRef = { repo, number: 28 };
+
+    it("returns an open PR as one to review, under the ref asked about", async () => {
+      const result = await hostWith([
+        exchange("GET", PR_URL, 200, { ...recorded, state: "OPEN" }),
+        exchange("GET", `${REPO_URL}/pullrequests/27`, 200, {
+          ...recorded,
+          id: 27,
+          state: "DECLINED",
+        }),
+        exchange("GET", `${REPO_URL}/pullrequests/28`, 403, { error: { message: "Forbidden" } }),
+      ]).getOpenPullRequests([pr, other, gone]);
+
+      expect(result).toEqual({
+        ok: true,
+        value: [
+          expect.objectContaining({
+            ref: pr,
+            title: recorded.title,
+            url: recorded.links.html.href,
+            role: "reviewer",
+          }),
+        ],
+      });
+    });
+
+    it("fails on an error that doesn't say the PR is gone", async () => {
+      const result = await hostWith([
+        exchange("GET", PR_URL, 200, { ...recorded, state: "OPEN" }),
+        exchange("GET", `${REPO_URL}/pullrequests/27`, 500, { error: { message: "Oops" } }),
+      ]).getOpenPullRequests([pr, other]);
+
+      expect(result.ok).toBe(false);
+    });
+  });
+
   describe("publish", () => {
     const COMMENTS_URL = `${PR_URL}/comments`;
     const options = (alreadyPosted: string[] = []) => {

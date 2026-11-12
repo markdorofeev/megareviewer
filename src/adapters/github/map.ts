@@ -5,7 +5,13 @@ import type {
   PullRequestRef,
   PullRequestSummary,
 } from "../../domain/review/index.ts";
-import type { GitHubCommit, GitHubPullRequest, GitHubSearchResult, GitHubUser } from "./schemas.ts";
+import type {
+  GitHubCommit,
+  GitHubOpenPullRequests,
+  GitHubPullRequest,
+  GitHubSearchResult,
+  GitHubUser,
+} from "./schemas.ts";
 
 /** GitHub shows deleted accounts as "ghost". */
 const GHOST: HostUser = { id: "ghost", name: "ghost" };
@@ -62,6 +68,29 @@ export const toSummaries = (
       updatedAt: item.updated_at,
       role,
     };
+  });
+
+/** The alias a PR is asked about under, in a query of many. */
+export const openAlias = (index: number): string => `p${index}`;
+
+/** The refs whose PRs are open, as PRs to review. */
+export const toOpenSummaries = (
+  refs: readonly PullRequestRef[],
+  data: GitHubOpenPullRequests,
+): PullRequestSummary[] =>
+  refs.flatMap((ref, index) => {
+    const pullRequest = data[openAlias(index)]?.pullRequest;
+    if (pullRequest == null || pullRequest.state !== "OPEN") return [];
+    return [
+      {
+        ref,
+        url: pullRequest.url,
+        title: pullRequest.title,
+        author: account(pullRequest.author),
+        updatedAt: pullRequest.updatedAt,
+        role: "reviewer" as const,
+      },
+    ];
   });
 
 /** Newest first. ISO-8601 UTC timestamps sort as strings. */

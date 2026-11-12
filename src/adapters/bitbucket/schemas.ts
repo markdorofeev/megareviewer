@@ -40,6 +40,9 @@ export const BitbucketPullRequest = z.object({
 });
 export type BitbucketPullRequest = z.infer<typeof BitbucketPullRequest>;
 
+/** A PR with its state: OPEN, MERGED, DECLINED or SUPERSEDED. */
+export const BitbucketPullRequestWithState = BitbucketPullRequest.extend({ state: z.string() });
+
 export const BitbucketCommit = z.object({
   hash: Sha,
   message: z.string(),

@@ -6,6 +6,7 @@ import type {
   DecisionId,
   DecisionVerdict,
   PublicationReceipt,
+  PullRequestRef,
 } from "../../domain/review/index.ts";
 import type { AnalysisStore } from "../ports/index.ts";
 
@@ -42,6 +43,16 @@ export class InMemoryAnalysisStore implements AnalysisStore {
       .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : a.updatedAt < b.updatedAt ? 1 : 0))
       .slice(0, limit)
       .map((analysis) => structuredClone(analysis));
+  }
+
+  async listAnalyzedPullRequests(limit: number): Promise<PullRequestRef[]> {
+    const refs = new Map<string, PullRequestRef>();
+    for (const analysis of await this.listRecent(this.analyses.size)) {
+      const { ref } = analysis.key;
+      const key = `${ref.repo.host}/${ref.repo.owner}/${ref.repo.repo}#${ref.number}`;
+      if (!refs.has(key)) refs.set(key, ref);
+    }
+    return [...refs.values()].slice(0, limit);
   }
 
   async getVerdicts(id: AnalysisId): Promise<DecisionVerdict[]> {

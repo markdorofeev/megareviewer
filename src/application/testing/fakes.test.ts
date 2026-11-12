@@ -3,6 +3,7 @@ import {
   type CommentKey,
   type HostError,
   type Publication,
+  type PullRequestRef,
   validateRiskCoverage,
   validateTourTitles,
 } from "../../domain/review/index.ts";
@@ -46,17 +47,20 @@ const rateLimited: HostError = {
 };
 const network: HostError = { kind: "network", message: "socket hang up", retryAfterSeconds: null };
 
-const scenarioHost = (host: "github" | "bitbucket") => (scenario: string) => {
-  const fake = new FakeGitHost({ host, fixtures: allFixtures });
-  if (scenario === "unauthorized") fake.failAlways(unauthorized);
-  if (scenario === "rate-limited") fake.failAlways(rateLimited);
-  return fake;
-};
+/** `merged` is the contract's existing PR, merged as the recorded ones are. */
+const scenarioHost =
+  (host: "github" | "bitbucket", merged: PullRequestRef) => (scenario: string) => {
+    const fake = new FakeGitHost({ host, fixtures: allFixtures });
+    fake.close(merged);
+    if (scenario === "unauthorized") fake.failAlways(unauthorized);
+    if (scenario === "rate-limited") fake.failAlways(rateLimited);
+    return fake;
+  };
 
 describeGitHostContract("fake github", () => {
   const { ref, headSha, baseSha } = smallFeature.pullRequest;
   return {
-    host: scenarioHost("github"),
+    host: scenarioHost("github", ref),
     existingPr: ref,
     missingPr: { ...ref, number: 999 },
     existingFile: { repo: ref.repo, sha: headSha, path: "src/services/receipts.ts" },
@@ -69,7 +73,7 @@ describeGitHostContract("fake github", () => {
 describeGitHostContract("fake bitbucket", () => {
   const { ref, headSha, baseSha } = bitbucketBugfix.pullRequest;
   return {
-    host: scenarioHost("bitbucket"),
+    host: scenarioHost("bitbucket", ref),
     existingPr: ref,
     missingPr: { ...ref, number: 999 },
     existingFile: { repo: ref.repo, sha: baseSha, path: "src/refunds.ts" },

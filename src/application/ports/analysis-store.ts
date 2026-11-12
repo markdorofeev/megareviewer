@@ -5,6 +5,7 @@ import type {
   CommentKey,
   DecisionVerdict,
   PublicationReceipt,
+  PullRequestRef,
 } from "../../domain/review/index.ts";
 
 export interface AnalysisStore {
@@ -14,6 +15,8 @@ export interface AnalysisStore {
   saveAnalysis(analysis: Analysis): Promise<void>;
   /** Most recently updated first. */
   listRecent(limit: number): Promise<Analysis[]>;
+  /** The PRs that have an analysis, each once, the most recently analyzed first. */
+  listAnalyzedPullRequests(limit: number): Promise<PullRequestRef[]>;
   getVerdicts(id: AnalysisId): Promise<DecisionVerdict[]>;
   /** Upsert by decisionId. */
   saveVerdict(id: AnalysisId, verdict: DecisionVerdict): Promise<void>;

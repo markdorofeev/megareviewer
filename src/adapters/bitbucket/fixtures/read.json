@@ -13,6 +13,7 @@
       "body": {
         "id": 26,
         "title": "PIPES-1654: Add logs and warnings about directory from upload.",
+        "state": "MERGED",
         "description": "",
         "summary": {
           "raw": ""

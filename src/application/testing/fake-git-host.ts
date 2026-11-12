@@ -20,6 +20,7 @@ export type GitHostMethod =
   | "getPullRequest"
   | "getFiles"
   | "listPullRequests"
+  | "getOpenPullRequests"
   | "publish";
 
 export interface PublishAttempt {
@@ -36,6 +37,18 @@ const prKey = (ref: PullRequestRef): string =>
 const commitKey = (repo: RepoRef, sha: string): string =>
   `${repo.host}/${repo.owner}/${repo.repo}@${sha}`;
 
+const toSummary = (
+  pullRequest: PullRequest,
+  role: PullRequestSummary["role"],
+): PullRequestSummary => ({
+  ref: structuredClone(pullRequest.ref),
+  url: pullRequest.url,
+  title: pullRequest.title,
+  author: { ...pullRequest.author },
+  updatedAt: pullRequest.updatedAt,
+  role,
+});
+
 const notFound = (what: string): HostError => ({
   kind: "not-found",
   message: `${what} not found`,
@@ -49,6 +62,10 @@ export class FakeGitHost implements GitHost {
   private readonly user: HostUser;
   private readonly clock: Clock;
   private readonly pullRequests = new Map<string, PullRequest>();
+  /** PRs merged or closed: still readable, but listed nowhere. */
+  private readonly closed = new Set<string>();
+  /** Open PRs the user isn't asked to review: readable, but not listed. */
+  private readonly unlisted = new Set<string>();
   /** File contents by commit, then path. */
   private readonly commits = new Map<string, Map<string, string>>();
   private readonly failures = new Map<GitHostMethod, HostError[]>();
@@ -108,6 +125,19 @@ export class FakeGitHost implements GitHost {
     this.pullRequests.set(prKey(ref), { ...pullRequest, headSha: sha });
   }
 
+  /** Simulates a merge or a close. */
+  close(ref: PullRequestRef): void {
+    this.closed.add(prKey(ref));
+  }
+
+  /** Simulates an open PR the user isn't asked to review, so listPullRequests leaves it out. */
+  unlist(ref: PullRequestRef): void {
+    this.unlisted.add(prKey(ref));
+  }
+
+  /** Every getOpenPullRequests call, with the refs it asked about. */
+  readonly getOpenPullRequestsCalls: PullRequestRef[][] = [];
+
   async currentUser(): Promise<Result<HostUser, HostError>> {
     return this.fail("currentUser") ?? ok({ ...this.user });
   }
@@ -144,14 +174,27 @@ export class FakeGitHost implements GitHost {
     const failure = this.fail("listPullRequests");
     if (failure !== null) return failure;
     return ok(
-      [...this.pullRequests.values()].map((pullRequest) => ({
-        ref: structuredClone(pullRequest.ref),
-        url: pullRequest.url,
-        title: pullRequest.title,
-        author: { ...pullRequest.author },
-        updatedAt: pullRequest.updatedAt,
-        role: pullRequest.author.id === this.user.id ? "author" : "reviewer",
-      })),
+      [...this.pullRequests.values()]
+        .filter(({ ref }) => !this.closed.has(prKey(ref)) && !this.unlisted.has(prKey(ref)))
+        .map((pullRequest) =>
+          toSummary(pullRequest, pullRequest.author.id === this.user.id ? "author" : "reviewer"),
+        ),
+    );
+  }
+
+  async getOpenPullRequests(
+    refs: readonly PullRequestRef[],
+  ): Promise<Result<PullRequestSummary[], HostError>> {
+    this.getOpenPullRequestsCalls.push([...refs]);
+    const failure = this.fail("getOpenPullRequests");
+    if (failure !== null) return failure;
+    return ok(
+      refs.flatMap((ref) => {
+        const pullRequest = this.pullRequests.get(prKey(ref));
+        return pullRequest === undefined || this.closed.has(prKey(ref))
+          ? []
+          : [{ ...toSummary(pullRequest, "reviewer"), ref: structuredClone(ref) }];
+      }),
     );
   }
 

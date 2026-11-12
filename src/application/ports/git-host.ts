@@ -43,6 +43,14 @@ export interface GitHost {
   /** Open PRs where the current user is a requested reviewer or the author. */
   listPullRequests(): Promise<Result<PullRequestSummary[], HostError>>;
   /**
+   * The PRs among `refs` that are still open, as PRs to review, keeping each ref as given. A
+   * merged, declined or closed PR is left out, and so is one the host doesn't find or won't
+   * show.
+   */
+  getOpenPullRequests(
+    refs: readonly PullRequestRef[],
+  ): Promise<Result<PullRequestSummary[], HostError>>;
+  /**
    * Publishes the summary (key "summary") and the inline comments with the verdict.
    * Skips keys in alreadyPosted and calls onPosted for every key it posts, so the caller
    * can persist progress (Bitbucket posts comments one by one). The receipt lists the
