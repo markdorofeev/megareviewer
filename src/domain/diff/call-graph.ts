@@ -49,7 +49,7 @@ interface Change {
 }
 
 /**
- * Hints for the tour and the call chips: a part that uses a symbol points to each part that
+ * Hints for the tour and the overview: a part that uses a symbol points to each part that
  * changes it. Hunks split into `parts` are read part by part; any other hunk is one part. A part
  * changes the innermost definitions its added lines fall in, so adding a method changes the
  * method, not every use of its class. It uses a symbol when a reference falls on its added or
