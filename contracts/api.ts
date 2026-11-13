@@ -174,7 +174,7 @@ const ThreadParams = z.object({ id: AnalysisId, threadId: ThreadId }).readonly()
 const NoParams = z.object({}).readonly();
 
 export interface JsonRoute {
-  readonly method: "GET" | "POST" | "PUT";
+  readonly method: "GET" | "POST" | "PUT" | "DELETE";
   readonly path: string;
   readonly params: z.ZodType<Readonly<Record<string, string>>>;
   /** null for routes without a body. */
@@ -236,6 +236,17 @@ export const routes = {
    */
   runModel: {
     method: "POST",
+    path: "/api/analyses/:id/model",
+    params: AnalysisParams,
+    request: null,
+    response: AnalysisIdResponse,
+  },
+  /**
+   * Takes the model's run off a complete analysis: the code's stages run again in place, so its
+   * events follow, and the model's points and their states go. For trying the passes again.
+   */
+  removeModelRun: {
+    method: "DELETE",
     path: "/api/analyses/:id/model",
     params: AnalysisParams,
     request: null,

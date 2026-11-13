@@ -67,6 +67,10 @@ export class InMemoryAnalysisStore implements AnalysisStore {
     this.pointReviews.set(id, reviews);
   }
 
+  async clearPointReviews(id: AnalysisId): Promise<void> {
+    this.pointReviews.delete(id);
+  }
+
   async getPostedComments(id: AnalysisId): Promise<ReadonlyMap<CommentKey, string>> {
     return new Map(this.postedComments.get(id));
   }

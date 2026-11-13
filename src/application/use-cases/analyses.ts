@@ -5,6 +5,7 @@ import {
   analysisId,
   type CheckoutStatus,
   type HostKind,
+  hasModelRun,
   inProgress,
   MODEL_STAGES,
   mapModelStages,
@@ -21,7 +22,7 @@ import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { pipelineVersion } from "./pipeline-version.ts";
 import { runModel, runPipeline } from "./run-pipeline.ts";
-import { lookUpCheckout } from "./unchanged-callers.ts";
+import { type CheckoutAt, lookUpCheckout } from "./unchanged-callers.ts";
 
 /** More than enough to find every analysis that was running when megareviewer stopped. */
 const RECOVERY_SCAN_LIMIT = 200;
@@ -123,16 +124,28 @@ export const createAnalysisRunner = (deps: AppDeps) => {
       checkout.status,
       existing?.createdAt ?? deps.clock.now(),
     );
+    runCode(host, analysis, pullRequest, checkout.at);
+    return id;
+  };
+
+  /** Saves a new analysis and runs the code's stages on it, in the background. */
+  const runCode = (
+    host: GitHost,
+    analysis: Analysis,
+    pullRequest: PullRequest,
+    checkout: CheckoutAt | null,
+    before: () => Promise<void> = async () => {},
+  ): void => {
     const run = (async () => {
+      await before();
       await deps.store.saveAnalysis(analysis);
-      await runPipeline(deps, host, analysis, pullRequest, checkout.at);
+      await runPipeline(deps, host, analysis, pullRequest, checkout);
     })()
       .catch((error: unknown) => {
-        deps.logger.error("Couldn't record the analysis", { analysisId: id, error });
+        deps.logger.error("Couldn't record the analysis", { analysisId: analysis.id, error });
       })
-      .finally(() => inFlight.delete(id));
-    inFlight.set(id, run);
-    return id;
+      .finally(() => inFlight.delete(analysis.id));
+    inFlight.set(analysis.id, run);
   };
 
   return {
@@ -198,6 +211,45 @@ export const createAnalysisRunner = (deps: AppDeps) => {
         })
         .finally(() => inFlight.delete(id));
       inFlight.set(id, run);
+      return ok({ analysisId: id });
+    },
+
+    /**
+     * Takes Claude's run off a complete analysis, so the passes can be tried again: the code's
+     * stages run again in place, under the same ID, and the states of Claude's points go.
+     */
+    async removeModelRun(
+      id: AnalysisId,
+    ): Promise<Result<{ analysisId: AnalysisId }, UseCaseError>> {
+      const analysis = await deps.store.getAnalysis(id);
+      if (analysis === null) return err(appError("not-found", `No analysis ${id}`));
+      const { pullRequest } = analysis;
+      if (analysis.status !== "complete" || inProgress(analysis) || pullRequest === null) {
+        return err(appError("analysis-not-complete", "The analysis isn't complete yet"));
+      }
+      if (!hasModelRun(analysis)) {
+        return err(appError("bad-request", "Claude hasn't analyzed this pull request"));
+      }
+      const host = hostFor(deps, analysis.key.ref.repo.host);
+      if (!host.ok) return host;
+      const checkout =
+        analysis.checkout === "read"
+          ? await lookUpCheckout(deps.checkouts, pullRequest.ref.repo, analysis.key.headSha)
+          : null;
+      // No await from here on until the run is in the map, so a model run can't start meanwhile.
+      if (inFlight.has(id)) {
+        return err(appError("analysis-not-complete", "The analysis isn't complete yet"));
+      }
+      const fresh = newAnalysis(
+        deps,
+        analysis.key,
+        pullRequest,
+        analysis.checkout,
+        analysis.createdAt,
+      );
+      runCode(host.value, fresh, pullRequest, checkout?.at ?? null, () =>
+        deps.store.clearPointReviews(id),
+      );
       return ok({ analysisId: id });
     },
 

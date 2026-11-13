@@ -14,6 +14,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     startAnalysis: runner.startAnalysis,
     retryAnalysis: runner.retryAnalysis,
     runModel: runner.runModel,
+    removeModelRun: runner.removeModelRun,
     recoverInterruptedAnalyses: runner.recoverInterruptedAnalyses,
     getAnalysisView: review.getAnalysisView,
     getFileContent: review.getFileContent,

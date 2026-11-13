@@ -121,6 +121,7 @@ export const openSqliteAnalysisStore = (
      ON CONFLICT (analysis_id, point_id) DO UPDATE SET
        state = excluded.state, updated_at = excluded.updated_at`,
   );
+  const deletePointReviews = db.prepare("DELETE FROM point_reviews WHERE analysis_id = ?");
   const selectPostedComments = db.prepare(
     "SELECT comment_key, host_comment_id FROM published_comments WHERE analysis_id = ?",
   );
@@ -232,6 +233,10 @@ export const openSqliteAnalysisStore = (
 
     async savePointReview(id: AnalysisId, review: PointReview) {
       upsertPointReview.run(id, review.pointId, review.state, review.updatedAt);
+    },
+
+    async clearPointReviews(id: AnalysisId) {
+      deletePointReviews.run(id);
     },
 
     async getPostedComments(id: AnalysisId) {

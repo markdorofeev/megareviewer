@@ -80,6 +80,7 @@ export const createApiClient = (options: ApiClientOptions) => {
       send(routes.getFileContent, { id, side, path }),
     retryAnalysis: (id: AnalysisId) => send(routes.retryAnalysis, { id }),
     runModel: (id: AnalysisId) => send(routes.runModel, { id }),
+    removeModelRun: (id: AnalysisId) => send(routes.removeModelRun, { id }),
     putPointState: (id: AnalysisId, pointId: PointId, body: PutPointStateRequest) =>
       send(routes.putPointState, { id, pointId }, body),
     previewPublication: (id: AnalysisId, body: PublicationPreviewRequest) =>

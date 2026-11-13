@@ -10,6 +10,7 @@ import {
   type Analysis,
   type AnalysisId,
   HunkComment,
+  hasModelRun,
   inProgress,
   type Point,
   PointId,
@@ -83,6 +84,7 @@ import { PointStepper } from "./PointStepper.tsx";
 import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { Rail } from "./Rail.tsx";
+import { RemoveModelRun } from "./RemoveModelRun.tsx";
 import { ReviewBar } from "./ReviewBar.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
@@ -1279,7 +1281,13 @@ const Review = ({
         </div>
       )}
 
-      <UsageFooter usage={live.usage} />
+      <div className="flex items-center justify-end gap-3">
+        {complete && !modelRunning && hasModelRun(live) && (
+          // A new run of the code's stages under the same ID: the page starts afresh to follow it.
+          <RemoveModelRun analysisId={analysisId} onRemoved={restart} />
+        )}
+        <UsageFooter usage={live.usage} />
+      </div>
 
       {publishing && (
         <PublishDialog

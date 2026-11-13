@@ -20,6 +20,7 @@ export interface AnalysisStore {
   getPointReviews(id: AnalysisId): Promise<PointReview[]>;
   /** Upsert by pointId. */
   savePointReview(id: AnalysisId, review: PointReview): Promise<void>;
+  clearPointReviews(id: AnalysisId): Promise<void>;
   getPostedComments(id: AnalysisId): Promise<ReadonlyMap<CommentKey, string>>;
   recordPostedComment(id: AnalysisId, key: CommentKey, hostCommentId: string): Promise<void>;
   getPublication(id: AnalysisId): Promise<PublicationReceipt | null>;

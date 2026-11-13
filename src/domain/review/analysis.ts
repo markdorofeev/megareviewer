@@ -196,6 +196,12 @@ export const modelRunnable = (analysis: Pick<Analysis, "status" | "stages">): bo
   !inProgress(analysis) &&
   !MODEL_STAGES.every((stage) => analysis.stages[stage] === "done");
 
+/** Whether Claude has run on the analysis, whatever came of it. */
+export const hasModelRun = (analysis: Pick<Analysis, "stages" | "usage" | "modelError">): boolean =>
+  MODEL_STAGES.some((stage) => analysis.stages[stage] !== "skipped") ||
+  analysis.usage.length > 0 ||
+  analysis.modelError !== null;
+
 /** Deterministic, so the same PR at the same head SHA and pipeline version maps to one analysis. */
 export const analysisId = (key: AnalysisKey): AnalysisId => {
   const { host, owner, repo } = key.ref.repo;

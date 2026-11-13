@@ -7,6 +7,7 @@ import {
   MismatchId,
   type ModelError,
   modelRunnable,
+  PointId,
   type StageName,
   type StageStatus,
   type Tour,
@@ -160,6 +161,7 @@ const setup = (
     emitted,
     useCases,
     done,
+    doneCount,
     stored,
     analyze,
     runModel,
@@ -1440,5 +1442,82 @@ describe("runModel", () => {
       message: "megareviewer stopped while Claude analyzed the pull request",
     });
     expect(recovered !== undefined && recovered !== null && modelRunnable(recovered)).toBe(true);
+  });
+});
+
+describe("removeModelRun", () => {
+  const withModelRun = async () => {
+    const ready = setup({ modelEnabled: false });
+    const codeOnly = await ready.analyze();
+    const ran = await ready.runModel(codeOnly.id);
+    const remove = async () => {
+      const before = ready.doneCount(codeOnly.id);
+      const removed = await ready.useCases.removeModelRun(codeOnly.id);
+      if (!removed.ok) throw new Error(removed.error.message);
+      await ready.done(codeOnly.id, before + 1);
+      return ready.stored(codeOnly.id);
+    };
+    return { ...ready, codeOnly, ran, remove };
+  };
+
+  it("puts the analysis back as the code made it, under the same ID", async () => {
+    const { codeOnly, ran, remove } = await withModelRun();
+    expect(ran.intent).not.toBeNull();
+
+    const removed = await remove();
+    expect({ ...removed, updatedAt: codeOnly.updatedAt }).toEqual(codeOnly);
+  });
+
+  it("forgets the states of Claude's points, so a new run starts from none", async () => {
+    const { codeOnly, store, remove, runModel } = await withModelRun();
+    await store.savePointReview(codeOnly.id, {
+      pointId: PointId.parse("f1"),
+      state: "dismissed",
+      updatedAt: "2026-10-21T09:05:00Z",
+    });
+
+    await remove();
+    expect(await store.getPointReviews(codeOnly.id)).toEqual([]);
+    const again = await runModel(codeOnly.id);
+    expect(again.stages.tour).toBe("done");
+  });
+
+  it("keeps the record of a published review", async () => {
+    const { codeOnly, store, remove } = await withModelRun();
+    const receipt = {
+      url: "https://github.com/acme/shop/pull/101#pullrequestreview-1",
+      publishedAt: "2026-10-21T09:10:00Z",
+      postedCommentIds: {},
+    };
+    await store.recordPublication(codeOnly.id, receipt);
+
+    await remove();
+    expect(await store.getPublication(codeOnly.id)).toEqual(receipt);
+  });
+
+  it("refuses an analysis Claude hasn't run on, or one that isn't complete", async () => {
+    const { useCases, store, analyze } = setup({ modelEnabled: false });
+    const codeOnly = await analyze();
+    expect(await useCases.removeModelRun(codeOnly.id)).toEqual(
+      err({ code: "bad-request", message: "Claude hasn't analyzed this pull request" }),
+    );
+    await store.saveAnalysis({ ...codeOnly, status: "failed" });
+    expect(await useCases.removeModelRun(codeOnly.id)).toEqual(
+      err({ code: "analysis-not-complete", message: "The analysis isn't complete yet" }),
+    );
+    expect(await useCases.removeModelRun(AnalysisId.parse("a_0000000000000000"))).toEqual(
+      err({ code: "not-found", message: "No analysis a_0000000000000000" }),
+    );
+  });
+
+  it("refuses while Claude's run is going", async () => {
+    const { useCases, analyze, done, doneCount } = setup({ modelEnabled: false });
+    const codeOnly = await analyze();
+    const before = doneCount(codeOnly.id);
+    await useCases.runModel(codeOnly.id);
+    expect(await useCases.removeModelRun(codeOnly.id)).toEqual(
+      err({ code: "analysis-not-complete", message: "The analysis isn't complete yet" }),
+    );
+    await done(codeOnly.id, before + 1);
   });
 });

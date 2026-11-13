@@ -16,6 +16,7 @@ import {
   type Analysis,
   buildPublication,
   composeBody,
+  hasModelRun,
   MODEL_STAGES,
   type PointId,
   type PointReview,
@@ -286,6 +287,21 @@ export const createMockApi = (
       if (missing !== null) return missing;
       if (!failed) return failure("bad-request", "Only a failed analysis can be retried");
       simulate(null);
+      const response: AnalysisIdResponse = { analysisId: fixture.id };
+      return success(response);
+    },
+    removeModelRun: ({ id }) => {
+      const refused = findAnalysis(id) ?? requireComplete();
+      if (refused !== null) return refused;
+      if (timer !== null || !hasModelRun(analysis())) {
+        return failure("bad-request", "Claude hasn't analyzed this pull request");
+      }
+      fixture = { ...withoutModel(fixtureView.analysis), usage: [] };
+      modelStagesDone = null;
+      // The code's stages run again; a publication stays, as on the server.
+      const published = publication;
+      simulate(null);
+      publication = published;
       const response: AnalysisIdResponse = { analysisId: fixture.id };
       return success(response);
     },

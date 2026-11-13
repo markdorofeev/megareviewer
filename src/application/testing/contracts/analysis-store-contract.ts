@@ -112,6 +112,18 @@ export const describeAnalysisStoreContract = (
       expect(await store.listAnalyzedPullRequests(1)).toEqual([ref]);
     });
 
+    it("clears an analysis's point reviews, leaving other analyses' alone", async () => {
+      await store.saveAnalysis(a);
+      await store.saveAnalysis(b);
+      await store.savePointReview(a.id, review("f1", "dismissed"));
+      await store.savePointReview(b.id, review("f1", "raised"));
+
+      await store.clearPointReviews(a.id);
+
+      expect(await store.getPointReviews(a.id)).toEqual([]);
+      expect(await store.getPointReviews(b.id)).toEqual([review("f1", "raised")]);
+    });
+
     it("upserts point reviews by point", async () => {
       await store.saveAnalysis(a);
       await store.savePointReview(a.id, review("f1", "dismissed"));

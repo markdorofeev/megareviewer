@@ -62,6 +62,7 @@ const responses: Record<RouteName, unknown> = {
   getFileContent: { content: "export const total = 1;\n" },
   retryAnalysis: { analysisId: smallFeatureAnalysis.id },
   runModel: { analysisId: smallFeatureAnalysis.id },
+  removeModelRun: { analysisId: smallFeatureAnalysis.id },
   putPointState: pointReview,
   previewPublication: smallFeaturePublication,
   publish: receipt,

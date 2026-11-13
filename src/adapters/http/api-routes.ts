@@ -95,6 +95,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     getFileContent: ({ params }) => useCases.getFileContent(params.id, params.side, params.path),
     retryAnalysis: ({ params }) => useCases.retryAnalysis(params.id),
     runModel: ({ params }) => useCases.runModel(params.id),
+    removeModelRun: ({ params }) => useCases.removeModelRun(params.id),
     putPointState: ({ params, body }) =>
       useCases.recordPointState(params.id, params.pointId, body.state),
     previewPublication: ({ params, body }) =>
@@ -118,6 +119,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   register(app, routes.getFileContent, handlers.getFileContent);
   register(app, routes.retryAnalysis, handlers.retryAnalysis);
   register(app, routes.runModel, handlers.runModel);
+  register(app, routes.removeModelRun, handlers.removeModelRun);
   register(app, routes.putPointState, handlers.putPointState);
   register(app, routes.previewPublication, handlers.previewPublication);
   register(app, routes.publish, handlers.publish);

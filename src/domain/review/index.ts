@@ -7,6 +7,7 @@ export {
   analysisId,
   CheckoutStatus,
   FilesFetched,
+  hasModelRun,
   inProgress,
   MODEL_STAGES,
   ModelBilling,
