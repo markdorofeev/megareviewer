@@ -160,8 +160,6 @@ export const LandingDemo = () => {
           points={points}
           narrowed={null}
           onNarrow={() => {}}
-          decisionsShown
-          onDecisionsShown={() => {}}
           onRun={() => setRun("running")}
         >
           <PointStepper

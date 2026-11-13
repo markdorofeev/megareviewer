@@ -4,6 +4,11 @@ import { expect, PR, publishAttempts, TOKEN, test } from "./fake-server.ts";
 
 const SMALL_FEATURE_TITLE = "Add receipt download endpoint";
 
+// Decisions are off until the Display menu turns them on; these tests read them.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("megareviewer:decisions", "true"));
+});
+
 /** Opens the picker the way the CLI's link does. */
 const openPicker = async (page: Page) => {
   await page.goto(`/?token=${TOKEN}`);

@@ -63,7 +63,7 @@ const THEMES: readonly { readonly value: ThemePreference; readonly label: string
   { value: "system", label: "System" },
 ];
 
-/** The page's own choice of view, if it has one, then the theme and the diff palette. */
+/** The page's own choice of view and switch, if it has them, then the theme and the diff palette. */
 export const DisplayMenu = () => {
   const { theme, diffPalette, setTheme, setDiffPalette } = useTheme();
   const page = usePageDisplayChoice();
@@ -102,6 +102,17 @@ export const DisplayMenu = () => {
               </DropdownMenuRadioGroup>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            {page.toggle !== undefined && (
+              <>
+                <DropdownMenuCheckboxItem
+                  checked={page.toggle.checked}
+                  onCheckedChange={page.toggle.onChange}
+                >
+                  {page.toggle.label}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
           </>
         )}
         <DropdownMenuGroup>

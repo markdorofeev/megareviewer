@@ -102,8 +102,6 @@ const BarDemo = ({
                 const to = narrowTo(points, kind, current);
                 if (to !== null) setCurrent(to);
               }}
-              decisionsShown
-              onDecisionsShown={() => {}}
               onRun={() => {}}
             >
               <PointStepper

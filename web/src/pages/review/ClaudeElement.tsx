@@ -1,4 +1,4 @@
-import { EyeIcon, EyeOffIcon, InfoIcon, LockIcon, SparklesIcon } from "lucide-react";
+import { InfoIcon, LockIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useEffect, useId, useState } from "react";
 import {
   type Analysis,
@@ -172,8 +172,6 @@ export const ClaudeElement = ({
   points,
   narrowed,
   onNarrow,
-  decisionsShown,
-  onDecisionsShown,
   onRun,
   children,
 }: {
@@ -192,9 +190,6 @@ export const ClaudeElement = ({
   /** The kind whose chip is pressed, or null. */
   readonly narrowed: PointKind | null;
   readonly onNarrow: (kind: PointKind | null) => void;
-  /** Decisions are footnotes on the code, shown or hidden all at once. */
-  readonly decisionsShown: boolean;
-  readonly onDecisionsShown: (shown: boolean) => void;
   readonly onRun: () => void;
   /** After the chips: the stepper through the points. */
   readonly children?: ReactNode;
@@ -236,20 +231,6 @@ export const ClaudeElement = ({
             onPressed={(pressed) => onNarrow(pressed ? kind : null)}
           />
         ))}
-        {counts.some(([kind]) => kind === "decision") && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            data-slot="decisions-shown"
-            title={decisionsShown ? "Hide decisions on the code" : "Show decisions on the code"}
-            onClick={() => onDecisionsShown(!decisionsShown)}
-          >
-            {decisionsShown ? <EyeIcon aria-hidden="true" /> : <EyeOffIcon aria-hidden="true" />}
-            <span className="sr-only">
-              {decisionsShown ? "Hide decisions on the code" : "Show decisions on the code"}
-            </span>
-          </Button>
-        )}
         <span {...after(0)} className="ml-1 flex min-w-0 items-center border-l pl-1.5">
           {children}
         </span>

@@ -87,7 +87,7 @@ import { ReviewBar } from "./ReviewBar.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
 import { narrowTo } from "./stepper.ts";
-import { useStoredState } from "./storage.ts";
+import { parseBoolean, useStoredState } from "./storage.ts";
 import { coveredLines, placeKey, placeThreads } from "./threads.ts";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
@@ -317,7 +317,12 @@ const Review = ({
   const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
   const mechanical = mechanicalCount(trailing);
-  const points = useMemo(() => pointsOf(analysis), [analysis]);
+  // Decisions are behind a switch in the Display menu, off until the reviewer turns them on.
+  const [decisionsOn, setDecisionsOn] = useStoredState("decisions", false, parseBoolean);
+  const points = useMemo(
+    () => pointsOf(analysis).filter((point) => decisionsOn || point.kind !== "decision"),
+    [analysis, decisionsOn],
+  );
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
   const landing = useLanding(modelRunning, pointIds);
   const places = useMemo(() => pointPlaces(points, order, index), [points, order, index]);
@@ -442,10 +447,7 @@ const Review = ({
   // The kind a chip narrowed the stepper to.
   const [narrowed, setNarrowed] = useState<PointKind | null>(null);
   const [showPoints, setShowPoints] = useState(false);
-  // Decisions are footnotes: the reviewer can hide them all, and opens one at a time.
-  const [decisionsShown, setDecisionsShown] = useStoredState("decisions-shown", true, (stored) =>
-    typeof stored === "boolean" ? stored : undefined,
-  );
+  // Decisions are footnotes, opened one at a time.
   const [openDecisions, setOpenDecisions] = useState<ReadonlySet<PointId>>(new Set());
   const toggleDecision = useCallback(
     (id: PointId) =>
@@ -598,7 +600,6 @@ const Review = ({
     const point = points.find((one) => one.id === id);
     const cardPart = places.cardPart.get(id);
     if (point?.kind === "decision") {
-      setDecisionsShown(() => true);
       setOpenDecisions((previous) => new Set([...previous, id]));
     }
     setHighlight(new Set((point?.hunkIds ?? []).flatMap(index.partsOf)));
@@ -664,6 +665,11 @@ const Review = ({
     value: layout,
     onChange: (next) => {
       if (next !== layout) switchLayout();
+    },
+    toggle: {
+      label: "Decisions",
+      checked: decisionsOn,
+      onChange: (on) => setDecisionsOn(() => on),
     },
   });
 
@@ -860,7 +866,7 @@ const Review = ({
       ? findingCard(point, partId)
       : point.kind === "risk"
         ? riskBand(point)
-        : decisionsShown && decisionNote(point);
+        : decisionNote(point);
   // The lines each part's points rest on, so they take the kind's bar. Where points overlap,
   // the one that matters most wins: a finding's line reads as a finding. A point landing in view
   // gives its lines their place in the timeline.
@@ -931,11 +937,9 @@ const Review = ({
   const pointsAt = (id: PartId, place: LinePlace): ReactNode => {
     const key = placeKey(place);
     const here = cardPlaces.underLine.get(id)?.get(key) ?? NO_POINTS;
-    const notes = decisionsShown
-      ? (cardPlaces.atLineEnd.get(id)?.get(key) ?? NO_POINTS).filter((point) =>
-          openDecisions.has(point.id),
-        )
-      : NO_POINTS;
+    const notes = (cardPlaces.atLineEnd.get(id)?.get(key) ?? NO_POINTS).filter((point) =>
+      openDecisions.has(point.id),
+    );
     return (
       <>
         {fold(
@@ -962,7 +966,6 @@ const Review = ({
   };
   // A decision's chip at the end of its line.
   const pointsAtEnd = (id: PartId, place: LinePlace): ReactNode => {
-    if (!decisionsShown) return null;
     const here = cardPlaces.atLineEnd.get(id)?.get(placeKey(place));
     if (here === undefined) return null;
     return here.map((point) => (
@@ -1009,7 +1012,7 @@ const Review = ({
     for (const point of cards) {
       parts.push(point.id, pointStates.stateOf(point.id), pointStates.isSaving(point.id));
       parts.push(currentPoint === point.id);
-      if (point.kind === "decision") parts.push(decisionsShown, openDecisions.has(point.id));
+      if (point.kind === "decision") parts.push(openDecisions.has(point.id));
     }
     for (const point of mentions) parts.push(point.id);
     for (const point of [...cards, ...mentions]) {
@@ -1103,8 +1106,6 @@ const Review = ({
             points={points}
             narrowed={narrowed}
             onNarrow={narrow}
-            decisionsShown={decisionsShown}
-            onDecisionsShown={(shown) => setDecisionsShown(() => shown)}
             onRun={async () => {
               const result = await runModel.run(analysisId);
               if (!result.ok) return;

@@ -185,6 +185,8 @@ const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   window.localStorage.clear();
+  // Decisions are off by default; most of these tests read them.
+  window.localStorage.setItem("megareviewer:decisions", "true");
 });
 
 afterEach(() => {
@@ -824,7 +826,7 @@ describe("points", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("open a decision's footnote from its chip, and hide them all from the bar", async () => {
+  it("open a decision's footnote from its chip", async () => {
     renderReview();
     await loaded();
     expect(screen.queryByRole("article", { name: PLAIN_TEXT })).toBeNull();
@@ -833,27 +835,30 @@ describe("points", () => {
     expect(note.textContent).toContain("plain text needs no renderer");
     // The click is the chip's, not the line's: no comment box opens.
     expect(within(mainArea()).queryByRole("textbox", { name: /^Comment on/ })).toBeNull();
-
-    await userEvent.click(
-      within(reviewBar()).getByRole("button", { name: "Hide decisions on the code" }),
-    );
-    expect(screen.queryByRole("button", { name: /^Decision: / })).toBeNull();
-    expect(screen.queryByRole("article", { name: PLAIN_TEXT })).toBeNull();
-    expect(window.localStorage.getItem("megareviewer:decisions-shown")).toBe("false");
-    expect(
-      within(reviewBar()).getByRole("button", { name: "Show decisions on the code" }),
-    ).toBeTruthy();
   });
 
-  it("show the decisions again when the stepper goes to one", async () => {
-    window.localStorage.setItem("megareviewer:decisions-shown", "false");
+  it("leave decisions out until the Display menu turns them on, and remember the choice", async () => {
+    window.localStorage.removeItem("megareviewer:decisions");
     renderReview();
     await loaded();
+    expect(await within(reviewBar()).findByRole("button", { name: "3 findings" })).toBeTruthy();
+    expect(within(reviewBar()).queryByRole("button", { name: /decision/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Decision: / })).toBeNull();
-    await userEvent.click(await within(reviewBar()).findByRole("button", { name: "4 decisions" }));
-    expect(scrolledTo().at(-1)).toBe("point-d1");
-    expect(decisionChip(PLAIN_TEXT).getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("article", { name: PLAIN_TEXT })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    const decisions = await screen.findByRole("menuitemcheckbox", { name: "Decisions" });
+    expect(decisions.getAttribute("aria-checked")).toBe("false");
+    await userEvent.click(decisions);
+    expect(await within(reviewBar()).findByRole("button", { name: "4 decisions" })).toBeTruthy();
+    expect(decisionChip(PLAIN_TEXT)).toBeTruthy();
+    expect(window.localStorage.getItem("megareviewer:decisions")).toBe("true");
+
+    await userEvent.click(
+      await screen.findByRole("menuitemcheckbox", { name: "Decisions", checked: true }),
+    );
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^Decision: / })).toBeNull());
+    expect(within(reviewBar()).queryByRole("button", { name: "4 decisions" })).toBeNull();
+    expect(window.localStorage.getItem("megareviewer:decisions")).toBe("false");
   });
 
   it("are counted by kind in the bar, and stepped through both ways, round", async () => {
