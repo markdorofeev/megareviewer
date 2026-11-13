@@ -1,6 +1,7 @@
 import { isScenario, type Scenario } from "../../src/cli/dev/model-recording.ts";
 import {
   type Analysis,
+  DecisionId,
   mapModelStages,
   type StageName,
   type StageStatus,
@@ -33,7 +34,11 @@ const pad = (decisions: Analysis["decisions"], to: number): Analysis["decisions"
     : Array.from({ length: to }, (_, index) => {
         const decision = decisions[index % decisions.length];
         if (decision === undefined) throw new Error("unreachable: decisions is not empty");
-        return { ...decision, id: decision.id, title: `${decision.title} (${index + 1})` };
+        return {
+          ...decision,
+          id: DecisionId.parse(`d${index + 1}`),
+          title: `${decision.title} (${index + 1})`,
+        };
       });
 
 const stages = (

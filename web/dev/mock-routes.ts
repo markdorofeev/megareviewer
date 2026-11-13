@@ -292,7 +292,8 @@ export const createMockApi = (
       if (scenario === undefined) {
         return failure("model-unavailable", "the mock API doesn't run Claude");
       }
-      if (modelStagesDone === null && timer === null) {
+      // A run that ended plays again, as Try again does on the server.
+      if (timer === null) {
         modelStagesDone = 0;
         timer = setInterval(
           () => {
@@ -323,7 +324,7 @@ export const createMockApi = (
         return failure("bad-request", problems.join("; "));
       }
       const { pointId } = parsedParams.data;
-      if (!pointsOf(fixture).some((point) => point.id === pointId)) {
+      if (!pointsOf(analysis()).some((point) => point.id === pointId)) {
         return failure("not-found", `No point ${pointId} in analysis ${params.id}`);
       }
       const saved: PointReview = { pointId, ...request.data, updatedAt: now() };

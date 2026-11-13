@@ -623,6 +623,39 @@ describe("points", () => {
     expect(pointCard(FINDING).dataset.state).toBe("raised");
   });
 
+  it("raise into the draft already on their lines, keeping what the reviewer wrote", async () => {
+    window.localStorage.setItem(
+      `megareviewer:hunk-comments:${id}`,
+      JSON.stringify([
+        { hunkId: h.receiptRoute, side: "new", line: 16, startLine: 14, body: "My words." },
+      ]),
+    );
+    renderReview();
+    await loaded();
+    await userEvent.click(raise(FINDING));
+    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 14–16/ });
+    expect((field as HTMLTextAreaElement).value).toMatch(
+      /^My words\.\n\nAny signed-in user can read every customer's receipt/,
+    );
+  });
+
+  it("open a raised point's draft as the reviewer left it when raised again", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(raise(FINDING));
+    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 14–16/ });
+    await userEvent.clear(field);
+    await userEvent.type(field, "Check the owner.");
+    await userEvent.click(raise(FINDING));
+    expect(
+      (
+        within(mainArea()).getByRole("textbox", {
+          name: /^Comment on lines 14–16/,
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe("Check the owner.");
+  });
+
   it("fold to one line when dismissed, and come back", async () => {
     const { requests } = renderReview();
     await loaded();

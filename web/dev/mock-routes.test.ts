@@ -324,4 +324,32 @@ describe("a scenario", () => {
     expect(signedOut.stages.intent).toBe("failed");
     expect(pointsOf(signedOut)).toEqual([]);
   });
+
+  it("gives each of many points its own ID", () => {
+    const ids = pointsOf(run("many")).map((point) => point.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("records a point's state once Claude's run has landed it", () => {
+    const api = createMockApi({ now: () => NOW, scenario: "ready" });
+    api.handle(request("POST", `/api/analyses/${id}/model`));
+    vi.advanceTimersByTime(MOCK_STAGE_MS * 10);
+    const saved = api.handle(request("PUT", `/api/analyses/${id}/points/f1`, { state: "raised" }));
+    expect(PointReview.parse(saved.body).state).toBe("raised");
+    api.close();
+  });
+
+  it("plays Claude's run again on Try again", () => {
+    const api = createMockApi({ now: () => NOW, scenario: "limit-after-findings" });
+    const view = () => AnalysisView.parse(api.handle(request("GET", `/api/analyses/${id}`)).body);
+    api.handle(request("POST", `/api/analyses/${id}/model`));
+    vi.advanceTimersByTime(MOCK_STAGE_MS * 10);
+    expect(view().analysis.stages.risk).toBe("failed");
+
+    api.handle(request("POST", `/api/analyses/${id}/model`));
+    expect(view().analysis.stages.intent).toBe("running");
+    vi.advanceTimersByTime(MOCK_STAGE_MS * 10);
+    expect(view().analysis.stages.risk).toBe("failed");
+    api.close();
+  });
 });

@@ -526,7 +526,8 @@ const Review = ({
 
   /**
    * Raises a point: a comment on its lines, prefilled with its text for the reviewer to edit,
-   * which posts with the review under their name.
+   * which posts with the review under their name. A draft already on those lines keeps what's in
+   * it: the point's text goes after it, or, raised before, the draft opens as the reviewer left it.
    */
   const raisePoint = (point: Point) => {
     const partId = places.cardPart.get(point.id);
@@ -545,9 +546,22 @@ const Review = ({
     const firstChanged = found.hunk.lines.find((one) => one.kind !== "context");
     const place = fromLines ?? (firstChanged === undefined ? null : commentPlace(firstChanged));
     if (place === null) return;
-    const body = point.explanation === "" ? point.title : `${point.title}\n\n${point.explanation}`;
-    writeComment(partId, { ...place, body });
-    setOpenComment({ partId, place });
+    const text = point.explanation === "" ? point.title : `${point.title}\n\n${point.explanation}`;
+    const hunkId = hunkIdOf(partId);
+    const draft = hunkComments.find(
+      (comment) =>
+        comment.hunkId === hunkId && comment.side === place.side && comment.line === place.line,
+    );
+    if (draft === undefined) {
+      writeComment(partId, { ...place, body: text });
+    } else if (pointStates.stateOf(point.id) !== "raised" && !draft.body.includes(text)) {
+      writeComment(partId, { ...draft, body: draft.body === "" ? text : `${draft.body}\n\n${text}` });
+    }
+    const { startLine } = draft ?? place;
+    setOpenComment({
+      partId,
+      place: { side: place.side, line: place.line, ...(startLine === undefined ? {} : { startLine }) },
+    });
     setCurrentPoint(point.id);
     void pointStates.setState(point.id, "raised");
     scrollTo(hunkAnchor(partId));
