@@ -135,6 +135,16 @@ test("a call's card keeps its header in view when its code scrolls sideways", as
   if (cardBox === null || headerBox === null || goToBox === null) throw new Error("not laid out");
   expect(Math.abs(headerBox.x - cardBox.x)).toBeLessThan(2);
   expect(goToBox.x + goToBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+  // Scrolled to the bottom, the last line ends above room for a scrollbar drawn over the code,
+  // as macOS draws it.
+  const room = await scroller.evaluate((box) => {
+    box.scrollTop = box.scrollHeight;
+    const rows = box.querySelectorAll("[role=row]");
+    const last = rows[rows.length - 1];
+    if (last === undefined) return 0;
+    return box.getBoundingClientRect().top + box.clientHeight - last.getBoundingClientRect().bottom;
+  });
+  expect(room).toBeGreaterThanOrEqual(10);
 });
 
 test("the line under the mouse shows a plus on its number, an unchanged fold's doesn't", async ({

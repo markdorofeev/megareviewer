@@ -132,7 +132,8 @@ const PeekBody = ({
       data-slot="peek-scroller"
       className="@container relative min-h-0 overflow-auto"
     >
-      <div className="w-max min-w-full">
+      {/* Room under the last line for a scrollbar drawn over the code, as macOS draws it. */}
+      <div className="w-max min-w-full pb-3">
         {payload.targets.map((target, at) => (
           <PeekPart
             key={target.id}
