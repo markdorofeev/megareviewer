@@ -150,6 +150,16 @@ The page shows only the reviewer's own drafts. This slice brings the PR's existi
 |---|---|---|---|
 | 40 | [Review threads on the code](40-review-threads.md) | 23, 36 | `ReviewThreads` port and adapters, `src/domain/review/thread.ts`, thread routes, `web/src/review/thread/` |
 
+## Seventh slice: the model on the reviewer's Claude plan
+
+`--ai` needs an API key and bills every review per token. This slice runs the passes through the reviewer's own Claude Code instead, so they come out of the plan the reviewer already has.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 41 | [The model through Claude Code, by default](41-claude-code-model.md) | 20, 31 | The Claude Code transport in `src/adapters/claude/`, model selection in `src/cli/`, the evals' model option |
+
+The `ModelUsage` change goes in its own PR first.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
