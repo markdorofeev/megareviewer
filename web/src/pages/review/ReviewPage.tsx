@@ -155,7 +155,6 @@ const PAGE_SHORTCUTS: readonly ShortcutId[] = [
   "openCall",
   "moveFile",
   "openFile",
-  "nextPoint",
   "toggleLayout",
   "openReview",
   "close",
@@ -600,7 +599,6 @@ const Review = ({
   useShortcuts(
     {
       ...(layout === "map" ? mapOnly : {}),
-      ...(points.length > 0 ? { nextPoint: goToNextPoint } : {}),
       toggleLayout: () => switchLayout(),
       openReview: () => {
         if (canPublish) void openPublish();

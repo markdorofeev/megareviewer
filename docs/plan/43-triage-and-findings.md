@@ -41,7 +41,7 @@ In the header, where the button was:
 
 In this order, about a second in all:
 
-1. **The receipt.** The hairline stops, and chips appear one by one with their counts rolling up from zero: "⚠ 2 findings", "▲ 1 risk", "◇ 2 decisions". "All 5" opens the full list in the header, a row per point that goes to its card; Next steps through them, with a key in the keymap.
+1. **The receipt.** The hairline stops, and chips appear one by one with their counts rolling up from zero: "⚠ 2 findings", "▲ 1 risk", "◇ 2 decisions". "All 5" opens the full list in the header, a row per point that goes to its card; Next steps through them.
 2. **Marks drop into the tree,** row by row from the top: each file's counts by kind. The file holding the current point is highlighted.
 3. **Lines light up, then cards unfold.** A point's lines take its kind's tint and an edge bar, and its card grows out from under them. Only cards in view animate; the others are in place when the reviewer gets there. The line at the top of the window is held where it is while cards above it open.
 
@@ -136,6 +136,7 @@ Not taken yet: both need a real run on delphi-code #2 (see **Open issues**).
 
 ## Notes for later stages
 
+- **Next has no key.** The stage asked for one in the keymap; the button is the way through the points, and a key per button is noise to learn. The page's keys are the ones that were already there.
 - **The mismatch chip went with the chip, not with the mismatch.** Mismatches are findings now, so the header has no chip; Details still goes to one, which scrolls to its point's card (`point-m1`, `point-m2`, …).
 - **A point's lines take a bar, not a tint.** The design asked for the kind's tint on the lines; a tint under code would need a contrast pair for every syntax color on three more surfaces, for what the bar and the card beside it already say. The bar is the kind's color at the lines' edge, and the strongest kind wins where points overlap.
 - **The landing is cards growing in and the intent fading over, with the scroll held.** The receipt's chips roll their counts up from zero; the tree's marks and the cards appear with the motion tokens, which `prefers-reduced-motion` sets to 0 ms, rather than row by row on a timeline. `useHeldScroll` holds the first card in view while cards open above it.

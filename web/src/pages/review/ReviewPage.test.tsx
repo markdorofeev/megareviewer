@@ -932,16 +932,6 @@ describe("keyboard shortcuts", () => {
     expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
   });
 
-  it("step through Claude's points with .", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.keyboard(".");
-    expect(scrolledTo().at(-1)).toBe("point-f1");
-    expect(pointCard(FINDING).dataset.current === "true").toBe(true);
-    await userEvent.keyboard(".");
-    expect(scrolledTo().at(-1)).toBe("point-f2");
-  });
-
   it("open a comment on the focused hunk's first changed line with c", async () => {
     renderReview();
     await loaded();
@@ -962,7 +952,6 @@ describe("keyboard shortcuts", () => {
         .map((keys) => keys.textContent);
     expect(keysOf("In the code")).toEqual(["n", "p", "c", "o"]);
     expect(keysOf("In the overview")).toEqual(["←→↑↓", "↵"]);
-    expect(keysOf("On Claude's points")).toEqual(["."]);
     expect(keysOf("Anywhere")).toEqual(["v", "⇧R", "Esc", "?"]);
     await userEvent.keyboard("v");
     // The page behind the open dialog is inert, so its switch is hidden from the tree.

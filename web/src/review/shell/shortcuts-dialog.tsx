@@ -23,7 +23,6 @@ const SCOPES: readonly { readonly scope: ShortcutScope; readonly title: string }
   { scope: "global", title: "Anywhere" },
   { scope: "diff", title: "In the code" },
   { scope: "overview", title: "In the overview" },
-  { scope: "point", title: "On Claude's points" },
   { scope: "tree", title: "In the file tree" },
   { scope: "composer", title: "Writing a comment or review" },
 ];

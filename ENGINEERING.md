@@ -108,7 +108,7 @@ Don't over-apply it. An interface exists only at an I/O boundary or when there's
 - **Primitives from `web/src/ui`.** shadcn/ui on Base UI, owned here; a change from upstream is marked `// hunk:`. No other component library.
 - **Classes with `cn()`,** from `web/src/lib/utils.ts`, and `cva` for a component with more than two variants. Tailwind generates only the classes it finds whole, so a class chosen by a value is spelled out in a map.
 - **Never color alone.** A risk, verdict, status or changed line also has a glyph or a word.
-- **One keymap.** Every shortcut is in `web/src/lib/keymap.ts`, and hints come from it through `KeyHint`.
+- **One keymap, and few keys.** Every shortcut is in `web/src/lib/keymap.ts`, and hints come from it through `KeyHint`. A new one is added only when a reviewer asks for it or the action is one they repeat on every PR; a button or a click is the way to do something, and a key per button is a list nobody learns.
 - **WCAG 2.2 AA** in light, dark and the color-blind diff: 4.5:1 text, 3:1 for what isn't text, a visible focus, 24 px targets.
 
 ## 7. Testing

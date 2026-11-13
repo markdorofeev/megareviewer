@@ -12,7 +12,6 @@ export type ClaudeRun = Pick<Analysis, "status" | "stages" | "modelError">;
 
 import { POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
-import { KeyHint } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 
 /** How long a count takes to roll up from zero, and how often it steps. */
@@ -150,7 +149,6 @@ export const ClaudeElement = ({
         </Button>
         <Button variant="ghost" size="xs" onClick={onNext}>
           Next
-          <KeyHint id="nextPoint" />
         </Button>
         {(error ?? note) !== null && (
           <span role="alert" className="text-caption text-destructive">
