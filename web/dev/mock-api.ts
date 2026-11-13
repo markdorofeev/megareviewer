@@ -47,6 +47,8 @@ const sendJson = (response: ServerResponse, { status, body }: MockResponse) => {
 /**
  * The scenario the page is open with: `?scenario=<name>` in its URL, which the API requests
  * carry in their Referer. A dev-only trick, so the whole page can be played without the model.
+ * The page's own navigation drops the query, so a request without one keeps the scenario in
+ * play; opening the page at another one switches.
  */
 const scenarioOf = (referer: string | undefined): Scenario | undefined => {
   const name = referer === undefined ? null : new URL(referer).searchParams.get("scenario");
@@ -61,7 +63,7 @@ export const mockApi = (): Plugin => ({
     let api = createMockApi();
     /** A new scenario starts a fresh API, so its analysis begins before Claude ran. */
     const apiFor = (next: Scenario | undefined): MockApi => {
-      if (next === scenario) return api;
+      if (next === undefined || next === scenario) return api;
       api.close();
       scenario = next;
       api = createMockApi(next === undefined ? {} : { scenario: next });

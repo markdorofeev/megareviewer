@@ -13,6 +13,7 @@ import {
 } from "../../contracts/index.ts";
 import type { FileChange } from "../../src/domain/diff/index.ts";
 import {
+  type Analysis,
   buildPublication,
   composeBody,
   MODEL_STAGES,
@@ -150,8 +151,11 @@ export const createMockApi = (
   const stageMs = options.stageMs ?? MOCK_STAGE_MS;
   const scenario = options.scenario;
   const now = options.now ?? (() => new Date().toISOString());
+  /** In a scenario the analysis starts as the code's review alone, before anyone asked Claude. */
+  const asked = (analysis: Analysis): Analysis =>
+    scenario === undefined ? analysis : withoutModel(analysis);
   let fixtureView = fixtureAnalysisView;
-  let fixture = scenario === undefined ? fixtureView.analysis : withoutModel(fixtureView.analysis);
+  let fixture = asked(fixtureView.analysis);
   /** The model's stages, stepped through when the reviewer asks Claude in a scenario. */
   let modelStagesDone: number | null = null;
 
@@ -171,7 +175,7 @@ export const createMockApi = (
       return analysisInProgress(fixture, stagesDone);
     }
     // Claude's run: each pass's results appear as its stage finishes, then the scenario's end.
-    const ended = afterModelRun(fixtureAnalysisView.analysis, scenario);
+    const ended = afterModelRun(fixtureView.analysis, scenario);
     return modelStagesDone >= MODEL_STAGES.length
       ? ended
       : analysisInProgress(ended, StageName.options.length - MODEL_STAGES.length + modelStagesDone);
@@ -257,7 +261,7 @@ export const createMockApi = (
       if (timer === null) {
         fixtureView =
           ref.value.number === MOCK_LARGE_PR_NUMBER ? largeAnalysisView : fixtureAnalysisView;
-        fixture = fixtureView.analysis;
+        fixture = asked(fixtureView.analysis);
       }
       simulate(ref.value.number === MOCK_FAILING_PR_NUMBER ? FAILING_STAGE : null);
       const response: AnalysisIdResponse = { analysisId: fixture.id };
@@ -462,7 +466,8 @@ export const createMockApi = (
       const id = EVENTS_PATTERN.exec(request.path)?.groups?.id;
       const missing = findAnalysis(id === undefined ? undefined : decodeURIComponent(id));
       if (missing !== null) return missing;
-      if (analysis().status !== "running") {
+      // Claude's run leaves the analysis complete, so the timer says whether anything is left.
+      if (analysis().status !== "running" && timer === null) {
         listener({ event: "done", data: {} });
         return { unsubscribe: () => {} };
       }
