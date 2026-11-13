@@ -7,6 +7,7 @@ import {
   TOKEN_HEADER,
 } from "../../contracts/index.ts";
 import {
+  inProgress,
   PointReview,
   Publication,
   PublicationReceipt,
@@ -303,6 +304,21 @@ describe("a scenario", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.stages.findings).toBe("skipped");
     expect(pointsOf(analysis)).toEqual([]);
+    api.close();
+  });
+
+  it("analyzes a PR opened afresh without running Claude, as the server does", () => {
+    const api = createMockApi({ now: () => NOW, scenario: "ready" });
+    const view = () => AnalysisView.parse(api.handle(request("GET", `/api/analyses/${id}`)).body);
+    api.handle(request("POST", "/api/analyses", { url: PR_URL }));
+    // Each step of the code's analysis: Claude's stages never run on their own.
+    for (let step = 0; step < 7; step += 1) {
+      const { status, stages } = view().analysis;
+      expect(status !== "complete" || !inProgress({ status, stages })).toBe(true);
+      vi.advanceTimersByTime(MOCK_STAGE_MS);
+    }
+    expect(view().analysis.status).toBe("complete");
+    expect(view().analysis.stages.intent).toBe("skipped");
     api.close();
   });
 

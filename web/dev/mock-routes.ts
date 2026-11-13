@@ -136,9 +136,12 @@ const issuesOf = (
   issues: readonly { path: readonly PropertyKey[]; message: string }[],
 ) => issues.map((issue) => `${[where, ...issue.path.map(String)].join(".")}: ${issue.message}`);
 
+/** The code's stages, which run when a PR is opened; Claude's come after them, when asked. */
+const CODE_STAGES = StageName.options.length - MODEL_STAGES.length;
+
 /**
  * Every contract route in memory, backed by the fixtures. Starting an analysis replays the
- * fixture's stages one by one, so loading states can be built against it.
+ * code's stages one by one, so loading states can be built against it.
  */
 export const createMockApi = (
   options: {
@@ -159,7 +162,7 @@ export const createMockApi = (
   /** The model's stages, stepped through when the reviewer asks Claude in a scenario. */
   let modelStagesDone: number | null = null;
 
-  let stagesDone = StageName.options.length;
+  let stagesDone = CODE_STAGES;
   let failAt: StageName | null = null;
   let failed = false;
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -172,7 +175,7 @@ export const createMockApi = (
   const analysis = () => {
     if (failed && failAt !== null) return analysisFailed(fixture, failAt, FAILURE_MESSAGE);
     if (scenario === undefined || modelStagesDone === null) {
-      return analysisInProgress(fixture, stagesDone);
+      return stagesDone >= CODE_STAGES ? fixture : analysisInProgress(fixture, stagesDone);
     }
     // Claude's run: each pass's results appear as its stage finishes, then the scenario's end.
     const ended = afterModelRun(fixtureView.analysis, scenario);
@@ -207,7 +210,7 @@ export const createMockApi = (
     stagesDone += 1;
     if (finished !== undefined)
       emit({ event: "updated", data: { stage: finished, status: "done" } });
-    const next = StageName.options[stagesDone];
+    const next = stagesDone < CODE_STAGES ? StageName.options[stagesDone] : undefined;
     if (next !== undefined) {
       emit({ event: "updated", data: { stage: next, status: "running" } });
       return;
