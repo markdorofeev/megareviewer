@@ -75,10 +75,10 @@ describe("DiffViewer", () => {
 
 describe("FileTree", () => {
   const files = [
-    { path: "src/http/retry.ts", status: "modified", additions: 1, deletions: 1, contract: 0 },
-    { path: "src/auth/session.ts", status: "deleted", additions: 0, deletions: 9, contract: 2 },
-    { path: "src/http/backoff.ts", status: "added", additions: 7, deletions: 0, contract: 0 },
-    { path: "src/util/sleep.ts", status: "renamed", additions: 0, deletions: 0, contract: 0 },
+    { path: "src/http/retry.ts", status: "modified", additions: 1, deletions: 1 },
+    { path: "src/auth/session.ts", status: "deleted", additions: 0, deletions: 9 },
+    { path: "src/http/backoff.ts", status: "added", additions: 7, deletions: 0 },
+    { path: "src/util/sleep.ts", status: "renamed", additions: 0, deletions: 0 },
   ] as const;
 
   it("filters with / and clears with Esc", () => {
@@ -93,11 +93,11 @@ describe("FileTree", () => {
     expect(screen.getByText("4 files")).toBeTruthy();
   });
 
-  it("says a file's status and contract parts in words", () => {
+  it("says a file's status in words, and nothing of contract", () => {
     render(<FileTree files={files} activePath="src/http/retry.ts" onSelect={() => undefined} />);
     const deleted = screen.getByTitle("src/auth/session.ts");
     expect(deleted.textContent).toContain("deleted");
-    expect(deleted.textContent).toContain("2 contract");
+    expect(deleted.textContent).not.toContain("contract");
     // A modified file says nothing about its status.
     const modified = screen.getByTitle("src/http/retry.ts");
     expect(modified.textContent).not.toMatch(/modified|deleted|new|renamed/);

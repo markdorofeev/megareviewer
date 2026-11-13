@@ -184,7 +184,6 @@ export const overviewLines = ({ rows, strip }: FileOverview): string[] => {
     const notes = [
       ...(node.kind === "outside" ? ["outside"] : []),
       ...node.entries,
-      ...(node.risk === "contract" ? ["contract"] : []),
       ...(node.generated ? ["generated"] : []),
     ];
     const badges = node.badges.length > 0 ? ` [${node.badges.map(basename).join(", ")}]` : "";

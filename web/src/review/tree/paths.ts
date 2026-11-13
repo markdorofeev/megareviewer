@@ -31,7 +31,6 @@ export interface TreeFile {
   readonly kind: "file";
   readonly path: string;
   readonly name: string;
-  readonly contract: number;
 }
 
 export interface TreeDirectory {
@@ -40,8 +39,6 @@ export interface TreeDirectory {
   readonly path: string;
   /** Its path below its parent heading, with a trailing slash: `web/src/` for a chain. */
   readonly label: string;
-  /** Contract parts in every file under it. */
-  readonly contract: number;
   readonly children: readonly TreeEntry[];
 }
 
@@ -57,10 +54,7 @@ interface Building {
  * with no files and one directory in it is one heading with that directory, so a chain like
  * `web/src/` takes one row. Top-level files sit at the root, after its directories.
  */
-export const fileTree = (
-  paths: readonly string[],
-  contractOf: (path: string) => number,
-): readonly TreeEntry[] => {
+export const fileTree = (paths: readonly string[]): readonly TreeEntry[] => {
   const root: Building = { directories: new Map(), files: [] };
   for (const path of paths) {
     let at = root;
@@ -85,18 +79,9 @@ export const fileTree = (
         path = `${path}/${only[0]}`;
         inner = only[1];
       }
-      const children = entries(inner, path);
-      return {
-        kind: "directory",
-        path,
-        label: `${label}/`,
-        contract: children.reduce((sum, entry) => sum + entry.contract, 0),
-        children,
-      };
+      return { kind: "directory", path, label: `${label}/`, children: entries(inner, path) };
     });
-    const files = node.files.map(
-      (path): TreeFile => ({ kind: "file", path, name: nameOf(path), contract: contractOf(path) }),
-    );
+    const files = node.files.map((path): TreeFile => ({ kind: "file", path, name: nameOf(path) }));
     return [
       ...directories.sort((a, b) => byTreePath(`${a.path}/x`, `${b.path}/x`)),
       ...files.sort((a, b) => byTreePath(a.path, b.path)),

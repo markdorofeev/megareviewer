@@ -99,7 +99,6 @@ export const Primitives = () => (
         {Object.entries(RISK_STATUS).map(([risk, status]) => (
           <StatusBadge key={risk} status={status} />
         ))}
-        <StatusBadge status={RISK_STATUS.contract} label="3 contract" />
       </Row>
       <Row label="badge">
         <Badge>default</Badge>

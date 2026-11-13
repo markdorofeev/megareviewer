@@ -256,7 +256,7 @@ describe("raiseByRules", () => {
 
     expect(raiseByRules(model, rules)).toEqual([
       rule(1, "contract", "r1"),
-      assessed(2, "contract", "m2; r2"),
+      assessed(2, "contract", "m2"),
       assessed(3, "logic", "m3"),
     ]);
   });

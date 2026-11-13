@@ -1,10 +1,6 @@
 import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from "react";
 import type { MechanicalProof, PartId } from "../../../../src/domain/diff/index.ts";
-import {
-  type Analysis,
-  type AnalysisId,
-  pathReasons,
-} from "../../../../src/domain/review/index.ts";
+import type { Analysis, AnalysisId } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import {
   FileNotices,
@@ -18,7 +14,7 @@ import {
 import { FoldView, useFileText } from "./FoldView.tsx";
 import { canOpen, type Fold, foldsOf } from "./folds.ts";
 import { type HunkDeps, HunkView, hunkAnchor } from "./HunkView.tsx";
-import { contractParts, type FileGroup, gapBetween } from "./model.ts";
+import { type FileGroup, gapBetween } from "./model.ts";
 
 export const MECHANICAL_ANCHOR = "mechanical-changes";
 
@@ -99,9 +95,6 @@ const FileCard = ({
   const items = deps.index.items(group.partIds);
   const added = items.reduce((sum, item) => sum + lineCounts(item.hunk).added, 0);
   const deleted = items.reduce((sum, item) => sum + lineCounts(item.hunk).deleted, 0);
-  const contract = contractParts(group, deps.index);
-  // A path rule holds for every part of the file, so its reason is said once, here.
-  const fileReasons = contract > 0 ? pathReasons(group.file) : [];
   const openThreads = deps.openThreads(group.file.path);
   const earlier = deps.earlierThreads(group.file.path);
   const { text, load } = useFileText(analysisId, group.file.path);
@@ -137,7 +130,6 @@ const FileCard = ({
     <section
       id={fileAnchor(group.file.path)}
       data-slot="file-card"
-      data-risk={contract > 0 ? "contract" : undefined}
       className="scroll-mt-2 rounded-lg border bg-card -outline-offset-2"
       aria-label={group.file.path}
       data-path={group.file.path}
@@ -151,15 +143,6 @@ const FileCard = ({
         <FilePath file={group.file} status={group.file.status} className="min-w-0 flex-1" />
         <FileStatusChip status={group.file.status} />
         <span className="tabular flex flex-wrap items-center gap-x-1.5 text-caption">
-          {fileReasons.length > 0 && (
-            <span className="text-muted-foreground">{fileReasons.join("; ")} · </span>
-          )}
-          {contract > 0 && (
-            <span data-slot="count-contract" className="font-medium text-risk-contract">
-              <span aria-hidden="true">▲ </span>
-              {contract} contract ·{" "}
-            </span>
-          )}
           {openThreads > 0 && (
             <span
               data-slot="count-threads"

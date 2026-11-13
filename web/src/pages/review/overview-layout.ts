@@ -28,16 +28,12 @@ const uses = (count: number): string => (count === 1 ? "1 use" : `${count} uses`
 export const files = (count: number): string => (count === 1 ? "1 file" : `${count} files`);
 
 export const metaText = (
-  node: Pick<
-    OverviewNode,
-    "kind" | "paths" | "added" | "deleted" | "contract" | "entries" | "uses"
-  >,
+  node: Pick<OverviewNode, "kind" | "paths" | "added" | "deleted" | "entries" | "uses">,
 ) =>
   node.kind === "outside"
     ? `${node.paths.length > 1 ? `${files(node.paths.length)} · ` : ""}outside the PR · ${uses(node.uses)}`
     : [
         node.kind === "group" ? files(node.paths.length) : `+${node.added} −${node.deleted}`,
-        ...(node.contract > 0 ? [`${node.contract} contract`] : []),
         ...node.entries,
       ].join(" · ");
 

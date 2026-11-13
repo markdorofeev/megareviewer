@@ -1,17 +1,10 @@
 import { z } from "zod";
-import {
-  type FileChange,
-  type Hunk,
-  HunkId,
-  hunkHasLine,
-  type MechanicalProof,
-} from "../diff/index.ts";
+import { type FileChange, type Hunk, HunkId, hunkHasLine } from "../diff/index.ts";
 import type { Decision } from "./decision.ts";
 import { type Intent, IntentMismatchKind } from "./intent.ts";
 import { PointLines } from "./point-lines.ts";
 import { Timestamp } from "./primitives.ts";
 import type { RiskAssessment } from "./risk.ts";
-import { classifyByRules } from "./risk-rules.ts";
 
 export { PointLines };
 
@@ -121,7 +114,6 @@ const changedLines = (hunk: Hunk): PointLines | null => {
 
 export interface PointsInput {
   readonly files: readonly FileChange[];
-  readonly proofs: readonly MechanicalProof[];
   readonly intent: Intent | null;
   readonly findings: readonly Finding[];
   readonly risk: readonly RiskAssessment[];
@@ -130,8 +122,8 @@ export interface PointsInput {
 
 /**
  * The model's points on an analysis, in order: findings, the intent's mismatches as findings,
- * risks, then decisions, each in the model's own order. A risk is a point only when the model
- * raised it: a hunk the path rules mark contract is counted on its file instead.
+ * risks, then decisions, each in the model's own order. A risk is a hunk the model marked
+ * contract: the path rules' contract alone is never shown, since a rule reads the path, not the code.
  */
 export const pointsOf = (analysis: PointsInput): Point[] => {
   const hunks = new Map(
@@ -190,15 +182,8 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     ];
   });
 
-  const proved = new Set(analysis.proofs.flatMap((proof) => proof.hunkId ?? []));
-  const ruleContract = new Set(
-    classifyByRules(analysis.files, proved)
-      .filter((rule) => rule.riskClass === "contract")
-      .map((rule) => rule.hunkId),
-  );
   const risks = analysis.risk.flatMap((risk): Point[] => {
     if (risk.source !== "model" || risk.riskClass !== "contract") return [];
-    if (ruleContract.has(risk.hunkId)) return [];
     const landed = landing([risk.hunkId]);
     if (landed.lines === null) return [];
     return [

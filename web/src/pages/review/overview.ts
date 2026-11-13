@@ -32,12 +32,10 @@ export interface OverviewNode {
   readonly paths: readonly string[];
   /** The file's name with as many parent directories as make it unique; a group's directory. */
   readonly label: string;
-  /** Its contract parts, as the files' cards count them. */
-  readonly contract: number;
   readonly added: number;
   readonly deleted: number;
-  /** The highest risk class of its hunks. */
-  readonly risk: RiskClass;
+  /** Mechanical when every hunk in it is. */
+  readonly risk: NodeRisk;
   /** Every file in it is one a tool wrote. */
   readonly generated: boolean;
   /** Where users reach it: "3 routes", "Page: SetupPage", "Command: main". */
@@ -79,7 +77,8 @@ export interface FileOverview {
 /** Above this many files outside the pull request, they group by directory. */
 export const MAX_OUTSIDE_NODES = 10;
 
-const RISK_RANK: Readonly<Record<RiskClass, number>> = { mechanical: 0, logic: 1, contract: 2 };
+/** Contract is the rules' and the model's internal class, never shown, so a box is logic. */
+export type NodeRisk = Exclude<RiskClass, "contract">;
 const USES: readonly EdgeUse[] = ["import", "call", "type", "request"];
 
 const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
@@ -274,11 +273,8 @@ export const fileOverview = (
   analysis: OverviewInput,
   steps: readonly TourStep[],
   expanded: ReadonlySet<string> = new Set(),
-  /** A file's contract parts as the page counts them; else its parts in contract hunks. */
-  contractOf?: (path: string) => number,
 ): FileOverview => {
   const { mechanical, files, pathOfHunk, links } = linksBetweenFiles(analysis);
-  const riskOf = new Map(analysis.risk.map((one) => [one.hunkId, one.riskClass]));
   const tourOrder = [...new Set(steps.flatMap((step) => step.partIds))];
   const rank = new Map(tourOrder.map((id, at) => [id, at]));
   const rankOf = (id: PartId) => rank.get(id) ?? tourOrder.length;
@@ -292,18 +288,9 @@ export const fileOverview = (
         .map((piece) => piece.id)
         .filter((id) => !mechanical.has(hunkIdOf(id)))
         .sort((a, b) => rankOf(a) - rankOf(b));
-      const byHunks = file.hunks
-        .map(
-          (hunk): RiskClass =>
-            mechanical.has(hunk.id) ? "mechanical" : (riskOf.get(hunk.id) ?? "logic"),
-        )
-        .reduce((a, b) => (RISK_RANK[b] > RISK_RANK[a] ? b : a), "mechanical");
-      const contract =
-        contractOf?.(file.path) ??
-        toReview.filter((id) => riskOf.get(hunkIdOf(id)) === "contract").length;
-      // The page's count is per part, so a file whose contract hunk splits into logic parts is logic.
-      const risk: RiskClass =
-        contract > 0 ? "contract" : byHunks === "contract" ? "logic" : byHunks;
+      const risk: NodeRisk = file.hunks.every((hunk) => mechanical.has(hunk.id))
+        ? "mechanical"
+        : "logic";
       return [
         file.path,
         {
@@ -311,7 +298,6 @@ export const fileOverview = (
           deleted: lines.filter((line) => line.kind === "del").length,
           partIds: toReview,
           risk,
-          contract,
           rank: toReview.reduce((least, id) => Math.min(least, rankOf(id)), Infinity),
         },
       ] as const;
@@ -560,7 +546,6 @@ export const fileOverview = (
           : (outsideLabels.get(only) ?? only),
       added: 0,
       deleted: 0,
-      contract: 0,
       risk: "logic",
       generated: false,
       entries: [],
@@ -583,10 +568,7 @@ export const fileOverview = (
       label: group ? `${key.slice("group:".length) || "."}/` : (labels.get(key) ?? key),
       added: facts.reduce((sum, one) => sum + one.added, 0),
       deleted: facts.reduce((sum, one) => sum + one.deleted, 0),
-      contract: facts.reduce((sum, one) => sum + one.contract, 0),
-      risk: facts
-        .map((one) => one.risk)
-        .reduce((a, b) => (RISK_RANK[b] > RISK_RANK[a] ? b : a), "mechanical"),
+      risk: facts.every((one) => one.risk === "mechanical") ? "mechanical" : "logic",
       generated: inIt.every((path) => generated.has(path)),
       entries: unique(inIt.flatMap((path) => entries.get(path) ?? [])),
       flows: unique(inIt.flatMap((path) => flowsOf.get(path) ?? [])),

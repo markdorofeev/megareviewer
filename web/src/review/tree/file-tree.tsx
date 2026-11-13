@@ -26,7 +26,7 @@ export interface FileTreeProps {
   readonly className?: string;
 }
 
-/** The changed files, filtered with `/`, each with its status, its counts and its contract parts. */
+/** The changed files, filtered with `/`, each with its status and its counts. */
 export const FileTree = ({
   files,
   activePath,
@@ -65,14 +65,7 @@ export const FileTree = ({
 
   const shown = useMemo(() => filterFiles(files, query), [files, query]);
   const byPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
-  const tree = useMemo(
-    () =>
-      fileTree(
-        shown.map((file) => file.path),
-        (path) => byPath.get(path)?.contract ?? 0,
-      ),
-    [shown, byPath],
-  );
+  const tree = useMemo(() => fileTree(shown.map((file) => file.path)), [shown]);
 
   const shownOrder = useMemo(
     () => (mode === "tree" ? treeOrder(tree) : sortFiles(shown, order).map((file) => file.path)),
@@ -141,7 +134,6 @@ export const FileTree = ({
             />
             <Folder aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-            {entry.contract > 0 && <ContractCount count={entry.contract} />}
           </button>
           {open && (
             <div className="relative">
@@ -207,14 +199,6 @@ export const FileTree = ({
   );
 };
 
-export const ContractCount = ({ count }: { readonly count: number }) => (
-  <span className="tabular flex items-center gap-1 text-caption font-medium text-risk-contract">
-    <span aria-hidden="true">▲</span>
-    {count}
-    <span className="sr-only"> contract</span>
-  </span>
-);
-
 /** A file's unresolved review threads: a speech bubble and a count, said in words to readers. */
 export const ThreadCount = ({ count }: { readonly count: number }) => (
   <span data-slot="thread-count" className="tabular inline-flex items-center gap-0.5 text-caption">
@@ -279,7 +263,7 @@ export const PointCounts = ({
 
 /**
  * A file's row: its type's icon, its name (its directory muted when the row isn't under it), its
- * status when it isn't modified, its contract parts and its counts. A click selects it.
+ * status when it isn't modified, and its counts. A click selects it.
  */
 export const FileRow = ({
   entry,
@@ -290,7 +274,7 @@ export const FileRow = ({
   landing,
   onSelect,
 }: {
-  readonly entry: Pick<FileEntry, "path" | "contract"> & Partial<FileEntry>;
+  readonly entry: Pick<FileEntry, "path"> & Partial<FileEntry>;
   /** The row's place among the rows with points, for their landing. */
   readonly landing?: { readonly at: number; readonly of: number };
   readonly label: string;
@@ -330,7 +314,6 @@ export const FileRow = ({
       {entry.points !== undefined && (
         <PointCounts points={entry.points} {...(landing === undefined ? {} : { landing })} />
       )}
-      {entry.contract > 0 && <ContractCount count={entry.contract} />}
       {entry.threads !== undefined && entry.threads > 0 && <ThreadCount count={entry.threads} />}
       {entry.additions !== undefined && entry.deletions !== undefined && (
         <span className="tabular font-mono text-code-compact">

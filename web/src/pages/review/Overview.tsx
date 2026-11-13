@@ -57,7 +57,6 @@ const NodeButton = ({
       : [
           node.label,
           group ? files(node.paths.length) : null,
-          node.contract > 0 ? `${node.contract} contract` : null,
           ...node.entries,
           node.risk,
           node.generated ? "generated" : null,

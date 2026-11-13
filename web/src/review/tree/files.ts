@@ -7,8 +7,6 @@ export interface FileEntry {
   readonly status: FileStatus;
   readonly additions: number;
   readonly deletions: number;
-  /** Contract parts in the file. */
-  readonly contract: number;
   /** Unresolved review threads on the file. */
   readonly threads?: number;
   /** Claude's points on the file, by kind. */

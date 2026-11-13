@@ -61,7 +61,7 @@ describe("measure-pr", () => {
     // The overview's rows: the route's file above the service it imports and calls.
     expect(found.fileLinks).toBe(1);
     expect(printed).toContain(
-      "Overview\n  1. src/routes/ (GET /orders/:id/receipt)\n  2. src/services/\n  Not linked: config/ (contract)\n",
+      "Overview\n  1. src/routes/ (GET /orders/:id/receipt)\n  2. src/services/\n  Not linked: config/\n",
     );
   });
 

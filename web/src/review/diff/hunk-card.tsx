@@ -170,8 +170,8 @@ export interface HunkCardProps {
   /** Said in the comment box when a range is chosen, e.g. that a host can't anchor one. */
   readonly rangeNote?: string;
   /**
-   * One of several parts on a file's card, which names the file and counts its contract parts:
-   * the header shows only a proof, and the part shows no risk of its own.
+   * One of several parts on a file's card, which names the file: the header shows only a proof,
+   * and the part shows no risk of its own.
    */
   readonly inFile?: boolean;
   /** Ranges of the code to wrap, e.g. calls, by new-side line number. */

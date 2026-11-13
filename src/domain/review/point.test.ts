@@ -28,7 +28,6 @@ const finding = (lines: Partial<Finding["lines"]> = {}): Finding => ({
 
 describe("pointsOf", () => {
   it("orders findings, then mismatches, then the model's risks, then decisions", () => {
-    // config/app.yaml's three contract hunks are the path rules' too, so only the route's is a point.
     const points = pointsOf({
       ...smallFeatureAnalysis,
       intent: smallFeatureAnalysis.intent && {
@@ -39,7 +38,7 @@ describe("pointsOf", () => {
     expect(points.map((point) => [point.kind, point.id])).toEqual([
       ["finding", "f1"],
       ["finding", "m1"],
-      ["risk", `r:${smallFeatureAnalysis.risk[4]?.hunkId}`],
+      ...[0, 1, 2, 4].map((at) => ["risk", `r:${smallFeatureAnalysis.risk[at]?.hunkId}`]),
       ["decision", "d1"],
       ["decision", "d2"],
       ["decision", "d3"],
@@ -157,7 +156,7 @@ describe("pointsOf", () => {
     });
   });
 
-  it("leaves out a contract hunk the path rules raised, and the model's logic", () => {
+  it("makes the model's contract a risk on a path the rules mark too, and leaves out its logic", () => {
     const auth = fileChange(
       { path: "src/auth/session.ts", status: "modified", language: "typescript" },
       [hunk("src/auth/session.ts", "@@ -1,1 +1,1 @@", ["-const ttl = 1;", "+const ttl = 2;"])],
@@ -166,16 +165,18 @@ describe("pointsOf", () => {
     if (authHunk === undefined) throw new Error("built with a hunk");
     const points = pointsOf({
       files: [auth, ...smallFeatureAnalysis.files],
-      proofs: [],
       intent: null,
       findings: [],
       decisions: [],
       risk: [
         { hunkId: authHunk.id, riskClass: "contract", reason: "Session TTL.", source: "model" },
         { hunkId: receiptsHunk.id, riskClass: "logic", reason: "Renders.", source: "model" },
+        { hunkId: receiptsHunk.id, riskClass: "contract", reason: "A path rule.", source: "rule" },
       ],
     });
-    expect(points).toEqual([]);
+    expect(points.map((point) => [point.id, point.title])).toEqual([
+      [`r:${authHunk.id}`, "Session TTL."],
+    ]);
   });
 
   it("lands a deletion-only hunk on its old lines", () => {
@@ -186,7 +187,6 @@ describe("pointsOf", () => {
     if (removedHunk === undefined) throw new Error("built with a hunk");
     const [point] = pointsOf({
       files: [removed],
-      proofs: [],
       intent: null,
       findings: [],
       decisions: [],

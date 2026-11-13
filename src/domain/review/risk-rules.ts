@@ -195,7 +195,8 @@ const textOf = (hunk: Hunk, kind: "add" | "del"): string[] =>
 
 /**
  * The model's risk raised by the rules: a hunk is contract if either says so. A rule's contract
- * over the model's logic keeps the rule's assessment; when both say contract, the reasons join.
+ * over the model's logic keeps the rule's assessment; when both say contract, the model's stands,
+ * since its reason is about the code and the page shows it.
  */
 export const raiseByRules = (
   assessments: readonly RiskAssessment[],
@@ -204,10 +205,9 @@ export const raiseByRules = (
   const byHunk = new Map(rules.map((rule) => [rule.hunkId, rule]));
   return assessments.map((assessment) => {
     const rule = byHunk.get(assessment.hunkId);
-    if (rule === undefined || rule.riskClass !== "contract") return assessment;
-    return assessment.riskClass === "contract"
-      ? { ...assessment, reason: `${assessment.reason}; ${rule.reason}` }
-      : rule;
+    return rule?.riskClass === "contract" && assessment.riskClass !== "contract"
+      ? rule
+      : assessment;
   });
 };
 

@@ -129,39 +129,21 @@ describe("gapBetween", () => {
 });
 
 describe("a split part's risk", () => {
-  // The cache part is the second of its hunk; the rules see "cachedReceipt" there, no credentials.
-  const ruled = (reason: string): Analysis => ({
-    ...analysis,
-    risk: analysis.risk.map((risk) =>
-      risk.hunkId === h.retryAndCache
-        ? { ...risk, riskClass: "contract" as const, reason, source: "rule" as const }
-        : risk,
-    ),
-  });
-
-  it("is the rules' on its own lines, when the rules made its hunk's", () => {
-    const [cache] = partIndex(ruled("changes credential storage (save_token)")).items([p.cache]);
-    expect(cache?.risk).toMatchObject({
-      riskClass: "logic",
-      reason: "No contract rule matches this part's lines.",
-    });
-  });
-
-  it("is the hunk's when the model made it", () => {
-    const modelled: Analysis = {
-      ...analysis,
-      risk: analysis.risk.map((risk) =>
-        risk.hunkId === h.retryAndCache
-          ? {
-              ...risk,
-              riskClass: "contract" as const,
-              reason: "Whole hunk.",
-              source: "model" as const,
-            }
-          : risk,
-      ),
-    };
-    expect(partIndex(modelled).items([p.cache])[0]?.risk.reason).toBe("Whole hunk.");
+  it("is its hunk's, whether the rules or the model made it", () => {
+    for (const source of ["rule", "model"] as const) {
+      const assessed: Analysis = {
+        ...analysis,
+        risk: analysis.risk.map((risk) =>
+          risk.hunkId === h.retryAndCache
+            ? { ...risk, riskClass: "contract" as const, reason: "Whole hunk.", source }
+            : risk,
+        ),
+      };
+      expect(partIndex(assessed).items([p.cache])[0]?.risk).toMatchObject({
+        riskClass: "contract",
+        reason: "Whole hunk.",
+      });
+    }
   });
 });
 

@@ -817,26 +817,26 @@ describe("points", () => {
         [...reviewBar().querySelectorAll("[data-slot=point-chip]")].map((chip) =>
           chip.textContent?.replace(/\s+/g, " ").trim(),
         ),
-      ).toEqual(["3 findings", "1 risk", "4 decisions"]),
+      ).toEqual(["3 findings", "2 risks", "4 decisions"]),
     );
     // Before the first step, the count; Next goes to the first.
-    expect(position().textContent).toBe("8 points");
-    expect(position().getAttribute("aria-label")).toBe("8 points, show all");
+    expect(position().textContent).toBe("9 points");
+    expect(position().getAttribute("aria-label")).toBe("9 points, show all");
     await step("Next point");
     expect(scrolledTo().at(-1)).toBe("point-f1");
-    expect(position().getAttribute("aria-label")).toBe("Point 1 of 8, show all");
+    expect(position().getAttribute("aria-label")).toBe("Point 1 of 9, show all");
     expect(within(reviewBar()).getByRole("status").textContent).toMatch(
-      /^Finding 1 of 8: Any signed-in user can read/,
+      /^Finding 1 of 9: Any signed-in user can read/,
     );
     expect(
       within(reviewBar()).getByRole("button", { name: /^Go to finding: Any signed-in user/ }),
     ).toBeTruthy();
 
     await step("Previous point");
-    expect(position().textContent).toBe("8 of 8");
+    expect(position().textContent).toBe("9 of 9");
     expect(scrolledTo().at(-1)).toBe("point-d4");
     await step("Next point");
-    expect(position().textContent).toBe("1 of 8");
+    expect(position().textContent).toBe("1 of 9");
     await step("Next point");
     expect(scrolledTo().at(-1)).toBe("point-f2");
 
@@ -870,7 +870,7 @@ describe("points", () => {
     expect(scrolledTo().at(-1)).toBe("point-f1");
     expect(chip.getAttribute("aria-pressed")).toBe("false");
     await userEvent.click(within(reviewBar()).getByRole("button", { name: "3 findings" }));
-    expect(position().textContent).toBe("1 of 8");
+    expect(position().textContent).toBe("1 of 9");
   });
 
   it("are listed in full from the position, and a row there is where the stepper goes on", async () => {
@@ -878,10 +878,10 @@ describe("points", () => {
     await loaded();
     await userEvent.click(position());
     const list = screen.getByRole("list", { name: "Points" });
-    expect(within(list).getAllByRole("button")).toHaveLength(8);
+    expect(within(list).getAllByRole("button")).toHaveLength(9);
     await userEvent.click(within(list).getAllByRole("button")[1] as HTMLElement);
     expect(scrolledTo().at(-1)).toBe("point-f2");
-    expect(position().textContent).toBe("2 of 8");
+    expect(position().textContent).toBe("2 of 9");
 
     await step("Next point");
     expect(scrolledTo().at(-1)).toBe("point-f3");
@@ -1014,7 +1014,7 @@ describe("overview", () => {
       /^src\/routes\/, 1 file, /,
     );
     const strip = within(overviewBox()).getByRole("region", { name: "Not linked" });
-    expect(within(strip).getByRole("button", { name: /^\.\/, 1 file, \d+ contract/ })).toBeTruthy();
+    expect(within(strip).getByRole("button", { name: "./, 1 file, logic" })).toBeTruthy();
     // Proved-mechanical files aren't in it: the map lists them with their proofs.
     expect(overviewBox().querySelector('[data-key="pnpm-lock.yaml"]')).toBeNull();
   });
@@ -1239,18 +1239,16 @@ describe("parts of a split hunk", () => {
 });
 
 describe("navigation", () => {
-  it("count a file's contract parts on its card, and mark no part by its risk", async () => {
+  it("never show contract, on a file's card or its parts", async () => {
     renderReview();
     await loaded();
     const orders = fileCardOf("src/routes/orders.ts");
-    expect(
-      orders.querySelector("[data-slot=file-card-header] [data-slot=count-contract]")?.textContent,
-    ).toBe("▲ 1 contract · ");
-    // A rule's reason quotes the code under it, so the contract part has no divider at all.
+    expect(orders.querySelector("[data-slot=file-card-header]")?.textContent).not.toMatch(
+      /contract/,
+    );
     expect(orders.querySelector("[data-slot=hunk-contract-reason]")).toBeNull();
     expect(cardOf(h.receiptRoute).querySelector("[data-slot=hunk-header]")).toBeNull();
     expect(cardOf(h.routeImports).querySelector("[data-slot=hunk-header]")).toBeNull();
-    // The file's count says a part is contract; the part itself carries no badge or bar.
     expect(within(cardOf(h.receiptRoute)).queryByRole("button", { name: "contract" })).toBeNull();
     expect(cardOf(h.receiptRoute).querySelector("[data-slot=part-risk]")).toBeNull();
   });

@@ -6,7 +6,6 @@ const entry = (path: string, additions = 0, deletions = 0): FileEntry => ({
   status: "modified",
   additions,
   deletions,
-  contract: 0,
 });
 
 const FILES = [

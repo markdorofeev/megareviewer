@@ -1,11 +1,10 @@
-import type { RiskClass } from "../../../../src/domain/review/index.ts";
+import type { NodeRisk } from "./overview.ts";
 
 // The overview's colors and line styles, from the tokens. Spelled out because
 // Tailwind only generates the classes it finds whole in the source.
 
-/** A directory's box by its highest risk: a tint and text of the risk, a border the reader sees. */
-export const NODE_RISK: Readonly<Record<RiskClass, string>> = {
-  contract: "border-risk-contract-solid bg-risk-contract-bg text-risk-contract",
+/** A directory's box by its risk: a tint and text of the risk, a border the reader sees. */
+export const NODE_RISK: Readonly<Record<NodeRisk, string>> = {
   logic: "border-risk-logic-solid bg-risk-logic-bg text-risk-logic",
   mechanical: "border-risk-mechanical-solid bg-risk-mechanical-bg text-risk-mechanical",
 };

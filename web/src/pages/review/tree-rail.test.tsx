@@ -15,35 +15,28 @@ const paths = [
   "web/src/setup/ConnectionsSection.tsx",
   "CONTRIBUTING.md",
 ];
-const contract: Readonly<Record<string, number>> = {
-  "delphi_code/http_api/routes/hosting_services.py": 3,
-  "delphi_code/infrastructure/keychain.py": 1,
-};
-const tree = fileTree(paths, (path) => contract[path] ?? 0);
+const tree = fileTree(paths);
 
 /** Headings and file names, indented by depth: the tree as the rail draws it. */
 const outline = (entries: readonly TreeEntry[], depth = 0): string[] =>
   entries.flatMap((entry) =>
     entry.kind === "file"
-      ? [`${"  ".repeat(depth)}${entry.name}${entry.contract > 0 ? ` (${entry.contract})` : ""}`]
-      : [
-          `${"  ".repeat(depth)}${entry.label}${entry.contract > 0 ? ` (${entry.contract})` : ""}`,
-          ...outline(entry.children, depth + 1),
-        ],
+      ? [`${"  ".repeat(depth)}${entry.name}`]
+      : [`${"  ".repeat(depth)}${entry.label}`, ...outline(entry.children, depth + 1)],
   );
 
 describe("fileTree", () => {
-  it("nests files under their directories, one heading for a chain, with contract totals", () => {
+  it("nests files under their directories, one heading for a chain", () => {
     expect(outline(tree)).toEqual([
-      "delphi_code/ (4)",
+      "delphi_code/",
       "  domain/",
       "    hosting_services.py",
-      "  http_api/ (3)",
-      "    routes/ (3)",
-      "      hosting_services.py (3)",
+      "  http_api/",
+      "    routes/",
+      "      hosting_services.py",
       "    app.py",
-      "  infrastructure/ (1)",
-      "    keychain.py (1)",
+      "  infrastructure/",
+      "    keychain.py",
       "web/src/",
       "  routes/",
       "    setup.tsx",
@@ -54,7 +47,7 @@ describe("fileTree", () => {
   });
 
   it("collapses a chain only while its directories hold no files and one directory", () => {
-    const deep = fileTree(["a/b/c/one.ts", "a/b/two.ts", "x/y/z/three.ts"], () => 0);
+    const deep = fileTree(["a/b/c/one.ts", "a/b/two.ts", "x/y/z/three.ts"]);
     expect(outline(deep)).toEqual([
       "a/b/",
       "  c/",
@@ -66,7 +59,7 @@ describe("fileTree", () => {
   });
 
   it("lists the files in the order the page shows them, whatever order they came in", () => {
-    const order = treeOrder(fileTree([...paths].reverse(), () => 0));
+    const order = treeOrder(fileTree([...paths].reverse()));
     expect(order).toEqual([...paths].sort(byTreePath));
     expect(order.indexOf("delphi_code/http_api/routes/hosting_services.py")).toBeLessThan(
       order.indexOf("delphi_code/http_api/app.py"),
@@ -89,14 +82,13 @@ const entries = paths.map((path) => ({
   status: "modified" as const,
   additions: 1,
   deletions: 0,
-  contract: contract[path] ?? 0,
 }));
 
 const renderRail = (current: string | null, onGo = vi.fn()) =>
   render(<FileTree files={entries} activePath={current} onSelect={onGo} />);
 
 describe("FileTree as the rail", () => {
-  it("shows directory headings with their totals, and a row per file with its contract parts", () => {
+  it("shows directory headings, a row per file, and no contract counts", () => {
     renderRail(null);
     const rail = screen.getByRole("navigation", { name: "Changed files" });
     expect(within(rail).getByText("web/src/")).toBeTruthy();
@@ -105,11 +97,8 @@ describe("FileTree as the rail", () => {
         .getAllByRole("button")
         .filter((button) => !button.title.endsWith("/")),
     ).toHaveLength(paths.length);
-    expect(row("routes/hosting_services.py").textContent).toContain(
-      "hosting_services.py▲3 contract",
-    );
-    expect(row("domain/hosting_services.py").textContent).not.toContain("contract");
-    expect(within(rail).getByTitle("delphi_code/").textContent).toBe("delphi_code/▲4 contract");
+    expect(row("routes/hosting_services.py").textContent).not.toContain("contract");
+    expect(within(rail).getByTitle("delphi_code/").textContent).toBe("delphi_code/");
   });
 
   it("highlights the file in view and only it", () => {

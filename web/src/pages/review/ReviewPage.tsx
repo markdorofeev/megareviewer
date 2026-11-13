@@ -56,7 +56,6 @@ import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./
 import {
   changeTotals,
   commentsInParts,
-  contractParts,
   type Layout,
   mapFiles,
   mechanicalCount,
@@ -395,10 +394,6 @@ const Review = ({
     }
     return byPath;
   }, [places, index]);
-  const contractOf = useMemo(() => {
-    const counts = new Map(files.map((group) => [group.file.path, contractParts(group, index)]));
-    return (path: string) => counts.get(path) ?? 0;
-  }, [files, index]);
   const treeFiles = useMemo(
     () =>
       files.map(({ file }) => ({
@@ -406,16 +401,15 @@ const Review = ({
         status: file.status,
         additions: file.additions,
         deletions: file.deletions,
-        contract: contractOf(file.path),
         ...(pointsByFile.has(file.path) ? { points: pointsByFile.get(file.path) } : {}),
       })),
-    [files, contractOf, pointsByFile],
+    [files, pointsByFile],
   );
   // Directories the reviewer opened in the overview, to see their files.
   const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([]);
   const overview = useMemo(
-    () => fileOverview(analysis, steps, new Set(expandedGroups), contractOf),
-    [analysis, steps, expandedGroups, contractOf],
+    () => fileOverview(analysis, steps, new Set(expandedGroups)),
+    [analysis, steps, expandedGroups],
   );
 
   const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);

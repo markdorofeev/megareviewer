@@ -15,7 +15,6 @@ import {
   type PointId,
   type ReviewThread,
   type RiskAssessment,
-  ruleReasons,
   type TourStep,
   TourStepId,
 } from "../../../../src/domain/review/index.ts";
@@ -43,17 +42,6 @@ export interface PartPlace {
   /** The hunk's parts, in order. */
   readonly siblings: readonly PartId[];
 }
-
-/**
- * Rules run on a split part's own lines, so a part git put next to credential code isn't contract.
- * The model's risk is about the whole hunk and stays the hunk's.
- */
-const partRisk = (hunk: RiskAssessment, reasons: readonly string[]): RiskAssessment =>
-  reasons.length === 0
-    ? { ...hunk, riskClass: "logic", reason: NO_RULE_IN_PART }
-    : { ...hunk, riskClass: "contract", reason: reasons.join("; ") };
-
-const NO_RULE_IN_PART = "No contract rule matches this part's lines.";
 
 /** A part as the page shows it: its lines as a hunk, its file, its hunk's risk and proofs. */
 export interface PartItem extends HunkItem {
@@ -110,15 +98,9 @@ export const partIndex = (analysis: Analysis) => {
   const mechanical: ReadonlySet<PartId> = new Set(proofs.keys());
   const riskOf = (id: PartId): RiskAssessment => {
     const hunkId = hunkIdOf(id);
-    const assessed = risk.get(hunkId) ?? {
-      hunkId,
-      riskClass: "logic",
-      reason: UNCLASSIFIED,
-      source: "fallback",
-    };
-    const found = parts.get(id);
-    if (assessed.source !== "rule" || found?.place == null) return assessed;
-    return partRisk(assessed, ruleReasons(found.hunk, found.file));
+    return (
+      risk.get(hunkId) ?? { hunkId, riskClass: "logic", reason: UNCLASSIFIED, source: "fallback" }
+    );
   };
   const items = (ids: readonly PartId[]): PartItem[] =>
     ids.flatMap((id) => {
@@ -194,12 +176,6 @@ export const mapFiles = (analysis: Analysis, index: PartIndex): FileGroup[] =>
       const ids = index.partsInFile(file);
       return ids.every((id) => index.mechanical.has(id)) ? [] : [{ file, partIds: ids }];
     });
-
-/** A file's contract parts, as its card counts them: mechanical parts never are. */
-export const contractParts = (group: FileGroup, index: PartIndex): number =>
-  index
-    .items(group.partIds)
-    .filter((item) => !index.mechanical.has(item.id) && item.risk.riskClass === "contract").length;
 
 /**
  * How many lines lie between two parts of one file that its card shows one after the other, on the

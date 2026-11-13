@@ -279,7 +279,7 @@ describe("fileOverview with every directory opened", () => {
     expect([...overview.placeOf.keys()].sort()).toEqual(["a.py", "b.py"]);
   });
 
-  it("sums lines, takes the highest risk, and lists hunks in tour order", () => {
+  it("sums lines, shows contract as logic, and lists hunks in tour order", () => {
     const files = [file("a.py", [1, 2], "x = 1", 3), file("b.py", [3])];
     const risk: RiskAssessment[] = [
       { hunkId: h(1), riskClass: "logic", reason: "", source: "rule" },
@@ -289,7 +289,7 @@ describe("fileOverview with every directory opened", () => {
       step(1, "Second hunk first", [2, 1, 3]),
     ]);
     const [a] = overview.rows[0] ?? [];
-    expect([a?.added, a?.deleted, a?.risk, a?.partIds]).toEqual([6, 0, "contract", [h(2), h(1)]]);
+    expect([a?.added, a?.deleted, a?.risk, a?.partIds]).toEqual([6, 0, "logic", [h(2), h(1)]]);
     expect(a?.flows).toEqual(["Second hunk first"]);
   });
 
@@ -538,7 +538,7 @@ describe("fileOverview by directory", () => {
     source: "rule",
   });
 
-  it("makes each directory a box with its files, contract parts, highest risk and tests", () => {
+  it("makes each directory a box with its files, its risk and its tests, never contract", () => {
     const files = [
       file("api/routes.py", [1]),
       file("api/models.py", [2]),
@@ -556,17 +556,12 @@ describe("fileOverview by directory", () => {
       key: "group:api",
       kind: "group",
       paths: ["api/models.py", "api/routes.py"],
-      contract: 1,
-      risk: "contract",
+      risk: "logic",
       badges: ["tests/test_api.py"],
     });
     expect(overview.strip.map((node) => node.label)).toEqual(["docs/"]);
     expect(overview.placeOf.get("api/routes.py")).toBe("group:api");
     expect(overview.placeOf.get("tests/test_api.py")).toBe("group:api");
-
-    // The page counts contract per part, so a hunk the rules marked can hold no contract part.
-    const counted = fileOverview(analysis, tourOf(files), new Set(), () => 0);
-    expect(counted.rows[0]?.[0]).toMatchObject({ contract: 0, risk: "logic" });
   });
 
   it("merges the links between two directories into one edge, keeping its request", () => {
