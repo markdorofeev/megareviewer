@@ -82,6 +82,25 @@ describe("CallPeek", () => {
     expect(screen.getByText("lines 40–43").textContent).toBe("lines 40–43");
   });
 
+  it("numbers the lines once, by the new side, with a removed line's marker kept", async () => {
+    const { user } = renderPage(<Page onGoTo={() => {}} />);
+    await user.hover(screen.getByText("cachedReceipt"));
+    await wait(PEEK_OPEN_MS * 2);
+    const rows = screen.getAllByRole("row");
+    // A number and the code: no column for the base's numbers, which an added line leaves empty.
+    expect(rows.map((row) => row.querySelectorAll("[role=cell]").length)).toEqual(
+      rows.map(() => 2),
+    );
+    expect(rows.map((row) => row.querySelector("[role=cell]")?.textContent)).toEqual([
+      "40",
+      "",
+      "41",
+      "42",
+      "43",
+    ]);
+    expect(rows[1]?.dataset.kind).toBe("del");
+  });
+
   it("stays open while the pointer is on the card, and closes once it leaves both", async () => {
     const { user } = renderPage(<Page onGoTo={() => {}} />);
     await user.hover(screen.getByText("cachedReceipt"));

@@ -184,7 +184,14 @@ const PeekPart = ({
       </header>
       <div role="table" aria-label={`Lines of ${symbol}`} className="w-max min-w-full">
         {lines.map((line) => (
-          <DiffLine key={line.key} line={line} cellRole="cell" density="compact" />
+          // The new side's numbers only: the base's column is empty beside every added line.
+          <DiffLine
+            key={line.key}
+            line={line}
+            layout="split-new"
+            cellRole="cell"
+            density="compact"
+          />
         ))}
       </div>
     </section>
