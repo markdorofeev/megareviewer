@@ -374,7 +374,6 @@ test.describe("without the model", () => {
     await expect(page.locator("[data-slot=review-thread]").first()).toBeVisible();
 
     // A click on the route's directory in the overview opens its first file in the map.
-    // The rail has its own Tree · Overview switch; this is the page's layout switch.
     await page
       .getByRole("group", { name: "Layout" })
       .getByRole("button", { name: "Overview", exact: true })
@@ -420,7 +419,6 @@ for (const width of [720, 1024, 1440]) {
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeInViewport();
-    // The rail has its own Tree · Overview switch; this is the page's layout switch.
     await page
       .getByRole("group", { name: "Layout" })
       .getByRole("button", { name: "Overview", exact: true })

@@ -11,7 +11,6 @@ import { KeyHint } from "../shell/key-hint.tsx";
 import { FileIcon } from "./file-icon.tsx";
 import { type FileEntry, type FileOrder, filterFiles, sortFiles } from "./files.ts";
 import { fileTree, nameOf, type TreeEntry, treeOrder } from "./paths.ts";
-import { ARROWS, type Neighbors, type Relation, relationOf } from "./relations.ts";
 
 export interface FileTreeProps {
   readonly files: readonly FileEntry[];
@@ -23,11 +22,6 @@ export interface FileTreeProps {
   readonly order?: FileOrder;
   /** n and p select the next and previous file, in the order shown. One tree per page has it. */
   readonly navigate?: boolean;
-  /**
-   * The links between files. With them, the active file's callers and callees carry arrows and
-   * the other files are muted, as in the rail beside the code.
-   */
-  readonly neighbors?: Neighbors;
   readonly className?: string;
 }
 
@@ -39,7 +33,6 @@ export const FileTree = ({
   mode = "tree",
   order = "path",
   navigate = false,
-  neighbors,
   className,
 }: FileTreeProps) => {
   const nav = useRef<HTMLElement>(null);
@@ -104,13 +97,7 @@ export const FileTree = ({
         entry={entry}
         label={label}
         depth={depth}
-        relation={
-          neighbors === undefined
-            ? entry.path === activePath
-              ? "current"
-              : "none"
-            : relationOf(entry.path, activePath, neighbors)
-        }
+        active={entry.path === activePath}
         onSelect={onSelect}
       />
     </li>
@@ -229,52 +216,39 @@ export const ThreadCount = ({ count }: { readonly count: number }) => (
 );
 
 /**
- * A file's row: an arrow saying how it relates to the active file, its type's icon, its name (its directory muted
- * when the row isn't under it), its status when it isn't modified, its contract parts and its
- * counts. A click selects it.
+ * A file's row: its type's icon, its name (its directory muted when the row isn't under it), its
+ * status when it isn't modified, its contract parts and its counts. A click selects it.
  */
 export const FileRow = ({
   entry,
   label,
   depth = 0,
-  relation = "none",
+  active = false,
   directory,
   onSelect,
 }: {
   readonly entry: Pick<FileEntry, "path" | "contract"> & Partial<FileEntry>;
   readonly label: string;
   readonly depth?: number;
-  readonly relation?: Relation;
+  readonly active?: boolean;
   /** Shown muted after the name, for a row outside its directory's heading. */
   readonly directory?: string;
   readonly onSelect: (path: string) => void;
 }) => {
-  const arrow = ARROWS[relation];
-  const active = relation === "current";
   const style = entry.status === undefined ? null : FILE_STATUS[entry.status];
   const mark = style?.kind === "mark" ? style : null;
   return (
     <button
       type="button"
-      data-relation={relation}
       aria-current={active ? "location" : undefined}
       title={entry.path}
       onClick={() => onSelect(entry.path)}
       className={cn(
         "flex min-h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left hover:bg-surface-row",
         active && "bg-surface-row font-medium shadow-[inset_3px_0_0_var(--primary)]",
-        relation === "other" && "text-muted-foreground",
       )}
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
     >
-      <span className="w-3 shrink-0 text-center text-primary">
-        {arrow !== null && (
-          <>
-            <span aria-hidden="true">{arrow.mark}</span>
-            <span className="sr-only">{arrow.text}, </span>
-          </>
-        )}
-      </span>
       <FileIcon path={entry.path} status={entry.status} />
       <span className="min-w-0 flex-1 truncate">
         <span data-slot="file-name" className={mark?.name}>

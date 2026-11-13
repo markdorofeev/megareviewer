@@ -96,10 +96,6 @@ const area = (path: string): string => directoryOf(path).split("/").slice(0, 3).
 /** A directory's box. */
 export const groupKey = (directory: string): string => `group:${directory}`;
 
-/** The directory whose box holds a file: its own, or its first `depth` segments. */
-export const boxDirectory = (path: string, depth?: number): string =>
-  depth === undefined ? directoryOf(path) : directoryOf(path).split("/").slice(0, depth).join("/");
-
 /**
  * Each path's name plus as many parent directories as it takes to tell it from the others:
  * `routes/hosting_services.py` and `domain/hosting_services.py`.
@@ -262,15 +258,6 @@ const linksBetweenFiles = (
   return { mechanical, files, pathOfHunk, links };
 };
 
-/**
- * For each changed file, the files it calls, imports, uses types from or sends requests to: the
- * links the overview draws, file by file. The rail shows them for the file in view.
- */
-export const fileNeighbors = (
-  analysis: Pick<OverviewInput, "files" | "proofs" | "callGraph" | "fileLinks">,
-): ReadonlyMap<string, ReadonlySet<string>> =>
-  new Map([...linksBetweenFiles(analysis).links].map(([from, out]) => [from, new Set(out.keys())]));
-
 export type OverviewInput = Pick<
   Analysis,
   "files" | "parts" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated"
@@ -289,8 +276,6 @@ export const fileOverview = (
   expanded: ReadonlySet<string> = new Set(),
   /** A file's contract parts as the page counts them; else its parts in contract hunks. */
   contractOf?: (path: string) => number,
-  /** Groups directories by their first `depth` segments, as files outside the PR group by area. */
-  depth?: number,
 ): FileOverview => {
   const { mechanical, files, pathOfHunk, links } = linksBetweenFiles(analysis);
   const riskOf = new Map(analysis.risk.map((one) => [one.hunkId, one.riskClass]));
@@ -386,7 +371,7 @@ export const fileOverview = (
   const unlinkedTests = [...testLike].filter((test) => (badgesOf.get(test) ?? []).length === 0);
   const members = new Map<string, string[]>();
   for (const path of [...code, ...docs, ...unlinkedTests].sort(byTreePath)) {
-    const box = groupKey(boxDirectory(path, depth));
+    const box = groupKey(directoryOf(path));
     const key = expanded.has(box) ? path : box;
     members.set(key, [...(members.get(key) ?? []), path]);
   }

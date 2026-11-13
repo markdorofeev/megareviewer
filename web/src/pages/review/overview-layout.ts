@@ -1,11 +1,11 @@
 import type { FileOverview, OverviewEdge, OverviewNode } from "./overview.ts";
 
-// The overview's layout, shared by the full diagram and the miniature in the rail.
+// The overview's layout.
 
 // Sizes in pixels. Nodes are HTML buttons, for focus and text that fits; the edges are an inline
 // SVG behind them, drawn from the same numbers.
 export const NODE_HEIGHT = 64;
-export const ROW_GAP = 56;
+const ROW_GAP = 56;
 const NODE_GAP = 24;
 const PAD = 16;
 const MIN_WIDTH = 120;

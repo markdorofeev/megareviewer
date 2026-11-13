@@ -74,15 +74,6 @@ describe("fileTree", () => {
   });
 });
 
-const neighbors = new Map<string, ReadonlySet<string>>([
-  // app.py registers the routes, which call the domain and the keychain.
-  ["delphi_code/http_api/app.py", new Set(["delphi_code/http_api/routes/hosting_services.py"])],
-  [
-    "delphi_code/http_api/routes/hosting_services.py",
-    new Set(["delphi_code/domain/hosting_services.py", "delphi_code/infrastructure/keychain.py"]),
-  ],
-]);
-
 /** File rows only: directory headings are buttons too, titled with a trailing slash. */
 const row = (name: string, at = 0): HTMLElement => {
   const found = screen
@@ -102,7 +93,7 @@ const entries = paths.map((path) => ({
 }));
 
 const renderRail = (current: string | null, onGo = vi.fn()) =>
-  render(<FileTree files={entries} activePath={current} neighbors={neighbors} onSelect={onGo} />);
+  render(<FileTree files={entries} activePath={current} onSelect={onGo} />);
 
 describe("FileTree as the rail", () => {
   it("shows directory headings with their totals, and a row per file with its contract parts", () => {
@@ -121,25 +112,11 @@ describe("FileTree as the rail", () => {
     expect(within(rail).getByTitle("delphi_code/").textContent).toBe("delphi_code/▲4 contract");
   });
 
-  it("highlights the file in view, arrows its callers and callees, and mutes the rest", () => {
+  it("highlights the file in view and only it", () => {
     renderRail("delphi_code/http_api/routes/hosting_services.py");
-    const current = row("routes/hosting_services.py");
-    expect(current.getAttribute("aria-current")).toBe("location");
-    expect(current.dataset.relation).toBe("current");
-    expect(row("app.py").textContent).toMatch(/^↑calls the file in view, app\.py/);
-    expect(row("domain/hosting_services.py").textContent).toContain("↓called by the file in view");
-    expect(row("keychain.py").textContent).toContain("↓");
-    for (const name of ["setup.tsx", "ConnectionsSection.tsx", "CONTRIBUTING.md"]) {
-      expect(row(name).dataset.relation).toBe("other");
+    expect(row("routes/hosting_services.py").getAttribute("aria-current")).toBe("location");
+    for (const name of ["app.py", "domain/hosting_services.py", "CONTRIBUTING.md"]) {
       expect(row(name).getAttribute("aria-current")).toBeNull();
-    }
-  });
-
-  it("mutes nothing and draws no arrows without a file in view", () => {
-    renderRail(null);
-    for (const button of screen.getAllByRole("button")) {
-      expect(button.dataset.relation === "other").toBe(false);
-      expect(button.textContent).not.toMatch(/[↑↓↕]/);
     }
   });
 
@@ -153,7 +130,6 @@ describe("FileTree as the rail", () => {
       <FileTree
         files={entries}
         activePath="delphi_code/http_api/routes/hosting_services.py"
-        neighbors={neighbors}
         onSelect={vi.fn()}
       />,
     );

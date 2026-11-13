@@ -124,24 +124,6 @@ describe("FileTree", () => {
     expect(modified.querySelector("svg")?.hasAttribute("data-status")).toBe(false);
     expect(modified.querySelector("[data-slot=file-status]")).toBeNull();
   });
-
-  it("keeps a new or deleted name in its status color on a muted row", () => {
-    render(
-      <FileTree
-        files={files}
-        activePath="src/http/retry.ts"
-        neighbors={new Map([["src/http/retry.ts", new Set(["src/util/sleep.ts"])]])}
-        onSelect={() => undefined}
-      />,
-    );
-    const added = screen.getByTitle("src/http/backoff.ts");
-    expect(added.getAttribute("data-relation")).toBe("other");
-    expect(added.querySelector("svg")?.getAttribute("class")).toContain("text-diff-add-fg");
-    expect(added.querySelector("[data-slot=file-name]")?.className).toContain("text-diff-add-fg");
-    const deleted = screen.getByTitle("src/auth/session.ts").querySelector("[data-slot=file-name]");
-    expect(deleted?.className).toContain("text-diff-del-fg");
-    expect(deleted?.className).toContain("line-through");
-  });
 });
 
 describe("FilePath", () => {

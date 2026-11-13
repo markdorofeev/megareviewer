@@ -15,7 +15,6 @@ import {
 import { directoryOf } from "../../review/tree/paths.ts";
 import {
   type FileOverview,
-  fileNeighbors,
   fileOverview,
   groupKey,
   type OverviewInput,
@@ -570,25 +569,6 @@ describe("fileOverview by directory", () => {
     expect(counted.rows[0]?.[0]).toMatchObject({ contract: 0, risk: "logic" });
   });
 
-  it("groups directories by their leading segments when given a depth", () => {
-    const files = [
-      file("app/api/routes.py", [1]),
-      file("app/api/v2/routes.py", [2]),
-      file("app/svc/run.py", [3]),
-      file("README.md", [4]),
-    ];
-    const analysis = input(files, { callGraph: [call(1, 3), call(2, 3)] });
-    expect(rowsOf(fileOverview(analysis, tourOf(files)))).toEqual([
-      ["app/api/", "app/api/v2/"],
-      ["app/svc/"],
-    ]);
-    const grouped = fileOverview(analysis, tourOf(files), new Set(), undefined, 2);
-    expect(rowsOf(grouped)).toEqual([["app/api/"], ["app/svc/"]]);
-    expect(grouped.rows[0]?.[0]?.paths).toEqual(["app/api/v2/routes.py", "app/api/routes.py"]);
-    expect(grouped.placeOf.get("app/api/v2/routes.py")).toBe("group:app/api");
-    expect(grouped.strip.map((node) => node.label)).toEqual(["./"]);
-  });
-
   it("merges the links between two directories into one edge, keeping its request", () => {
     const files = [
       file("web/Page.tsx", [1]),
@@ -655,22 +635,5 @@ describe("fileOverview by directory", () => {
       "group:svc",
     ]);
     expect(overview.placeOf.get("api/models.py")).toBe("api/models.py");
-  });
-});
-
-describe("fileNeighbors", () => {
-  it("lists the files each file links to, without files that are all mechanical", () => {
-    const files = [file("a.py", [1]), file("b.py", [2]), file("c.lock", [3])];
-    const neighbors = fileNeighbors(
-      input(files, {
-        callGraph: [call(1, 2), call(2, 3)],
-        fileLinks: [{ from: "b.py", to: "a.py" }],
-        proofs: [{ hunkId: h(3), path: "c.lock", kind: "generated", detail: "lockfile" }],
-      }),
-    );
-    expect(Object.fromEntries([...neighbors].map(([from, to]) => [from, [...to]]))).toEqual({
-      "a.py": ["b.py"],
-      "b.py": ["a.py"],
-    });
   });
 });

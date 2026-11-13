@@ -78,4 +78,3 @@ export {
   type TreeEntry,
   treeOrder,
 } from "./tree/paths.ts";
-export { type Neighbors, type Relation, relationOf } from "./tree/relations.ts";
