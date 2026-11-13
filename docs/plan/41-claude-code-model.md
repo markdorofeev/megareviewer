@@ -1,6 +1,6 @@
 # Stage 41: The model through Claude Code, by default
 
-**Status:** Not started
+**Status:** In progress (on main): built, and checked live on delphi-code #2; the evals through Claude Code and the prompt-injection comparison are left (see **Open issues**)
 **Depends on:** 20, 31
 **Owns:** `src/adapters/claude/` (new files beside the API ones), `src/cli/args.ts`, `compose.ts`, `doctor.ts`, `main.ts`, the model option of `evals/`, the Anthropic parts of `README.md` and `ARCHITECTURE.md`
 
@@ -127,18 +127,44 @@ In its own PR first, with a line in stage 02's change log:
 
 ## Definition of done
 
-- [ ] `pnpm check` passes.
-- [ ] `megareviewer --ai` on delphi-code #2 with no API credentials set: all four passes complete on the plan, and the startup line and usage footer say so.
-- [ ] The second pass onward reads the PR data from cache there; the numbers are in **Measurements**.
+- [x] `pnpm check` passes.
+- [x] `megareviewer --ai` on delphi-code #2 with no API credentials set: all four passes complete on the plan, and the startup line and usage footer say so.
+- [x] The second pass onward reads the PR data from cache there; the numbers are in **Measurements**.
 - [ ] The evals' scores through Claude Code are within the baseline's tolerance of the API's, or the difference is written down with the decision taken.
 - [ ] A PR whose description tells the model to answer something else scores no worse through Claude Code than through the API.
-- [ ] ARCHITECTURE.md and README.md updated as in task 10.
+- [x] ARCHITECTURE.md and README.md updated as in task 10.
+
+## Measurements
+
+`megareviewer --ai` on delphi-code #2, 2026-11-13, Claude Code 2.1.303 on a Pro plan, with `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` unset. The startup line said "Claude Code, on your Pro plan"; the footer "≈ $0.25 at API prices, on your Claude plan". The analysis completed with 11 decisions and the model's tour titles.
+
+| Pass | Uncached in | Cache read | Cache write | Out | At API prices |
+|---|---|---|---|---|---|
+| Intent | 2 | 1,706 | 127,509 | 3,491 | $0.136 |
+| Risk | 2 | 128,130 | 1,075 | 5,802 | $0.022 |
+| Risk, retried on invalid output | 2 | 128,130 | 1,127 | 6,106 | $0.023 |
+| Decisions | 2 | 128,130 | 1,108 | 12,709 | $0.039 |
+| Tour | 4 | 264,133 | 9,830 | 3,383 | $0.031 |
+
+The intent pass writes the PR to cache; every later pass reads it, 128,130 tokens, and writes only its own message. The tour's counts are two turns' together, as Claude Code reports them. Above 100k tokens the long-prompt prices apply, so the cache write is most of the cost.
+
+On small-feature the four recorded passes read 5.5k to 6.2k tokens from cache after the first. The size estimate, calibrated on the 13 eval cases with `node evals/calibrate-claude-code.ts`: about 1,550 tokens of Claude Code's own per prompt, mostly the schema's tool, plus a token per 2.06 bytes (1.28 to 1.99 bytes a token in all, the small cases being mostly overhead).
 
 ## Open issues
 
+- **The evals through Claude Code aren't run.** `evals/run.ts --via claude-code` is there; the judge calls the API, so it needs the reviewer's own API credentials, which this session didn't have. Run the set on both transports, record the scores, and check the prompt-injection case scores no worse through Claude Code.
+
 - **Whether a published tool may make this its default.** The terms forbid a third party offering Claude sign-in or routing requests through a plan's credentials, and allow a user running unmodified Claude Code on their own plan. This design is the second, but that's our reading. Ask Anthropic before the release that ships it; until then the README says megareviewer "runs your Claude Code", never "sign in with Claude".
 - **Windows.** `spawn("claude")` without a shell doesn't start a `.cmd` shim. Check what the native installer puts on the PATH.
-- **The output limit.** The API path asks for 64,000 tokens. Find how Claude Code sets it for `-p`, and whether a long tour answer is cut off sooner.
-- **The plan's limits.** A large PR's four passes come out of the reviewer's 5-hour window. Measure delphi-code #2's share of a Pro window, and say it in the README if it's large.
+- **The output limit** is answered: Claude Code 2.1.303 reports `maxOutputTokens` 128,000 for Haiku 5.5 under `-p`, past the API path's 64,000, so a tour answer isn't cut off sooner.
+- **The plan's limits.** A large PR's four passes come out of the reviewer's 5-hour window. Measure delphi-code #2's share of a Pro window, and say it in the README if it's large. Each pass's `rate_limit_event` carries the window's `utilization`, so reading it before the first pass and after the last measures it.
 
 ## Notes for later stages
+
+- **More is dropped from the child's environment than the three credential variables:** every `ANTHROPIC_*` and `CLAUDE*` variable but `CLAUDE_CONFIG_DIR`. Under a parent Claude Code session (the desktop app here) the environment holds 30-odd `CLAUDE_CODE_*` variables, such as `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SIMPLE` and its messaging socket, that would make the child act as the parent's subprocess, and `CLAUDE_CODE_USE_BEDROCK` would send it elsewhere. With them dropped, the child ran on the plan (`apiKeySource: none`). `CLAUDE_CONFIG_DIR` stays: it's where the reviewer signed in.
+- **The lockdown also checks who pays.** On a plan, an init event with an `apiKeySource` other than `none` fails the pass, so the startup line can't say the plan while a key from managed settings bills the API.
+- **A Claude Code signed in to a Console account bills the API,** so its passes are `billing: "api"` and the startup line says "Claude Code, billed to your Anthropic Console account". `claude auth status` tells them apart by `authMethod` (`claude.ai` on a plan).
+- **Claude Code reports an answer's failure on the assistant event's `error`** (`authentication_failed`, `rate_limit`, `server_error`, `invalid_request`, `max_output_tokens`, `billing_error`, `unknown`), not only in the result, and running out of turns is the result's `subtype` `error_max_turns`, mapped to invalid output so the pipeline retries it once.
+- **A version older than the recorded one** isn't used: `--ai` falls back to the API, `--ai-via claude-code` fails at startup, and `doctor` fails the line, all saying `claude update`.
+- **`pass-model.ts`** holds what both transports share: parsing the answer and the four pass methods over a transport's `runPass`. `MAX_INPUT_TOKENS` (400,000) moved to `request.ts` for both.
+- **The logger redacts any field whose name holds "token"**, so the passes' token counts show as `[redacted]` in the server log; the counts above come from the stored analysis.

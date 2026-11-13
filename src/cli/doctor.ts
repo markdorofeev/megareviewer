@@ -1,12 +1,25 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  type ClaudeCodeStatus,
+  claudeCodeStatus,
+  createRunClaude,
+  MIN_CLAUDE_CODE_VERSION,
+  planName,
+} from "../adapters/claude/index.ts";
 import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
 import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
 import type { GitHost, Logger, TicketSource } from "../application/ports/index.ts";
 import type { HostKind, RepoRef } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
-import { anthropicConfigured, createHosts, createTicketSource, systemClock } from "./compose.ts";
+import {
+  anthropicConfigured,
+  claudeCodeProblem,
+  createHosts,
+  createTicketSource,
+  systemClock,
+} from "./compose.ts";
 import type { BitbucketCredential, Config, GitHubTokenSource } from "./config.ts";
 import { NODE_FIX, nodeSupported } from "./node-version.ts";
 
@@ -24,6 +37,7 @@ export interface DoctorDeps {
   readonly problems: readonly string[];
   readonly hosts: Partial<Record<HostKind, GitHost>>;
   readonly tickets: TicketSource;
+  readonly claudeCode: ClaudeCodeStatus;
   readonly anthropic: {
     readonly configured: boolean;
     /** Fetches the model the passes use: free, and proves the credentials work. */
@@ -119,21 +133,65 @@ const checkJira = async (deps: DoctorDeps): Promise<Check> => {
       );
 };
 
+/** What --ai runs on first. Not having it is fine: reviews run without the model, or on the API. */
+const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
+  const title = "Claude Code";
+  switch (claudeCode.state) {
+    case "not-installed":
+      return check(
+        "skip",
+        title,
+        "not installed: --ai runs on the Anthropic API instead, if it's configured",
+        "Install Claude Code (https://code.claude.com) and sign in with `claude` to run --ai on your Claude plan.",
+      );
+    case "signed-out":
+      return check(
+        "skip",
+        title,
+        `${claudeCode.version}, not signed in: --ai runs on the Anthropic API instead, if it's configured`,
+        "Run `claude` and sign in to run --ai on your Claude plan.",
+      );
+    case "failed":
+      return check("fail", title, claudeCode.message, "Run `claude doctor`.");
+    case "signed-in": {
+      const problem = claudeCodeProblem(claudeCode);
+      if (problem !== null) {
+        return check(
+          "fail",
+          title,
+          `${claudeCode.version}, older than ${MIN_CLAUDE_CODE_VERSION}, the oldest megareviewer was checked with`,
+          "Run `claude update`.",
+        );
+      }
+      const pays =
+        claudeCode.billing === "plan"
+          ? `on ${planName(claudeCode.plan)}`
+          : "billed to your Anthropic Console account";
+      return check("pass", title, `${claudeCode.version}, signed in: --ai runs here, ${pays}`);
+    }
+  }
+};
+
 const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
+  const title = "Anthropic API";
   if (!deps.anthropic.configured) {
     return check(
       "skip",
-      "Anthropic",
-      "not configured: reviews run without the model",
-      "Set ANTHROPIC_API_KEY or run `ant auth login` to use --ai.",
+      title,
+      "not configured: --ai's fallback when Claude Code can't run it",
+      "Set ANTHROPIC_API_KEY or run `ant auth login` to use it.",
     );
   }
   const retrieved = await deps.anthropic.retrieveModel();
   return retrieved.ok
-    ? check("pass", "Anthropic", `credentials work, ${MODEL} is available`)
+    ? check(
+        "pass",
+        title,
+        `credentials work, ${MODEL} is available: --ai's fallback, or with --ai-via api`,
+      )
     : check(
         "fail",
-        "Anthropic",
+        title,
         retrieved.error,
         "Check ANTHROPIC_API_KEY, or run `ant auth login` again.",
       );
@@ -179,6 +237,7 @@ export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
     checkGitHub(deps),
     checkBitbucket(deps),
     checkJira(deps),
+    checkClaudeCode(deps),
     checkAnthropic(deps),
   ]);
   const opened = deps.openStore();
@@ -213,6 +272,7 @@ export const createDoctorDeps = async (options: {
     problems: options.problems,
     hosts: createHosts(config, { version: options.version, clock: systemClock, logger }),
     tickets: createTicketSource(config, logger),
+    claudeCode: await claudeCodeStatus(createRunClaude()),
     anthropic: {
       configured: await anthropicConfigured(client, logger),
       async retrieveModel() {

@@ -341,6 +341,7 @@ export const smallFeatureAnalysis: Analysis = {
       cacheWriteTokens: 5800,
       outputTokens: 410,
       costUsd: 0.07,
+      billing: "api",
     },
     {
       pass: "risk",
@@ -349,6 +350,7 @@ export const smallFeatureAnalysis: Analysis = {
       cacheWriteTokens: 0,
       outputTokens: 260,
       costUsd: 0.02,
+      billing: "api",
     },
     {
       pass: "decisions",
@@ -357,6 +359,7 @@ export const smallFeatureAnalysis: Analysis = {
       cacheWriteTokens: 0,
       outputTokens: 690,
       costUsd: 0.03,
+      billing: "api",
     },
     {
       pass: "tour",
@@ -365,6 +368,7 @@ export const smallFeatureAnalysis: Analysis = {
       cacheWriteTokens: 0,
       outputTokens: 350,
       costUsd: 0.03,
+      billing: "api",
     },
   ],
   error: null,

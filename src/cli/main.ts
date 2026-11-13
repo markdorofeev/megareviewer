@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import packageJson from "../../package.json" with { type: "json" };
 import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
 import type { Logger } from "../application/ports/index.ts";
-import { EXIT, parseCliArgs, USAGE } from "./args.ts";
-import { type Composition, compose } from "./compose.ts";
+import { type AiVia, EXIT, parseCliArgs, USAGE } from "./args.ts";
+import { type Composition, compose, describeTransport } from "./compose.ts";
 import { type Config, loadConfig } from "./config.ts";
 import { createDoctorDeps, formatCheck, repoName, runDoctor } from "./doctor.ts";
 import { createLogger } from "./logger.ts";
@@ -49,9 +49,10 @@ const printSummary = (
       : `as ${config.bitbucket.username} (${config.bitbucket.credential})${config.bitbucket.workspace === null ? "" : `, workspace ${config.bitbucket.workspace}`}`;
   const jira =
     config.jira === null ? "not configured: ticket keys aren't fetched" : config.jira.baseUrl;
-  const model = composition.modelEnabled
-    ? "on: intent, decisions and the tour's titles come from Claude"
-    : "off: start with --ai to add intent, decisions and a guided tour from Claude";
+  const model =
+    composition.transport === null
+      ? "off: start with --ai to add intent, decisions and a guided tour from Claude"
+      : `${describeTransport(composition.transport)}: intent, decisions and the tour's titles`;
   const repos = checkout?.repos.map(repoName).join(", ") ?? "";
   const local =
     checkout === null
@@ -61,7 +62,7 @@ const printSummary = (
   GitHub     ${github}
   Bitbucket  ${bitbucket}
   Jira       ${jira}
-  Anthropic  ${model}
+  Claude     ${model}
   Checkout   ${local}
 ${ui ? "" : "\nNo built UI found, so only the API is served.\n"}
 Open ${url}
@@ -111,7 +112,7 @@ const stopOnSignal = (stop: () => Promise<void>, logger: Logger): void => {
 const start = async (options: {
   port: number;
   open: boolean;
-  ai: boolean;
+  ai: AiVia | null;
   checkout: string | null;
 }): Promise<number | null> => {
   const { config, problems } = await loadConfig();

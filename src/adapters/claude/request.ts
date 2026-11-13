@@ -6,6 +6,8 @@ import { SYSTEM_PROMPT } from "./prompts/system.ts";
 /** The cheapest model, so a review costs cents. ARCHITECTURE.md has the trade-off. */
 export const MODEL = "claude-haiku-5-5";
 export const MAX_TOKENS = 64_000;
+/** The largest PR, in input tokens, either transport sends. */
+export const MAX_INPUT_TOKENS = 400_000;
 
 type Effort = "low" | "medium" | "high";
 

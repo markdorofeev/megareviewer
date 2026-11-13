@@ -76,7 +76,7 @@ flowchart LR
   UI[Web UI<br/>Vite + React] <-->|HTTP + SSE| Server
   Server --> Hosts[Git hosts<br/>GitHub, Bitbucket]
   Server --> Jira[Jira API]
-  Server --> Claude[Claude API]
+  Server --> Claude[Claude<br/>Claude Code, else the API]
   Server --> DB[(SQLite<br/>~/.megareviewer)]
 ```
 
@@ -85,7 +85,7 @@ flowchart LR
 | CLI | Checks credentials, starts the server, opens the browser | Node 22.13+, TypeScript |
 | Local server | Serves the UI and the API, runs the analysis pipeline, holds all credentials | Hono |
 | Web UI | PR picker, review page, publishing | Vite, React, Tailwind CSS, shadcn/ui on Base UI, Shiki |
-| Connectors | Git hosts, tickets, model calls, the local checkout | Octokit, Bitbucket REST, Jira REST, `@anthropic-ai/sdk`, the `git` command |
+| Connectors | Git hosts, tickets, model calls, the local checkout | Octokit, Bitbucket REST, Jira REST, the `claude` command, `@anthropic-ai/sdk`, the `git` command |
 | Code analysis | Parse changed files for mechanical proofs and call-graph hints | `web-tree-sitter` |
 | Store | Cached analyses and review state | SQLite via built-in `node:sqlite`, plain SQL migrations |
 
@@ -121,10 +121,12 @@ Versions are published to npm from CI: pushing a `v*` tag runs every check, buil
 |---|---|---|
 | GitHub | `GITHUB_TOKEN`, else `GH_TOKEN`, else `gh auth token` | For GitHub PRs |
 | Bitbucket Cloud | `BITBUCKET_EMAIL` + `BITBUCKET_API_TOKEN` (scoped Atlassian API token), else `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD`; `BITBUCKET_WORKSPACE` for the picker | For Bitbucket PRs |
-| Anthropic | SDK default resolution: `ANTHROPIC_API_KEY`, else an `ant auth login` profile | For `--ai`, which fails at startup without them |
+| Claude | Claude Code's own sign-in, through the `claude` on the PATH; else the SDK's resolution: `ANTHROPIC_API_KEY`, else an `ant auth login` profile | For `--ai`, which fails at startup without either |
 | Jira | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | No. Without it, ticket keys are shown but not fetched |
 
 Bitbucket app passwords are accepted because existing setups for other tools often have them, and both kinds are the same Basic auth to the adapter. Atlassian removed app passwords in July 2026, so `doctor` points to an API token when one is rejected; rejecting them outright at startup was the alternative.
+
+megareviewer never reads Claude Code's credentials: it runs the unmodified `claude`, which signs its own requests, and removes `ANTHROPIC_*` and `CLAUDE*` variables (but `CLAUDE_CONFIG_DIR`) from its environment, since an API key there would make Claude Code bill the API while the startup line says the plan. `--ai` takes Claude Code when it's installed, signed in and no older than the version megareviewer was checked with, else the API; `--ai-via claude-code` or `--ai-via api` forces one. Claude Code only, with the API behind a flag, was the alternative: it would break `--ai` for everyone set up with a key.
 
 At least one git host must be configured. Credentials stay in the server process and are never sent to the browser.
 
@@ -165,7 +167,15 @@ The model can't override a mechanical proof. It only classifies the hunks that r
 
 ### 3. Model passes
 
-Only with `--ai`. All passes use **Claude Haiku 5.5** (`claude-haiku-5-5`) with structured outputs (Zod schemas) and streaming. They share one cached prompt prefix holding the PR context, so the PR is paid for in full once and read from cache by the later passes. Effort is set per pass. Changing the output format or the top-level effort between requests would invalidate that cache, so every pass sends the same output schema (a union of the four outputs, tagged by pass) and sets its effort in a system message after the PR context.
+Only with `--ai`. All passes use **Claude Haiku 5.5** (`claude-haiku-5-5`) with structured outputs (Zod schemas), through one of two transports that share the prompts, the input rendering and the output schema:
+
+- **Claude Code,** the default: one `claude -p` process per pass, on the reviewer's own Claude plan, so a review isn't billed per token on top of a plan they already pay for. The Messages API can't spend a plan; Claude Code can. Each runs without a shell in a new empty directory, with no tools but the schema's `StructuredOutput`, no MCP servers, settings, skills, commands or saved session, and the answer comes back as the stream's `structured_output`. Claude Code has no token count, so the size check estimates tokens from the prompt's bytes, high on purpose: 1.9 bytes a token and 2,000 tokens for its own, where the eval cases measured 2.06 and about 1,550.
+- **The Anthropic API,** the fallback: one streaming request per pass with the SDK.
+
+On both, the passes share one cached prefix holding the PR context, so the PR is paid for in full once and read from cache by the later passes. Effort is set per pass. Changing the output format between requests would invalidate that cache, so every pass sends the same output schema (a union of the four outputs, tagged by pass). Where the PR data sits differs:
+
+- **On the API,** it's a user message, after the system prompt, and each pass sets its effort in a system message after it, since a different top-level effort would invalidate the cache.
+- **On Claude Code,** it's in the system prompt, after the instructions, which end by saying what follows is data. That's the only placement Claude Code caches across processes: measured with 30.5k tokens of PR data, the second process read 29,887 tokens from cache with the data in the system prompt, and none with it in the user message, as one text or as a block of its own. Effort is the `--effort` flag, which doesn't miss the cache; another schema does, since it's a tool before the system prompt. On delphi-code #2 the later passes read the PR from cache, as the stage 41 doc records. Forking one saved session per pass was the alternative: it keeps the data in a user message, and writes the PR's code into `~/.claude/projects` as sessions the reviewer then sees in Claude Code.
 
 | Pass | Output | Effort | Runs |
 |---|---|---|---|
@@ -182,13 +192,13 @@ The server validates every response: every referenced hunk ID must exist, and ev
 
 PR content is untrusted. A description or code comment can contain text aimed at the model, so:
 
-- The model has no tools. The worst a prompt injection can do is distort the analysis.
+- The model has no tools; with Claude Code, that's checked on every call. The stream's first event lists the session's tools and MCP servers, and anything but `StructuredOutput` alone and no servers kills the process and fails the pass, as does an API key in use when the startup line says the plan, so a Claude Code update that changes a flag's meaning fails loudly instead of handing PR text a shell. The worst a prompt injection can do is distort the analysis.
 - Model output is rendered as text, never as HTML.
 - Mechanical proofs come from deterministic code, not the model.
 
 **Size limits.** Mechanical hunks are sent as path plus stats, not content. If the PR still doesn't fit in the context window, the analysis fails with a clear message. It never silently truncates.
 
-**Model and cost.** Haiku 5.5 is the cheapest model, at $0.10 per million input tokens and $0.50 per million output tokens for prompts up to 100K tokens, five times that above. A medium PR costs a few cents. This is an estimate, to be measured on real PRs. Each reviewer pays for their own analysis, so cost per review decides whether people run it at all. Opus 5.5 was the first choice: stronger analysis, but on the order of $1 per medium PR. The evals measure what the cheaper model costs in quality. Haiku has no server-side refusal fallback, so a refused pass fails with the model's reason instead of being answered by another model.
+**Model and cost.** Haiku 5.5 is the cheapest model, at $0.10 per million input tokens and $0.50 per million output tokens for prompts up to 100K tokens, five times that above. A medium PR costs a few cents. This is an estimate, to be measured on real PRs. Each reviewer pays for their own analysis, so cost per review decides whether people run it at all. Through Claude Code nothing is charged per review: the passes come out of the plan's usage limits, and the usage footer shows Claude Code's cost at API prices as an estimate, "≈ $0.02 at API prices, on your Claude plan". Opus 5.5 was the first choice: stronger analysis, but on the order of $1 per medium PR. The evals measure what the cheaper model costs in quality. Haiku has no server-side refusal fallback, so a refused pass fails with the model's reason instead of being answered by another model.
 
 ## UI
 

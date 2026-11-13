@@ -1,14 +1,21 @@
 // Runs the golden set through the real pipeline and model, scores it and prints a summary:
-// node evals/run.ts [--case <name>]... [--baseline evals/baseline.json] [--write-baseline] --yes
+// node evals/run.ts [--case <name>]... [--via api|claude-code] [--baseline evals/baseline.json]
+//   [--write-baseline] --yes
 // Spends money: without --yes it prints the estimated cost and stops. Needs Anthropic
-// credentials (ANTHROPIC_API_KEY or `ant auth login`). See evals/README.md.
+// credentials (ANTHROPIC_API_KEY or `ant auth login`) for the judge, and with --via claude-code
+// a signed-in Claude Code for the passes. See evals/README.md.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig } from "@anthropic-ai/sdk/core/credentials";
-import { createClaudeAnalysisModel } from "../src/adapters/claude/index.ts";
+import {
+  claudeCodeStatus,
+  createClaudeAnalysisModel,
+  createClaudeCodeAnalysisModel,
+  createRunClaude,
+} from "../src/adapters/claude/index.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import { PIPELINE_VERSION } from "../src/application/use-cases/index.ts";
 import type { Analysis } from "../src/domain/review/index.ts";
@@ -37,6 +44,8 @@ const { values } = parseArgs({
     case: { type: "string", multiple: true },
     baseline: { type: "string" },
     "write-baseline": { type: "boolean", default: false },
+    // The API by default, so runs stay comparable with the baseline, which was measured on it.
+    via: { type: "string", default: "api" },
     yes: { type: "boolean", default: false },
   },
 });
@@ -76,6 +85,21 @@ if (client.apiKey === null && client.authToken === null && (await loadConfig()) 
   process.exit(1);
 }
 
+if (values.via !== "api" && values.via !== "claude-code") {
+  console.error("--via must be api or claude-code.");
+  process.exit(1);
+}
+const runClaude = createRunClaude();
+let claudeCodeBilling: "api" | "plan" = "plan";
+if (values.via === "claude-code") {
+  const status = await claudeCodeStatus(runClaude);
+  if (status.state !== "signed-in") {
+    console.error(`--via claude-code needs Claude Code signed in; it's ${status.state}.`);
+    process.exit(1);
+  }
+  claudeCodeBilling = status.billing;
+}
+
 const parser = await createTreeSitterCodeParser({
   grammarsDir: fileURLToPath(new URL("../src/adapters/treesitter/grammars", import.meta.url)),
 });
@@ -99,7 +123,10 @@ interface CaseResult {
 const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) => {
   const problems: string[] = [];
   const logger = quietLogger((line) => problems.push(line));
-  const model = createClaudeAnalysisModel({ client, logger });
+  const model =
+    values.via === "claude-code"
+      ? createClaudeCodeAnalysisModel({ run: runClaude, billing: claudeCodeBilling, logger })
+      : createClaudeAnalysisModel({ client, logger });
   modelVersion(model.version);
   const started = performance.now();
   const latency = () => (performance.now() - started) / 1000;

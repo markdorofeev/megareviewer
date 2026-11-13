@@ -1,0 +1,40 @@
+{
+  "rate-limited": [
+    { "type": "system", "subtype": "init", "tools": ["StructuredOutput"], "mcp_servers": [], "apiKeySource": "none", "claude_code_version": "2.1.303" },
+    { "type": "rate_limit_event", "rate_limit_info": { "status": "rejected", "resetsAt": 1794567600, "rateLimitType": "five_hour" } },
+    { "type": "assistant", "error": "rate_limit", "message": { "model": "<synthetic>", "role": "assistant", "content": [{ "type": "text", "text": "You've hit your limit · resets 3pm" }] } },
+    { "type": "result", "subtype": "success", "is_error": true, "result": "You've hit your limit · resets 3pm", "stop_reason": "stop_sequence", "api_error_status": 429, "total_cost_usd": 0, "usage": { "input_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 0 } }
+  ],
+  "overloaded": [
+    { "type": "system", "subtype": "init", "tools": ["StructuredOutput"], "mcp_servers": [], "apiKeySource": "none", "claude_code_version": "2.1.303" },
+    { "type": "assistant", "error": "server_error", "message": { "model": "<synthetic>", "role": "assistant", "content": [{ "type": "text", "text": "API Error: 529 Overloaded" }] } },
+    { "type": "result", "subtype": "success", "is_error": true, "result": "API Error: 529 Overloaded", "stop_reason": "stop_sequence", "api_error_status": 529, "total_cost_usd": 0, "usage": { "input_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 0 } }
+  ],
+  "prompt-too-long": [
+    { "type": "system", "subtype": "init", "tools": ["StructuredOutput"], "mcp_servers": [], "apiKeySource": "none", "claude_code_version": "2.1.303" },
+    { "type": "assistant", "error": "invalid_request", "message": { "model": "<synthetic>", "role": "assistant", "content": [{ "type": "text", "text": "Prompt is too long" }] } },
+    { "type": "result", "subtype": "success", "is_error": true, "result": "Prompt is too long", "stop_reason": "stop_sequence", "api_error_status": 400, "total_cost_usd": 0, "usage": { "input_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 0 } }
+  ],
+  "network": [
+    { "type": "system", "subtype": "init", "tools": ["StructuredOutput"], "mcp_servers": [], "apiKeySource": "none", "claude_code_version": "2.1.303" },
+    { "type": "assistant", "error": "unknown", "message": { "model": "<synthetic>", "role": "assistant", "content": [{ "type": "text", "text": "API Error: Connection error." }] } },
+    { "type": "result", "subtype": "success", "is_error": true, "result": "API Error: Connection error.", "stop_reason": "stop_sequence", "api_error_status": null, "total_cost_usd": 0, "usage": { "input_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 0 } }
+  ],
+  "refusal": [
+    { "type": "system", "subtype": "init", "tools": ["StructuredOutput"], "mcp_servers": [], "apiKeySource": "none", "claude_code_version": "2.1.303" },
+    { "type": "result", "subtype": "success", "is_error": false, "result": "", "stop_reason": "refusal", "api_error_status": null, "total_cost_usd": 0.0004, "usage": { "input_tokens": 2, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 5524, "output_tokens": 12 } }
+  ],
+  "max-turns": [
+    { "type": "system", "subtype": "init", "tools": ["StructuredOutput"], "mcp_servers": [], "apiKeySource": "none", "claude_code_version": "2.1.303" },
+    { "type": "result", "subtype": "error_max_turns", "is_error": true, "stop_reason": "end_turn", "api_error_status": null, "total_cost_usd": 0.002, "usage": { "input_tokens": 8, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 22096, "output_tokens": 400 } }
+  ],
+  "tools": [
+    { "type": "system", "subtype": "init", "tools": ["Bash", "StructuredOutput"], "mcp_servers": [], "apiKeySource": "none", "claude_code_version": "2.1.303" }
+  ],
+  "mcp-server": [
+    { "type": "system", "subtype": "init", "tools": ["StructuredOutput"], "mcp_servers": [{ "name": "github", "status": "connected" }], "apiKeySource": "none", "claude_code_version": "2.1.303" }
+  ],
+  "api-key": [
+    { "type": "system", "subtype": "init", "tools": ["StructuredOutput"], "mcp_servers": [], "apiKeySource": "ANTHROPIC_API_KEY", "claude_code_version": "2.1.303" }
+  ]
+}

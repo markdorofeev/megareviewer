@@ -3,16 +3,21 @@ import { parseCliArgs } from "./args.ts";
 
 describe("parseCliArgs", () => {
   it.each([
-    [[], { kind: "serve", port: 0, open: true, ai: false, checkout: null }],
-    [["--port", "4823"], { kind: "serve", port: 4823, open: true, ai: false, checkout: null }],
-    [["--port=0", "--no-open"], { kind: "serve", port: 0, open: false, ai: false, checkout: null }],
-    [["--ai"], { kind: "serve", port: 0, open: true, ai: true, checkout: null }],
+    [[], { kind: "serve", port: 0, open: true, ai: null, checkout: null }],
+    [["--port", "4823"], { kind: "serve", port: 4823, open: true, ai: null, checkout: null }],
+    [["--port=0", "--no-open"], { kind: "serve", port: 0, open: false, ai: null, checkout: null }],
+    [["--ai"], { kind: "serve", port: 0, open: true, ai: "auto", checkout: null }],
     [["doctor"], { kind: "doctor", checkout: null }],
     [["doctor", "--checkout", "../shop"], { kind: "doctor", checkout: "../shop" }],
     [
       ["--checkout=/src/shop", "--ai"],
-      { kind: "serve", port: 0, open: true, ai: true, checkout: "/src/shop" },
+      { kind: "serve", port: 0, open: true, ai: "auto", checkout: "/src/shop" },
     ],
+    [
+      ["--ai-via", "claude-code"],
+      { kind: "serve", port: 0, open: true, ai: "claude-code", checkout: null },
+    ],
+    [["--ai", "--ai-via=api"], { kind: "serve", port: 0, open: true, ai: "api", checkout: null }],
     [["--version"], { kind: "version" }],
     [["--help"], { kind: "help" }],
     [["-h"], { kind: "help" }],
@@ -34,6 +39,9 @@ describe("parseCliArgs", () => {
     [["--checkout="], "--checkout needs a directory"],
     [["--version", "--checkout", "."], "--version takes no other arguments"],
     [["doctor", "--ai"], "doctor takes no options"],
+    [["doctor", "--ai-via", "api"], "doctor takes no options"],
+    [["--ai-via", "bedrock"], "--ai-via must be claude-code or api"],
+    [["--ai-via"], "--ai-via"],
     [["--version", "--port", "1"], "--version takes no other arguments"],
     [["doctor", "--version"], "--version takes no other arguments"],
     [["--no-open=yes"], "--no-open"],

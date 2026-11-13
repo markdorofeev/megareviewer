@@ -13,7 +13,7 @@ import {
   tourSteps,
   trailingProofs,
 } from "./model.ts";
-import { formatCost, formatTokens } from "./UsageFooter.tsx";
+import { formatCost, formatTokens, formatTotalCost } from "./UsageFooter.tsx";
 
 const analysis = fixtureAnalysisView.analysis;
 const h = fixtureHunks;
@@ -218,6 +218,11 @@ describe("usage formatting", () => {
     expect(formatTokens(182_400)).toBe("182k");
     expect(formatTokens(2_350_000)).toBe("2.4M");
     expect(formatCost(0.9349)).toBe("$0.93");
+  });
+
+  it("calls a plan's cost an estimate at API prices", () => {
+    expect(formatTotalCost(0.9349, false)).toBe("$0.93");
+    expect(formatTotalCost(0.9349, true)).toBe("≈ $0.93 at API prices, on your Claude plan");
   });
 });
 

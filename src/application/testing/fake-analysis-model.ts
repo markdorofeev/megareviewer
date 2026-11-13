@@ -169,6 +169,7 @@ export class FakeAnalysisModel implements AnalysisModel {
       cacheWriteTokens: 0,
       outputTokens: Math.ceil(JSON.stringify(answer.value).length / 4),
       costUsd: 0,
+      billing: "api",
     };
     return ok({ value: answer.value, usage });
   }

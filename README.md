@@ -41,7 +41,7 @@ Set them as environment variables. You need at least one git host.
 | `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD` | Used instead of the two above when they aren't set: your Bitbucket username and an app password with Account: read, Repositories: read and Pull requests: write. Atlassian removed app passwords in July 2026, so they only work where Bitbucket still accepts them |
 | `BITBUCKET_WORKSPACE` | Optional. The workspace whose PRs the picker lists. It scans the 50 most recently updated repositories; a pasted PR URL always works |
 
-**Anthropic.** Only for `--ai`: `ANTHROPIC_API_KEY`, or a profile from `ant auth login`. Analyses use Claude Haiku 5.5 and are billed to your account.
+**Claude.** Only for `--ai`, which runs your Claude Code when it's installed and signed in, so the analysis comes out of your Claude plan's usage. megareviewer never sees your Claude credentials: it runs the `claude` on your PATH, which uses its own sign-in. Without Claude Code, `--ai` uses the Anthropic API, with `ANTHROPIC_API_KEY` or a profile from `ant auth login`, billed to your account. `--ai-via claude-code` or `--ai-via api` picks one. Either way, analyses use Claude Haiku 5.5.
 
 **Jira.** Optional: without it, ticket keys are shown but not fetched.
 
@@ -53,7 +53,7 @@ Set them as environment variables. You need at least one git host.
 
 ## Privacy
 
-Without `--ai`, your code goes nowhere but your machine and your git host. With it, your code also goes to Anthropic's API, for the analysis. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and verdicts are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
+Without `--ai`, your code goes nowhere but your machine and your git host. With it, your code also goes to Anthropic for the analysis: through your Claude Code, under your own Claude plan and its privacy settings, or to the Anthropic API under your API account's. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and verdicts are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
 
 ## Contributing
 

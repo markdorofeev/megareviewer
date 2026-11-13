@@ -480,6 +480,7 @@ const usage: readonly ModelUsage[] = [
     cacheWriteTokens: 38_400,
     outputTokens: 1_240,
     costUsd: 0.36,
+    billing: "api",
   },
   {
     pass: "risk",
@@ -488,6 +489,7 @@ const usage: readonly ModelUsage[] = [
     cacheWriteTokens: 0,
     outputTokens: 610,
     costUsd: 0.08,
+    billing: "api",
   },
   {
     pass: "decisions",
@@ -496,6 +498,7 @@ const usage: readonly ModelUsage[] = [
     cacheWriteTokens: 0,
     outputTokens: 4_980,
     costUsd: 0.21,
+    billing: "api",
   },
   {
     pass: "tour",
@@ -504,6 +507,7 @@ const usage: readonly ModelUsage[] = [
     cacheWriteTokens: 0,
     outputTokens: 1_530,
     costUsd: 0.12,
+    billing: "api",
   },
 ];
 

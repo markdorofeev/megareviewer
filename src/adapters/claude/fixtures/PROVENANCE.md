@@ -14,3 +14,15 @@ node evals/claude-live-check.ts --record
 ```
 
 It writes `small-feature.json` with the raw response streams (`{ "sse": "…" }` per pass), which `anthropic-fetch.ts` replays byte for byte. Point the import in `claude-analysis-model.test.ts` at it and delete the synthetic file. Responses hold no credentials or personal data; the request bodies aren't kept.
+
+## Claude Code
+
+`claude-code/` holds the Claude Code transport's `stream-json` output, which `fake-run-claude.ts` replays to the adapter.
+
+| File | Source |
+|---|---|
+| `intent.jsonl`, `risk.jsonl`, `decisions.jsonl`, `tour.jsonl` | Recorded with Claude Code 2.1.303 signed in to a Pro plan, on 2026-11-13: the four passes of the AnalysisModel contract on `small-feature`, as the suite sends them. |
+| `not-signed-in.jsonl` | Recorded the same day, with an empty `CLAUDE_CONFIG_DIR`. |
+| `errors.synthetic.json` | Synthetic, in the recorded events' shape: the plan's limit reached, overloaded, prompt too long, no connection, a refusal, out of turns, and sessions with a tool, an MCP server or an API key. Claude Code's error codes are the ones its binary names. |
+
+Recorded with `node evals/record-claude-code.ts`, which keeps only the fields the adapter reads, so no paths, account or session IDs.

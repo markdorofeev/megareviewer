@@ -29,6 +29,7 @@ const deps = (overrides: Partial<DoctorDeps> = {}): DoctorDeps => ({
     bitbucket: new FakeGitHost({ host: "bitbucket", fixtures: allFixtures }),
   },
   tickets: new FakeTicketSource(),
+  claudeCode: { state: "signed-in", version: "2.1.303", plan: "pro", billing: "plan" },
   anthropic: { configured: true, retrieveModel: async () => ok(undefined) },
   openStore: () => ok(undefined),
   checkout: {
@@ -57,7 +58,8 @@ describe("runDoctor", () => {
       "✓ GitHub: signed in as lee-park (token from gh auth token)",
       "✓ Bitbucket: signed in as Lee Park, listing PRs in acme",
       "✓ Jira: signed in at https://acme.atlassian.net",
-      "✓ Anthropic: credentials work, claude-haiku-5-5 is available",
+      "✓ Claude Code: 2.1.303, signed in: --ai runs here, on your Pro plan",
+      "✓ Anthropic API: credentials work, claude-haiku-5-5 is available: --ai's fallback, or with --ai-via api",
       "✓ Checkout: /home/lee/src/shop, a checkout of github.com/acme/shop\n    Callers outside a PR need its head commit: if a review says it's missing, run `git fetch` there.",
       "✓ Home: /home/lee/.megareviewer is writable and the database opens",
     ]);
@@ -155,13 +157,38 @@ describe("runDoctor", () => {
     const missing = await lines({
       anthropic: { configured: false, retrieveModel: async () => ok(undefined) },
     });
-    expect(missing[4]).toBe(
-      "– Anthropic: not configured: reviews run without the model\n    Set ANTHROPIC_API_KEY or run `ant auth login` to use --ai.",
+    expect(missing[5]).toBe(
+      "– Anthropic API: not configured: --ai's fallback when Claude Code can't run it\n    Set ANTHROPIC_API_KEY or run `ant auth login` to use it.",
     );
     const rejected = await lines({
       anthropic: { configured: true, retrieveModel: async () => err("401 invalid x-api-key") },
     });
-    expect(rejected[4]).toMatch(/^✗ Anthropic: 401 invalid x-api-key\n/);
+    expect(rejected[5]).toMatch(/^✗ Anthropic API: 401 invalid x-api-key\n/);
+  });
+
+  it.each<[DoctorDeps["claudeCode"], string]>([
+    [
+      { state: "not-installed" },
+      "– Claude Code: not installed: --ai runs on the Anthropic API instead, if it's configured\n    Install Claude Code (https://code.claude.com) and sign in with `claude` to run --ai on your Claude plan.",
+    ],
+    [
+      { state: "signed-out", version: "2.1.303" },
+      "– Claude Code: 2.1.303, not signed in: --ai runs on the Anthropic API instead, if it's configured\n    Run `claude` and sign in to run --ai on your Claude plan.",
+    ],
+    [
+      { state: "signed-in", version: "2.0.9", plan: "max", billing: "plan" },
+      "✗ Claude Code: 2.0.9, older than 2.1.303, the oldest megareviewer was checked with\n    Run `claude update`.",
+    ],
+    [
+      { state: "signed-in", version: "2.1.303", plan: null, billing: "api" },
+      "✓ Claude Code: 2.1.303, signed in: --ai runs here, billed to your Anthropic Console account",
+    ],
+    [
+      { state: "failed", message: "`claude auth status` gave no status: no output" },
+      "✗ Claude Code: `claude auth status` gave no status: no output\n    Run `claude doctor`.",
+    ],
+  ])("says what Claude Code can do: %j", async (claudeCode, line) => {
+    expect((await lines({ claudeCode }))[4]).toBe(line);
   });
 
   it("fails when the home directory or database doesn't open", async () => {

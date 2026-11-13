@@ -8,7 +8,9 @@ Measure the model passes on a labeled golden set, so a prompt change is judged b
 node evals/run.ts --baseline evals/baseline.json
 ```
 
-That prints the estimated cost and stops. Add `--yes` to run, `--case <name>` (repeatable) for a subset, and `--write-baseline` to replace `evals/baseline.json` with this run's scores. It needs Anthropic credentials (`ANTHROPIC_API_KEY` or `ant auth login`).
+That prints the estimated cost and stops. Add `--yes` to run, `--case <name>` (repeatable) for a subset, `--write-baseline` to replace `evals/baseline.json` with this run's scores, and `--via claude-code` to run the passes through the signed-in Claude Code instead of the API, which the baseline was measured on. The judge always calls the API, so it needs Anthropic credentials (`ANTHROPIC_API_KEY` or `ant auth login`).
+
+For the Claude Code transport, `node evals/record-claude-code.ts` records its fixtures from real runs, and `node evals/calibrate-claude-code.ts` measures the bytes per token its size estimate rests on. Both run on the signed-in Claude Code's plan.
 
 Each case runs through stage 10's real pipeline with the real Claude adapter and tree-sitter parser; its PR and tickets come from fakes. A Claude Opus 5.5 judge ([judge.ts](judge.ts)) matches the produced decisions and mismatches against the labels. The full outputs go to `evals/results/<time>.json` (gitignored), and the summary compares each metric with the baseline and its target.
 

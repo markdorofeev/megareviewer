@@ -1,20 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { z } from "zod";
-import type {
-  AnalysisInput,
-  AnalysisModel,
-  Logger,
-  PassOptions,
-  PassOutput,
-} from "../../application/ports/index.ts";
-import type { ModelError, ModelPass, ModelUsage } from "../../domain/review/index.ts";
-import { err, ok, type Result } from "../../domain/shared/index.ts";
+import type { AnalysisModel, Logger } from "../../application/ports/index.ts";
+import type { ModelPass, ModelUsage } from "../../domain/review/index.ts";
+import { err, ok } from "../../domain/shared/index.ts";
 import { fromSdkError, invalidOutput, maxTokens, refusal, tooLarge } from "./errors.ts";
-import { PassAnswer } from "./output-schema.ts";
+import { createPassModel } from "./pass-model.ts";
 import { costUsd, HIGHEST_PRICE, PRICES, type TokenCounts } from "./pricing.ts";
-import { type EarlierResults, passMessage, renderSkeleton } from "./prompts/passes.ts";
+import { passMessage } from "./prompts/passes.ts";
 import { renderInput } from "./render-input.ts";
-import { countTokensRequest, MAX_TOKENS, passRequest } from "./request.ts";
+import { countTokensRequest, MAX_INPUT_TOKENS, MAX_TOKENS, passRequest } from "./request.ts";
 import { VERSION } from "./version.ts";
 
 export interface ClaudeAnalysisModelOptions {
@@ -24,7 +17,6 @@ export interface ClaudeAnalysisModelOptions {
   readonly logger: Logger;
 }
 
-type Answer = PassAnswer["answer"];
 type Message = Anthropic.Beta.Messages.BetaMessage;
 
 const tokenCounts = ({ usage }: Message): TokenCounts => ({
@@ -37,23 +29,10 @@ const tokenCounts = ({ usage }: Message): TokenCounts => ({
 const answerText = (message: Message): string =>
   message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
 
-const parseAnswer = (text: string): Result<Answer, ModelError> => {
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return err(invalidOutput("the answer isn't JSON"));
-  }
-  const answer = PassAnswer.safeParse(json);
-  return answer.success
-    ? ok(answer.data.answer)
-    : err(invalidOutput(z.prettifyError(answer.error)));
-};
-
-/** The four passes on Claude, with the PR data shared through the prompt cache. */
+/** The four passes on the Anthropic API, with the PR data shared through the prompt cache. */
 export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): AnalysisModel => {
   const client = options.client ?? new Anthropic();
-  const maxInputTokens = options.maxInputTokens ?? 400_000;
+  const maxInputTokens = options.maxInputTokens ?? MAX_INPUT_TOKENS;
   const { logger } = options;
 
   const usageOf = (pass: ModelPass, message: Message): ModelUsage => {
@@ -62,61 +41,10 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
       logger.warn("No price for model, using the highest known", { model: message.model });
     }
     const tokens = tokenCounts(message);
-    return { pass, ...tokens, costUsd: costUsd(price ?? HIGHEST_PRICE, tokens) };
+    return { pass, ...tokens, costUsd: costUsd(price ?? HIGHEST_PRICE, tokens), billing: "api" };
   };
 
-  const runPass = async <T>(
-    pass: ModelPass,
-    input: AnalysisInput,
-    earlier: EarlierResults | null,
-    passOptions: PassOptions | undefined,
-    pick: (answer: Answer) => T | null,
-  ): Promise<Result<PassOutput<T>, ModelError>> => {
-    const request = passRequest(
-      pass,
-      renderInput(input),
-      passMessage(pass, earlier, passOptions?.feedback),
-    );
-    logger.debug("Model pass started", {
-      pass,
-      attempt: passOptions?.feedback ? "retry" : "first",
-    });
-
-    let message: Message;
-    try {
-      message = await client.beta.messages.stream(request).finalMessage();
-    } catch (error) {
-      const modelError = fromSdkError(error);
-      logger.warn("Model pass failed", {
-        pass,
-        kind: modelError.kind,
-        message: modelError.message,
-      });
-      return err(modelError);
-    }
-
-    const usage = usageOf(pass, message);
-    logger.info("Model pass finished", {
-      ...usage,
-      model: message.model,
-      stopReason: message.stop_reason,
-    });
-
-    if (message.stop_reason === "refusal") {
-      return err(refusal(message.stop_details?.category ?? null));
-    }
-    if (message.stop_reason === "max_tokens") return err(maxTokens(MAX_TOKENS));
-
-    const answer = parseAnswer(answerText(message));
-    if (!answer.ok) return answer;
-    const value = pick(answer.value);
-    if (value === null) {
-      return err(invalidOutput(`answered the ${answer.value.pass} task instead of ${pass}`));
-    }
-    return ok({ value, usage });
-  };
-
-  return {
+  return createPassModel({
     version: VERSION,
 
     async checkSize(input) {
@@ -139,28 +67,49 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
         : ok({ inputTokens });
     },
 
-    intent: (input, passOptions) =>
-      runPass("intent", input, null, passOptions, (answer) =>
-        answer.pass === "intent" ? answer.intent : null,
-      ),
+    async runPass(pass, input, earlier, passOptions) {
+      const request = passRequest(
+        pass,
+        renderInput(input),
+        passMessage(pass, earlier, passOptions?.feedback),
+      );
+      logger.debug("Model pass started", {
+        pass,
+        attempt: passOptions?.feedback ? "retry" : "first",
+      });
 
-    risk: (input, intent, passOptions) =>
-      runPass("risk", input, { intent }, passOptions, (answer) =>
-        answer.pass === "risk" ? answer.assessments : null,
-      ),
+      let message: Message;
+      try {
+        message = await client.beta.messages.stream(request).finalMessage();
+      } catch (error) {
+        const modelError = fromSdkError(error);
+        logger.warn("Model pass failed", {
+          pass,
+          kind: modelError.kind,
+          message: modelError.message,
+        });
+        return err(modelError);
+      }
 
-    decisions: (input, intent, passOptions) =>
-      runPass("decisions", input, { intent }, passOptions, (answer) =>
-        answer.pass === "decisions" ? answer.decisions : null,
-      ),
+      const usage = usageOf(pass, message);
+      logger.info("Model pass finished", {
+        ...usage,
+        model: message.model,
+        stopReason: message.stop_reason,
+      });
 
-    tour: (input, intent, risk, decisions, skeleton, passOptions) =>
-      runPass(
-        "tour",
-        input,
-        { intent, risk, decisions, skeleton: renderSkeleton(skeleton, input) },
-        passOptions,
-        (answer) => (answer.pass === "tour" ? answer.tour : null),
-      ),
-  };
+      if (message.stop_reason === "refusal") {
+        return err(refusal(message.stop_details?.category ?? null));
+      }
+      if (message.stop_reason === "max_tokens") return err(maxTokens(MAX_TOKENS));
+
+      let answer: unknown;
+      try {
+        answer = JSON.parse(answerText(message));
+      } catch {
+        return err(invalidOutput("the answer isn't JSON"));
+      }
+      return ok({ answer, usage });
+    },
+  });
 };

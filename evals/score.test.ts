@@ -51,6 +51,7 @@ const usage = (pass: ModelUsage["pass"]): ModelUsage => ({
   cacheWriteTokens: 0,
   outputTokens: 1,
   costUsd: 0.01,
+  billing: "api",
 });
 
 describe("scoreCase", () => {

@@ -47,6 +47,10 @@ export type ModelPass = z.infer<typeof ModelPass>;
 
 const TokenCount = z.number().int().nonnegative();
 
+/** Who pays for the tokens: the reviewer's API account, or nobody per call on their Claude plan. */
+export const ModelBilling = z.enum(["api", "plan"]);
+export type ModelBilling = z.infer<typeof ModelBilling>;
+
 export const ModelUsage = z
   .object({
     pass: ModelPass,
@@ -54,7 +58,10 @@ export const ModelUsage = z
     cacheReadTokens: TokenCount,
     cacheWriteTokens: TokenCount,
     outputTokens: TokenCount,
+    /** Under "plan", what the tokens would cost at API prices: nothing is charged per call. */
     costUsd: z.number().nonnegative(),
+    // Analyses stored before there was a plan transport were all billed to the API.
+    billing: ModelBilling.default("api"),
   })
   .readonly();
 export type ModelUsage = z.infer<typeof ModelUsage>;

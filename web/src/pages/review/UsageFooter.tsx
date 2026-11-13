@@ -18,6 +18,10 @@ export const formatTokens = (count: number): string =>
 
 export const formatCost = (usd: number): string => `$${usd.toFixed(2)}`;
 
+/** On a plan nothing is charged per review: the cost is what the tokens would be at API prices. */
+export const formatTotalCost = (usd: number, onPlan: boolean): string =>
+  onPlan ? `≈ ${formatCost(usd)} at API prices, on your Claude plan` : formatCost(usd);
+
 /** Uncached input, which includes tokens written to the cache. */
 const inputOf = (usage: ModelUsage): number => usage.inputTokens + usage.cacheWriteTokens;
 
@@ -27,6 +31,7 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
   if (usage.length === 0) return null;
   const sum = (pick: (entry: ModelUsage) => number) =>
     usage.reduce((total, entry) => total + pick(entry), 0);
+  const onPlan = usage.some((entry) => entry.billing === "plan");
 
   return (
     <footer className="group relative flex justify-end">
@@ -37,7 +42,11 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
       >
         Usage: {formatTokens(sum(inputOf))} tokens in ·{" "}
         {formatTokens(sum((u) => u.cacheReadTokens))} cache read ·{" "}
-        {formatTokens(sum((u) => u.outputTokens))} out · {formatCost(sum((u) => u.costUsd))}
+        {formatTokens(sum((u) => u.outputTokens))} out ·{" "}
+        {formatTotalCost(
+          sum((u) => u.costUsd),
+          onPlan,
+        )}
       </button>
       <table
         id={`${id}-breakdown`}
@@ -50,7 +59,7 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
             <th scope="col">In</th>
             <th scope="col">Cache read</th>
             <th scope="col">Out</th>
-            <th scope="col">Cost</th>
+            <th scope="col">{onPlan ? "At API prices" : "Cost"}</th>
           </tr>
         </thead>
         <tbody>

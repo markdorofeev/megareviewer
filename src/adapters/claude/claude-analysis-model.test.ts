@@ -180,6 +180,7 @@ describe("ClaudeAnalysisModel", () => {
         pass: "risk",
         ...tokens,
         costUsd: costUsd(price, tokens),
+        billing: "api",
       });
       expect(logger.entries).toContainEqual(
         expect.objectContaining({

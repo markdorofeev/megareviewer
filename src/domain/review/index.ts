@@ -7,6 +7,7 @@ export {
   analysisId,
   CheckoutStatus,
   FilesFetched,
+  ModelBilling,
   ModelPass,
   ModelUsage,
   PipelineVersion,
