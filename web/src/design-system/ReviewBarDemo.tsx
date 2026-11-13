@@ -24,6 +24,9 @@ const MORE_POINTS: readonly Point[] = [
     path: "src/http/retry.ts",
     lines: null,
     hunkIds: [],
+    severity: "minor",
+    suggestion: null,
+    mismatch: null,
   },
 ];
 
@@ -95,6 +98,8 @@ const BarDemo = ({
                 const to = narrowTo(points, kind, current);
                 if (to !== null) setCurrent(to);
               }}
+              decisionsShown
+              onDecisionsShown={() => {}}
               onRun={() => {}}
             >
               <PointStepper

@@ -4,6 +4,7 @@ import {
   type CoverageProblem,
   type Decision,
   DecisionId,
+  decisionLinesFit,
   type Finding,
   FindingId,
   type FindingProblem,
@@ -16,6 +17,7 @@ import {
   type ModelPass,
   type ModelUsage,
   type RiskAssessment,
+  strippable,
   type Tour,
   type TourTitlesProblem,
   validateFindings,
@@ -138,12 +140,17 @@ const FINDING_FEEDBACK = (problem: FindingProblem): string => {
       return `${finding} has a blank ${problem.field}.`;
     case "too-long":
       return `${finding}'s ${problem.field} is longer than ${problem.field === "title" ? MAX_FINDING_TITLE : MAX_FINDING_EXPLANATION} characters.`;
+    case "suggestion-old-side":
+      return `${finding} suggests a change for "-" lines; a suggestion replaces only new-side lines, so give none or rest the finding on new-side lines.`;
+    case "unknown-mismatch":
+      return `${finding} names ${problem.mismatch}, which isn't one of the intent's mismatches.`;
   }
 };
 
 /**
  * Findings on lines the PR's hunks show. One still invalid after the retry is dropped and
- * logged, not shown: the reviewer can't act on the model's mistake.
+ * logged, not shown: the reviewer can't act on the model's mistake. One wrong only in its
+ * suggestion or mismatch keeps its place without them.
  */
 export const runFindings = async (
   model: AnalysisModel,
@@ -152,17 +159,31 @@ export const runFindings = async (
   hunks: ReadonlyMap<HunkId, Hunk>,
   logger: Logger,
 ): Promise<PassResult<Finding[]>> => {
+  const mismatches = intent.mismatches.length;
   const { outcome, usage } = await callChecked(
     "findings",
     (options) => model.findings(input, intent, options),
-    (drafts) => validateFindings(drafts, hunks).map(FINDING_FEEDBACK),
+    (drafts) => validateFindings(drafts, hunks, mismatches).map(FINDING_FEEDBACK),
     logger,
   );
   if (!outcome.ok) return { outcome, usage, warnings: [] };
   const drafts = outcome.value.value;
-  const invalid = new Set(validateFindings(drafts, hunks).map((problem) => problem.index));
+  const problems = validateFindings(drafts, hunks, mismatches);
+  const invalid = new Set(problems.filter((one) => !strippable(one)).map((one) => one.index));
   if (invalid.size > 0) logger.warn("Dropped invalid findings", { count: invalid.size });
-  const kept = drafts.filter((_, index) => !invalid.has(index));
+  const stripped = (index: number, kind: FindingProblem["kind"]) =>
+    problems.some((one) => one.index === index && one.kind === kind);
+  const kept = drafts.flatMap((draft, index) =>
+    invalid.has(index)
+      ? []
+      : [
+          {
+            ...draft,
+            ...(stripped(index, "suggestion-old-side") ? { suggestion: null } : {}),
+            ...(stripped(index, "unknown-mismatch") ? { mismatch: null } : {}),
+          },
+        ],
+  );
   return {
     outcome: ok(kept.map((draft, index) => ({ ...draft, id: FindingId.parse(`f${index + 1}`) }))),
     usage,
@@ -227,9 +248,10 @@ export const runDecisions = async (
   model: AnalysisModel,
   input: AnalysisInput,
   intent: Intent,
-  knownHunks: ReadonlySet<HunkId>,
+  hunks: ReadonlyMap<HunkId, Hunk>,
   logger: Logger,
 ): Promise<PassResult<Decision[]>> => {
+  const knownHunks = new Set(hunks.keys());
   const unknownIn = (drafts: readonly { readonly hunkIds: readonly HunkId[] }[]) =>
     validateHunkReferences(
       knownHunks,
@@ -251,11 +273,16 @@ export const runDecisions = async (
   }
   return {
     outcome: ok(
-      drafts.map((draft, index) => ({
-        ...draft,
-        id: DecisionId.parse(`d${index + 1}`),
-        hunkIds: draft.hunkIds.filter((id) => knownHunks.has(id)),
-      })),
+      drafts.map((draft, index) => {
+        const hunkIds = draft.hunkIds.filter((id) => knownHunks.has(id));
+        // Lines outside its hunks fall back to its first hunk's: a footnote on the wrong line
+        // isn't worth a retry.
+        const lines =
+          draft.lines !== null && decisionLinesFit(hunkIds, draft.lines, hunks)
+            ? draft.lines
+            : null;
+        return { ...draft, id: DecisionId.parse(`d${index + 1}`), hunkIds, lines };
+      }),
     ),
     usage,
     warnings: [],

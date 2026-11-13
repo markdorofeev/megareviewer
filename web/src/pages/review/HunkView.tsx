@@ -32,6 +32,12 @@ export interface HunkDeps {
   readonly pointsAt: (id: PartId, place: LinePlace) => ReactNode;
   /** The lines of a part Claude's points rest on, by "side:line", each with its kind. */
   readonly pointLinesOf: (id: PartId) => ReadonlyMap<string, PointLine> | undefined;
+  /** Rows over a line of a part: a risk's band. */
+  readonly pointsOver: (id: PartId, place: LinePlace) => ReactNode;
+  /** After a line's code: a decision's chip. */
+  readonly pointsAtEnd: (id: PartId, place: LinePlace) => ReactNode;
+  /** The lines of a part with a finding's card under them. */
+  readonly flaggedOf: (id: PartId) => ReadonlySet<string> | undefined;
   /** The host's threads on a line of a part, shown under it. */
   readonly threadsAt: (id: PartId, place: LinePlace) => ReactNode;
   /** A file's threads its card can't put on a line, under "Earlier comments". */
@@ -86,6 +92,9 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       {...(deps.pointLinesOf(id) === undefined ? {} : { pointLines: deps.pointLinesOf(id) })}
       threadsAt={(place) => deps.threadsAt(id, place)}
       pointsAt={(place) => deps.pointsAt(id, place)}
+      pointsOver={(place) => deps.pointsOver(id, place)}
+      pointsAtEnd={(place) => deps.pointsAtEnd(id, place)}
+      {...(deps.flaggedOf(id) === undefined ? {} : { flagged: deps.flaggedOf(id) })}
       {...(deps.rangeNote === undefined ? {} : { rangeNote: deps.rangeNote })}
       {...markProps(deps.marksOf(id))}
     />

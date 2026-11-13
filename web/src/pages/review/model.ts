@@ -264,7 +264,9 @@ export const pointPlaces = (
     }
     add(cards, first, point);
     cardPart.set(point.id, first);
-    for (const id of rest) add(mentions, id, point);
+    // A point on its own lines needs no link from the other parts of their hunk, around it.
+    const own = onLines === undefined ? null : hunkIdOf(first);
+    for (const id of rest) if (hunkIdOf(id) !== own) add(mentions, id, point);
   }
   return { cards, mentions, cardPart, unplaced };
 };

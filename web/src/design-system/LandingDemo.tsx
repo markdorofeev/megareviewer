@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { mapModelStages, type Point, PointId } from "../../../src/domain/review/index.ts";
 import { ClaudeElement } from "../pages/review/ClaudeElement.tsx";
-import { PointCard, PointFold } from "../pages/review/PointCard.tsx";
+import { DecisionChip, FindingCard, PointFold, RiskBand } from "../pages/review/PointCard.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { tokenMs, useLanding } from "../pages/review/useLanding.ts";
 import { FileTree, HunkCard, type LinePlace, PINNED, type PointLine } from "../review/index.ts";
@@ -34,7 +34,8 @@ export const LandingDemo = () => {
   const [hunk] = RETRY_FILE.hunks;
   const pointLines = new Map<string, PointLine>();
   for (const point of points) {
-    if (point.lines === null) continue;
+    // A decision is a footnote, and marks no line.
+    if (point.lines === null || point.kind === "decision") continue;
     const { side, startLine, line: last } = point.lines;
     const at = landing.inView.get(point.id);
     for (let line = startLine; line <= last; line += 1) {
@@ -48,18 +49,35 @@ export const LandingDemo = () => {
       });
     }
   }
-  const card = (point: Point) => (
-    <PointCard
-      key={point.id}
-      point={point}
-      state="open"
-      saving={false}
-      readOnly={false}
-      current={false}
-      onRaise={() => {}}
-      onState={() => {}}
-    />
-  );
+  const actions = {
+    state: "open",
+    saving: false,
+    readOnly: false,
+    current: false,
+    onRaise: () => {},
+    onState: () => {},
+  } as const;
+  const card = (point: Point) =>
+    point.kind === "risk" ? (
+      <RiskBand key={point.id} point={point} {...actions} />
+    ) : (
+      <FindingCard
+        key={point.id}
+        point={point}
+        {...actions}
+        inReview={false}
+        removed={null}
+        language="typescript"
+      />
+    );
+  const on = (place: LinePlace, kind: Point["kind"], line: "startLine" | "line") =>
+    points.filter(
+      (point) =>
+        point.kind === kind &&
+        point.lines !== null &&
+        point.lines.side === place.side &&
+        point.lines[line] === place.line,
+    );
   const fold = (together: readonly Point[], row: boolean, children: ReactNode) => {
     const [first] = together;
     return first === undefined ? null : (
@@ -80,12 +98,31 @@ export const LandingDemo = () => {
     );
   };
   const pointsAt = (place: LinePlace) => {
-    const here = points.filter(
-      (point) =>
-        point.lines !== null && point.lines.side === place.side && point.lines.line === place.line,
-    );
+    const here = on(place, "finding", "line");
     return fold(here, true, here.map(card));
   };
+  const pointsOver = (place: LinePlace) => {
+    const here = on(place, "risk", "startLine");
+    return fold(here, true, here.map(card));
+  };
+  const pointsAtEnd = (place: LinePlace) =>
+    on(place, "decision", "line").map((point) => (
+      <DecisionChip
+        key={point.id}
+        point={point}
+        state="open"
+        open={false}
+        current={false}
+        onToggle={() => {}}
+      />
+    ));
+  const flagged = new Set(
+    points.flatMap((point) =>
+      point.kind === "finding" && point.lines !== null
+        ? [`${point.lines.side}:${point.lines.line}`]
+        : [],
+    ),
+  );
   const unlined = points.filter((point) => point.lines === null);
   const tree = run === "after" ? TREE_FILES : TREE_FILES.map(({ points: _, ...file }) => file);
   const ran = { ...DESIGN_RUN, stages: mapModelStages(DESIGN_RUN.stages, () => "done" as const) };
@@ -122,6 +159,8 @@ export const LandingDemo = () => {
           points={points}
           narrowed={null}
           onNarrow={() => {}}
+          decisionsShown
+          onDecisionsShown={() => {}}
           onRun={() => setRun("running")}
         >
           <PointStepper
@@ -144,6 +183,9 @@ export const LandingDemo = () => {
             afterHeader={fold(unlined, false, unlined.map(card))}
             pointLines={pointLines}
             pointsAt={pointsAt}
+            pointsOver={pointsOver}
+            pointsAtEnd={pointsAtEnd}
+            flagged={flagged}
           />
         )}
       </div>

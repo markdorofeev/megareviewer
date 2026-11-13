@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { fileChange, hunk, smallFeatureAnalysis } from "../../application/testing/index.ts";
 import { HunkId } from "../diff/index.ts";
-import { type Finding, FindingId, pointsOf, validateFindings } from "./index.ts";
+import {
+  type Finding,
+  FindingId,
+  MismatchId,
+  pointsOf,
+  strippable,
+  validateFindings,
+} from "./index.ts";
 
 const receipts = smallFeatureAnalysis.files.find(
   (file) => file.path === "src/services/receipts.ts",
@@ -14,6 +21,9 @@ const finding = (lines: Partial<Finding["lines"]> = {}): Finding => ({
   title: "Serves a stale receipt",
   explanation: "Keyed by order ID alone.",
   lines: { hunkId: receiptsHunk.id, side: "new", startLine: 9, line: 11, ...lines },
+  severity: "major",
+  suggestion: null,
+  mismatch: null,
 });
 
 describe("pointsOf", () => {
@@ -73,6 +83,9 @@ describe("pointsOf", () => {
         path: null,
         lines: null,
         hunkIds: [],
+        severity: null,
+        suggestion: null,
+        mismatch: null,
       },
       {
         id: "m2",
@@ -82,8 +95,66 @@ describe("pointsOf", () => {
         path: "src/services/receipts.ts",
         lines: { hunkId: receiptsHunk.id, side: "new", startLine: 1, line: 20 },
         hunkIds: [receiptsHunk.id],
+        severity: null,
+        suggestion: null,
+        mismatch: null,
       },
     ]);
+  });
+
+  it("folds a mismatch a finding names into that finding, and keeps the others", () => {
+    const points = pointsOf({
+      ...smallFeatureAnalysis,
+      risk: [],
+      decisions: [],
+      findings: [{ ...finding(), mismatch: MismatchId.parse("m2") }],
+      intent: smallFeatureAnalysis.intent && {
+        ...smallFeatureAnalysis.intent,
+        mismatches: [
+          { kind: "missing", description: "The lifetime isn't configurable.", hunkIds: [] },
+          { kind: "contradicts", description: "Hard-codes the lifetime.", hunkIds: [] },
+        ],
+      },
+    });
+    expect(points.map((point) => point.id)).toEqual(["f1", "m1"]);
+    expect(points[0]?.mismatch).toEqual({
+      kind: "contradicts",
+      description: "Hard-codes the lifetime.",
+    });
+  });
+
+  it("carries a finding's severity and suggestion, but no suggestion for old-side lines", () => {
+    const suggested = { ...finding(), severity: "blocking" as const, suggestion: ["x();"] };
+    const [onNew] = pointsOf({ ...smallFeatureAnalysis, findings: [suggested] });
+    expect(onNew).toMatchObject({ severity: "blocking", suggestion: ["x();"], mismatch: null });
+    const onOld = { ...suggested, lines: { ...suggested.lines, side: "old" as const } };
+    expect(pointsOf({ ...smallFeatureAnalysis, findings: [onOld] })[0]?.suggestion).toBeNull();
+  });
+
+  it("puts a decision on its own line when one of its hunks shows it, else its hunk's", () => {
+    const [decision] = smallFeatureAnalysis.decisions;
+    if (decision === undefined) throw new Error("small-feature has decisions");
+    const onLine = {
+      ...decision,
+      hunkIds: [receiptsHunk.id],
+      lines: { hunkId: receiptsHunk.id, side: "new" as const, startLine: 10, line: 10 },
+    };
+    const outside = { ...onLine, lines: { ...onLine.lines, startLine: 99, line: 99 } };
+    const decided = (one: typeof onLine) =>
+      pointsOf({
+        ...smallFeatureAnalysis,
+        intent: null,
+        findings: [],
+        risk: [],
+        decisions: [one],
+      })[0]?.lines;
+    expect(decided(onLine)).toEqual(onLine.lines);
+    expect(decided(outside)).toEqual({
+      hunkId: receiptsHunk.id,
+      side: "new",
+      startLine: 1,
+      line: 20,
+    });
   });
 
   it("leaves out a contract hunk the path rules raised, and the model's logic", () => {
@@ -153,5 +224,21 @@ describe("validateFindings", () => {
       { kind: "too-long", index: 3, field: "explanation" },
       { kind: "too-long", index: 4, field: "title" },
     ]);
+  });
+
+  it("names a suggestion on old-side lines and a mismatch the intent doesn't have", () => {
+    const onOld = {
+      ...finding(),
+      lines: { hunkId: receiptsHunk.id, side: "old" as const, startLine: 9, line: 9 },
+      suggestion: ["x();"],
+    };
+    const problems = validateFindings(
+      [onOld, { ...finding(), mismatch: MismatchId.parse("m2") }],
+      hunks,
+      1,
+    );
+    expect(problems).toContainEqual({ kind: "suggestion-old-side", index: 0 });
+    expect(problems).toContainEqual({ kind: "unknown-mismatch", index: 1, mismatch: "m2" });
+    expect(problems.filter((problem) => problem.index === 1).every(strippable)).toBe(true);
   });
 });

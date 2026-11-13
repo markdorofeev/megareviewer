@@ -4,6 +4,7 @@ import {
   type Analysis,
   AnalysisId,
   type HostError,
+  MismatchId,
   type ModelError,
   modelRunnable,
   type StageName,
@@ -700,12 +701,41 @@ describe("the analysis pipeline", () => {
     });
   });
 
+  describe("findings", () => {
+    const hunk = smallFeatureFiles.flatMap((file) => file.hunks).at(-1);
+    const added = hunk?.lines.find((line) => line.kind === "add")?.newLine;
+    if (hunk === undefined || added == null) throw new Error("small-feature adds lines");
+    const onLine = (side: "new" | "old") => ({
+      title: "Serves a stale receipt",
+      explanation: "Keyed by order ID alone.",
+      lines: { hunkId: hunk.id, side, startLine: added, line: added },
+      severity: "major" as const,
+      suggestion: ["fixed();"],
+      mismatch: MismatchId.parse("m9"),
+    });
+
+    it("keeps a finding wrong only in its suggestion or mismatch, without them", async () => {
+      const model = new FakeAnalysisModel();
+      const drafts = [{ ...onLine("new"), suggestion: null }];
+      model.script("findings", ok(drafts), ok(drafts));
+      const { analyze } = setup({ model });
+      const analysis = await analyze();
+      expect(model.callsTo("findings")[1]?.options).toEqual({
+        feedback: ["Finding 1 names m9, which isn't one of the intent's mismatches."],
+      });
+      expect(analysis.findings).toEqual([
+        { ...drafts[0], id: "f1", suggestion: null, mismatch: null },
+      ]);
+    });
+  });
+
   describe("decisions", () => {
     const draft = (hunkIds: readonly HunkId[]) => ({
       title: "Adds receipts",
       category: "api" as const,
       whyItMatters: "New endpoint.",
       hunkIds,
+      lines: null,
     });
 
     it("drops unknown hunk references after a retry", async () => {
@@ -730,6 +760,25 @@ describe("the analysis pipeline", () => {
           message: "Dropped unknown hunk references from decisions",
         }),
       );
+    });
+
+    it("keeps a decision's lines only when one of its hunks shows them", async () => {
+      const hunk = smallFeatureFiles.flatMap((file) => file.hunks).find((one) => one.id === h2);
+      const line = hunk?.lines.find((one) => one.newLine !== null)?.newLine;
+      if (line == null) throw new Error("small-feature's second hunk has new lines");
+      const lines = { hunkId: h2, side: "new" as const, startLine: line, line };
+      const model = new FakeAnalysisModel();
+      model.script(
+        "decisions",
+        ok([
+          { ...draft([h2]), lines },
+          { ...draft([h1]), lines },
+          { ...draft([h2]), lines: { ...lines, startLine: 999, line: 999 } },
+        ]),
+      );
+      const { analyze } = setup({ model });
+      const analysis = await analyze();
+      expect(analysis.decisions.map((decision) => decision.lines)).toEqual([lines, null, null]);
     });
 
     it("may reference mechanical hunks", async () => {

@@ -2,7 +2,7 @@
 
 Turns a GitHub or Bitbucket Cloud pull request into a guided review. Changes are ordered as a tour that follows the call graph, with each test next to the code it tests. Risky changes (dependencies, schemas, auth, CI, removed tests) stand out, and mechanical ones are collapsed with proof. Your review is posted back to the PR.
 
-On any review, Analyze with Claude adds what the PR was asked to do next to what the code actually does, plain-language titles for the tour's steps, and a ranked list of points on the code: what looks wrong, what deserves a hard look, and the decisions the code makes. Raise a point to comment on its lines, or dismiss it; saying nothing means it's fine. You pick the verdict when you publish.
+On any review, Analyze with Claude adds what the PR was asked to do next to what the code actually does, plain-language titles for the tour's steps, and its points on the code: what looks wrong, as a draft comment under its line you can add to your review as it is; contract changes that deserve a hard look, as a band over their lines; and why the code makes its choices, as footnotes you can hide. Saying nothing means it's fine. You pick the verdict when you publish.
 
 ## Run
 

@@ -1,5 +1,5 @@
 import type { Point, PointId, PointKind, PointState } from "../../../../src/domain/review/index.ts";
-import { POINT_STATUS } from "../../lib/status.ts";
+import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Dialog } from "./Dialog.tsx";
 
@@ -38,7 +38,8 @@ export const PointList = ({
       {/* The dialog is a grid: without min-w-0 the list grows to its longest title. */}
       <ul className="flex min-w-0 flex-col gap-1" aria-label="Points">
         {shown.map((point) => {
-          const { glyph, label } = POINT_STATUS[point.kind];
+          const { label } = POINT_STATUS[point.kind];
+          const Icon = POINT_ICON[point.kind];
           const state = stateOf(point.id);
           return (
             <li key={point.id}>
@@ -49,7 +50,7 @@ export const PointList = ({
                 className="flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-accent"
                 onClick={() => onGo(point.id)}
               >
-                <span aria-hidden="true">{glyph}</span>
+                <Icon aria-hidden="true" className="size-3.5 shrink-0" />
                 <span className="sr-only">{label}: </span>
                 <span
                   className={cn("min-w-0 flex-1 truncate", state === "dismissed" && "line-through")}

@@ -40,13 +40,17 @@ const openReview = async (page: Page, url: string, title: string, claude = true)
 };
 
 /** One of Claude's points, by its title: the fake model's decision on a file. */
-const point = (page: Page, title: string) => ({
-  card: page.getByRole("article", { name: title }),
-  raise: page.getByRole("button", { name: `Raise: ${title}` }),
-  dismiss: page.getByRole("button", { name: `Dismiss: ${title}` }),
+/**
+ * One of the fake model's decisions: its chip at the end of its line, which opens its footnote
+ * with Comment and Hide.
+ */
+const decision = (page: Page, title: string) => ({
+  chip: page.getByRole("button", { name: `Decision: ${title}` }),
+  comment: page.getByRole("button", { name: `Comment: ${title}` }),
+  hide: page.getByRole("button", { name: `Hide: ${title}` }),
 });
 
-/** Clicks Raise or Dismiss and waits until the server has the state. */
+/** Clicks Comment, Hide or Dismiss and waits until the server has the state. */
 const act = async (page: Page, button: Locator, state: string) => {
   const saved = page.waitForResponse(
     (response) =>
@@ -321,31 +325,35 @@ test("mechanical changes are collapsed until expanded", async ({ page }) => {
 
 test("raised and dismissed points persist across a reload", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  const config = point(page, "Changes config/app.yaml");
-  const routes = point(page, "Changes src/routes/orders.ts");
+  const config = decision(page, "Changes config/app.yaml");
+  const routes = decision(page, "Changes src/routes/orders.ts");
   const changes = page.getByRole("region", { name: "Changes" });
 
-  await act(page, config.dismiss, "dismissed");
-  await act(page, routes.raise, "raised");
+  await config.chip.click();
+  await act(page, config.hide, "dismissed");
+  await routes.chip.click();
+  await act(page, routes.comment, "raised");
   await expect(changes.getByRole("textbox", { name: /^Comment on line/ })).toHaveValue(
     /Changes src\/routes\/orders\.ts/,
   );
-  await changes.getByRole("button", { name: /^Add to review/ }).click();
+  await changes.getByRole("button", { name: "Add to review", exact: true }).click();
 
   await page.reload();
-  await expect(config.card).toHaveAttribute("data-state", "dismissed");
-  await expect(routes.card).toHaveAttribute("data-state", "raised");
+  await expect(config.chip).toHaveAttribute("data-state", "dismissed");
+  await expect(routes.chip).toHaveAttribute("data-state", "raised");
   // The comment it opened is a draft in this browser until the review is published.
   await expect(changes.getByText(/Changes src\/routes\/orders\.ts/).first()).toBeVisible();
 });
 
 test("publishes exactly what the preview shows, once", async ({ page, server }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  await act(page, point(page, "Changes src/routes/orders.ts").raise, "raised");
+  const routes = decision(page, "Changes src/routes/orders.ts");
+  await routes.chip.click();
+  await act(page, routes.comment, "raised");
   const changes = page.getByRole("region", { name: "Changes" });
   const field = changes.getByRole("textbox", { name: /^Comment on line/ });
   await field.fill("Scope this to the order's owner.");
-  await changes.getByRole("button", { name: /^Add to review/ }).click();
+  await changes.getByRole("button", { name: "Add to review", exact: true }).click();
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish 1 comment" });
@@ -369,7 +377,7 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
   const line = await number.textContent();
   await number.click();
   await changes.getByRole("textbox", { name: `Comment on line ${line}` }).fill("One more.");
-  await expect(changes.getByRole("button", { name: /^Add to review/ })).toHaveCount(0);
+  await expect(changes.getByRole("button", { name: "Add to review", exact: true })).toHaveCount(0);
   await changes.getByRole("button", { name: "Comment now" }).click();
   await expect(
     changes
@@ -390,8 +398,10 @@ test("a publish that fails part-way posts only the rest on retry", async ({ page
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
   const changes = page.getByRole("region", { name: "Changes" });
   for (const path of ["config/app.yaml", "src/routes/orders.ts"]) {
-    await act(page, point(page, `Changes ${path}`).raise, "raised");
-    await changes.getByRole("button", { name: /^Add to review/ }).click();
+    const one = decision(page, `Changes ${path}`);
+    await one.chip.click();
+    await act(page, one.comment, "raised");
+    await changes.getByRole("button", { name: "Add to review", exact: true }).click();
   }
   // Post 1 is the summary, so the second inline comment is post 3.
   const armed = await server.request.post("/__fake/fail-publish-comment", { data: { n: 3 } });
@@ -513,7 +523,7 @@ test.describe("without the model", () => {
     const line = await number.textContent();
     await number.click();
     await changes.getByRole("textbox", { name: `Comment on line ${line}` }).fill("Why this?");
-    await changes.getByRole("button", { name: /^Add to review/ }).click();
+    await changes.getByRole("button", { name: "Add to review", exact: true }).click();
 
     await page.getByRole("button", { name: /^Publish review…/ }).click();
     const dialog = page.getByRole("dialog", { name: "Publish 1 comment" });

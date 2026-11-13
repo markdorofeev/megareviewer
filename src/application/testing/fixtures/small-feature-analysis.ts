@@ -235,6 +235,9 @@ export const smallFeatureAnalysis: Analysis = {
       explanation:
         "The cache is keyed by order ID alone, so a refund or an edited item still shows the receipt rendered before it until the entry expires.",
       lines: { hunkId: receiptServiceHunk.id, side: "new", startLine: 9, line: 11 },
+      severity: "major",
+      suggestion: null,
+      mismatch: null,
     },
   ],
   risk: [
@@ -282,6 +285,7 @@ export const smallFeatureAnalysis: Analysis = {
       category: "api",
       whyItMatters: "A new public endpoint is a contract clients will depend on.",
       hunkIds: [receiptRouteHunk.id, importHunk.id],
+      lines: null,
     },
     {
       id: d("d2"),
@@ -289,6 +293,7 @@ export const smallFeatureAnalysis: Analysis = {
       category: "performance",
       whyItMatters: "The cache grows with every order viewed and isn't shared between instances.",
       hunkIds: [receiptServiceHunk.id],
+      lines: null,
     },
     {
       id: d("d3"),
@@ -296,6 +301,7 @@ export const smallFeatureAnalysis: Analysis = {
       category: "configuration",
       whyItMatters: "Nobody asked for it, and it weakens abuse protection for every endpoint.",
       hunkIds: [rateLimitHunk.id],
+      lines: null,
     },
     {
       id: d("d4"),
@@ -303,6 +309,7 @@ export const smallFeatureAnalysis: Analysis = {
       category: "configuration",
       whyItMatters: "The ticket asks for a configurable lifetime, and the new setting is ignored.",
       hunkIds: [receiptServiceHunk.id, cacheTtlHunk.id],
+      lines: null,
     },
   ],
   tour: {

@@ -2,7 +2,7 @@ import { ChevronDownIcon, FolderIcon, FolderOpenIcon, MessageSquare } from "luci
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointKind } from "../../../../src/domain/review/index.ts";
 import { useShortcuts } from "../../lib/keymap.ts";
-import { FILE_STATUS, POINT_STATUS } from "../../lib/status.ts";
+import { FILE_STATUS, POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Input } from "../../ui/input.tsx";
 import { ScrollArea } from "../../ui/scroll-area.tsx";
@@ -230,11 +230,11 @@ const POINT_KINDS: readonly PointKind[] = ["finding", "risk", "decision"];
 const POINT_TONE: Readonly<Record<PointKind, string>> = {
   finding: "text-review-changes",
   risk: "text-risk-contract",
-  decision: "text-review-pending",
+  decision: "text-muted-foreground",
 };
 
 /**
- * A file's points from Claude: a glyph and a count per kind, named in words to readers. Landing,
+ * A file's points from Claude: an icon and a count per kind, named in words to readers. Landing,
  * they drop in at the row's place among the marked rows (globals.css).
  */
 export const PointCounts = ({
@@ -252,7 +252,8 @@ export const PointCounts = ({
     {POINT_KINDS.map((kind) => {
       const count = points[kind] ?? 0;
       if (count === 0) return null;
-      const { glyph, label } = POINT_STATUS[kind];
+      const { label } = POINT_STATUS[kind];
+      const Icon = POINT_ICON[kind];
       return (
         <span
           key={kind}
@@ -263,7 +264,7 @@ export const PointCounts = ({
             POINT_TONE[kind],
           )}
         >
-          <span aria-hidden="true">{glyph}</span>
+          <Icon aria-hidden="true" className="size-3" />
           {count}
           <span className="sr-only">
             {" "}

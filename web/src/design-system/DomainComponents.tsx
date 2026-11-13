@@ -4,7 +4,7 @@ import type { Hunk } from "../../../src/domain/diff/index.ts";
 import { PointId } from "../../../src/domain/review/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
 import { VERDICT_STATUS } from "../lib/status.ts";
-import { PointCard } from "../pages/review/PointCard.tsx";
+import { DecisionChip, DecisionNote, FindingCard, RiskBand } from "../pages/review/PointCard.tsx";
 import {
   CollapsedHunk,
   CommentCard,
@@ -430,34 +430,77 @@ const Card = ({ children }: { readonly children: ReactNode }) => (
   <div className="rounded-lg border">{children}</div>
 );
 
-/** A point card of each kind, and a dismissed one. */
-const PointStates = () => (
-  <div className="flex flex-col gap-2">
-    {POINTS.map((point) => (
-      <PointCard
-        key={point.id}
-        point={point}
-        state="open"
-        saving={false}
-        readOnly={false}
-        current={point.kind === "finding"}
-        onRaise={() => {}}
-        onState={() => {}}
+/**
+ * Claude's points one by one: a finding's card, then folded into the review and dismissed; a
+ * risk's band and a dismissed one; a decision's chip and its footnote.
+ */
+const PointStates = () => {
+  const [finding, risk, decision] = POINTS;
+  const [open, setOpen] = useState(true);
+  if (finding === undefined || risk === undefined || decision === undefined) return null;
+  const actions = {
+    state: "open",
+    saving: false,
+    readOnly: false,
+    current: false,
+    onRaise: () => {},
+    onState: () => {},
+  } as const;
+  const [hunk] = RETRY_FILE.hunks;
+  const removed =
+    hunk?.lines.flatMap((line) =>
+      line.newLine !== null && line.newLine >= 22 && line.newLine <= 23 ? [line.text] : [],
+    ) ?? null;
+  return (
+    <div className="flex max-w-4xl flex-col gap-2">
+      <FindingCard
+        point={finding}
+        {...actions}
+        current
+        inReview={false}
+        removed={removed}
+        language="typescript"
       />
-    ))}
-    {POINTS[2] !== undefined && (
-      <PointCard
-        point={{ ...POINTS[2], id: PointId.parse("d2"), title: "Keeps the old retry helper" }}
+      <FindingCard
+        point={{ ...finding, id: PointId.parse("f7") }}
+        {...actions}
+        state="raised"
+        inReview
+        removed={null}
+        language={null}
+      />
+      <FindingCard
+        point={{ ...finding, id: PointId.parse("f8"), title: "Swallows the last error" }}
+        {...actions}
         state="dismissed"
-        saving={false}
-        readOnly={false}
-        current={false}
-        onRaise={() => {}}
-        onState={() => {}}
+        inReview={false}
+        removed={null}
+        language={null}
       />
-    )}
-  </div>
-);
+      <RiskBand point={risk} {...actions} />
+      <RiskBand
+        point={{
+          ...risk,
+          id: PointId.parse("r:h_00000000000000ff"),
+          title: "Changes the default timeout for every request.",
+        }}
+        {...actions}
+        state="dismissed"
+      />
+      <p className="font-mono text-code">
+        await sleep(delay);
+        <DecisionChip
+          point={decision}
+          state="open"
+          open={open}
+          current={false}
+          onToggle={() => setOpen((previous) => !previous)}
+        />
+      </p>
+      {open && <DecisionNote point={decision} {...actions} />}
+    </div>
+  );
+};
 
 const Group = ({ title, children }: { readonly title: string; readonly children: ReactNode }) => (
   <section className="flex flex-col gap-3">

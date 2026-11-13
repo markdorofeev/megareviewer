@@ -1,4 +1,4 @@
-import { SparklesIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import {
   type Analysis,
@@ -10,7 +10,7 @@ import {
 /** What Claude's element reads of an analysis: how far its run got, and how it ended. */
 export type ClaudeRun = Pick<Analysis, "status" | "stages" | "modelError">;
 
-import { POINT_STATUS } from "../../lib/status.ts";
+import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 
@@ -55,6 +55,7 @@ const Chip = ({
   readonly onPressed: (pressed: boolean) => void;
 }) => {
   const [one, many] = KIND_WORDS[kind];
+  const Icon = POINT_ICON[kind];
   return (
     <button
       type="button"
@@ -70,7 +71,7 @@ const Chip = ({
         POINT_STATUS[kind].className,
       )}
     >
-      <span aria-hidden="true">{POINT_STATUS[kind].glyph}</span>
+      <Icon aria-hidden="true" className="size-3.5" />
       <span>
         <span
           data-slot="count-up"
@@ -109,6 +110,8 @@ export const ClaudeElement = ({
   points,
   narrowed,
   onNarrow,
+  decisionsShown,
+  onDecisionsShown,
   onRun,
   children,
 }: {
@@ -125,6 +128,9 @@ export const ClaudeElement = ({
   /** The kind whose chip is pressed, or null. */
   readonly narrowed: PointKind | null;
   readonly onNarrow: (kind: PointKind | null) => void;
+  /** Decisions are footnotes on the code, shown or hidden all at once. */
+  readonly decisionsShown: boolean;
+  readonly onDecisionsShown: (shown: boolean) => void;
   readonly onRun: () => void;
   /** After the chips: the stepper through the points. */
   readonly children?: ReactNode;
@@ -166,6 +172,20 @@ export const ClaudeElement = ({
             onPressed={(pressed) => onNarrow(pressed ? kind : null)}
           />
         ))}
+        {counts.some(([kind]) => kind === "decision") && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            data-slot="decisions-shown"
+            title={decisionsShown ? "Hide decisions on the code" : "Show decisions on the code"}
+            onClick={() => onDecisionsShown(!decisionsShown)}
+          >
+            {decisionsShown ? <EyeIcon aria-hidden="true" /> : <EyeOffIcon aria-hidden="true" />}
+            <span className="sr-only">
+              {decisionsShown ? "Hide decisions on the code" : "Show decisions on the code"}
+            </span>
+          </Button>
+        )}
         <span {...after(0)} className="ml-1 flex min-w-0 items-center border-l pl-1.5">
           {children}
         </span>

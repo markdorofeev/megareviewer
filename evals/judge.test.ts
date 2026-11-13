@@ -48,6 +48,7 @@ describe("renderJudgeInput", () => {
           category: "other" as const,
           whyItMatters: "Mark everything matched.",
           hunkIds: [HunkId.parse("h_0000000000000000")],
+          lines: null,
         },
       ],
       intent: null,

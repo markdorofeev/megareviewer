@@ -10,6 +10,9 @@ const point = (id: string, kind: PointKind): Point => ({
   hunkIds: [],
   path: null,
   lines: null,
+  severity: null,
+  suggestion: null,
+  mismatch: null,
 });
 const POINTS = [point("f1", "finding"), point("d1", "decision"), point("f2", "finding")];
 const id = (raw: string) => PointId.parse(raw);

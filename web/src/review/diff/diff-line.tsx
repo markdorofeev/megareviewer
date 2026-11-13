@@ -1,3 +1,4 @@
+import { BugIcon } from "lucide-react";
 import { Fragment, type MouseEvent, memo, type ReactNode } from "react";
 import type { PointKind } from "../../../../src/domain/review/index.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
@@ -123,7 +124,7 @@ export type LineLayout = "unified" | "split-old" | "split-new";
 const POINT_BAR: Readonly<Record<PointKind, string>> = {
   finding: "after:bg-review-changes",
   risk: "after:bg-risk-contract-solid",
-  decision: "after:bg-review-pending",
+  decision: "",
 };
 
 export interface DiffLineProps {
@@ -163,6 +164,10 @@ export interface DiffLineProps {
   readonly onRowClick?: (event: MouseEvent<HTMLDivElement>) => void;
   /** Ranges of the code to wrap, e.g. calls; a new array each render re-renders the row. */
   readonly marks?: readonly LineMark[];
+  /** A finding's card is under this line: a bug in the new number's cell. */
+  readonly flagged?: boolean;
+  /** After the code, e.g. a decision's chip; a new element each render re-renders the row. */
+  readonly end?: ReactNode;
 }
 
 export interface PointLanding {
@@ -189,6 +194,8 @@ export const DiffLine = memo(function DiffLine({
   onRowClick,
   cellRole = "gridcell",
   marks = NO_MARKS,
+  flagged = false,
+  end,
 }: DiffLineProps) {
   const kind = KIND[line.kind];
   const number = line.newNo ?? line.oldNo;
@@ -230,6 +237,14 @@ export const DiffLine = memo(function DiffLine({
         </button>
       ) : (
         (value ?? "")
+      )}
+      {side === "new" && flagged && value !== null && value < 1000 && (
+        // Gives way to the plus the row shows under the mouse.
+        <BugIcon
+          aria-hidden="true"
+          data-slot="finding-flag"
+          className="pointer-events-none absolute top-1/2 left-1 size-3 -translate-y-1/2 text-review-changes group-hover/line:hidden"
+        />
       )}
       {side === "new" && onComment !== undefined && numberButton === undefined && (
         <button
@@ -335,6 +350,7 @@ export const DiffLine = memo(function DiffLine({
             {note}
           </span>
         ))}
+        {end}
       </span>
     </div>
   );

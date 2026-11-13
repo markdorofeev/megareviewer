@@ -292,7 +292,7 @@ const modelStages = async (
       }));
       return result.outcome.ok ? ok({ ...result.outcome.value, assessments }) : result.outcome;
     }),
-    runDecisions(model, input, intent, knownHunks, logger).then(async (result) => {
+    runDecisions(model, input, intent, hunks, logger).then(async (result) => {
       await tracker.setStage("decisions", result.outcome.ok ? "done" : "failed", (analysis) => ({
         ...(result.outcome.ok ? { decisions: result.outcome.value } : {}),
         ...adding(result)(analysis),

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { HunkId } from "../diff/index.ts";
+import { PointLines } from "./point-lines.ts";
 
 /** "d1", "d2", … in the order the model listed the decisions. */
 export const DecisionId = z
@@ -30,6 +31,8 @@ export const Decision = z
     whyItMatters: z.string(),
     /** Can be empty, e.g. after unknown IDs from the model were dropped. */
     hunkIds: z.array(HunkId).readonly(),
+    /** The line its footnote goes on, in one of its hunks; null to use its first hunk's. */
+    lines: PointLines.nullable().default(null),
   })
   .readonly();
 export type Decision = z.infer<typeof Decision>;

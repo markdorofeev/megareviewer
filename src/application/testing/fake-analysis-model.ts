@@ -123,6 +123,9 @@ export class FakeAnalysisModel implements AnalysisModel {
                   title: `Check ${hunk.path}`,
                   explanation: "Derived by the fake model.",
                   lines: { hunkId: hunk.id, side: "new" as const, startLine: line, line },
+                  severity: "major" as const,
+                  suggestion: null,
+                  mismatch: null,
                 },
               ];
         })
@@ -157,6 +160,7 @@ export class FakeAnalysisModel implements AnalysisModel {
         category: "behavior" as const,
         whyItMatters: "Derived by the fake model.",
         hunkIds: file.hunks.map((hunk) => hunk.id),
+        lines: null,
       })),
     );
   }

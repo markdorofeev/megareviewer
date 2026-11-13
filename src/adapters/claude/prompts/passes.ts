@@ -21,10 +21,13 @@ Find what looks wrong in this code: bugs, security holes, regressions, data loss
 
 The reviewer reads every finding, and a wrong one costs them more than a missed one, so list only what the code in the data shows. Prefer no finding over a speculative one. A small or routine change usually has none.
 
-For each finding:
+Each finding is a draft comment the reviewer can add to their review as it is, so write it to the author:
 - title: what is wrong, as its consequence, in at most 80 characters ("Retries a charge after it succeeded", not "Possible issue in retry logic").
-- explanation: why, pointing at the code, in at most 300 characters.
+- explanation: why, pointing at the code, in at most 300 characters. Put code names in backticks.
 - lines: the hunk it rests on (hunkId) and the lines in that hunk that show it, startLine to line (startLine equal to line for one line). side is "new" for numbers on "+" and unchanged lines, "old" for numbers on "-" lines. Use only line numbers the hunk shows.
+- severity: "blocking" when it must be fixed before merging (data exposed or lost, a security hole, a crash on a normal path), "major" when it's wrong but bounded, "minor" when it's worth fixing but the change works without it.
+- suggestion: when the fix is a change to those same lines, the lines that replace startLine to line, whole, with their indentation; only for side "new". null when the fix is elsewhere, longer than a few lines, or you aren't sure of it.
+- mismatch: when the finding is one of the intent's mismatches shown in the code, its ID ("m1"), so the reviewer reads it once. Otherwise null.
 
 Order them by how much they matter, most first. At most 10.`,
 
@@ -39,15 +42,16 @@ When a hunk could be either, choose contract. The reason is one sentence naming 
 
   decisions: `Task: decisions.
 
-List the choices this code makes that a reviewer should consciously accept or reject: things a different reasonable engineer might have done differently, or that have consequences beyond the diff (a new dependency, retries without backoff, a permission check removed, a default changed, errors swallowed). Don't restate what the code does, and don't comment on style.
+Explain the choices this code makes that a reader would wonder about: why it caches, why it retries this way, why a dependency, why this format, why this default. Each is a short footnote the reviewer may read or skip, so it explains and never asks for a change. Anything that looks wrong is a finding, not a decision: leave it out here.
 
 For each decision:
-- title: the choice itself, stated plainly ("Retries failed payments 3 times without backoff").
+- title: the question it answers, starting with "Why", in at most 60 characters ("Why clamp the delay before adding jitter").
 - category: the closest one.
-- whyItMatters: one or two sentences on the consequence a reviewer should weigh.
+- whyItMatters: the answer, in one or two sentences, from what the code, the description or the tickets show. Don't guess at a reason they don't show.
 - hunkIds: the hunks the decision rests on.
+- lines: the line that makes the choice, in the first of those hunks: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines), and startLine and line, equal for one line. Use only line numbers the hunk shows.
 
-Order them by importance, most important first. At most 15. A small or routine change may have none.`,
+Order them by how much they help a reader, most first. At most 8. A small or routine change may have none.`,
 
   tour: `Task: tour.
 
@@ -109,7 +113,8 @@ const renderIntent = (intent: Intent): string[] => [
   ...intent.inferred.behaviorChanges.map((change) => `- ${escapeText(change)}`),
   ...(intent.mismatches.length === 0 ? [] : ["Mismatches:"]),
   ...intent.mismatches.map(
-    (mismatch) => `- ${mismatch.kind}: ${escapeText(mismatch.description)}${ids(mismatch.hunkIds)}`,
+    (mismatch, index) =>
+      `- m${index + 1} ${mismatch.kind}: ${escapeText(mismatch.description)}${ids(mismatch.hunkIds)}`,
   ),
   "</intent>",
 ];

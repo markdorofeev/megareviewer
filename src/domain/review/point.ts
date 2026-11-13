@@ -7,10 +7,14 @@ import {
   type MechanicalProof,
 } from "../diff/index.ts";
 import type { Decision } from "./decision.ts";
-import type { Intent, IntentMismatchKind } from "./intent.ts";
+import { type Intent, IntentMismatchKind } from "./intent.ts";
+import { PointLines } from "./point-lines.ts";
 import { Timestamp } from "./primitives.ts";
 import type { RiskAssessment } from "./risk.ts";
 import { classifyByRules } from "./risk-rules.ts";
+import { Severity } from "./thread.ts";
+
+export { PointLines };
 
 export const MAX_FINDING_TITLE = 80;
 export const MAX_FINDING_EXPLANATION = 300;
@@ -22,27 +26,25 @@ export const FindingId = z
   .brand<"FindingId">();
 export type FindingId = z.infer<typeof FindingId>;
 
-/** Lines of one hunk, `startLine` to `line`: new is the head side, old the base. */
-export const PointLines = z
-  .object({
-    hunkId: HunkId,
-    side: z.enum(["new", "old"]),
-    startLine: z.number().int().positive(),
-    line: z.number().int().positive(),
-  })
-  .readonly()
-  .refine((lines) => lines.startLine <= lines.line, {
-    message: "startLine must not come after line",
-  });
-export type PointLines = z.infer<typeof PointLines>;
+/** "m1" for the intent's first mismatch, in its order. */
+export const MismatchId = z
+  .string()
+  .regex(/^m[1-9][0-9]*$/)
+  .brand<"MismatchId">();
+export type MismatchId = z.infer<typeof MismatchId>;
 
-/** Something in the code that looks wrong, on the lines it rests on. */
+/** Something in the code that looks wrong, on the lines it rests on: a draft comment. */
 export const Finding = z
   .object({
     id: FindingId,
     title: z.string().min(1),
     explanation: z.string(),
     lines: PointLines,
+    severity: Severity.default("major"),
+    /** The new-side lines that replace the ones it rests on; null when it suggests none. */
+    suggestion: z.array(z.string()).readonly().nullable().default(null),
+    /** The intent mismatch it shows, which then isn't a point of its own. */
+    mismatch: MismatchId.nullable().default(null),
   })
   .readonly();
 export type Finding = z.infer<typeof Finding>;
@@ -73,6 +75,12 @@ export const Point = z
     lines: PointLines.nullable(),
     /** Every hunk the point rests on, `lines`' first. */
     hunkIds: z.array(HunkId).readonly(),
+    /** A finding's severity; null for a mismatch no finding named, and the other kinds. */
+    severity: Severity.nullable(),
+    /** A finding's suggested lines, in place of `lines`. */
+    suggestion: z.array(z.string()).readonly().nullable(),
+    /** The intent mismatch a finding shows. */
+    mismatch: z.object({ kind: IntentMismatchKind, description: z.string() }).readonly().nullable(),
   })
   .readonly();
 export type Point = z.infer<typeof Point>;
@@ -131,9 +139,18 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     return { hunkIds: known, lines, path: lines === null ? null : (hunk?.path ?? null) };
   };
 
+  const mismatchList = analysis.intent?.mismatches ?? [];
+  const mismatchOf = (id: MismatchId | null) => {
+    const at = id === null ? Number.NaN : Number(id.slice(1)) - 1;
+    const found = mismatchList[at];
+    return found === undefined ? null : { kind: found.kind, description: found.description };
+  };
+  const named = new Set<string>();
   const findings = analysis.findings.flatMap((finding): Point[] => {
     const hunk = hunks.get(finding.lines.hunkId);
     if (hunk === undefined) return [];
+    const mismatch = mismatchOf(finding.mismatch);
+    if (mismatch !== null && finding.mismatch !== null) named.add(finding.mismatch);
     return [
       {
         id: PointId.parse(finding.id),
@@ -143,19 +160,29 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         path: hunk.path,
         lines: finding.lines,
         hunkIds: [hunk.id],
+        severity: finding.severity,
+        suggestion: finding.lines.side === "new" ? finding.suggestion : null,
+        mismatch,
       },
     ];
   });
 
-  const mismatches = (analysis.intent?.mismatches ?? []).map(
-    (mismatch, index): Point => ({
-      id: PointId.parse(`m${index + 1}`),
-      kind: "finding",
-      title: mismatch.description,
-      explanation: MISMATCH_EXPLANATION[mismatch.kind],
-      ...landing(mismatch.hunkIds),
-    }),
-  );
+  const NONE = { severity: null, suggestion: null, mismatch: null } as const;
+  // A mismatch a finding shows is a line of that finding, not a point of its own.
+  const mismatches = mismatchList.flatMap((mismatch, index): Point[] => {
+    const id = `m${index + 1}`;
+    if (named.has(id)) return [];
+    return [
+      {
+        id: PointId.parse(id),
+        kind: "finding",
+        title: mismatch.description,
+        explanation: MISMATCH_EXPLANATION[mismatch.kind],
+        ...landing(mismatch.hunkIds),
+        ...NONE,
+      },
+    ];
+  });
 
   const proved = new Set(analysis.proofs.flatMap((proof) => proof.hunkId ?? []));
   const ruleContract = new Set(
@@ -175,21 +202,51 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         title: risk.reason,
         explanation: "",
         ...landed,
+        ...NONE,
       },
     ];
   });
 
-  const decisions = analysis.decisions.map(
-    (decision): Point => ({
+  const decisions = analysis.decisions.map((decision): Point => {
+    const landed = landing(decision.hunkIds);
+    const own = decision.lines;
+    const hunk = own === null ? undefined : hunks.get(own.hunkId);
+    // Its own line when one of its hunks shows it, else its first hunk's changed lines.
+    const fits =
+      own !== null && hunk !== undefined && decisionLinesFit(decision.hunkIds, own, hunks);
+    return {
       id: PointId.parse(decision.id),
       kind: "decision",
       title: decision.title,
       explanation: decision.whyItMatters,
-      ...landing(decision.hunkIds),
-    }),
-  );
+      ...landed,
+      ...(fits
+        ? {
+            lines: own,
+            path: hunk.path,
+            hunkIds: [own.hunkId, ...landed.hunkIds.filter((id) => id !== own.hunkId)],
+          }
+        : {}),
+      ...NONE,
+    };
+  });
 
   return [...findings, ...mismatches, ...risks, ...decisions];
+};
+
+/** Whether a decision's own lines are in one of its hunks, which shows them. */
+export const decisionLinesFit = (
+  hunkIds: readonly HunkId[],
+  lines: PointLines,
+  hunks: ReadonlyMap<HunkId, Hunk>,
+): boolean => {
+  const hunk = hunks.get(lines.hunkId);
+  return (
+    hunk !== undefined &&
+    hunkIds.includes(lines.hunkId) &&
+    hunkHasLine(hunk, lines.side, lines.startLine) &&
+    hunkHasLine(hunk, lines.side, lines.line)
+  );
 };
 
 /** What can be wrong with a finding the model wrote. */
@@ -200,12 +257,23 @@ export type FindingProblem =
       readonly kind: "blank" | "too-long";
       readonly index: number;
       readonly field: "title" | "explanation";
-    };
+    }
+  /** A suggestion on base-side lines, which a comment can't replace. */
+  | { readonly kind: "suggestion-old-side"; readonly index: number }
+  | { readonly kind: "unknown-mismatch"; readonly index: number; readonly mismatch: MismatchId };
 
-/** Whether a draft finding names a hunk of the PR and lines that hunk shows, with text that fits. */
+/** Problems that cost a finding only its suggestion or mismatch, not its place. */
+export const strippable = (problem: FindingProblem): boolean =>
+  problem.kind === "suggestion-old-side" || problem.kind === "unknown-mismatch";
+
+/**
+ * Whether a draft finding names a hunk of the PR and lines that hunk shows, with text that fits, a
+ * suggestion only for head-side lines and a mismatch the intent has.
+ */
 export const validateFindings = (
   findings: readonly Omit<Finding, "id">[],
   hunks: ReadonlyMap<HunkId, Hunk>,
+  mismatches = 0,
 ): FindingProblem[] =>
   findings.flatMap((finding, index): FindingProblem[] => {
     const problems: FindingProblem[] = [];
@@ -221,6 +289,13 @@ export const validateFindings = (
     if (hunk === undefined) problems.push({ kind: "unknown-hunk", index, hunkId });
     else if (!hunkHasLine(hunk, side, startLine) || !hunkHasLine(hunk, side, line)) {
       problems.push({ kind: "lines-outside", index, hunkId });
+    }
+    if (finding.suggestion !== null && side === "old") {
+      problems.push({ kind: "suggestion-old-side", index });
+    }
+    const mismatch = finding.mismatch;
+    if (mismatch !== null && Number(mismatch.slice(1)) > mismatches) {
+      problems.push({ kind: "unknown-mismatch", index, mismatch });
     }
     return problems;
   });

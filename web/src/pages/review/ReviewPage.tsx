@@ -34,6 +34,7 @@ import {
   KeyHint,
   type LineComment,
   type LinePlace,
+  LineRow,
   languageOf,
   PINNED,
   type PointLine,
@@ -68,7 +69,16 @@ import {
 } from "./model.ts";
 import { Overview } from "./Overview.tsx";
 import { fileOverview, type OverviewNode } from "./overview.ts";
-import { PointCard, PointFold, PointMention, pointAnchor } from "./PointCard.tsx";
+import {
+  DecisionChip,
+  DecisionNote,
+  FindingCard,
+  type PointActions,
+  PointFold,
+  PointMention,
+  pointAnchor,
+  RiskBand,
+} from "./PointCard.tsx";
 import { PointList } from "./PointList.tsx";
 import { PointStepper } from "./PointStepper.tsx";
 import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
@@ -249,6 +259,18 @@ const lastLineShown = (point: Point, hunk: Hunk): { key: string; rows: number } 
     : { key: `${lines.side}:${last.line}`, rows: last.at - first + 1 };
 };
 
+/** The "side:line" of the first of a point's lines a part shows, which a risk's band goes over. */
+const firstLineShown = (point: Point, hunk: Hunk): string | null => {
+  const { lines } = point;
+  if (lines === null) return null;
+  for (const one of hunk.lines) {
+    const place = commentPlace(one);
+    if (place === null || place.side !== lines.side) continue;
+    if (place.line >= lines.startLine && place.line <= lines.line) return placeKey(place);
+  }
+  return null;
+};
+
 /** Bitbucket can't anchor a comment on a range of lines. */
 const RANGE_NOTES = {
   github: undefined,
@@ -300,26 +322,43 @@ const Review = ({
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
   const landing = useLanding(modelRunning, pointIds);
   const places = useMemo(() => pointPlaces(points, order, index), [points, order, index]);
-  // Where each card goes: under the last of its lines the part shows, or else under its header.
+  // Where each point goes on its part, by its kind: a finding's card under the last of its lines
+  // the part shows, a risk's band over the first, a decision's chip at the end of the last. A
+  // point whose lines the part doesn't show goes under its header.
   const cardPlaces = useMemo(() => {
     const underLine = new Map<PartId, Map<string, Point[]>>();
+    const overLine = new Map<PartId, Map<string, Point[]>>();
+    const atLineEnd = new Map<PartId, Map<string, Point[]>>();
     const underHeader = new Map<PartId, Point[]>();
     const rowsAbove = new Map<PointId, number>();
+    const add = (
+      map: Map<PartId, Map<string, Point[]>>,
+      partId: PartId,
+      key: string,
+      point: Point,
+    ) => {
+      const lines = map.get(partId) ?? new Map<string, Point[]>();
+      lines.set(key, [...(lines.get(key) ?? []), point]);
+      map.set(partId, lines);
+    };
     for (const [partId, placed] of places.cards) {
       const part = index.parts.get(partId);
       for (const point of placed) {
         const last = part === undefined ? null : lastLineShown(point, part.hunk);
-        if (last === null) {
+        const first = part === undefined ? null : firstLineShown(point, part.hunk);
+        if (last === null || first === null) {
           underHeader.set(partId, [...(underHeader.get(partId) ?? []), point]);
-          continue;
+        } else if (point.kind === "risk") {
+          add(overLine, partId, first, point);
+        } else if (point.kind === "decision") {
+          add(atLineEnd, partId, last.key, point);
+        } else {
+          add(underLine, partId, last.key, point);
+          rowsAbove.set(point.id, last.rows);
         }
-        const lines = underLine.get(partId) ?? new Map<string, Point[]>();
-        lines.set(last.key, [...(lines.get(last.key) ?? []), point]);
-        underLine.set(partId, lines);
-        rowsAbove.set(point.id, last.rows);
       }
     }
-    return { underLine, underHeader, rowsAbove };
+    return { underLine, overLine, atLineEnd, underHeader, rowsAbove };
   }, [places, index]);
   // Points that share a fold land with its first: the fold is what's measured and unfolds.
   const foldOf = useMemo(() => {
@@ -328,8 +367,8 @@ const Review = ({
       const [lead] = together;
       for (const point of together) if (lead !== undefined) first.set(point.id, lead.id);
     };
-    for (const lines of cardPlaces.underLine.values())
-      for (const here of lines.values()) share(here);
+    for (const placed of [cardPlaces.underLine, cardPlaces.overLine])
+      for (const lines of placed.values()) for (const here of lines.values()) share(here);
     for (const [partId, here] of cardPlaces.underHeader) {
       share([...here, ...(places.mentions.get(partId) ?? NO_POINTS)]);
     }
@@ -409,6 +448,20 @@ const Review = ({
   // The kind a chip narrowed the stepper to.
   const [narrowed, setNarrowed] = useState<PointKind | null>(null);
   const [showPoints, setShowPoints] = useState(false);
+  // Decisions are footnotes: the reviewer can hide them all, and opens one at a time.
+  const [decisionsShown, setDecisionsShown] = useStoredState("decisions-shown", true, (stored) =>
+    typeof stored === "boolean" ? stored : undefined,
+  );
+  const [openDecisions, setOpenDecisions] = useState<ReadonlySet<PointId>>(new Set());
+  const toggleDecision = useCallback(
+    (id: PointId) =>
+      setOpenDecisions((previous) => {
+        const next = new Set(previous);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      }),
+    [],
+  );
   // When this page saw Claude's run start, for the time since.
   const [modelStartedAt, setModelStartedAt] = useState<number | null>(null);
   // The hunks of a decision or mismatch the reviewer went to.
@@ -551,6 +604,10 @@ const Review = ({
   const goToPoint = (id: PointId) => {
     const point = points.find((one) => one.id === id);
     const cardPart = places.cardPart.get(id);
+    if (point?.kind === "decision") {
+      setDecisionsShown(() => true);
+      setOpenDecisions((previous) => new Set([...previous, id]));
+    }
     setHighlight(new Set((point?.hunkIds ?? []).flatMap(index.partsOf)));
     if (layout === "overview") {
       if (cardPart !== undefined) showHunk(cardPart);
@@ -565,8 +622,17 @@ const Review = ({
     const to = narrowTo(points, kind, currentPoint);
     if (to !== null) goToPoint(to);
   };
-  /** A mismatch is one of Claude's points, the nth of the intent's, so Details goes to its card. */
-  const goToMismatch = (at: number) => goToPoint(PointId.parse(`m${at + 1}`));
+  /**
+   * A mismatch is one of Claude's points, the nth of the intent's, so Details goes to its card:
+   * its own, or the finding that shows it.
+   */
+  const goToMismatch = (at: number) => {
+    const id = PointId.parse(`m${at + 1}`);
+    const shows = analysis.findings.find((finding) => finding.mismatch === `m${at + 1}`);
+    goToPoint(
+      points.some((point) => point.id === id) || shows === undefined ? id : PointId.parse(shows.id),
+    );
+  };
   /** The overview opens on the file the reviewer is on: the card holding the focus, else in view. */
   const openOverview = () => {
     const focused = document.activeElement?.closest<HTMLElement>(
@@ -627,11 +693,12 @@ const Review = ({
   };
 
   /**
-   * Raises a point: a comment on its lines, prefilled with its text for the reviewer to edit,
-   * which posts with the review under their name. A draft already on those lines keeps what's in
-   * it: the point's text goes after it, or, raised before, the draft opens as the reviewer left it.
+   * Raises a point: a comment on its lines with its text, its severity and its suggestion, which
+   * posts with the review under their name. With `add` it's saved as it is; otherwise the comment
+   * box opens on it for the reviewer to edit. A draft already on those lines keeps what's in it:
+   * the point's text goes after it, or, raised before, the draft opens as the reviewer left it.
    */
-  const raisePoint = (point: Point) => {
+  const raisePoint = (point: Point, add = false) => {
     const partId = places.cardPart.get(point.id);
     const found = partId === undefined ? undefined : index.parts.get(partId);
     if (readOnly || partId === undefined || found === undefined) return;
@@ -654,14 +721,22 @@ const Review = ({
       (comment) =>
         comment.hunkId === hunkId && comment.side === place.side && comment.line === place.line,
     );
+    const extras = {
+      ...(point.severity === null ? {} : { severity: point.severity }),
+      ...(point.suggestion === null ? {} : { suggestion: point.suggestion }),
+    };
     if (draft === undefined) {
-      writeComment(partId, { ...place, body: text });
+      writeComment(partId, { ...place, body: text, ...extras });
     } else if (pointStates.stateOf(point.id) !== "raised" && !draft.body.includes(text)) {
       writeComment(partId, {
+        ...extras,
         ...draft,
         body: draft.body === "" ? text : `${draft.body}\n\n${text}`,
       });
     }
+    setCurrentPoint(point.id);
+    void pointStates.setState(point.id, "raised");
+    if (add) return;
     const { startLine } = draft ?? place;
     setOpenComment({
       partId,
@@ -671,8 +746,6 @@ const Review = ({
         ...(startLine === undefined ? {} : { startLine }),
       },
     });
-    setCurrentPoint(point.id);
-    void pointStates.setState(point.id, "raised");
     scrollTo(hunkAnchor(partId));
   };
   const commentOnFocused = () => {
@@ -749,19 +822,53 @@ const Review = ({
       ? ""
       : (points.find((point) => point.id === pointStates.failure?.pointId)?.title ?? "");
 
-  const card = (point: Point) => (
-    <PointCard
-      key={point.id}
-      point={point}
-      state={pointStates.stateOf(point.id)}
-      saving={pointStates.isSaving(point.id)}
-      readOnly={readOnly}
-      current={currentPoint === point.id}
-      linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
-      onRaise={stable.raisePoint}
-      onState={stable.setPointState}
-    />
+  const actionsOf = (point: Point): PointActions => ({
+    state: pointStates.stateOf(point.id),
+    saving: pointStates.isSaving(point.id),
+    readOnly,
+    current: currentPoint === point.id,
+    onRaise: stable.raisePoint,
+    onState: stable.setPointState,
+  });
+  /** A finding's card, with the lines its suggestion replaces and whether its draft is written. */
+  const findingCard = (point: Point, partId: PartId | null) => {
+    const found = partId === null ? undefined : index.parts.get(partId);
+    const lines = point.lines;
+    const inReview =
+      partId !== null &&
+      lines !== null &&
+      commentsOf(partId).some(
+        (comment) => comment.side === lines.side && comment.line === lines.line,
+      );
+    return (
+      <FindingCard
+        key={point.id}
+        point={point}
+        {...actionsOf(point)}
+        linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
+        inReview={inReview}
+        removed={
+          found === undefined || lines === null || lines.side === "old"
+            ? null
+            : coveredLines(found.hunk, lines.startLine, lines.line)
+        }
+        language={found === undefined ? null : languageOf(found.file)}
+      />
+    );
+  };
+  const riskBand = (point: Point) => (
+    <RiskBand key={point.id} point={point} {...actionsOf(point)} />
   );
+  const decisionNote = (point: Point) => (
+    <DecisionNote key={point.id} point={point} {...actionsOf(point)} />
+  );
+  /** A point by its kind, where no line of its part holds it. */
+  const card = (point: Point, partId: PartId | null = null) =>
+    point.kind === "finding"
+      ? findingCard(point, partId)
+      : point.kind === "risk"
+        ? riskBand(point)
+        : decisionsShown && decisionNote(point);
   // The lines each part's points rest on, so they take the kind's bar. Where points overlap,
   // the one that matters most wins: a finding's line reads as a finding. A point landing in view
   // gives its lines their place in the timeline.
@@ -771,7 +878,8 @@ const Review = ({
     for (const [partId, placed] of places.cards) {
       const lines = new Map<string, PointLine>();
       for (const point of placed) {
-        if (point.lines === null) continue;
+        // A decision is a footnote, and marks no line.
+        if (point.lines === null || point.kind === "decision") continue;
         const { side, startLine, line: last } = point.lines;
         const at = landingAt(point.id);
         for (let line = startLine; line <= last; line += 1) {
@@ -819,33 +927,77 @@ const Review = ({
       [...cards, ...mentions],
       { bodyClassName: "flex flex-col gap-2 border-b bg-surface-subtle p-3" },
       <>
-        {cards.map(card)}
+        {cards.map((point) => card(point, id))}
         {mentions.map((point) => (
           <PointMention key={point.id} point={point} onGo={stable.goToPoint} />
         ))}
       </>,
     );
   };
-  // Cards under the last of their lines, which they grow out from when they land.
+  // Findings under the last of their lines, which they grow out from when they land, and the
+  // footnotes of the decisions at the end of the line, when opened.
   const pointsAt = (id: PartId, place: LinePlace): ReactNode => {
-    const here = cardPlaces.underLine.get(id)?.get(placeKey(place)) ?? NO_POINTS;
-    return fold(
-      here,
-      {
-        row: true,
-        className: PINNED,
-        bodyClassName: "flex max-w-3xl flex-col gap-2 py-2 pr-3 pl-29 font-sans",
-      },
-      here.map(card),
+    const key = placeKey(place);
+    const here = cardPlaces.underLine.get(id)?.get(key) ?? NO_POINTS;
+    const notes = decisionsShown
+      ? (cardPlaces.atLineEnd.get(id)?.get(key) ?? NO_POINTS).filter((point) =>
+          openDecisions.has(point.id),
+        )
+      : NO_POINTS;
+    return (
+      <>
+        {fold(
+          here,
+          {
+            row: true,
+            className: PINNED,
+            bodyClassName: "flex max-w-3xl flex-col gap-2 py-2 pr-3 pl-29 font-sans",
+          },
+          here.map((point) => findingCard(point, id)),
+        )}
+        {notes.length > 0 && (
+          <LineRow inset>
+            <div className="flex flex-col gap-1">{notes.map(decisionNote)}</div>
+          </LineRow>
+        )}
+      </>
     );
   };
+  // A risk's band over the first of its lines, which lands as a finding's card does.
+  const pointsOver = (id: PartId, place: LinePlace): ReactNode => {
+    const here = cardPlaces.overLine.get(id)?.get(placeKey(place)) ?? NO_POINTS;
+    return fold(here, { row: true, className: PINNED }, here.map(riskBand));
+  };
+  // A decision's chip at the end of its line.
+  const pointsAtEnd = (id: PartId, place: LinePlace): ReactNode => {
+    if (!decisionsShown) return null;
+    const here = cardPlaces.atLineEnd.get(id)?.get(placeKey(place));
+    if (here === undefined) return null;
+    return here.map((point) => (
+      <DecisionChip
+        key={point.id}
+        point={point}
+        state={pointStates.stateOf(point.id)}
+        open={openDecisions.has(point.id)}
+        current={currentPoint === point.id}
+        onToggle={toggleDecision}
+      />
+    ));
+  };
+  const flaggedOf = useCallback(
+    (id: PartId): ReadonlySet<string> | undefined => {
+      const lines = cardPlaces.underLine.get(id);
+      return lines === undefined ? undefined : new Set(lines.keys());
+    },
+    [cardPlaces],
+  );
   // Map cards render again only when their signature changes, so their handlers call the latest.
   const latest = useRef({ goToPoint, raisePoint });
   latest.current = { goToPoint, raisePoint };
   const stable = useMemo(
     () => ({
       goToPoint: (id: PointId) => latest.current.goToPoint(id),
-      raisePoint: (point: Point) => latest.current.raisePoint(point),
+      raisePoint: (point: Point, add: boolean) => latest.current.raisePoint(point, add),
       setPointState: pointStates.setState,
     }),
     [pointStates.setState],
@@ -865,6 +1017,7 @@ const Review = ({
     for (const point of cards) {
       parts.push(point.id, pointStates.stateOf(point.id), pointStates.isSaving(point.id));
       parts.push(currentPoint === point.id);
+      if (point.kind === "decision") parts.push(decisionsShown, openDecisions.has(point.id));
     }
     for (const point of mentions) parts.push(point.id);
     for (const point of [...cards, ...mentions]) {
@@ -887,6 +1040,9 @@ const Review = ({
     marksOf,
     pointsOn,
     pointsAt,
+    pointsOver,
+    pointsAtEnd,
+    flaggedOf,
     pointLinesOf,
     threadsAt,
     earlierThreads,
@@ -902,7 +1058,7 @@ const Review = ({
           {fold(
             places.unplaced,
             { bodyClassName: "flex flex-col gap-2" },
-            places.unplaced.map(card),
+            places.unplaced.map((point) => card(point)),
           )}
         </section>
       )}
@@ -952,6 +1108,8 @@ const Review = ({
             points={points}
             narrowed={narrowed}
             onNarrow={narrow}
+            decisionsShown={decisionsShown}
+            onDecisionsShown={(shown) => setDecisionsShown(() => shown)}
             onRun={async () => {
               const result = await runModel.run(analysisId);
               if (!result.ok) return;

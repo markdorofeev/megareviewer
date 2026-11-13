@@ -2,7 +2,7 @@
   "pullRequestUrl": "https://github.com/acme/shop/pull/101",
   "headSha": "ec7f8e0489e3011a207691eeef6ad1840f4a9259",
   "version": "fake-model/1",
-  "recordedAt": "2026-11-13T10:51:54.730Z",
+  "recordedAt": "2026-11-13T13:28:25.817Z",
   "passes": {
     "intent": {
       "answer": {
@@ -50,7 +50,10 @@
             "side": "new",
             "startLine": 13,
             "line": 13
-          }
+          },
+          "severity": "major",
+          "suggestion": null,
+          "mismatch": null
         }
       ],
       "durationMs": 9400,
@@ -118,7 +121,8 @@
             "h_fbaf18305007c20a",
             "h_2e2332fa455a2146",
             "h_3822ea0f7192c70e"
-          ]
+          ],
+          "lines": null
         },
         {
           "title": "Changes src/routes/orders.ts",
@@ -127,7 +131,8 @@
           "hunkIds": [
             "h_88747b653fc82f6d",
             "h_5c94b39812b2e8f8"
-          ]
+          ],
+          "lines": null
         },
         {
           "title": "Changes src/services/receipts.ts",
@@ -135,7 +140,8 @@
           "whyItMatters": "Derived by the fake model.",
           "hunkIds": [
             "h_a2e0236601ffc778"
-          ]
+          ],
+          "lines": null
         }
       ],
       "durationMs": 11200,

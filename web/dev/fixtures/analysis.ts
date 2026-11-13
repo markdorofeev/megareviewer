@@ -16,6 +16,7 @@ import {
   analysisId,
   DecisionId,
   FindingId,
+  MismatchId,
   type ModelUsage,
   type PullRequest,
   type RiskAssessment,
@@ -456,7 +457,7 @@ const modelRisk: readonly RiskAssessment[] = [
   {
     hunkId: h.receiptRoute,
     riskClass: "contract",
-    reason: "New public endpoint that reads orders by ID.",
+    reason: "Adds a public endpoint, GET /orders/:id/receipt, that clients will build on.",
     source: "model",
   },
   {
@@ -646,57 +647,69 @@ const analysis: Analysis = {
       id: FindingId.parse("f1"),
       title: "Any signed-in user can read every customer's receipt",
       explanation:
-        "The order is looked up by ID alone, and IDs are sequential, so changing the number in the URL returns another customer's name, address and items.",
-      lines: { hunkId: h.receiptRoute, side: "new", startLine: 14, line: 16 },
+        "`findOrderById` takes the ID alone, and order IDs are sequential. The route below it scopes the order by `req.user.id`; this one doesn't.",
+      lines: { hunkId: h.receiptRoute, side: "new", startLine: 15, line: 15 },
+      severity: "blocking",
+      suggestion: ["  const order = await findOrder(req.user.id, req.params.id);"],
+      mismatch: MismatchId.parse("m1"),
     },
     {
       id: FindingId.parse("f2"),
-      title: "Serves a refunded order's old receipt for an hour",
+      title: "Keeps serving a receipt rendered before a refund",
       explanation:
-        "The cache is keyed by order ID with no invalidation, so a receipt rendered before a refund keeps being served until its entry expires.",
-      lines: { hunkId: h.retryAndCache, side: "new", startLine: 44, line: 47 },
+        "`receiptCache` is keyed by order ID and never cleared, so after a refund or an edited item the old receipt is served until the process restarts.",
+      lines: { hunkId: h.retryAndCache, side: "new", startLine: 45, line: 46 },
+      severity: "major",
+      suggestion: null,
+      mismatch: null,
+    },
+    {
+      id: FindingId.parse("f3"),
+      title: "Retries the tax service back to back",
+      explanation:
+        "Three attempts with no delay triple the load on a tax service that's already failing.",
+      lines: { hunkId: h.retryAndCache, side: "new", startLine: 32, line: 37 },
+      severity: "minor",
+      suggestion: null,
+      mismatch: null,
     },
   ],
   decisions: [
     {
       id: DecisionId.parse("d1"),
-      title: "Adds a public endpoint GET /orders/:id/receipt",
+      title: "Why plain text, not a PDF",
       category: "api",
       whyItMatters:
-        "Clients will depend on its path and plain-text format, so changing either later breaks them.",
+        "SHOP-142 asks for a receipt to download; plain text needs no renderer and no new dependency.",
       hunkIds: [h.receiptRoute],
+      lines: { hunkId: h.receiptRoute, side: "new", startLine: 20, line: 20 },
     },
     {
       id: DecisionId.parse("d2"),
-      title: "Looks up the order by ID without checking that it belongs to the user",
-      category: "security",
+      title: "Why cache rendered receipts",
+      category: "performance",
       whyItMatters:
-        "Order IDs are sequential, so any signed-in user can read every customer's receipt, including names and addresses.",
-      hunkIds: [h.receiptRoute],
+        "Rendering calls the tax service; a cached receipt is sent again without calling it.",
+      hunkIds: [h.retryAndCache],
+      lines: { hunkId: h.retryAndCache, side: "new", startLine: 44, line: 44 },
     },
     {
       id: DecisionId.parse("d3"),
-      title: "Retries the tax service 3 times with no backoff",
-      category: "error-handling",
+      title: "Why dayjs for one date format",
+      category: "dependency",
       whyItMatters:
-        "When the tax service is overloaded, immediate retries triple its load and make the outage worse.",
-      hunkIds: [h.retryAndCache],
+        'Receipts show dates as "21 October 2026"; dayjs writes that in one call, where toISOString gave only "2026-10-21".',
+      hunkIds: [h.receiptFormatting, h.dependency],
+      lines: { hunkId: h.receiptFormatting, side: "new", startLine: 6, line: 6 },
     },
     {
       id: DecisionId.parse("d4"),
-      title: "Caches rendered receipts in memory with no size limit or expiry",
-      category: "performance",
+      title: "Why move formatMoney into src/lib",
+      category: "other",
       whyItMatters:
-        "Memory grows with every receipt viewed until the process restarts, and a refunded order keeps showing its old receipt.",
-      hunkIds: [h.retryAndCache],
-    },
-    {
-      id: DecisionId.parse("d5"),
-      title: "Adds dependency dayjs 1.11.13 to format dates",
-      category: "dependency",
-      whyItMatters:
-        "A new runtime dependency for one date format that Intl.DateTimeFormat already covers.",
-      hunkIds: [h.dependency, h.receiptFormatting],
+        "The receipt renderer now formats prices too, so the helper moved where both can import it.",
+      hunkIds: [h.receiptFormatting],
+      lines: { hunkId: h.receiptFormatting, side: "new", startLine: 2, line: 2 },
     },
   ],
   tour: {

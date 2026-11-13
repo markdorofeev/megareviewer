@@ -272,35 +272,45 @@ export const THREADS = {
 /** The hunk the points below rest on: the retry file's first. */
 const HUNK_ID = RETRY_FILE.hunks[0]?.id ?? HunkId.parse("h_0123456789abcdef");
 
-/** One of Claude's points of each kind, for the point card. */
+/** One of Claude's points of each kind, on the retry file's first hunk. */
 export const POINTS: readonly Point[] = [
   {
     id: PointId.parse("f1"),
     kind: "finding",
-    title: "Retries a charge after it has already succeeded",
+    title: "Sleeps after the last attempt too",
     explanation:
-      "A timeout leaves the charge in doubt, and the retry sends it again, so a customer can be charged twice.",
+      "After the fifth failure `retry` waits 16 s before it throws, so a caller learns of the failure 16 s late.",
     path: "src/http/retry.ts",
-    lines: { hunkId: HUNK_ID, side: "new", startLine: 12, line: 14 },
+    lines: { hunkId: HUNK_ID, side: "new", startLine: 22, line: 23 },
     hunkIds: [HUNK_ID],
+    severity: "major",
+    suggestion: ["      if (attempt + 1 < attempts) await sleep(1000 * 2 ** attempt);"],
+    mismatch: null,
   },
   {
     id: PointId.parse("r:h_0123456789abcdef"),
     kind: "risk",
-    title: "Changes which errors are retried, which callers depend on.",
+    title: "Raises the default attempts from 3 to 5 for every caller.",
     explanation: "",
     path: "src/http/retry.ts",
-    lines: { hunkId: HUNK_ID, side: "new", startLine: 12, line: 12 },
+    lines: { hunkId: HUNK_ID, side: "new", startLine: 14, line: 14 },
     hunkIds: [HUNK_ID],
+    severity: null,
+    suggestion: null,
+    mismatch: null,
   },
   {
     id: PointId.parse("d1"),
     kind: "decision",
-    title: "Backs off exponentially: 1, 2, 4, 8 seconds, with no jitter",
-    explanation: "Without jitter, clients that failed together retry together.",
+    title: "Why back off exponentially",
+    explanation:
+      "A flaky link gets more time to recover with each attempt, as the comment above the delay says.",
     path: "src/http/retry.ts",
-    lines: null,
+    lines: { hunkId: HUNK_ID, side: "new", startLine: 22, line: 22 },
     hunkIds: [HUNK_ID],
+    severity: null,
+    suggestion: null,
+    mismatch: null,
   },
 ];
 

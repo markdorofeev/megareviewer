@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AnalysisView, PullRequestListResponse, StatusResponse } from "../../../contracts/index.ts";
 import { hunkIdOf } from "../../../src/domain/diff/index.ts";
 import {
+  decisionLinesFit,
   validateHunkReferences,
   validateRiskCoverage,
   validateTour,
@@ -69,9 +70,17 @@ describe("the fixture analysis", () => {
     expect(analysis.intent?.mismatches).toHaveLength(1);
   });
 
-  it("has 5 decisions across categories", () => {
-    expect(analysis.decisions).toHaveLength(5);
-    expect(new Set(analysis.decisions.map((decision) => decision.category)).size).toBe(5);
+  it("has 4 decisions across categories, each on a line its hunks show", () => {
+    expect(analysis.decisions).toHaveLength(4);
+    expect(new Set(analysis.decisions.map((decision) => decision.category)).size).toBe(4);
+    const hunks = new Map(
+      analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
+    );
+    for (const decision of analysis.decisions) {
+      expect(decision.lines).not.toBeNull();
+      if (decision.lines === null) continue;
+      expect(decisionLinesFit(decision.hunkIds, decision.lines, hunks)).toBe(true);
+    }
   });
 
   it("has a 4-step tour covering every part of every non-mechanical hunk once", () => {

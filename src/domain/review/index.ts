@@ -41,11 +41,13 @@ export {
 } from "./intent.ts";
 export { type JoinedParts, joinParts } from "./join-parts.ts";
 export {
+  decisionLinesFit,
   Finding,
   FindingId,
   type FindingProblem,
   MAX_FINDING_EXPLANATION,
   MAX_FINDING_TITLE,
+  MismatchId,
   Point,
   PointId,
   PointKind,
@@ -54,6 +56,7 @@ export {
   PointState,
   type PointsInput,
   pointsOf,
+  strippable,
   validateFindings,
 } from "./point.ts";
 export { HttpUrl, Sha, Timestamp } from "./primitives.ts";

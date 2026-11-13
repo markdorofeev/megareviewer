@@ -1,6 +1,6 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { Point, PointId, PointKind, PointState } from "../../../../src/domain/review/index.ts";
-import { POINT_STATUS } from "../../lib/status.ts";
+import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { stepFrom, stepperPlace } from "./stepper.ts";
@@ -11,11 +11,16 @@ const KIND_PLURALS: Readonly<Record<PointKind, string>> = {
   decision: "decisions",
 };
 
-/** The glyph's color, as its chip's text. */
+/** The icon's color, as its chip's text. */
 const KIND_TEXT: Readonly<Record<PointKind, string>> = {
   finding: "text-review-changes",
   risk: "text-risk-contract",
-  decision: "text-review-pending",
+  decision: "text-muted-foreground",
+};
+
+const KindIcon = ({ kind }: { readonly kind: PointKind }) => {
+  const Icon = POINT_ICON[kind];
+  return <Icon aria-hidden="true" className={cn("size-3.5 shrink-0", KIND_TEXT[kind])} />;
 };
 
 /**
@@ -92,9 +97,7 @@ export const PointStepper = ({
           aria-label={`Go to ${POINT_STATUS[point.kind].label.toLowerCase()}: ${point.title}`}
           onClick={() => onGo(point.id)}
         >
-          <span aria-hidden="true" className={KIND_TEXT[point.kind]}>
-            {POINT_STATUS[point.kind].glyph}
-          </span>
+          <KindIcon kind={point.kind} />
           <span
             className={cn(
               "min-w-0 truncate",

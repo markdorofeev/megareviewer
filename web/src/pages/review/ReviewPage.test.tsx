@@ -128,11 +128,25 @@ const reviewBar = () => {
 };
 const overviewBox = () => screen.getByRole("region", { name: "Overview of the changed files" });
 const pointCard = (title: RegExp) => screen.getByRole("article", { name: title });
-const raise = (title: RegExp) =>
-  screen.getByRole("button", { name: new RegExp(`^Raise: ${title.source}`) });
-const OWNERSHIP = /Looks up the order by ID/;
-const RETRIES = /Retries the tax service/;
-const DAYJS = /Adds dependency dayjs/;
+const pointButton = (action: string, title: RegExp) =>
+  screen.getByRole("button", { name: new RegExp(`^${action}: ${title.source}`) });
+const addToReview = (title: RegExp) => pointButton("Add to review", title);
+const decisionChip = (title: RegExp) =>
+  screen.getByRole("button", { name: new RegExp(`^Decision: ${title.source}`) });
+/** A part's row for a line, by its number on the new side, or the old for a removed line. */
+const lineRow = (card: HTMLElement, label: string) => {
+  const row = [...card.querySelectorAll<HTMLElement>("[data-line]")].find((one) =>
+    one.textContent?.includes(`${label}: `),
+  );
+  if (row === undefined) throw new Error(`no row for ${label}`);
+  return row;
+};
+const comesBefore = (a: Element, b: Element) =>
+  (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+const RETRIES = /Retries the tax service back to back/;
+const RISK = /Adds a public endpoint, GET/;
+const PLAIN_TEXT = /Why plain text/;
+const DAYJS = /Why dayjs for one date format/;
 const FINDING = /Any signed-in user can read/;
 const putRequests = (requests: readonly RecordedRequest[]) =>
   requests.filter((request) => request.method === "PUT");
@@ -212,7 +226,7 @@ describe("ReviewPage states", () => {
     expect(document.querySelector("[data-slot=point-chip]")).toBeNull();
 
     setView(fixture);
-    await waitFor(() => expect(raise(OWNERSHIP).hasAttribute("disabled")).toBe(false));
+    await waitFor(() => expect(addToReview(FINDING).hasAttribute("disabled")).toBe(false));
     expect(document.querySelector("[data-slot=intent-swap]")).toBeNull();
     expect(screen.queryByText(description)).toBeNull();
   });
@@ -490,7 +504,8 @@ describe("intent", () => {
 
     await userEvent.click(within(intent).getByRole("button", { name: /Contradicts/ }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(scrolledTo().at(-1)).toBe("point-m1");
+    // The finding that shows the mismatch holds it.
+    expect(scrolledTo().at(-1)).toBe("point-f1");
   });
 
   it("says the code does what was asked when they agree, with what was asked in the details", async () => {
@@ -617,100 +632,116 @@ describe("map", () => {
 });
 
 describe("points", () => {
-  it("sit on the part their lines are in, and the others link back to them", async () => {
+  const position = () => within(reviewBar()).getByRole("button", { name: /, show all$/ });
+  const step = (name: "Next point" | "Previous point") =>
+    userEvent.click(within(reviewBar()).getByRole("button", { name }));
+
+  it("sit where their kind goes: a risk over its range, a finding under its line, a decision at its end", async () => {
     renderReview();
     await loaded();
+    const card = cardOf(h.receiptRoute);
+    const risk = within(card).getByRole("article", { name: RISK });
+    const finding = within(card).getByRole("article", { name: FINDING });
+    expect(comesBefore(risk, lineRow(card, "added line 13"))).toBe(true);
+    expect(comesBefore(lineRow(card, "added line 15"), finding)).toBe(true);
+    expect(comesBefore(finding, lineRow(card, "added line 16"))).toBe(true);
+    expect(lineRow(card, "added line 15").querySelector("[data-slot=finding-flag]")).not.toBeNull();
     expect(
-      within(cardOf(h.receiptRoute))
-        .getAllByRole("article")
-        .map((card) => card.querySelector("h3")?.textContent),
-    ).toEqual([
-      "Any signed-in user can read every customer's receipt",
-      // The intent's mismatch is a finding, and the model's risk on this hunk is a point too.
-      "SHOP-142 says only the customer who placed the order may download its receipt, but the endpoint looks the order up by ID alone, so any signed-in user can read any receipt.",
-      "New public endpoint that reads orders by ID.",
-      "Adds a public endpoint GET /orders/:id/receipt",
-      "Looks up the order by ID without checking that it belongs to the user",
-    ]);
-    expect(within(cardOf(h.receiptFormatting)).getByRole("article", { name: DAYJS })).toBeTruthy();
-    const back = within(cardOf(h.dependency)).getByRole("button", { name: DAYJS });
-    expect(within(cardOf(h.dependency)).queryByRole("article")).toBeNull();
+      within(lineRow(card, "added line 20")).getByRole("button", { name: PLAIN_TEXT }),
+    ).toBeTruthy();
+    // The SHOP-142 mismatch is a line of the finding that shows it, not a card of its own.
+    expect(finding.textContent).toContain("Contradicts what was asked:");
+    expect(screen.queryByRole("article", { name: /^SHOP-142 says/ })).toBeNull();
+    expect(finding.textContent).toContain("blocking");
+    expect(within(finding).getByText("Suggested change")).toBeTruthy();
+  });
 
+  it("link a decision's other hunk back to it, and open its footnote there", async () => {
+    renderReview();
+    await loaded();
+    const back = within(cardOf(h.dependency)).getByRole("button", { name: DAYJS });
     await userEvent.click(back);
-    expect(scrolledTo().at(-1)).toBe("point-d5");
-    expect(pointCard(DAYJS).dataset.current === "true").toBe(true);
+    expect(scrolledTo().at(-1)).toBe("point-d3");
+    expect(decisionChip(DAYJS).dataset.current).toBe("true");
+    expect(decisionChip(DAYJS).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("article", { name: DAYJS }).dataset.slot).toBe("decision-note");
     expect(cardOf(h.dependency).dataset.highlighted === "true").toBe(true);
   });
 
-  it("mark the lines they rest on with their kind's bar", async () => {
+  it("mark a finding's and a risk's lines with their kind's bar, a finding's winning", async () => {
     renderReview();
     await loaded();
     const kinds = [...cardOf(h.receiptRoute).querySelectorAll("[data-point]")].map((row) =>
       row.getAttribute("data-point"),
     );
-    // The mismatch, a finding, covers the hunk's nine added lines, and beats the risk and the
-    // decisions resting on the same lines.
-    expect(kinds).toEqual(Array(9).fill("finding"));
+    // The risk covers the hunk's nine added lines, 13 to 21; the finding rests on 15. Decisions
+    // are footnotes and mark none.
+    expect(kinds).toEqual(["risk", "risk", "finding", ...Array(6).fill("risk")]);
   });
 
-  it("raise into a comment on their lines, prefilled, which posts with the review", async () => {
+  it("add a finding to the review as a draft with its severity and suggestion", async () => {
     const { requests } = renderReview();
     await loaded();
-    await userEvent.click(raise(FINDING));
-    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 14–16/ });
-    expect((field as HTMLTextAreaElement).value).toContain(
-      "Any signed-in user can read every customer's receipt",
-    );
+    await userEvent.click(addToReview(FINDING));
     await waitFor(() => expect(putRequests(requests)).toHaveLength(1));
     expect(putRequests(requests)[0]).toMatchObject({
       url: `${viewPath}/points/f1`,
       body: { state: "raised" },
     });
-    expect(pointCard(FINDING).dataset.state).toBe("raised");
+    expect(within(mainArea()).queryByRole("textbox", { name: /^Comment on/ })).toBeNull();
+    const [draft] = JSON.parse(
+      window.localStorage.getItem(`megareviewer:hunk-comments:${id}`) ?? "[]",
+    );
+    expect(draft).toMatchObject({
+      hunkId: h.receiptRoute,
+      side: "new",
+      line: 15,
+      severity: "blocking",
+      suggestion: ["  const order = await findOrder(req.user.id, req.params.id);"],
+    });
+    expect(draft.body).toMatch(/^Any signed-in user can read every customer's receipt\n\n/);
+    // The card folds above the draft that holds it now.
+    expect(pointCard(FINDING).textContent).toContain("In your review, below");
+    expect(within(mainArea()).getByText("Draft · posts with your review")).toBeTruthy();
   });
 
-  it("raise into the draft already on their lines, keeping what the reviewer wrote", async () => {
+  it("come back as a card when the draft that held them is discarded", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(addToReview(FINDING));
+    await userEvent.click(within(mainArea()).getByRole("button", { name: "Discard" }));
+    expect(addToReview(FINDING)).toBeTruthy();
+  });
+
+  it("edit in the comment box first, after what the reviewer already wrote there", async () => {
     window.localStorage.setItem(
       `megareviewer:hunk-comments:${id}`,
-      JSON.stringify([
-        { hunkId: h.receiptRoute, side: "new", line: 16, startLine: 14, body: "My words." },
-      ]),
+      JSON.stringify([{ hunkId: h.receiptRoute, side: "new", line: 15, body: "My words." }]),
     );
     renderReview();
     await loaded();
-    await userEvent.click(raise(FINDING));
-    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 14–16/ });
+    await userEvent.click(pointButton("Edit", FINDING));
+    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on line 15/ });
     expect((field as HTMLTextAreaElement).value).toMatch(
       /^My words\.\n\nAny signed-in user can read every customer's receipt/,
     );
   });
 
-  it("open a raised point's draft as the reviewer left it when raised again", async () => {
+  it("comment on a risk in the comment box, prefilled with its reason", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(raise(FINDING));
-    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 14–16/ });
-    await userEvent.clear(field);
-    await userEvent.type(field, "Check the owner.");
-    await userEvent.click(raise(FINDING));
-    expect(
-      (
-        within(mainArea()).getByRole("textbox", {
-          name: /^Comment on lines 14–16/,
-        }) as HTMLTextAreaElement
-      ).value,
-    ).toBe("Check the owner.");
+    await userEvent.click(pointButton("Comment", RISK));
+    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 13–21/ });
+    expect((field as HTMLTextAreaElement).value).toMatch(RISK);
   });
 
   it("fold to one line when dismissed, and come back", async () => {
     const { requests } = renderReview();
     await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: new RegExp(`^Dismiss: ${RETRIES.source}`) }),
-    );
+    await userEvent.click(pointButton("Dismiss", RETRIES));
     await waitFor(() =>
       expect(putRequests(requests).at(-1)).toMatchObject({
-        url: `${viewPath}/points/d3`,
+        url: `${viewPath}/points/f3`,
         body: { state: "dismissed" },
       }),
     );
@@ -733,24 +764,49 @@ describe("points", () => {
           : undefined,
     });
     await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: new RegExp(`^Dismiss: ${RETRIES.source}`) }),
-    );
+    await userEvent.click(pointButton("Dismiss", RETRIES));
     expect(screen.getByText("Dismissed")).toBeTruthy();
     fail();
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(
-      "Couldn't save what you did with “Retries the tax service 3 times with no backoff”. Database locked.",
+      "Couldn't save what you did with “Retries the tax service back to back”. Database locked.",
     );
     expect(screen.queryByText("Dismissed")).toBeNull();
     await userEvent.click(within(alert).getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  /** The stepper's position, which opens the list. */
-  const position = () => within(reviewBar()).getByRole("button", { name: /, show all$/ });
-  const step = (name: "Next point" | "Previous point") =>
-    userEvent.click(within(reviewBar()).getByRole("button", { name }));
+  it("open a decision's footnote from its chip, and hide them all from the bar", async () => {
+    renderReview();
+    await loaded();
+    expect(screen.queryByRole("article", { name: PLAIN_TEXT })).toBeNull();
+    await userEvent.click(decisionChip(PLAIN_TEXT));
+    const note = screen.getByRole("article", { name: PLAIN_TEXT });
+    expect(note.textContent).toContain("plain text needs no renderer");
+    // The click is the chip's, not the line's: no comment box opens.
+    expect(within(mainArea()).queryByRole("textbox", { name: /^Comment on/ })).toBeNull();
+
+    await userEvent.click(
+      within(reviewBar()).getByRole("button", { name: "Hide decisions on the code" }),
+    );
+    expect(screen.queryByRole("button", { name: /^Decision: / })).toBeNull();
+    expect(screen.queryByRole("article", { name: PLAIN_TEXT })).toBeNull();
+    expect(window.localStorage.getItem("megareviewer:decisions-shown")).toBe("false");
+    expect(
+      within(reviewBar()).getByRole("button", { name: "Show decisions on the code" }),
+    ).toBeTruthy();
+  });
+
+  it("show the decisions again when the stepper goes to one", async () => {
+    window.localStorage.setItem("megareviewer:decisions-shown", "false");
+    renderReview();
+    await loaded();
+    expect(screen.queryByRole("button", { name: /^Decision: / })).toBeNull();
+    await userEvent.click(await within(reviewBar()).findByRole("button", { name: "4 decisions" }));
+    expect(scrolledTo().at(-1)).toBe("point-d1");
+    expect(decisionChip(PLAIN_TEXT).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("article", { name: PLAIN_TEXT })).toBeTruthy();
+  });
 
   it("are counted by kind in the bar, and stepped through both ways, round", async () => {
     renderReview();
@@ -760,26 +816,26 @@ describe("points", () => {
         [...reviewBar().querySelectorAll("[data-slot=point-chip]")].map((chip) =>
           chip.textContent?.replace(/\s+/g, " ").trim(),
         ),
-      ).toEqual(["⚠3 findings", "▲1 risk", "◇5 decisions"]),
+      ).toEqual(["3 findings", "1 risk", "4 decisions"]),
     );
     // Before the first step, the count; Next goes to the first.
-    expect(position().textContent).toBe("9 points");
-    expect(position().getAttribute("aria-label")).toBe("9 points, show all");
+    expect(position().textContent).toBe("8 points");
+    expect(position().getAttribute("aria-label")).toBe("8 points, show all");
     await step("Next point");
     expect(scrolledTo().at(-1)).toBe("point-f1");
-    expect(position().getAttribute("aria-label")).toBe("Point 1 of 9, show all");
+    expect(position().getAttribute("aria-label")).toBe("Point 1 of 8, show all");
     expect(within(reviewBar()).getByRole("status").textContent).toMatch(
-      /^Finding 1 of 9: Any signed-in user can read/,
+      /^Finding 1 of 8: Any signed-in user can read/,
     );
     expect(
       within(reviewBar()).getByRole("button", { name: /^Go to finding: Any signed-in user/ }),
     ).toBeTruthy();
 
     await step("Previous point");
-    expect(position().textContent).toBe("9 of 9");
-    expect(scrolledTo().at(-1)).toBe("point-d5");
+    expect(position().textContent).toBe("8 of 8");
+    expect(scrolledTo().at(-1)).toBe("point-d4");
     await step("Next point");
-    expect(position().textContent).toBe("1 of 9");
+    expect(position().textContent).toBe("1 of 8");
     await step("Next point");
     expect(scrolledTo().at(-1)).toBe("point-f2");
 
@@ -791,21 +847,21 @@ describe("points", () => {
   it("narrow to a kind with its chip, and widen again", async () => {
     renderReview();
     await loaded();
-    const chip = await within(reviewBar()).findByRole("button", { name: "5 decisions" });
+    const chip = await within(reviewBar()).findByRole("button", { name: "4 decisions" });
     expect(chip.getAttribute("aria-pressed")).toBe("false");
     await userEvent.click(chip);
     expect(chip.getAttribute("aria-pressed")).toBe("true");
     // The reviewer wasn't on a decision, so the stepper goes to the first.
     expect(scrolledTo().at(-1)).toBe("point-d1");
-    expect(position().textContent).toBe("1 of 5");
+    expect(position().textContent).toBe("1 of 4");
     await step("Next point");
     expect(scrolledTo().at(-1)).toBe("point-d2");
-    expect(position().textContent).toBe("2 of 5");
+    expect(position().textContent).toBe("2 of 4");
     // The list the position opens is narrowed too.
     await userEvent.click(position());
-    const list = screen.getByRole("dialog", { name: "5 decisions from Claude" });
+    const list = screen.getByRole("dialog", { name: "4 decisions from Claude" });
     const rows = within(within(list).getByRole("list", { name: "Points" })).getAllByRole("button");
-    expect(rows.map((row) => row.dataset.kind)).toEqual(Array(5).fill("decision"));
+    expect(rows.map((row) => row.dataset.kind)).toEqual(Array(4).fill("decision"));
     await userEvent.click(within(list).getByRole("button", { name: "Close" }));
 
     // Another chip narrows to its own kind; the same one again widens to every point.
@@ -813,7 +869,7 @@ describe("points", () => {
     expect(scrolledTo().at(-1)).toBe("point-f1");
     expect(chip.getAttribute("aria-pressed")).toBe("false");
     await userEvent.click(within(reviewBar()).getByRole("button", { name: "3 findings" }));
-    expect(position().textContent).toBe("1 of 9");
+    expect(position().textContent).toBe("1 of 8");
   });
 
   it("are listed in full from the position, and a row there is where the stepper goes on", async () => {
@@ -821,36 +877,34 @@ describe("points", () => {
     await loaded();
     await userEvent.click(position());
     const list = screen.getByRole("list", { name: "Points" });
-    expect(within(list).getAllByRole("button")).toHaveLength(9);
+    expect(within(list).getAllByRole("button")).toHaveLength(8);
     await userEvent.click(within(list).getAllByRole("button")[1] as HTMLElement);
     expect(scrolledTo().at(-1)).toBe("point-f2");
-    expect(position().textContent).toBe("2 of 9");
+    expect(position().textContent).toBe("2 of 8");
 
     await step("Next point");
-    expect(scrolledTo().at(-1)).toBe("point-m1");
+    expect(scrolledTo().at(-1)).toBe("point-f3");
   });
 
   it("keep a dismissed point as a step, struck through", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: new RegExp(`^Dismiss: ${RETRIES.source}`) }),
-    );
+    await userEvent.click(pointButton("Dismiss", RETRIES));
     await userEvent.click(position());
     const list = screen.getByRole("list", { name: "Points" });
     await userEvent.click(within(list).getByRole("button", { name: RETRIES }));
-    const title = within(reviewBar()).getByRole("button", { name: /^Go to decision:/ });
+    const title = within(reviewBar()).getByRole("button", { name: /^Go to finding:/ });
     expect(title.querySelector(".line-through")?.textContent).toMatch(RETRIES);
     expect(within(reviewBar()).getByRole("status").textContent).toMatch(/\(dismissed\)$/);
     await step("Next point");
     await step("Previous point");
-    expect(scrolledTo().at(-1)).toBe("point-d3");
+    expect(scrolledTo().at(-1)).toBe("point-f3");
   });
 
-  it("sit under the last of their lines, and going to one keeps those lines in view", async () => {
+  it("keep a finding's lines in view when going to its card, at rest once landed", async () => {
     renderReview();
     await loaded();
-    const card = await screen.findByRole("article", { name: OWNERSHIP });
+    const card = await screen.findByRole("article", { name: FINDING });
     const fold = card.closest("[data-slot=point-fold]");
     // The row before the card's is the last line it rests on, with the kind's bar.
     expect(fold?.previousElementSibling?.getAttribute("data-point")).toBe("finding");
@@ -864,10 +918,11 @@ describe("points", () => {
     renderReview();
     await loaded();
     const row = within(rail()).getByTitle("src/routes/orders.ts");
-    // One card there holds the finding, the mismatch, the risk and two decisions.
-    expect(row.textContent).toContain("⚠2");
-    expect(row.textContent).toContain("▲1");
-    expect(row.textContent).toContain("◇2");
+    const count = (kind: string) =>
+      row.querySelector(`[data-slot=point-count][data-kind=${kind}]`)?.textContent;
+    expect(count("finding")).toBe("1 finding");
+    expect(count("risk")).toBe("1 risk");
+    expect(count("decision")).toBe("1 decision");
   });
 
   it("can't be acted on once the review is published", async () => {
@@ -881,16 +936,15 @@ describe("points", () => {
         ...fixture,
         publication: receipt,
         pointReviews: [
-          { pointId: PointId.parse("d2"), state: "raised", updatedAt: "2026-10-22T09:59:00Z" },
+          { pointId: PointId.parse("f1"), state: "raised", updatedAt: "2026-10-22T09:59:00Z" },
         ],
       },
     });
     await loaded();
-    const published = within(reviewBar()).getByRole("link", { name: "Published" });
-    expect(published.getAttribute("href")).toBe(receipt.url);
+    expect(screen.getByRole("link", { name: "Published" }).getAttribute("href")).toBe(receipt.url);
     expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
-    expect(pointCard(OWNERSHIP).dataset.state).toBe("raised");
-    expect(raise(OWNERSHIP).hasAttribute("disabled")).toBe(true);
+    expect(pointCard(FINDING).dataset.state).toBe("raised");
+    expect(addToReview(FINDING).hasAttribute("disabled")).toBe(true);
   });
 
   it("keeps line comments open after publishing: they post now", async () => {
@@ -910,7 +964,7 @@ describe("points", () => {
       box.getByRole("textbox", { name: `Comment on line ${line}` }),
       "Also this.",
     );
-    expect(box.queryByRole("button", { name: /^Add to review/ })).toBeNull();
+    expect(box.queryByRole("button", { name: "Add to review" })).toBeNull();
     await userEvent.click(box.getByRole("button", { name: "Comment now" }));
     await vi.waitFor(() =>
       expect(
@@ -1161,14 +1215,12 @@ describe("parts of a split hunk", () => {
     expect(placeOf(p.cache).classList.contains("border-t")).toBe(false);
   });
 
-  it("put a point's card on the first part on the page, and link the other to it", async () => {
+  it("put a point on the part showing its lines, with no link from the rest of its hunk", async () => {
     renderReview();
     await loaded();
     expect(within(cardOf(p.retry)).getByRole("article", { name: RETRIES })).toBeTruthy();
     expect(within(cardOf(p.cache)).queryByRole("article", { name: RETRIES })).toBeNull();
-    expect(cardOf(p.cache).querySelector("[data-slot=point-mention]")?.textContent).toMatch(
-      RETRIES,
-    );
+    expect(cardOf(p.cache).querySelector("[data-slot=point-mention]")).toBeNull();
   });
 
   it("show a comment in the part that holds its line", async () => {
@@ -1249,8 +1301,11 @@ describe("navigation", () => {
     const orders = fileCardOf("src/routes/orders.ts");
     await user.click(within(orders).getByRole("button", { name: "4 lines unchanged" }));
     await within(orders).findByText("// unchanged line 25");
-    const scrollers = orders.querySelectorAll(".overflow-x-auto");
-    expect([...scrollers].map((one) => one.getAttribute("data-slot"))).toEqual(["file-lines"]);
+    // A suggestion in a finding's card scrolls on its own, as a thread's does.
+    const scrollers = [...orders.querySelectorAll(".overflow-x-auto")].filter(
+      (one) => one.closest("[data-slot=point-fold], [data-slot=line-row]") === null,
+    );
+    expect(scrollers.map((one) => one.getAttribute("data-slot"))).toEqual(["file-lines"]);
     // What isn't a line stays at the visible width while the lines scroll under it.
     expect(orders.querySelector("[data-slot=file-gap]")?.className).toMatch(/sticky left-0/);
   });
@@ -1434,17 +1489,17 @@ describe("publishing", () => {
     return dialog;
   };
 
-  it("shows a raised point's comment as it'll post, the verdict, and nothing else", async () => {
+  it("shows a finding added to the review as it'll post, the verdict, and nothing else", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(raise(FINDING));
+    await userEvent.click(addToReview(FINDING));
     const dialog = await openDialog("Publish 1 comment");
     const comments = within(dialog).getAllByRole("listitem");
     expect(comments).toHaveLength(1);
     expect(comments[0]?.textContent).toContain(
       "Any signed-in user can read every customer's receipt",
     );
-    expect(comments[0]?.textContent).toContain("src/routes/orders.ts:14–16");
+    expect(comments[0]?.textContent).toContain("src/routes/orders.ts:15");
     expect(
       within(within(dialog).getByRole("group", { name: "Verdict" })).getAllByRole("button").length,
     ).toBe(3);
@@ -1481,7 +1536,7 @@ describe("publishing", () => {
       hunkComments: [],
       verdict: "comment",
     });
-    expect(raise(RETRIES).hasAttribute("disabled")).toBe(true);
+    expect(addToReview(RETRIES).hasAttribute("disabled")).toBe(true);
   });
 
   it("asks before publishing on a PR that changed since the analysis", async () => {

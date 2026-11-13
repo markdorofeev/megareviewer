@@ -158,6 +158,7 @@ const analysis: Analysis = {
       category: "behavior",
       whyItMatters: "Rounding now happens once per step.",
       hunkIds: [hunkAt(0, 0), hunkAt(30, 1)],
+      lines: null,
     },
   ],
   tour: {

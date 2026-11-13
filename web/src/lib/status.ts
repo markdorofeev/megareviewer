@@ -1,3 +1,4 @@
+import { BugIcon, type LucideIcon, ScanEyeIcon, SignpostIcon } from "lucide-react";
 import type { FileStatus } from "../../../src/domain/diff/index.ts";
 import type { PointKind, RiskClass } from "../../../src/domain/review/index.ts";
 
@@ -23,11 +24,19 @@ export const POINT_STATUS: Readonly<Record<PointKind, StatusStyle>> = {
     glyph: "▲",
     className: "text-risk-contract bg-risk-contract-bg border-risk-contract-border",
   },
+  // The quietest kind: a footnote, never a request, so it takes no hue.
   decision: {
     label: "Decision",
     glyph: "◇",
-    className: "text-review-pending bg-review-pending-bg border-review-pending/25",
+    className: "text-muted-foreground bg-muted border-border",
   },
+};
+
+/** A point's kind as an icon, beside its word: a bug, a scan, a signpost. */
+export const POINT_ICON: Readonly<Record<PointKind, LucideIcon>> = {
+  finding: BugIcon,
+  risk: ScanEyeIcon,
+  decision: SignpostIcon,
 };
 
 /** The verdict a published review carries, and the marks the design system still shows. */

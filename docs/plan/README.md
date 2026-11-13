@@ -165,6 +165,7 @@ The `ModelUsage` change goes in its own PR first.
 | 42 | [Claude from a button on the review](42-model-from-the-page.md) | 41 | `--ai` removed; the model run on an open analysis, its route and button |
 | 43 | [Triage and findings from Claude, landed in the code](43-triage-and-findings.md) | 42 | The findings pass, points with Raise and Dismiss, the wait and the landing, the replayed model for testing without spend |
 | 44 | [A bar that stays, with a stepper through Claude's points](44-review-bar.md) | 43 | The header, the sticky bar, the point stepper and the Publish button in `web/src/pages/review/` |
+| 45 | [Claude's points on the lines, each kind its own weight](45-points-on-the-lines.md) | 44 | Findings as draft comments under their lines, risks as bands, decisions as footnotes; the findings and decisions prompts |
 
 ## How to pick up a stage
 

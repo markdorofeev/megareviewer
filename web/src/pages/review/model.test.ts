@@ -176,6 +176,9 @@ describe("pointPlaces", () => {
     path: null,
     lines: null,
     hunkIds,
+    severity: null,
+    suggestion: null,
+    mismatch: null,
   });
 
   it("puts each card on the point's first hunk in the page's order, and links the others", () => {
@@ -198,7 +201,8 @@ describe("pointPlaces", () => {
     };
     const places = pointPlaces([onCache], order, index);
     expect(places.cards.get(p.cache)).toEqual([onCache]);
-    expect(places.mentions.get(p.retry)).toEqual([onCache]);
+    // The retry part is the same hunk's, around the card: no link back.
+    expect(places.mentions.get(p.retry)).toBeUndefined();
   });
 
   it("never puts a card on a mechanical hunk, and keeps points on none apart", () => {
