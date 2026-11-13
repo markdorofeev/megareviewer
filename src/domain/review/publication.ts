@@ -101,11 +101,8 @@ export const PublicationReceipt = z
 export type PublicationReceipt = z.infer<typeof PublicationReceipt>;
 
 /**
- * What publishing sends: the verdict, one inline comment per decision the reviewer rejected or
- * commented on and per comment written on a hunk, and a summary listing every decision. Pure, so
- * the preview and the published review are the same thing. The reviewer's own verdict, when
- * given, replaces the one the decisions imply: without the model there are no decisions to imply
- * one.
+ * What publishing sends. Pure, so the preview and the published review match. The reviewer's own
+ * verdict, when given, replaces the one the decisions imply.
  */
 export const buildPublication = (input: {
   readonly analysis: Analysis;

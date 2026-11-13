@@ -1,7 +1,6 @@
 import type { FileStatus } from "../../../../src/domain/diff/index.ts";
 import { byTreePath } from "./paths.ts";
 
-/** A changed file as the tree lists it. */
 export interface FileEntry {
   readonly path: string;
   readonly status: FileStatus;

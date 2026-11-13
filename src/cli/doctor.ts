@@ -196,7 +196,6 @@ export const formatCheck = ({ status, title, detail, fix }: Check): string =>
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-/** The real services `doctor` checks. */
 export const createDoctorDeps = async (options: {
   readonly config: Config;
   /** The directory unchanged callers are read from. */

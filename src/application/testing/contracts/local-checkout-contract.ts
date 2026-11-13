@@ -17,7 +17,6 @@ export interface LocalCheckoutContractSetup {
 
 const MISSING = "0123456789abcdef0123456789abcdef01234567";
 
-/** Every LocalCheckout implementation must pass this suite. */
 export const describeLocalCheckoutContract = (
   name: string,
   setup: () => Promise<LocalCheckoutContractSetup>,

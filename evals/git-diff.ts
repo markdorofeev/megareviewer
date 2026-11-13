@@ -20,7 +20,6 @@ const writeFiles = (root: string, files: Readonly<Record<string, string>>) => {
   }
 };
 
-/** The diff git makes from base to head, as stage 02's fixture test makes it. */
 export const gitDiff = (
   baseFiles: Readonly<Record<string, string>>,
   headFiles: Readonly<Record<string, string>>,

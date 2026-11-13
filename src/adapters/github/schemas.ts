@@ -113,7 +113,6 @@ export const GitHubReviewComment = z.object({
 });
 export type GitHubReviewComment = z.infer<typeof GitHubReviewComment>;
 
-/** The body of a 4xx or 5xx response. */
 export const GitHubErrorBody = z.object({
   message: z.string(),
   errors: z.array(z.union([z.string(), z.object({ message: z.string().optional() })])).optional(),

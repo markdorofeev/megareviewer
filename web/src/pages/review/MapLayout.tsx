@@ -28,7 +28,6 @@ export interface ScrollRequest {
   readonly n: number;
 }
 
-/** The anchor of a file's card. */
 export const fileAnchor = (path: string): string => `file-${path}`;
 
 /**

@@ -52,7 +52,6 @@ export const parsePullRequestUrl = (url: string): Result<PullRequestRef, "unsupp
   });
 };
 
-/** The canonical URL of a PR. */
 export const pullRequestUrl = (ref: PullRequestRef): string => {
   const { host, owner, repo } = ref.repo;
   switch (host) {

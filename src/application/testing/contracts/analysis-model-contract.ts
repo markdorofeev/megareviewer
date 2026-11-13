@@ -28,7 +28,6 @@ const expectUsage = (output: PassOutput<unknown>, pass: ModelUsage["pass"]) => {
   expect(output.usage.pass).toBe(pass);
 };
 
-/** Every AnalysisModel implementation must pass this suite. */
 export const describeAnalysisModelContract = (
   name: string,
   createModel: () => AnalysisModel,

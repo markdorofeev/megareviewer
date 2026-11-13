@@ -20,7 +20,6 @@ import { VERSION } from "./version.ts";
 export interface ClaudeAnalysisModelOptions {
   /** Default: new Anthropic(), which resolves ANTHROPIC_API_KEY or an `ant auth login` profile. */
   readonly client?: Anthropic;
-  /** Default: 400,000. */
   readonly maxInputTokens?: number;
   readonly logger: Logger;
 }

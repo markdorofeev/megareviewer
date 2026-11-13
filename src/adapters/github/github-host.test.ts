@@ -97,7 +97,6 @@ describeGitHostContract("github", () => ({
   publication,
 }));
 
-/** A fetch that counts the requests it answers. */
 const countingFetch = (exchanges: readonly RecordedExchange[]) => {
   const answer = createFixtureFetch(exchanges);
   const requests: string[] = [];

@@ -13,10 +13,8 @@ const END_OF_NODE: Token = { type: "", text: "" };
 const IGNORABLE = /^[ \t\r\n]*$/;
 
 /**
- * Every node of the tree in pre-order, with source text on leaves and an end marker after each inner
- * node's children. Without the markers, dedenting a Python statement out of a block would give the
- * same list. Text between nodes is kept too unless it's plain whitespace: a grammar can hide a token
- * (a regex inside a string rule, say), and the hidden token's text would otherwise not be compared.
+ * End markers keep a statement dedented out of a Python block from giving the same list. Text
+ * between nodes is kept unless it's whitespace, since a grammar can hide a token's text.
  */
 export const syntaxNodes = (tree: Tree, source: string): Token[] => {
   const tokens: Token[] = [];

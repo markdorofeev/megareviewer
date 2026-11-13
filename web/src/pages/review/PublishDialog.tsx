@@ -31,7 +31,6 @@ export const PublishDialog = ({
   onPublished,
 }: {
   readonly analysisId: AnalysisId;
-  /** Comments the reviewer wrote on hunk lines. */
   readonly hunkComments: readonly HunkComment[];
   readonly onClose: () => void;
   readonly onPublished: (receipt: PublicationReceipt) => void;

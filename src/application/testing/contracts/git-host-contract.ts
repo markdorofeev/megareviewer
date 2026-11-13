@@ -38,7 +38,6 @@ const recordingOptions = (
   };
 };
 
-/** Every GitHost implementation must pass this suite. */
 export const describeGitHostContract = (name: string, setup: () => GitHostContractSetup): void => {
   describe(`GitHost contract: ${name}`, () => {
     let s: GitHostContractSetup;

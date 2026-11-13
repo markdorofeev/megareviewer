@@ -30,7 +30,6 @@ const notFound = (what: string): HostError => ({
   retryAfterSeconds: null,
 });
 
-/** Threads kept in memory. */
 export class FakeReviewThreads implements ReviewThreads {
   readonly host: HostKind;
   private readonly user: HostUser;
@@ -50,7 +49,6 @@ export class FakeReviewThreads implements ReviewThreads {
     this.clock = options.clock ?? new FixedClock();
   }
 
-  /** Seeds a PR's threads. */
   setThreads(ref: PullRequestRef, list: ThreadList): void {
     this.lists.set(prKey(ref), structuredClone([...list.threads]));
   }

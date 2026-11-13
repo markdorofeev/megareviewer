@@ -72,7 +72,6 @@ export const openPullRequestsQuery = (count: number): string => {
   return `query (${variables}) {\n  ${pullRequests}\n}`;
 };
 
-/** The variables of openPullRequestsQuery for `refs`. */
 export const openPullRequestsVariables = (
   refs: readonly PullRequestRef[],
 ): Record<string, string | number> =>

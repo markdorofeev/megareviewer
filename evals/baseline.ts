@@ -67,7 +67,6 @@ export const COMPARED = [
 ] as const;
 export type ComparedMetric = (typeof COMPARED)[number];
 
-/** For these, lower is better. */
 const LOWER_IS_BETTER: ReadonlySet<ComparedMetric> = new Set([
   "decisionNoise",
   "mismatchFalsePositives",

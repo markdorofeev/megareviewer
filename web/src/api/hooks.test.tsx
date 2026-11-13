@@ -28,7 +28,6 @@ const countingMock = () => {
   return { ...testApi({ mock, fetch: counted }), viewRequests: () => viewRequests };
 };
 
-/** Starts the mock's simulated analysis. */
 const startAnalysis = (mock: MockApi) =>
   mock.handle({
     method: "POST",

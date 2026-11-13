@@ -59,7 +59,6 @@ export const ReviewThread = z
   .readonly();
 export type ReviewThread = z.infer<typeof ReviewThread>;
 
-/** A PR's threads. */
 export const ThreadList = z
   .object({
     threads: z.array(ReviewThread).readonly(),

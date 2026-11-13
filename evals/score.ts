@@ -179,7 +179,7 @@ export type TargetMetric = (typeof TARGET_METRICS)[number];
 export const isTargetMetric = (metric: string): metric is TargetMetric =>
   TARGET_METRICS.some((target) => target === metric);
 
-/** The first baseline's targets (stage 16). Not gating: below target means an open issue. */
+/** Not gating: below target means an open issue. */
 export const TARGETS: Readonly<
   Record<TargetMetric, { readonly min?: number; readonly max?: number }>
 > = {

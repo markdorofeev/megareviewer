@@ -4,7 +4,6 @@ import { cn } from "../../lib/utils.ts";
 import { StatusBadge } from "../../ui/status-badge.tsx";
 import { Tabs, TabsCount, TabsList, TabsTrigger } from "../../ui/tabs.tsx";
 
-/** What the header shows of a pull request. */
 export interface PrSummary {
   readonly number: number;
   readonly url: string;

@@ -10,7 +10,6 @@ import {
 } from "../../review/index.ts";
 import type { PartIndex } from "./model.ts";
 
-/** What a part on the page needs. */
 export interface HunkDeps {
   readonly index: PartIndex;
   /** Uses outside the pull request of what a part changes, read from a local checkout. */
@@ -32,7 +31,6 @@ export interface HunkDeps {
   readonly threadsAt: (id: PartId, place: LinePlace) => ReactNode;
   /** A file's threads its card can't put on a line, under "Earlier comments". */
   readonly earlierThreads: (path: string) => ReactNode;
-  /** A file's unresolved threads. */
   readonly openThreads: (path: string) => number;
   /** Said when the reviewer picks a range, e.g. that the host can't anchor one. */
   readonly rangeNote?: string;

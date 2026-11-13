@@ -22,16 +22,9 @@ const endLine = (node: Node): number => {
 };
 
 /**
- * Definitions, references and imports found by a symbols query.
- *
- * - A definition pattern captures the whole definition as `@definition.<kind>` and its name as
- *   `@name`.
- * - A reference pattern captures the identifier as `@reference.<kind>`: name, member or type.
- * - An import pattern captures the module as `@import.module`, and each imported name as
- *   `@import.name`. A match without names imports the whole module.
- *
- * When definition or reference patterns overlap, the first in the query wins. Captures starting
- * with `_` are only for predicates.
+ * Captures a symbols query uses: `@definition.<kind>` with `@name`, `@reference.<kind>` (name,
+ * member or type), and `@import.module` with optional `@import.name`s. On overlap the first pattern
+ * wins; captures starting with `_` are for predicates only.
  */
 export const findSymbols = (tree: Tree, query: Query): CodeSymbols => {
   const definitions = new Map<number, { patternIndex: number; definition: SymbolDefinition }>();

@@ -49,26 +49,10 @@ interface Change {
 }
 
 /**
- * Hints for the tour and the overview: a part that uses a symbol points to each part that
- * changes it. Hunks split into `parts` are read part by part; any other hunk is one part. A part
- * changes the innermost definitions its added lines fall in, so adding a method changes the
- * method, not every use of its class. It uses a symbol when a reference falls on its added or
- * context lines. A use in a type position is a hint with `use: "type"`: it groups
- * code, but a type annotation isn't a call for the reader to follow.
- *
- * A reference reaches a definition only in its own file or in a file its imports reach, and
- * never across languages or from production code into tests. For languages whose imports aren't
- * read, names match within the language. A reference never reaches the definition it's in, so
- * a method that calls a same-named method elsewhere links there. When several definitions in a
- * file share the name, a reference in that file reaches the one in its own class, if any.
- *
- * A definition changed by several hunks gets one hint, to the first. One hint per symbol and
- * hunk, on its first reference's line. At most 10 calls and 10 type uses per hunk, same file
- * first, then by symbol name. Calls come before type uses.
- *
- * Requests come last: a part that sends an HTTP request points to each part whose added lines
- * declare a route serving it (see `routesFor`), across languages but never from production code
- * into tests. Both ends are code, in a language the parser knows. At most 10 per part, by line.
+ * Links a part that uses a symbol to each part that changes it. A reference reaches a definition
+ * only in its own file or one its imports reach, never across languages or from code into tests.
+ * Type uses group code but aren't calls to follow. Requests link to the routes serving them (see
+ * `routesFor`). ARCHITECTURE.md has the full rules.
  */
 export const buildCallGraphHints = (
   files: readonly FileChange[],
@@ -133,10 +117,8 @@ export const buildCallGraphHints = (
 };
 
 /**
- * Every use of a name, on a part's added or context lines, that reaches a definition the PR
- * changes, by the rules of `buildCallGraphHints`: one site per use, reaching every part that changes
- * a definition it reaches, in diff order, except its own part. Calls and type uses alike; uses
- * without columns make none. In diff order, then by line and column.
+ * Every use, on a part's added or context lines, of a definition the PR changes, by the rules of
+ * `buildCallGraphHints` but uncapped. In diff order, then by line and column.
  */
 export const buildCallSites = (
   files: readonly FileChange[],

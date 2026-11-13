@@ -43,12 +43,8 @@ export interface CodeParser {
   /** A tree-sitter language name for the path, or null when none is supported. */
   languageFor(path: string): string | null;
   /**
-   * Pre-order list of every syntax node, named and anonymous. Leaves carry their source text;
-   * inner nodes have text "" and are closed by an end marker `{ type: "", text: "" }` after their
-   * children. Source text no node covers, other than whitespace, is listed as `{ type: "", text }`.
-   * No positions. Two sources with equal lists have the same syntax tree ignoring whitespace.
-   * Leaves alone aren't enough, and neither is node order: dedenting a Python statement out of an
-   * `if` keeps every leaf and every node but changes the tree.
+   * Every syntax node in pre-order, leaves with their text, each inner node closed by an end
+   * marker. Equal lists mean the same tree, ignoring whitespace.
    */
   syntaxNodes(source: string, language: string): Promise<Result<Token[], CodeParserError>>;
   symbols(source: string, language: string): Promise<Result<CodeSymbols, CodeParserError>>;

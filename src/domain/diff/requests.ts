@@ -154,11 +154,8 @@ const REQUEST_PATTERNS: readonly ((line: string, path: string) => Found[])[] = [
 ];
 
 /**
- * The requests one line of `path` sends: calls that name an HTTP method and a literal path. A
- * line that declares a route, a call whose next argument is a function (a route or a mock
- * handler), a path something is added to, and a path with no method, such as a schema key, aren't
- * requests. Test clients count
- * only in test files. The path keeps its placeholders and loses its query.
+ * Requests on one line of `path`: calls that name an HTTP method and a literal path. Route
+ * declarations and handlers aren't requests; test clients count only in tests.
  */
 export const requestsOn = (line: string, path: string): Route[] => {
   const seen = new Set<string>();

@@ -66,14 +66,9 @@ interface Run {
 }
 
 /**
- * A hunk's candidate parts, one per definition it changes, or none when it changes one or none.
- *
- * The hunk is cut at the outermost definitions that start or end inside it. An added line goes
- * with the head definition around it, a deleted line with the base one, so a deleted definition
- * stays where it was and lines keep their diff order. A definition is known by its name on both
- * sides, so a changed function is one part. Unchanged lines inside a changed definition go with
- * it; any other line (an unchanged stretch, a decorator, a comment, an import) goes with the next
- * part, or the previous one at the end. A part always adds or deletes a line.
+ * A hunk's candidate parts, one per definition it changes, or none when it changes fewer than two.
+ * Added lines go with the head definition around them, deleted ones with the base one, matched by
+ * name. Any other line goes with the next part, or the last one.
  */
 export const splitByDefinition = (hunk: Hunk, definitions: FileDefinitions): HunkPart[] => {
   const head = cutters(

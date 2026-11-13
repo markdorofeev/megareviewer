@@ -11,10 +11,8 @@ export interface RetryOptions {
 }
 
 /**
- * Retries the host's reads that fail on the network: a dropped connection or a timeout, which
- * a flaky link makes common and a second try usually gets past. Other failures are answers and
- * aren't retried. Publishing is passed through untouched, because a post that failed on the
- * network may still have been posted.
+ * Retries reads that fail on the network. Publishing isn't retried: a post that failed may still
+ * have landed.
  */
 const retrier =
   (host: string, { sleep, logger }: RetryOptions) =>

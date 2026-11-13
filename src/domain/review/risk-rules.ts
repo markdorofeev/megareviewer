@@ -230,10 +230,8 @@ export const ruleReasons = (hunk: Hunk, file: FileChange): string[] => {
 };
 
 /**
- * Risk for every hunk without a mechanical proof, from deterministic rules. A hunk any rule
- * matches is contract, with every matching rule's reason; the rest are logic. Rules only raise
- * attention: they never make a hunk mechanical, and they skip hunks a proof already covers. A
- * renamed file is matched by its old path too, so moving code out of a sensitive place counts.
+ * Rules only raise a hunk to contract, never to mechanical. A renamed file is matched by its old
+ * path too, so moving code out of a sensitive place counts.
  */
 export const classifyByRules = (
   files: readonly FileChange[],

@@ -21,14 +21,8 @@ export interface JoinedParts {
 }
 
 /**
- * Joins back what the tour placed together. Consecutive candidate parts of one hunk in the same
- * step become one part, which reads where the first of them did; a hunk whose candidates all
- * landed in one step is whole again, with its hunk ID. Parts left are numbered again from 1. The
- * tour's steps, `via` and entries, the hints, the unchanged callers and the call sites name the
- * joined parts.
- *
- * Splitting without joining gave 115 parts on a PR of 48 hunks, one file in 29 pieces: too fine to
- * read. A part is split off only where the tour reads it apart from its neighbors.
+ * Joins consecutive candidate parts of a hunk that the tour put in one step, and makes a hunk whole
+ * again when all of its parts did. Parts left are renumbered, and everything naming them remapped.
  */
 export const joinParts = (
   tour: Tour,

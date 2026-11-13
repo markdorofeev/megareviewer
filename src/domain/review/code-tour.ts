@@ -104,21 +104,10 @@ interface Send {
 }
 
 /**
- * The tour without the model, as flows. A flow starts at an entry point (a route, a page, a
- * command) or at a root (code nothing calls that calls something) and reads the changed code it
- * runs, callers before callees. Code an earlier flow read goes in `via` instead. Code that more
- * than one flow runs is read once, in a shared section before them, one per connected piece of it,
- * and goes in their `via`. Registering an entry, like adding a router to an app, is read first in
- * that entry's flow. A request never extends the walk: the route it reaches goes in `via`, and
- * the flow comes after the route's.
- *
- * What no flow runs joins the flow it belongs with: a type the flow that uses it, any other code
- * the flow with most of its file, a test the flow of the route it requests, then the flow it
- * calls into, then its file's, then its subject's; a doc the code in its directory. The rest goes
- * into supporting steps: API schema, docs, tests, and other changes by area.
- *
- * Shared sections come first, then flows that reach contract hunks, then routes, pages, commands
- * and roots. Every required hunk is in exactly one step.
+ * The tour without the model: flows from entry points (routes, pages, commands) or roots, callers
+ * before callees. Code several flows run is read once, in a shared section before them. What no
+ * flow runs joins the flow it belongs with, else a supporting step. Every required hunk lands in
+ * exactly one step; ARCHITECTURE.md has the ordering rules.
  */
 export const codeTour = (input: CodeTourInput): Tour => {
   const { files, required, callGraph, risk, definitions } = input;

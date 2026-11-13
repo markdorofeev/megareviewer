@@ -32,10 +32,8 @@ const scaleOf = (overview: FileOverview): number => {
 };
 
 /**
- * The overview for the rail: the full one when it fits, else the one with directories cut to the
- * deepest number of leading segments that fits. When none fits, the narrowest, which is the full
- * one when grouping doesn't narrow it, such as when the widest row is files outside the PR.
- * `build` makes the overview with directories cut to `depth` segments, or uncut.
+ * The full overview when it fits the rail, else directories cut to the deepest depth that fits,
+ * else the narrowest.
  */
 export const fitMiniOverview = (
   build: (depth?: number) => FileOverview,

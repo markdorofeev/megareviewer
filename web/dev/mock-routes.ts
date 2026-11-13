@@ -75,7 +75,6 @@ export interface MockApi {
     request: MockRequest,
     listener: (event: MockEvent) => void,
   ): MockResponse | { readonly unsubscribe: () => void };
-  /** Stops a simulated analysis. */
   close(): void;
 }
 
@@ -439,6 +438,5 @@ export const createMockApi = (
   };
 };
 
-/** Whether a request is for an analysis's event stream. */
 export const isEventsRequest = (method: string, path: string): boolean =>
   method === "GET" && EVENTS_PATTERN.test(path);

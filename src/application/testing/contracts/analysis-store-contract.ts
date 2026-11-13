@@ -36,7 +36,6 @@ const receipt: PublicationReceipt = {
   postedCommentIds: { [summaryKey]: "1", [d3Key]: "2" },
 };
 
-/** Every AnalysisStore implementation must pass this suite. */
 export const describeAnalysisStoreContract = (
   name: string,
   createStore: () => AnalysisStore | Promise<AnalysisStore>,

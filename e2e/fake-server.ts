@@ -16,7 +16,7 @@ export interface FakeServer {
   readonly request: APIRequestContext;
 }
 
-/** Starts stage 12's fake mode on a free port, serving the built UI, with the model or without. */
+/** Starts the server's fake mode on a free port, serving the built UI, with the model or without. */
 const start = async (ai: boolean): Promise<{ child: ChildProcess; url: string }> => {
   if (!existsSync(`${root}/dist/web/index.html`)) {
     throw new Error("No built UI in dist/web. Run `pnpm build` first.");

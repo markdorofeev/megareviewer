@@ -76,7 +76,6 @@ const githubMessage = (response: GitHubErrorResponse): string => {
 const isDiffTooLarge = (message: string): boolean =>
   /diff/i.test(message) && /too (large|big|long)|exceed/i.test(message);
 
-/** Maps an error response to a HostError (the table in stage 05's doc). */
 export const fromErrorResponse = (response: GitHubErrorResponse, now: string): HostError => {
   const { status } = response;
   const message = githubMessage(response);

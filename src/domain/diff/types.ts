@@ -109,13 +109,9 @@ export const HunkPart = z
 export type HunkPart = z.infer<typeof HunkPart>;
 
 /**
- * The code in `fromPartId` references `symbol`, which `toPartId` defines or changes. `line` is the
- * new-side line of the first such reference in `fromPartId`. `use` says whether the code calls or
- * builds it, or only names it as a type; type uses group code but aren't followed as calls.
- *
- * A `request` hint links a part that sends an HTTP request to the part that adds the route serving
- * it, across languages. Its `symbol` is the method and path as the route has them
- * (`PUT /api/items/{id}`), and its `line` is the request's.
+ * `fromPartId` references `symbol`, which `toPartId` defines or changes, first on new-side `line`.
+ * A `type` use groups code but isn't followed as a call. A `request` hint links an HTTP request to
+ * the route serving it, across languages; its `symbol` is the route's method and path.
  */
 export const CallGraphHint = z
   .object({
@@ -129,10 +125,8 @@ export const CallGraphHint = z
 export type CallGraphHint = z.infer<typeof CallGraphHint>;
 
 /**
- * A name in part `partId`, at `column` (UTF-16 units from 0) on new-side `line` of `path`, that
- * reaches definitions the PR changes: by the hints' rules, but every use rather than the first,
- * with no cap, and every part that changes a reached definition, in diff order. For the code a
- * call runs, shown where the call is. Requests aren't call sites.
+ * Every use, by the hints' rules but uncapped, of a definition the PR changes. `column` is in
+ * UTF-16 units. Requests aren't call sites.
  */
 export const CallSite = z
   .object({

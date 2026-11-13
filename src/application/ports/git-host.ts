@@ -12,7 +12,6 @@ import type {
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
 
-/** A file at a commit. */
 export interface FileAt {
   readonly sha: string;
   readonly path: string;
@@ -51,10 +50,8 @@ export interface GitHost {
     refs: readonly PullRequestRef[],
   ): Promise<Result<PullRequestSummary[], HostError>>;
   /**
-   * Publishes the summary (key "summary") and the inline comments with the verdict.
-   * Skips keys in alreadyPosted and calls onPosted for every key it posts, so the caller
-   * can persist progress (Bitbucket posts comments one by one). The receipt lists the
-   * comments this call posted.
+   * Skips keys in alreadyPosted and calls onPosted per key it posts, so a partial publish can be
+   * retried (Bitbucket posts comments one by one).
    */
   publish(
     ref: PullRequestRef,

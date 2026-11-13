@@ -146,7 +146,7 @@ const readGrammarNotices = async (): Promise<GrammarNotice[]> => {
   );
 };
 
-/** Builds the UI when stage 13's Vite app exists; returns the files it bundled. */
+/** Returns the files the UI bundled. */
 const buildWeb = async (): Promise<string[]> => {
   const configFile = "web/vite.config.ts";
   if (!existsSync("web/index.html") || !existsSync(configFile)) {

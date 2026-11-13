@@ -12,7 +12,7 @@ export interface BitbucketErrorResponse {
 /** Publishing calls get `rejected` for 400 and 409, which on reads would be our bug. */
 export type CallKind = "read" | "publish";
 
-/** Bitbucket doesn't document a delay, so this is the stage doc's default. */
+/** Bitbucket doesn't document a delay. */
 const DEFAULT_RETRY_AFTER_SECONDS = 60;
 /** Bitbucket's documented status for a diff too large to produce in time. */
 const DIFF_TIMED_OUT = 555;
@@ -63,7 +63,6 @@ const retryAfterSeconds = (headers: Headers): number =>
   seconds(headers.get("x-ratelimit-reset")) ??
   DEFAULT_RETRY_AFTER_SECONDS;
 
-/** Maps an error response to a HostError (the table in stage 06's doc). */
 export const fromErrorResponse = (response: BitbucketErrorResponse, call: CallKind): HostError => {
   const { status } = response;
   const message = bitbucketMessage(response);

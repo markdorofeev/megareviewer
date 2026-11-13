@@ -122,7 +122,6 @@ export interface HunkCardProps {
   readonly hunk: Hunk;
   readonly file: FileChange;
   readonly risk: RiskAssessment | null;
-  /** Mechanical proofs, shown in the header. */
   readonly proofs?: readonly MechanicalProof[];
   readonly highlighted?: boolean;
   /** Scrolls the card into view and focuses it. */
@@ -431,11 +430,8 @@ export const HunkCard = memo(function HunkCard({
 type CommentDraft = Pick<LineComment, "body" | "severity" | "suggestion">;
 
 /**
- * A draft under a line, in one of two states. Editing: its text, saved as it's typed, with a Preview
- * of it as it will read. Add to review or a
- * click on its own line keeps it; Cancel or Esc puts back the draft as it was when the box opened,
- * none for a new one. It stays open while the reviewer selects code.
- * Saved: the draft as its comment will read, with Edit and Discard.
+ * A draft under a line. While editing, its text saves as it's typed and Cancel restores it as it
+ * was when the box opened; once saved, it reads as its comment will.
  */
 const CommentRow = ({
   place,

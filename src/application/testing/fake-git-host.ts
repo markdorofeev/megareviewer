@@ -125,7 +125,6 @@ export class FakeGitHost implements GitHost {
     this.pullRequests.set(prKey(ref), { ...pullRequest, headSha: sha });
   }
 
-  /** Simulates a merge or a close. */
   close(ref: PullRequestRef): void {
     this.closed.add(prKey(ref));
   }

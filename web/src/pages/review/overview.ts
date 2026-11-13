@@ -271,7 +271,6 @@ export const fileNeighbors = (
 ): ReadonlyMap<string, ReadonlySet<string>> =>
   new Map([...linksBetweenFiles(analysis).links].map(([from, out]) => [from, new Set(out.keys())]));
 
-/** What the overview reads of an analysis. */
 export type OverviewInput = Pick<
   Analysis,
   "files" | "parts" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated"
@@ -279,22 +278,10 @@ export type OverviewInput = Pick<
   Partial<Pick<Analysis, "unchangedCallers">>;
 
 /**
- * The overview of the changed files with a hunk to review, by directory. Each directory is a node
- * holding its code, its docs and its tests that link to nothing, except the directories in
- * `expanded`, whose files are nodes of their own. Tests and test helpers (files with a helper's name
- * only tests link to) are badges on the nodes they link to; nodes no edge touches sit in the strip.
- *
- * Edges come from imports, from calls and type uses between files, and from requests a file sends
- * to the routes another file adds, so a test's requests put its badge on the routes; between two
- * nodes they merge into one. A node's row is one more than its lowest caller's. Two nodes that link
- * each other keep the edge joining more pairs of files pointing down; any other cycle, or a tie, is
- * broken at the edges into its node earliest in tour order. Rows are ordered by the mean position
- * of each node's callers, then of its callees, then of its callers again, with tour order on ties.
- *
- * Files outside the pull request that use what it changes, read from a local checkout, are faded
- * nodes one row below the lowest node they use, which joins the diagram if nothing else linked it.
- * Above 10 of them, they group by directory. Tests and helpers in the pull request have no node,
- * so their outside callers show only on their cards.
+ * The changed files by directory, as layered nodes: each one row below its lowest caller, cycles
+ * broken toward tour order. Edges merge imports, calls, type uses and requests per pair. Tests are
+ * badges, unlinked nodes go to the strip, and files outside the PR that use its code are faded
+ * nodes under it. ARCHITECTURE.md's Overview has the rest.
  */
 export const fileOverview = (
   analysis: OverviewInput,

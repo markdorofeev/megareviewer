@@ -37,7 +37,7 @@ const logger: Logger = {
 };
 
 /**
- * The analysis input stage 10 would build: hunks with a proof go as stats, the rest in full. And
+ * The analysis input the pipeline would build: hunks with a proof go as stats, the rest in full. And
  * the code's tour of them.
  */
 const inputFrom = (

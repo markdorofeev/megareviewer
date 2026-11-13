@@ -12,9 +12,7 @@ export interface ReviewThreadsContractSetup {
   pr: PullRequestRef;
   /** A thread with replies, open, that the user may reply to and resolve. */
   thread: ThreadId;
-  /** A resolved thread. */
   resolvedThread: ThreadId;
-  /** An outdated thread. */
   outdatedThread: ThreadId;
   /** The reply `reply` posts to `thread`. */
   replyBody: string;
@@ -24,7 +22,6 @@ export interface ReviewThreadsContractSetup {
   attachment: string;
 }
 
-/** Every ReviewThreads implementation must pass this suite. */
 export const describeReviewThreadsContract = (
   name: string,
   setup: () => ReviewThreadsContractSetup,

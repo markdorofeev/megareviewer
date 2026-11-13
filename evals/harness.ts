@@ -30,7 +30,7 @@ export interface AnalyzeOptions {
 }
 
 /**
- * Runs stage 10's pipeline on one case, as the CLI would: the case's PR on a fake host, its
+ * Runs the analysis pipeline on one case, as the CLI would: the case's PR on a fake host, its
  * tickets in a fake Jira, the given model and parser, an in-memory store. Resolves with the
  * analysis once it completes or fails; an error only when it didn't start or ran out of time.
  */

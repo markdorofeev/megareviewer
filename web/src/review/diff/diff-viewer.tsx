@@ -66,7 +66,6 @@ export interface DiffViewerProps {
   readonly expanding?: ReadonlySet<Hunk["id"]>;
   /** More controls for the file header, after the view switch. */
   readonly actions?: ReactNode;
-  /** Starts folded to its header. */
   readonly defaultCollapsed?: boolean;
   /** The line, by its `hunkId:index` key, that starts with the focus. */
   readonly defaultFocus?: string;

@@ -22,10 +22,8 @@ const boxName = (node: OverviewNode, label: string, current: boolean): string =>
     .join(", ");
 
 /**
- * The overview as a miniature in the rail: the full overview's boxes in their rows and places,
- * scaled to the rail's width, the box holding the file in view outlined. Under it, the directories
- * outside the diagram as chips, then the files of the current directory and the files in other
- * directories that call the file in view or that it calls.
+ * The overview scaled to the rail. Under it: the current directory's files, and the files that
+ * call the file in view or that it calls.
  */
 export const MiniOverview = ({
   mini,

@@ -44,10 +44,8 @@ export interface PartPlace {
 }
 
 /**
- * A split part's risk when the rules made its hunk's: the rules run on the part's own lines, so a
- * part is contract for what it changes, with its own reason, and a part git put in a hunk next to
- * credential code isn't. A part they don't match is logic, which still shows it in full. The
- * model's risk is about the whole hunk, so it stays the hunk's.
+ * Rules run on a split part's own lines, so a part git put next to credential code isn't contract.
+ * The model's risk is about the whole hunk and stays the hunk's.
  */
 const partRisk = (hunk: RiskAssessment, reasons: readonly string[]): RiskAssessment =>
   reasons.length === 0

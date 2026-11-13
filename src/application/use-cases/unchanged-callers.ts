@@ -39,10 +39,8 @@ export const lookUpCheckout = async (
 const FILES_PER_READ = 500;
 
 /**
- * Reads the unchanged callers of `changed` from the checkout. Only files in a language whose
- * imports are read, in the family of a changed file, and whose text names a changed definition
- * are parsed. Reading never fails the analysis: a failure is a warning, and files over 1 MB are
- * counted in one.
+ * Parses only the files that could call a changed definition. A failure is a warning, never a
+ * failed analysis.
  */
 export const readUnchangedCallers = async (
   parser: CodeParser,

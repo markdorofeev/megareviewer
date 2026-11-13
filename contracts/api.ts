@@ -24,8 +24,6 @@ export const TOKEN_HEADER = "x-megareviewer-token";
 /** The events endpoint takes the token in this query parameter: EventSource can't set headers. */
 export const TOKEN_QUERY_PARAM = "token";
 
-// Requests and responses
-
 export const HostStatus = z
   .object({
     configured: z.boolean(),
@@ -126,8 +124,6 @@ export type ResolveRequest = z.infer<typeof ResolveRequest>;
 export const ResolveResponse = ResolveRequest;
 export type ResolveResponse = z.infer<typeof ResolveResponse>;
 
-// Errors
-
 export const ErrorCode = z.enum([
   "bad-request",
   "unsupported-url",
@@ -160,8 +156,6 @@ export const ErrorResponse = z
   .object({ error: z.object({ code: ErrorCode, message: z.string() }).readonly() })
   .readonly();
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
-
-// Routes
 
 const AnalysisParams = z.object({ id: AnalysisId }).readonly();
 const VerdictParams = z.object({ id: AnalysisId, decisionId: DecisionId }).readonly();
@@ -289,7 +283,6 @@ export const routes = {
 
 export type RouteName = keyof typeof routes;
 
-/** The server-sent events stream of one analysis. */
 export const analysisEventsRoute = {
   method: "GET",
   path: "/api/analyses/:id/events",

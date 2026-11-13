@@ -35,10 +35,8 @@ const innermost = (
     .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine))[0];
 
 /**
- * The definitions whose own lines the PR adds or deletes, and which were in the base file: an added
- * line belongs to the innermost head definition around it, a deleted one to the innermost base
- * definition, so a class whose methods the PR adds or changes isn't changed itself. Blank lines
- * don't count. One per file and name, from the first part in diff order that changes it.
+ * Definitions in the base file whose own lines the PR adds or deletes: a class that only gains
+ * methods isn't one. Blank lines don't count. One per file and name.
  */
 export const changedDefinitions = (
   files: readonly FileChange[],
@@ -85,13 +83,9 @@ const canCall = (from: { path: string; language: string }, to: FileChange): bool
   (isTestFile(from.path) || !isTestFile(to.path));
 
 /**
- * Uses outside the PR of the definitions it changes: calls, and type uses unless the changed file is
- * generated. A use counts only where `buildCallGraphHints` would link it: in a file whose imports
- * reach the changed file (or, in Go and Java, in its package), within its language family, and
- * never from code into tests. Languages whose imports aren't read are left out, since matching
- * names alone finds mostly other things with the same name. A name the file defines itself is its
- * own. Per definition, code comes before tests, then by path and line; at most 50 uses, the rest
- * counted in `more`.
+ * Uses outside the PR of the definitions it changes, linked by `buildCallGraphHints`' rules.
+ * Languages whose imports aren't read are skipped: names alone match mostly unrelated code. At most
+ * 50 per definition, code before tests; the rest are counted in `more`.
  */
 export const findUnchangedCallers = (
   files: readonly FileChange[],

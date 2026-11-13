@@ -12,7 +12,6 @@ const del = (text: string) => ({ kind: "del" as const, text });
 const add = (text: string) => ({ kind: "add" as const, text });
 const context = (text: string) => ({ kind: "context" as const, text });
 
-/** The text of each range. */
 const pieces = (text: string, ranges: readonly CharRange[] | undefined) =>
   ranges?.map(({ start, end }) => text.slice(start, end));
 

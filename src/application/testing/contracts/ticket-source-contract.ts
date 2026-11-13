@@ -12,7 +12,6 @@ export interface TicketSourceContractSetup {
   unconfigured?: () => TicketSource;
 }
 
-/** Every TicketSource implementation must pass this suite. */
 export const describeTicketSourceContract = (
   name: string,
   setup: TicketSourceContractSetup,

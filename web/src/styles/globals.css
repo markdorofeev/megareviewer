@@ -9,7 +9,7 @@
  *   <html class="dark">                      dark theme (shadcn / next-themes convention)
  *   <html data-diff-palette="cb">            color-blind-safe diff palette (blue / orange)
  *   both can be combined.
- * All text pairs pass WCAG 2.x AA (>= 4.5:1); see reference/contrast-pairs.json.
+ * All text pairs pass WCAG 2.x AA (>= 4.5:1), checked by `pnpm check:contrast`.
  */
 
 /* hunk: scan web/src only; from the repo root Tailwind would also read src/, docs and fixtures. */
@@ -81,9 +81,6 @@
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Light (default)                                                    */
-/* ------------------------------------------------------------------ */
 :root {
   color-scheme: light;
 
@@ -190,9 +187,6 @@
   --risk-mechanical: #71717A; --risk-mechanical-bg: #FAFAFA; --risk-mechanical-border: #E4E4E7; --risk-mechanical-solid: #D4D4D8;
 }
 
-/* ------------------------------------------------------------------ */
-/* Dark                                                               */
-/* ------------------------------------------------------------------ */
 .dark {
   color-scheme: dark;
 
@@ -436,9 +430,6 @@
   --ease-standard: var(--motion-ease);
 }
 
-/* ------------------------------------------------------------------ */
-/* Base                                                               */
-/* ------------------------------------------------------------------ */
 @layer base {
   * {
     @apply border-border outline-ring/50;

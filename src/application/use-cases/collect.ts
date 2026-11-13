@@ -11,12 +11,7 @@ import type { AppDeps } from "./deps.ts";
 import { appError, type UseCaseError } from "./errors.ts";
 import { mapLimit } from "./text.ts";
 
-/**
- * Files per host call, and calls at a time. A host that batches reads (GitHub) makes one
- * request per call. On a slow link each connection is slow on its own, so small batches over
- * several connections finish sooner than large ones over two: through a link capped at 20 KB/s
- * per connection, one PR's 49 files took 11s this way and 21s in batches of 10, two at a time.
- */
+/** Small batches over several connections: on a slow link each connection is slow on its own. */
 const FILES_PER_BATCH = 3;
 const BATCH_CONCURRENCY = 6;
 /** Larger files are treated as unavailable: too big to parse or to send to the model. */

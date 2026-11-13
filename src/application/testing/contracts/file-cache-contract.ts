@@ -5,7 +5,6 @@ import type { FileCache } from "../../ports/index.ts";
 const repo: RepoRef = { host: "github", owner: "acme", repo: "shop" };
 const sha = "a".repeat(40);
 
-/** Every FileCache implementation must pass this suite. */
 export const describeFileCacheContract = (name: string, setup: () => FileCache): void => {
   describe(`FileCache contract: ${name}`, () => {
     let cache: FileCache;
