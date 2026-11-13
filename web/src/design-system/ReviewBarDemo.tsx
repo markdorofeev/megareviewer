@@ -10,7 +10,6 @@ import { ClaudeElement, type ClaudeRun } from "../pages/review/ClaudeElement.tsx
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
 import { narrowTo } from "../pages/review/stepper.ts";
-import { KeyHint } from "../review/index.ts";
 import { Button } from "../ui/button.tsx";
 import { DESIGN_RUN, POINTS, PULL_REQUEST } from "./fixtures.ts";
 
@@ -115,7 +114,6 @@ const BarDemo = ({
               <span className="tabular rounded-full bg-primary-foreground px-1.5 text-caption text-primary">
                 2<span className="sr-only"> to post</span>
               </span>
-              <KeyHint id="openReview" />
             </Button>
           }
         />

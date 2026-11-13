@@ -132,4 +132,5 @@ mark wants to merge feat/retry-backoff → main · updated 40m ago · 4 files +2
 - **The stepper's live region is its own `sr-only` status,** "Finding 2 of 5: …", rather than the visible position and title, which are buttons whose names ("Point 2 of 5, show all") would read oddly as an announcement.
 - **The header's count of files waits for the diff,** which prep reads; before it, the line read "0 files +0 −0".
 - **The design system's bar section** replaces the header's Claude element: every state of the slot, the stepper's states, stuck and published, each stepping on its own. The snapshotted sections (foundations, screens) don't include it, so no baseline changed. `PrHeader`'s examples stay as the design's.
+- **Publish has no key hint in the bar.** The doc kept it; the two key caps took room from the stepper's title. ⇧R still opens the dialog and is in the `?` dialog.
 - **New contrast pairs:** the kind glyphs on the page's background and a pressed chip's border on its tint, all 3:1 non-text.

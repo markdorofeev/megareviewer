@@ -998,7 +998,6 @@ const Review = ({
                   <span className="sr-only"> to post</span>
                 </span>
               )}
-              <KeyHint id="openReview" />
             </Button>
           )
         }
