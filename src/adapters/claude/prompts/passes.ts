@@ -35,14 +35,22 @@ Order them by how much they matter, most first. At most 10.`,
 
 Classify every <hunk> in the data exactly once as "contract" or "logic". Mechanical hunks are already classified; leave them out.
 
-- contract: changes a public API or exported signature, a database schema or migration, a serialized format (JSON shapes, file formats, events), authentication, permissions or another security boundary, a dependency manifest, configuration or environment variables, calls to external services, or what gets persisted.
-- logic: everything else.
+Every contract hunk is a place the reviewer is asked to stop, so mark only the hunks where a mistake would break or expose something outside this pull request:
+- callers outside the PR: a public API or endpoint, an exported signature, a serialized format others read (JSON shapes, files, events);
+- stored data: a database schema or migration, what gets persisted and where;
+- a security boundary: authentication, permissions, credentials and secrets, input from untrusted users;
+- the outside world: calls to external services, a dependency manifest, configuration or environment variables.
 
-When a hunk could be either, choose contract. The reason is one sentence naming the specific thing ("Adds a required region column to the accounts table", not "Changes the schema").`,
+Everything else is logic, and so are:
+- hunks that only follow from a contract hunk in this PR: the request and response models of a new endpoint, a generated client, types or API schema, the registration of a router, the page or form that calls a new endpoint, a caller passing a new argument. The hunk that makes the change carries it, once.
+- an interface whose every end is in this PR, such as a protocol between two of its own modules or a new method only its own code calls.
+- tests.
+
+reason: one sentence saying what could break outside this pull request, and for whom ("Existing clients that omit region now get a 400", not "Changes the schema" or "Defines the response shape"). When you can't name what could break outside the PR, the hunk is logic. When you can, and are unsure how likely it is, choose contract.`,
 
   decisions: `Task: decisions.
 
-Explain the choices this code makes that a reader would wonder about: why it caches, why it retries this way, why a dependency, why this format, why this default. Each is a short footnote the reviewer may read or skip, so it explains and never asks for a change. Anything that looks wrong is a finding, not a decision: leave it out here.
+Explain the choices this code makes that a reader would wonder about: why it caches, why it retries this way, why a dependency, why this format, why this default. Each is a short footnote the reviewer may read or skip, so it explains and never asks for a change. Anything that looks wrong is a finding, not a decision: leave it out here. So is a choice that only carries out what the description or a ticket already says and explains, such as an implementation detail it describes: the reviewer has just read them, and a footnote that says it again is noise. Keep a choice whose consequence the reviewer has to accept even when it was asked for: a breaking change, a new public surface, a default, a limit, a lifetime.
 
 For each decision:
 - title: the question it answers, starting with "Why", in at most 60 characters ("Why clamp the delay before adding jitter").
