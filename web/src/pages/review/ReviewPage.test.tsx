@@ -21,6 +21,7 @@ import { analysisFailed, analysisInProgress } from "../../../dev/progress.ts";
 import { type Highlighter, HighlighterContext } from "../../review/index.ts";
 import { testApi } from "../../testing/api.tsx";
 import { fakeFetch, jsonResponse, type RecordedRequest } from "../../testing/fetch.ts";
+import { firstSentence } from "./IntentLine.tsx";
 import { ReviewPage } from "./ReviewPage.tsx";
 
 const fixture = fixtureAnalysisView;
@@ -171,7 +172,7 @@ describe("ReviewPage states", () => {
     expect(progress.textContent).not.toContain("files");
   });
 
-  it("shows each part of Claude's run as soon as its data exists", async () => {
+  it("follows Claude's run in the header, and changes the code only once it ends", async () => {
     const { setView } = renderReview({
       view: { ...fixture, analysis: analysisInProgress(analysis, 2) },
     });
@@ -179,18 +180,30 @@ describe("ReviewPage states", () => {
     // The code's stages are done, so the strip is gone; Claude's run says so in the header.
     expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull();
     expect(screen.getByText("Claude is reading this PR")).toBeTruthy();
-    expect(screen.getByText("Working out the intent…")).toBeTruthy();
+    expect(document.querySelector("[data-slot=model-hairline]")?.getAttribute("data-state")).toBe(
+      "running",
+    );
+    // The description stays until the intent arrives.
+    const description = firstSentence(analysis.pullRequest?.description ?? "");
+    expect(screen.getByText(description)).toBeTruthy();
     expect(fileCards()).toContain("src/routes/orders.ts");
     expect(within(mainArea()).getAllByRole("region", { name: /, lines / })).toHaveLength(5);
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
 
-    // The intent is the first result: Claude's sentence replaces the description's.
+    // The intent is the first result: Claude's sentence swaps in where the description was,
+    // which keeps its room, hidden from readers, until the run ends.
     setView({ ...fixture, analysis: analysisInProgress(analysis, 4) });
     expect(await screen.findByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
+    const swap = document.querySelector("[data-slot=intent-swap]");
+    expect(swap?.querySelector("[data-leaving]")?.getAttribute("aria-hidden")).toBe("true");
+    // Findings are in, but the code doesn't change until everything has arrived.
+    expect(document.querySelector("[data-slot=point]")).toBeNull();
+    expect(document.querySelector("[data-slot=point-chip]")).toBeNull();
 
-    // Points can be raised as soon as the whole run is done.
     setView(fixture);
     await waitFor(() => expect(raise(OWNERSHIP).hasAttribute("disabled")).toBe(false));
+    expect(document.querySelector("[data-slot=intent-swap]")).toBeNull();
+    expect(screen.queryByText(description)).toBeNull();
   });
 
   it("shows where a failed analysis stopped, what it has, and retries it", async () => {
@@ -272,7 +285,7 @@ describe("ReviewPage states", () => {
     expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
 
     setView({ ...fixture, analysis: analysisInProgress(analysis, 2) });
-    expect(await screen.findByText("Working out the intent…")).toBeTruthy();
+    expect(await screen.findByText("Claude is reading this PR")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Analyze with Claude" })).toBeNull();
   });
 
@@ -723,6 +736,19 @@ describe("points", () => {
     // Next goes on from the point the list left the reviewer on.
     await userEvent.click(within(header).getByRole("button", { name: /^Next/ }));
     expect(scrolledTo().at(-1)).toBe("point-m1");
+  });
+
+  it("sit under the last of their lines, and going to one keeps those lines in view", async () => {
+    renderReview();
+    await loaded();
+    const card = await screen.findByRole("article", { name: OWNERSHIP });
+    const fold = card.closest("[data-slot=point-fold]");
+    // The row before the card's is the last line it rests on, with the kind's bar.
+    expect(fold?.previousElementSibling?.getAttribute("data-point")).toBe("finding");
+    expect(Number(card.style.getPropertyValue("--lines-above"))).toBeGreaterThan(0);
+    // Opened with its results, the page is at rest: nothing lands.
+    expect(document.querySelector("[data-landing]")?.getAttribute("data-landing")).toBe("done");
+    expect(fold?.hasAttribute("data-fresh")).toBe(false);
   });
 
   it("count each file's points in the tree", async () => {

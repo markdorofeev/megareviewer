@@ -38,7 +38,7 @@ import {
   SuggestionDiff,
   ThreadBody,
 } from "../thread/index.ts";
-import { DiffLine, type LineMark } from "./diff-line.tsx";
+import { DiffLine, type LineMark, type PointLanding } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { languageOf } from "./languages.ts";
 import { hunkLocation, lineCounts } from "./lines.ts";
@@ -162,7 +162,15 @@ export interface HunkCardProps {
   /** Ranges of the code to wrap, e.g. calls, by new-side line number. */
   readonly marks?: ReadonlyMap<number, readonly LineMark[]>;
   /** Lines one of Claude's points rests on, by "side:line", each with its kind. */
-  readonly pointLines?: ReadonlyMap<string, PointKind>;
+  readonly pointLines?: ReadonlyMap<string, PointLine>;
+  /** Claude's point cards under the last of their lines. */
+  readonly pointsAt?: (place: LinePlace) => ReactNode;
+}
+
+/** A line a point rests on: the kind that wins there, and how the line lands when it does. */
+export interface PointLine {
+  readonly kind: PointKind;
+  readonly landing?: PointLanding;
 }
 
 /** One hunk, or one part of a split hunk: its file, place and risk when alone, and its lines. */
@@ -189,6 +197,7 @@ export const HunkCard = memo(function HunkCard({
   inFile = false,
   marks,
   pointLines,
+  pointsAt,
 }: HunkCardProps) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -312,14 +321,16 @@ export const HunkCard = memo(function HunkCard({
             const open = place !== null && openComment !== null && samePlace(openComment, place);
             const commentAt = open ? openComment : comment;
             const threads = place === null ? null : (threadsAt?.(place) ?? null);
+            const points = place === null ? null : (pointsAt?.(place) ?? null);
+            const point =
+              place === null ? undefined : pointLines?.get(`${place.side}:${place.line}`);
             return (
               <Fragment key={line.key}>
                 <DiffLine
                   line={line}
                   cellRole="cell"
-                  pointKind={
-                    place === null ? null : (pointLines?.get(`${place.side}:${place.line}`) ?? null)
-                  }
+                  pointKind={point?.kind ?? null}
+                  {...(point?.landing === undefined ? {} : { pointLanding: point.landing })}
                   marks={
                     (line.kind === "del" || line.newNo === null
                       ? undefined
@@ -355,6 +366,7 @@ export const HunkCard = memo(function HunkCard({
                         },
                       })}
                 />
+                {points}
                 {place !== null &&
                   commentAt != null &&
                   (comment !== undefined || (open && onComment !== undefined)) && (

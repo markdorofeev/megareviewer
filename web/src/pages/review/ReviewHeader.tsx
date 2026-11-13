@@ -6,6 +6,8 @@ import { cn } from "../../lib/utils.ts";
 import { WARNING } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 
+export type HairlineState = "running" | "finishing";
+
 /** Up to this many warnings show in full; more collapse to a count. */
 const SHOWN_WARNINGS = 2;
 
@@ -17,7 +19,7 @@ export const ReviewHeader = ({
   view,
   intent,
   tools,
-  modelRunning,
+  hairline,
   reanalyzing,
   reanalyzeError,
   onReanalyze,
@@ -27,8 +29,11 @@ export const ReviewHeader = ({
   readonly intent: ReactNode;
   /** The layout switch. */
   readonly tools: ReactNode;
-  /** Claude is reading the PR: an accent hairline runs along the header's bottom edge. */
-  readonly modelRunning: boolean;
+  /**
+   * Claude is reading the PR: a segment runs along the header's bottom edge. Once it's done, it
+   * runs out to the full width and fades.
+   */
+  readonly hairline: HairlineState | null;
   readonly reanalyzing: boolean;
   readonly reanalyzeError: ApiError | null;
   readonly onReanalyze: () => void;
@@ -39,12 +44,11 @@ export const ReviewHeader = ({
 
   return (
     <header className="relative flex flex-col gap-3 border-b pb-3">
-      {modelRunning && (
-        <span
-          data-slot="model-hairline"
-          aria-hidden="true"
-          className="absolute inset-x-0 -bottom-px h-px animate-pulse bg-primary duration-(--duration-slow)"
-        />
+      {hairline !== null && (
+        // Drawn by globals.css: a still, full-width bar under reduced motion.
+        <span data-slot="model-hairline" data-state={hairline} aria-hidden="true">
+          <span />
+        </span>
       )}
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">

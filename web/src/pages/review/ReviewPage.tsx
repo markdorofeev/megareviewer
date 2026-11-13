@@ -1,7 +1,13 @@
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
-import { hunkIdOf, type PartId, type UnchangedCallers } from "../../../../src/domain/diff/index.ts";
 import {
+  type Hunk,
+  hunkIdOf,
+  type PartId,
+  type UnchangedCallers,
+} from "../../../../src/domain/diff/index.ts";
+import {
+  type Analysis,
   type AnalysisId,
   HunkComment,
   inProgress,
@@ -27,6 +33,8 @@ import {
   type LineComment,
   type LinePlace,
   languageOf,
+  PINNED,
+  type PointLine,
   ReviewThreadView,
   ShortcutsDialog,
   TreeSkeleton,
@@ -56,7 +64,7 @@ import {
 } from "./model.ts";
 import { Overview } from "./Overview.tsx";
 import { fileOverview, type OverviewNode } from "./overview.ts";
-import { PointCard, PointMention, pointAnchor } from "./PointCard.tsx";
+import { PointCard, PointFold, PointMention, pointAnchor } from "./PointCard.tsx";
 import { PointList } from "./PointList.tsx";
 import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
@@ -68,7 +76,7 @@ import { useStoredState } from "./storage.ts";
 import { coveredLines, placeKey, placeThreads } from "./threads.ts";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
-import { useHeldScroll } from "./useHeldScroll.ts";
+import { useLanding } from "./useLanding.ts";
 import { usePoints } from "./usePoints.ts";
 import { useThreads } from "./useThreads.ts";
 
@@ -204,6 +212,37 @@ const CheckoutNote = ({ analysis }: { readonly analysis: AnalysisView["analysis"
 
 const NO_UNCHANGED: readonly UnchangedCallers[] = [];
 
+/**
+ * The analysis the page shows: the live one, except while Claude runs, when it stays as it was
+ * before, so nothing in the code moves until everything that will land has arrived.
+ */
+const useSettled = (live: Analysis, running: boolean): Analysis => {
+  const [held, setHeld] = useState(live);
+  if (!running && held !== live) setHeld(live);
+  return running ? held : live;
+};
+
+/**
+ * The "side:line" of the last of a point's lines a part shows, which its card goes under, and
+ * how many rows from its first line down to it.
+ */
+const lastLineShown = (point: Point, hunk: Hunk): { key: string; rows: number } | null => {
+  const { lines } = point;
+  if (lines === null) return null;
+  let first: number | null = null;
+  let last: { line: number; at: number } | null = null;
+  for (const [at, one] of hunk.lines.entries()) {
+    const place = commentPlace(one);
+    if (place === null || place.side !== lines.side) continue;
+    if (place.line < lines.startLine || place.line > lines.line) continue;
+    first ??= at;
+    if (last === null || place.line > last.line) last = { line: place.line, at };
+  }
+  return first === null || last === null
+    ? null
+    : { key: `${lines.side}:${last.line}`, rows: last.at - first + 1 };
+};
+
 /** Bitbucket can't anchor a comment on a range of lines. */
 const RANGE_NOTES = {
   github: undefined,
@@ -234,11 +273,14 @@ const Review = ({
 }) => {
   const { client } = useApi();
   const modelStatus = useStatus().status?.model ?? null;
-  const { analysis, publication } = view;
-  const analysisId = analysis.id;
-  const complete = analysis.status === "complete";
+  const { analysis: live, publication } = view;
+  const analysisId = live.id;
+  const complete = live.status === "complete";
   // Claude's passes, running on the complete analysis since the reviewer asked for them.
-  const modelRunning = complete && inProgress(analysis);
+  const modelRunning = complete && inProgress(live);
+  // The code, the tree and the receipt stay as they were until Claude's run ends; only the
+  // header follows it.
+  const analysis = useSettled(live, modelRunning);
   const runModel = useMutation(client.runModel);
   const readOnly = publication !== null || !complete;
 
@@ -249,7 +291,53 @@ const Review = ({
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
   const mechanical = mechanicalCount(trailing);
   const points = useMemo(() => pointsOf(analysis), [analysis]);
+  const pointIds = useMemo(() => points.map((point) => point.id), [points]);
+  const landing = useLanding(modelRunning, pointIds);
   const places = useMemo(() => pointPlaces(points, order, index), [points, order, index]);
+  // Where each card goes: under the last of its lines the part shows, or else under its header.
+  const cardPlaces = useMemo(() => {
+    const underLine = new Map<PartId, Map<string, Point[]>>();
+    const underHeader = new Map<PartId, Point[]>();
+    const rowsAbove = new Map<PointId, number>();
+    for (const [partId, placed] of places.cards) {
+      const part = index.parts.get(partId);
+      for (const point of placed) {
+        const last = part === undefined ? null : lastLineShown(point, part.hunk);
+        if (last === null) {
+          underHeader.set(partId, [...(underHeader.get(partId) ?? []), point]);
+          continue;
+        }
+        const lines = underLine.get(partId) ?? new Map<string, Point[]>();
+        lines.set(last.key, [...(lines.get(last.key) ?? []), point]);
+        underLine.set(partId, lines);
+        rowsAbove.set(point.id, last.rows);
+      }
+    }
+    return { underLine, underHeader, rowsAbove };
+  }, [places, index]);
+  // Points that share a fold land with its first: the fold is what's measured and unfolds.
+  const foldOf = useMemo(() => {
+    const first = new Map<PointId, PointId>();
+    const share = (together: readonly Point[]) => {
+      const [lead] = together;
+      for (const point of together) if (lead !== undefined) first.set(point.id, lead.id);
+    };
+    for (const lines of cardPlaces.underLine.values())
+      for (const here of lines.values()) share(here);
+    for (const [partId, here] of cardPlaces.underHeader) {
+      share([...here, ...(places.mentions.get(partId) ?? NO_POINTS)]);
+    }
+    for (const [partId, mentions] of places.mentions) {
+      if (!cardPlaces.underHeader.has(partId)) share(mentions);
+    }
+    share(places.unplaced);
+    return first;
+  }, [cardPlaces, places]);
+  const { inView } = landing;
+  const landingAt = useCallback(
+    (id: PointId): number | undefined => inView.get(foldOf.get(id) ?? id),
+    [inView, foldOf],
+  );
   // Each file's points by kind, for the tree's marks.
   const pointsByFile = useMemo(() => {
     const byPath = new Map<string, Partial<Record<Point["kind"], number>>>();
@@ -374,8 +462,6 @@ const Review = ({
   );
 
   const pointStates = usePoints(analysisId, view.pointReviews);
-  // Claude's points land as cards in the code; the line at the top of the window stays put.
-  useHeldScroll(points.length, "[aria-label=Changes] [data-slot=file-card]");
 
   // The host's conversation on the code, read live, beside the analysis.
   const threads = useThreads(analysisId, analysis.stages.prep === "done");
@@ -555,12 +641,19 @@ const Review = ({
     if (draft === undefined) {
       writeComment(partId, { ...place, body: text });
     } else if (pointStates.stateOf(point.id) !== "raised" && !draft.body.includes(text)) {
-      writeComment(partId, { ...draft, body: draft.body === "" ? text : `${draft.body}\n\n${text}` });
+      writeComment(partId, {
+        ...draft,
+        body: draft.body === "" ? text : `${draft.body}\n\n${text}`,
+      });
     }
     const { startLine } = draft ?? place;
     setOpenComment({
       partId,
-      place: { side: place.side, line: place.line, ...(startLine === undefined ? {} : { startLine }) },
+      place: {
+        side: place.side,
+        line: place.line,
+        ...(startLine === undefined ? {} : { startLine }),
+      },
     });
     setCurrentPoint(point.id);
     void pointStates.setState(point.id, "raised");
@@ -648,41 +741,86 @@ const Review = ({
       saving={pointStates.isSaving(point.id)}
       readOnly={readOnly}
       current={currentPoint === point.id}
+      linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
       onRaise={stable.raisePoint}
       onState={stable.setPointState}
     />
   );
   // The lines each part's points rest on, so they take the kind's bar. Where points overlap,
-  // the one that matters most wins: a finding's line reads as a finding.
+  // the one that matters most wins: a finding's line reads as a finding. A point landing in view
+  // gives its lines their place in the timeline.
   const pointLines = useMemo(() => {
     const rank: Readonly<Record<Point["kind"], number>> = { finding: 0, risk: 1, decision: 2 };
-    const byPart = new Map<PartId, Map<string, Point["kind"]>>();
+    const byPart = new Map<PartId, Map<string, PointLine>>();
     for (const [partId, placed] of places.cards) {
-      const lines = new Map<string, Point["kind"]>();
+      const lines = new Map<string, PointLine>();
       for (const point of placed) {
         if (point.lines === null) continue;
-        for (let line = point.lines.startLine; line <= point.lines.line; line += 1) {
-          const key = `${point.lines.side}:${line}`;
+        const { side, startLine, line: last } = point.lines;
+        const at = landingAt(point.id);
+        for (let line = startLine; line <= last; line += 1) {
+          const key = `${side}:${line}`;
           const held = lines.get(key);
-          if (held === undefined || rank[point.kind] < rank[held]) lines.set(key, point.kind);
+          if (held !== undefined && rank[point.kind] >= rank[held.kind]) continue;
+          lines.set(key, {
+            kind: point.kind,
+            ...(at === undefined
+              ? {}
+              : { landing: { at, line: line - startLine, lines: last - startLine + 1 } }),
+          });
         }
       }
       if (lines.size > 0) byPart.set(partId, lines);
     }
     return byPart;
-  }, [places]);
+  }, [places, landingAt]);
   const pointLinesOf = useCallback((id: PartId) => pointLines.get(id), [pointLines]);
-  const pointsOn = (id: PartId): ReactNode => {
-    const cards = places.cards.get(id) ?? NO_POINTS;
-    const mentions = places.mentions.get(id) ?? NO_POINTS;
-    if (cards.length === 0 && mentions.length === 0) return null;
+  /** A fold of point cards: fresh while it's landing if any of them is new to the page. */
+  const fold = (
+    together: readonly Point[],
+    props: Pick<Parameters<typeof PointFold>[0], "row" | "className" | "bodyClassName">,
+    children: ReactNode,
+  ): ReactNode => {
+    const [lead] = together;
+    if (lead === undefined) return null;
     return (
-      <div className="flex flex-col gap-2 border-b bg-surface-subtle p-3">
+      <PointFold
+        key={lead.id}
+        pointId={lead.id}
+        fresh={together.some((point) => landing.fresh(point.id))}
+        at={landingAt(lead.id)}
+        {...props}
+      >
+        {children}
+      </PointFold>
+    );
+  };
+  // Points whose lines the part doesn't show, and links to cards on other parts.
+  const pointsOn = (id: PartId): ReactNode => {
+    const cards = cardPlaces.underHeader.get(id) ?? NO_POINTS;
+    const mentions = places.mentions.get(id) ?? NO_POINTS;
+    return fold(
+      [...cards, ...mentions],
+      { bodyClassName: "flex flex-col gap-2 border-b bg-surface-subtle p-3" },
+      <>
         {cards.map(card)}
         {mentions.map((point) => (
           <PointMention key={point.id} point={point} onGo={stable.goToPoint} />
         ))}
-      </div>
+      </>,
+    );
+  };
+  // Cards under the last of their lines, which they grow out from when they land.
+  const pointsAt = (id: PartId, place: LinePlace): ReactNode => {
+    const here = cardPlaces.underLine.get(id)?.get(placeKey(place)) ?? NO_POINTS;
+    return fold(
+      here,
+      {
+        row: true,
+        className: PINNED,
+        bodyClassName: "flex max-w-3xl flex-col gap-2 py-2 pr-3 pl-29 font-sans",
+      },
+      here.map(card),
     );
   };
   // Map cards render again only when their signature changes, so their handlers call the latest.
@@ -706,11 +844,16 @@ const Review = ({
     ];
     // A part with threads draws again when they change.
     if (placement.onLine.has(id)) parts.push(epochOf(placement));
-    for (const point of places.cards.get(id) ?? NO_POINTS) {
+    const cards = places.cards.get(id) ?? NO_POINTS;
+    const mentions = places.mentions.get(id) ?? NO_POINTS;
+    for (const point of cards) {
       parts.push(point.id, pointStates.stateOf(point.id), pointStates.isSaving(point.id));
       parts.push(currentPoint === point.id);
     }
-    for (const point of places.mentions.get(id) ?? NO_POINTS) parts.push(point.id);
+    for (const point of mentions) parts.push(point.id);
+    for (const point of [...cards, ...mentions]) {
+      parts.push(landing.fresh(point.id), landingAt(point.id) ?? "");
+    }
     return parts.join("\u0000");
   };
   const deps: HunkDeps = {
@@ -727,6 +870,7 @@ const Review = ({
     onFocusHunk: focusHunk,
     marksOf,
     pointsOn,
+    pointsAt,
     pointLinesOf,
     threadsAt,
     earlierThreads,
@@ -738,8 +882,12 @@ const Review = ({
   const before = (
     <>
       {places.unplaced.length > 0 && (
-        <section className="flex flex-col gap-2" aria-label="Points on no change shown here">
-          {places.unplaced.map(card)}
+        <section aria-label="Points on no change shown here">
+          {fold(
+            places.unplaced,
+            { bodyClassName: "flex flex-col gap-2" },
+            places.unplaced.map(card),
+          )}
         </section>
       )}
     </>
@@ -748,6 +896,8 @@ const Review = ({
   return (
     <div
       data-layout={layout}
+      // The landing of Claude's results, which globals.css plays (useLanding).
+      data-landing={landing.phase}
       // Room under the last of the page for the floating Publish button.
       className={cn("mx-auto flex max-w-[1600px] flex-col gap-4", publishShown && "pb-20")}
     >
@@ -755,17 +905,17 @@ const Review = ({
         view={view}
         intent={
           <IntentLine
-            analysis={analysis}
-            intentComing={modelRunning && analysis.intent === null}
+            analysis={live}
+            running={landing.running}
             onDetails={() => {
               detailsReturnFocus.current = true;
               setShowDetails(true);
             }}
           >
             <ClaudeElement
-              analysis={analysis}
+              analysis={live}
               via={modelStatus?.via ?? null}
-              running={modelRunning}
+              running={landing.running}
               startedAt={modelStartedAt}
               starting={runModel.pending}
               error={runModel.error === null ? null : errorMessage(runModel.error)}
@@ -805,7 +955,7 @@ const Review = ({
             />
           </>
         }
-        modelRunning={modelRunning}
+        hairline={landing.running ? "running" : landing.phase === "landing" ? "finishing" : null}
         reanalyzing={reanalyze.pending}
         reanalyzeError={reanalyze.error}
         onReanalyze={async () => {
@@ -815,17 +965,13 @@ const Review = ({
       />
 
       {!complete && (
-        <ProgressStrip
-          stages={analysis.stages}
-          shown={CODE_STAGES}
-          filesFetched={analysis.filesFetched}
-        />
+        <ProgressStrip stages={live.stages} shown={CODE_STAGES} filesFetched={live.filesFetched} />
       )}
-      {analysis.error !== null && (
+      {live.error !== null && (
         <div className={cn(DANGER, "flex flex-col items-start gap-2")} role="alert">
           <p>
-            The analysis failed at the {stageName(analysis.error.stage).toLowerCase()} stage:{" "}
-            {analysis.error.message}
+            The analysis failed at the {stageName(live.error.stage).toLowerCase()} stage:{" "}
+            {live.error.message}
           </p>
           {retry.error !== null && <p>Couldn't retry. {errorMessage(retry.error)}</p>}
           <Button
@@ -938,7 +1084,7 @@ const Review = ({
         </div>
       )}
 
-      <UsageFooter usage={analysis.usage} />
+      <UsageFooter usage={live.usage} />
 
       {publishShown && (
         // Floats at the bottom right, so the review can be published from anywhere in the scroll.

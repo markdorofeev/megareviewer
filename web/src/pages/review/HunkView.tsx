@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { PartId, UnchangedCallers } from "../../../../src/domain/diff/index.ts";
-import type { PointKind } from "../../../../src/domain/review/index.ts";
 import {
   HunkCard,
   type LineComment,
@@ -8,6 +7,7 @@ import {
   type LinePlace,
   MechanicalHunk,
   PINNED,
+  type PointLine,
 } from "../../review/index.ts";
 import type { PartIndex } from "./model.ts";
 
@@ -28,8 +28,10 @@ export interface HunkDeps {
   readonly onFocusHunk: (id: PartId) => void;
   /** Claude's point cards and links that go under a part's header. */
   readonly pointsOn: (id: PartId) => ReactNode;
+  /** Claude's point cards under the last of their lines. */
+  readonly pointsAt: (id: PartId, place: LinePlace) => ReactNode;
   /** The lines of a part Claude's points rest on, by "side:line", each with its kind. */
-  readonly pointLinesOf: (id: PartId) => ReadonlyMap<string, PointKind> | undefined;
+  readonly pointLinesOf: (id: PartId) => ReadonlyMap<string, PointLine> | undefined;
   /** The host's threads on a line of a part, shown under it. */
   readonly threadsAt: (id: PartId, place: LinePlace) => ReactNode;
   /** A file's threads its card can't put on a line, under "Earlier comments". */
@@ -83,6 +85,7 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       afterHeader={deps.pointsOn(id)}
       {...(deps.pointLinesOf(id) === undefined ? {} : { pointLines: deps.pointLinesOf(id) })}
       threadsAt={(place) => deps.threadsAt(id, place)}
+      pointsAt={(place) => deps.pointsAt(id, place)}
       {...(deps.rangeNote === undefined ? {} : { rangeNote: deps.rangeNote })}
       {...markProps(deps.marksOf(id))}
     />

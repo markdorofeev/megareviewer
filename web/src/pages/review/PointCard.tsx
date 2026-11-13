@@ -1,7 +1,7 @@
-import { memo, useId } from "react";
+import { memo, type ReactNode, useId } from "react";
 import type { Point, PointId, PointState } from "../../../../src/domain/review/index.ts";
 import { POINT_STATUS } from "../../lib/status.ts";
-import { cn } from "../../lib/utils.ts";
+import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
 
@@ -24,6 +24,7 @@ export const PointCard = memo(function PointCard({
   saving,
   readOnly,
   current,
+  linesAbove = 0,
   onRaise,
   onState,
 }: {
@@ -34,6 +35,8 @@ export const PointCard = memo(function PointCard({
   readonly readOnly: boolean;
   /** The point the list or Next is on. */
   readonly current: boolean;
+  /** The lines of code above the card that it rests on, which going to it keeps in view. */
+  readonly linesAbove?: number;
   readonly onRaise: (point: Point) => void;
   readonly onState: (id: PointId, state: PointState) => void;
 }) {
@@ -70,9 +73,9 @@ export const PointCard = memo(function PointCard({
       data-kind={point.kind}
       data-state={state}
       data-current={current || undefined}
+      style={cssVars({ "--lines-above": linesAbove })}
       className={cn(
-        // The card grows out from under the lines it rests on; instant with reduced motion.
-        "flex scroll-mt-24 animate-in flex-col gap-2 rounded-lg border border-l-3 bg-thread-bg p-3 duration-(--duration-slow) fade-in-0 slide-in-from-top-1 -outline-offset-2",
+        "flex scroll-mt-[calc(6rem+var(--lines-above)*var(--text-code--line-height))] flex-col gap-2 rounded-lg border border-l-3 bg-thread-bg p-3 -outline-offset-2",
         BORDER[point.kind],
         current && "shadow-[inset_0_0_0_2px_var(--ring)]",
       )}
@@ -135,4 +138,43 @@ export const PointMention = ({
       {point.title}
     </button>
   </p>
+);
+
+/**
+ * Where point cards unfold when they land: in height from nothing, under the lines they rest on
+ * (globals.css). `fresh` cards take no room while the page finds which are in view; `at` is an
+ * in-view card's place in the code's order, and only those unfold.
+ */
+export const PointFold = ({
+  pointId,
+  fresh,
+  at,
+  row = false,
+  className,
+  bodyClassName,
+  children,
+}: {
+  /** The first point in the fold, which the page measures it by. */
+  readonly pointId: PointId;
+  readonly fresh: boolean;
+  readonly at: number | undefined;
+  /** A row of a part's lines, under the line it follows. */
+  readonly row?: boolean;
+  readonly className?: string;
+  readonly bodyClassName?: string;
+  readonly children: ReactNode;
+}) => (
+  <div
+    role={row ? "row" : undefined}
+    data-slot="point-fold"
+    data-point-id={pointId}
+    data-fresh={fresh || undefined}
+    data-unfold={at === undefined ? undefined : true}
+    style={at === undefined ? undefined : cssVars({ "--landing-i": at })}
+    className={className}
+  >
+    <div role={row ? "cell" : undefined}>
+      <div className={bodyClassName}>{children}</div>
+    </div>
+  </div>
 );

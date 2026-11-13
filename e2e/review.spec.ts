@@ -15,6 +15,13 @@ const analyzeWithClaude = async (page: Page) => {
   await page.getByRole("button", { name: "Analyze with Claude" }).click();
   await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
+  await landed(page);
+};
+
+/** Waits until Claude's run has ended and its landing is done, so the page is at rest. */
+const landed = async (page: Page) => {
+  await expect(page.locator("[data-slot=model-hairline]")).toHaveCount(0);
+  await expect(page.locator("[data-landing]")).toHaveAttribute("data-landing", "done");
 };
 
 /**
@@ -201,6 +208,47 @@ test("the line under the mouse shows a plus on its number, an unchanged fold's d
   expect(await tint(unchanged)).toBe("rgba(0, 0, 0, 0)");
   expect((await look(number)).plus).toBe("none");
 });
+
+for (const reducedMotion of ["no-preference", "reduce"] as const) {
+  test(`the top line holds while Claude's cards open above it, ${reducedMotion} motion`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await page.setViewportSize({ width: 1280, height: 480 });
+    await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+    // Down to the last file, below the code the points rest on.
+    await page
+      .locator("[aria-label=Changes] [data-slot=file-card]")
+      .last()
+      .evaluate((card) =>
+        window.scrollTo(0, card.getBoundingClientRect().top + window.scrollY + 80),
+      );
+    const top = await page.evaluateHandle(() =>
+      [...document.querySelectorAll("[aria-label=Changes] [role=row]")].find(
+        (row) =>
+          row.getBoundingClientRect().top >= 48 &&
+          row.closest("[data-slot=file-card-header]") === null,
+      ),
+    );
+    const topOf = () => top.evaluate((row) => row?.getBoundingClientRect().top ?? Number.NaN);
+    const before = await topOf();
+    expect(before).toBeGreaterThan(0);
+
+    // Clicked where it is: a click that scrolls up to the button would move the window itself.
+    await page.getByRole("button", { name: "Analyze with Claude" }).dispatchEvent("click");
+    await expect(page.locator("[data-slot=point]").first()).toBeAttached();
+    await landed(page);
+    // Cards opened above the line, and the line didn't move.
+    const above = await page
+      .locator("[data-slot=point]")
+      .evaluateAll(
+        (cards, line) => cards.filter((card) => card.getBoundingClientRect().bottom < line).length,
+        before,
+      );
+    expect(above).toBeGreaterThan(0);
+    expect(Math.abs((await topOf()) - before)).toBeLessThanOrEqual(1);
+  });
+}
 
 test("mechanical changes are collapsed until expanded", async ({ page }) => {
   await openReview(page, PR.refactorMove, "Tidy up utilities");

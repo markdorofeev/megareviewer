@@ -1,5 +1,5 @@
 import { SparklesIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type Analysis,
   modelRunnable,
@@ -11,36 +11,8 @@ import {
 export type ClaudeRun = Pick<Analysis, "status" | "stages" | "modelError">;
 
 import { POINT_STATUS } from "../../lib/status.ts";
-import { cn } from "../../lib/utils.ts";
+import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
-
-/** How long a count takes to roll up from zero, and how often it steps. */
-const ROLL_MS = 400;
-const ROLL_STEP_MS = 40;
-
-const reducedMotion = (): boolean =>
-  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/** Counts up from zero when `to` first arrives; an instant change with reduced motion. */
-const useCountUp = (to: number): number => {
-  const [shown, setShown] = useState(to);
-  const from = useRef(to);
-  useEffect(() => {
-    if (to === from.current) return;
-    from.current = to;
-    if (reducedMotion()) return setShown(to);
-    setShown(0);
-    const steps = Math.max(1, Math.round(ROLL_MS / ROLL_STEP_MS));
-    let step = 0;
-    const timer = setInterval(() => {
-      step += 1;
-      setShown(step >= steps ? to : Math.round((to * step) / steps));
-      if (step >= steps) clearInterval(timer);
-    }, ROLL_STEP_MS);
-    return () => clearInterval(timer);
-  }, [to]);
-  return shown;
-};
 
 /** Seconds since `since`, ticking while it runs. */
 const useElapsed = (since: number | null): number => {
@@ -63,20 +35,41 @@ const KIND_WORDS: Readonly<Record<PointKind, [string, string]>> = {
   decision: ["decision", "decisions"],
 };
 
-const Chip = ({ kind, count }: { readonly kind: PointKind; readonly count: number }) => {
-  const shown = useCountUp(count);
+/**
+ * A kind's count. Landing, it rises in at its place among the chips, its count rolling up from
+ * zero (globals.css); the number is in the text for screen readers, and drawn for the eye.
+ */
+const Chip = ({
+  kind,
+  count,
+  at,
+}: {
+  readonly kind: PointKind;
+  readonly count: number;
+  readonly at: number;
+}) => {
   const [one, many] = KIND_WORDS[kind];
   return (
     <span
       data-slot="point-chip"
       data-kind={kind}
+      data-land="rise"
+      style={cssVars({ "--landing-i": at })}
       className={cn(
         "flex min-h-6 items-center gap-1.5 rounded-full border px-2 text-caption font-medium",
         POINT_STATUS[kind].className,
       )}
     >
       <span aria-hidden="true">{POINT_STATUS[kind].glyph}</span>
-      <span className="tabular">{shown}</span> {count === 1 ? one : many}
+      <span>
+        <span
+          data-slot="count-up"
+          aria-hidden="true"
+          className="tabular"
+          style={cssVars({ "--count": count })}
+        />
+        <span className="sr-only">{count}</span> {count === 1 ? one : many}
+      </span>
     </span>
   );
 };
@@ -136,29 +129,40 @@ export const ClaudeElement = ({
     );
   }
 
-  const counts = (["finding", "risk", "decision"] as const).map(
-    (kind) => [kind, points.filter((point) => point.kind === kind).length] as const,
-  );
+  const counts = (["finding", "risk", "decision"] as const)
+    .map((kind) => [kind, points.filter((point) => point.kind === kind).length] as const)
+    .filter(([, count]) => count > 0);
   const note = missingNote(analysis);
+  // What follows the chips lands after the last of them.
+  const after = (at: number) => ({
+    "data-land": "rise",
+    style: cssVars({ "--landing-i": counts.length + at }),
+  });
   if (points.length > 0) {
     return (
       <span data-slot="claude-receipt" className="flex flex-wrap items-center gap-1.5">
-        {counts.map(([kind, count]) => count > 0 && <Chip key={kind} kind={kind} count={count} />)}
-        <Button variant="ghost" size="xs" onClick={onOpenList}>
-          All {points.length}
-        </Button>
-        <Button variant="ghost" size="xs" onClick={onNext}>
-          Next
-        </Button>
+        {counts.map(([kind, count], at) => (
+          <Chip key={kind} kind={kind} count={count} at={at} />
+        ))}
+        <span {...after(0)} className="flex items-center gap-1.5">
+          <Button variant="ghost" size="xs" onClick={onOpenList}>
+            All {points.length}
+          </Button>
+          <Button variant="ghost" size="xs" onClick={onNext}>
+            Next
+          </Button>
+        </span>
         {(error ?? note) !== null && (
-          <span role="alert" className="text-caption text-destructive">
+          <span {...after(1)} role="alert" className="text-caption text-destructive">
             {error ?? note}
           </span>
         )}
         {modelRunnable(analysis) && (
-          <Button variant="ghost" size="xs" disabled={starting} onClick={onRun}>
-            {starting ? "Starting…" : "Try again"}
-          </Button>
+          <span {...after(1)}>
+            <Button variant="ghost" size="xs" disabled={starting} onClick={onRun}>
+              {starting ? "Starting…" : "Try again"}
+            </Button>
+          </span>
         )}
       </span>
     );
@@ -167,7 +171,7 @@ export const ClaudeElement = ({
   if (!modelRunnable(analysis)) {
     // Claude ran and found nothing to raise.
     return analysis.stages.findings === "done" ? (
-      <span data-slot="claude-receipt" className="text-muted-foreground">
+      <span data-slot="claude-receipt" data-land="fade" className="text-muted-foreground">
         <span aria-hidden="true">✓ </span>Claude found nothing to raise
       </span>
     ) : null;

@@ -9,7 +9,7 @@ export {
   CallTrigger,
   createCallPeekHandle,
 } from "./diff/call-peek.tsx";
-export { type Density, DiffLine, type LineMark } from "./diff/diff-line.tsx";
+export { type Density, DiffLine, type LineMark, type PointLanding } from "./diff/diff-line.tsx";
 export { type DiffView, DiffViewer, type DiffViewerProps } from "./diff/diff-viewer.tsx";
 export { FilePath, FileStatusChip, UnchangedUses } from "./diff/file-path.tsx";
 export {
@@ -20,6 +20,7 @@ export {
   type LineComment,
   type LinePlace,
   PINNED,
+  type PointLine,
 } from "./diff/hunk-card.tsx";
 export {
   CollapsedHunk,

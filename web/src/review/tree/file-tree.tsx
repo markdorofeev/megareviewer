@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointKind } from "../../../../src/domain/review/index.ts";
 import { useShortcuts } from "../../lib/keymap.ts";
 import { FILE_STATUS, POINT_STATUS } from "../../lib/status.ts";
-import { cn } from "../../lib/utils.ts";
+import { cn, cssVars } from "../../lib/utils.ts";
 import { Input } from "../../ui/input.tsx";
 import { ScrollArea } from "../../ui/scroll-area.tsx";
 import { FileStatusChip } from "../diff/file-path.tsx";
@@ -78,6 +78,11 @@ export const FileTree = ({
     () => (mode === "tree" ? treeOrder(tree) : sortFiles(shown, order).map((file) => file.path)),
     [mode, tree, shown, order],
   );
+  // Landing, the marks drop in row by row from the top: each marked row's place among them.
+  const marked = useMemo(() => {
+    const paths = shownOrder.filter((path) => byPath.get(path)?.points !== undefined);
+    return new Map(paths.map((path, at) => [path, at]));
+  }, [shownOrder, byPath]);
   const step = (by: 1 | -1) => {
     const at = activePath === null ? -1 : shownOrder.indexOf(activePath);
     const next = shownOrder[Math.min(shownOrder.length - 1, Math.max(0, at + by))];
@@ -100,6 +105,9 @@ export const FileTree = ({
         depth={depth}
         active={entry.path === activePath}
         onSelect={onSelect}
+        {...(marked.has(entry.path)
+          ? { landing: { at: marked.get(entry.path) ?? 0, of: marked.size } }
+          : {})}
       />
     </li>
   );
@@ -225,13 +233,22 @@ const POINT_TONE: Readonly<Record<PointKind, string>> = {
   decision: "text-review-pending",
 };
 
-/** A file's points from Claude: a glyph and a count per kind, named in words to readers. */
+/**
+ * A file's points from Claude: a glyph and a count per kind, named in words to readers. Landing,
+ * they drop in at the row's place among the marked rows (globals.css).
+ */
 export const PointCounts = ({
   points,
+  landing,
 }: {
   readonly points: Readonly<Partial<Record<PointKind, number>>>;
+  readonly landing?: { readonly at: number; readonly of: number };
 }) => (
-  <>
+  <span
+    data-land="drop"
+    style={cssVars({ "--landing-i": landing?.at ?? 0, "--landing-n": landing?.of ?? 1 })}
+    className="inline-flex items-center gap-1.5"
+  >
     {POINT_KINDS.map((kind) => {
       const count = points[kind] ?? 0;
       if (count === 0) return null;
@@ -256,7 +273,7 @@ export const PointCounts = ({
         </span>
       );
     })}
-  </>
+  </span>
 );
 
 /**
@@ -269,9 +286,12 @@ export const FileRow = ({
   depth = 0,
   active = false,
   directory,
+  landing,
   onSelect,
 }: {
   readonly entry: Pick<FileEntry, "path" | "contract"> & Partial<FileEntry>;
+  /** The row's place among the rows with points, for their landing. */
+  readonly landing?: { readonly at: number; readonly of: number };
   readonly label: string;
   readonly depth?: number;
   readonly active?: boolean;
@@ -306,7 +326,9 @@ export const FileRow = ({
         )}
       </span>
       {entry.status !== undefined && <FileStatusChip status={entry.status} />}
-      {entry.points !== undefined && <PointCounts points={entry.points} />}
+      {entry.points !== undefined && (
+        <PointCounts points={entry.points} {...(landing === undefined ? {} : { landing })} />
+      )}
       {entry.contract > 0 && <ContractCount count={entry.contract} />}
       {entry.threads !== undefined && entry.threads > 0 && <ThreadCount count={entry.threads} />}
       {entry.additions !== undefined && entry.deletions !== undefined && (

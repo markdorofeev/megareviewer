@@ -45,6 +45,7 @@ import {
   THREADS,
   TREE_FILES,
 } from "./fixtures.ts";
+import { LandingDemo } from "./LandingDemo.tsx";
 
 const DENSITIES: readonly Density[] = ["compact", "default", "comfy"];
 
@@ -164,6 +165,10 @@ export const DomainComponents = () => {
 
       <Group title="Claude's element in the header">
         <ClaudeStates />
+      </Group>
+
+      <Group title="Claude's run landing: Play reads for a moment, then lands">
+        <LandingDemo />
       </Group>
 
       <Group title="Claude's points, one of each kind">
@@ -430,8 +435,14 @@ const Card = ({ children }: { readonly children: ReactNode }) => (
 const ClaudeStates = () => {
   const analysis = DESIGN_RUN;
   const ran = { ...analysis, stages: mapModelStages(analysis.stages, () => "done" as const) };
-  const element = (label: string, node: ReactNode) => (
-    <div key={label} className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
+  const element = (label: string, node: ReactNode, reading = false) => (
+    <div key={label} className="relative flex flex-wrap items-center gap-3 rounded-lg border p-3">
+      {/* The header's bottom edge while Claude reads. */}
+      {reading && (
+        <span data-slot="model-hairline" data-state="running" aria-hidden="true">
+          <span />
+        </span>
+      )}
       <span className="w-40 shrink-0 text-caption text-muted-foreground">{label}</span>
       {node}
     </div>
@@ -465,6 +476,7 @@ const ClaudeStates = () => {
           points={[]}
           {...shared}
         />,
+        true,
       )}
       {element(
         "The receipt",

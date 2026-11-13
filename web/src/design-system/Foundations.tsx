@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { useTheme } from "../lib/theme.ts";
 import { cn } from "../lib/utils.ts";
+import { tokenMs } from "../pages/review/useLanding.ts";
 import { Button } from "../ui/button.tsx";
 
 // The tokens of globals.css, shown live: swatches read the variables, so they follow the theme
@@ -263,6 +264,23 @@ const Colors = () => {
   );
 };
 
+/** The tokens Claude's run plays to: the hairline's loop while it reads, and the landing. */
+const LANDING_MOTION = [
+  { name: "--hairline-loop", use: "The hairline's trip along the header while Claude reads" },
+  { name: "--hairline-finish", use: "The hairline running out to full width and fading" },
+  { name: "--landing-step-chip", use: "Between the receipt's chips" },
+  { name: "--landing-count", use: "A chip's count rolling up from zero" },
+  { name: "--landing-at-tree", use: "When the tree's marks start" },
+  { name: "--landing-step-tree", use: "Between the tree's rows, at most" },
+  { name: "--landing-span-tree", use: "By when the last row's mark has started" },
+  { name: "--landing-at-code", use: "When the code's points start" },
+  { name: "--landing-step-code", use: "Between points in view" },
+  { name: "--landing-bar", use: "A point's bar drawing down its lines" },
+  { name: "--landing-wash", use: "The kind's wash passing over the lines" },
+  { name: "--landing-unfold", use: "A card unfolding under its lines" },
+  { name: "--landing-total", use: "The landing, for one point in view" },
+] as const;
+
 const Motion = () => {
   const [moved, setMoved] = useState(false);
   return (
@@ -288,6 +306,18 @@ const Motion = () => {
             <span className="text-caption text-muted-foreground">{entry.use}</span>
           </div>
         ))}
+        <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[14rem_4rem_minmax(0,1fr)]">
+          {LANDING_MOTION.map((entry) => (
+            <div key={entry.name} className="contents">
+              <dt className="font-mono text-code-compact text-muted-foreground">{entry.name}</dt>
+              <dd className="tabular font-mono text-code-compact">{tokenMs(entry.name)}ms</dd>
+              <dd className="text-caption text-muted-foreground">{entry.use}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="text-caption text-muted-foreground">
+          Played on Claude's run landing, under Domain components.
+        </p>
       </div>
     </Group>
   );

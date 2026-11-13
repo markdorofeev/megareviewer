@@ -27,6 +27,8 @@ const open = async (page: Page, { theme, palette }: Pick<Combination, "theme" | 
   // Fonts and syntax colors arrive after the first paint.
   await page.evaluate(() => document.fonts.ready);
   await expect(page.locator(".text-syntax-keyword").first()).toBeVisible();
+  // Nothing is mid-landing, so screenshots are of the page at rest.
+  await expect(page.locator('[data-landing]:not([data-landing="done"])')).toHaveCount(0);
 };
 
 for (const combination of COMBINATIONS) {
@@ -154,6 +156,32 @@ test("stops motion when the reader asks for less", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(await durations()).toEqual({ transition: "0s", animation: "0s" });
 });
+
+for (const reducedMotion of ["no-preference", "reduce"] as const) {
+  test(`Play runs Claude's landing, ${reducedMotion} motion`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion });
+    await open(page, { theme: "light", palette: "default" });
+    const demo = page
+      .locator("[data-landing]")
+      .filter({ has: page.getByRole("button", { name: "Play" }) });
+    await demo.evaluate((root) => {
+      const seen: string[] = [];
+      new MutationObserver(() => seen.push(root.getAttribute("data-landing") ?? "")).observe(root, {
+        attributes: true,
+        attributeFilter: ["data-landing"],
+      });
+      Object.assign(window, { landingPhases: seen });
+    });
+    await demo.getByRole("button", { name: "Play" }).click();
+    await expect(demo.getByText("Claude is reading this PR")).toBeVisible();
+    await expect(demo.locator("[data-slot=point-chip]").first()).toBeVisible();
+    await expect(demo).toHaveAttribute("data-landing", "done");
+    await expect(demo.locator("[data-slot=model-hairline]")).toHaveCount(0);
+    const phases: unknown = await page.evaluate(() => Reflect.get(window, "landingPhases"));
+    // Under reduced motion every step is an instant change: the landing never plays.
+    expect(Array.isArray(phases) && phases.includes("landing")).toBe(reducedMotion !== "reduce");
+  });
+}
 
 test("the checks catch what they look for", async ({ page }) => {
   await open(page, { theme: "light", palette: "default" });

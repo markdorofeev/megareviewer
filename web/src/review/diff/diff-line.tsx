@@ -1,6 +1,6 @@
 import { Fragment, type MouseEvent, memo, type ReactNode } from "react";
 import type { PointKind } from "../../../../src/domain/review/index.ts";
-import { cn } from "../../lib/utils.ts";
+import { cn, cssVars } from "../../lib/utils.ts";
 import type { CharRange } from "./intra-line.ts";
 import type { LineKind, ViewLine } from "./rows.ts";
 import type { SyntaxToken, SyntaxTokenType } from "./syntax.ts";
@@ -139,6 +139,11 @@ export interface DiffLineProps {
   readonly marked?: boolean;
   /** A line one of Claude's points rests on: a bar at its edge in the kind's color. */
   readonly pointKind?: PointKind | null;
+  /**
+   * The point is landing: its place among those in view, and this line's among its lines, so its
+   * bar draws down them and its wash passes over (globals.css).
+   */
+  readonly pointLanding?: PointLanding;
   /** Shows a comment button in the gutter on hover and focus. */
   readonly onComment?: (line: ViewLine) => void;
   /** A gutter click; shift-click extends the selection. */
@@ -160,6 +165,12 @@ export interface DiffLineProps {
   readonly marks?: readonly LineMark[];
 }
 
+export interface PointLanding {
+  readonly at: number;
+  readonly line: number;
+  readonly lines: number;
+}
+
 /** One line of a diff: the old and new numbers, the + / − marker, and the code. */
 export const DiffLine = memo(function DiffLine({
   line,
@@ -171,6 +182,7 @@ export const DiffLine = memo(function DiffLine({
   selected = false,
   marked = false,
   pointKind = null,
+  pointLanding,
   onComment,
   onGutterClick,
   numberButton,
@@ -248,6 +260,16 @@ export const DiffLine = memo(function DiffLine({
       data-focused={focused || undefined}
       data-marked={marked || undefined}
       data-point={pointKind ?? undefined}
+      data-point-line={pointLanding === undefined ? undefined : pointLanding.line}
+      style={
+        pointLanding === undefined
+          ? undefined
+          : cssVars({
+              "--landing-i": pointLanding.at,
+              "--point-line": pointLanding.line,
+              "--point-lines": pointLanding.lines,
+            })
+      }
       className={cn(
         "group/line relative flex min-w-full font-mono",
         onRowClick !== undefined && "cursor-pointer",
