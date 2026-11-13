@@ -324,6 +324,27 @@ const markedCode = (
   );
 };
 
+/**
+ * An empty stretch after a line, in its row's and its new number's colors, as if the line ran on:
+ * room for a scrollbar drawn over the code.
+ */
+export const LineEnd = ({
+  kind,
+  className,
+}: {
+  readonly kind: LineKind;
+  readonly className?: string;
+}) => (
+  <div
+    aria-hidden="true"
+    data-slot="line-end"
+    data-kind={kind}
+    className={cn("flex min-w-full", KIND[kind].row, className)}
+  >
+    <span className={cn("w-12 shrink-0", KIND[kind].gutter)} />
+  </div>
+);
+
 /** An empty half of a split row, beside a line the other side doesn't have. */
 export const EmptyHalf = ({ density = "default" }: { readonly density?: Density }) => (
   <div

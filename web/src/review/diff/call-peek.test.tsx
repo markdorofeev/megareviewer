@@ -101,6 +101,15 @@ describe("CallPeek", () => {
     expect(rows[1]?.dataset.kind).toBe("del");
   });
 
+  it("runs the last line's colors on to the card's edge, under where a scrollbar draws", async () => {
+    const { user } = renderPage(<Page onGoTo={() => {}} />);
+    await user.hover(screen.getByText("cachedReceipt"));
+    await wait(PEEK_OPEN_MS * 2);
+    const end = document.querySelector<HTMLElement>("[data-slot=line-end]");
+    expect(end?.dataset.kind).toBe(screen.getAllByRole("row").at(-1)?.dataset.kind);
+    expect(end?.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("stays open while the pointer is on the card, and closes once it leaves both", async () => {
     const { user } = renderPage(<Page onGoTo={() => {}} />);
     await user.hover(screen.getByText("cachedReceipt"));

@@ -9,7 +9,7 @@ import {
   type HoverCardHandle,
   HoverCardTrigger,
 } from "../../ui/hover-card.tsx";
-import { DiffLine } from "./diff-line.tsx";
+import { DiffLine, LineEnd } from "./diff-line.tsx";
 import { FilePath } from "./file-path.tsx";
 import { PINNED } from "./hunk-card.tsx";
 import { hunkLocation, lineCounts } from "./lines.ts";
@@ -132,8 +132,7 @@ const PeekBody = ({
       data-slot="peek-scroller"
       className="@container relative min-h-0 overflow-auto"
     >
-      {/* Room under the last line for a scrollbar drawn over the code, as macOS draws it. */}
-      <div className="w-max min-w-full pb-3">
+      <div className="w-max min-w-full">
         {payload.targets.map((target, at) => (
           <PeekPart
             key={target.id}
@@ -141,6 +140,7 @@ const PeekBody = ({
             symbol={payload.symbol}
             onGoTo={onGoTo}
             divided={at > 0}
+            last={at === payload.targets.length - 1}
           />
         ))}
       </div>
@@ -153,12 +153,15 @@ const PeekPart = ({
   symbol,
   onGoTo,
   divided,
+  last,
 }: {
   readonly target: CallTarget;
   readonly symbol: string;
   readonly onGoTo: (id: PartId) => void;
   /** Not the first part, so a rule sets it apart from the one above. */
   readonly divided: boolean;
+  /** The card's last part, whose last line runs on to the card's edge. */
+  readonly last: boolean;
 }) => {
   const { hunk, file } = target;
   const tokens = useHunkTokens(hunk, file, true);
@@ -195,6 +198,8 @@ const PeekPart = ({
           />
         ))}
       </div>
+      {/* Room under the last line for a scrollbar drawn over the code, as macOS draws it. */}
+      {last && <LineEnd kind={lines.at(-1)?.kind ?? "context"} className="h-3" />}
     </section>
   );
 };
