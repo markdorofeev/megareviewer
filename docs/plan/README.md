@@ -163,6 +163,7 @@ The `ModelUsage` change goes in its own PR first.
 | # | Stage | Depends on | Owns |
 |---|---|---|---|
 | 42 | [Claude from a button on the review](42-model-from-the-page.md) | 41 | `--ai` removed; the model run on an open analysis, its route and button |
+| 43 | [Triage and findings from Claude, landed in the code](43-triage-and-findings.md) | 42 | The findings pass, points with Raise and Dismiss, the wait and the landing, the replayed model for testing without spend |
 
 ## How to pick up a stage
 
