@@ -116,6 +116,13 @@ const PAIRS = [
   // hunk: a point's bar at the edge of the lines it rests on, by kind.
   ["Finding bar on card (non-text)", "review-changes", "card", 3],
   ["Decision bar on card (non-text)", "review-pending", "card", 3],
+  // The stepper's kind glyph, beside the current point's title in the review bar.
+  ["Finding glyph in the review bar (non-text)", "review-changes", "background", 3],
+  ["Decision glyph in the review bar (non-text)", "review-pending", "background", 3],
+  // A pressed point chip's border is its text's color, on the chip's own tint.
+  ["Pressed finding chip border (non-text)", "review-changes", "review-changes-bg", 3],
+  ["Pressed risk chip border (non-text)", "risk-contract", "risk-contract-bg", 3],
+  ["Pressed decision chip border (non-text)", "review-pending", "review-pending-bg", 3],
   ["Contract bar on background (non-text)", "risk-contract-solid", "background", 3],
   ["Contract bar on card (non-text)", "risk-contract-solid", "card", 3],
   ["Logic label on its tint", "risk-logic", "risk-logic-bg", 4.5],

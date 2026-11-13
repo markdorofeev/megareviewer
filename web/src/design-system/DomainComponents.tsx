@@ -1,10 +1,9 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Hunk } from "../../../src/domain/diff/index.ts";
-import { mapModelStages, PointId } from "../../../src/domain/review/index.ts";
+import { PointId } from "../../../src/domain/review/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
 import { VERDICT_STATUS } from "../lib/status.ts";
-import { ClaudeElement } from "../pages/review/ClaudeElement.tsx";
 import { PointCard } from "../pages/review/PointCard.tsx";
 import {
   CollapsedHunk,
@@ -35,7 +34,6 @@ import {
   ADDED_FILE,
   BINARY_FILE,
   DELETED_FILE,
-  DESIGN_RUN,
   generatedFile,
   PENDING_COMMENTS,
   POINTS,
@@ -46,6 +44,7 @@ import {
   TREE_FILES,
 } from "./fixtures.ts";
 import { LandingDemo } from "./LandingDemo.tsx";
+import { ReviewBarStates } from "./ReviewBarDemo.tsx";
 
 const DENSITIES: readonly Density[] = ["compact", "default", "comfy"];
 
@@ -163,8 +162,8 @@ export const DomainComponents = () => {
         <DraftDemo />
       </Group>
 
-      <Group title="Claude's element in the header">
-        <ClaudeStates />
+      <Group title="The review bar: Claude, the stepper through its points, the layout and Publish">
+        <ReviewBarStates />
       </Group>
 
       <Group title="Claude's run landing: Play reads for a moment, then lands">
@@ -430,89 +429,6 @@ const ThreadDemo = ({
 const Card = ({ children }: { readonly children: ReactNode }) => (
   <div className="rounded-lg border">{children}</div>
 );
-
-/** The header's Claude element, in each state a reviewer sees it in. */
-const ClaudeStates = () => {
-  const analysis = DESIGN_RUN;
-  const ran = { ...analysis, stages: mapModelStages(analysis.stages, () => "done" as const) };
-  const element = (label: string, node: ReactNode, reading = false) => (
-    <div key={label} className="relative flex flex-wrap items-center gap-3 rounded-lg border p-3">
-      {/* The header's bottom edge while Claude reads. */}
-      {reading && (
-        <span data-slot="model-hairline" data-state="running" aria-hidden="true">
-          <span />
-        </span>
-      )}
-      <span className="w-40 shrink-0 text-caption text-muted-foreground">{label}</span>
-      {node}
-    </div>
-  );
-  const shared = {
-    via: "Claude Code, on your Pro plan",
-    starting: false,
-    error: null,
-    onRun: () => {},
-    onOpenList: () => {},
-    onNext: () => {},
-  };
-  return (
-    <div className="flex flex-col gap-2">
-      {element(
-        "Before it runs",
-        <ClaudeElement
-          analysis={analysis}
-          running={false}
-          startedAt={null}
-          points={[]}
-          {...shared}
-        />,
-      )}
-      {element(
-        "While it reads",
-        <ClaudeElement
-          analysis={analysis}
-          running={true}
-          startedAt={Date.now() - 42_000}
-          points={[]}
-          {...shared}
-        />,
-        true,
-      )}
-      {element(
-        "The receipt",
-        <ClaudeElement
-          analysis={ran}
-          running={false}
-          startedAt={null}
-          points={POINTS}
-          {...shared}
-        />,
-      )}
-      {element(
-        "What's missing, and why",
-        <ClaudeElement
-          analysis={{
-            ...ran,
-            stages: { ...ran.stages, risk: "failed", decisions: "skipped" },
-            modelError: {
-              stage: "risk",
-              code: "model-error",
-              message: "Your Claude plan's usage limit is reached. It resets at 18:00.",
-            },
-          }}
-          running={false}
-          startedAt={null}
-          points={POINTS.slice(0, 1)}
-          {...shared}
-        />,
-      )}
-      {element(
-        "Nothing to raise",
-        <ClaudeElement analysis={ran} running={false} startedAt={null} points={[]} {...shared} />,
-      )}
-    </div>
-  );
-};
 
 /** A point card of each kind, and a dismissed one. */
 const PointStates = () => (

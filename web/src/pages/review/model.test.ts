@@ -3,6 +3,7 @@ import { type Analysis, type Point, PointId } from "../../../../src/domain/revie
 import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
 import {
   byTreePath,
+  changeTotals,
   gapBetween,
   mapFiles,
   mechanicalCount,
@@ -10,6 +11,7 @@ import {
   partIndex,
   partsInPathOrder,
   pointPlaces,
+  threadTotals,
   tourSteps,
   trailingProofs,
 } from "./model.ts";
@@ -248,5 +250,21 @@ describe("trailingProofs", () => {
     const trailing = trailingProofs(analysis, index);
     expect(trailing.some((proof) => proof.hunkId === h.formatMoneyRemoved)).toBe(false);
     expect(trailing).toHaveLength(analysis.proofs.length - 1);
+  });
+});
+
+describe("totals", () => {
+  it("count every file the PR changes, mechanical ones too, and the lines", () => {
+    const totals = changeTotals(analysis.files);
+    expect(totals).toEqual({ files: 7, additions: 58, deletions: 13 });
+    expect(changeTotals([])).toEqual({ files: 0, additions: 0, deletions: 0 });
+  });
+
+  it("count the threads and those still open", () => {
+    expect(threadTotals([{ resolved: false }, { resolved: true }, { resolved: false }])).toEqual({
+      threads: 3,
+      unresolved: 2,
+    });
+    expect(threadTotals([])).toEqual({ threads: 0, unresolved: 0 });
   });
 });

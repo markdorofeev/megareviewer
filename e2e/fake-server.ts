@@ -16,8 +16,14 @@ export interface FakeServer {
   readonly request: APIRequestContext;
 }
 
-/** Starts the server's fake mode on a free port, serving the built UI, with the model or without. */
-const start = async (ai: boolean): Promise<{ child: ChildProcess; url: string }> => {
+/**
+ * Starts the server's fake mode on a free port, serving the built UI, with the model or without,
+ * playing a scenario of Claude's run when one is named.
+ */
+const start = async (
+  ai: boolean,
+  scenario: string | null,
+): Promise<{ child: ChildProcess; url: string }> => {
   if (!existsSync(`${root}/dist/web/index.html`)) {
     throw new Error("No built UI in dist/web. Run `pnpm build` first.");
   }
@@ -32,6 +38,7 @@ const start = async (ai: boolean): Promise<{ child: ChildProcess; url: string }>
       "--static",
       "dist/web",
       ...(ai ? [] : ["--no-ai"]),
+      ...(scenario === null ? [] : ["--scenario", scenario]),
     ],
     { cwd: root, stdio: ["ignore", "pipe", "pipe"] },
   );
@@ -53,11 +60,13 @@ const start = async (ai: boolean): Promise<{ child: ChildProcess; url: string }>
   return { child, url };
 };
 
-export const test = base.extend<{ ai: boolean; server: FakeServer }>({
+export const test = base.extend<{ ai: boolean; scenario: string | null; server: FakeServer }>({
   /** Whether Analyze with Claude can run; `test.use({ ai: false })` serves it as unavailable. */
   ai: [true, { option: true }],
-  server: async ({ playwright, ai }, use) => {
-    const { child, url } = await start(ai);
+  /** The scenario Claude's run plays, as `--scenario` names it; `test.use({ scenario: "many" })`. */
+  scenario: [null, { option: true }],
+  server: async ({ playwright, ai, scenario }, use) => {
+    const { child, url } = await start(ai, scenario);
     const request = await playwright.request.newContext({
       baseURL: url,
       extraHTTPHeaders: { [TOKEN_HEADER]: TOKEN },

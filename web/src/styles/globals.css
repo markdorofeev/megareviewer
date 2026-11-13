@@ -508,6 +508,15 @@
   content: counter(count-up);
 }
 
+/*
+ * The review page's bar stays at the top of the window. What sticks or scrolls under it reads its
+ * height: file headers and the tree rail sit below it, and the focus never lands under it.
+ */
+:root:has([data-slot="review-page"]) {
+  --review-bar-h: 2.75rem;
+  scroll-padding-top: var(--review-bar-h);
+}
+
 /* The hairline: a segment travelling along a faint track while Claude reads. */
 [data-slot="model-hairline"] {
   position: absolute;

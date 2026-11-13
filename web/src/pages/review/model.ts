@@ -13,6 +13,7 @@ import {
   type HunkComment,
   type Point,
   type PointId,
+  type ReviewThread,
   type RiskAssessment,
   ruleReasons,
   type TourStep,
@@ -320,3 +321,27 @@ export const commentsInParts = (
   }
   return byPart;
 };
+
+/** What the pull request changes, counted over every file in it, mechanical ones too. */
+export interface ChangeTotals {
+  readonly files: number;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+export const changeTotals = (files: readonly FileChange[]): ChangeTotals => ({
+  files: files.length,
+  additions: files.reduce((sum, file) => sum + file.additions, 0),
+  deletions: files.reduce((sum, file) => sum + file.deletions, 0),
+});
+
+/** The pull request's conversation: its threads, and how many of them are still open. */
+export interface ThreadTotals {
+  readonly threads: number;
+  readonly unresolved: number;
+}
+
+export const threadTotals = (threads: readonly Pick<ReviewThread, "resolved">[]): ThreadTotals => ({
+  threads: threads.length,
+  unresolved: threads.filter((thread) => !thread.resolved).length,
+});

@@ -115,6 +115,12 @@ const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
 const _storedReviewed = (): unknown =>
   JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "[]");
 const rail = () => screen.getByRole("complementary", { name: "Files" });
+/** The row under the header that stays at the top of the window. */
+const reviewBar = () => {
+  const bar = document.querySelector<HTMLElement>("[data-slot=review-bar]");
+  if (bar === null) throw new Error("no review bar");
+  return bar;
+};
 const overviewBox = () => screen.getByRole("region", { name: "Overview of the changed files" });
 const pointCard = (title: RegExp) => screen.getByRole("article", { name: title });
 const raise = (title: RegExp) =>
@@ -179,10 +185,10 @@ describe("ReviewPage states", () => {
     await loaded();
     // The code's stages are done, so the strip is gone; Claude's run says so in the header.
     expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull();
-    expect(screen.getByText("Claude is reading this PR")).toBeTruthy();
-    expect(document.querySelector("[data-slot=model-hairline]")?.getAttribute("data-state")).toBe(
-      "running",
-    );
+    expect(within(reviewBar()).getByText("Claude is reading this PR")).toBeTruthy();
+    expect(
+      reviewBar().querySelector("[data-slot=model-hairline]")?.getAttribute("data-state"),
+    ).toBe("running");
     // The description stays until the intent arrives.
     const description = firstSentence(analysis.pullRequest?.description ?? "");
     expect(screen.getByText(description)).toBeTruthy();
@@ -270,7 +276,7 @@ describe("ReviewPage states", () => {
         request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
     });
     await loaded();
-    const button = screen.getByRole("button", { name: "Analyze with Claude" });
+    const button = within(reviewBar()).getByRole("button", { name: "Analyze with Claude" });
     // What runs it, once the status has loaded.
     await waitFor(() =>
       expect(button.getAttribute("title")).toBe("Runs on Claude Code, on your Pro plan"),
@@ -299,7 +305,9 @@ describe("ReviewPage states", () => {
     });
     await loaded();
     // What landed stays; the receipt says what's missing and why.
-    expect(screen.getByRole("alert").textContent).toBe("risk, decisions missing: Overloaded");
+    expect(within(reviewBar()).getByRole("alert").textContent).toBe(
+      "risk, decisions missing: Overloaded",
+    );
     // The code's review is all there.
     expect(fileCards()).toContain("src/routes/orders.ts");
 
@@ -335,13 +343,37 @@ describe("ReviewPage states", () => {
 });
 
 describe("header", () => {
-  it("names the PR once, by its title and a link", async () => {
+  it("names the PR once, with who wants to merge what, how much it changes and its threads", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-21T10:21:00Z"));
     renderReview();
     await loaded();
     const link = screen.getByRole("link", { name: "shop #128" });
     expect(link.getAttribute("href")).toBe("https://github.com/acme/shop/pull/128");
-    expect(screen.queryByText(/Sam Rivera/)).toBeNull();
-    expect(screen.queryByText(/shop-142-order-receipts/)).toBeNull();
+    const byline = document.querySelector<HTMLElement>("[data-slot=pr-byline]");
+    expect(byline?.textContent?.replace(/\s+/g, " ")).toBe(
+      "Sam Rivera wants to merge shop-142-order-receipts → into main · updated 40m ago · 7 files +58 −13, 58 lines added, 13 removed",
+    );
+    await waitFor(() =>
+      expect(document.querySelector("[data-slot=thread-totals]")?.textContent).toBe(
+        "4 threads · 3 unresolved",
+      ),
+    );
+  });
+
+  it("leaves out who, what and the threads while the pull request is being collected", async () => {
+    const { setView } = renderReview({
+      view: { ...fixture, analysis: analysisInProgress(analysis, 0) },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Collecting the pull request…" });
+    expect(document.querySelector("[data-slot=pr-byline]")).toBeNull();
+    expect(document.querySelector("[data-slot=thread-totals]")).toBeNull();
+
+    // Collected, but the diff isn't read yet: who and what, but no count of files.
+    setView({ ...fixture, analysis: analysisInProgress(analysis, 1) });
+    await loaded();
+    const byline = document.querySelector("[data-slot=pr-byline]");
+    expect(byline?.textContent).toContain("Sam Rivera wants to merge");
+    expect(byline?.textContent).not.toContain("files");
   });
 
   it("shows up to two warnings in full and collapses more to a count", async () => {
@@ -714,28 +746,98 @@ describe("points", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("are counted by kind in the header, listed in full, and stepped through", async () => {
+  /** The stepper's position, which opens the list. */
+  const position = () => within(reviewBar()).getByRole("button", { name: /, show all$/ });
+  const step = (name: "Next point" | "Previous point") =>
+    userEvent.click(within(reviewBar()).getByRole("button", { name }));
+
+  it("are counted by kind in the bar, and stepped through both ways, round", async () => {
     renderReview();
     await loaded();
-    const [header] = screen.getAllByRole("banner");
-    if (header === undefined) throw new Error("no header");
     await waitFor(() =>
       expect(
-        [...header.querySelectorAll("[data-slot=point-chip]")].map((chip) =>
+        [...reviewBar().querySelectorAll("[data-slot=point-chip]")].map((chip) =>
           chip.textContent?.replace(/\s+/g, " ").trim(),
         ),
       ).toEqual(["⚠3 findings", "▲1 risk", "◇5 decisions"]),
     );
+    // Before the first step, the count; Next goes to the first.
+    expect(position().textContent).toBe("9 points");
+    expect(position().getAttribute("aria-label")).toBe("9 points, show all");
+    await step("Next point");
+    expect(scrolledTo().at(-1)).toBe("point-f1");
+    expect(position().getAttribute("aria-label")).toBe("Point 1 of 9, show all");
+    expect(within(reviewBar()).getByRole("status").textContent).toMatch(
+      /^Finding 1 of 9: Any signed-in user can read/,
+    );
+    expect(
+      within(reviewBar()).getByRole("button", { name: /^Go to finding: Any signed-in user/ }),
+    ).toBeTruthy();
 
-    await userEvent.click(within(header).getByRole("button", { name: "All 9" }));
+    await step("Previous point");
+    expect(position().textContent).toBe("9 of 9");
+    expect(scrolledTo().at(-1)).toBe("point-d5");
+    await step("Next point");
+    expect(position().textContent).toBe("1 of 9");
+    await step("Next point");
+    expect(scrolledTo().at(-1)).toBe("point-f2");
+
+    // The title goes back to the point's card.
+    await userEvent.click(within(reviewBar()).getByRole("button", { name: /^Go to finding/ }));
+    expect(scrolledTo().slice(-2)).toEqual(["point-f2", "point-f2"]);
+  });
+
+  it("narrow to a kind with its chip, and widen again", async () => {
+    renderReview();
+    await loaded();
+    const chip = await within(reviewBar()).findByRole("button", { name: "5 decisions" });
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    await userEvent.click(chip);
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    // The reviewer wasn't on a decision, so the stepper goes to the first.
+    expect(scrolledTo().at(-1)).toBe("point-d1");
+    expect(position().textContent).toBe("1 of 5");
+    await step("Next point");
+    expect(scrolledTo().at(-1)).toBe("point-d2");
+    expect(position().textContent).toBe("2 of 5");
+
+    // Another chip narrows to its own kind; the same one again widens to every point.
+    await userEvent.click(within(reviewBar()).getByRole("button", { name: "3 findings" }));
+    expect(scrolledTo().at(-1)).toBe("point-f1");
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    await userEvent.click(within(reviewBar()).getByRole("button", { name: "3 findings" }));
+    expect(position().textContent).toBe("1 of 9");
+  });
+
+  it("are listed in full from the position, and a row there is where the stepper goes on", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(position());
     const list = screen.getByRole("list", { name: "Points" });
     expect(within(list).getAllByRole("button")).toHaveLength(9);
     await userEvent.click(within(list).getAllByRole("button")[1] as HTMLElement);
     expect(scrolledTo().at(-1)).toBe("point-f2");
+    expect(position().textContent).toBe("2 of 9");
 
-    // Next goes on from the point the list left the reviewer on.
-    await userEvent.click(within(header).getByRole("button", { name: /^Next/ }));
+    await step("Next point");
     expect(scrolledTo().at(-1)).toBe("point-m1");
+  });
+
+  it("keep a dismissed point as a step, struck through", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: new RegExp(`^Dismiss: ${RETRIES.source}`) }),
+    );
+    await userEvent.click(position());
+    const list = screen.getByRole("list", { name: "Points" });
+    await userEvent.click(within(list).getByRole("button", { name: RETRIES }));
+    const title = within(reviewBar()).getByRole("button", { name: /^Go to decision:/ });
+    expect(title.querySelector(".line-through")?.textContent).toMatch(RETRIES);
+    expect(within(reviewBar()).getByRole("status").textContent).toMatch(/\(dismissed\)$/);
+    await step("Next point");
+    await step("Previous point");
+    expect(scrolledTo().at(-1)).toBe("point-d3");
   });
 
   it("sit under the last of their lines, and going to one keeps those lines in view", async () => {
@@ -777,7 +879,8 @@ describe("points", () => {
       },
     });
     await loaded();
-    expect(screen.getByRole("link", { name: "Published" }).getAttribute("href")).toBe(receipt.url);
+    const published = within(reviewBar()).getByRole("link", { name: "Published" });
+    expect(published.getAttribute("href")).toBe(receipt.url);
     expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
     expect(pointCard(OWNERSHIP).dataset.state).toBe("raised");
     expect(raise(OWNERSHIP).hasAttribute("disabled")).toBe(true);
@@ -1187,10 +1290,10 @@ describe("without the model", () => {
   it("offers Publish, since the reviewer's own verdict is a review in itself", async () => {
     renderReview({ view: { ...withoutModel, isAuthor: true } });
     await loaded();
-    // It floats, in reach wherever the page is scrolled, and counts what will post.
+    // It's in the bar, in reach wherever the page is scrolled, and counts what will post.
     const publish = screen.getByRole("button", { name: /^Publish review…/ });
     expect(publish.dataset.slot).toBe("publish-button");
-    expect(publish.className).toContain("fixed");
+    expect(reviewBar().contains(publish)).toBe(true);
     expect(publish.textContent).not.toContain("to post");
 
     window.localStorage.setItem(

@@ -13,6 +13,7 @@ import {
   inProgress,
   type Point,
   PointId,
+  type PointKind,
   pointsOf,
   pullRequestUrl,
   type ReviewThread,
@@ -51,6 +52,7 @@ import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
 import {
+  changeTotals,
   commentsInParts,
   contractParts,
   type Layout,
@@ -59,6 +61,7 @@ import {
   parseLayout,
   partIndex,
   pointPlaces,
+  threadTotals,
   tourSteps,
   trailingProofs,
 } from "./model.ts";
@@ -66,12 +69,15 @@ import { Overview } from "./Overview.tsx";
 import { fileOverview, type OverviewNode } from "./overview.ts";
 import { PointCard, PointFold, PointMention, pointAnchor } from "./PointCard.tsx";
 import { PointList } from "./PointList.tsx";
+import { PointStepper } from "./PointStepper.tsx";
 import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { Rail } from "./Rail.tsx";
+import { ReviewBar } from "./ReviewBar.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { Segmented } from "./Segmented.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
+import { narrowTo } from "./stepper.ts";
 import { useStoredState } from "./storage.ts";
 import { coveredLines, placeKey, placeThreads } from "./threads.ts";
 import { UsageFooter } from "./UsageFooter.tsx";
@@ -400,6 +406,8 @@ const Review = ({
   // The overview node the map was opened from, for Esc to go back to.
   const [openedFrom, setOpenedFrom] = useState<string | null>(null);
   const [currentPoint, setCurrentPoint] = useState<PointId | null>(null);
+  // The kind a chip narrowed the stepper to.
+  const [narrowed, setNarrowed] = useState<PointKind | null>(null);
   const [showPoints, setShowPoints] = useState(false);
   // When this page saw Claude's run start, for the time since.
   const [modelStartedAt, setModelStartedAt] = useState<number | null>(null);
@@ -551,11 +559,11 @@ const Review = ({
     }
     setCurrentPoint(id);
   };
-  /** Steps to the point after the one the reviewer is on, round to the first. */
-  const goToNextPoint = () => {
-    const at = points.findIndex((point) => point.id === currentPoint);
-    const next = points[(at + 1) % points.length];
-    if (next !== undefined) goToPoint(next.id);
+  /** Narrows the stepper to a kind, going to its first point unless the reviewer is on one. */
+  const narrow = (kind: PointKind | null) => {
+    setNarrowed(kind);
+    const to = narrowTo(points, kind, currentPoint);
+    if (to !== null) goToPoint(to);
   };
   /** A mismatch is one of Claude's points, the nth of the intent's, so Details goes to its card. */
   const goToMismatch = (at: number) => goToPoint(PointId.parse(`m${at + 1}`));
@@ -727,7 +735,7 @@ const Review = ({
 
   // What publishing will post on the code: the reviewer's comments, raised points among them.
   const toPost = hunkComments.length;
-  const publishShown = view.publication === null && canPublish;
+  const totals = useMemo(() => changeTotals(analysis.files), [analysis.files]);
   const failureTitle =
     pointStates.failure === null
       ? ""
@@ -895,11 +903,11 @@ const Review = ({
 
   return (
     <div
+      data-slot="review-page"
       data-layout={layout}
       // The landing of Claude's results, which globals.css plays (useLanding).
       data-landing={landing.phase}
-      // Room under the last of the page for the floating Publish button.
-      className={cn("mx-auto flex max-w-[1600px] flex-col gap-4", publishShown && "pb-20")}
+      className="mx-auto flex max-w-[1600px] flex-col gap-4"
     >
       <ReviewHeader
         view={view}
@@ -911,25 +919,47 @@ const Review = ({
               detailsReturnFocus.current = true;
               setShowDetails(true);
             }}
+          />
+        }
+        totals={totals}
+        threads={threads.list === null ? null : threadTotals(threads.list.threads)}
+        now={Date.now()}
+        reanalyzing={reanalyze.pending}
+        reanalyzeError={reanalyze.error}
+        onReanalyze={async () => {
+          const result = await reanalyze.run({ url: prUrl });
+          if (result.ok) open(result.value.analysisId);
+        }}
+      />
+      <ReviewBar
+        title={live.pullRequest?.title ?? null}
+        claude={
+          <ClaudeElement
+            analysis={live}
+            via={modelStatus?.via ?? null}
+            running={landing.running}
+            startedAt={modelStartedAt}
+            starting={runModel.pending}
+            error={runModel.error === null ? null : errorMessage(runModel.error)}
+            points={points}
+            narrowed={narrowed}
+            onNarrow={narrow}
+            onRun={async () => {
+              const result = await runModel.run(analysisId);
+              if (!result.ok) return;
+              setModelStartedAt(Date.now());
+              follow();
+            }}
           >
-            <ClaudeElement
-              analysis={live}
-              via={modelStatus?.via ?? null}
-              running={landing.running}
-              startedAt={modelStartedAt}
-              starting={runModel.pending}
-              error={runModel.error === null ? null : errorMessage(runModel.error)}
+            <PointStepper
               points={points}
-              onRun={async () => {
-                const result = await runModel.run(analysisId);
-                if (!result.ok) return;
-                setModelStartedAt(Date.now());
-                follow();
-              }}
+              current={currentPoint}
+              stateOf={pointStates.stateOf}
+              kind={narrowed}
+              onGo={goToPoint}
               onOpenList={() => setShowPoints(true)}
-              onNext={goToNextPoint}
             />
-          </IntentLine>
+          </ClaudeElement>
         }
         tools={
           <>
@@ -955,13 +985,27 @@ const Review = ({
             />
           </>
         }
+        publish={
+          canPublish && (
+            <Button
+              size="sm"
+              data-slot="publish-button"
+              className="shrink-0"
+              onClick={() => void openPublish()}
+            >
+              Publish review…
+              {toPost > 0 && (
+                <span className="tabular rounded-full bg-primary-foreground px-1.5 text-caption text-primary">
+                  {toPost}
+                  <span className="sr-only"> to post</span>
+                </span>
+              )}
+              <KeyHint id="openReview" />
+            </Button>
+          )
+        }
+        publication={publication}
         hairline={landing.running ? "running" : landing.phase === "landing" ? "finishing" : null}
-        reanalyzing={reanalyze.pending}
-        reanalyzeError={reanalyze.error}
-        onReanalyze={async () => {
-          const result = await reanalyze.run({ url: prUrl });
-          if (result.ok) open(result.value.analysisId);
-        }}
       />
 
       {!complete && (
@@ -1085,26 +1129,6 @@ const Review = ({
       )}
 
       <UsageFooter usage={live.usage} />
-
-      {publishShown && (
-        // Floats at the bottom right, so the review can be published from anywhere in the scroll.
-        <Button
-          size="lg"
-          data-slot="publish-button"
-          disabled={!complete}
-          onClick={() => void openPublish()}
-          className="fixed right-6 bottom-6 z-40 rounded-full px-4 shadow-lg"
-        >
-          Publish review…
-          {toPost > 0 && (
-            <span className="tabular rounded-full bg-primary-foreground px-1.5 text-caption text-primary">
-              {toPost}
-              <span className="sr-only"> to post</span>
-            </span>
-          )}
-          <KeyHint id="openReview" />
-        </Button>
-      )}
 
       {publishing && (
         <PublishDialog

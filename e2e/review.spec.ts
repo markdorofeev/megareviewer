@@ -250,6 +250,63 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
   });
 }
 
+test.describe("the bar, with many of Claude's points", () => {
+  test.use({ scenario: "many" });
+
+  test("is one row, stays in view, steps to a card below it, and publishes from there", async ({
+    page,
+  }) => {
+    // The scenario plays Claude's run at its recorded pace, some 20 seconds.
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1024, height: 720 });
+    await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+    await page.getByRole("button", { name: "Analyze with Claude" }).click();
+    await expect(page.locator("[data-slot=point-chip]").first()).toBeVisible({ timeout: 60_000 });
+    await landed(page);
+    const bar = page.locator("[data-slot=review-bar]");
+
+    // At 1024px every visible button sits on the bar's one row, and nothing scrolls sideways.
+    const middles = await bar.getByRole("button").evaluateAll((buttons) =>
+      buttons
+        .map((button) => button.getBoundingClientRect())
+        .filter((box) => box.width > 0)
+        .map((box) => Math.round(box.top + box.height / 2)),
+    );
+    expect(Math.max(...middles) - Math.min(...middles)).toBeLessThanOrEqual(1);
+    expect(await bar.evaluate((one) => one.getBoundingClientRect().height)).toBeLessThanOrEqual(45);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      1024,
+    );
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect(bar).toBeInViewport();
+    expect((await bar.boundingBox())?.y).toBe(0);
+    // Stuck, it names the PR.
+    await expect(bar.getByText(SMALL_FEATURE_TITLE)).toBeVisible();
+
+    await bar.getByRole("button", { name: "Next point" }).click();
+    await expect(bar.getByRole("button", { name: /^Point 1 of \d+, show all$/ })).toBeVisible();
+    const card = page.locator("[data-slot=point]:focus");
+    await expect(card).toBeInViewport();
+    const barBottom = await bar.evaluate((one) => one.getBoundingClientRect().bottom);
+    const cardTop = await card.evaluate((one) => one.getBoundingClientRect().top);
+    expect(cardTop).toBeGreaterThanOrEqual(barBottom);
+    // The lines the card rests on show above it, below the file's sticky header.
+    const header = await card.evaluate(
+      (one) =>
+        one
+          .closest("[data-slot=file-card]")
+          ?.querySelector("[data-slot=file-card-header]")
+          ?.getBoundingClientRect().bottom ?? Number.NaN,
+    );
+    expect(header).toBeLessThanOrEqual(cardTop);
+
+    await bar.getByRole("button", { name: /^Publish review…/ }).click();
+    await expect(page.getByRole("dialog", { name: "Publish the review" })).toBeVisible();
+  });
+});
+
 test("mechanical changes are collapsed until expanded", async ({ page }) => {
   await openReview(page, PR.refactorMove, "Tidy up utilities");
   const group = page.getByRole("region", { name: /Mechanical changes/ });

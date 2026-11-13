@@ -1,6 +1,6 @@
 # Stage 44: A bar that stays, with a stepper through Claude's points
 
-**Status:** Not started
+**Status:** Done (branch `claude/stage-45-8e010e`): `pnpm check` and `pnpm e2e` pass; the live check of Claude's points on delphi-code #2 waits for `dev:replay` (see **Notes for later stages**)
 **Depends on:** 43
 **Owns:** the header, the bar, the stepper, Claude's element and the Publish button in `web/src/pages/review/`; sticky offsets in `MapLayout.tsx` and `Rail.tsx`; their examples in `web/src/design-system/`; `e2e/review.spec.ts`
 
@@ -114,15 +114,22 @@ mark wants to merge feat/retry-backoff → main · updated 40m ago · 4 files +2
 
 ## Definition of done
 
-- [ ] From any scroll position, one click goes to the next or the previous point, and the bar says which point of how many.
-- [ ] No floating Publish button; publishing works from the bar at the top of the page and after scrolling.
-- [ ] A file's sticky header sits under the bar, the tree rail isn't cut off by it, and a card scrolled to isn't hidden under either.
-- [ ] Tab never lands on an element hidden under the bar.
-- [ ] The page doesn't shift when the bar sticks or lets go.
-- [ ] Checked live on delphi-code #2 with `pnpm dev:replay --scenario ready` and `--scenario many`, in light, dark and at 1024px.
-- [ ] ARCHITECTURE.md says what the header and the bar are, and why the floating button went.
-- [ ] `pnpm check` and `pnpm e2e` pass.
+- [x] From any scroll position, one click goes to the next or the previous point, and the bar says which point of how many.
+- [x] No floating Publish button; publishing works from the bar at the top of the page and after scrolling.
+- [x] A file's sticky header sits under the bar, the tree rail isn't cut off by it, and a card scrolled to isn't hidden under either.
+- [x] Tab never lands on an element hidden under the bar.
+- [x] The page doesn't shift when the bar sticks or lets go.
+- [ ] Checked live on delphi-code #2 with `pnpm dev:replay --scenario ready` and `--scenario many`, in light, dark and at 1024px. Partly: see **Notes for later stages**.
+- [x] ARCHITECTURE.md says what the header and the bar are, and why the floating button went.
+- [x] `pnpm check` and `pnpm e2e` pass.
 
 ## Notes for later stages
 
-(none yet)
+- **Checked live without `dev:replay`,** which stage 43 left unbuilt. delphi-code #2 was checked on the real server without Claude (the header's line and threads, the bar stuck and not, the rail and file headers under it, in light, dark and at 1024px), and Claude's states and the stepper with `pnpm dev:web:mock` and `?scenario=many`. The end-to-end test plays `--scenario many` in fake mode, at the recording's pace, about 20 seconds; the fixture gained a `scenario` option for it.
+- **Stuck is observed on the bar itself,** not on a sentinel above it: an `IntersectionObserver` with the window's top edge moved down a pixel cuts the bar only while it sits at the top. A sentinel is a flex item of its own in the page's column, which adds the column's gap, and needs a negative margin to take it back wherever the bar is used.
+- **`scroll-padding-top` is the bar's height, and the `scroll-mt-*` classes stayed.** `scrollIntoView` honors the scroll root's padding as well as an element's margin, so the margins that cleared a file's sticky header still do, now counted from under the bar; adding the bar to them as well would have put cards a bar lower. The variable is set on `:root` while the page is there (`:root:has([data-slot=review-page])`), since the scroll root is what reads it; the rail and the file headers fall back to 0 elsewhere, as in the design system.
+- **The bar gives up its words below 1280px, not 1024px.** At 1024px with the stuck title and the chips' words, the stepper's title was cut to its first letter. The stuck title and the words go below `xl`; the stepper's title still goes below `sm`.
+- **The stepper's live region is its own `sr-only` status,** "Finding 2 of 5: …", rather than the visible position and title, which are buttons whose names ("Point 2 of 5, show all") would read oddly as an announcement.
+- **The header's count of files waits for the diff,** which prep reads; before it, the line read "0 files +0 −0".
+- **The design system's bar section** replaces the header's Claude element: every state of the slot, the stepper's states, stuck and published, each stepping on its own. The snapshotted sections (foundations, screens) don't include it, so no baseline changed. `PrHeader`'s examples stay as the design's.
+- **New contrast pairs:** the kind glyphs on the page's background and a pressed chip's border on its tint, all 3:1 non-text.

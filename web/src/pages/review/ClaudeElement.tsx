@@ -1,5 +1,5 @@
 import { SparklesIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   type Analysis,
   modelRunnable,
@@ -36,27 +36,37 @@ const KIND_WORDS: Readonly<Record<PointKind, [string, string]>> = {
 };
 
 /**
- * A kind's count. Landing, it rises in at its place among the chips, its count rolling up from
- * zero (globals.css); the number is in the text for screen readers, and drawn for the eye.
+ * A kind's count, a toggle that narrows the stepper to that kind. Landing, it rises in at its place
+ * among the chips, its count rolling up from zero (globals.css); the number is in the text for
+ * screen readers, and drawn for the eye. Below 1280px the word gives way to the glyph and count,
+ * leaving the stepper room for its title.
  */
 const Chip = ({
   kind,
   count,
   at,
+  pressed,
+  onPressed,
 }: {
   readonly kind: PointKind;
   readonly count: number;
   readonly at: number;
+  readonly pressed: boolean;
+  readonly onPressed: (pressed: boolean) => void;
 }) => {
   const [one, many] = KIND_WORDS[kind];
   return (
-    <span
+    <button
+      type="button"
       data-slot="point-chip"
       data-kind={kind}
       data-land="rise"
+      aria-pressed={pressed}
       style={cssVars({ "--landing-i": at })}
+      onClick={() => onPressed(!pressed)}
       className={cn(
-        "flex min-h-6 items-center gap-1.5 rounded-full border px-2 text-caption font-medium",
+        // A pressed chip is told by a border in its text's color, as well as by its fill.
+        "flex min-h-6 shrink-0 items-center gap-1.5 rounded-full border px-2 text-caption font-medium aria-pressed:border-current aria-pressed:ring-1 aria-pressed:ring-current",
         POINT_STATUS[kind].className,
       )}
     >
@@ -68,9 +78,10 @@ const Chip = ({
           className="tabular"
           style={cssVars({ "--count": count })}
         />
-        <span className="sr-only">{count}</span> {count === 1 ? one : many}
+        <span className="sr-only">{count}</span>{" "}
+        <span className="max-xl:sr-only">{count === 1 ? one : many}</span>
       </span>
-    </span>
+    </button>
   );
 };
 
@@ -84,9 +95,9 @@ const missingNote = (analysis: ClaudeRun): string | null => {
 };
 
 /**
- * Where the button was: Claude's run and what it found. Before it runs, the button; while it
- * does, a line of words and the time since; once it's done, a chip per kind of point with its
- * count, the whole list, and Next through them.
+ * Claude's run and what it found, in the bar. Before it runs, the button; while it does, a line of
+ * words and the time since; once it's done, a chip per kind of point with its count, which narrows
+ * the stepper that follows them to its kind.
  */
 export const ClaudeElement = ({
   analysis,
@@ -96,9 +107,10 @@ export const ClaudeElement = ({
   starting,
   error,
   points,
+  narrowed,
+  onNarrow,
   onRun,
-  onOpenList,
-  onNext,
+  children,
 }: {
   readonly analysis: ClaudeRun;
   /** What runs the passes and who pays, from the status; null when it isn't known yet. */
@@ -110,9 +122,12 @@ export const ClaudeElement = ({
   /** Why the last request to start it was refused. */
   readonly error: string | null;
   readonly points: readonly Point[];
+  /** The kind whose chip is pressed, or null. */
+  readonly narrowed: PointKind | null;
+  readonly onNarrow: (kind: PointKind | null) => void;
   readonly onRun: () => void;
-  readonly onOpenList: () => void;
-  readonly onNext: () => void;
+  /** After the chips: the stepper through the points. */
+  readonly children?: ReactNode;
 }) => {
   const elapsed = useElapsed(running ? startedAt : null);
   if (running) {
@@ -120,7 +135,7 @@ export const ClaudeElement = ({
       <span
         data-slot="claude-running"
         role="status"
-        className="flex items-center gap-2 text-muted-foreground"
+        className="flex min-w-0 items-center gap-2 whitespace-nowrap text-muted-foreground"
       >
         <SparklesIcon aria-hidden="true" className="size-3.5" />
         Claude is reading this PR
@@ -140,20 +155,28 @@ export const ClaudeElement = ({
   });
   if (points.length > 0) {
     return (
-      <span data-slot="claude-receipt" className="flex flex-wrap items-center gap-1.5">
+      <span data-slot="claude-receipt" className="flex min-w-0 items-center gap-1.5">
         {counts.map(([kind, count], at) => (
-          <Chip key={kind} kind={kind} count={count} at={at} />
+          <Chip
+            key={kind}
+            kind={kind}
+            count={count}
+            at={at}
+            pressed={narrowed === kind}
+            onPressed={(pressed) => onNarrow(pressed ? kind : null)}
+          />
         ))}
-        <span {...after(0)} className="flex items-center gap-1.5">
-          <Button variant="ghost" size="xs" onClick={onOpenList}>
-            All {points.length}
-          </Button>
-          <Button variant="ghost" size="xs" onClick={onNext}>
-            Next
-          </Button>
+        <span {...after(0)} className="ml-1 flex min-w-0 items-center border-l pl-1.5">
+          {children}
         </span>
         {(error ?? note) !== null && (
-          <span {...after(1)} role="alert" className="text-caption text-destructive">
+          // The bar is one row: a long reason is cut there, and whole on hover and when read out.
+          <span
+            {...after(1)}
+            role="alert"
+            title={error ?? note ?? undefined}
+            className="min-w-0 truncate text-caption text-destructive"
+          >
             {error ?? note}
           </span>
         )}
@@ -171,14 +194,18 @@ export const ClaudeElement = ({
   if (!modelRunnable(analysis)) {
     // Claude ran and found nothing to raise.
     return analysis.stages.findings === "done" ? (
-      <span data-slot="claude-receipt" data-land="fade" className="text-muted-foreground">
+      <span
+        data-slot="claude-receipt"
+        data-land="fade"
+        className="whitespace-nowrap text-muted-foreground"
+      >
         <span aria-hidden="true">✓ </span>Claude found nothing to raise
       </span>
     ) : null;
   }
   const failed = analysis.modelError;
   return (
-    <span className="flex flex-wrap items-center gap-2">
+    <span className="flex min-w-0 items-center gap-2">
       <Button
         variant="outline"
         size="xs"
@@ -190,7 +217,11 @@ export const ClaudeElement = ({
         {starting ? "Starting…" : failed === null ? "Analyze with Claude" : "Try again"}
       </Button>
       {(error ?? failed) !== null && (
-        <span role="alert" className="text-caption text-destructive">
+        <span
+          role="alert"
+          title={error ?? `Claude couldn't finish: ${failed?.message}`}
+          className="min-w-0 truncate text-caption text-destructive"
+        >
           {error ?? `Claude couldn't finish: ${failed?.message}`}
         </span>
       )}

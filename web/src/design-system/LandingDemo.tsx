@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { mapModelStages, type Point, PointId } from "../../../src/domain/review/index.ts";
 import { ClaudeElement } from "../pages/review/ClaudeElement.tsx";
 import { PointCard, PointFold } from "../pages/review/PointCard.tsx";
+import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { tokenMs, useLanding } from "../pages/review/useLanding.ts";
 import { FileTree, HunkCard, type LinePlace, PINNED, type PointLine } from "../review/index.ts";
 import { Button } from "../ui/button.tsx";
@@ -119,10 +120,19 @@ export const LandingDemo = () => {
           starting={false}
           error={null}
           points={points}
+          narrowed={null}
+          onNarrow={() => {}}
           onRun={() => setRun("running")}
-          onOpenList={() => {}}
-          onNext={() => {}}
-        />
+        >
+          <PointStepper
+            points={points}
+            current={null}
+            stateOf={() => "open"}
+            kind={null}
+            onGo={() => {}}
+            onOpenList={() => {}}
+          />
+        </ClaudeElement>
       </header>
       <div className="grid items-start gap-3 md:grid-cols-[16rem_minmax(0,1fr)]">
         <FileTree files={tree} activePath={RETRY_FILE.path} onSelect={() => {}} />
