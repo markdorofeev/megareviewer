@@ -18,6 +18,8 @@ import {
 import { mockFetch } from "../../../dev/mock-fetch.ts";
 import { createMockApi } from "../../../dev/mock-routes.ts";
 import { analysisFailed, analysisInProgress } from "../../../dev/progress.ts";
+import { DisplayMenu } from "../../app/Header.tsx";
+import { PageDisplayProvider } from "../../lib/page-display.tsx";
 import { type Highlighter, HighlighterContext } from "../../review/index.ts";
 import { testApi } from "../../testing/api.tsx";
 import { fakeFetch, jsonResponse, type RecordedRequest } from "../../testing/fetch.ts";
@@ -68,7 +70,10 @@ const renderReview = (
   const wrapper = ({ children }: { readonly children: ReactNode }) => (
     <api.wrapper>
       <HighlighterContext.Provider value={pendingHighlighter}>
-        {children}
+        <PageDisplayProvider>
+          <DisplayMenu />
+          {children}
+        </PageDisplayProvider>
       </HighlighterContext.Provider>
     </api.wrapper>
   );
@@ -605,11 +610,7 @@ describe("map", () => {
     renderReview();
     await loaded();
     await userEvent.keyboard("v");
-    expect(
-      within(screen.getByRole("group", { name: "Layout" }))
-        .getByRole("button", { name: "Overview" })
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(layoutIs("overview")).toBe(true);
     await userEvent.keyboard("v");
     expect(fileCards()).toHaveLength(3);
   });
@@ -914,9 +915,8 @@ describe("points", () => {
 });
 
 const openOverview = async () => {
-  await userEvent.click(
-    within(screen.getByRole("group", { name: "Layout" })).getByRole("button", { name: "Overview" }),
-  );
+  await userEvent.click(screen.getByRole("button", { name: "Display" }));
+  await userEvent.click(await screen.findByRole("menuitemradio", { name: "Overview" }));
   return overviewBox();
 };
 /** The diagram's file nodes by row, as their labels. */
@@ -936,8 +936,8 @@ const nodeOf = (path: string) => {
   return node;
 };
 const focusedKey = () => (document.activeElement as HTMLElement | null)?.dataset.key;
-const pressed = (name: string) =>
-  screen.getByRole("button", { name }).getAttribute("aria-pressed") === "true";
+const layoutIs = (layout: "map" | "overview") =>
+  document.querySelector("[data-slot=review-page]")?.getAttribute("data-layout") === layout;
 
 describe("overview", () => {
   it("draws the changed directories from the entry down, with unlinked ones in the strip", async () => {
@@ -963,10 +963,10 @@ describe("overview", () => {
     await loaded();
     await openOverview();
     await userEvent.click(nodeOf("group:src/services"));
-    expect(pressed("Map")).toBe(true);
+    expect(layoutIs("map")).toBe(true);
     expect(scrolledTo().at(-1)).toBe("file-src/services/receipts.ts");
     await userEvent.keyboard("{Escape}");
-    expect(pressed("Overview")).toBe(true);
+    expect(layoutIs("overview")).toBe(true);
     expect(focusedKey()).toBe("group:src/services");
   });
 
@@ -990,7 +990,7 @@ describe("overview", () => {
       ),
     ).toBeTruthy();
     await userEvent.keyboard("{Enter}");
-    expect(pressed("Map")).toBe(true);
+    expect(layoutIs("map")).toBe(true);
     expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
   });
 
@@ -1046,18 +1046,37 @@ describe("overview", () => {
 });
 
 describe("layouts", () => {
+  it("are chosen in the Display menu, which shows the one in use", async () => {
+    renderReview();
+    await loaded();
+    expect(screen.queryByRole("group", { name: "Layout" })).toBeNull();
+    const display = screen.getByRole("button", { name: "Display" });
+    await userEvent.click(display);
+    const map = await screen.findByRole("menuitemradio", { name: "Map" });
+    expect(map.getAttribute("aria-checked")).toBe("true");
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Overview" }));
+    expect(overviewBox()).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    // The overview takes the focus to the file in view; closing doesn't hand it back to the menu.
+    expect(document.activeElement).not.toBe(display);
+    await userEvent.click(display);
+    expect(
+      (await screen.findByRole("menuitemradio", { name: "Overview" })).getAttribute("aria-checked"),
+    ).toBe("true");
+  });
+
   it("switch with v, keeping the file the reviewer is on", async () => {
     renderReview();
     await loaded();
     await userEvent.click(cardOf(h.routeImports));
     expect(focusedLabel()).toMatch(IMPORTS);
     await userEvent.keyboard("v");
-    expect(pressed("Overview")).toBe(true);
+    expect(layoutIs("overview")).toBe(true);
     expect(focusedKey()).toBe("group:src/routes");
 
     await userEvent.keyboard("{ArrowDown}");
     await userEvent.keyboard("v");
-    expect(pressed("Map")).toBe(true);
+    expect(layoutIs("map")).toBe(true);
     expect(scrolledTo().at(-1)).toBe("file-src/services/receipts.ts");
     expect(focusedLabel()).toBe("src/services/receipts.ts");
   });
@@ -1073,7 +1092,7 @@ describe("layouts", () => {
     renderReview();
     await loaded();
     expect(overviewBox()).toBeTruthy();
-    expect(pressed("Overview")).toBe(true);
+    expect(layoutIs("overview")).toBe(true);
   });
 });
 
@@ -1116,10 +1135,7 @@ describe("keyboard shortcuts", () => {
     expect(keysOf("In the overview")).toEqual(["←→↑↓", "↵"]);
     expect(keysOf("Anywhere")).toEqual(["v", "⇧R", "Esc", "?"]);
     await userEvent.keyboard("v");
-    // The page behind the open dialog is inert, so its switch is hidden from the tree.
-    expect(
-      screen.getByRole("button", { name: "Map", hidden: true }).getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(layoutIs("map")).toBe(true);
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -1558,7 +1574,7 @@ describe("outside the pull request", () => {
       "Faded files are outside the pull request, under the code whose changes they use.",
     );
     await userEvent.click(outside);
-    expect(pressed("Map")).toBe(true);
+    expect(layoutIs("map")).toBe(true);
     expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptFormatting}`);
   });
 

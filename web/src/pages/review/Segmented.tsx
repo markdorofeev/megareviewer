@@ -1,7 +1,7 @@
 import { Toggle } from "../../ui/toggle.tsx";
 
 /**
- * A choice of a few views as pressed buttons in a named group: the page's layout, the rail's form.
+ * A choice of a few values as pressed buttons in a named group, such as the review's verdict.
  * Pressing the chosen one again keeps it.
  */
 export const Segmented = <T extends string>({

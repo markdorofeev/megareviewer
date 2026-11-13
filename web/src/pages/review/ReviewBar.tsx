@@ -29,7 +29,7 @@ const useStuck = () => {
 
 /**
  * The row under the header that stays at the top of the window while the code scrolls: Claude's
- * run and the stepper through its points, the layout switch, and Publish. Its height is
+ * run and the stepper through its points, Show files at 1024px or less, and Publish. Its height is
  * `--review-bar-h`, which what sticks or scrolls under it reads. Stuck, it names the PR first.
  */
 export const ReviewBar = ({
@@ -45,7 +45,7 @@ export const ReviewBar = ({
   readonly title: string | null;
   /** Claude's run, its chips and the stepper. */
   readonly claude: ReactNode;
-  /** The layout switch, and Show files at 1024px or less. */
+  /** Show files, at 1024px or less. */
   readonly tools: ReactNode;
   /** The Publish button, while the review can be published. */
   readonly publish: ReactNode;

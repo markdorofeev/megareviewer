@@ -496,16 +496,11 @@ test.describe("without the model", () => {
     await expect(page.locator("[data-slot=review-thread]").first()).toBeVisible();
 
     // A click on the route's directory in the overview opens its first file in the map.
-    await page
-      .getByRole("group", { name: "Layout" })
-      .getByRole("button", { name: "Overview", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Display" }).click();
+    await page.getByRole("menuitemradio", { name: "Overview" }).click();
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
     await overview.getByRole("button", { name: /^src\/routes\/, / }).click();
-    await expect(page.getByRole("button", { name: "Map", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(page.locator("[data-slot=review-page]")).toHaveAttribute("data-layout", "map");
     await expect(page.locator("[data-slot=file-card]:focus")).toHaveAttribute(
       "aria-label",
       "src/routes/orders.ts",
@@ -541,10 +536,8 @@ for (const width of [720, 1024, 1440]) {
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeInViewport();
-    await page
-      .getByRole("group", { name: "Layout" })
-      .getByRole("button", { name: "Overview", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Display" }).click();
+    await page.getByRole("menuitemradio", { name: "Overview" }).click();
     await expect(page.locator("[data-slot=overview-scroll]")).toBeVisible();
     expect(await overflows()).toBe(false);
   });

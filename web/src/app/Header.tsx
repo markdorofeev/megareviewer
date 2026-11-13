@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import type { StatusResponse } from "../../../contracts/index.ts";
 import { type ApiError, errorMessage } from "../api/index.ts";
+import { usePageDisplayChoice } from "../lib/page-display.tsx";
 import { type ThemePreference, useTheme } from "../lib/theme.ts";
 import { cn } from "../lib/utils.ts";
 import { Button } from "../ui/button.tsx";
@@ -61,15 +63,47 @@ const THEMES: readonly { readonly value: ThemePreference; readonly label: string
   { value: "system", label: "System" },
 ];
 
-/** The theme and the diff palette, two preferences kept per browser. */
-const DisplayMenu = () => {
+/** The page's own choice of view, if it has one, then the theme and the diff palette. */
+export const DisplayMenu = () => {
   const { theme, diffPalette, setTheme, setDiffPalette } = useTheme();
+  const page = usePageDisplayChoice();
+  // A view the page switches to takes the focus itself, so closing on it doesn't move it back.
+  const pickedView = useRef(false);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
         Display
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent
+        align="end"
+        className="w-56"
+        finalFocus={() => {
+          const picked = pickedView.current;
+          pickedView.current = false;
+          return !picked;
+        }}
+      >
+        {page !== null && (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>{page.label}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={page.value}
+                onValueChange={(value) => {
+                  pickedView.current = true;
+                  page.onChange(value);
+                }}
+              >
+                {page.options.map((option) => (
+                  <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
+                    {option.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuGroup>
           <DropdownMenuLabel>Theme</DropdownMenuLabel>
           <DropdownMenuRadioGroup

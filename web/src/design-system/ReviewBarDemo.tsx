@@ -9,7 +9,6 @@ import {
 import { ClaudeElement, type ClaudeRun } from "../pages/review/ClaudeElement.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
-import { Segmented } from "../pages/review/Segmented.tsx";
 import { narrowTo } from "../pages/review/stepper.ts";
 import { KeyHint } from "../review/index.ts";
 import { Button } from "../ui/button.tsx";
@@ -33,11 +32,6 @@ const RAN: ClaudeRun = {
   ...DESIGN_RUN,
   stages: mapModelStages(DESIGN_RUN.stages, () => "done" as const),
 };
-
-const LAYOUTS = [
-  { value: "map", label: "Map" },
-  { value: "overview", label: "Overview" },
-] as const;
 
 /**
  * The review bar on made-up data, with a stepper that steps: Previous, Next and the chips work,
@@ -68,7 +62,6 @@ const BarDemo = ({
 }) => {
   const [current, setCurrent] = useState<PointId | null>(start);
   const [narrowed, setNarrowed] = useState<PointKind | null>(narrowedAt);
-  const [layout, setLayout] = useState<"map" | "overview">("map");
   const stateOf = (id: PointId): PointState => (dismissed.includes(id) ? "dismissed" : "open");
   return (
     <div className="flex flex-col gap-1">
@@ -115,9 +108,7 @@ const BarDemo = ({
               />
             </ClaudeElement>
           }
-          tools={
-            <Segmented legend="Layout" options={LAYOUTS} value={layout} onChange={setLayout} />
-          }
+          tools={null}
           publish={
             <Button size="sm" className="shrink-0">
               Publish review…

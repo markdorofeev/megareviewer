@@ -7,6 +7,7 @@ import {
   subscribeToAnalysis,
   useStatus,
 } from "../api/index.ts";
+import { PageDisplayProvider } from "../lib/page-display.tsx";
 import { PickerPage } from "../pages/picker/index.ts";
 import { ReviewPage } from "../pages/review/index.ts";
 import { Toaster } from "../ui/sonner.tsx";
@@ -56,17 +57,19 @@ const Shell = () => {
   const status = useStatus();
   return (
     <TooltipProvider>
-      <Header status={status.status} error={status.error} />
-      <main className="px-4 py-5 sm:px-6">
-        {route.page === "picker" ? (
-          <PickerPage status={status.status} />
-        ) : route.page === "review" ? (
-          <ReviewPage analysisId={route.analysisId} />
-        ) : (
-          <NotFoundPage />
-        )}
-      </main>
-      <Toaster />
+      <PageDisplayProvider>
+        <Header status={status.status} error={status.error} />
+        <main className="px-4 py-5 sm:px-6">
+          {route.page === "picker" ? (
+            <PickerPage status={status.status} />
+          ) : route.page === "review" ? (
+            <ReviewPage analysisId={route.analysisId} />
+          ) : (
+            <NotFoundPage />
+          )}
+        </main>
+        <Toaster />
+      </PageDisplayProvider>
     </TooltipProvider>
   );
 };

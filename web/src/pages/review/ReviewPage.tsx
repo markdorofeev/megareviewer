@@ -22,6 +22,7 @@ import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from ".
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
 import { type ShortcutHandlers, type ShortcutId, useShortcuts } from "../../lib/keymap.ts";
+import { usePageDisplay } from "../../lib/page-display.tsx";
 import { cn } from "../../lib/utils.ts";
 import {
   CallPeek,
@@ -75,7 +76,6 @@ import { PublishDialog } from "./PublishDialog.tsx";
 import { Rail } from "./Rail.tsx";
 import { ReviewBar } from "./ReviewBar.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
-import { Segmented } from "./Segmented.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
 import { narrowTo } from "./stepper.ts";
 import { useStoredState } from "./storage.ts";
@@ -599,6 +599,14 @@ const Review = ({
     if (node !== undefined && node.kind !== "outside") return openNode(node);
     setLayout(() => "map");
   };
+  usePageDisplay({
+    label: "Layout",
+    options: LAYOUTS,
+    value: layout,
+    onChange: (next) => {
+      if (next !== layout) switchLayout();
+    },
+  });
 
   /**
    * Goes to the next or previous file's card: from the card holding the focus, or else from where
@@ -962,28 +970,18 @@ const Review = ({
           </ClaudeElement>
         }
         tools={
-          <>
-            {layout === "map" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="lg:hidden"
-                aria-expanded={railOpen}
-                aria-controls="review-tree-rail"
-                onClick={() => setRailOpen(!railOpen)}
-              >
-                {railOpen ? "Hide files" : "Show files"}
-              </Button>
-            )}
-            <Segmented
-              legend="Layout"
-              options={LAYOUTS}
-              value={layout}
-              onChange={(next) => {
-                if (next !== layout) switchLayout();
-              }}
-            />
-          </>
+          layout === "map" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="lg:hidden"
+              aria-expanded={railOpen}
+              aria-controls="review-tree-rail"
+              onClick={() => setRailOpen(!railOpen)}
+            >
+              {railOpen ? "Hide files" : "Show files"}
+            </Button>
+          )
         }
         publish={
           canPublish && (
