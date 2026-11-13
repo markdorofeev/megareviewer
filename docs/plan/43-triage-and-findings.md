@@ -1,6 +1,6 @@
 # Stage 43: Triage and findings from Claude, landed in the code
 
-**Status:** In progress (branch claude/stage-43-implementation-c155f8)
+**Status:** In progress (on main): built, `pnpm check` and `pnpm e2e` pass; the live reading of the findings on delphi-code #2 and the real recording are left (see **Open issues**)
 **Depends on:** 42
 **Owns:** the findings pass in `src/adapters/claude/`, `src/domain/review/point.ts`, the model run in `src/application/use-cases/`, point routes in `contracts/`, the header's Claude element, point cards and tree marks in `web/src/pages/review/` and `web/src/review/`, the replayed model in `src/cli/dev/`, `web/dev/`
 
@@ -125,8 +125,20 @@ In its own PR first, with a line in stage 02's change log:
 
 ## Open issues
 
+- **No real recording yet.** `evals/record-model-run.ts` records one through the reviewer's Claude Code; the committed recording is the fake model's, marked synthetic, so the scenarios and the page can be worked on without spend. A real one of delphi-code #2 also unlocks `pnpm dev:replay` and the measurements above.
 - **How good the findings are is unknown.** No eval scores them, and a list of wrong findings is worse than none. The definition of done asks for one honest reading on a real PR; a golden set is the stage after.
 - **The recording holds delphi-code #2's code** in the repository. It's the PR every stage measures on; check it's fine to commit before recording.
 - **Accountability.** DESIGN.md's fourth goal leaned on a verdict per decision. With silence meaning fine, the record is the published review alone.
 
+## Measurements
+
+Not taken yet: both need a real run on delphi-code #2 (see **Open issues**).
+
 ## Notes for later stages
+
+- **The mismatch chip went with the chip, not with the mismatch.** Mismatches are findings now, so the header has no chip; Details still goes to one, which scrolls to its point's card (`point-m1`, `point-m2`, …).
+- **A point's lines take a bar, not a tint.** The design asked for the kind's tint on the lines; a tint under code would need a contrast pair for every syntax color on three more surfaces, for what the bar and the card beside it already say. The bar is the kind's color at the lines' edge, and the strongest kind wins where points overlap.
+- **The landing is cards growing in and the intent fading over, with the scroll held.** The receipt's chips roll their counts up from zero; the tree's marks and the cards appear with the motion tokens, which `prefers-reduced-motion` sets to 0 ms, rather than row by row on a timeline. `useHeldScroll` holds the first card in view while cards open above it.
+- **Publish is offered on any complete analysis.** The verdict is the reviewer's own, so an approval with nothing to say is a review in itself. The count on the button is the comments it will post.
+- **`hunkHasLine` moved to `src/domain/diff/`.** Points and comments both ask it, and leaving it in `publication.ts` made a cycle with `analysis.ts`.
+- **`dev:replay` isn't there yet.** `pnpm dev:fake --scenario <name>` plays every scenario through the real pipeline, and `pnpm dev:web:mock` with `?scenario=<name>` plays them in the browser against the mock API. Both read `src/cli/dev/fixtures/model-run-small-feature.synthetic.json`, recorded from the fake model with `node evals/record-model-run.ts --synthetic`. The real server's replay waits for a recording of delphi-code #2, which the same script makes without `--synthetic`.

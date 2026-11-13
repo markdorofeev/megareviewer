@@ -181,14 +181,14 @@ export const mapModelStages = (
  * Still changing: the code's stages are running, or the model is. Once the code's are done, a
  * model stage is pending only while a run hasn't reached it.
  */
-export const inProgress = (analysis: Analysis): boolean =>
+export const inProgress = (analysis: Pick<Analysis, "status" | "stages">): boolean =>
   analysis.status === "running" ||
   MODEL_STAGES.some(
     (stage) => analysis.stages[stage] === "running" || analysis.stages[stage] === "pending",
   );
 
 /** Whether the model can be asked to run: the code's analysis is complete and the model isn't running or done. */
-export const modelRunnable = (analysis: Analysis): boolean =>
+export const modelRunnable = (analysis: Pick<Analysis, "status" | "stages">): boolean =>
   analysis.status === "complete" &&
   !inProgress(analysis) &&
   !MODEL_STAGES.every((stage) => analysis.stages[stage] === "done");

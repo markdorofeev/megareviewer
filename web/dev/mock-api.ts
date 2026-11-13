@@ -4,9 +4,11 @@ import {
   createMockApi,
   isEventsRequest,
   MOCK_TOKEN,
+  type MockApi,
   type MockRequest,
   type MockResponse,
 } from "./mock-routes.ts";
+import { isScenario, type Scenario } from "./scenarios.ts";
 
 const readBody = async (request: IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = [];
@@ -42,11 +44,29 @@ const sendJson = (response: ServerResponse, { status, body }: MockResponse) => {
   response.end(JSON.stringify(body));
 };
 
+/**
+ * The scenario the page is open with: `?scenario=<name>` in its URL, which the API requests
+ * carry in their Referer. A dev-only trick, so the whole page can be played without the model.
+ */
+const scenarioOf = (referer: string | undefined): Scenario | undefined => {
+  const name = referer === undefined ? null : new URL(referer).searchParams.get("scenario");
+  return name !== null && isScenario(name) ? name : undefined;
+};
+
 /** Serves the HTTP API contract from fixtures, so the UI can be built without the server. */
 export const mockApi = (): Plugin => ({
   name: "megareviewer-mock-api",
   configureServer(server) {
-    const api = createMockApi();
+    let scenario: Scenario | undefined;
+    let api = createMockApi();
+    /** A new scenario starts a fresh API, so its analysis begins before Claude ran. */
+    const apiFor = (next: Scenario | undefined): MockApi => {
+      if (next === scenario) return api;
+      api.close();
+      scenario = next;
+      api = createMockApi(next === undefined ? {} : { scenario: next });
+      return api;
+    };
     server.httpServer?.on("close", () => api.close());
     server.httpServer?.once("listening", () => {
       const address = server.httpServer?.address();
@@ -60,6 +80,7 @@ export const mockApi = (): Plugin => ({
         next();
         return;
       }
+      const api = apiFor(scenarioOf(request.headers.referer));
       void toMockRequest(request).then((mockRequest) => {
         if (!isEventsRequest(mockRequest.method, mockRequest.path)) {
           sendJson(response, api.handle(mockRequest));

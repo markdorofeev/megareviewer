@@ -6,7 +6,12 @@ import {
   routes,
   TOKEN_HEADER,
 } from "../../contracts/index.ts";
-import { PointReview, Publication, PublicationReceipt } from "../../src/domain/review/index.ts";
+import {
+  PointReview,
+  Publication,
+  PublicationReceipt,
+  pointsOf,
+} from "../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks, largeAnalysisView } from "./fixtures/index.ts";
 import {
   createMockApi,
@@ -269,5 +274,54 @@ describe("analysisInProgress", () => {
 
   it("is the analysis itself once every stage is done", () => {
     expect(analysisInProgress(analysis, 7)).toBe(analysis);
+  });
+});
+
+describe("a scenario", () => {
+  const run = (
+    scenario: Parameters<typeof createMockApi>[0] extends infer O
+      ? O extends { scenario?: infer S }
+        ? NonNullable<S>
+        : never
+      : never,
+  ) => {
+    const api = createMockApi({ now: () => NOW, scenario });
+    const view = () => AnalysisView.parse(api.handle(request("GET", `/api/analyses/${id}`)).body);
+    api.handle(request("POST", `/api/analyses/${id}/model`));
+    // Every model stage, and the one that ends the run.
+    vi.advanceTimersByTime(MOCK_STAGE_MS * 10);
+    const analysis = view().analysis;
+    api.close();
+    return analysis;
+  };
+
+  it("starts before Claude ran, with the code's review alone", () => {
+    const api = createMockApi({ now: () => NOW, scenario: "ready" });
+    const analysis = AnalysisView.parse(
+      api.handle(request("GET", `/api/analyses/${id}`)).body,
+    ).analysis;
+    expect(analysis.status).toBe("complete");
+    expect(analysis.stages.findings).toBe("skipped");
+    expect(pointsOf(analysis)).toEqual([]);
+    api.close();
+  });
+
+  it("plays Claude's run to each scenario's end", () => {
+    expect(pointsOf(run("ready")).length).toBeGreaterThan(0);
+    expect(pointsOf(run("nothing-found"))).toEqual([]);
+    expect(pointsOf(run("many")).length).toBeGreaterThan(40);
+
+    const limited = run("limit-after-findings");
+    expect(limited.stages.risk).toBe("failed");
+    expect(limited.modelError?.message).toContain("resets at");
+    expect(pointsOf(limited).every((point) => point.kind === "finding")).toBe(true);
+
+    const refused = run("refusal");
+    expect(refused.findings).toEqual([]);
+    expect(refused.modelError?.message).toContain("declined");
+
+    const signedOut = run("not-signed-in");
+    expect(signedOut.stages.intent).toBe("failed");
+    expect(pointsOf(signedOut)).toEqual([]);
   });
 });

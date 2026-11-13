@@ -20,6 +20,11 @@ import {
 import { parsePullRequestUrl, pullRequestUrl, Sha } from "../../domain/review/index.ts";
 import { err } from "../../domain/shared/index.ts";
 import { allowedHosts, assemble, type Composition, systemClock } from "../compose.ts";
+import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
+import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./model-recording.ts";
+
+/** The recorded run the scenarios play, read once at startup. */
+const recording = ModelRecording.parse(recordingJson);
 
 const failingRef = { ...smallFeature.pullRequest.ref, number: 104 };
 
@@ -148,6 +153,8 @@ export const createFakeApp = async (options: {
   readonly sessionToken?: string;
   /** Whether Analyze with Claude can run the fake model. Available unless false. */
   readonly modelAvailable?: boolean;
+  /** Plays the recorded model run as this scenario instead of answering from the fake model. */
+  readonly scenario?: Scenario;
 }): Promise<FakeApp> => {
   const clock = systemClock;
   const github = new FakeGitHost({ host: "github", fixtures: fakeFixtures, clock });
@@ -165,7 +172,10 @@ export const createFakeApp = async (options: {
       tickets: new FakeTicketSource({
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
-      model: failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url),
+      model:
+        options.scenario === undefined
+          ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+          : createReplayAnalysisModel(recording, { scenario: options.scenario }),
       modelAvailability: async () =>
         options.modelAvailable === false
           ? { available: false, reason: "fake mode started with --no-ai" }

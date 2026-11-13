@@ -6,6 +6,7 @@ import { createTreeSitterCodeParser } from "../../adapters/treesitter/index.ts";
 import { createLogger } from "../logger.ts";
 import { serve } from "../serve.ts";
 import { createFakeApp } from "./fake-app.ts";
+import { isScenario, SCENARIOS } from "./model-recording.ts";
 
 // Fake mode, for UI development and end-to-end tests: no credentials, no network, nothing on disk.
 // Never bundled.
@@ -15,8 +16,14 @@ const { values } = parseArgs({
     token: { type: "string" },
     static: { type: "string" },
     "no-ai": { type: "boolean" },
+    scenario: { type: "string" },
   },
 });
+
+const scenario = values.scenario;
+if (scenario !== undefined && !isScenario(scenario)) {
+  throw new Error(`No scenario ${scenario}. Have: ${SCENARIOS.join(", ")}`);
+}
 
 const logger = createLogger({ level: "info" });
 const fake = await createFakeApp({
@@ -27,11 +34,12 @@ const fake = await createFakeApp({
   version: `${packageJson.version}-fake`,
   staticDir: values.static ?? null,
   modelAvailable: values["no-ai"] !== true,
+  ...(scenario === undefined ? {} : { scenario }),
   ...(values.token !== undefined && { sessionToken: values.token }),
 });
 const server = await serve(fake.app, Number(values.port));
 
-console.log(`megareviewer fake mode, serving fixtures
+console.log(`megareviewer fake mode, serving fixtures${scenario === undefined ? "" : `, playing the ${scenario} scenario`}
 Token ${fake.composition.sessionToken}
 Open http://127.0.0.1:${server.port}/?token=${fake.composition.sessionToken}`);
 

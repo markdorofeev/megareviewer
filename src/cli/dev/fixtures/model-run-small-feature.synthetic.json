@@ -1,0 +1,180 @@
+{
+  "pullRequestUrl": "https://github.com/acme/shop/pull/101",
+  "headSha": "ec7f8e0489e3011a207691eeef6ad1840f4a9259",
+  "version": "fake-model/1",
+  "recordedAt": "2026-11-13T10:51:54.730Z",
+  "passes": {
+    "intent": {
+      "answer": {
+        "stated": {
+          "summary": "Add receipt download endpoint",
+          "sources": [
+            {
+              "kind": "description",
+              "ref": null
+            },
+            {
+              "kind": "ticket",
+              "ref": "SHOP-123"
+            }
+          ]
+        },
+        "inferred": {
+          "summary": "Changes 3 file(s).",
+          "behaviorChanges": [
+            "Changes config/app.yaml",
+            "Changes src/routes/orders.ts",
+            "Changes src/services/receipts.ts"
+          ]
+        },
+        "mismatches": []
+      },
+      "durationMs": 4200,
+      "usage": {
+        "pass": "intent",
+        "inputTokens": 2889,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "outputTokens": 77,
+        "costUsd": 0,
+        "billing": "api"
+      }
+    },
+    "findings": {
+      "answer": [
+        {
+          "title": "Check config/app.yaml",
+          "explanation": "Derived by the fake model.",
+          "lines": {
+            "hunkId": "h_fbaf18305007c20a",
+            "side": "new",
+            "startLine": 13,
+            "line": 13
+          }
+        }
+      ],
+      "durationMs": 9400,
+      "usage": {
+        "pass": "findings",
+        "inputTokens": 2889,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "outputTokens": 39,
+        "costUsd": 0,
+        "billing": "api"
+      }
+    },
+    "risk": {
+      "answer": [
+        {
+          "hunkId": "h_fbaf18305007c20a",
+          "riskClass": "logic",
+          "reason": "Ordinary code change"
+        },
+        {
+          "hunkId": "h_2e2332fa455a2146",
+          "riskClass": "logic",
+          "reason": "Ordinary code change"
+        },
+        {
+          "hunkId": "h_3822ea0f7192c70e",
+          "riskClass": "logic",
+          "reason": "Ordinary code change"
+        },
+        {
+          "hunkId": "h_88747b653fc82f6d",
+          "riskClass": "logic",
+          "reason": "Ordinary code change"
+        },
+        {
+          "hunkId": "h_5c94b39812b2e8f8",
+          "riskClass": "logic",
+          "reason": "Ordinary code change"
+        },
+        {
+          "hunkId": "h_a2e0236601ffc778",
+          "riskClass": "logic",
+          "reason": "Ordinary code change"
+        }
+      ],
+      "durationMs": 3100,
+      "usage": {
+        "pass": "risk",
+        "inputTokens": 2889,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "outputTokens": 127,
+        "costUsd": 0,
+        "billing": "api"
+      }
+    },
+    "decisions": {
+      "answer": [
+        {
+          "title": "Changes config/app.yaml",
+          "category": "behavior",
+          "whyItMatters": "Derived by the fake model.",
+          "hunkIds": [
+            "h_fbaf18305007c20a",
+            "h_2e2332fa455a2146",
+            "h_3822ea0f7192c70e"
+          ]
+        },
+        {
+          "title": "Changes src/routes/orders.ts",
+          "category": "behavior",
+          "whyItMatters": "Derived by the fake model.",
+          "hunkIds": [
+            "h_88747b653fc82f6d",
+            "h_5c94b39812b2e8f8"
+          ]
+        },
+        {
+          "title": "Changes src/services/receipts.ts",
+          "category": "behavior",
+          "whyItMatters": "Derived by the fake model.",
+          "hunkIds": [
+            "h_a2e0236601ffc778"
+          ]
+        }
+      ],
+      "durationMs": 11200,
+      "usage": {
+        "pass": "decisions",
+        "inputTokens": 2889,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "outputTokens": 121,
+        "costUsd": 0,
+        "billing": "api"
+      }
+    },
+    "tour": {
+      "answer": {
+        "steps": [
+          {
+            "stepId": "s1",
+            "title": "GET /orders/:id/receipt",
+            "explanation": "Derived by the fake model."
+          },
+          {
+            "stepId": "s2",
+            "title": "Other changes in config",
+            "explanation": "Derived by the fake model."
+          }
+        ],
+        "merges": []
+      },
+      "durationMs": 6300,
+      "usage": {
+        "pass": "tour",
+        "inputTokens": 2889,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "outputTokens": 53,
+        "costUsd": 0,
+        "billing": "api"
+      }
+    }
+  }
+}

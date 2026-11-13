@@ -1,5 +1,6 @@
-import { type FileChange, parseUnifiedDiff } from "../../../src/domain/diff/index.ts";
-import type { ReviewThread } from "../../../src/domain/review/index.ts";
+import { type FileChange, HunkId, parseUnifiedDiff } from "../../../src/domain/diff/index.ts";
+import { type Point, PointId, type ReviewThread } from "../../../src/domain/review/index.ts";
+import type { ClaudeRun } from "../pages/review/ClaudeElement.tsx";
 import type { FileEntry, PendingComment, PrSummary } from "../review/index.ts";
 
 // Made-up data for the preview: an example repository, PR and people, none of them real.
@@ -127,9 +128,23 @@ export const PULL_REQUEST: PrSummary = {
 };
 
 export const TREE_FILES: readonly FileEntry[] = [
-  { path: "src/http/retry.ts", status: "modified", additions: 4, deletions: 2, contract: 0 },
+  {
+    path: "src/http/retry.ts",
+    status: "modified",
+    additions: 4,
+    deletions: 2,
+    contract: 0,
+    points: { finding: 1, decision: 2 },
+  },
   { path: "src/http/client.ts", status: "modified", additions: 12, deletions: 3, contract: 1 },
-  { path: "src/auth/session.ts", status: "modified", additions: 8, deletions: 8, contract: 2 },
+  {
+    path: "src/auth/session.ts",
+    status: "modified",
+    additions: 8,
+    deletions: 8,
+    contract: 2,
+    points: { risk: 1 },
+  },
   { path: "src/util/sleep.ts", status: "renamed", additions: 0, deletions: 0, contract: 0 },
   { path: "src/http/legacy-retry.ts", status: "deleted", additions: 0, deletions: 41, contract: 0 },
   { path: "src/http/retry.test.ts", status: "added", additions: 56, deletions: 0, contract: 0 },
@@ -253,3 +268,53 @@ export const THREADS = {
     ],
   }),
 } as const satisfies Record<string, ReviewThread>;
+
+/** The hunk the points below rest on: the retry file's first. */
+const HUNK_ID = RETRY_FILE.hunks[0]?.id ?? HunkId.parse("h_0123456789abcdef");
+
+/** One of Claude's points of each kind, for the point card. */
+export const POINTS: readonly Point[] = [
+  {
+    id: PointId.parse("f1"),
+    kind: "finding",
+    title: "Retries a charge after it has already succeeded",
+    explanation:
+      "A timeout leaves the charge in doubt, and the retry sends it again, so a customer can be charged twice.",
+    path: "src/http/retry.ts",
+    lines: { hunkId: HUNK_ID, side: "new", startLine: 12, line: 14 },
+    hunkIds: [HUNK_ID],
+  },
+  {
+    id: PointId.parse("r:h_0123456789abcdef"),
+    kind: "risk",
+    title: "Changes which errors are retried, which callers depend on.",
+    explanation: "",
+    path: "src/http/retry.ts",
+    lines: { hunkId: HUNK_ID, side: "new", startLine: 12, line: 12 },
+    hunkIds: [HUNK_ID],
+  },
+  {
+    id: PointId.parse("d1"),
+    kind: "decision",
+    title: "Backs off exponentially: 1, 2, 4, 8 seconds, with no jitter",
+    explanation: "Without jitter, clients that failed together retry together.",
+    path: "src/http/retry.ts",
+    lines: null,
+    hunkIds: [HUNK_ID],
+  },
+];
+
+/** As much of an analysis as Claude's element reads: how far its run got, and how it ended. */
+export const DESIGN_RUN: ClaudeRun = {
+  status: "complete",
+  stages: {
+    collect: "done",
+    prep: "done",
+    intent: "skipped",
+    findings: "skipped",
+    risk: "skipped",
+    decisions: "skipped",
+    tour: "skipped",
+  },
+  modelError: null,
+};

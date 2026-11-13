@@ -1,8 +1,11 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Hunk } from "../../../src/domain/diff/index.ts";
+import { mapModelStages, PointId } from "../../../src/domain/review/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
 import { VERDICT_STATUS } from "../lib/status.ts";
+import { ClaudeElement } from "../pages/review/ClaudeElement.tsx";
+import { PointCard } from "../pages/review/PointCard.tsx";
 import {
   CollapsedHunk,
   CommentCard,
@@ -32,8 +35,10 @@ import {
   ADDED_FILE,
   BINARY_FILE,
   DELETED_FILE,
+  DESIGN_RUN,
   generatedFile,
   PENDING_COMMENTS,
+  POINTS,
   PULL_REQUEST,
   RENAMED_FILE,
   RETRY_FILE,
@@ -155,6 +160,14 @@ export const DomainComponents = () => {
 
       <Group title="A draft on a line: click a line to write one, Edit to change it">
         <DraftDemo />
+      </Group>
+
+      <Group title="Claude's element in the header">
+        <ClaudeStates />
+      </Group>
+
+      <Group title="Claude's points, one of each kind">
+        <PointStates />
       </Group>
 
       <Group title="Review threads">
@@ -411,6 +424,111 @@ const ThreadDemo = ({
 
 const Card = ({ children }: { readonly children: ReactNode }) => (
   <div className="rounded-lg border">{children}</div>
+);
+
+/** The header's Claude element, in each state a reviewer sees it in. */
+const ClaudeStates = () => {
+  const analysis = DESIGN_RUN;
+  const ran = { ...analysis, stages: mapModelStages(analysis.stages, () => "done" as const) };
+  const element = (label: string, node: ReactNode) => (
+    <div key={label} className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
+      <span className="w-40 shrink-0 text-caption text-muted-foreground">{label}</span>
+      {node}
+    </div>
+  );
+  const shared = {
+    via: "Claude Code, on your Pro plan",
+    starting: false,
+    error: null,
+    onRun: () => {},
+    onOpenList: () => {},
+    onNext: () => {},
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      {element(
+        "Before it runs",
+        <ClaudeElement
+          analysis={analysis}
+          running={false}
+          startedAt={null}
+          points={[]}
+          {...shared}
+        />,
+      )}
+      {element(
+        "While it reads",
+        <ClaudeElement
+          analysis={analysis}
+          running={true}
+          startedAt={Date.now() - 42_000}
+          points={[]}
+          {...shared}
+        />,
+      )}
+      {element(
+        "The receipt",
+        <ClaudeElement
+          analysis={ran}
+          running={false}
+          startedAt={null}
+          points={POINTS}
+          {...shared}
+        />,
+      )}
+      {element(
+        "What's missing, and why",
+        <ClaudeElement
+          analysis={{
+            ...ran,
+            stages: { ...ran.stages, risk: "failed", decisions: "skipped" },
+            modelError: {
+              stage: "risk",
+              code: "model-error",
+              message: "Your Claude plan's usage limit is reached. It resets at 18:00.",
+            },
+          }}
+          running={false}
+          startedAt={null}
+          points={POINTS.slice(0, 1)}
+          {...shared}
+        />,
+      )}
+      {element(
+        "Nothing to raise",
+        <ClaudeElement analysis={ran} running={false} startedAt={null} points={[]} {...shared} />,
+      )}
+    </div>
+  );
+};
+
+/** A point card of each kind, and a dismissed one. */
+const PointStates = () => (
+  <div className="flex flex-col gap-2">
+    {POINTS.map((point) => (
+      <PointCard
+        key={point.id}
+        point={point}
+        state="open"
+        saving={false}
+        readOnly={false}
+        current={point.kind === "finding"}
+        onRaise={() => {}}
+        onState={() => {}}
+      />
+    ))}
+    {POINTS[2] !== undefined && (
+      <PointCard
+        point={{ ...POINTS[2], id: PointId.parse("d2"), title: "Keeps the old retry helper" }}
+        state="dismissed"
+        saving={false}
+        readOnly={false}
+        current={false}
+        onRaise={() => {}}
+        onState={() => {}}
+      />
+    )}
+  </div>
 );
 
 const Group = ({ title, children }: { readonly title: string; readonly children: ReactNode }) => (

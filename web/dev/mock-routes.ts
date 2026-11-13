@@ -15,6 +15,7 @@ import type { FileChange } from "../../src/domain/diff/index.ts";
 import {
   buildPublication,
   composeBody,
+  MODEL_STAGES,
   type PointId,
   type PointReview,
   type PublicationReceipt,
@@ -31,6 +32,7 @@ import {
   largeAnalysisView,
 } from "./fixtures/index.ts";
 import { analysisFailed, analysisInProgress } from "./progress.ts";
+import { afterModelRun, type Scenario, withoutModel } from "./scenarios.ts";
 
 /** The session token the mock accepts; open the UI with `?token=mock`. */
 export const MOCK_TOKEN = "mock";
@@ -138,12 +140,20 @@ const issuesOf = (
  * fixture's stages one by one, so loading states can be built against it.
  */
 export const createMockApi = (
-  options: { readonly stageMs?: number; readonly now?: () => string } = {},
+  options: {
+    readonly stageMs?: number;
+    readonly now?: () => string;
+    /** Plays Claude's run as this scenario, starting from the code's review alone. */
+    readonly scenario?: Scenario;
+  } = {},
 ): MockApi => {
   const stageMs = options.stageMs ?? MOCK_STAGE_MS;
+  const scenario = options.scenario;
   const now = options.now ?? (() => new Date().toISOString());
   let fixtureView = fixtureAnalysisView;
-  let fixture = fixtureView.analysis;
+  let fixture = scenario === undefined ? fixtureView.analysis : withoutModel(fixtureView.analysis);
+  /** The model's stages, stepped through when the reviewer asks Claude in a scenario. */
+  let modelStagesDone: number | null = null;
 
   let stagesDone = StageName.options.length;
   let failAt: StageName | null = null;
@@ -155,10 +165,17 @@ export const createMockApi = (
   let replies = 0;
   const listeners = new Set<(event: MockEvent) => void>();
 
-  const analysis = () =>
-    failed && failAt !== null
-      ? analysisFailed(fixture, failAt, FAILURE_MESSAGE)
-      : analysisInProgress(fixture, stagesDone);
+  const analysis = () => {
+    if (failed && failAt !== null) return analysisFailed(fixture, failAt, FAILURE_MESSAGE);
+    if (scenario === undefined || modelStagesDone === null) {
+      return analysisInProgress(fixture, stagesDone);
+    }
+    // Claude's run: each pass's results appear as its stage finishes, then the scenario's end.
+    const ended = afterModelRun(fixtureAnalysisView.analysis, scenario);
+    return modelStagesDone >= MODEL_STAGES.length
+      ? ended
+      : analysisInProgress(ended, StageName.options.length - MODEL_STAGES.length + modelStagesDone);
+  };
   const view = (): AnalysisView => ({
     ...fixtureView,
     analysis: analysis(),
@@ -265,8 +282,30 @@ export const createMockApi = (
       const response: AnalysisIdResponse = { analysisId: fixture.id };
       return success(response);
     },
-    runModel: ({ id }) =>
-      findAnalysis(id) ?? failure("model-unavailable", "the mock API doesn't run Claude"),
+    runModel: ({ id }) => {
+      const missing = findAnalysis(id);
+      if (missing !== null) return missing;
+      if (scenario === undefined) {
+        return failure("model-unavailable", "the mock API doesn't run Claude");
+      }
+      if (modelStagesDone === null && timer === null) {
+        modelStagesDone = 0;
+        timer = setInterval(
+          () => {
+            modelStagesDone = (modelStagesDone ?? 0) + 1;
+            const stage = MODEL_STAGES[Math.min(modelStagesDone, MODEL_STAGES.length - 1)];
+            if (modelStagesDone >= MODEL_STAGES.length) {
+              stop();
+              return;
+            }
+            if (stage !== undefined) emit({ event: "updated", data: { stage, status: "running" } });
+          },
+          scenario === "slow" ? stageMs * 3 : stageMs,
+        );
+      }
+      const response: AnalysisIdResponse = { analysisId: fixture.id };
+      return success(response);
+    },
     putPointState: (params, body) => {
       const missing = findAnalysis(params.id) ?? requireComplete();
       if (missing !== null) return missing;

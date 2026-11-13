@@ -6,6 +6,10 @@ import {
   type Point,
   type PointKind,
 } from "../../../../src/domain/review/index.ts";
+
+/** What Claude's element reads of an analysis: how far its run got, and how it ended. */
+export type ClaudeRun = Pick<Analysis, "status" | "stages" | "modelError">;
+
 import { POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { KeyHint } from "../../review/index.ts";
@@ -79,7 +83,7 @@ const Chip = ({ kind, count }: { readonly kind: PointKind; readonly count: numbe
 };
 
 /** The passes whose results aren't in, and why, when a run ended early. */
-const missingNote = (analysis: Analysis): string | null => {
+const missingNote = (analysis: ClaudeRun): string | null => {
   const missing = (["findings", "risk", "decisions"] as const).filter(
     (stage) => analysis.stages[stage] !== "done",
   );
@@ -104,7 +108,7 @@ export const ClaudeElement = ({
   onOpenList,
   onNext,
 }: {
-  readonly analysis: Analysis;
+  readonly analysis: ClaudeRun;
   /** What runs the passes and who pays, from the status; null when it isn't known yet. */
   readonly via: string | null;
   readonly running: boolean;

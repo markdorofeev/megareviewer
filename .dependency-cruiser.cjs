@@ -63,8 +63,17 @@ module.exports = {
       name: "web-uses-contracts",
       comment: "The web talks to the server only through the HTTP API contract.",
       severity: "error",
-      from: { path: "^web/(src|dev)/" },
+      from: { path: "^web/src/" },
       to: { path: "^src/(application|adapters|cli)/" },
+    },
+    {
+      name: "web-dev-uses-contracts",
+      comment:
+        "The mock API may share the dev fakes under src/cli/dev (the scenarios the replayed " +
+        "model plays), which aren't bundled, but nothing else of the server's.",
+      severity: "error",
+      from: { path: "^web/dev/" },
+      to: { path: "^src/(application|adapters|cli)/", pathNot: "^src/cli/dev/" },
     },
     {
       name: "no-deep-imports",

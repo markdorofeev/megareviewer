@@ -27,7 +27,10 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Mechanical proof | Deterministic evidence that a hunk is mechanical: generated, whitespace, rename, move or formatting |
 | Intent | Stated intent (description, tickets), inferred intent (code), and the mismatches between them |
 | Decision | A choice the code makes, resting on one or more hunks |
-| Verdict | The reviewer's answer on a decision: pending, approved or rejected |
+| Finding | Something that looks wrong, on the lines of a hunk that show it |
+| Point | What the model asks the reviewer to look at: a finding, a risk it raised, or a decision, with the hunk and lines it rests on |
+| Point state | What the reviewer did with a point: *open* (nothing, which means fine), *raised* or *dismissed* |
+| Verdict | What the published review says: approve, request changes or comment. The reviewer picks it |
 | Tour | Hunks ordered into steps, grouped by concept |
 | Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed |
 | Unchanged caller | Code outside the PR that calls a definition the PR changes, or names it as a type. Read from a checkout |
