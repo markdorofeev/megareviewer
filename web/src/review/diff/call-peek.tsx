@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import type { FileChange, Hunk, PartId } from "../../../../src/domain/diff/index.ts";
+import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import {
   createHoverCardHandle,
@@ -10,6 +11,7 @@ import {
 } from "../../ui/hover-card.tsx";
 import { DiffLine } from "./diff-line.tsx";
 import { FilePath } from "./file-path.tsx";
+import { PINNED } from "./hunk-card.tsx";
 import { hunkLocation, lineCounts } from "./lines.ts";
 import { viewLines } from "./rows.ts";
 import { useHunkTokens } from "./syntax.ts";
@@ -124,16 +126,23 @@ const PeekBody = ({
     box.scrollTop = row.offsetTop - (header?.offsetHeight ?? 0);
   }, [start]);
   return (
-    <div ref={scroller} className="relative min-h-0 overflow-auto">
-      {payload.targets.map((target, at) => (
-        <PeekPart
-          key={target.id}
-          target={target}
-          symbol={payload.symbol}
-          onGoTo={onGoTo}
-          divided={at > 0}
-        />
-      ))}
+    // The parts' lines scroll sideways together, with each header held at the visible width.
+    <div
+      ref={scroller}
+      data-slot="peek-scroller"
+      className="@container relative min-h-0 overflow-auto"
+    >
+      <div className="w-max min-w-full">
+        {payload.targets.map((target, at) => (
+          <PeekPart
+            key={target.id}
+            target={target}
+            symbol={payload.symbol}
+            onGoTo={onGoTo}
+            divided={at > 0}
+          />
+        ))}
+      </div>
     </div>
   );
 };
@@ -157,7 +166,12 @@ const PeekPart = ({
   const where = hunkLocation(hunk);
   return (
     <section aria-label={`${file.path}, ${where}`} className={divided ? "border-t" : undefined}>
-      <header className="sticky top-0 z-[2] flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-surface-subtle px-3 py-1 text-caption">
+      <header
+        className={cn(
+          PINNED,
+          "top-0 z-[2] flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-surface-subtle px-3 py-1 text-caption",
+        )}
+      >
         <FilePath file={file} status={file.status} />
         <span className="text-muted-foreground">{where}</span>
         <span className="tabular font-mono text-code-compact">

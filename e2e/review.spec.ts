@@ -113,6 +113,30 @@ test("a call shows the code it runs while the pointer is on it or on its card", 
   await expect(page.locator("[data-slot=hunk-card]:focus")).toContainText("renderReceipt");
 });
 
+test("a call's card keeps its header in view when its code scrolls sideways", async ({ page }) => {
+  // Narrow enough that the code is wider than the card.
+  await page.setViewportSize({ width: 560, height: 800 });
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+  await page.locator("[data-slot=call]", { hasText: "renderReceipt" }).first().hover();
+  const card = page.getByLabel("Code renderReceipt runs");
+  await expect(card).toBeVisible();
+  const scroller = card.locator("[data-slot=peek-scroller]");
+  expect(await scroller.evaluate((box) => box.scrollWidth > box.clientWidth)).toBe(true);
+  await scroller.evaluate((box) => {
+    box.scrollLeft = box.scrollWidth;
+  });
+  const goTo = card.getByRole("button", { name: "Go to file" });
+  const header = card.locator("header").first();
+  const [cardBox, headerBox, goToBox] = await Promise.all([
+    card.boundingBox(),
+    header.boundingBox(),
+    goTo.boundingBox(),
+  ]);
+  if (cardBox === null || headerBox === null || goToBox === null) throw new Error("not laid out");
+  expect(Math.abs(headerBox.x - cardBox.x)).toBeLessThan(2);
+  expect(goToBox.x + goToBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+});
+
 test("the line under the mouse shows a plus on its number, an unchanged fold's doesn't", async ({
   page,
 }) => {
