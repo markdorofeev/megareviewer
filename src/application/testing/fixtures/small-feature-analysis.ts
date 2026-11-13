@@ -6,6 +6,7 @@ import {
   analysisId,
   CommentKey,
   DecisionId,
+  FindingId,
   type Intent,
   type Publication,
   type Tour,
@@ -161,7 +162,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "17",
+  pipelineVersion: "18",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -208,6 +209,7 @@ export const smallFeatureAnalysis: Analysis = {
     collect: "done",
     prep: "done",
     intent: "done",
+    findings: "done",
     risk: "done",
     decisions: "done",
     tour: "done",
@@ -226,6 +228,15 @@ export const smallFeatureAnalysis: Analysis = {
   checkout: "none",
   unchangedCallers: [],
   intent: smallFeatureIntent,
+  findings: [
+    {
+      id: FindingId.parse("f1"),
+      title: "Serves a stale receipt for an hour after its order changes",
+      explanation:
+        "The cache is keyed by order ID alone, so a refund or an edited item still shows the receipt rendered before it until the entry expires.",
+      lines: { hunkId: receiptServiceHunk.id, side: "new", startLine: 9, line: 11 },
+    },
+  ],
   risk: [
     {
       hunkId: rateLimitHunk.id,

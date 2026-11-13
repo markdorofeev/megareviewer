@@ -25,3 +25,11 @@ export const hunkNamer = (): ((path: string, hunk: HunkContent) => HunkId) => {
     return count === 1 ? id : HunkId.parse(`${id}-${count}`);
   };
 };
+
+/** Whether a hunk shows a line number on a side: new is the head side, old the base. */
+export const hunkHasLine = (hunk: Hunk, side: "new" | "old", line: number): boolean =>
+  hunk.lines.some((diffLine) =>
+    side === "new"
+      ? diffLine.kind !== "del" && diffLine.newLine === line
+      : diffLine.kind !== "add" && diffLine.oldLine === line,
+  );

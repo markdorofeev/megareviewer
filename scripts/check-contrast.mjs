@@ -113,6 +113,9 @@ const PAIRS = [
   // background or card only.
   ["Contract label on its tint", "risk-contract", "risk-contract-bg", 4.5],
   ["Contract label on card", "risk-contract", "card", 4.5],
+  // hunk: a point's bar at the edge of the lines it rests on, by kind.
+  ["Finding bar on card (non-text)", "review-changes", "card", 3],
+  ["Decision bar on card (non-text)", "review-pending", "card", 3],
   ["Contract bar on background (non-text)", "risk-contract-solid", "background", 3],
   ["Contract bar on card (non-text)", "risk-contract-solid", "card", 3],
   ["Logic label on its tint", "risk-logic", "risk-logic-bg", 4.5],

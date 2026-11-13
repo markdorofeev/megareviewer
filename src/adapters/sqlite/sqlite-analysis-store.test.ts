@@ -12,8 +12,8 @@ import {
 } from "../../application/testing/index.ts";
 import {
   CommentKey,
-  DecisionId,
-  type DecisionVerdict,
+  PointId,
+  type PointReview,
   type PublicationReceipt,
 } from "../../domain/review/index.ts";
 import { openSqliteAnalysisStore, type SqliteAnalysisStore } from "./index.ts";
@@ -56,10 +56,9 @@ const warnings = (logger: RecordingLogger) =>
   logger.entries.filter((entry) => entry.level === "warn");
 
 const analysis = smallFeatureAnalysis;
-const approved: DecisionVerdict = {
-  decisionId: DecisionId.parse("d1"),
-  verdict: "approved",
-  comment: "",
+const raised: PointReview = {
+  pointId: PointId.parse("d1"),
+  state: "raised",
   updatedAt: "2026-10-21T10:05:00Z",
 };
 const summaryKey = CommentKey.parse("summary");
@@ -192,70 +191,70 @@ describe("openSqliteAnalysisStore", () => {
     expect(warnings(logger)).toHaveLength(1);
   });
 
-  it("skips verdicts, posted comments and publications that no longer parse, and logs them", async () => {
+  it("skips point reviews, posted comments and publications that no longer parse, and logs them", async () => {
     const path = tempPath();
     const logger = new RecordingLogger();
     const store = openStore(path, logger);
     await store.saveAnalysis(analysis);
-    await store.saveVerdict(analysis.id, approved);
+    await store.savePointReview(analysis.id, raised);
     await store.recordPostedComment(analysis.id, summaryKey, "101");
     await store.recordPublication(analysis.id, receipt);
     withRawDatabase(path, (db) => {
-      db.prepare("INSERT INTO decision_reviews VALUES (?, 'x1', 'approved', '', ?)").run(
+      db.prepare("INSERT INTO point_reviews VALUES (?, 'x1', 'raised', ?)").run(
         analysis.id,
-        approved.updatedAt,
+        raised.updatedAt,
       );
       db.prepare("INSERT INTO published_comments VALUES (?, 'hunk:h1', '102', ?)").run(
         analysis.id,
-        approved.updatedAt,
+        raised.updatedAt,
       );
       db.prepare("UPDATE publications SET receipt = '{}' WHERE analysis_id = ?").run(analysis.id);
     });
 
-    expect(await store.getVerdicts(analysis.id)).toEqual([approved]);
+    expect(await store.getPointReviews(analysis.id)).toEqual([raised]);
     expect(Object.fromEntries(await store.getPostedComments(analysis.id))).toEqual({
       summary: "101",
     });
     expect(await store.getPublication(analysis.id)).toBeNull();
     expect(warnings(logger).map((entry) => entry.message)).toEqual([
-      "Ignoring a stored verdict that no longer parses",
+      "Ignoring a stored point review that no longer parses",
       "Ignoring a stored posted comment that no longer parses",
       "Ignoring a stored publication that no longer parses",
     ]);
   });
 
-  it("keeps verdicts, comments and the publication when an analysis is saved again", async () => {
+  it("keeps point reviews, comments and the publication when an analysis is saved again", async () => {
     const store = openStore(":memory:");
     await store.saveAnalysis({ ...analysis, status: "running" });
-    await store.saveVerdict(analysis.id, approved);
+    await store.savePointReview(analysis.id, raised);
     await store.recordPostedComment(analysis.id, summaryKey, "101");
     await store.recordPublication(analysis.id, receipt);
     await store.saveAnalysis(analysis);
 
-    expect(await store.getVerdicts(analysis.id)).toEqual([approved]);
+    expect(await store.getPointReviews(analysis.id)).toEqual([raised]);
     expect([...(await store.getPostedComments(analysis.id))]).toEqual([["summary", "101"]]);
     expect(await store.getPublication(analysis.id)).toEqual(receipt);
   });
 
-  it("deletes an analysis's verdicts, comments and publication with it", async () => {
+  it("deletes an analysis's point reviews, comments and publication with it", async () => {
     const path = tempPath();
     const store = openStore(path);
     await store.saveAnalysis(analysis);
-    await store.saveVerdict(analysis.id, approved);
+    await store.savePointReview(analysis.id, raised);
     await store.recordPostedComment(analysis.id, summaryKey, "101");
     await store.recordPublication(analysis.id, receipt);
 
     withRawDatabase(path, (db) => {
       db.prepare("DELETE FROM analyses WHERE id = ?").run(analysis.id);
-      for (const table of ["decision_reviews", "published_comments", "publications"]) {
+      for (const table of ["point_reviews", "published_comments", "publications"]) {
         expect(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()).toEqual({ n: 0 });
       }
     });
   });
 
-  it("refuses a verdict for an analysis it doesn't have", async () => {
+  it("refuses a point review for an analysis it doesn't have", async () => {
     const store = openStore(":memory:");
 
-    await expect(store.saveVerdict(analysis.id, approved)).rejects.toThrow(/FOREIGN KEY/);
+    await expect(store.savePointReview(analysis.id, raised)).rejects.toThrow(/FOREIGN KEY/);
   });
 });

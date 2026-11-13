@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Intent, ModelUsage, validateTourTitles } from "../../../domain/review/index.ts";
+import {
+  Intent,
+  ModelUsage,
+  validateFindings,
+  validateTourTitles,
+} from "../../../domain/review/index.ts";
 import {
   type AnalysisModel,
   DecisionDraft,
+  FindingDraft,
   ModelRisk,
   type PassOutput,
   TourDraft,
@@ -54,6 +60,18 @@ export const describeAnalysisModelContract = (
 
       expect(Intent.parse(result.value.value)).toEqual(result.value.value);
       expectUsage(result.value, "intent");
+    });
+
+    it("returns findings on lines of the PR's hunks", async () => {
+      const result = await model.findings(smallFeatureInput, intent);
+      if (!result.ok) throw new Error(`findings failed: ${result.error.message}`);
+
+      const hunks = new Map(
+        smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
+      );
+      for (const item of result.value.value) expect(FindingDraft.parse(item)).toEqual(item);
+      expect(validateFindings(result.value.value, hunks)).toEqual([]);
+      expectUsage(result.value, "findings");
     });
 
     it("returns risk classifications", async () => {

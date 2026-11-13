@@ -4,9 +4,9 @@ import {
   AnalysisId,
   buildPublication,
   CommentKey,
-  DecisionId,
   type HostError,
   type HostUser,
+  PointId,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { createAnalysisEvents } from "../events/index.ts";
@@ -27,7 +27,7 @@ import {
 } from "../testing/index.ts";
 import { createUseCases } from "./index.ts";
 
-const d = DecisionId.parse;
+const p = PointId.parse;
 const { id } = smallFeatureAnalysis;
 const { ref } = smallFeature.pullRequest;
 const missingId = AnalysisId.parse("a_0000000000000000");
@@ -75,20 +75,19 @@ const setup = (
 const running: Analysis = { ...smallFeatureAnalysis, status: "running" };
 
 describe("getAnalysisView", () => {
-  it("returns the analysis with its verdicts and publication", async () => {
+  it("returns the analysis with its point reviews and publication", async () => {
     const { useCases, store, seeded } = setup();
     await seeded;
-    const verdict = {
-      decisionId: d("d1"),
-      verdict: "approved" as const,
-      comment: "",
+    const review = {
+      pointId: p("d1"),
+      state: "dismissed" as const,
       updatedAt: "2026-10-21T10:00:00Z",
     };
-    await store.saveVerdict(id, verdict);
+    await store.savePointReview(id, review);
     expect(await useCases.getAnalysisView(id)).toEqual(
       ok({
         analysis: smallFeatureAnalysis,
-        verdicts: [verdict],
+        pointReviews: [review],
         publication: null,
         isAuthor: false,
         stale: false,
@@ -190,60 +189,61 @@ describe("getFileContent", () => {
   });
 });
 
-describe("recordVerdict", () => {
-  it("saves the verdict with the current time", async () => {
+describe("recordPointState", () => {
+  it("saves the state with the current time", async () => {
     const { useCases, store, seeded } = setup();
     await seeded;
-    const saved = await useCases.recordVerdict(id, d("d2"), "rejected", "Needs eviction.");
-    const expected = {
-      decisionId: d("d2"),
-      verdict: "rejected",
-      comment: "Needs eviction.",
-      updatedAt: "2026-10-21T10:00:00.000Z",
-    };
+    const saved = await useCases.recordPointState(id, p("f1"), "raised");
+    const expected = { pointId: p("f1"), state: "raised", updatedAt: "2026-10-21T10:00:00.000Z" };
     expect(saved).toEqual(ok(expected));
-    expect(await store.getVerdicts(id)).toEqual([expected]);
+    expect(await store.getPointReviews(id)).toEqual([expected]);
   });
 
-  it("needs a complete analysis and a known decision", async () => {
+  it("needs a complete analysis and a point it has", async () => {
     const { useCases, seeded } = setup();
     await seeded;
-    expect(await useCases.recordVerdict(id, d("d9"), "approved", "")).toEqual(
-      err({ code: "not-found", message: `No decision d9 in analysis ${id}` }),
+    expect(await useCases.recordPointState(id, p("d9"), "raised")).toEqual(
+      err({ code: "not-found", message: `No point d9 in analysis ${id}` }),
     );
-    expect(await useCases.recordVerdict(missingId, d("d1"), "approved", "")).toEqual(
+    expect(await useCases.recordPointState(missingId, p("d1"), "raised")).toEqual(
       err({ code: "not-found", message: `No analysis ${missingId}` }),
     );
     const incomplete = setup({ analysis: running });
     await incomplete.seeded;
-    expect(await incomplete.useCases.recordVerdict(id, d("d1"), "approved", "")).toEqual(
+    expect(await incomplete.useCases.recordPointState(id, p("d1"), "raised")).toEqual(
       err({ code: "analysis-not-complete", message: "The analysis isn't complete" }),
     );
   });
 });
 
 describe("publishing", () => {
-  const reject = async (useCases: ReturnType<typeof setup>["useCases"]) => {
-    await useCases.recordVerdict(id, d("d1"), "approved", "");
-    await useCases.recordVerdict(id, d("d3"), "rejected", "Out of scope here.");
+  const commented = smallFeatureAnalysis.files[1]?.hunks[0];
+  const commentedLine = commented?.lines.find((line) => line.kind === "add")?.newLine;
+  if (commented === undefined || commentedLine == null) throw new Error("small-feature has a hunk");
+  /** A raised point: its comment, as the reviewer left it. */
+  const raised = {
+    hunkComments: [
+      { hunkId: commented.id, side: "new" as const, line: commentedLine, body: "Out of scope." },
+    ],
+    verdict: "request_changes" as const,
   };
+  const raisedKey = CommentKey.parse(`hunk:${commented.id}:new:${commentedLine}`);
 
   it("previews exactly what it publishes", async () => {
     const { useCases, github, store, seeded } = setup();
     await seeded;
-    await reject(useCases);
-    const preview = await useCases.previewPublication(id, "Drop the rate limit.");
+    const preview = await useCases.previewPublication(id, "Drop the rate limit.", raised);
     expect(preview).toEqual(
       ok(
         buildPublication({
           analysis: smallFeatureAnalysis,
-          verdicts: await store.getVerdicts(id),
           summary: "Drop the rate limit.",
           isAuthor: false,
+          ...raised,
         }),
       ),
     );
-    const receipt = await useCases.publishReview(id, "Drop the rate limit.", false);
+    const receipt = await useCases.publishReview(id, "Drop the rate limit.", false, raised);
     expect(receipt.ok).toBe(true);
     expect(github.publishAttempts).toHaveLength(1);
     expect(github.publishAttempts[0]?.publication).toEqual(preview.ok && preview.value);
@@ -300,20 +300,18 @@ describe("publishing", () => {
   it("only comments when the reviewer wrote the PR", async () => {
     const { useCases, seeded } = setup({ githubUser: smallFeature.pullRequest.author });
     await seeded;
-    await reject(useCases);
-    const preview = await useCases.previewPublication(id, "");
+    const preview = await useCases.previewPublication(id, "", raised);
     expect(preview.ok && preview.value.verdict).toBe("comment");
   });
 
   it("publishes once, however often it's asked", async () => {
     const { useCases, github, seeded } = setup();
     await seeded;
-    await reject(useCases);
     const [first, second] = await Promise.all([
-      useCases.publishReview(id, "", false),
-      useCases.publishReview(id, "", false),
+      useCases.publishReview(id, "", false, raised),
+      useCases.publishReview(id, "", false, raised),
     ]);
-    const third = await useCases.publishReview(id, "", false);
+    const third = await useCases.publishReview(id, "", false, raised);
     expect(second).toEqual(first);
     expect(third).toEqual(first);
     expect(github.publishAttempts).toHaveLength(1);
@@ -322,26 +320,25 @@ describe("publishing", () => {
   it("posts only the rest when retried after a partial failure", async () => {
     const { useCases, github, store, seeded } = setup();
     await seeded;
-    await reject(useCases);
     github.failPublishAtPost(2, network);
-    expect(await useCases.publishReview(id, "", false)).toEqual(
+    expect(await useCases.publishReview(id, "", false, raised)).toEqual(
       err({ code: "host-error", message: "socket hang up" }),
     );
     expect([...(await store.getPostedComments(id)).keys()]).toEqual(["summary"]);
     expect(await store.getPublication(id)).toBeNull();
 
-    const receipt = await useCases.publishReview(id, "", false);
+    const receipt = await useCases.publishReview(id, "", false, raised);
     expect(github.publishAttempts.map((attempt) => attempt.postedKeys)).toEqual([
       ["summary"],
-      ["decision:d3"],
+      [raisedKey],
     ]);
     expect(receipt.ok && receipt.value.postedCommentIds).toEqual({
       summary: "fake-comment-1",
-      "decision:d3": "fake-comment-2",
+      [raisedKey]: "fake-comment-2",
     });
     expect(receipt.ok && Object.keys(receipt.value.postedCommentIds)).toEqual([
       CommentKey.parse("summary"),
-      CommentKey.parse("decision:d3"),
+      raisedKey,
     ]);
   });
 

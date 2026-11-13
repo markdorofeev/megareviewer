@@ -10,6 +10,7 @@ import {
 import {
   type Commit,
   Decision,
+  Finding,
   type Intent,
   type ModelError,
   type ModelUsage,
@@ -76,6 +77,10 @@ export const ModelRisk = z
   .readonly();
 export type ModelRisk = z.infer<typeof ModelRisk>;
 
+/** A finding as the model writes it; the server numbers them. */
+export const FindingDraft = Finding.unwrap().omit({ id: true }).readonly();
+export type FindingDraft = z.infer<typeof FindingDraft>;
+
 export const DecisionDraft = Decision.unwrap().omit({ id: true }).readonly();
 export type DecisionDraft = z.infer<typeof DecisionDraft>;
 
@@ -110,6 +115,11 @@ export interface AnalysisModel {
     input: AnalysisInput,
     options?: PassOptions,
   ): Promise<Result<PassOutput<Intent>, ModelError>>;
+  findings(
+    input: AnalysisInput,
+    intent: Intent,
+    options?: PassOptions,
+  ): Promise<Result<PassOutput<FindingDraft[]>, ModelError>>;
   risk(
     input: AnalysisInput,
     intent: Intent,

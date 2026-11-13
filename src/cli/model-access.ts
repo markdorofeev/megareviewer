@@ -162,6 +162,8 @@ export const createModelAccess = (options: {
       },
       checkSize: (input) => onModel((model) => model.checkSize(input)),
       intent: (input, passOptions) => onModel((model) => model.intent(input, passOptions)),
+      findings: (input, intent, passOptions) =>
+        onModel((model) => model.findings(input, intent, passOptions)),
       risk: (input, intent, passOptions) =>
         onModel((model) => model.risk(input, intent, passOptions)),
       decisions: (input, intent, passOptions) =>

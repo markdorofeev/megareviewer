@@ -10,6 +10,7 @@ import type {
   AnalysisInput,
   AnalysisModel,
   DecisionDraft,
+  FindingDraft,
   ModelRisk,
   PassOptions,
   PassOutput,
@@ -19,6 +20,7 @@ import type {
 
 export interface PassValues {
   intent: Intent;
+  findings: FindingDraft[];
   risk: ModelRisk[];
   decisions: DecisionDraft[];
   tour: TourDraft;
@@ -43,8 +45,8 @@ const filesToReview = (input: AnalysisInput) => input.files.filter((file) => fil
 
 /**
  * Returns scripted answers per pass, in order, and derives plausible ones from the input
- * when none are left: every hunk sent in full is logic, one decision per file, and the code's tour
- * keeps its titles.
+ * when none are left: a finding on the first added line, every hunk sent in full is logic, one
+ * decision per file, and the code's tour keeps its titles.
  */
 export class FakeAnalysisModel implements AnalysisModel {
   readonly version: string;
@@ -52,6 +54,7 @@ export class FakeAnalysisModel implements AnalysisModel {
   private readonly maxInputTokens: number;
   private readonly scripts: { [P in ModelPass]: ScriptedPass<P>[] } = {
     intent: [],
+    findings: [],
     risk: [],
     decisions: [],
     tour: [],
@@ -101,6 +104,30 @@ export class FakeAnalysisModel implements AnalysisModel {
         mismatches: [],
       };
     });
+  }
+
+  async findings(
+    input: AnalysisInput,
+    _intent: Intent,
+    options?: PassOptions,
+  ): Promise<Result<PassOutput<FindingDraft[]>, ModelError>> {
+    return this.answer("findings", input, options, undefined, () =>
+      input.files
+        .flatMap((file) => file.hunks)
+        .flatMap((hunk) => {
+          const line = hunk.lines.find((one) => one.kind === "add")?.newLine;
+          return line == null
+            ? []
+            : [
+                {
+                  title: `Check ${hunk.path}`,
+                  explanation: "Derived by the fake model.",
+                  lines: { hunkId: hunk.id, side: "new" as const, startLine: line, line },
+                },
+              ];
+        })
+        .slice(0, 1),
+    );
   }
 
   async risk(

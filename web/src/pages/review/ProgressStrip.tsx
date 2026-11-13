@@ -9,6 +9,7 @@ const STAGE_NAMES: Readonly<Record<StageName, string>> = {
   collect: "Collect",
   prep: "Prepare",
   intent: "Intent",
+  findings: "Findings",
   risk: "Risk",
   decisions: "Decisions",
   tour: "Tour",

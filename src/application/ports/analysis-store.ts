@@ -3,7 +3,7 @@ import type {
   AnalysisId,
   AnalysisKey,
   CommentKey,
-  DecisionVerdict,
+  PointReview,
   PublicationReceipt,
   PullRequestRef,
 } from "../../domain/review/index.ts";
@@ -17,9 +17,9 @@ export interface AnalysisStore {
   listRecent(limit: number): Promise<Analysis[]>;
   /** The PRs that have an analysis, each once, the most recently analyzed first. */
   listAnalyzedPullRequests(limit: number): Promise<PullRequestRef[]>;
-  getVerdicts(id: AnalysisId): Promise<DecisionVerdict[]>;
-  /** Upsert by decisionId. */
-  saveVerdict(id: AnalysisId, verdict: DecisionVerdict): Promise<void>;
+  getPointReviews(id: AnalysisId): Promise<PointReview[]>;
+  /** Upsert by pointId. */
+  savePointReview(id: AnalysisId, review: PointReview): Promise<void>;
   getPostedComments(id: AnalysisId): Promise<ReadonlyMap<CommentKey, string>>;
   recordPostedComment(id: AnalysisId, key: CommentKey, hostCommentId: string): Promise<void>;
   getPublication(id: AnalysisId): Promise<PublicationReceipt | null>;

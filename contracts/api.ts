@@ -2,11 +2,12 @@ import { z } from "zod";
 import {
   Analysis,
   AnalysisId,
-  DecisionId,
-  DecisionVerdict,
   HostKind,
   HostUser,
   HunkComment,
+  PointId,
+  PointReview,
+  PointState,
   Publication,
   PublicationReceipt,
   PublicationVerdict,
@@ -16,7 +17,6 @@ import {
   ThreadComment,
   ThreadId,
   ThreadList,
-  Verdict,
 } from "../src/domain/review/index.ts";
 
 /** Every /api request carries the session token in this header. */
@@ -67,7 +67,7 @@ export type AnalysisIdResponse = z.infer<typeof AnalysisIdResponse>;
 export const AnalysisView = z
   .object({
     analysis: Analysis,
-    verdicts: z.array(DecisionVerdict).readonly(),
+    pointReviews: z.array(PointReview).readonly(),
     publication: PublicationReceipt.nullable(),
     /** The current user opened the PR, so the review can only comment, not approve. */
     isAuthor: z.boolean(),
@@ -77,10 +77,10 @@ export const AnalysisView = z
   .readonly();
 export type AnalysisView = z.infer<typeof AnalysisView>;
 
-export const PutVerdictRequest = z.object({ verdict: Verdict, comment: z.string() }).readonly();
-export type PutVerdictRequest = z.infer<typeof PutVerdictRequest>;
+export const PutPointStateRequest = z.object({ state: PointState }).readonly();
+export type PutPointStateRequest = z.infer<typeof PutPointStateRequest>;
 
-/** Comments on hunk lines and the reviewer's own verdict; without them, the decisions decide. */
+/** Comments on hunk lines, raised points among them, and the verdict; a comment without one. */
 const ReviewFields = {
   hunkComments: z.array(HunkComment).readonly().optional(),
   verdict: PublicationVerdict.nullable().optional(),
@@ -166,7 +166,7 @@ export const ErrorResponse = z
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 const AnalysisParams = z.object({ id: AnalysisId }).readonly();
-const VerdictParams = z.object({ id: AnalysisId, decisionId: DecisionId }).readonly();
+const PointParams = z.object({ id: AnalysisId, pointId: PointId }).readonly();
 const FileParams = z
   .object({ id: AnalysisId, side: z.enum(["base", "head"]), path: z.string().min(1) })
   .readonly();
@@ -241,12 +241,13 @@ export const routes = {
     request: null,
     response: AnalysisIdResponse,
   },
-  putVerdict: {
+  /** Raises, dismisses or reopens one of the model's points. */
+  putPointState: {
     method: "PUT",
-    path: "/api/analyses/:id/verdicts/:decisionId",
-    params: VerdictParams,
-    request: PutVerdictRequest,
-    response: DecisionVerdict,
+    path: "/api/analyses/:id/points/:pointId",
+    params: PointParams,
+    request: PutPointStateRequest,
+    response: PointReview,
   },
   /** Exactly what publishing would post. */
   previewPublication: {

@@ -19,7 +19,7 @@ import { type Collected, collect, type OnFilesFetched } from "./collect.ts";
 import type { AppDeps } from "./deps.ts";
 import type { UseCaseError } from "./errors.ts";
 import { buildAnalysisInput, fitToModel } from "./model-input.ts";
-import { runDecisions, runIntent, runRisk, runTour } from "./model-passes.ts";
+import { runDecisions, runFindings, runIntent, runRisk, runTour } from "./model-passes.ts";
 import { prep } from "./prep.ts";
 import type { CheckoutAt } from "./unchanged-callers.ts";
 
@@ -191,8 +191,8 @@ const codeStages = async (
 };
 
 /**
- * Runs the model's passes on a complete analysis, adding intent, decisions, the model's risk and
- * the tour's titles to it. Collects and preps again from the stored PR first: files come from
+ * Runs the model's passes on a complete analysis, adding intent, findings, decisions, the model's
+ * risk and the tour's titles to it. Collects and preps again from the stored PR first: files come from
  * the file cache, and prep is deterministic. A failure is the analysis's `modelError`; its
  * status stays complete. Never throws.
  */
@@ -254,7 +254,10 @@ const modelStages = async (
   const { input } = fitted.value;
   await tracker.save(adding({ warnings: fitted.value.warnings }));
 
-  const knownHunks = new Set<HunkId>(files.flatMap((file) => file.hunks.map((hunk) => hunk.id)));
+  const hunks = new Map(
+    files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
+  );
+  const knownHunks = new Set<HunkId>(hunks.keys());
 
   await tracker.setStage("intent", "running");
   const intentResult = await runIntent(model, input, knownHunks, logger);
@@ -268,9 +271,17 @@ const modelStages = async (
   const intent = intentResult.outcome.value;
   await tracker.setStage("intent", "done", { intent });
 
+  await tracker.setStage("findings", "running");
   await tracker.setStage("risk", "running");
   await tracker.setStage("decisions", "running");
-  const [risk, decisions] = await Promise.all([
+  const [findings, risk, decisions] = await Promise.all([
+    runFindings(model, input, intent, hunks, logger).then(async (result) => {
+      await tracker.setStage("findings", result.outcome.ok ? "done" : "failed", (analysis) => ({
+        ...(result.outcome.ok ? { findings: result.outcome.value } : {}),
+        ...adding(result)(analysis),
+      }));
+      return result.outcome;
+    }),
     runRisk(model, input, intent, required, logger).then(async (result) => {
       const assessments = result.outcome.ok
         ? [...proofRisk, ...raiseByRules(result.outcome.value.assessments, ruleRisk)]
@@ -289,15 +300,16 @@ const modelStages = async (
       return result.outcome;
     }),
   ]);
-  if (!risk.ok) {
-    return tracker.finishModel({ stage: "risk", code: "model-error", message: risk.error.message });
-  }
-  if (!decisions.ok) {
-    return tracker.finishModel({
-      stage: "decisions",
-      code: "model-error",
-      message: decisions.error.message,
-    });
+  // What finished stays; the first failure is the run's error.
+  const failure = !findings.ok
+    ? { stage: "findings" as const, message: findings.error.message }
+    : !risk.ok
+      ? { stage: "risk" as const, message: risk.error.message }
+      : !decisions.ok
+        ? { stage: "decisions" as const, message: decisions.error.message }
+        : null;
+  if (!risk.ok || !decisions.ok) {
+    return tracker.finishModel(failure === null ? null : { ...failure, code: "model-error" });
   }
 
   await tracker.setStage("tour", "running");
@@ -318,5 +330,5 @@ const modelStages = async (
     ...adding(tour)(analysis),
   }));
 
-  await tracker.finishModel(null);
+  await tracker.finishModel(failure === null ? null : { ...failure, code: "model-error" });
 };

@@ -10,9 +10,9 @@ import {
 } from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
-  type Decision,
-  type DecisionId,
   type HunkComment,
+  type Point,
+  type PointId,
   type RiskAssessment,
   ruleReasons,
   type TourStep,
@@ -221,49 +221,65 @@ export const gapBetween = (previous: PartId, next: PartId, index: PartIndex): nu
   return Math.max(start - end - 1, 0);
 };
 
-/** Where the decisions show: each as a card on one hunk, linked from its other hunks. */
-export interface DecisionPlaces {
-  /** The decisions whose card sits on this hunk. */
-  readonly cards: ReadonlyMap<PartId, readonly Decision[]>;
-  /** The decisions resting on this hunk whose card sits on another. */
-  readonly mentions: ReadonlyMap<PartId, readonly Decision[]>;
-  readonly cardHunk: ReadonlyMap<DecisionId, PartId>;
-  /** Decisions resting on no hunk the page can show a card on. They show before the code. */
-  readonly unplaced: readonly Decision[];
+/** Where the points show: each as a card on one part, linked from the others it rests on. */
+export interface PointPlaces {
+  /** The points whose card sits on this part. */
+  readonly cards: ReadonlyMap<PartId, readonly Point[]>;
+  /** The points resting on this part whose card sits on another. */
+  readonly mentions: ReadonlyMap<PartId, readonly Point[]>;
+  readonly cardPart: ReadonlyMap<PointId, PartId>;
+  /** Points resting on no part the page can show a card on. They show before the code. */
+  readonly unplaced: readonly Point[];
 }
 
 /**
- * A decision's card goes under the header of the first part, in `order` (the page's), of the
- * hunks it rests on; its other parts link to it. Mechanical hunks show collapsed, so they never
- * hold a card.
+ * A point's card goes on the part holding its lines, or else on the first part, in `order` (the
+ * page's), of the hunks it rests on; its other parts link to it. Mechanical hunks show collapsed,
+ * so they never hold a card.
  */
-export const decisionPlaces = (
-  decisions: readonly Decision[],
+export const pointPlaces = (
+  points: readonly Point[],
   order: readonly PartId[],
   index: PartIndex,
-): DecisionPlaces => {
+): PointPlaces => {
   const rank = new Map(order.map((id, at) => [id, at]));
-  const cards = new Map<PartId, Decision[]>();
-  const mentions = new Map<PartId, Decision[]>();
-  const cardHunk = new Map<DecisionId, PartId>();
-  const unplaced: Decision[] = [];
-  const add = (map: Map<PartId, Decision[]>, id: PartId, decision: Decision) =>
-    map.set(id, [...(map.get(id) ?? []), decision]);
-  for (const decision of decisions) {
-    const [first, ...rest] = [...new Set(decision.hunkIds)]
+  const cards = new Map<PartId, Point[]>();
+  const mentions = new Map<PartId, Point[]>();
+  const cardPart = new Map<PointId, PartId>();
+  const unplaced: Point[] = [];
+  const add = (map: Map<PartId, Point[]>, id: PartId, point: Point) =>
+    map.set(id, [...(map.get(id) ?? []), point]);
+  for (const point of points) {
+    const parts = [...new Set(point.hunkIds)]
       .flatMap(index.partsOf)
       .filter((id) => rank.has(id) && !index.mechanical.has(id))
       .sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
+    const onLines = point.lines === null ? undefined : partShowing(point.lines, parts, index);
+    const [first = onLines, ...rest] =
+      onLines === undefined ? parts : [onLines, ...parts.filter((id) => id !== onLines)];
     if (first === undefined) {
-      unplaced.push(decision);
+      unplaced.push(point);
       continue;
     }
-    add(cards, first, decision);
-    cardHunk.set(decision.id, first);
-    for (const id of rest) add(mentions, id, decision);
+    add(cards, first, point);
+    cardPart.set(point.id, first);
+    for (const id of rest) add(mentions, id, point);
   }
-  return { cards, mentions, cardHunk, unplaced };
+  return { cards, mentions, cardPart, unplaced };
 };
+
+/** The part among `parts` that shows the point's first line, if any does. */
+const partShowing = (
+  lines: NonNullable<Point["lines"]>,
+  parts: readonly PartId[],
+  index: PartIndex,
+): PartId | undefined =>
+  parts.find((id) =>
+    index.parts.get(id)?.hunk.lines.some((line) => {
+      const place = commentPlace(line);
+      return place !== null && place.side === lines.side && place.line === lines.startLine;
+    }),
+  );
 
 /** One row per mechanical hunk, plus one per file-level proof, as the mechanical group shows. */
 export const mechanicalCount = (proofs: readonly MechanicalProof[]): number => {

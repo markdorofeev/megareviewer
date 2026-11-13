@@ -1,5 +1,5 @@
 import type { FileStatus } from "../../../src/domain/diff/index.ts";
-import type { RiskClass, Verdict } from "../../../src/domain/review/index.ts";
+import type { PointKind, RiskClass } from "../../../src/domain/review/index.ts";
 
 // One map from every state to its label, glyph and token classes. The glyph and the label always
 // go with the color, so a state is never told by color alone.
@@ -11,7 +11,29 @@ export interface StatusStyle {
   readonly className: string;
 }
 
-export const VERDICT_STATUS: Readonly<Record<Verdict, StatusStyle>> = {
+/** A point's kind: its glyph and word go everywhere its tint does. */
+export const POINT_STATUS: Readonly<Record<PointKind, StatusStyle>> = {
+  finding: {
+    label: "Finding",
+    glyph: "⚠",
+    className: "text-review-changes bg-review-changes-bg border-review-changes/25",
+  },
+  risk: {
+    label: "Risk",
+    glyph: "▲",
+    className: "text-risk-contract bg-risk-contract-bg border-risk-contract-border",
+  },
+  decision: {
+    label: "Decision",
+    glyph: "◇",
+    className: "text-review-pending bg-review-pending-bg border-review-pending/25",
+  },
+};
+
+/** The verdict a published review carries, and the marks the design system still shows. */
+export type ReviewMark = "approved" | "rejected" | "pending";
+
+export const VERDICT_STATUS: Readonly<Record<ReviewMark, StatusStyle>> = {
   approved: {
     label: "Approved",
     glyph: "✓",

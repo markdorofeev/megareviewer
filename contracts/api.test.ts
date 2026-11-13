@@ -4,7 +4,7 @@ import {
   smallFeaturePublication,
   smallFeatureThreadList,
 } from "../src/application/testing/index.ts";
-import { CommentKey, DecisionId } from "../src/domain/review/index.ts";
+import { CommentKey, PointId } from "../src/domain/review/index.ts";
 import {
   AnalysisDoneEvent,
   AnalysisUpdatedEvent,
@@ -16,10 +16,9 @@ import {
   routes,
 } from "./index.ts";
 
-const verdict = {
-  decisionId: DecisionId.parse("d3"),
-  verdict: "rejected",
-  comment: "Out of scope here.",
+const pointReview = {
+  pointId: PointId.parse("r:h_0123456789abcdef"),
+  state: "raised",
   updatedAt: "2026-10-21T09:05:00Z",
 } as const;
 
@@ -55,7 +54,7 @@ const responses: Record<RouteName, unknown> = {
   startAnalysis: { analysisId: smallFeatureAnalysis.id },
   getAnalysis: {
     analysis: smallFeatureAnalysis,
-    verdicts: [verdict],
+    pointReviews: [pointReview],
     publication: receipt,
     isAuthor: false,
     stale: false,
@@ -63,7 +62,7 @@ const responses: Record<RouteName, unknown> = {
   getFileContent: { content: "export const total = 1;\n" },
   retryAnalysis: { analysisId: smallFeatureAnalysis.id },
   runModel: { analysisId: smallFeatureAnalysis.id },
-  putVerdict: verdict,
+  putPointState: pointReview,
   previewPublication: smallFeaturePublication,
   publish: receipt,
   getThreads: smallFeatureThreadList,
@@ -74,7 +73,7 @@ const responses: Record<RouteName, unknown> = {
 
 const requests: Partial<Record<RouteName, unknown>> = {
   startAnalysis: { url: "https://github.com/acme/shop/pull/101" },
-  putVerdict: { verdict: "approved", comment: "" },
+  putPointState: { state: "dismissed" },
   previewPublication: { summary: "Looks good." },
   publish: { summary: "Looks good.", allowStale: false },
   replyToThread: { body: "Capped it." },
@@ -105,11 +104,11 @@ describe("routes", () => {
 
   it("parses path params into domain IDs and rejects bad ones", () => {
     expect(
-      routes.putVerdict.params.safeParse({ id: smallFeatureAnalysis.id, decisionId: "d3" }).success,
+      routes.putPointState.params.safeParse({ id: smallFeatureAnalysis.id, pointId: "m2" }).success,
     ).toBe(true);
     expect(routes.getAnalysis.params.safeParse({ id: "../etc" }).success).toBe(false);
     expect(
-      routes.putVerdict.params.safeParse({ id: smallFeatureAnalysis.id, decisionId: "h_1" })
+      routes.putPointState.params.safeParse({ id: smallFeatureAnalysis.id, pointId: "h_1" })
         .success,
     ).toBe(false);
   });
@@ -145,8 +144,8 @@ describe("errors", () => {
 
 describe("routePath", () => {
   it("fills and encodes params", () => {
-    expect(routePath(routes.putVerdict.path, { id: "a_1", decisionId: "d 2" })).toBe(
-      "/api/analyses/a_1/verdicts/d%202",
+    expect(routePath(routes.putPointState.path, { id: "a_1", pointId: "r:h_1" })).toBe(
+      "/api/analyses/a_1/points/r%3Ah_1",
     );
     expect(routePath(routes.getStatus.path, {})).toBe("/api/status");
   });

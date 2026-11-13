@@ -55,8 +55,9 @@ describe("shortcutFor", () => {
     expect(shortcutFor(press("Escape"), ALL, off)).toBe("close");
   });
 
-  it("gives r to a decision", () => {
-    expect(shortcutFor(press("r"), ["rejectDecision"], ON)).toBe("rejectDecision");
+  it("gives . to the next point, and turns it off with the other single keys", () => {
+    expect(shortcutFor(press("."), ["nextPoint"], ON)).toBe("nextPoint");
+    expect(shortcutFor(press("."), ["nextPoint"], { mac: true, singleKeys: false })).toBeNull();
   });
 
   it("only runs the shortcuts asked for", () => {

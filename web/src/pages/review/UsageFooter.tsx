@@ -3,6 +3,7 @@ import type { ModelPass, ModelUsage } from "../../../../src/domain/review/index.
 
 const PASS_NAMES: Readonly<Record<ModelPass, string>> = {
   intent: "Intent",
+  findings: "Findings",
   risk: "Risk",
   decisions: "Decisions",
   tour: "Tour",

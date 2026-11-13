@@ -52,6 +52,22 @@ export const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX file_contents_fetched_at ON file_contents (fetched_at);
   `,
+  // Verdicts on decisions become states of points: an approval said "fine", as open does now,
+  // and a rejection raised the decision.
+  `
+  CREATE TABLE point_reviews (
+    analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+    point_id TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('open', 'raised', 'dismissed')),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (analysis_id, point_id)
+  );
+  INSERT INTO point_reviews (analysis_id, point_id, state, updated_at)
+    SELECT analysis_id, decision_id, CASE verdict WHEN 'rejected' THEN 'raised' ELSE 'open' END,
+      updated_at
+    FROM decision_reviews;
+  DROP TABLE decision_reviews;
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

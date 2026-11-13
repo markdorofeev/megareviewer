@@ -1,4 +1,5 @@
 import type { FileStatus } from "../../../../src/domain/diff/index.ts";
+import type { PointKind } from "../../../../src/domain/review/index.ts";
 import { byTreePath } from "./paths.ts";
 
 export interface FileEntry {
@@ -10,6 +11,8 @@ export interface FileEntry {
   readonly contract: number;
   /** Unresolved review threads on the file. */
   readonly threads?: number;
+  /** Claude's points on the file, by kind. */
+  readonly points?: Readonly<Partial<Record<PointKind, number>>>;
 }
 
 export type FileOrder = "path" | "size";

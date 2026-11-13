@@ -1,14 +1,20 @@
 import { z } from "zod";
-import { DecisionDraft, ModelRisk, TourDraft } from "../../application/ports/index.ts";
+import {
+  DecisionDraft,
+  FindingDraft,
+  ModelRisk,
+  TourDraft,
+} from "../../application/ports/index.ts";
 import { Intent } from "../../domain/review/index.ts";
 
 /**
- * One schema for all four passes, tagged by pass. The API adds a system prompt for the output
+ * One schema for all five passes, tagged by pass. The API adds a system prompt for the output
  * format and changing it invalidates the prompt cache, so every pass sends the same one.
  */
 export const PassAnswer = z.object({
   answer: z.discriminatedUnion("pass", [
     z.object({ pass: z.literal("intent"), intent: Intent }),
+    z.object({ pass: z.literal("findings"), findings: z.array(FindingDraft) }),
     z.object({ pass: z.literal("risk"), assessments: z.array(ModelRisk) }),
     z.object({ pass: z.literal("decisions"), decisions: z.array(DecisionDraft) }),
     z.object({ pass: z.literal("tour"), tour: TourDraft }),

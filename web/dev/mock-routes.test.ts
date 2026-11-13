@@ -6,8 +6,8 @@ import {
   routes,
   TOKEN_HEADER,
 } from "../../contracts/index.ts";
-import { DecisionVerdict, Publication, PublicationReceipt } from "../../src/domain/review/index.ts";
-import { fixtureAnalysisView, largeAnalysisView } from "./fixtures/index.ts";
+import { PointReview, Publication, PublicationReceipt } from "../../src/domain/review/index.ts";
+import { fixtureAnalysisView, fixtureHunks, largeAnalysisView } from "./fixtures/index.ts";
 import {
   createMockApi,
   MOCK_FAILING_PR_NUMBER,
@@ -104,7 +104,7 @@ describe("mock API", () => {
     ]);
     expect(view().analysis.pullRequest).not.toBeNull();
 
-    vi.advanceTimersByTime(MOCK_STAGE_MS * 5);
+    vi.advanceTimersByTime(MOCK_STAGE_MS * 6);
     expect(events.at(-1)).toEqual({ event: "done", data: {} });
     expect(view().analysis).toEqual(fixtureAnalysisView.analysis);
   });
@@ -128,28 +128,25 @@ describe("mock API", () => {
     expect("status" in anonymous && anonymous.status).toBe(401);
   });
 
-  it("records verdicts on a complete analysis", () => {
-    const put = (decisionId: string, body: unknown) =>
-      api.handle(request("PUT", `/api/analyses/${id}/verdicts/${decisionId}`, body));
-    const saved = put("d2", { verdict: "rejected", comment: "Check the owner." });
-    expect(DecisionVerdict.parse(saved.body)).toEqual({
-      decisionId: "d2",
-      verdict: "rejected",
-      comment: "Check the owner.",
+  it("records a point's state on a complete analysis", () => {
+    const put = (pointId: string, body: unknown) =>
+      api.handle(request("PUT", `/api/analyses/${id}/points/${pointId}`, body));
+    const saved = put("f1", { state: "raised" });
+    expect(PointReview.parse(saved.body)).toEqual({
+      pointId: "f1",
+      state: "raised",
       updatedAt: NOW,
     });
     expect(
-      AnalysisView.parse(api.handle(request("GET", `/api/analyses/${id}`)).body).verdicts,
+      AnalysisView.parse(api.handle(request("GET", `/api/analyses/${id}`)).body).pointReviews,
     ).toHaveLength(1);
-    expect(errorCode(put("d9", { verdict: "approved", comment: "" }))).toBe("not-found");
-    expect(errorCode(put("d1", { verdict: "maybe" }))).toBe("bad-request");
+    expect(errorCode(put("d9", { state: "raised" }))).toBe("not-found");
+    expect(errorCode(put("d1", { state: "maybe" }))).toBe("bad-request");
   });
 
-  it("refuses verdicts and publishing while the analysis runs", () => {
+  it("refuses a point's state and publishing while the analysis runs", () => {
     api.handle(request("POST", "/api/analyses", { url: PR_URL }));
-    const put = api.handle(
-      request("PUT", `/api/analyses/${id}/verdicts/d1`, { verdict: "approved", comment: "" }),
-    );
+    const put = api.handle(request("PUT", `/api/analyses/${id}/points/d1`, { state: "raised" }));
     expect(errorCode(put)).toBe("analysis-not-complete");
     const publish = api.handle(
       request("POST", `/api/analyses/${id}/publication`, { summary: "", allowStale: false }),
@@ -158,24 +155,42 @@ describe("mock API", () => {
   });
 
   it("previews and publishes what buildPublication makes, once", () => {
-    api.handle(
-      request("PUT", `/api/analyses/${id}/verdicts/d2`, { verdict: "rejected", comment: "No." }),
-    );
+    const comment = {
+      hunkId: fixtureHunks.receiptRoute,
+      side: "new",
+      line: 14,
+      body: "Whose order is this?",
+    };
     const preview = Publication.parse(
-      api.handle(request("POST", `/api/analyses/${id}/publication/preview`, { summary: "Hi" }))
-        .body,
+      api.handle(
+        request("POST", `/api/analyses/${id}/publication/preview`, {
+          summary: "Hi",
+          hunkComments: [comment],
+          verdict: "request_changes",
+        }),
+      ).body,
     );
     expect(preview.verdict).toBe("request_changes");
-    expect(preview.comments.map((comment) => comment.key)).toEqual(["decision:d2"]);
+    expect(preview.comments.map((one) => one.key)).toEqual([
+      `hunk:${fixtureHunks.receiptRoute}:new:14`,
+    ]);
 
     const publish = () =>
       PublicationReceipt.parse(
         api.handle(
-          request("POST", `/api/analyses/${id}/publication`, { summary: "Hi", allowStale: false }),
+          request("POST", `/api/analyses/${id}/publication`, {
+            summary: "Hi",
+            allowStale: false,
+            hunkComments: [comment],
+            verdict: "request_changes",
+          }),
         ).body,
       );
     const receipt = publish();
-    expect(Object.keys(receipt.postedCommentIds)).toEqual(["summary", "decision:d2"]);
+    expect(Object.keys(receipt.postedCommentIds)).toEqual([
+      "summary",
+      `hunk:${fixtureHunks.receiptRoute}:new:14`,
+    ]);
     expect(publish()).toEqual(receipt);
     const view = AnalysisView.parse(api.handle(request("GET", `/api/analyses/${id}`)).body);
     expect(view.publication).toEqual(receipt);
@@ -214,7 +229,7 @@ describe("mock API", () => {
     const retried = api.handle(request("POST", `/api/analyses/${id}/retry`));
     expect(AnalysisIdResponse.parse(retried.body).analysisId).toBe(id);
     expect(view().analysis.status).toBe("running");
-    vi.advanceTimersByTime(MOCK_STAGE_MS * 6);
+    vi.advanceTimersByTime(MOCK_STAGE_MS * 7);
     expect(view().analysis).toEqual(fixtureAnalysisView.analysis);
   });
 });
@@ -253,6 +268,6 @@ describe("analysisInProgress", () => {
   });
 
   it("is the analysis itself once every stage is done", () => {
-    expect(analysisInProgress(analysis, 6)).toBe(analysis);
+    expect(analysisInProgress(analysis, 7)).toBe(analysis);
   });
 });

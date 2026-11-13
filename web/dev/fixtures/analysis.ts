@@ -15,6 +15,7 @@ import {
   type AnalysisKey,
   analysisId,
   DecisionId,
+  FindingId,
   type ModelUsage,
   type PullRequest,
   type RiskAssessment,
@@ -536,6 +537,7 @@ const analysis: Analysis = {
     collect: "done",
     prep: "done",
     intent: "done",
+    findings: "done",
     risk: "done",
     decisions: "done",
     tour: "done",
@@ -638,6 +640,22 @@ const analysis: Analysis = {
           ],
     ),
     ...modelRisk.filter((assessment) => !provedHunks.has(assessment.hunkId)),
+  ],
+  findings: [
+    {
+      id: FindingId.parse("f1"),
+      title: "Any signed-in user can read every customer's receipt",
+      explanation:
+        "The order is looked up by ID alone, and IDs are sequential, so changing the number in the URL returns another customer's name, address and items.",
+      lines: { hunkId: h.receiptRoute, side: "new", startLine: 14, line: 16 },
+    },
+    {
+      id: FindingId.parse("f2"),
+      title: "Serves a refunded order's old receipt for an hour",
+      explanation:
+        "The cache is keyed by order ID with no invalidation, so a receipt rendered before a refund keeps being served until its entry expires.",
+      lines: { hunkId: h.retryAndCache, side: "new", startLine: 44, line: 47 },
+    },
   ],
   decisions: [
     {
@@ -743,10 +761,10 @@ const analysis: Analysis = {
   updatedAt: "2026-10-21T09:43:02Z",
 };
 
-/** A complete analysis with no verdicts yet, seen by a reviewer who isn't the author. */
+/** A complete analysis with nothing raised yet, seen by a reviewer who isn't the author. */
 export const fixtureAnalysisView: AnalysisView = {
   analysis,
-  verdicts: [],
+  pointReviews: [],
   publication: null,
   isAuthor: false,
   stale: false,

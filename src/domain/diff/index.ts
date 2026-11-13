@@ -6,7 +6,7 @@ export {
 } from "./call-graph.ts";
 export { FileLink, fileLinks } from "./file-links.ts";
 export { findFormattingProofs } from "./formatting.ts";
-export { hunkId } from "./hunk-id.ts";
+export { hunkHasLine, hunkId } from "./hunk-id.ts";
 export { languageFamily, resolvesImports, type SymbolImport } from "./imports.ts";
 export { type DiffParseError, parseUnifiedDiff } from "./parse-diff.ts";
 export {

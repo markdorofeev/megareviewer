@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { type Analysis, DecisionId } from "../../../../src/domain/review/index.ts";
+import { type Analysis, type Point, PointId } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
 import {
   byTreePath,
-  decisionPlaces,
   gapBetween,
   mapFiles,
   mechanicalCount,
   parseLayout,
   partIndex,
   partsInPathOrder,
+  pointPlaces,
   tourSteps,
   trailingProofs,
 } from "./model.ts";
@@ -163,31 +163,46 @@ describe("a split part's risk", () => {
   });
 });
 
-describe("decisionPlaces", () => {
+describe("pointPlaces", () => {
   const index = partIndex(analysis);
   const order = mapFiles(analysis, index).flatMap((group) => group.partIds);
-  const decision = (id: string, hunkIds: readonly (typeof h)[keyof typeof h][]) => ({
-    ...analysis.decisions[0],
-    id: DecisionId.parse(id),
+  const point = (id: string, hunkIds: readonly (typeof h)[keyof typeof h][]): Point => ({
+    id: PointId.parse(id),
+    kind: "decision",
     title: id,
-    category: "other" as const,
-    whyItMatters: "w",
+    explanation: "w",
+    path: null,
+    lines: null,
     hunkIds,
   });
 
-  it("puts each card on the decision's first hunk in the page's order, and links the others", () => {
-    const d5 = decision("d5", [h.dependency, h.receiptFormatting]);
-    const places = decisionPlaces([d5], order, index);
+  it("puts each card on the point's first hunk in the page's order, and links the others", () => {
+    const d5 = point("d5", [h.dependency, h.receiptFormatting]);
+    const places = pointPlaces([d5], order, index);
     expect(places.cards.get(h.receiptFormatting)).toEqual([d5]);
     expect(places.mentions.get(h.dependency)).toEqual([d5]);
-    expect(places.cardHunk.get(d5.id)).toBe(h.receiptFormatting);
+    expect(places.cardPart.get(d5.id)).toBe(h.receiptFormatting);
     expect(places.unplaced).toEqual([]);
   });
 
-  it("never puts a card on a mechanical hunk, and keeps decisions on none apart", () => {
-    const moved = decision("d1", [h.formatMoneyRemoved, h.retryAndCache]);
-    const nowhere = decision("d2", [h.formatMoneyAdded]);
-    const places = decisionPlaces([moved, nowhere], order, index);
+  it("puts a card on the part showing its lines, whatever the page's order", () => {
+    const cachePart = index.parts.get(p.cache);
+    const line = cachePart?.hunk.lines.find((one) => one.kind === "add")?.newLine;
+    if (line == null) throw new Error("the cache part has an added line");
+    const onCache: Point = {
+      ...point("f1", [h.retryAndCache]),
+      kind: "finding",
+      lines: { hunkId: h.retryAndCache, side: "new", startLine: line, line },
+    };
+    const places = pointPlaces([onCache], order, index);
+    expect(places.cards.get(p.cache)).toEqual([onCache]);
+    expect(places.mentions.get(p.retry)).toEqual([onCache]);
+  });
+
+  it("never puts a card on a mechanical hunk, and keeps points on none apart", () => {
+    const moved = point("d1", [h.formatMoneyRemoved, h.retryAndCache]);
+    const nowhere = point("d2", [h.formatMoneyAdded]);
+    const places = pointPlaces([moved, nowhere], order, index);
     // The card goes on the split hunk's first part on the page, and its other part links to it.
     expect(places.cards.get(p.retry)).toEqual([moved]);
     expect(places.mentions.get(p.cache)).toEqual([moved]);

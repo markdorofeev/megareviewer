@@ -17,6 +17,7 @@ export const ReviewHeader = ({
   view,
   intent,
   tools,
+  modelRunning,
   reanalyzing,
   reanalyzeError,
   onReanalyze,
@@ -26,6 +27,8 @@ export const ReviewHeader = ({
   readonly intent: ReactNode;
   /** The layout switch. */
   readonly tools: ReactNode;
+  /** Claude is reading the PR: an accent hairline runs along the header's bottom edge. */
+  readonly modelRunning: boolean;
   readonly reanalyzing: boolean;
   readonly reanalyzeError: ApiError | null;
   readonly onReanalyze: () => void;
@@ -35,7 +38,14 @@ export const ReviewHeader = ({
   const { ref } = analysis.key;
 
   return (
-    <header className="flex flex-col gap-3 border-b pb-3">
+    <header className="relative flex flex-col gap-3 border-b pb-3">
+      {modelRunning && (
+        <span
+          data-slot="model-hairline"
+          aria-hidden="true"
+          className="absolute inset-x-0 -bottom-px h-px animate-pulse bg-primary duration-(--duration-slow)"
+        />
+      )}
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

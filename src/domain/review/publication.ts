@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { type Hunk, HunkId, hunkIdOf } from "../diff/index.ts";
+import { type Hunk, HunkId, hunkHasLine } from "../diff/index.ts";
 import type { Analysis } from "./analysis.ts";
-import type { DecisionId, DecisionVerdict, Verdict } from "./decision.ts";
 import { HttpUrl, Timestamp } from "./primitives.ts";
 import { Severity } from "./thread.ts";
 import { composeBody } from "./thread-body.ts";
@@ -10,8 +9,8 @@ export const PublicationVerdict = z.enum(["approve", "request_changes", "comment
 export type PublicationVerdict = z.infer<typeof PublicationVerdict>;
 
 /**
- * "summary", "decision:<DecisionId>" for a decision's inline comment, or
- * "hunk:<HunkId>:<side>:<line>" for a comment the reviewer wrote on a line of a hunk.
+ * "summary", "hunk:<HunkId>:<side>:<line>" for a comment the reviewer wrote on a line of a hunk,
+ * or "decision:<DecisionId>", which reviews published before points posted for a rejection.
  */
 export const CommentKey = z
   .string()
@@ -40,14 +39,6 @@ export const HunkComment = z
     message: "startLine must come before line",
   });
 export type HunkComment = z.infer<typeof HunkComment>;
-
-/** Whether a hunk shows the line a comment is on, on that side. */
-export const hunkHasLine = (hunk: Hunk, side: HunkComment["side"], line: number): boolean =>
-  hunk.lines.some((diffLine) =>
-    side === "new"
-      ? diffLine.kind !== "del" && diffLine.newLine === line
-      : diffLine.kind !== "add" && diffLine.oldLine === line,
-  );
 
 /**
  * Whether a comment's hunk shows its lines, first and last: one on a line the diff doesn't show
@@ -101,131 +92,39 @@ export const PublicationReceipt = z
 export type PublicationReceipt = z.infer<typeof PublicationReceipt>;
 
 /**
- * What publishing sends. Pure, so the preview and the published review match. The reviewer's own
- * verdict, when given, replaces the one the decisions imply.
+ * What publishing sends. Pure, so the preview and the published review match. A raised point is
+ * one of the comments: raising it opened a comment on its lines for the reviewer to edit.
  */
 export const buildPublication = (input: {
   readonly analysis: Analysis;
-  readonly verdicts: readonly DecisionVerdict[];
   readonly summary: string;
   /** Hosts don't let authors approve or reject their own PRs. */
   readonly isAuthor: boolean;
   /** Comments on hunk lines; empty ones are left out, and the caller checks the lines exist. */
   readonly hunkComments?: readonly HunkComment[];
+  /** The reviewer's pick; a comment when they made none. */
   readonly verdict?: PublicationVerdict | null;
 }): Publication => {
   const { analysis, isAuthor } = input;
-  const verdictOf = new Map(input.verdicts.map((verdict) => [verdict.decisionId, verdict]));
-  const reviewed = analysis.decisions.map((decision) => {
-    const verdict = verdictOf.get(decision.id);
-    return {
-      decision,
-      verdict: verdict?.verdict ?? "pending",
-      comment: verdict?.comment.trim() ?? "",
-    };
-  });
-
-  const anchorOf = hunkAnchors(analysis);
-  const comments: PublicationComment[] = [];
-  const anchored = new Set<DecisionId>();
-  for (const { decision, verdict, comment } of reviewed) {
-    if (verdict !== "rejected" && comment === "") continue;
-    const anchor = decision.hunkIds
-      .map((hunkId) => anchorOf.get(hunkId))
-      .filter((found) => found !== undefined)
-      .sort((a, b) => a.rank - b.rank)[0];
-    if (anchor === undefined) continue;
-    const heading = `**${verdict === "rejected" ? "Rejected" : "Comment"}: ${decision.title}**`;
-    comments.push({
-      key: CommentKey.parse(`decision:${decision.id}`),
-      path: anchor.path,
-      line: anchor.line,
-      side: anchor.side,
-      body: comment === "" ? heading : `${heading}\n\n${comment}`,
-    });
-    anchored.add(decision.id);
-  }
-
   const hunkOf = new Map(
     analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
   );
+  const comments: PublicationComment[] = [];
   for (const comment of input.hunkComments ?? []) {
     const hunk = hunkOf.get(comment.hunkId);
     // A severity alone says nothing; a suggestion does, even an empty one, which deletes lines.
     if (hunk === undefined || (comment.body.trim() === "" && comment.suggestion === undefined)) {
       continue;
     }
-    const body = composeBody(comment);
     comments.push({
       key: CommentKey.parse(`hunk:${comment.hunkId}:${comment.side}:${comment.line}`),
       path: hunk.path,
       line: comment.line,
       ...(comment.startLine === undefined ? {} : { startLine: comment.startLine }),
       side: comment.side,
-      body,
+      body: composeBody(comment),
     });
   }
-
-  const decisionLines = reviewed.map(({ decision, verdict, comment }) => {
-    const label = { approved: "✅ ", rejected: "❌ ", pending: "⏳ Not reviewed: " }[verdict];
-    // An anchored comment is already inline; a rejection repeats it so the summary reads alone.
-    const showComment = comment !== "" && (verdict === "rejected" || !anchored.has(decision.id));
-    return `- ${label}${decision.title}${showComment ? ` — ${oneLine(comment)}` : ""}`;
-  });
-  // What the reviewer wrote, and the decisions when the model made some: nothing else, so the
-  // dialog can show all of it.
-  const summary = [
-    input.summary.trim(),
-    decisionLines.length > 0 ? `**Decisions**\n${decisionLines.join("\n")}` : "",
-  ]
-    .filter((part) => part !== "")
-    .join("\n\n");
-
-  const verdict = isAuthor ? "comment" : (input.verdict ?? publicationVerdict(reviewed, isAuthor));
-  return { verdict, summary, comments };
+  const verdict = isAuthor ? "comment" : (input.verdict ?? "comment");
+  return { verdict, summary: input.summary.trim(), comments };
 };
-
-const publicationVerdict = (
-  reviewed: readonly { readonly verdict: Verdict }[],
-  isAuthor: boolean,
-): PublicationVerdict => {
-  if (isAuthor) return "comment";
-  if (reviewed.some(({ verdict }) => verdict === "rejected")) return "request_changes";
-  if (reviewed.length > 0 && reviewed.every(({ verdict }) => verdict === "approved")) {
-    return "approve";
-  }
-  return "comment";
-};
-
-interface Anchor {
-  readonly path: string;
-  readonly line: number;
-  readonly side: "new" | "old";
-  /** Position in tour order; hunks the tour doesn't list follow in file order. */
-  readonly rank: number;
-}
-
-/** Where a comment on each hunk goes: its first added line, else its first deleted line. */
-const hunkAnchors = (analysis: Analysis): ReadonlyMap<HunkId, Anchor> => {
-  const hunks = analysis.files.flatMap((file) => file.hunks);
-  const order = [
-    ...new Set([
-      ...(analysis.tour?.steps.flatMap((step) => step.partIds.map(hunkIdOf)) ?? []),
-      ...hunks.map((hunk) => hunk.id),
-    ]),
-  ];
-  const rankOf = new Map(order.map((hunkId, rank) => [hunkId, rank]));
-  const anchors = new Map<HunkId, Anchor>();
-  for (const hunk of hunks) {
-    const added = hunk.lines.find((line) => line.kind === "add")?.newLine;
-    const deleted = hunk.lines.find((line) => line.kind === "del")?.oldLine;
-    const rank = rankOf.get(hunk.id) ?? order.length;
-    if (added != null) anchors.set(hunk.id, { path: hunk.path, line: added, side: "new", rank });
-    else if (deleted != null) {
-      anchors.set(hunk.id, { path: hunk.path, line: deleted, side: "old", rank });
-    }
-  }
-  return anchors;
-};
-
-const oneLine = (text: string): string => text.replace(/\s*\n\s*/g, " ");

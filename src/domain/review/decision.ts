@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { HunkId } from "../diff/index.ts";
-import { Timestamp } from "./primitives.ts";
 
 /** "d1", "d2", … in the order the model listed the decisions. */
 export const DecisionId = z
@@ -34,16 +33,3 @@ export const Decision = z
   })
   .readonly();
 export type Decision = z.infer<typeof Decision>;
-
-export const Verdict = z.enum(["pending", "approved", "rejected"]);
-export type Verdict = z.infer<typeof Verdict>;
-
-export const DecisionVerdict = z
-  .object({
-    decisionId: DecisionId,
-    verdict: Verdict,
-    comment: z.string(),
-    updatedAt: Timestamp,
-  })
-  .readonly();
-export type DecisionVerdict = z.infer<typeof DecisionVerdict>;

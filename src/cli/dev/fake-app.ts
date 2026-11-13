@@ -51,6 +51,7 @@ export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisMo
         message: "The fake model fails this PR's first intent pass. Try again.",
       });
     },
+    findings: (input, intent, options) => model.findings(input, intent, options),
     risk: (input, intent, options) => model.risk(input, intent, options),
     decisions: (input, intent, options) => model.decisions(input, intent, options),
     tour: (input, intent, risk, decisions, skeleton, options) =>

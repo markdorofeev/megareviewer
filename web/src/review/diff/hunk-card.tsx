@@ -17,6 +17,7 @@ import type {
   UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
 import {
+  type PointKind,
   parseBody,
   type RiskAssessment,
   type Severity,
@@ -160,6 +161,8 @@ export interface HunkCardProps {
   readonly inFile?: boolean;
   /** Ranges of the code to wrap, e.g. calls, by new-side line number. */
   readonly marks?: ReadonlyMap<number, readonly LineMark[]>;
+  /** Lines one of Claude's points rests on, by "side:line", each with its kind. */
+  readonly pointLines?: ReadonlyMap<string, PointKind>;
 }
 
 /** One hunk, or one part of a split hunk: its file, place and risk when alone, and its lines. */
@@ -185,6 +188,7 @@ export const HunkCard = memo(function HunkCard({
   rangeNote,
   inFile = false,
   marks,
+  pointLines,
 }: HunkCardProps) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -313,6 +317,9 @@ export const HunkCard = memo(function HunkCard({
                 <DiffLine
                   line={line}
                   cellRole="cell"
+                  pointKind={
+                    place === null ? null : (pointLines?.get(`${place.side}:${place.line}`) ?? null)
+                  }
                   marks={
                     (line.kind === "del" || line.newNo === null
                       ? undefined

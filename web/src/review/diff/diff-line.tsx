@@ -1,4 +1,5 @@
 import { Fragment, type MouseEvent, memo, type ReactNode } from "react";
+import type { PointKind } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import type { CharRange } from "./intra-line.ts";
 import type { LineKind, ViewLine } from "./rows.ts";
@@ -118,6 +119,13 @@ export const segments = (
 
 export type LineLayout = "unified" | "split-old" | "split-new";
 
+// Spelled out because Tailwind only generates the classes it finds whole in the source.
+const POINT_BAR: Readonly<Record<PointKind, string>> = {
+  finding: "after:bg-review-changes",
+  risk: "after:bg-risk-contract-solid",
+  decision: "after:bg-review-pending",
+};
+
 export interface DiffLineProps {
   readonly line: ViewLine;
   /** The row's id, for the grid's aria-activedescendant. */
@@ -129,6 +137,8 @@ export interface DiffLineProps {
   readonly selected?: boolean;
   /** A line an open comment box is on, marked by a bar at its edge. */
   readonly marked?: boolean;
+  /** A line one of Claude's points rests on: a bar at its edge in the kind's color. */
+  readonly pointKind?: PointKind | null;
   /** Shows a comment button in the gutter on hover and focus. */
   readonly onComment?: (line: ViewLine) => void;
   /** A gutter click; shift-click extends the selection. */
@@ -160,6 +170,7 @@ export const DiffLine = memo(function DiffLine({
   focused = false,
   selected = false,
   marked = false,
+  pointKind = null,
   onComment,
   onGutterClick,
   numberButton,
@@ -236,6 +247,7 @@ export const DiffLine = memo(function DiffLine({
       data-kind={line.kind}
       data-focused={focused || undefined}
       data-marked={marked || undefined}
+      data-point={pointKind ?? undefined}
       className={cn(
         "group/line relative flex min-w-full font-mono",
         onRowClick !== undefined && "cursor-pointer",
@@ -249,8 +261,10 @@ export const DiffLine = memo(function DiffLine({
         !selected &&
           onRowClick !== undefined &&
           "hover:before:pointer-events-none hover:before:absolute hover:before:inset-0 hover:before:z-[1] hover:before:bg-primary/8",
-        (focused || marked) &&
-          "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px] after:bg-ring",
+        (focused || marked || pointKind !== null) &&
+          "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px]",
+        (focused || marked) && "after:bg-ring",
+        !focused && !marked && pointKind !== null && POINT_BAR[pointKind],
       )}
     >
       {layout !== "split-new" && gutter(line.oldNo, "old")}

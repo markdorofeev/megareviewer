@@ -20,13 +20,7 @@ export {
 } from "./analysis.ts";
 export { attachmentHost } from "./attachments.ts";
 export { type CodeTourInput, codeTour, looksGenerated } from "./code-tour.ts";
-export {
-  Decision,
-  DecisionCategory,
-  DecisionId,
-  DecisionVerdict,
-  Verdict,
-} from "./decision.ts";
+export { Decision, DecisionCategory, DecisionId } from "./decision.ts";
 export { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 export {
   HostError,
@@ -46,13 +40,28 @@ export {
   Ticket,
 } from "./intent.ts";
 export { type JoinedParts, joinParts } from "./join-parts.ts";
+export {
+  Finding,
+  FindingId,
+  type FindingProblem,
+  MAX_FINDING_EXPLANATION,
+  MAX_FINDING_TITLE,
+  Point,
+  PointId,
+  PointKind,
+  PointLines,
+  PointReview,
+  PointState,
+  type PointsInput,
+  pointsOf,
+  validateFindings,
+} from "./point.ts";
 export { HttpUrl, Sha, Timestamp } from "./primitives.ts";
 export {
   buildPublication,
   CommentKey,
   commentFits,
   HunkComment,
-  hunkHasLine,
   Publication,
   PublicationComment,
   PublicationReceipt,

@@ -68,7 +68,7 @@ export {
   ThreadBody,
   threadPlace,
 } from "./thread/index.ts";
-export { ContractCount, FileRow, FileTree, ThreadCount } from "./tree/file-tree.tsx";
+export { ContractCount, FileRow, FileTree, PointCounts, ThreadCount } from "./tree/file-tree.tsx";
 export type { FileEntry } from "./tree/files.ts";
 export {
   byTreePath,

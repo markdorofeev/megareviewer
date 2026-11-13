@@ -95,8 +95,8 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     getFileContent: ({ params }) => useCases.getFileContent(params.id, params.side, params.path),
     retryAnalysis: ({ params }) => useCases.retryAnalysis(params.id),
     runModel: ({ params }) => useCases.runModel(params.id),
-    putVerdict: ({ params, body }) =>
-      useCases.recordVerdict(params.id, params.decisionId, body.verdict, body.comment),
+    putPointState: ({ params, body }) =>
+      useCases.recordPointState(params.id, params.pointId, body.state),
     previewPublication: ({ params, body }) =>
       useCases.previewPublication(params.id, body.summary, reviewInput(body)),
     publish: ({ params, body }) =>
@@ -118,7 +118,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   register(app, routes.getFileContent, handlers.getFileContent);
   register(app, routes.retryAnalysis, handlers.retryAnalysis);
   register(app, routes.runModel, handlers.runModel);
-  register(app, routes.putVerdict, handlers.putVerdict);
+  register(app, routes.putPointState, handlers.putPointState);
   register(app, routes.previewPublication, handlers.previewPublication);
   register(app, routes.publish, handlers.publish);
   register(app, routes.getThreads, handlers.getThreads);

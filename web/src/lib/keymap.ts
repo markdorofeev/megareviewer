@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 // so a hint can't name a key that does something else. Single-key shortcuts never fire while
 // typing, and the reviewer can turn them off (WCAG 2.1.4); shortcuts with a modifier stay on.
 
-export type ShortcutScope = "global" | "diff" | "overview" | "tree" | "decision" | "composer";
+export type ShortcutScope = "global" | "diff" | "overview" | "tree" | "point" | "composer";
 
 export type ShortcutId =
   | "nextFile"
@@ -15,8 +15,7 @@ export type ShortcutId =
   | "extendUp"
   | "comment"
   | "openCall"
-  | "approveDecision"
-  | "rejectDecision"
+  | "nextPoint"
   | "toggleSplit"
   | "moveFile"
   | "openFile"
@@ -73,16 +72,10 @@ export const KEYMAP: readonly Shortcut[] = [
     scope: "diff",
   },
   {
-    id: "approveDecision",
-    chords: [{ key: "a" }],
-    action: "Approve the selected decision",
-    scope: "decision",
-  },
-  {
-    id: "rejectDecision",
-    chords: [{ key: "r" }],
-    action: "Reject the selected decision",
-    scope: "decision",
+    id: "nextPoint",
+    chords: [{ key: "." }],
+    action: "Next point from Claude",
+    scope: "point",
   },
   { id: "toggleSplit", chords: [{ key: "u" }], action: "Unified or split diff", scope: "diff" },
   { id: "toggleLayout", chords: [{ key: "v" }], action: "Map or overview", scope: "global" },

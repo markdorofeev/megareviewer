@@ -33,6 +33,7 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
       collect: status("collect"),
       prep: status("prep"),
       intent: status("intent"),
+      findings: status("findings"),
       risk: status("risk"),
       decisions: status("decisions"),
       tour: status("tour"),
@@ -50,6 +51,7 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
         ? renameHints(analysis.callGraph, hunkIdOf)
         : [],
     intent: done("intent") ? analysis.intent : null,
+    findings: done("findings") ? analysis.findings : [],
     risk: done("risk")
       ? analysis.risk
       : done("prep")

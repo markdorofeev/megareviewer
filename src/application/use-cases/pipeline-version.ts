@@ -1,7 +1,7 @@
 import type { PipelineVersion } from "../../domain/review/index.ts";
 
 /** Bump whenever pipeline logic changes what an analysis contains. */
-export const PIPELINE_VERSION = "17";
+export const PIPELINE_VERSION = "18";
 
 /**
  * Says whether a local checkout was read, so a checkout that gains the PR's head commit analyzes

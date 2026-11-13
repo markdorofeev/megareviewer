@@ -1,7 +1,8 @@
 import { ChevronDownIcon, FolderIcon, FolderOpenIcon, MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointKind } from "../../../../src/domain/review/index.ts";
 import { useShortcuts } from "../../lib/keymap.ts";
-import { FILE_STATUS } from "../../lib/status.ts";
+import { FILE_STATUS, POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Input } from "../../ui/input.tsx";
 import { ScrollArea } from "../../ui/scroll-area.tsx";
@@ -215,6 +216,49 @@ export const ThreadCount = ({ count }: { readonly count: number }) => (
   </span>
 );
 
+const POINT_KINDS: readonly PointKind[] = ["finding", "risk", "decision"];
+
+// Spelled out because Tailwind only generates the classes it finds whole in the source.
+const POINT_TONE: Readonly<Record<PointKind, string>> = {
+  finding: "text-review-changes",
+  risk: "text-risk-contract",
+  decision: "text-review-pending",
+};
+
+/** A file's points from Claude: a glyph and a count per kind, named in words to readers. */
+export const PointCounts = ({
+  points,
+}: {
+  readonly points: Readonly<Partial<Record<PointKind, number>>>;
+}) => (
+  <>
+    {POINT_KINDS.map((kind) => {
+      const count = points[kind] ?? 0;
+      if (count === 0) return null;
+      const { glyph, label } = POINT_STATUS[kind];
+      return (
+        <span
+          key={kind}
+          data-slot="point-count"
+          data-kind={kind}
+          className={cn(
+            "tabular inline-flex items-center gap-0.5 text-caption font-medium",
+            POINT_TONE[kind],
+          )}
+        >
+          <span aria-hidden="true">{glyph}</span>
+          {count}
+          <span className="sr-only">
+            {" "}
+            {label.toLowerCase()}
+            {count === 1 ? "" : "s"}
+          </span>
+        </span>
+      );
+    })}
+  </>
+);
+
 /**
  * A file's row: its type's icon, its name (its directory muted when the row isn't under it), its
  * status when it isn't modified, its contract parts and its counts. A click selects it.
@@ -262,6 +306,7 @@ export const FileRow = ({
         )}
       </span>
       {entry.status !== undefined && <FileStatusChip status={entry.status} />}
+      {entry.points !== undefined && <PointCounts points={entry.points} />}
       {entry.contract > 0 && <ContractCount count={entry.contract} />}
       {entry.threads !== undefined && entry.threads > 0 && <ThreadCount count={entry.threads} />}
       {entry.additions !== undefined && entry.deletions !== undefined && (

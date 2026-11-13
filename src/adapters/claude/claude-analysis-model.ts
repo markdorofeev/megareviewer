@@ -29,7 +29,7 @@ const tokenCounts = ({ usage }: Message): TokenCounts => ({
 const answerText = (message: Message): string =>
   message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
 
-/** The four passes on the Anthropic API, with the PR data shared through the prompt cache. */
+/** The five passes on the Anthropic API, with the PR data shared through the prompt cache. */
 export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): AnalysisModel => {
   const client = options.client ?? new Anthropic();
   const maxInputTokens = options.maxInputTokens ?? MAX_INPUT_TOKENS;

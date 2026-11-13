@@ -13,7 +13,7 @@ import {
   type AnalysisId,
   type AnalysisKey,
   CommentKey,
-  DecisionVerdict,
+  PointReview,
   PublicationReceipt,
   PullRequestRef,
   type RepoRef,
@@ -34,10 +34,9 @@ export const FILE_CACHE_DAYS = 30;
 export type SqliteAnalysisStore = AnalysisStore & FileCache & { close(): void };
 
 const PayloadRow = z.object({ id: z.string(), payload: z.string() });
-const VerdictRow = z.object({
-  decision_id: z.string(),
-  verdict: z.string(),
-  comment: z.string(),
+const PointReviewRow = z.object({
+  point_id: z.string(),
+  state: z.string(),
   updated_at: z.string(),
 });
 const PostedCommentRow = z.object({ comment_key: z.string(), host_comment_id: z.string() });
@@ -100,7 +99,7 @@ export const openSqliteAnalysisStore = (
      GROUP BY host, owner, repo, number
      ORDER BY MAX(updated_at) DESC, host, owner, repo, number LIMIT ?`,
   );
-  // An upsert, not INSERT OR REPLACE: a replace deletes the row and would cascade to its verdicts.
+  // An upsert, not INSERT OR REPLACE: a replace deletes the row and would cascade to its point reviews.
   const upsertAnalysis = db.prepare(
     `INSERT INTO analyses
        (id, host, owner, repo, number, head_sha, pipeline_version, status, payload, created_at, updated_at)
@@ -112,15 +111,15 @@ export const openSqliteAnalysisStore = (
        payload = excluded.payload, created_at = excluded.created_at,
        updated_at = excluded.updated_at`,
   );
-  const selectVerdicts = db.prepare(
-    `SELECT decision_id, verdict, comment, updated_at FROM decision_reviews
-     WHERE analysis_id = ? ORDER BY decision_id`,
+  const selectPointReviews = db.prepare(
+    `SELECT point_id, state, updated_at FROM point_reviews
+     WHERE analysis_id = ? ORDER BY point_id`,
   );
-  const upsertVerdict = db.prepare(
-    `INSERT INTO decision_reviews (analysis_id, decision_id, verdict, comment, updated_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT (analysis_id, decision_id) DO UPDATE SET
-       verdict = excluded.verdict, comment = excluded.comment, updated_at = excluded.updated_at`,
+  const upsertPointReview = db.prepare(
+    `INSERT INTO point_reviews (analysis_id, point_id, state, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT (analysis_id, point_id) DO UPDATE SET
+       state = excluded.state, updated_at = excluded.updated_at`,
   );
   const selectPostedComments = db.prepare(
     "SELECT comment_key, host_comment_id FROM published_comments WHERE analysis_id = ?",
@@ -213,33 +212,26 @@ export const openSqliteAnalysisStore = (
       });
     },
 
-    async getVerdicts(id: AnalysisId) {
-      return selectVerdicts.all(id).flatMap((raw) => {
-        const row = VerdictRow.parse(raw);
-        const verdict = DecisionVerdict.safeParse({
-          decisionId: row.decision_id,
-          verdict: row.verdict,
-          comment: row.comment,
+    async getPointReviews(id: AnalysisId) {
+      return selectPointReviews.all(id).flatMap((raw) => {
+        const row = PointReviewRow.parse(raw);
+        const review = PointReview.safeParse({
+          pointId: row.point_id,
+          state: row.state,
           updatedAt: row.updated_at,
         });
-        if (verdict.success) return [verdict.data];
-        logger.warn("Ignoring a stored verdict that no longer parses", {
+        if (review.success) return [review.data];
+        logger.warn("Ignoring a stored point review that no longer parses", {
           analysisId: id,
-          decisionId: row.decision_id,
-          problem: z.prettifyError(verdict.error),
+          pointId: row.point_id,
+          problem: z.prettifyError(review.error),
         });
         return [];
       });
     },
 
-    async saveVerdict(id: AnalysisId, verdict: DecisionVerdict) {
-      upsertVerdict.run(
-        id,
-        verdict.decisionId,
-        verdict.verdict,
-        verdict.comment,
-        verdict.updatedAt,
-      );
+    async savePointReview(id: AnalysisId, review: PointReview) {
+      upsertPointReview.run(id, review.pointId, review.state, review.updatedAt);
     },
 
     async getPostedComments(id: AnalysisId) {

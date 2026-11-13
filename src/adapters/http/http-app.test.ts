@@ -352,7 +352,7 @@ describe("GET /api/analyses/:id", () => {
     const { body } = await call("getAnalysis", { params: { id } });
     expect(body).toEqual({
       analysis: smallFeatureAnalysis,
-      verdicts: [],
+      pointReviews: [],
       publication: null,
       isAuthor: false,
       stale: false,
@@ -412,42 +412,52 @@ describe("POST /api/analyses/:id/retry", () => {
   });
 });
 
-describe("PUT /api/analyses/:id/verdicts/:decisionId", () => {
-  it("records the verdict", async () => {
+describe("PUT /api/analyses/:id/points/:pointId", () => {
+  it("records the point's state", async () => {
     const { call } = await seeded();
-    const { body } = await call("putVerdict", {
-      params: { id, decisionId: "d1" },
-      body: { verdict: "rejected", comment: "No backoff?" },
+    const { body } = await call("putPointState", {
+      params: { id, pointId: "f1" },
+      body: { state: "raised" },
     });
     expect(body).toEqual({
-      decisionId: "d1",
-      verdict: "rejected",
-      comment: "No backoff?",
+      pointId: "f1",
+      state: "raised",
       updatedAt: "2026-10-21T10:00:00.000Z",
     });
     const view = await call("getAnalysis", { params: { id } });
-    expect(view.body?.verdicts).toEqual([body]);
+    expect(view.body?.pointReviews).toEqual([body]);
+  });
+
+  it("takes a risk's point ID, with its colon, through the path", async () => {
+    const { call } = await seeded();
+    const risk = smallFeatureAnalysis.risk.find((one) => one.reason === "Adds a public endpoint.");
+    const pointId = `r:${risk?.hunkId}`;
+    const { body } = await call("putPointState", {
+      params: { id, pointId },
+      body: { state: "dismissed" },
+    });
+    expect(body?.pointId).toBe(pointId);
   });
 
   it("validates params and body", async () => {
     const { call } = await seeded();
-    const put = async (decisionId: string, body: unknown) =>
-      (await call("putVerdict", { params: { id, decisionId }, body })).error?.code;
-    expect(await put("x1", { verdict: "approved", comment: "" })).toBe("bad-request");
-    expect(await put("d1", { verdict: "maybe", comment: "" })).toBe("bad-request");
-    expect(await put("d1", { verdict: "approved" })).toBe("bad-request");
+    const put = async (pointId: string, body: unknown) =>
+      (await call("putPointState", { params: { id, pointId }, body })).error?.code;
+    expect(await put("x1", { state: "raised" })).toBe("bad-request");
+    expect(await put("d1", { state: "approved" })).toBe("bad-request");
+    expect(await put("d1", {})).toBe("bad-request");
   });
 
-  it("needs a known decision of a complete analysis", async () => {
+  it("needs a point of a complete analysis", async () => {
     const complete = await seeded();
-    const verdict = { verdict: "approved", comment: "" };
+    const state = { state: "raised" };
     expect(
-      (await complete.call("putVerdict", { params: { id, decisionId: "d99" }, body: verdict }))
-        .error?.code,
+      (await complete.call("putPointState", { params: { id, pointId: "d99" }, body: state })).error
+        ?.code,
     ).toBe("not-found");
     const notComplete = await seeded(running);
     expect(
-      (await notComplete.call("putVerdict", { params: { id, decisionId: "d1" }, body: verdict }))
+      (await notComplete.call("putPointState", { params: { id, pointId: "d1" }, body: state }))
         .error?.code,
     ).toBe("analysis-not-complete");
   });

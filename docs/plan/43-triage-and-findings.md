@@ -1,6 +1,6 @@
 # Stage 43: Triage and findings from Claude, landed in the code
 
-**Status:** Not started
+**Status:** In progress (branch claude/stage-43-implementation-c155f8)
 **Depends on:** 42
 **Owns:** the findings pass in `src/adapters/claude/`, `src/domain/review/point.ts`, the model run in `src/application/use-cases/`, point routes in `contracts/`, the header's Claude element, point cards and tree marks in `web/src/pages/review/` and `web/src/review/`, the replayed model in `src/cli/dev/`, `web/dev/`
 

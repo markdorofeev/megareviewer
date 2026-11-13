@@ -3,9 +3,18 @@ import type { ModelPass } from "../../../domain/review/index.ts";
 import type { ClaudeRun, RunClaude, RunClaudeOptions } from "../run-claude.ts";
 import synthetic from "./claude-code/errors.synthetic.json" with { type: "json" };
 
-/** A recorded run's lines: a pass on small-feature, or the recording signed out. */
+/**
+ * A run's lines: a pass on small-feature, or the recording signed out. The findings pass's are
+ * synthetic, in the recorded passes' shape, until it's recorded.
+ */
 export const recordedLines = (name: ModelPass | "not-signed-in"): string[] =>
-  readFileSync(new URL(`./claude-code/${name}.jsonl`, import.meta.url), "utf8")
+  readFileSync(
+    new URL(
+      `./claude-code/${name === "findings" ? "findings.synthetic" : name}.jsonl`,
+      import.meta.url,
+    ),
+    "utf8",
+  )
     .split("\n")
     .filter((line) => line !== "");
 

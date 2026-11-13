@@ -41,6 +41,7 @@ const capturingModel = (onInput: (input: AnalysisInput) => void): AnalysisModel 
       return err({ kind: "too-large" as const, message: "captured" });
     },
     intent: fail,
+    findings: fail,
     risk: fail,
     decisions: fail,
     tour: fail,

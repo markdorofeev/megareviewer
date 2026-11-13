@@ -3,13 +3,14 @@ import {
   type AnalysisId,
   buildPublication,
   commentFits,
-  type DecisionId,
-  type DecisionVerdict,
   type HunkComment,
+  type PointId,
+  type PointReview,
+  type PointState,
   type Publication,
   type PublicationReceipt,
   type PublicationVerdict,
-  type Verdict,
+  pointsOf,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { GitHost } from "../ports/index.ts";
@@ -24,7 +25,7 @@ const STALE_CHECK_TTL_MS = 60_000;
 
 export interface AnalysisView {
   readonly analysis: Analysis;
-  readonly verdicts: readonly DecisionVerdict[];
+  readonly pointReviews: readonly PointReview[];
   readonly publication: PublicationReceipt | null;
   /** The current user opened the PR, so the review can only comment, not approve. */
   readonly isAuthor: boolean;
@@ -44,16 +45,16 @@ export interface FileContent {
   readonly content: string | null;
 }
 
-/** What the reviewer adds when publishing, beyond decision verdicts. */
+/** What the reviewer publishes: their comments, raised points among them, and their verdict. */
 export interface ReviewInput {
   readonly hunkComments: readonly HunkComment[];
-  /** The reviewer's verdict, or null for the one the decisions imply. */
+  /** The reviewer's verdict, or null for a comment. */
   readonly verdict: PublicationVerdict | null;
 }
 
 const NO_REVIEW_INPUT: ReviewInput = { hunkComments: [], verdict: null };
 
-/** Reading the analysis, recording verdicts, and publishing the review. */
+/** Reading the analysis, recording point states, and publishing the review. */
 export const createReviewUseCases = (deps: AppDeps) => {
   const staleChecks = new Map<AnalysisId, { checkedAt: number; stale: boolean }>();
   /** One publish per analysis at a time, so a double click can't post twice. */
@@ -106,7 +107,6 @@ export const createReviewUseCases = (deps: AppDeps) => {
     return ok(
       buildPublication({
         analysis,
-        verdicts: await deps.store.getVerdicts(analysis.id),
         summary,
         isAuthor: await isAuthorOf(deps.hosts[analysis.key.ref.repo.host], analysis),
         hunkComments: review.hunkComments,
@@ -202,28 +202,27 @@ export const createReviewUseCases = (deps: AppDeps) => {
       const analysis = await getAnalysis(id);
       if (!analysis.ok) return analysis;
       const host = deps.hosts[analysis.value.key.ref.repo.host];
-      const [verdicts, publication, isAuthor, stale] = await Promise.all([
-        deps.store.getVerdicts(id),
+      const [pointReviews, publication, isAuthor, stale] = await Promise.all([
+        deps.store.getPointReviews(id),
         deps.store.getPublication(id),
         isAuthorOf(host, analysis.value),
         isStale(analysis.value),
       ]);
-      return ok({ analysis: analysis.value, verdicts, publication, isAuthor, stale });
+      return ok({ analysis: analysis.value, pointReviews, publication, isAuthor, stale });
     },
 
-    async recordVerdict(
+    async recordPointState(
       id: AnalysisId,
-      decisionId: DecisionId,
-      verdict: Verdict,
-      comment: string,
-    ): Promise<Result<DecisionVerdict, UseCaseError>> {
+      pointId: PointId,
+      state: PointState,
+    ): Promise<Result<PointReview, UseCaseError>> {
       const analysis = await getComplete(id);
       if (!analysis.ok) return analysis;
-      if (!analysis.value.decisions.some((decision) => decision.id === decisionId)) {
-        return err(appError("not-found", `No decision ${decisionId} in analysis ${id}`));
+      if (!pointsOf(analysis.value).some((point) => point.id === pointId)) {
+        return err(appError("not-found", `No point ${pointId} in analysis ${id}`));
       }
-      const saved: DecisionVerdict = { decisionId, verdict, comment, updatedAt: deps.clock.now() };
-      await deps.store.saveVerdict(id, saved);
+      const saved: PointReview = { pointId, state, updatedAt: deps.clock.now() };
+      await deps.store.savePointReview(id, saved);
       return ok(saved);
     },
 

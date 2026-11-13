@@ -15,7 +15,7 @@ export {
   PublicationPreviewRequest,
   PublishRequest,
   PullRequestListResponse,
-  PutVerdictRequest,
+  PutPointStateRequest,
   ReplyRequest,
   ResolveRequest,
   ResolveResponse,

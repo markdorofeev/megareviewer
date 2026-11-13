@@ -6,7 +6,7 @@ import type { AnalysisView } from "../../../../contracts/index.ts";
 import type { PartId } from "../../../../src/domain/diff/index.ts";
 import {
   AnalysisId,
-  DecisionId,
+  PointId,
   type PublicationReceipt,
 } from "../../../../src/domain/review/index.ts";
 import {
@@ -113,17 +113,15 @@ const _isReviewed = (lines: string) =>
 const focusedLabel = () => document.activeElement?.getAttribute("aria-label");
 const _storedReviewed = (): unknown =>
   JSON.parse(window.localStorage.getItem("megareviewer:reviewed-hunks") ?? "[]");
-const rail = () => screen.getByRole("complementary", { name: "Map" });
+const rail = () => screen.getByRole("complementary", { name: "Files" });
 const overviewBox = () => screen.getByRole("region", { name: "Overview of the changed files" });
-const decisionCard = (title: RegExp) => screen.getByRole("article", { name: title });
-const approve = (title: RegExp) =>
-  screen.getByRole("button", { name: new RegExp(`^Approve: ${title.source}`) });
-const reject = (title: RegExp) =>
-  screen.getByRole("button", { name: new RegExp(`^Reject: ${title.source}`) });
+const pointCard = (title: RegExp) => screen.getByRole("article", { name: title });
+const raise = (title: RegExp) =>
+  screen.getByRole("button", { name: new RegExp(`^Raise: ${title.source}`) });
 const OWNERSHIP = /Looks up the order by ID/;
-const ENDPOINT = /Adds a public endpoint/;
 const RETRIES = /Retries the tax service/;
 const DAYJS = /Adds dependency dayjs/;
+const FINDING = /Any signed-in user can read/;
 const putRequests = (requests: readonly RecordedRequest[]) =>
   requests.filter((request) => request.method === "PUT");
 const scrolledTo = () =>
@@ -131,11 +129,7 @@ const scrolledTo = () =>
     .mocked(Element.prototype.scrollIntoView)
     .mock.contexts.map((element) => (element as Element).id);
 
-const ROUTE = /^src\/routes\/orders\.ts, lines 10–24$/;
 const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
-const _RECEIPTS = /^src\/services\/receipts\.ts, lines 26–/;
-/** The retry and cache hunk's two parts. */
-const RETRY = /^src\/services\/receipts\.ts, lines 26–39$/;
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -182,27 +176,21 @@ describe("ReviewPage states", () => {
       view: { ...fixture, analysis: analysisInProgress(analysis, 2) },
     });
     await loaded();
-    const progress = screen.getByRole("list", { name: "Analysis progress" });
-    // The model's stages only: the code's are done.
-    expect(progress.textContent).not.toContain("Prepare");
-    expect(progress.textContent).toContain("Intent: running");
+    // The code's stages are done, so the strip is gone; Claude's run says so in the header.
+    expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull();
+    expect(screen.getByText("Claude is reading this PR")).toBeTruthy();
     expect(screen.getByText("Working out the intent…")).toBeTruthy();
     expect(fileCards()).toContain("src/routes/orders.ts");
     expect(within(mainArea()).getAllByRole("region", { name: /, lines / })).toHaveLength(5);
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
 
+    // The intent is the first result: Claude's sentence replaces the description's.
     setView({ ...fixture, analysis: analysisInProgress(analysis, 4) });
     expect(await screen.findByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
-    expect(screen.getByText("Finding the decisions the code makes…")).toBeTruthy();
 
-    // Decisions can be given verdicts while the tour pass still runs.
-    setView({ ...fixture, analysis: analysisInProgress(analysis, 5) });
-    await waitFor(() => expect(approve(OWNERSHIP).hasAttribute("disabled")).toBe(false));
-
+    // Points can be raised as soon as the whole run is done.
     setView(fixture);
-    await waitFor(() =>
-      expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull(),
-    );
+    await waitFor(() => expect(raise(OWNERSHIP).hasAttribute("disabled")).toBe(false));
   });
 
   it("shows where a failed analysis stopped, what it has, and retries it", async () => {
@@ -297,7 +285,8 @@ describe("ReviewPage states", () => {
           : undefined,
     });
     await loaded();
-    expect(screen.getByRole("alert").textContent).toBe("Claude couldn't finish: Overloaded");
+    // What landed stays; the receipt says what's missing and why.
+    expect(screen.getByRole("alert").textContent).toBe("risk, decisions missing: Overloaded");
     // The code's review is all there.
     expect(fileCards()).toContain("src/routes/orders.ts");
 
@@ -404,12 +393,13 @@ describe("intent", () => {
     await loaded();
     expect(screen.getByText("From the code:")).toBeTruthy();
     expect(screen.getByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
-    const chip = screen.getByRole("button", { name: /^SHOP-142 says only the customer/ });
-    expect(chip.textContent).toContain("1 of 1");
+    // A mismatch is one of Claude's points on the code, not a chip in the header.
+    expect(document.querySelector("[data-slot=mismatch-chip]")).toBeNull();
+
     expect(screen.queryByRole("heading", { name: "Inferred from the code" })).toBeNull();
   });
 
-  it("goes to a mismatch's hunks from the chip, and names the next one", async () => {
+  it("goes from the details to a mismatch's card on the code", async () => {
     const second = {
       ...firstMismatch,
       description: "Caches receipts forever.",
@@ -417,19 +407,14 @@ describe("intent", () => {
     };
     renderReview({ view: withIntent({ mismatches: [firstMismatch, second] }) });
     await loaded();
-    await userEvent.click(screen.getByRole("button", { name: /^SHOP-142/ }));
-    expect(focusedLabel()).toMatch(ROUTE);
-    expect(cardOf(h.receiptRoute).dataset.highlighted === "true").toBe(true);
-    const next = screen.getByRole("button", { name: /^Caches receipts forever\./ });
-    expect(next.textContent).toContain("2 of 2");
-
-    await userEvent.click(next);
-    // The split hunk's first part on the page.
-    expect(focusedLabel()).toMatch(RETRY);
-    expect(cardOf(h.receiptRoute).dataset.highlighted === "true").toBe(false);
+    const intent = await openDetails();
+    await userEvent.click(
+      within(intent).getByRole("button", { name: /Caches receipts forever\./ }),
+    );
+    expect(scrolledTo().at(-1)).toBe("point-m2");
     expect(cardOf(p.retry).dataset.highlighted === "true").toBe(true);
     await userEvent.keyboard("{Escape}");
-    expect(cardOf(p.cache).dataset.highlighted === "true").toBe(false);
+    expect(cardOf(p.retry).dataset.highlighted === "true").toBe(false);
   });
 
   it("shows stated and inferred intent side by side in the details when they disagree", async () => {
@@ -455,7 +440,7 @@ describe("intent", () => {
 
     await userEvent.click(within(intent).getByRole("button", { name: /Contradicts/ }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(focusedLabel()).toMatch(ROUTE);
+    expect(scrolledTo().at(-1)).toBe("point-m1");
   });
 
   it("says the code does what was asked when they agree, with what was asked in the details", async () => {
@@ -585,17 +570,19 @@ describe("map", () => {
   });
 });
 
-describe("decisions", () => {
-  it("sit on the first hunk they rest on, and the others link back to them", async () => {
+describe("points", () => {
+  it("sit on the part their lines are in, and the others link back to them", async () => {
     renderReview();
     await loaded();
     expect(
       within(cardOf(h.receiptRoute))
         .getAllByRole("article")
-        .map(
-          (card) => card.getAttribute("aria-labelledby") && card.querySelector("h3")?.textContent,
-        ),
+        .map((card) => card.querySelector("h3")?.textContent),
     ).toEqual([
+      "Any signed-in user can read every customer's receipt",
+      // The intent's mismatch is a finding, and the model's risk on this hunk is a point too.
+      "SHOP-142 says only the customer who placed the order may download its receipt, but the endpoint looks the order up by ID alone, so any signed-in user can read any receipt.",
+      "New public endpoint that reads orders by ID.",
       "Adds a public endpoint GET /orders/:id/receipt",
       "Looks up the order by ID without checking that it belongs to the user",
     ]);
@@ -604,36 +591,59 @@ describe("decisions", () => {
     expect(within(cardOf(h.dependency)).queryByRole("article")).toBeNull();
 
     await userEvent.click(back);
-    expect(scrolledTo().at(-1)).toBe("decision-d5");
-    expect(decisionCard(DAYJS).dataset.selected === "true").toBe(true);
+    expect(scrolledTo().at(-1)).toBe("point-d5");
+    expect(pointCard(DAYJS).dataset.current === "true").toBe(true);
     expect(cardOf(h.dependency).dataset.highlighted === "true").toBe(true);
-    expect(cardOf(h.receiptFormatting).dataset.highlighted === "true").toBe(true);
   });
 
-  it("save a verdict at once, given on the card", async () => {
+  it("mark the lines they rest on with their kind's bar", async () => {
+    renderReview();
+    await loaded();
+    const kinds = [...cardOf(h.receiptRoute).querySelectorAll("[data-point]")].map((row) =>
+      row.getAttribute("data-point"),
+    );
+    // The mismatch, a finding, covers the hunk's nine added lines, and beats the risk and the
+    // decisions resting on the same lines.
+    expect(kinds).toEqual(Array(9).fill("finding"));
+  });
+
+  it("raise into a comment on their lines, prefilled, which posts with the review", async () => {
     const { requests } = renderReview();
     await loaded();
-    await userEvent.click(reject(OWNERSHIP));
-    expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(raise(FINDING));
+    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 14–16/ });
+    expect((field as HTMLTextAreaElement).value).toContain(
+      "Any signed-in user can read every customer's receipt",
+    );
     await waitFor(() => expect(putRequests(requests)).toHaveLength(1));
     expect(putRequests(requests)[0]).toMatchObject({
-      url: `${viewPath}/verdicts/d2`,
-      body: { verdict: "rejected", comment: "" },
+      url: `${viewPath}/points/f1`,
+      body: { state: "raised" },
     });
+    expect(pointCard(FINDING).dataset.state).toBe("raised");
   });
 
-  it("return a verdict to pending when its active button is clicked again", async () => {
+  it("fold to one line when dismissed, and come back", async () => {
     const { requests } = renderReview();
     await loaded();
-    await userEvent.click(approve(RETRIES));
-    await userEvent.click(approve(RETRIES));
-    expect(approve(RETRIES).getAttribute("aria-pressed")).toBe("false");
+    await userEvent.click(
+      screen.getByRole("button", { name: new RegExp(`^Dismiss: ${RETRIES.source}`) }),
+    );
     await waitFor(() =>
-      expect(putRequests(requests).at(-1)?.body).toMatchObject({ verdict: "pending" }),
+      expect(putRequests(requests).at(-1)).toMatchObject({
+        url: `${viewPath}/points/d3`,
+        body: { state: "dismissed" },
+      }),
+    );
+    const folded = screen.getByText("Dismissed").closest("[data-slot=point]");
+    expect(folded?.getAttribute("data-state")).toBe("dismissed");
+    await userEvent.click(within(folded as HTMLElement).getByRole("button", { name: "Undo" }));
+    await waitFor(() =>
+      expect(putRequests(requests).at(-1)?.body).toMatchObject({ state: "open" }),
     );
   });
 
-  it("roll a verdict back and say why when saving fails", async () => {
+  it("roll a state back and say why when saving fails", async () => {
     let fail = () => {};
     renderReview({
       respond: (request) =>
@@ -644,32 +654,55 @@ describe("decisions", () => {
           : undefined,
     });
     await loaded();
-    await userEvent.click(approve(RETRIES));
-    expect(approve(RETRIES).getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(
+      screen.getByRole("button", { name: new RegExp(`^Dismiss: ${RETRIES.source}`) }),
+    );
+    expect(screen.getByText("Dismissed")).toBeTruthy();
     fail();
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(
-      "Couldn't save your verdict on “Retries the tax service 3 times with no backoff”. Database locked.",
+      "Couldn't save what you did with “Retries the tax service 3 times with no backoff”. Database locked.",
     );
-    expect(approve(RETRIES).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByText("Dismissed")).toBeNull();
     await userEvent.click(within(alert).getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("autosave a comment once typing pauses", async () => {
-    const { requests } = renderReview();
+  it("are counted by kind in the header, listed in full, and stepped through", async () => {
+    renderReview();
     await loaded();
-    const field = screen.getByLabelText(
-      "Comment on: Retries the tax service 3 times with no backoff",
+    const [header] = screen.getAllByRole("banner");
+    if (header === undefined) throw new Error("no header");
+    await waitFor(() =>
+      expect(
+        [...header.querySelectorAll("[data-slot=point-chip]")].map((chip) =>
+          chip.textContent?.replace(/\s+/g, " ").trim(),
+        ),
+      ).toEqual(["⚠3 findings", "▲1 risk", "◇5 decisions"]),
     );
-    await userEvent.type(field, "Add backoff");
-    expect(putRequests(requests)).toHaveLength(0);
-    expect(await within(decisionCard(RETRIES)).findByText("Saved")).toBeTruthy();
-    expect(putRequests(requests)).toHaveLength(1);
-    expect(putRequests(requests)[0]?.body).toEqual({ verdict: "pending", comment: "Add backoff" });
+
+    await userEvent.click(within(header).getByRole("button", { name: "All 9" }));
+    const list = screen.getByRole("list", { name: "Points" });
+    expect(within(list).getAllByRole("button")).toHaveLength(9);
+    await userEvent.click(within(list).getAllByRole("button")[1] as HTMLElement);
+    expect(scrolledTo().at(-1)).toBe("point-f2");
+
+    // Next goes on from the point the list left the reviewer on.
+    await userEvent.click(within(header).getByRole("button", { name: /^Next/ }));
+    expect(scrolledTo().at(-1)).toBe("point-m1");
   });
 
-  it("are read-only once the review is published", async () => {
+  it("count each file's points in the tree", async () => {
+    renderReview();
+    await loaded();
+    const row = within(rail()).getByTitle("src/routes/orders.ts");
+    // One card there holds the finding, the mismatch, the risk and two decisions.
+    expect(row.textContent).toContain("⚠2");
+    expect(row.textContent).toContain("▲1");
+    expect(row.textContent).toContain("◇2");
+  });
+
+  it("can't be acted on once the review is published", async () => {
     const receipt: PublicationReceipt = {
       url: "https://github.com/acme/shop/pull/128#pullrequestreview-9",
       publishedAt: "2026-10-22T10:00:00Z",
@@ -679,26 +712,16 @@ describe("decisions", () => {
       view: {
         ...fixture,
         publication: receipt,
-        verdicts: [
-          {
-            decisionId: DecisionId.parse("d2"),
-            verdict: "rejected",
-            comment: "Check the owner.",
-            updatedAt: "2026-10-22T09:59:00Z",
-          },
+        pointReviews: [
+          { pointId: PointId.parse("d2"), state: "raised", updatedAt: "2026-10-22T09:59:00Z" },
         ],
       },
     });
     await loaded();
     expect(screen.getByRole("link", { name: "Published" }).getAttribute("href")).toBe(receipt.url);
     expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
-    expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
-    expect(reject(OWNERSHIP).hasAttribute("disabled")).toBe(true);
-    const field = screen.getByLabelText<HTMLTextAreaElement>(
-      "Comment on: Looks up the order by ID without checking that it belongs to the user",
-    );
-    expect(field.value).toBe("Check the owner.");
-    expect(field.readOnly).toBe(true);
+    expect(pointCard(OWNERSHIP).dataset.state).toBe("raised");
+    expect(raise(OWNERSHIP).hasAttribute("disabled")).toBe(true);
   });
 
   it("keeps line comments open after publishing: they post now", async () => {
@@ -909,30 +932,23 @@ describe("keyboard shortcuts", () => {
     expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
   });
 
-  it("give verdicts and comments on the decision of the hunk the reviewer is on", async () => {
+  it("step through Claude's points with .", async () => {
     renderReview();
     await loaded();
-    await userEvent.keyboard("a");
-    expect(approve(ENDPOINT).getAttribute("aria-pressed")).toBe("false");
+    await userEvent.keyboard(".");
+    expect(scrolledTo().at(-1)).toBe("point-f1");
+    expect(pointCard(FINDING).dataset.current === "true").toBe(true);
+    await userEvent.keyboard(".");
+    expect(scrolledTo().at(-1)).toBe("point-f2");
+  });
 
+  it("open a comment on the focused hunk's first changed line with c", async () => {
+    renderReview();
+    await loaded();
     await userEvent.click(cardOf(h.receiptRoute));
-    await userEvent.keyboard("r");
-    expect(reject(ENDPOINT).getAttribute("aria-pressed")).toBe("true");
-
-    await userEvent.click(approve(OWNERSHIP));
-    expect(decisionCard(OWNERSHIP).dataset.selected === "true").toBe(true);
-    await userEvent.keyboard("r");
-    expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
-
     await userEvent.keyboard("c");
-    const field = screen.getByLabelText(
-      "Comment on: Looks up the order by ID without checking that it belongs to the user",
-    );
+    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on line / });
     expect(document.activeElement).toBe(field);
-    // Typed into the field, these are text, not shortcuts.
-    await userEvent.keyboard("ran");
-    expect((field as HTMLTextAreaElement).value).toBe("ran");
-    expect(reject(OWNERSHIP).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("are listed for each layout, and none fire while the list is open", async () => {
@@ -946,7 +962,7 @@ describe("keyboard shortcuts", () => {
         .map((keys) => keys.textContent);
     expect(keysOf("In the code")).toEqual(["n", "p", "c", "o"]);
     expect(keysOf("In the overview")).toEqual(["←→↑↓", "↵"]);
-    expect(keysOf("On a decision")).toEqual(["a", "r"]);
+    expect(keysOf("On Claude's points")).toEqual(["."]);
     expect(keysOf("Anywhere")).toEqual(["v", "⇧R", "Esc", "?"]);
     await userEvent.keyboard("v");
     // The page behind the open dialog is inert, so its switch is hidden from the tree.
@@ -972,12 +988,12 @@ describe("parts of a split hunk", () => {
     expect(placeOf(p.cache).classList.contains("border-t")).toBe(false);
   });
 
-  it("put a decision's card on the first part on the page, and link the other to it", async () => {
+  it("put a point's card on the first part on the page, and link the other to it", async () => {
     renderReview();
     await loaded();
     expect(within(cardOf(p.retry)).getByRole("article", { name: RETRIES })).toBeTruthy();
     expect(within(cardOf(p.cache)).queryByRole("article", { name: RETRIES })).toBeNull();
-    expect(cardOf(p.cache).querySelector("[data-slot=decision-mention]")?.textContent).toMatch(
+    expect(cardOf(p.cache).querySelector("[data-slot=point-mention]")?.textContent).toMatch(
       RETRIES,
     );
   });
@@ -1089,11 +1105,17 @@ describe("without the model", () => {
     analysis: {
       ...analysis,
       intent: null,
+      findings: [],
       decisions: [],
       risk: analysis.risk.map((risk) =>
         risk.source === "model" ? { ...risk, source: "rule" as const } : risk,
       ),
-      stages: { ...analysis.stages, intent: "skipped", decisions: "skipped" },
+      stages: {
+        ...analysis.stages,
+        intent: "skipped",
+        findings: "skipped",
+        decisions: "skipped",
+      },
       pullRequest:
         analysis.pullRequest === null
           ? null
@@ -1104,38 +1126,34 @@ describe("without the model", () => {
     },
   };
 
-  it("shows the title and the description's first sentence, rule marks only, and no decision cards", async () => {
+  it("shows the title and the description's first sentence, rule marks only, and no points", async () => {
     renderReview({ view: withoutModel });
     await loaded();
     // Markup is text, and doesn't start a sentence.
     expect(screen.getByText("Adds receipts. <b>Not bold</b>")).toBeTruthy();
     expect(screen.queryByText(/Moves formatMoney too/)).toBeNull();
-    expect(document.querySelector("[data-slot=mismatch-chip]")).toBeNull();
+    expect(document.querySelector("[data-slot=point-chip]")).toBeNull();
     expect(screen.queryByRole("article")).toBeNull();
   });
 
-  it("offers Publish to the author only once there's something to post", async () => {
-    const { unmount } = renderReview({ view: { ...withoutModel, isAuthor: true } });
-    await loaded();
-    expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
-    window.localStorage.setItem(
-      `megareviewer:hunk-comments:${id}`,
-      JSON.stringify([{ hunkId: h.receiptRoute, side: "new", line: 12, body: "Check the owner." }]),
-    );
-    unmount();
+  it("offers Publish, since the reviewer's own verdict is a review in itself", async () => {
     renderReview({ view: { ...withoutModel, isAuthor: true } });
     await loaded();
     // It floats, in reach wherever the page is scrolled, and counts what will post.
     const publish = screen.getByRole("button", { name: /^Publish review…/ });
     expect(publish.dataset.slot).toBe("publish-button");
     expect(publish.className).toContain("fixed");
-    expect(publish.textContent).toContain("1 to post");
-  });
+    expect(publish.textContent).not.toContain("to post");
 
-  it("offers no Publish without decisions or comments, since there's nothing to post", async () => {
-    renderReview({ view: withoutModel });
+    window.localStorage.setItem(
+      `megareviewer:hunk-comments:${id}`,
+      JSON.stringify([{ hunkId: h.receiptRoute, side: "new", line: 12, body: "Check the owner." }]),
+    );
+    renderReview({ view: { ...withoutModel, isAuthor: true } });
     await loaded();
-    expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: /^Publish review…/ }).at(-1)?.textContent,
+    ).toContain("1 to post");
   });
 
   it("shows what was asked in full, as text, in the details", async () => {
@@ -1243,34 +1261,41 @@ describe("publishing", () => {
     return dialog;
   };
 
-  it("shows the comments as they'll post, and what the summary carries, and nothing else", async () => {
+  it("shows a raised point's comment as it'll post, the verdict, and nothing else", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(reject(OWNERSHIP));
-    await userEvent.type(
-      screen.getByLabelText(
-        "Comment on: Looks up the order by ID without checking that it belongs to the user",
-      ),
-      "Check the owner.",
-    );
+    await userEvent.click(raise(FINDING));
     const dialog = await openDialog("Publish 1 comment");
     const comments = within(dialog).getAllByRole("listitem");
     expect(comments).toHaveLength(1);
-    expect(comments[0]?.textContent).toBe(
-      "src/routes/orders.ts:13**Rejected: Looks up the order by ID without checking that it belongs to the user**\n\nCheck the owner.",
+    expect(comments[0]?.textContent).toContain(
+      "Any signed-in user can read every customer's receipt",
     );
-    // The decisions the model made go after the summary, and are shown under its field.
-    expect(within(dialog).getByText(/^\*\*Decisions\*\*/)).toBeTruthy();
-    expect(within(dialog).queryByText(/Verdict|Reviewed with megareviewer|on the code/)).toBeNull();
+    expect(comments[0]?.textContent).toContain("src/routes/orders.ts:14–16");
+    expect(
+      within(within(dialog).getByRole("group", { name: "Verdict" })).getAllByRole("button").length,
+    ).toBe(3);
+    expect(within(dialog).queryByText(/Reviewed with megareviewer|on the code/)).toBeNull();
     expect(within(dialog).getByLabelText("Summary").getAttribute("placeholder")).toBe(
       "Summary (optional)",
     );
   });
 
+  it("posts the verdict the reviewer picks", async () => {
+    const { requests } = renderReview();
+    await loaded();
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Request changes" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
+    expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(
+      requests.find((request) => request.url === `${viewPath}/publication`)?.body,
+    ).toMatchObject({ verdict: "request_changes" });
+  });
+
   it("publishes, closes and shows the link to the review", async () => {
     const { requests } = renderReview();
     await loaded();
-    await userEvent.click(approve(RETRIES));
     const dialog = await openDialog();
     await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
@@ -1281,8 +1306,9 @@ describe("publishing", () => {
       summary: "",
       allowStale: false,
       hunkComments: [],
+      verdict: "comment",
     });
-    expect(approve(RETRIES).hasAttribute("disabled")).toBe(true);
+    expect(raise(RETRIES).hasAttribute("disabled")).toBe(true);
   });
 
   it("asks before publishing on a PR that changed since the analysis", async () => {
@@ -1306,8 +1332,8 @@ describe("publishing", () => {
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
     const publishes = requests.filter((request) => request.url === `${viewPath}/publication`);
     expect(publishes.map((request) => request.body)).toEqual([
-      { summary: "", allowStale: false, hunkComments: [] },
-      { summary: "", allowStale: true, hunkComments: [] },
+      { summary: "", allowStale: false, hunkComments: [], verdict: "comment" },
+      { summary: "", allowStale: true, hunkComments: [], verdict: "comment" },
     ]);
   });
 
@@ -1327,17 +1353,6 @@ describe("publishing", () => {
     expect(alert.textContent).toContain("The git host returned an error: GitHub returned 502.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
-  });
-
-  it("saves a comment still waiting for its pause before previewing", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.type(
-      screen.getByLabelText("Comment on: Retries the tax service 3 times with no backoff"),
-      "Add jitter",
-    );
-    const dialog = await openDialog("Publish 1 comment");
-    expect(within(dialog).getAllByRole("listitem")[0]?.textContent).toContain("Add jitter");
   });
 
   it("closes with Cancel without publishing", async () => {

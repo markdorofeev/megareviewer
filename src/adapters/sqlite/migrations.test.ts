@@ -27,8 +27,8 @@ describe("migrate", () => {
     expect(schemaVersion(db)).toBe(MIGRATIONS.length);
     expect(tableNames(db)).toEqual([
       "analyses",
-      "decision_reviews",
       "file_contents",
+      "point_reviews",
       "publications",
       "published_comments",
     ]);
@@ -55,6 +55,25 @@ describe("migrate", () => {
     expect(db.prepare("SELECT id, reviewed_by FROM analyses").all()).toEqual([
       { id: "a_0123456789abcdef", reviewed_by: null },
     ]);
+  });
+
+  it("turns decision verdicts into point states: approved and pending open, rejected raised", () => {
+    const db = databaseAt(2);
+    db.exec(`INSERT INTO analyses VALUES
+      ('a_0123456789abcdef', 'github', 'acme', 'shop', 1, 'sha', 'v1', 'complete', '{}', 't', 't')`);
+    db.exec(`INSERT INTO decision_reviews VALUES
+      ('a_0123456789abcdef', 'd1', 'approved', '', 't1'),
+      ('a_0123456789abcdef', 'd2', 'rejected', 'No backoff', 't2'),
+      ('a_0123456789abcdef', 'd3', 'pending', '', 't3')`);
+
+    migrate(db, MIGRATIONS);
+
+    expect(db.prepare("SELECT * FROM point_reviews ORDER BY point_id").all()).toEqual([
+      { analysis_id: "a_0123456789abcdef", point_id: "d1", state: "open", updated_at: "t1" },
+      { analysis_id: "a_0123456789abcdef", point_id: "d2", state: "raised", updated_at: "t2" },
+      { analysis_id: "a_0123456789abcdef", point_id: "d3", state: "open", updated_at: "t3" },
+    ]);
+    expect(tableNames(db)).not.toContain("decision_reviews");
   });
 
   it("rolls back a failed migration and stays at the last good version", () => {

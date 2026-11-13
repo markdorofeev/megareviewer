@@ -33,7 +33,7 @@ export const parseAnswer = (json: unknown): Result<Answer, ModelError> => {
     : err(invalidOutput(z.prettifyError(answer.error)));
 };
 
-/** The four passes over a transport's `runPass`, which every pass shares. */
+/** The five passes over a transport's `runPass`, which every pass shares. */
 export const createPassModel = (transport: {
   readonly version: string;
   readonly checkSize: AnalysisModel["checkSize"];
@@ -64,6 +64,11 @@ export const createPassModel = (transport: {
     intent: (input, options) =>
       run("intent", input, null, options, (answer) =>
         answer.pass === "intent" ? answer.intent : null,
+      ),
+
+    findings: (input, intent, options) =>
+      run("findings", input, { intent }, options, (answer) =>
+        answer.pass === "findings" ? answer.findings : null,
       ),
 
     risk: (input, intent, options) =>

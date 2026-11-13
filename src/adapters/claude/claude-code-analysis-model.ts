@@ -34,7 +34,7 @@ export const estimateTokens = (prompt: string): number =>
   OVERHEAD_TOKENS + Math.ceil(Buffer.byteLength(prompt, "utf8") / BYTES_PER_TOKEN);
 
 /**
- * The four passes through the reviewer's own Claude Code, one `claude -p` process each. The PR
+ * The five passes through the reviewer's own Claude Code, one `claude -p` process each. The PR
  * data is in the system prompt, the one place Claude Code caches across processes.
  */
 export const createClaudeCodeAnalysisModel = (

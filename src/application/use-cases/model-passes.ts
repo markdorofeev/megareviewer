@@ -1,11 +1,16 @@
-import type { HunkId, PartId } from "../../domain/diff/index.ts";
+import type { Hunk, HunkId, PartId } from "../../domain/diff/index.ts";
 import {
   applyTourTitles,
   type CoverageProblem,
   type Decision,
   DecisionId,
+  type Finding,
+  FindingId,
+  type FindingProblem,
   type Intent,
   MAX_EXPLANATION,
+  MAX_FINDING_EXPLANATION,
+  MAX_FINDING_TITLE,
   MAX_TITLE,
   type ModelError,
   type ModelPass,
@@ -13,6 +18,7 @@ import {
   type RiskAssessment,
   type Tour,
   type TourTitlesProblem,
+  validateFindings,
   validateHunkReferences,
   validateRiskCoverage,
   validateTourTitles,
@@ -119,6 +125,49 @@ export const runIntent = async (
     })),
   };
   return { outcome: ok(repaired), usage, warnings: [] };
+};
+
+const FINDING_FEEDBACK = (problem: FindingProblem): string => {
+  const finding = `Finding ${problem.index + 1}`;
+  switch (problem.kind) {
+    case "unknown-hunk":
+      return `${finding} rests on ${problem.hunkId}, which isn't a hunk of this pull request.`;
+    case "lines-outside":
+      return `${finding}'s lines aren't lines ${problem.hunkId} shows on that side.`;
+    case "blank":
+      return `${finding} has a blank ${problem.field}.`;
+    case "too-long":
+      return `${finding}'s ${problem.field} is longer than ${problem.field === "title" ? MAX_FINDING_TITLE : MAX_FINDING_EXPLANATION} characters.`;
+  }
+};
+
+/**
+ * Findings on lines the PR's hunks show. One still invalid after the retry is dropped and
+ * logged, not shown: the reviewer can't act on the model's mistake.
+ */
+export const runFindings = async (
+  model: AnalysisModel,
+  input: AnalysisInput,
+  intent: Intent,
+  hunks: ReadonlyMap<HunkId, Hunk>,
+  logger: Logger,
+): Promise<PassResult<Finding[]>> => {
+  const { outcome, usage } = await callChecked(
+    "findings",
+    (options) => model.findings(input, intent, options),
+    (drafts) => validateFindings(drafts, hunks).map(FINDING_FEEDBACK),
+    logger,
+  );
+  if (!outcome.ok) return { outcome, usage, warnings: [] };
+  const drafts = outcome.value.value;
+  const invalid = new Set(validateFindings(drafts, hunks).map((problem) => problem.index));
+  if (invalid.size > 0) logger.warn("Dropped invalid findings", { count: invalid.size });
+  const kept = drafts.filter((_, index) => !invalid.has(index));
+  return {
+    outcome: ok(kept.map((draft, index) => ({ ...draft, id: FindingId.parse(`f${index + 1}`) }))),
+    usage,
+    warnings: [],
+  };
 };
 
 export interface RiskOutcome {

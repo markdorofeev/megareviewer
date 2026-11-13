@@ -3,8 +3,8 @@ import type {
   AnalysisId,
   AnalysisKey,
   CommentKey,
-  DecisionId,
-  DecisionVerdict,
+  PointId,
+  PointReview,
   PublicationReceipt,
   PullRequestRef,
 } from "../../domain/review/index.ts";
@@ -21,7 +21,7 @@ const sameKey = (a: AnalysisKey, b: AnalysisKey): boolean =>
 /** Copies on every read and write, so a test that mutates stored data fails loudly. */
 export class InMemoryAnalysisStore implements AnalysisStore {
   private readonly analyses = new Map<AnalysisId, Analysis>();
-  private readonly verdicts = new Map<AnalysisId, Map<DecisionId, DecisionVerdict>>();
+  private readonly pointReviews = new Map<AnalysisId, Map<PointId, PointReview>>();
   private readonly postedComments = new Map<AnalysisId, Map<CommentKey, string>>();
   private readonly publications = new Map<AnalysisId, PublicationReceipt>();
 
@@ -55,14 +55,16 @@ export class InMemoryAnalysisStore implements AnalysisStore {
     return [...refs.values()].slice(0, limit);
   }
 
-  async getVerdicts(id: AnalysisId): Promise<DecisionVerdict[]> {
-    return [...(this.verdicts.get(id)?.values() ?? [])].map((verdict) => structuredClone(verdict));
+  async getPointReviews(id: AnalysisId): Promise<PointReview[]> {
+    return [...(this.pointReviews.get(id)?.values() ?? [])].map((review) =>
+      structuredClone(review),
+    );
   }
 
-  async saveVerdict(id: AnalysisId, verdict: DecisionVerdict): Promise<void> {
-    const verdicts = this.verdicts.get(id) ?? new Map<DecisionId, DecisionVerdict>();
-    verdicts.set(verdict.decisionId, structuredClone(verdict));
-    this.verdicts.set(id, verdicts);
+  async savePointReview(id: AnalysisId, review: PointReview): Promise<void> {
+    const reviews = this.pointReviews.get(id) ?? new Map<PointId, PointReview>();
+    reviews.set(review.pointId, structuredClone(review));
+    this.pointReviews.set(id, reviews);
   }
 
   async getPostedComments(id: AnalysisId): Promise<ReadonlyMap<CommentKey, string>> {

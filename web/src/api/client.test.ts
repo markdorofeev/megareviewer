@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { TOKEN_HEADER } from "../../../contracts/index.ts";
-import { DecisionId } from "../../../src/domain/review/index.ts";
+import { PointId } from "../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureStatus } from "../../dev/fixtures/index.ts";
 import { mockFetch } from "../../dev/mock-fetch.ts";
 import { createMockApi, MOCK_TOKEN } from "../../dev/mock-routes.ts";
@@ -15,25 +15,19 @@ const id = fixtureAnalysisView.analysis.id;
 describe("createApiClient", () => {
   it("sends the session token, the method, the path and a JSON body", async () => {
     const { fetch, requests } = fakeFetch(() =>
-      jsonResponse(200, {
-        decisionId: "d1",
-        verdict: "approved",
-        comment: "",
-        updatedAt: "2026-10-22T10:00:00Z",
-      }),
+      jsonResponse(200, { pointId: "f1", state: "raised", updatedAt: "2026-10-22T10:00:00Z" }),
     );
-    const result = await client(fetch).putVerdict(id, DecisionId.parse("d1"), {
-      verdict: "approved",
-      comment: "",
+    const result = await client(fetch).putPointState(id, PointId.parse("f1"), {
+      state: "raised",
     });
     expect(result.ok).toBe(true);
     expect(requests).toHaveLength(1);
     const [request] = requests;
-    expect(request?.url).toBe(`/api/analyses/${id}/verdicts/d1`);
+    expect(request?.url).toBe(`/api/analyses/${id}/points/f1`);
     expect(request?.method).toBe("PUT");
     expect(request?.headers.get(TOKEN_HEADER)).toBe("secret");
     expect(request?.headers.get("content-type")).toBe("application/json");
-    expect(request?.body).toEqual({ verdict: "approved", comment: "" });
+    expect(request?.body).toEqual({ state: "raised" });
   });
 
   it("sends no body or content type on a GET", async () => {

@@ -15,10 +15,11 @@ import type { FileChange } from "../../src/domain/diff/index.ts";
 import {
   buildPublication,
   composeBody,
-  type DecisionId,
-  type DecisionVerdict,
+  type PointId,
+  type PointReview,
   type PublicationReceipt,
   parsePullRequestUrl,
+  pointsOf,
   type ReviewThread,
   StageName,
 } from "../../src/domain/review/index.ts";
@@ -148,7 +149,7 @@ export const createMockApi = (
   let failAt: StageName | null = null;
   let failed = false;
   let timer: ReturnType<typeof setInterval> | null = null;
-  const verdicts = new Map<DecisionId, DecisionVerdict>();
+  const pointReviews = new Map<PointId, PointReview>();
   let publication: PublicationReceipt | null = null;
   let threads: ReviewThread[] = structuredClone([...fixtureThreads.threads]);
   let replies = 0;
@@ -161,7 +162,7 @@ export const createMockApi = (
   const view = (): AnalysisView => ({
     ...fixtureView,
     analysis: analysis(),
-    verdicts: [...verdicts.values()],
+    pointReviews: [...pointReviews.values()],
     publication,
   });
   const emit = (event: MockEvent) => {
@@ -198,7 +199,7 @@ export const createMockApi = (
     stagesDone = 0;
     failAt = failing;
     failed = false;
-    verdicts.clear();
+    pointReviews.clear();
     publication = null;
     timer = setInterval(advance, stageMs);
   };
@@ -266,11 +267,11 @@ export const createMockApi = (
     },
     runModel: ({ id }) =>
       findAnalysis(id) ?? failure("model-unavailable", "the mock API doesn't run Claude"),
-    putVerdict: (params, body) => {
+    putPointState: (params, body) => {
       const missing = findAnalysis(params.id) ?? requireComplete();
       if (missing !== null) return missing;
-      const parsedParams = routes.putVerdict.params.safeParse(params);
-      const request = routes.putVerdict.request.safeParse(body);
+      const parsedParams = routes.putPointState.params.safeParse(params);
+      const request = routes.putPointState.request.safeParse(body);
       if (!parsedParams.success || !request.success) {
         const problems = [
           ...(parsedParams.success ? [] : issuesOf("params", parsedParams.error.issues)),
@@ -278,12 +279,12 @@ export const createMockApi = (
         ];
         return failure("bad-request", problems.join("; "));
       }
-      const { decisionId } = parsedParams.data;
-      if (!fixture.decisions.some((decision) => decision.id === decisionId)) {
-        return failure("not-found", `No decision ${decisionId} in analysis ${params.id}`);
+      const { pointId } = parsedParams.data;
+      if (!pointsOf(fixture).some((point) => point.id === pointId)) {
+        return failure("not-found", `No point ${pointId} in analysis ${params.id}`);
       }
-      const saved: DecisionVerdict = { decisionId, ...request.data, updatedAt: now() };
-      verdicts.set(decisionId, saved);
+      const saved: PointReview = { pointId, ...request.data, updatedAt: now() };
+      pointReviews.set(pointId, saved);
       return success(saved);
     },
     previewPublication: ({ id }, body) => {
@@ -296,7 +297,6 @@ export const createMockApi = (
       return success(
         buildPublication({
           analysis: fixture,
-          verdicts: [...verdicts.values()],
           summary: request.data.summary,
           isAuthor: fixtureView.isAuthor,
           hunkComments: request.data.hunkComments ?? [],
@@ -314,7 +314,6 @@ export const createMockApi = (
       if (publication === null) {
         const published = buildPublication({
           analysis: fixture,
-          verdicts: [...verdicts.values()],
           summary: request.data.summary,
           isAuthor: fixtureView.isAuthor,
           hunkComments: request.data.hunkComments ?? [],

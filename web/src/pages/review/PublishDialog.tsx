@@ -4,6 +4,7 @@ import type {
   HunkComment,
   Publication,
   PublicationReceipt,
+  PublicationVerdict,
 } from "../../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage, useApi, useMutation } from "../../api/index.ts";
 import { cn } from "../../lib/utils.ts";
@@ -11,6 +12,13 @@ import { DANGER, WARNING } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { Dialog } from "./Dialog.tsx";
+import { Segmented } from "./Segmented.tsx";
+
+const VERDICTS: readonly { readonly value: PublicationVerdict; readonly label: string }[] = [
+  { value: "comment", label: "Comment" },
+  { value: "approve", label: "Approve" },
+  { value: "request_changes", label: "Request changes" },
+];
 
 /** Text as it will be posted: its own line breaks, never HTML. */
 const POSTED = "whitespace-pre-wrap break-words";
@@ -20,24 +28,28 @@ const publishLabel = (count: number): string =>
   count === 0 ? "Publish the review" : `Publish ${count} ${count === 1 ? "comment" : "comments"}`;
 
 /**
- * The comments as they will be posted, then an optional summary, and a button that says what it
- * posts. Nothing is posted that isn't shown here: the summary goes as written, with the decisions
- * after it only when the model made some.
+ * The comments as they will be posted, the verdict the reviewer picks, an optional summary, and a
+ * button that says what it posts. Nothing is posted that isn't shown here: the summary goes as
+ * written. An author can only comment, as hosts don't let them approve their own PR.
  */
 export const PublishDialog = ({
   analysisId,
   hunkComments,
+  isAuthor,
   onClose,
   onPublished,
 }: {
   readonly analysisId: AnalysisId;
   readonly hunkComments: readonly HunkComment[];
+  /** The reviewer wrote the PR, so the review can only comment. */
+  readonly isAuthor: boolean;
   readonly onClose: () => void;
   readonly onPublished: (receipt: PublicationReceipt) => void;
 }) => {
   const { client } = useApi();
   const id = useId();
   const [summary, setSummary] = useState("");
+  const [verdict, setVerdict] = useState<PublicationVerdict>("comment");
   const [preview, setPreview] = useState<Publication | null>(null);
   const [previewError, setPreviewError] = useState<ApiError | null>(null);
   const [confirmStale, setConfirmStale] = useState(false);
@@ -60,7 +72,12 @@ export const PublishDialog = ({
   const send = async (stale: boolean) => {
     setAllowStale(stale);
     setConfirmStale(false);
-    const result = await publish.run(analysisId, { summary, allowStale: stale, hunkComments });
+    const result = await publish.run(analysisId, {
+      summary,
+      allowStale: stale,
+      hunkComments,
+      verdict,
+    });
     if (result.ok) {
       onPublished(result.value);
     } else if (result.error.code === "stale-analysis") {
@@ -97,6 +114,13 @@ export const PublishDialog = ({
         )
       )}
 
+      {!isAuthor && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-caption text-muted-foreground">Verdict</span>
+          <Segmented legend="Verdict" options={VERDICTS} value={verdict} onChange={setVerdict} />
+        </div>
+      )}
+
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${id}-summary`} className="sr-only">
           Summary
@@ -109,10 +133,6 @@ export const PublishDialog = ({
           value={summary}
           onChange={(event) => setSummary(event.target.value)}
         />
-        {preview !== null && preview.summary !== "" && (
-          // The decisions the model made, which the summary carries after the reviewer's text.
-          <p className={cn(POSTED, "text-caption text-muted-foreground")}>{preview.summary}</p>
-        )}
       </div>
 
       {confirmStale ? (

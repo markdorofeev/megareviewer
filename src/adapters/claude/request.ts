@@ -14,6 +14,7 @@ type Effort = "low" | "medium" | "high";
 /** ARCHITECTURE.md's pass table. */
 export const PASS_EFFORT: Readonly<Record<ModelPass, Effort>> = {
   intent: "medium",
+  findings: "high",
   risk: "low",
   decisions: "high",
   tour: "medium",

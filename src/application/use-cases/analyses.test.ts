@@ -218,8 +218,8 @@ describe("the analysis pipeline", () => {
 
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
-    expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("17");
+    expect(Object.values(analysis.stages)).toEqual(Array(7).fill("done"));
+    expect(analysis.key.pipelineVersion).toBe("18");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
@@ -249,6 +249,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
     expect(analysis.usage.map((usage) => usage.pass)).toEqual([
       "intent",
+      "findings",
       "risk",
       "decisions",
       "tour",
@@ -268,6 +269,7 @@ describe("the analysis pipeline", () => {
       "prep:done",
       // The code's analysis ends with the model's stages not run.
       "intent:skipped",
+      "findings:skipped",
       "risk:skipped",
       "decisions:skipped",
       "tour:skipped",
@@ -275,8 +277,10 @@ describe("the analysis pipeline", () => {
       // Then the model's run, as the button starts it.
       "intent:running",
       "intent:done",
+      "findings:running",
       "risk:running",
       "decisions:running",
+      "findings:done",
       "risk:done",
       "decisions:done",
       "tour:running",
@@ -329,7 +333,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.warnings).toEqual([
       "pnpm-lock.yaml changed without a change to package.json or pnpm-workspace.yaml",
     ]);
-    for (const pass of ["intent", "risk", "decisions", "tour"] as const) {
+    for (const pass of ["intent", "findings", "risk", "decisions", "tour"] as const) {
       expect(model.callsTo(pass)).toHaveLength(1);
     }
     const input = firstInput(model, "intent");
@@ -525,6 +529,7 @@ describe("the analysis pipeline", () => {
         collect: "done",
         prep: "done",
         intent: "failed",
+        findings: "skipped",
         risk: "skipped",
         decisions: "skipped",
         tour: "skipped",
@@ -1102,11 +1107,12 @@ describe("without the model", () => {
       collect: "done",
       prep: "done",
       intent: "skipped",
+      findings: "skipped",
       risk: "skipped",
       decisions: "skipped",
       tour: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("17");
+    expect(analysis.key.pipelineVersion).toBe("18");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
@@ -1192,7 +1198,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
-      expect(analysis.key.pipelineVersion).toBe("17+checkout");
+      expect(analysis.key.pipelineVersion).toBe("18+checkout");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1268,7 +1274,7 @@ describe("with a local checkout", () => {
       });
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
-      expect(analysis.key.pipelineVersion).toBe("17");
+      expect(analysis.key.pipelineVersion).toBe("18");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },
@@ -1295,7 +1301,7 @@ describe("runModel", () => {
     expect(after.intent).not.toBeNull();
     expect(after.decisions).toHaveLength(3);
     expect(after.tour?.builtBy).toBe("model");
-    expect(Object.values(after.stages)).toEqual(Array(6).fill("done"));
+    expect(Object.values(after.stages)).toEqual(Array(7).fill("done"));
     expect(model.callsTo("intent")).toHaveLength(1);
   });
 

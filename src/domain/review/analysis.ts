@@ -11,12 +11,21 @@ import {
 import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
 import { Intent, Ticket } from "./intent.ts";
+import { Finding } from "./point.ts";
 import { Sha, Timestamp } from "./primitives.ts";
 import { PullRequest, PullRequestRef } from "./pull-request.ts";
 import { RiskAssessment } from "./risk.ts";
 import { Tour } from "./tour.ts";
 
-export const StageName = z.enum(["collect", "prep", "intent", "risk", "decisions", "tour"]);
+export const StageName = z.enum([
+  "collect",
+  "prep",
+  "intent",
+  "findings",
+  "risk",
+  "decisions",
+  "tour",
+]);
 export type StageName = z.infer<typeof StageName>;
 
 /** skipped: a model pass that didn't run because the model is off. */
@@ -42,7 +51,7 @@ export const AnalysisKey = z
   .readonly();
 export type AnalysisKey = z.infer<typeof AnalysisKey>;
 
-export const ModelPass = z.enum(["intent", "risk", "decisions", "tour"]);
+export const ModelPass = z.enum(["intent", "findings", "risk", "decisions", "tour"]);
 export type ModelPass = z.infer<typeof ModelPass>;
 
 const TokenCount = z.number().int().nonnegative();
@@ -96,7 +105,16 @@ export const Analysis = z
     id: AnalysisId,
     key: AnalysisKey,
     status: AnalysisStatus,
-    stages: z.record(StageName, StageStatus).readonly(),
+    // Analyses stored before the findings pass have no stage for it.
+    stages: z
+      .preprocess(
+        (stages) =>
+          typeof stages === "object" && stages !== null && !("findings" in stages)
+            ? { ...stages, findings: "skipped" }
+            : stages,
+        z.record(StageName, StageStatus),
+      )
+      .readonly(),
     /** null until Collect starts fetching. Defaults for analyses stored before it existed. */
     filesFetched: FilesFetched.nullable().default(null),
     pullRequest: PullRequest.nullable(),
@@ -118,6 +136,8 @@ export const Analysis = z
     /** Read from the checkout: uses outside the PR of the definitions it changes. */
     unchangedCallers: z.array(UnchangedCallers).readonly(),
     intent: Intent.nullable(),
+    /** Defaults for analyses stored before the findings pass. */
+    findings: z.array(Finding).readonly().default([]),
     risk: z.array(RiskAssessment).readonly(),
     decisions: z.array(Decision).readonly(),
     tour: Tour.nullable(),
@@ -138,6 +158,7 @@ export type Analysis = z.infer<typeof Analysis>;
 
 export const MODEL_STAGES = [
   "intent",
+  "findings",
   "risk",
   "decisions",
   "tour",
@@ -150,6 +171,7 @@ export const mapModelStages = (
 ): Analysis["stages"] => ({
   ...stages,
   intent: next(stages.intent),
+  findings: next(stages.findings),
   risk: next(stages.risk),
   decisions: next(stages.decisions),
   tour: next(stages.tour),

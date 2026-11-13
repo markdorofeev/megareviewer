@@ -5,7 +5,7 @@ import {
   type JsonRoute,
   type PublicationPreviewRequest,
   type PublishRequest,
-  type PutVerdictRequest,
+  type PutPointStateRequest,
   type ReplyRequest,
   type ResolveRequest,
   type RouteName,
@@ -17,8 +17,8 @@ import {
 } from "../../../contracts/index.ts";
 import type {
   AnalysisId,
-  DecisionId,
   HunkComment,
+  PointId,
   ThreadId,
 } from "../../../src/domain/review/index.ts";
 import { err, ok, type Result } from "../../../src/domain/shared/index.ts";
@@ -80,8 +80,8 @@ export const createApiClient = (options: ApiClientOptions) => {
       send(routes.getFileContent, { id, side, path }),
     retryAnalysis: (id: AnalysisId) => send(routes.retryAnalysis, { id }),
     runModel: (id: AnalysisId) => send(routes.runModel, { id }),
-    putVerdict: (id: AnalysisId, decisionId: DecisionId, body: PutVerdictRequest) =>
-      send(routes.putVerdict, { id, decisionId }, body),
+    putPointState: (id: AnalysisId, pointId: PointId, body: PutPointStateRequest) =>
+      send(routes.putPointState, { id, pointId }, body),
     previewPublication: (id: AnalysisId, body: PublicationPreviewRequest) =>
       send(routes.previewPublication, { id }, body),
     publish: (id: AnalysisId, body: PublishRequest) => send(routes.publish, { id }, body),

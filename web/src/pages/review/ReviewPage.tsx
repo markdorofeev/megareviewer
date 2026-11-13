@@ -3,11 +3,11 @@ import type { AnalysisView } from "../../../../contracts/index.ts";
 import { hunkIdOf, type PartId, type UnchangedCallers } from "../../../../src/domain/diff/index.ts";
 import {
   type AnalysisId,
-  type Decision,
-  type DecisionId,
   HunkComment,
   inProgress,
-  MODEL_STAGES,
+  type Point,
+  PointId,
+  pointsOf,
   pullRequestUrl,
   type ReviewThread,
 } from "../../../../src/domain/review/index.ts";
@@ -35,9 +35,8 @@ import {
 } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
-import { AnalyzeWithClaude } from "./AnalyzeWithClaude.tsx";
+import { ClaudeElement } from "./ClaudeElement.tsx";
 import { callMarks } from "./calls.tsx";
-import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { IntentLine } from "./IntentLine.tsx";
@@ -46,17 +45,19 @@ import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./
 import {
   commentsInParts,
   contractParts,
-  decisionPlaces,
   type Layout,
   mapFiles,
   mechanicalCount,
   parseLayout,
   partIndex,
+  pointPlaces,
   tourSteps,
   trailingProofs,
 } from "./model.ts";
 import { Overview } from "./Overview.tsx";
 import { fileOverview, type OverviewNode } from "./overview.ts";
+import { PointCard, PointMention, pointAnchor } from "./PointCard.tsx";
+import { PointList } from "./PointList.tsx";
 import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { Rail } from "./Rail.tsx";
@@ -67,8 +68,9 @@ import { useStoredState } from "./storage.ts";
 import { coveredLines, placeKey, placeThreads } from "./threads.ts";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
+import { useHeldScroll } from "./useHeldScroll.ts";
+import { usePoints } from "./usePoints.ts";
 import { useThreads } from "./useThreads.ts";
-import { useVerdicts } from "./useVerdicts.ts";
 
 const NO_COMMENTS: readonly HunkComment[] = [];
 const parseHunkComments = (stored: unknown): readonly HunkComment[] | undefined =>
@@ -138,7 +140,7 @@ const ReviewSkeleton = () => (
 /** The map's two columns: the rail beside the code, or only the code at 1024px or less. */
 const MAP_GRID = "grid items-start gap-5 lg:grid-cols-[17rem_minmax(0,1fr)]";
 
-const NO_DECISIONS: readonly Decision[] = [];
+const NO_POINTS: readonly Point[] = [];
 
 const LAYOUTS: readonly { readonly value: Layout; readonly label: string }[] = [
   { value: "map", label: "Map" },
@@ -153,8 +155,7 @@ const PAGE_SHORTCUTS: readonly ShortcutId[] = [
   "openCall",
   "moveFile",
   "openFile",
-  "approveDecision",
-  "rejectDecision",
+  "nextPoint",
   "toggleLayout",
   "openReview",
   "close",
@@ -248,10 +249,20 @@ const Review = ({
   const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
   const mechanical = mechanicalCount(trailing);
-  const places = useMemo(
-    () => decisionPlaces(analysis.decisions, order, index),
-    [analysis.decisions, order, index],
-  );
+  const points = useMemo(() => pointsOf(analysis), [analysis]);
+  const places = useMemo(() => pointPlaces(points, order, index), [points, order, index]);
+  // Each file's points by kind, for the tree's marks.
+  const pointsByFile = useMemo(() => {
+    const byPath = new Map<string, Partial<Record<Point["kind"], number>>>();
+    for (const [partId, placed] of places.cards) {
+      const path = index.parts.get(partId)?.file.path;
+      if (path === undefined) continue;
+      const counts = byPath.get(path) ?? {};
+      for (const point of placed) counts[point.kind] = (counts[point.kind] ?? 0) + 1;
+      byPath.set(path, counts);
+    }
+    return byPath;
+  }, [places, index]);
   const contractOf = useMemo(() => {
     const counts = new Map(files.map((group) => [group.file.path, contractParts(group, index)]));
     return (path: string) => counts.get(path) ?? 0;
@@ -264,8 +275,9 @@ const Review = ({
         additions: file.additions,
         deletions: file.deletions,
         contract: contractOf(file.path),
+        ...(pointsByFile.has(file.path) ? { points: pointsByFile.get(file.path) } : {}),
       })),
-    [files, contractOf],
+    [files, contractOf, pointsByFile],
   );
   // Directories the reviewer opened in the overview, to see their files.
   const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([]);
@@ -300,20 +312,17 @@ const Review = ({
   const overviewAt = useRef<string | null>(null);
   // The overview node the map was opened from, for Esc to go back to.
   const [openedFrom, setOpenedFrom] = useState<string | null>(null);
-  const [selectedDecision, setSelectedDecision] = useState<DecisionId | null>(null);
+  const [currentPoint, setCurrentPoint] = useState<PointId | null>(null);
+  const [showPoints, setShowPoints] = useState(false);
+  // When this page saw Claude's run start, for the time since.
+  const [modelStartedAt, setModelStartedAt] = useState<number | null>(null);
   // The hunks of a decision or mismatch the reviewer went to.
   const [highlight, setHighlight] = useState<ReadonlySet<PartId>>(new Set());
-  const [mismatchAt, setMismatchAt] = useState(0);
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const detailsReturnFocus = useRef(true);
   const [showDetails, setShowDetails] = useState(false);
-  const commentField = useRef<HTMLTextAreaElement | null>(null);
-  const setCommentField = useCallback((field: HTMLTextAreaElement | null) => {
-    commentField.current = field;
-  }, []);
-
   // Comments on hunk lines are drafts in this browser until they're published with the review.
   const [hunkComments, setHunkComments] = useStoredState(
     `hunk-comments:${analysisId}`,
@@ -365,7 +374,9 @@ const Review = ({
     [setHunkComments],
   );
 
-  const verdicts = useVerdicts(analysisId, view.verdicts);
+  const pointStates = usePoints(analysisId, view.pointReviews);
+  // Claude's points land as cards in the code; the line at the top of the window stays put.
+  useHeldScroll(points.length, "[aria-label=Changes] [data-slot=file-card]");
 
   // The host's conversation on the code, read live, beside the analysis.
   const threads = useThreads(analysisId, analysis.stages.prep === "done");
@@ -429,17 +440,7 @@ const Review = ({
   /** The part the reviewer is on: the one last focused in the map. */
   const currentHunk = (): PartId | null => (layout === "overview" ? null : focusedHunkId);
 
-  /** A decision's card goes with the hunk the reviewer is on, for a, r and c. */
-  const focusHunk = useCallback(
-    (id: PartId) => {
-      setFocusedHunkId(id);
-      const cards = places.cards.get(id) ?? NO_DECISIONS;
-      setSelectedDecision((previous) =>
-        cards.some((decision) => decision.id === previous) ? previous : (cards[0]?.id ?? null),
-      );
-    },
-    [places],
-  );
+  const focusHunk = useCallback((id: PartId) => setFocusedHunkId(id), []);
   /** Focuses a file's place in the overview: its directory, its node, or a node it's a badge on. */
   const focusInOverview = (path: string) => {
     if (!overview.placeOf.has(path)) return;
@@ -454,28 +455,25 @@ const Review = ({
     }
     scrollTo(order.includes(id) ? hunkAnchor(id) : MECHANICAL_ANCHOR);
   };
-  const goToDecision = (id: DecisionId) => {
-    const decision = analysis.decisions.find((one) => one.id === id);
-    const cardHunk = places.cardHunk.get(id);
-    setHighlight(new Set((decision?.hunkIds ?? []).flatMap(index.partsOf)));
+  const goToPoint = (id: PointId) => {
+    const point = points.find((one) => one.id === id);
+    const cardPart = places.cardPart.get(id);
+    setHighlight(new Set((point?.hunkIds ?? []).flatMap(index.partsOf)));
     if (layout === "overview") {
-      if (cardHunk !== undefined) showHunk(cardHunk);
+      if (cardPart !== undefined) showHunk(cardPart);
     } else {
-      scrollTo(decisionAnchor(id));
+      scrollTo(pointAnchor(id));
     }
-    setSelectedDecision(id);
+    setCurrentPoint(id);
   };
-  const goToMismatch = (at: number) => {
-    const mismatch = analysis.intent?.mismatches[at];
-    if (mismatch === undefined) return;
-    const ids = mismatch.hunkIds
-      .flatMap(index.partsOf)
-      .sort((a, b) => order.indexOf(a) - order.indexOf(b));
-    setHighlight(new Set(ids));
-    setMismatchAt(at + 1);
-    const [first] = ids;
-    if (first !== undefined) showHunk(first);
+  /** Steps to the point after the one the reviewer is on, round to the first. */
+  const goToNextPoint = () => {
+    const at = points.findIndex((point) => point.id === currentPoint);
+    const next = points[(at + 1) % points.length];
+    if (next !== undefined) goToPoint(next.id);
   };
+  /** A mismatch is one of Claude's points, the nth of the intent's, so Details goes to its card. */
+  const goToMismatch = (at: number) => goToPoint(PointId.parse(`m${at + 1}`));
   /** The overview opens on the file the reviewer is on: the card holding the focus, else in view. */
   const openOverview = () => {
     const focused = document.activeElement?.closest<HTMLElement>(
@@ -527,17 +525,36 @@ const Review = ({
     if (target !== undefined) scrollTo(target.id);
   };
 
-  const toggleVerdict = (id: DecisionId, verdict: "approved" | "rejected") => {
-    if (readOnly) return;
-    const current = verdicts.draftOf(id).verdict;
-    verdicts.setVerdict(id, current === verdict ? "pending" : verdict);
+  /**
+   * Raises a point: a comment on its lines, prefilled with its text for the reviewer to edit,
+   * which posts with the review under their name.
+   */
+  const raisePoint = (point: Point) => {
+    const partId = places.cardPart.get(point.id);
+    const found = partId === undefined ? undefined : index.parts.get(partId);
+    if (readOnly || partId === undefined || found === undefined) return;
+    const fromLines =
+      point.lines === null
+        ? null
+        : {
+            side: point.lines.side,
+            line: point.lines.line,
+            ...(point.lines.startLine === point.lines.line
+              ? {}
+              : { startLine: point.lines.startLine }),
+          };
+    const firstChanged = found.hunk.lines.find((one) => one.kind !== "context");
+    const place = fromLines ?? (firstChanged === undefined ? null : commentPlace(firstChanged));
+    if (place === null) return;
+    const body = point.explanation === "" ? point.title : `${point.title}\n\n${point.explanation}`;
+    writeComment(partId, { ...place, body });
+    setOpenComment({ partId, place });
+    setCurrentPoint(point.id);
+    void pointStates.setState(point.id, "raised");
+    scrollTo(hunkAnchor(partId));
   };
   const commentOnFocused = () => {
-    if (selectedDecision !== null && commentField.current !== null) {
-      commentField.current.focus();
-      return;
-    }
-    // Without a decision selected, comment on the hunk's first changed line.
+    // Comment on the focused hunk's first changed line.
     const current = currentHunk();
     const found = current === null ? undefined : index.parts.get(current);
     const line = found?.hunk.lines.find((one) => one.kind !== "context");
@@ -570,18 +587,12 @@ const Review = ({
       setOpenedFrom(null);
     }
   };
-  // Something to post: decisions the model made, or comments on lines.
-  const canPublish = analysis.decisions.length > 0 || hunkComments.length > 0;
+  // The verdict is the reviewer's own, so a complete analysis can always be published.
+  const canPublish = complete;
   // The overview handles its own arrows and Enter, on the file that has the focus.
   const mapOnly: ShortcutHandlers = {
     nextFile: () => moveFile(1),
     previousFile: () => moveFile(-1),
-    approveDecision: () => {
-      if (selectedDecision !== null) toggleVerdict(selectedDecision, "approved");
-    },
-    rejectDecision: () => {
-      if (selectedDecision !== null) toggleVerdict(selectedDecision, "rejected");
-    },
     comment: commentOnFocused,
     openCall: openCallOnFocused,
     close: onEscape,
@@ -589,6 +600,7 @@ const Review = ({
   useShortcuts(
     {
       ...(layout === "map" ? mapOnly : {}),
+      ...(points.length > 0 ? { nextPoint: goToNextPoint } : {}),
       toggleLayout: () => switchLayout(),
       openReview: () => {
         if (canPublish) void openPublish();
@@ -606,56 +618,71 @@ const Review = ({
     else navigate(reviewPath(id));
   };
 
-  const openPublish = async () => {
-    await verdicts.flush();
-    setPublishing(true);
-  };
+  const openPublish = () => setPublishing(true);
 
-  // What publishing will post on the code: decided or commented decisions, and line comments.
-  const toPost =
-    analysis.decisions.filter((decision) => {
-      const draft = verdicts.draftOf(decision.id);
-      return draft.verdict !== "pending" || draft.comment.trim() !== "";
-    }).length + hunkComments.length;
+  // What publishing will post on the code: the reviewer's comments, raised points among them.
+  const toPost = hunkComments.length;
   const publishShown = view.publication === null && canPublish;
   const failureTitle =
-    verdicts.failure === null
+    pointStates.failure === null
       ? ""
-      : (analysis.decisions.find((d) => d.id === verdicts.failure?.decisionId)?.title ?? "");
+      : (points.find((point) => point.id === pointStates.failure?.pointId)?.title ?? "");
 
-  const card = (decision: Decision) => (
-    <DecisionCard
-      key={decision.id}
-      decision={decision}
-      draft={verdicts.draftOf(decision.id)}
-      status={verdicts.statusOf(decision.id)}
-      selected={selectedDecision === decision.id}
+  const card = (point: Point) => (
+    <PointCard
+      key={point.id}
+      point={point}
+      state={pointStates.stateOf(point.id)}
+      saving={pointStates.isSaving(point.id)}
       readOnly={readOnly}
-      commentRef={setCommentField}
-      onSelect={setSelectedDecision}
-      onVerdict={verdicts.setVerdict}
-      onComment={verdicts.setComment}
+      current={currentPoint === point.id}
+      onRaise={stable.raisePoint}
+      onState={stable.setPointState}
     />
   );
-  const decisionsOn = (id: PartId): ReactNode => {
-    const cards = places.cards.get(id) ?? NO_DECISIONS;
-    const mentions = places.mentions.get(id) ?? NO_DECISIONS;
+  // The lines each part's points rest on, so they take the kind's bar. Where points overlap,
+  // the one that matters most wins: a finding's line reads as a finding.
+  const pointLines = useMemo(() => {
+    const rank: Readonly<Record<Point["kind"], number>> = { finding: 0, risk: 1, decision: 2 };
+    const byPart = new Map<PartId, Map<string, Point["kind"]>>();
+    for (const [partId, placed] of places.cards) {
+      const lines = new Map<string, Point["kind"]>();
+      for (const point of placed) {
+        if (point.lines === null) continue;
+        for (let line = point.lines.startLine; line <= point.lines.line; line += 1) {
+          const key = `${point.lines.side}:${line}`;
+          const held = lines.get(key);
+          if (held === undefined || rank[point.kind] < rank[held]) lines.set(key, point.kind);
+        }
+      }
+      if (lines.size > 0) byPart.set(partId, lines);
+    }
+    return byPart;
+  }, [places]);
+  const pointLinesOf = useCallback((id: PartId) => pointLines.get(id), [pointLines]);
+  const pointsOn = (id: PartId): ReactNode => {
+    const cards = places.cards.get(id) ?? NO_POINTS;
+    const mentions = places.mentions.get(id) ?? NO_POINTS;
     if (cards.length === 0 && mentions.length === 0) return null;
     return (
       <div className="flex flex-col gap-2 border-b bg-surface-subtle p-3">
         {cards.map(card)}
-        {mentions.map((decision) => (
-          <DecisionMention key={decision.id} decision={decision} onGo={stable.goToDecision} />
+        {mentions.map((point) => (
+          <PointMention key={point.id} point={point} onGo={stable.goToPoint} />
         ))}
       </div>
     );
   };
   // Map cards render again only when their signature changes, so their handlers call the latest.
-  const latest = useRef({ goToDecision });
-  latest.current = { goToDecision };
+  const latest = useRef({ goToPoint, raisePoint });
+  latest.current = { goToPoint, raisePoint };
   const stable = useMemo(
-    () => ({ goToDecision: (id: DecisionId) => latest.current.goToDecision(id) }),
-    [],
+    () => ({
+      goToPoint: (id: PointId) => latest.current.goToPoint(id),
+      raisePoint: (point: Point) => latest.current.raisePoint(point),
+      setPointState: pointStates.setState,
+    }),
+    [pointStates.setState],
   );
   const signatureOf = (id: PartId): string => {
     const parts: unknown[] = [
@@ -667,11 +694,11 @@ const Review = ({
     ];
     // A part with threads draws again when they change.
     if (placement.onLine.has(id)) parts.push(epochOf(placement));
-    for (const decision of places.cards.get(id) ?? NO_DECISIONS) {
-      const draft = verdicts.draftOf(decision.id);
-      parts.push(decision.id, draft.verdict, draft.comment, verdicts.statusOf(decision.id));
-      parts.push(selectedDecision === decision.id);
+    for (const point of places.cards.get(id) ?? NO_POINTS) {
+      parts.push(point.id, pointStates.stateOf(point.id), pointStates.isSaving(point.id));
+      parts.push(currentPoint === point.id);
     }
+    for (const point of places.mentions.get(id) ?? NO_POINTS) parts.push(point.id);
     return parts.join("\u0000");
   };
   const deps: HunkDeps = {
@@ -687,7 +714,8 @@ const Review = ({
     published: publication !== null,
     onFocusHunk: focusHunk,
     marksOf,
-    decisionsOn,
+    pointsOn,
+    pointLinesOf,
     threadsAt,
     earlierThreads,
     openThreads,
@@ -697,11 +725,8 @@ const Review = ({
   };
   const before = (
     <>
-      {modelRunning && analysis.stages.decisions !== "done" && (
-        <p className="text-muted-foreground">Finding the decisions the code makes…</p>
-      )}
       {places.unplaced.length > 0 && (
-        <section className="flex flex-col gap-2" aria-label="Decisions on no change shown here">
+        <section className="flex flex-col gap-2" aria-label="Points on no change shown here">
           {places.unplaced.map(card)}
         </section>
       )}
@@ -720,23 +745,27 @@ const Review = ({
           <IntentLine
             analysis={analysis}
             intentComing={modelRunning && analysis.intent === null}
-            mismatchAt={mismatchAt}
-            onMismatch={goToMismatch}
             onDetails={() => {
               detailsReturnFocus.current = true;
               setShowDetails(true);
             }}
           >
-            <AnalyzeWithClaude
+            <ClaudeElement
               analysis={analysis}
               via={modelStatus?.via ?? null}
+              running={modelRunning}
+              startedAt={modelStartedAt}
               starting={runModel.pending}
               error={runModel.error === null ? null : errorMessage(runModel.error)}
+              points={points}
               onRun={async () => {
                 const result = await runModel.run(analysisId);
                 if (!result.ok) return;
+                setModelStartedAt(Date.now());
                 follow();
               }}
+              onOpenList={() => setShowPoints(true)}
+              onNext={goToNextPoint}
             />
           </IntentLine>
         }
@@ -764,6 +793,7 @@ const Review = ({
             />
           </>
         }
+        modelRunning={modelRunning}
         reanalyzing={reanalyze.pending}
         reanalyzeError={reanalyze.error}
         onReanalyze={async () => {
@@ -772,10 +802,10 @@ const Review = ({
         }}
       />
 
-      {(!complete || modelRunning) && (
+      {!complete && (
         <ProgressStrip
           stages={analysis.stages}
-          shown={modelRunning ? MODEL_STAGES : CODE_STAGES}
+          shown={CODE_STAGES}
           filesFetched={analysis.filesFetched}
         />
       )}
@@ -799,16 +829,15 @@ const Review = ({
           </Button>
         </div>
       )}
-      {verdicts.failure !== null && (
+      {pointStates.failure !== null && (
         <div
           className={cn(DANGER, "flex flex-wrap items-center justify-between gap-2")}
           role="alert"
         >
           <p>
-            Couldn't save your {verdicts.failure.what} on “{failureTitle}”.{" "}
-            {verdicts.failure.message}
+            Couldn't save what you did with “{failureTitle}”. {pointStates.failure.message}
           </p>
-          <Button variant="ghost" size="sm" onClick={verdicts.dismissFailure}>
+          <Button variant="ghost" size="sm" onClick={pointStates.dismissFailure}>
             Dismiss
           </Button>
         </div>
@@ -923,6 +952,7 @@ const Review = ({
         <PublishDialog
           analysisId={analysisId}
           hunkComments={hunkComments}
+          isAuthor={view.isAuthor}
           onClose={() => setPublishing(false)}
           onPublished={() => {
             setPublishing(false);
@@ -931,6 +961,17 @@ const Review = ({
             threads.reload();
             void refetch();
           }}
+        />
+      )}
+      {showPoints && (
+        <PointList
+          points={points}
+          stateOf={pointStates.stateOf}
+          onGo={(id) => {
+            setShowPoints(false);
+            goToPoint(id);
+          }}
+          onClose={() => setShowPoints(false)}
         />
       )}
       <ShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} ids={PAGE_SHORTCUTS} />

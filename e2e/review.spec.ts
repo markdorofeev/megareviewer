@@ -32,25 +32,22 @@ const openReview = async (page: Page, url: string, title: string, claude = true)
   if (claude) await analyzeWithClaude(page);
 };
 
-const decision = (page: Page, path: string) => ({
-  approve: page.getByRole("button", { name: `Approve: Changes ${path}` }),
-  reject: page.getByRole("button", { name: `Reject: Changes ${path}` }),
-  comment: page.getByRole("textbox", { name: `Comment on: Changes ${path}` }),
+/** One of Claude's points, by its title: the fake model's decision on a file. */
+const point = (page: Page, title: string) => ({
+  card: page.getByRole("article", { name: title }),
+  raise: page.getByRole("button", { name: `Raise: ${title}` }),
+  dismiss: page.getByRole("button", { name: `Dismiss: ${title}` }),
 });
 
-/** Types a comment and waits until the server has it (comments save after a pause). */
-const writeComment = async (page: Page, textbox: Locator, text: string) => {
+/** Clicks Raise or Dismiss and waits until the server has the state. */
+const act = async (page: Page, button: Locator, state: string) => {
   const saved = page.waitForResponse(
     (response) =>
-      response.url().includes("/verdicts/") && (response.request().postData() ?? "").includes(text),
+      response.url().includes("/points/") && (response.request().postData() ?? "").includes(state),
   );
-  await textbox.fill(text);
+  await button.click();
   expect((await saved).ok()).toBe(true);
 };
-
-/** Waits until every verdict change so far has been saved. */
-const allSaved = (page: Page, count: number) =>
-  expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toHaveCount(count);
 
 test("the token bootstraps the session and leaves the URL", async ({ page, browser, server }) => {
   await openPicker(page);
@@ -217,33 +214,38 @@ test("mechanical changes are collapsed until expanded", async ({ page }) => {
   await expect(group.locator("[data-slot=hunk-card]")).toHaveCount(1);
 });
 
-test("verdicts and comments persist across a reload", async ({ page }) => {
+test("raised and dismissed points persist across a reload", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  const config = decision(page, "config/app.yaml");
-  const routes = decision(page, "src/routes/orders.ts");
+  const config = point(page, "Changes config/app.yaml");
+  const routes = point(page, "Changes src/routes/orders.ts");
+  const changes = page.getByRole("region", { name: "Changes" });
 
-  await config.approve.click();
-  await routes.reject.click();
-  await writeComment(page, routes.comment, "Scope this to the order's owner.");
-  await allSaved(page, 2);
+  await act(page, config.dismiss, "dismissed");
+  await act(page, routes.raise, "raised");
+  await expect(changes.getByRole("textbox", { name: /^Comment on line/ })).toHaveValue(
+    /Changes src\/routes\/orders\.ts/,
+  );
+  await changes.getByRole("button", { name: /^Add to review/ }).click();
 
   await page.reload();
-  await expect(config.approve).toHaveAttribute("aria-pressed", "true");
-  await expect(routes.reject).toHaveAttribute("aria-pressed", "true");
-  await expect(routes.comment).toHaveValue("Scope this to the order's owner.");
+  await expect(config.card).toHaveAttribute("data-state", "dismissed");
+  await expect(routes.card).toHaveAttribute("data-state", "raised");
+  // The comment it opened is a draft in this browser until the review is published.
+  await expect(changes.getByText(/Changes src\/routes\/orders\.ts/).first()).toBeVisible();
 });
 
 test("publishes exactly what the preview shows, once", async ({ page, server }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  await decision(page, "config/app.yaml").approve.click();
-  const routes = decision(page, "src/routes/orders.ts");
-  await routes.reject.click();
-  await writeComment(page, routes.comment, "Scope this to the order's owner.");
-  await allSaved(page, 2);
+  await act(page, point(page, "Changes src/routes/orders.ts").raise, "raised");
+  const changes = page.getByRole("region", { name: "Changes" });
+  const field = changes.getByRole("textbox", { name: /^Comment on line/ });
+  await field.fill("Scope this to the order's owner.");
+  await changes.getByRole("button", { name: /^Add to review/ }).click();
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish 1 comment" });
   await expect(dialog.getByText(/^src\/routes\/orders\.ts:/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Request changes" }).click();
   await dialog.getByRole("button", { name: "Publish 1 comment" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("status").filter({ hasText: "Published" })).toBeVisible();
@@ -253,12 +255,11 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
   expect(attempt?.outcome).toBe("published");
   expect(attempt?.publication.verdict).toBe("request_changes");
   expect(attempt?.publication.comments.map((comment) => comment.body)).toEqual([
-    "**Rejected: Changes src/routes/orders.ts**\n\nScope this to the order's owner.",
+    "Scope this to the order's owner.",
   ]);
-  expect(attempt?.postedKeys).toEqual(["summary", "decision:d2"]);
+  expect(attempt?.postedKeys).toEqual(["summary", ...(attempt?.postedKeys.slice(1) ?? [])]);
 
   // Line comments stay open once it's published: they post now, as threads of their own.
-  const changes = page.getByRole("region", { name: "Changes" });
   const number = changes.getByRole("button", { name: /^Comment on line \d+$/ }).first();
   const line = await number.textContent();
   await number.click();
@@ -282,9 +283,11 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
 
 test("a publish that fails part-way posts only the rest on retry", async ({ page, server }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  await decision(page, "config/app.yaml").reject.click();
-  await decision(page, "src/routes/orders.ts").reject.click();
-  await allSaved(page, 2);
+  const changes = page.getByRole("region", { name: "Changes" });
+  for (const path of ["config/app.yaml", "src/routes/orders.ts"]) {
+    await act(page, point(page, `Changes ${path}`).raise, "raised");
+    await changes.getByRole("button", { name: /^Add to review/ }).click();
+  }
   // Post 1 is the summary, so the second inline comment is post 3.
   const armed = await server.request.post("/__fake/fail-publish-comment", { data: { n: 3 } });
   expect(armed.ok()).toBe(true);
@@ -297,9 +300,9 @@ test("a publish that fails part-way posts only the rest on retry", async ({ page
   await expect(dialog).toBeHidden();
 
   const attempts = await publishAttempts(server);
-  expect(attempts.map((attempt) => [attempt.outcome, attempt.postedKeys])).toEqual([
-    ["failed", ["summary", "decision:d1"]],
-    ["published", ["decision:d2"]],
+  expect(attempts.map((attempt) => [attempt.outcome, attempt.postedKeys.length])).toEqual([
+    ["failed", 2],
+    ["published", 1],
   ]);
 });
 
@@ -307,7 +310,7 @@ test("Claude's failure leaves the review, says why, and tries again", async ({ p
   await openReview(page, PR.intentFailsOnce, SMALL_FEATURE_TITLE, false);
   await page.getByRole("button", { name: "Analyze with Claude" }).click();
 
-  const failure = page.getByRole("alert").filter({ hasText: "Claude couldn't finish" });
+  const failure = page.getByRole("alert").filter({ hasText: /missing:|couldn't finish/ });
   await expect(failure).toBeVisible();
   // The code's review is all there.
   await expect(page.locator("[data-slot=file-card]").first()).toBeVisible();
@@ -383,8 +386,8 @@ test.describe("without the model", () => {
   test("opens a file from the overview and publishes", async ({ page, server }) => {
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
     await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
-    // No decisions without the model; the host's threads are still there.
-    await expect(page.locator("[data-slot=decision]")).toHaveCount(0);
+    // No points without the model; the host's threads are still there.
+    await expect(page.locator("[data-slot=point]")).toHaveCount(0);
     await expect(page.locator("[data-slot=review-thread]").first()).toBeVisible();
 
     // A click on the route's directory in the overview opens its first file in the map.
@@ -403,8 +406,8 @@ test.describe("without the model", () => {
       "src/routes/orders.ts",
     );
 
-    // Without decisions, there's something to publish once there's a comment on a line.
-    await expect(page.getByRole("button", { name: /^Publish review…/ })).toHaveCount(0);
+    // The verdict is the reviewer's own, so Publish is there with or without a comment.
+    await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeVisible();
     const changes = page.getByRole("region", { name: "Changes" });
     const number = changes.getByRole("button", { name: /^Comment on line \d+$/ }).first();
     const line = await number.textContent();

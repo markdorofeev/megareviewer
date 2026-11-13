@@ -4,8 +4,8 @@ import {
   type AnalysisKey,
   analysisId,
   CommentKey,
-  DecisionId,
-  type DecisionVerdict,
+  PointId,
+  type PointReview,
   type PublicationReceipt,
 } from "../../../domain/review/index.ts";
 import type { AnalysisStore } from "../../ports/index.ts";
@@ -20,10 +20,9 @@ const a = analysisFor("a".repeat(40), "2026-10-21T10:00:00Z");
 const b = analysisFor("b".repeat(40), "2026-10-21T12:00:00Z");
 const c = analysisFor("c".repeat(40), "2026-10-21T11:00:00Z");
 
-const verdict = (decisionId: string, value: DecisionVerdict["verdict"]): DecisionVerdict => ({
-  decisionId: DecisionId.parse(decisionId),
-  verdict: value,
-  comment: `${value} ${decisionId}`,
+const review = (pointId: string, state: PointReview["state"]): PointReview => ({
+  pointId: PointId.parse(pointId),
+  state,
   updatedAt: "2026-10-21T10:05:00Z",
 });
 
@@ -51,7 +50,7 @@ export const describeAnalysisStoreContract = (
       expect(await store.findByKey(a.key)).toBeNull();
       expect(await store.listRecent(10)).toEqual([]);
       expect(await store.listAnalyzedPullRequests(10)).toEqual([]);
-      expect(await store.getVerdicts(a.id)).toEqual([]);
+      expect(await store.getPointReviews(a.id)).toEqual([]);
       expect([...(await store.getPostedComments(a.id))]).toEqual([]);
       expect(await store.getPublication(a.id)).toBeNull();
     });
@@ -113,16 +112,16 @@ export const describeAnalysisStoreContract = (
       expect(await store.listAnalyzedPullRequests(1)).toEqual([ref]);
     });
 
-    it("upserts verdicts by decision", async () => {
+    it("upserts point reviews by point", async () => {
       await store.saveAnalysis(a);
-      await store.saveVerdict(a.id, verdict("d1", "approved"));
-      await store.saveVerdict(a.id, verdict("d2", "rejected"));
-      await store.saveVerdict(a.id, verdict("d1", "rejected"));
+      await store.savePointReview(a.id, review("f1", "dismissed"));
+      await store.savePointReview(a.id, review("r:h_0123456789abcdef", "raised"));
+      await store.savePointReview(a.id, review("f1", "raised"));
 
-      const verdicts = await store.getVerdicts(a.id);
-      expect([...verdicts].sort((x, y) => (x.decisionId < y.decisionId ? -1 : 1))).toEqual([
-        verdict("d1", "rejected"),
-        verdict("d2", "rejected"),
+      const reviews = await store.getPointReviews(a.id);
+      expect([...reviews].sort((x, y) => (x.pointId < y.pointId ? -1 : 1))).toEqual([
+        review("f1", "raised"),
+        review("r:h_0123456789abcdef", "raised"),
       ]);
     });
 
@@ -146,11 +145,11 @@ export const describeAnalysisStoreContract = (
     it("keeps each analysis's data apart", async () => {
       await store.saveAnalysis(a);
       await store.saveAnalysis(b);
-      await store.saveVerdict(a.id, verdict("d1", "approved"));
+      await store.savePointReview(a.id, review("d1", "raised"));
       await store.recordPostedComment(a.id, summaryKey, "101");
       await store.recordPublication(a.id, receipt);
 
-      expect(await store.getVerdicts(b.id)).toEqual([]);
+      expect(await store.getPointReviews(b.id)).toEqual([]);
       expect([...(await store.getPostedComments(b.id))]).toEqual([]);
       expect(await store.getPublication(b.id)).toBeNull();
     });
