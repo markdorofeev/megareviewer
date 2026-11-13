@@ -65,9 +65,10 @@ const setup = (
     /** What modelAvailability answers; available unless given. */
     availability?: ModelAvailability;
     checkouts?: FakeLocalCheckouts;
+    clock?: FixedClock;
   } = {},
 ) => {
-  const clock = new FixedClock("2026-10-21T09:00:00Z");
+  const clock = options.clock ?? new FixedClock("2026-10-21T09:00:00Z");
   const github = new FakeGitHost({ host: "github", fixtures: allFixtures, clock });
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: allFixtures, clock });
   const tickets =
@@ -356,6 +357,25 @@ describe("the analysis pipeline", () => {
     );
     expect(analysis.callGraph).toEqual([]);
     expect(analysis.warnings).toHaveLength(1);
+  });
+
+  it("stamps each pass's usage with when it started and how long it took", async () => {
+    const clock = new FixedClock("2026-10-21T09:00:00Z");
+    const model = new (class extends FakeAnalysisModel {
+      override async findings(...args: Parameters<FakeAnalysisModel["findings"]>) {
+        clock.advance(41_200);
+        return super.findings(...args);
+      }
+    })();
+    const { analyze } = setup({ model, clock });
+    const analysis = await analyze();
+
+    const usageOf = (pass: string) => analysis.usage.find((usage) => usage.pass === pass);
+    expect(usageOf("findings")?.durationMs).toBe(41_200);
+    expect(usageOf("risk")?.durationMs).toBe(0);
+    // The tour waits for the slowest of the three passes before it.
+    const findingsStart = Date.parse(usageOf("findings")?.startedAt ?? "");
+    expect(Date.parse(usageOf("tour")?.startedAt ?? "") - findingsStart).toBe(41_200);
   });
 
   describe("collect", () => {

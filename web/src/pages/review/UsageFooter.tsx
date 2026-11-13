@@ -19,6 +19,10 @@ export const formatTokens = (count: number): string =>
 
 export const formatCost = (usd: number): string => `$${usd.toFixed(2)}`;
 
+/** "41.2 s", or a dash for a pass stored before passes were timed. */
+export const formatDuration = (ms: number | undefined): string =>
+  ms === undefined ? "—" : `${(ms / 1_000).toFixed(1)} s`;
+
 /** On a plan nothing is charged per review: the cost is what the tokens would be at API prices. */
 export const formatTotalCost = (usd: number, onPlan: boolean): string =>
   onPlan ? `≈ ${formatCost(usd)} at API prices, on your Claude plan` : formatCost(usd);
@@ -33,6 +37,7 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
   const sum = (pick: (entry: ModelUsage) => number) =>
     usage.reduce((total, entry) => total + pick(entry), 0);
   const onPlan = usage.some((entry) => entry.billing === "plan");
+  const timed = usage.some((entry) => entry.durationMs !== undefined);
 
   return (
     <footer className="group relative flex justify-end">
@@ -61,6 +66,7 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
             <th scope="col">Cache read</th>
             <th scope="col">Out</th>
             <th scope="col">{onPlan ? "At API prices" : "Cost"}</th>
+            {timed && <th scope="col">Time</th>}
           </tr>
         </thead>
         <tbody>
@@ -71,6 +77,7 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
               <td>{formatTokens(entry.cacheReadTokens)}</td>
               <td>{formatTokens(entry.outputTokens)}</td>
               <td>{formatCost(entry.costUsd)}</td>
+              {timed && <td>{formatDuration(entry.durationMs)}</td>}
             </tr>
           ))}
         </tbody>

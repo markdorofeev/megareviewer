@@ -71,6 +71,9 @@ export const ModelUsage = z
     costUsd: z.number().nonnegative(),
     // Analyses stored before there was a plan transport were all billed to the API.
     billing: ModelBilling.default("api"),
+    // Absent on analyses stored before passes were timed.
+    startedAt: Timestamp.optional(),
+    durationMs: z.number().int().nonnegative().optional(),
   })
   .readonly();
 export type ModelUsage = z.infer<typeof ModelUsage>;

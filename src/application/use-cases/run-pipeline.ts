@@ -228,7 +228,7 @@ const modelStages = async (
   checkout: CheckoutAt | null,
   tracker: Tracker,
 ): Promise<void> => {
-  const { model, logger } = deps;
+  const { model } = deps;
 
   const collected = await collect(deps, host, pullRequest, noProgress);
   if (!collected.ok) return tracker.failModel("intent", collected.error);
@@ -260,7 +260,7 @@ const modelStages = async (
   const knownHunks = new Set<HunkId>(hunks.keys());
 
   await tracker.setStage("intent", "running");
-  const intentResult = await runIntent(model, input, knownHunks, logger);
+  const intentResult = await runIntent(model, input, knownHunks, deps);
   await tracker.save(adding(intentResult));
   if (!intentResult.outcome.ok) {
     return tracker.failModel("intent", {
@@ -275,14 +275,14 @@ const modelStages = async (
   await tracker.setStage("risk", "running");
   await tracker.setStage("decisions", "running");
   const [findings, risk, decisions] = await Promise.all([
-    runFindings(model, input, intent, hunks, logger).then(async (result) => {
+    runFindings(model, input, intent, hunks, deps).then(async (result) => {
       await tracker.setStage("findings", result.outcome.ok ? "done" : "failed", (analysis) => ({
         ...(result.outcome.ok ? { findings: result.outcome.value } : {}),
         ...adding(result)(analysis),
       }));
       return result.outcome;
     }),
-    runRisk(model, input, intent, required, logger).then(async (result) => {
+    runRisk(model, input, intent, required, deps).then(async (result) => {
       const assessments = result.outcome.ok
         ? [...proofRisk, ...raiseByRules(result.outcome.value.assessments, ruleRisk)]
         : [];
@@ -292,7 +292,7 @@ const modelStages = async (
       }));
       return result.outcome.ok ? ok({ ...result.outcome.value, assessments }) : result.outcome;
     }),
-    runDecisions(model, input, intent, hunks, logger).then(async (result) => {
+    runDecisions(model, input, intent, hunks, deps).then(async (result) => {
       await tracker.setStage("decisions", result.outcome.ok ? "done" : "failed", (analysis) => ({
         ...(result.outcome.ok ? { decisions: result.outcome.value } : {}),
         ...adding(result)(analysis),
@@ -323,7 +323,7 @@ const modelStages = async (
       skeleton,
       view: { tour: joined.tour, parts: joined.parts },
     },
-    logger,
+    deps,
   );
   await tracker.setStage("tour", "done", (analysis) => ({
     ...joinParts(tour.tour, parts, callGraph, unchangedCallers, callSites),

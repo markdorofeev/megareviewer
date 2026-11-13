@@ -29,6 +29,7 @@ import { ok, type Result } from "../../domain/shared/index.ts";
 import type {
   AnalysisInput,
   AnalysisModel,
+  Clock,
   Logger,
   ModelRisk,
   PassOptions,
@@ -46,6 +47,27 @@ export interface PassResult<T> {
 
 type PassCall<T> = (options?: PassOptions) => Promise<Result<PassOutput<T>, ModelError>>;
 
+export interface PassDeps {
+  readonly logger: Logger;
+  readonly clock: Clock;
+}
+
+/** Calls a pass with its usage stamped with when it started and how long it took. */
+const timed = async <T>(
+  pass: ModelPass,
+  call: PassCall<T>,
+  { logger, clock }: PassDeps,
+  options?: PassOptions,
+): Promise<Result<PassOutput<T>, ModelError>> => {
+  const startedAt = clock.now();
+  const result = await call(options);
+  const durationMs = Math.max(0, Date.parse(clock.now()) - Date.parse(startedAt));
+  logger.info("Model pass took", { pass, durationMs, ok: result.ok });
+  return result.ok
+    ? ok({ ...result.value, usage: { ...result.value.usage, startedAt, durationMs } })
+    : result;
+};
+
 /**
  * Calls a pass, and once more with feedback when its answer is invalid: unparseable, or with
  * the problems `check` finds. The answer comes back with whatever problems are left, for the
@@ -55,7 +77,7 @@ const callChecked = async <T>(
   pass: ModelPass,
   call: PassCall<T>,
   check: (value: T) => string[],
-  logger: Logger,
+  deps: PassDeps,
 ): Promise<{
   outcome: Result<{ value: T; problems: string[] }, ModelError>;
   usage: ModelUsage[];
@@ -65,17 +87,17 @@ const callChecked = async <T>(
     usage.push(output.usage);
     return { value: output.value, problems: check(output.value) };
   };
-  const first = await call();
+  const first = await timed(pass, call, deps);
   if (!first.ok && first.error.kind !== "invalid-output") return { outcome: first, usage };
   const firstChecked = first.ok ? checked(first.value) : null;
   if (firstChecked?.problems.length === 0) return { outcome: ok(firstChecked), usage };
   const feedback = first.ok ? (firstChecked?.problems ?? []) : [first.error.message];
 
-  logger.info("Retrying a model pass with feedback", { pass, problems: feedback.length });
-  const second = await call({ feedback });
+  deps.logger.info("Retrying a model pass with feedback", { pass, problems: feedback.length });
+  const second = await timed(pass, call, deps, { feedback });
   if (second.ok) return { outcome: ok(checked(second.value)), usage };
   if (firstChecked === null) return { outcome: second, usage };
-  logger.warn("A model pass retry failed; repairing the first answer", {
+  deps.logger.warn("A model pass retry failed; repairing the first answer", {
     pass,
     error: second.error.message,
   });
@@ -99,7 +121,7 @@ export const runIntent = async (
   model: AnalysisModel,
   input: AnalysisInput,
   knownHunks: ReadonlySet<HunkId>,
-  logger: Logger,
+  deps: PassDeps,
 ): Promise<PassResult<Intent>> => {
   const unknownIn = (intent: Intent) =>
     validateHunkReferences(
@@ -110,13 +132,13 @@ export const runIntent = async (
     "intent",
     (options) => model.intent(input, options),
     (intent) => unknownIn(intent).map(describeUnknown),
-    logger,
+    deps,
   );
   if (!outcome.ok) return { outcome, usage, warnings: [] };
   const { value: intent, problems } = outcome.value;
   if (problems.length === 0) return { outcome: ok(intent), usage, warnings: [] };
   // Not a warning on the page: the reviewer can't act on the model's mistake.
-  logger.warn("Dropped unknown hunk references from intent mismatches", {
+  deps.logger.warn("Dropped unknown hunk references from intent mismatches", {
     count: unknownIn(intent).length,
   });
   const repaired: Intent = {
@@ -157,20 +179,20 @@ export const runFindings = async (
   input: AnalysisInput,
   intent: Intent,
   hunks: ReadonlyMap<HunkId, Hunk>,
-  logger: Logger,
+  deps: PassDeps,
 ): Promise<PassResult<Finding[]>> => {
   const mismatches = intent.mismatches.length;
   const { outcome, usage } = await callChecked(
     "findings",
     (options) => model.findings(input, intent, options),
     (drafts) => validateFindings(drafts, hunks, mismatches).map(FINDING_FEEDBACK),
-    logger,
+    deps,
   );
   if (!outcome.ok) return { outcome, usage, warnings: [] };
   const drafts = outcome.value.value;
   const problems = validateFindings(drafts, hunks, mismatches);
   const invalid = new Set(problems.filter((one) => !strippable(one)).map((one) => one.index));
-  if (invalid.size > 0) logger.warn("Dropped invalid findings", { count: invalid.size });
+  if (invalid.size > 0) deps.logger.warn("Dropped invalid findings", { count: invalid.size });
   const stripped = (index: number, kind: FindingProblem["kind"]) =>
     problems.some((one) => one.index === index && one.kind === kind);
   const kept = drafts.flatMap((draft, index) =>
@@ -203,13 +225,13 @@ export const runRisk = async (
   input: AnalysisInput,
   intent: Intent,
   required: ReadonlySet<HunkId>,
-  logger: Logger,
+  deps: PassDeps,
 ): Promise<PassResult<RiskOutcome>> => {
   const { outcome, usage } = await callChecked(
     "risk",
     (options) => model.risk(input, intent, options),
     (risk) => validateRiskCoverage(risk, required).map(describeProblem(RISK_FEEDBACK)),
-    logger,
+    deps,
   );
   if (!outcome.ok) return { outcome, usage, warnings: [] };
 
@@ -249,7 +271,7 @@ export const runDecisions = async (
   input: AnalysisInput,
   intent: Intent,
   hunks: ReadonlyMap<HunkId, Hunk>,
-  logger: Logger,
+  deps: PassDeps,
 ): Promise<PassResult<Decision[]>> => {
   const knownHunks = new Set(hunks.keys());
   const unknownIn = (drafts: readonly { readonly hunkIds: readonly HunkId[] }[]) =>
@@ -261,13 +283,13 @@ export const runDecisions = async (
     "decisions",
     (options) => model.decisions(input, intent, options),
     (drafts) => unknownIn(drafts).map(describeUnknown),
-    logger,
+    deps,
   );
   if (!outcome.ok) return { outcome, usage, warnings: [] };
   const { value: drafts, problems } = outcome.value;
   if (problems.length > 0) {
     // Not a warning on the page: the reviewer can't act on the model's mistake.
-    logger.warn("Dropped unknown hunk references from decisions", {
+    deps.logger.warn("Dropped unknown hunk references from decisions", {
       count: unknownIn(drafts).length,
     });
   }
@@ -332,7 +354,7 @@ export const runTour = async (
     readonly skeleton: Tour;
     readonly view: TourSkeleton;
   },
-  logger: Logger,
+  deps: PassDeps,
 ): Promise<{ tour: Tour; usage: readonly ModelUsage[]; warnings: readonly string[] }> => {
   const { skeleton } = context;
   const { outcome, usage } = await callChecked(
@@ -340,7 +362,7 @@ export const runTour = async (
     (options) =>
       model.tour(input, context.intent, context.risk, context.decisions, context.view, options),
     (titles) => validateTourTitles(titles, skeleton).map(TITLES_FEEDBACK),
-    logger,
+    deps,
   );
   const fallback = (reason: string) => ({
     tour: skeleton,
