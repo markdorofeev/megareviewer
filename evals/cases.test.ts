@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import type { CodeParser } from "../src/application/ports/index.ts";
 import { FakeAnalysisModel } from "../src/application/testing/index.ts";
+import { HunkId, hunkHasLine } from "../src/domain/diff/index.ts";
 import {
   type Analysis,
   extractTicketKeys,
@@ -93,14 +94,47 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
         }
       });
 
+      it("place each finding on lines a hunk the model reads shows", () => {
+        const proved = new Set(analysis.proofs.map((proof) => proof.hunkId));
+        const hunks = new Map(
+          analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
+        );
+        for (const finding of labels.findings) {
+          expect(finding.at.length, finding.description).toBeGreaterThan(0);
+          for (const { hunkId, side, lines } of finding.at) {
+            const hunk = hunks.get(HunkId.parse(hunkId));
+            if (hunk === undefined) throw new Error(`${hunkId} isn't a hunk of the case`);
+            expect(proved, hunkId).not.toContain(hunkId);
+            expect(lines[0]).toBeLessThanOrEqual(lines[1]);
+            for (const line of lines)
+              expect(hunkHasLine(hunk, side, line), `${hunkId} ${line}`).toBe(true);
+          }
+        }
+      });
+
       it("expect something of the model when it has hunks to look at", () => {
         const required =
           analysis.files.flatMap((file) => file.hunks).length - analysis.proofs.length;
         if (required > 0) {
           expect(Object.keys(labels.risk).length).toBeGreaterThan(0);
-          expect(labels.decisions.some((decision) => decision.mustHave)).toBe(true);
+          expect([...labels.findings, ...labels.decisions].some((point) => point.mustHave)).toBe(
+            true,
+          );
         }
       });
+    });
+
+    it("phrase decisions as why, and leave what looks wrong to the findings", () => {
+      for (const decision of labels.decisions) expect(decision.description).toMatch(/^Why /);
+      for (const finding of labels.findings) expect(finding.description).not.toMatch(/^Why /);
+    });
+
+    it("tie each finding to a labeled mismatch at most once", () => {
+      const shown = labels.findings.flatMap((finding) =>
+        finding.mismatch === undefined ? [] : [finding.mismatch],
+      );
+      for (const index of shown) expect(labels.mismatches[index], String(index)).toBeDefined();
+      expect(new Set(shown).size).toBe(shown.length);
     });
   },
 );

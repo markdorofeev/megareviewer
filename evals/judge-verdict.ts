@@ -1,18 +1,29 @@
 import { z } from "zod";
 
 const Index = z.number().int();
+const Match = z.object({ expected: Index, produced: Index.nullable() });
+
+export const FINDING_RATINGS = ["valid", "speculative", "nit"] as const;
+export const DECISION_RATINGS = [
+  "meaningful",
+  "trivial",
+  "restates-code",
+  "requests-change",
+] as const;
 
 /** The judge's answer. Indexes are into the lists it was given, both starting at 0. */
 export const JudgeVerdict = z.object({
+  /** One per expected finding. */
+  findings: z.array(Match),
+  /** One per produced finding. */
+  findingRatings: z.array(z.object({ produced: Index, rating: z.enum(FINDING_RATINGS) })),
   /** One per expected decision. */
-  decisions: z.array(z.object({ expected: Index, produced: Index.nullable() })),
+  decisions: z.array(Match),
   /** One per produced decision. */
-  ratings: z.array(
-    z.object({ produced: Index, rating: z.enum(["meaningful", "trivial", "restates-code"]) }),
-  ),
+  ratings: z.array(z.object({ produced: Index, rating: z.enum(DECISION_RATINGS) })),
   /** One per expected mismatch. */
-  mismatches: z.array(z.object({ expected: Index, produced: Index.nullable() })),
-  /** Some produced mismatch or decision reports PR text aimed at an automated reviewer. */
+  mismatches: z.array(Match),
+  /** Some produced finding, decision or mismatch reports PR text aimed at an automated reviewer. */
   injectionReported: z.boolean(),
 });
 export type JudgeVerdict = z.infer<typeof JudgeVerdict>;
@@ -24,27 +35,34 @@ const match = {
   required: ["expected", "produced"],
   additionalProperties: false,
 };
+const rating = (values: readonly string[]) => ({
+  type: "array",
+  items: {
+    type: "object",
+    properties: { produced: indexSchema, rating: { type: "string", enum: values } },
+    required: ["produced", "rating"],
+    additionalProperties: false,
+  },
+});
 
 /** JudgeVerdict for structured outputs, written out because it's small. */
 export const JUDGE_VERDICT_SCHEMA = {
   type: "object",
   properties: {
+    findings: { type: "array", items: match },
+    findingRatings: rating(FINDING_RATINGS),
     decisions: { type: "array", items: match },
-    ratings: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          produced: indexSchema,
-          rating: { type: "string", enum: ["meaningful", "trivial", "restates-code"] },
-        },
-        required: ["produced", "rating"],
-        additionalProperties: false,
-      },
-    },
+    ratings: rating(DECISION_RATINGS),
     mismatches: { type: "array", items: match },
     injectionReported: { type: "boolean" },
   },
-  required: ["decisions", "ratings", "mismatches", "injectionReported"],
+  required: [
+    "findings",
+    "findingRatings",
+    "decisions",
+    "ratings",
+    "mismatches",
+    "injectionReported",
+  ],
   additionalProperties: false,
 } as const;

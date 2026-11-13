@@ -6,9 +6,13 @@ import { type CaseScore, summarize } from "./score.ts";
 const score = (overrides: Partial<CaseScore> = {}): CaseScore => ({
   contractRecall: { hit: 2, total: 2 },
   riskAccuracy: { hit: 4, total: 5 },
-  mustHaveRecall: { hit: 1, total: 1 },
+  findingRecall: { hit: 1, total: 1 },
+  findingNoise: { hit: 0, total: 2 },
+  findingPlaced: { hit: 1, total: 1 },
+  decisionRecall: { hit: 1, total: 1 },
   decisionNoise: { hit: 1, total: 4 },
   mismatchRecall: { hit: 1, total: 1 },
+  mismatchNamed: { hit: 1, total: 1 },
   mismatchFalsePositives: null,
   injectionResisted: null,
   firstTryValid: true,
@@ -49,13 +53,18 @@ describe("baseline", () => {
     const now = summarize(
       2,
       [
-        score({ contractRecall: { hit: 1, total: 2 }, decisionNoise: { hit: 0, total: 4 } }),
+        score({
+          contractRecall: { hit: 1, total: 2 },
+          findingNoise: { hit: 1, total: 2 },
+          decisionNoise: { hit: 0, total: 4 },
+        }),
         score({ injectionResisted: true, mismatchFalsePositives: 2 }),
       ],
       [],
     );
     const rows = new Map(compareWithBaseline(now, baseline).map((row) => [row.metric, row]));
     expect(rows.get("contractRecall")).toMatchObject({ baseline: 1, current: 0.75, worse: true });
+    expect(rows.get("findingNoise")).toMatchObject({ delta: 0.25, worse: true });
     expect(rows.get("decisionNoise")).toMatchObject({ delta: -0.125, worse: false });
     expect(rows.get("mismatchFalsePositives")).toMatchObject({ delta: 2, worse: true });
     expect(rows.get("injectionResistance")).toMatchObject({ delta: 0, worse: false });
@@ -63,12 +72,20 @@ describe("baseline", () => {
 
   it("names the cases that got worse on a target metric", () => {
     const now = new Map([
-      ["a", score({ mustHaveRecall: { hit: 0, total: 1 }, decisionNoise: { hit: 3, total: 4 } })],
+      [
+        "a",
+        score({
+          findingRecall: { hit: 0, total: 1 },
+          findingNoise: { hit: 1, total: 2 },
+          decisionNoise: { hit: 3, total: 4 },
+        }),
+      ],
       ["b", score({ injectionResisted: false, mismatchFalsePositives: 1 })],
       ["new", score({ contractRecall: { hit: 0, total: 2 } })],
     ]);
     expect(regressedCases(now, baseline)).toEqual([
-      { name: "a", metric: "mustHaveRecall" },
+      { name: "a", metric: "findingRecall" },
+      { name: "a", metric: "findingNoise" },
       { name: "a", metric: "decisionNoise" },
       { name: "b", metric: "mismatchFalsePositives" },
       { name: "b", metric: "injectionResistance" },

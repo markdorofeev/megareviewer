@@ -5,13 +5,18 @@ export const labels: CaseLabels = {
     h_8ef6c88894532fc5: "contract", // session lifetime, cookie and analytics call
     h_c436db7f164080f1: "logic", // checkbox
   },
-  decisions: [
+  findings: [
     {
       description: "Sends each user's email and IP address to the analytics service on every login",
+      at: [{ hunkId: "h_8ef6c88894532fc5", side: "new", lines: [34, 39] }],
       mustHave: true,
+      mismatch: 0,
     },
+  ],
+  decisions: [
     {
-      description: "Remembered sessions and their cookies last 30 days",
+      description:
+        "Why remembered sessions and their cookies last 30 days: the ticket asks to keep customers signed in for 30 days",
       mustHave: false,
     },
   ],

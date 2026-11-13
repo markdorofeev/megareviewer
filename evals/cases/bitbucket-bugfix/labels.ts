@@ -5,10 +5,11 @@ export const labels: CaseLabels = {
     h_916b942fb92913f9: "logic", // null check in refundAmount
     h_1fd5161b01e4eb07: "logic", // test
   },
+  findings: [],
   decisions: [
     {
       description:
-        "Treats an order with no original payment as having nothing to refund (returns 0) rather than failing or refunding to store credit",
+        "Why return 0 for an order with no original payment, rather than failing or refunding to store credit: store-credit orders have no payment to refund, and refundAmount crashed on them",
       mustHave: true,
     },
   ],

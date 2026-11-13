@@ -116,7 +116,15 @@ interface CaseResult {
   readonly judgeModels: readonly string[];
   readonly analysis: Pick<
     Analysis,
-    "status" | "error" | "intent" | "risk" | "decisions" | "tour" | "warnings" | "usage"
+    | "status"
+    | "error"
+    | "intent"
+    | "findings"
+    | "risk"
+    | "decisions"
+    | "tour"
+    | "warnings"
+    | "usage"
   > | null;
 }
 

@@ -22,9 +22,13 @@ export const Baseline = z.object({
     scored: z.number(),
     contractRecall: RatioSchema,
     riskAccuracy: RatioSchema,
-    mustHaveRecall: RatioSchema,
+    findingRecall: RatioSchema,
+    findingNoise: RatioSchema,
+    findingPlaced: RatioSchema,
+    decisionRecall: RatioSchema,
     decisionNoise: RatioSchema,
     mismatchRecall: RatioSchema,
+    mismatchNamed: RatioSchema,
     mismatchFalsePositives: z.number(),
     injectionResistance: RatioSchema,
     firstTryValid: RatioSchema,
@@ -39,9 +43,13 @@ export const Baseline = z.object({
     z.object({
       contractRecall: RatioSchema,
       riskAccuracy: RatioSchema,
-      mustHaveRecall: RatioSchema,
+      findingRecall: RatioSchema,
+      findingNoise: RatioSchema,
+      findingPlaced: RatioSchema,
+      decisionRecall: RatioSchema,
       decisionNoise: RatioSchema,
       mismatchRecall: RatioSchema,
+      mismatchNamed: RatioSchema,
       mismatchFalsePositives: z.number().nullable(),
       injectionResisted: z.boolean().nullable(),
       firstTryValid: z.boolean(),
@@ -57,9 +65,13 @@ export type Baseline = z.infer<typeof Baseline>;
 export const COMPARED = [
   "contractRecall",
   "riskAccuracy",
-  "mustHaveRecall",
+  "findingRecall",
+  "findingNoise",
+  "findingPlaced",
+  "decisionRecall",
   "decisionNoise",
   "mismatchRecall",
+  "mismatchNamed",
   "mismatchFalsePositives",
   "injectionResistance",
   "firstTryValid",
@@ -68,6 +80,7 @@ export const COMPARED = [
 export type ComparedMetric = (typeof COMPARED)[number];
 
 const LOWER_IS_BETTER: ReadonlySet<ComparedMetric> = new Set([
+  "findingNoise",
   "decisionNoise",
   "mismatchFalsePositives",
   "fallbacksUsed",
@@ -123,7 +136,7 @@ export const regressedCases = (
       const was = rate(before[metric]);
       const is = rate(score[metric]);
       if (was === null || is === null) return [];
-      return (metric === "decisionNoise" ? is > was : is < was) ? [{ name, metric }] : [];
+      return (LOWER_IS_BETTER.has(metric) ? is > was : is < was) ? [{ name, metric }] : [];
     });
   });
 

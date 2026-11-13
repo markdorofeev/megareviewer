@@ -6,10 +6,11 @@ export const labels: CaseLabels = {
     // would hide a logic change, so it must come out logic.
     h_0ea106903cb8153b: "logic",
   },
+  findings: [],
   decisions: [
     {
       description:
-        "The item count now includes inactive items while the total still excludes them, so count and total describe different sets of items",
+        "Why the item count now includes inactive items while the total still excludes them: the count should match the cart's, which counts out-of-stock items (BILL-88)",
       mustHave: true,
     },
   ],

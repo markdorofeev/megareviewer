@@ -1,6 +1,6 @@
 # Stage 45: Claude's points on the lines, each kind its own weight
 
-**Status:** In progress (branch claude/ai-comments-clarity-3dc02b): built, `pnpm check` and `pnpm e2e` pass; the prompts' real run and the eval labels are left (see **Open issues**)
+**Status:** In progress (branch claude/ai-comments-clarity-3dc02b): built, `pnpm check` and `pnpm e2e` pass; the prompts' real run is left (see **Open issues**)
 **Depends on:** 44
 **Owns:** the findings and decisions prompts in `src/adapters/claude/prompts/`, `Finding` and `Decision` in `src/domain/review/`, `pointsOf`, the point components in `web/src/pages/review/`, line slots in `web/src/review/diff/hunk-card.tsx` and `diff-line.tsx`, the decisions button in the bar
 
@@ -68,7 +68,7 @@ The repetition is fixed where it's made, in the prompts: a finding names the int
 ## Open issues
 
 - **The prompts are unmeasured.** The synthetic recording comes from the fake model; whether Haiku writes useful severities, suggestions and "why" decisions needs a real run on delphi-code #2, as stage 43's measurements do.
-- **The eval labels expect the old decisions.** `evals/cases/*/labels.ts` list decisions such as a removed permission check, which the decisions pass now leaves to the findings; the judge scores them as missed until the labels move to findings. Evals cost money, so they weren't run here.
+- **The eval labels expect the old decisions.** Resolved: the labels list findings apart from decisions, every labeled decision that described a defect or a request is a finding now, with the mismatch it shows, and the decisions left are "why" questions. Each labeled finding names the hunks and lines that show it; severity isn't labeled or scored, since it's leaving the product. The judge (version 2) matches and rates findings too, and the scores add `findingRecall`, `findingNoise`, `findingPlaced` (on the labeled lines), `decisionRecall` (was `mustHaveRecall`) and `mismatchNamed`. No paid run has measured them yet, and there's no baseline to compare with: the next run writes one.
 
 ## Notes for later stages
 

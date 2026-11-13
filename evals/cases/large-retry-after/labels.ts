@@ -13,30 +13,31 @@ export const labels: CaseLabels = {
     h_dcdac188b08b35ea: "logic", // timeout tests
     h_2be7f8b0d1fd2f45: "logic", // Retry-After tests
   },
+  findings: [],
   decisions: [
     {
       description:
-        "A numeric Retry-After is now always read as a delay in seconds; only reset-style headers (RateLimit-Reset, X-RateLimit-Reset) may be epoch timestamps",
+        "Why a numeric Retry-After is now always read as a delay in seconds, while only reset-style headers (RateLimit-Reset, X-RateLimit-Reset) may be epoch timestamps",
       mustHave: true,
     },
     {
       description:
-        "Reading a response body (json(), text() and the other shortcuts) now counts against totalTimeout and can throw a TimeoutError, which is not retried",
+        "Why reading a response body (json(), text() and the other shortcuts) now counts against totalTimeout and can throw a TimeoutError, which is not retried",
       mustHave: true,
     },
     {
       description:
-        "A malformed retry timing header falls back to the normal retry delay, no longer capped by maxRetryAfter",
+        "Why a malformed retry timing header falls back to the normal retry delay, no longer capped by maxRetryAfter",
       mustHave: false,
     },
     {
       description:
-        "Retry-After wins when present; rate-limit headers are consulted only when it's missing",
+        "Why Retry-After wins when present, with rate-limit headers consulted only when it's missing",
       mustHave: false,
     },
     {
       description:
-        "Only the three HTTP-date formats are parsed; any other date-like value falls back to the normal retry delay",
+        "Why only the three HTTP-date formats are parsed, any other date-like value falling back to the normal retry delay",
       mustHave: false,
     },
   ],
