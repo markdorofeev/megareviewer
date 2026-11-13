@@ -801,6 +801,12 @@ describe("points", () => {
     await step("Next point");
     expect(scrolledTo().at(-1)).toBe("point-d2");
     expect(position().textContent).toBe("2 of 5");
+    // The list the position opens is narrowed too.
+    await userEvent.click(position());
+    const list = screen.getByRole("dialog", { name: "5 decisions from Claude" });
+    const rows = within(within(list).getByRole("list", { name: "Points" })).getAllByRole("button");
+    expect(rows.map((row) => row.dataset.kind)).toEqual(Array(5).fill("decision"));
+    await userEvent.click(within(list).getByRole("button", { name: "Close" }));
 
     // Another chip narrows to its own kind; the same one again widens to every point.
     await userEvent.click(within(reviewBar()).getByRole("button", { name: "3 findings" }));

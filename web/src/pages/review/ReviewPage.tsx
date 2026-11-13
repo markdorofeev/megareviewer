@@ -1145,6 +1145,7 @@ const Review = ({
       {showPoints && (
         <PointList
           points={points}
+          kind={narrowed}
           stateOf={pointStates.stateOf}
           onGo={(id) => {
             setShowPoints(false);
