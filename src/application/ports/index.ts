@@ -3,6 +3,7 @@ export {
   type AnalysisInputFile,
   type AnalysisModel,
   DecisionDraft,
+  type ModelAvailability,
   ModelRisk,
   type PassOptions,
   type PassOutput,

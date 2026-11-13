@@ -4,9 +4,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import packageJson from "../../package.json" with { type: "json" };
 import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
-import type { Logger } from "../application/ports/index.ts";
-import { type AiVia, EXIT, parseCliArgs, USAGE } from "./args.ts";
-import { type Composition, compose, describeTransport } from "./compose.ts";
+import type { Logger, ModelAvailability } from "../application/ports/index.ts";
+import { EXIT, parseCliArgs, USAGE } from "./args.ts";
+import { compose } from "./compose.ts";
 import { type Config, loadConfig } from "./config.ts";
 import { createDoctorDeps, formatCheck, repoName, runDoctor } from "./doctor.ts";
 import { createLogger } from "./logger.ts";
@@ -37,7 +37,7 @@ const printProblems = (problems: readonly string[]): void => {
 
 const printSummary = (
   config: Config,
-  composition: Composition,
+  model: ModelAvailability,
   checkout: CheckoutInfo | null,
   url: string,
   ui: boolean,
@@ -49,10 +49,9 @@ const printSummary = (
       : `as ${config.bitbucket.username} (${config.bitbucket.credential})${config.bitbucket.workspace === null ? "" : `, workspace ${config.bitbucket.workspace}`}`;
   const jira =
     config.jira === null ? "not configured: ticket keys aren't fetched" : config.jira.baseUrl;
-  const model =
-    composition.transport === null
-      ? "off: start with --ai to add intent, decisions and a guided tour from Claude"
-      : `${describeTransport(composition.transport)}: intent, decisions and the tour's titles`;
+  const claude = model.available
+    ? `${model.via}: Analyze with Claude on a review adds intent, decisions and the tour's titles`
+    : `unavailable: ${model.reason}`;
   const repos = checkout?.repos.map(repoName).join(", ") ?? "";
   const local =
     checkout === null
@@ -62,7 +61,7 @@ const printSummary = (
   GitHub     ${github}
   Bitbucket  ${bitbucket}
   Jira       ${jira}
-  Claude     ${model}
+  Claude     ${claude}
   Checkout   ${local}
 ${ui ? "" : "\nNo built UI found, so only the API is served.\n"}
 Open ${url}
@@ -112,7 +111,6 @@ const stopOnSignal = (stop: () => Promise<void>, logger: Logger): void => {
 const start = async (options: {
   port: number;
   open: boolean;
-  ai: AiVia | null;
   checkout: string | null;
 }): Promise<number | null> => {
   const { config, problems } = await loadConfig();
@@ -125,7 +123,6 @@ const start = async (options: {
   const dir = checkoutDir(options.checkout);
   const composed = await compose(config, {
     ...assets,
-    ai: options.ai,
     checkoutDir: dir,
     version,
     logger,
@@ -150,7 +147,11 @@ const start = async (options: {
   }, logger);
 
   const url = `http://127.0.0.1:${server.port}/?token=${composition.sessionToken}`;
-  printSummary(config, composition, await inspectCheckout(dir), url, assets.staticDir !== null);
+  const [model, checkout] = await Promise.all([
+    composition.modelAvailability(),
+    inspectCheckout(dir),
+  ]);
+  printSummary(config, model, checkout, url, assets.staticDir !== null);
   if (options.open) openBrowser(url, logger);
   return null;
 };

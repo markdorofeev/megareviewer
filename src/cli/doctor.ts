@@ -13,14 +13,9 @@ import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
 import type { GitHost, Logger, TicketSource } from "../application/ports/index.ts";
 import type { HostKind, RepoRef } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
-import {
-  anthropicConfigured,
-  claudeCodeProblem,
-  createHosts,
-  createTicketSource,
-  systemClock,
-} from "./compose.ts";
+import { createHosts, createTicketSource, systemClock } from "./compose.ts";
 import type { BitbucketCredential, Config, GitHubTokenSource } from "./config.ts";
+import { anthropicConfigured, claudeCodeProblem } from "./model-access.ts";
 import { NODE_FIX, nodeSupported } from "./node-version.ts";
 
 export interface Check {
@@ -133,7 +128,7 @@ const checkJira = async (deps: DoctorDeps): Promise<Check> => {
       );
 };
 
-/** What --ai runs on first. Not having it is fine: reviews run without the model, or on the API. */
+/** What Analyze with Claude runs on first. Without it, reviews run without the model, or on the API. */
 const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
   const title = "Claude Code";
   switch (claudeCode.state) {
@@ -141,15 +136,15 @@ const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
       return check(
         "skip",
         title,
-        "not installed: --ai runs on the Anthropic API instead, if it's configured",
-        "Install Claude Code (https://code.claude.com) and sign in with `claude` to run --ai on your Claude plan.",
+        "not installed: Analyze with Claude runs on the Anthropic API instead, if it's configured",
+        "Install Claude Code (https://code.claude.com) and sign in with `claude` to analyze on your Claude plan.",
       );
     case "signed-out":
       return check(
         "skip",
         title,
-        `${claudeCode.version}, not signed in: --ai runs on the Anthropic API instead, if it's configured`,
-        "Run `claude` and sign in to run --ai on your Claude plan.",
+        `${claudeCode.version}, not signed in: Analyze with Claude runs on the Anthropic API instead, if it's configured`,
+        "Run `claude` and sign in to analyze on your Claude plan.",
       );
     case "failed":
       return check("fail", title, claudeCode.message, "Run `claude doctor`.");
@@ -167,7 +162,11 @@ const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
         claudeCode.billing === "plan"
           ? `on ${planName(claudeCode.plan)}`
           : "billed to your Anthropic Console account";
-      return check("pass", title, `${claudeCode.version}, signed in: --ai runs here, ${pays}`);
+      return check(
+        "pass",
+        title,
+        `${claudeCode.version}, signed in: Analyze with Claude runs here, ${pays}`,
+      );
     }
   }
 };
@@ -178,7 +177,7 @@ const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
     return check(
       "skip",
       title,
-      "not configured: --ai's fallback when Claude Code can't run it",
+      "not configured: Analyze with Claude's fallback when Claude Code can't run it",
       "Set ANTHROPIC_API_KEY or run `ant auth login` to use it.",
     );
   }
@@ -187,7 +186,7 @@ const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
     ? check(
         "pass",
         title,
-        `credentials work, ${MODEL} is available: --ai's fallback, or with --ai-via api`,
+        `credentials work, ${MODEL} is available: Analyze with Claude's fallback when Claude Code can't run it`,
       )
     : check(
         "fail",

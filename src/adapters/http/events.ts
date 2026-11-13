@@ -4,6 +4,7 @@ import { type AnalysisUpdatedEvent, analysisEventsRoute } from "../../../contrac
 import type { AnalysisEvent, AnalysisEvents } from "../../application/events/index.ts";
 import type { Logger } from "../../application/ports/index.ts";
 import type { UseCases } from "../../application/use-cases/index.ts";
+import { inProgress } from "../../domain/review/index.ts";
 import { errorResponse, summarizeIssues } from "./api-routes.ts";
 
 /** Keeps idle connections from being closed by anything in between. */
@@ -35,7 +36,7 @@ export const registerEventsRoute = (
       unsubscribe();
       return errorResponse(c, view.error);
     }
-    if (view.value.analysis.status !== "running") queue.push({ type: "done" });
+    if (!inProgress(view.value.analysis)) queue.push({ type: "done" });
 
     return streamSSE(c, async (stream) => {
       stream.onAbort(() => wake?.());

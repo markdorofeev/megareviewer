@@ -79,6 +79,7 @@ export const createApiClient = (options: ApiClientOptions) => {
     getFileContent: (id: AnalysisId, side: "base" | "head", path: string) =>
       send(routes.getFileContent, { id, side, path }),
     retryAnalysis: (id: AnalysisId) => send(routes.retryAnalysis, { id }),
+    runModel: (id: AnalysisId) => send(routes.runModel, { id }),
     putVerdict: (id: AnalysisId, decisionId: DecisionId, body: PutVerdictRequest) =>
       send(routes.putVerdict, { id, decisionId }, body),
     previewPublication: (id: AnalysisId, body: PublicationPreviewRequest) =>

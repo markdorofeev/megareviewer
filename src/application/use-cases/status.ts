@@ -25,7 +25,11 @@ export interface Status {
   readonly version: string;
   readonly hosts: Readonly<Record<HostKind, HostStatus>>;
   readonly jira: { readonly configured: boolean };
-  readonly model: { readonly enabled: boolean };
+  readonly model: {
+    readonly available: boolean;
+    readonly via: string | null;
+    readonly reason: string | null;
+  };
 }
 
 const HOSTS: readonly HostKind[] = HostKinds.options;
@@ -91,12 +95,18 @@ export const createStatusUseCases = (deps: AppDeps, version: string) => ({
         ? { configured: true, user: user.value, error: null }
         : { configured: true, user: null, error: user.error.message };
     };
+    const modelStatus = async (): Promise<Status["model"]> => {
+      const availability = await deps.modelAvailability();
+      return availability.available
+        ? { available: true, via: availability.via, reason: null }
+        : { available: false, via: null, reason: availability.reason };
+    };
     const [github, bitbucket] = await Promise.all([hostStatus("github"), hostStatus("bitbucket")]);
     return {
       version,
       hosts: { github, bitbucket },
       jira: { configured: deps.tickets.configured },
-      model: { enabled: deps.modelEnabled },
+      model: await modelStatus(),
     };
   },
 });

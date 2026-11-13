@@ -65,7 +65,7 @@ const setupApp = (
       hosts: options.onlyGithub ? { github } : { github, bitbucket },
       tickets: new FakeTicketSource({ tickets: allFixtures.flatMap((fixture) => fixture.tickets) }),
       model: options.model ?? new FakeAnalysisModel(),
-      modelEnabled: true,
+      modelAvailability: async () => ({ available: true, via: "the fake model" }),
       store,
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
@@ -85,6 +85,24 @@ const setupApp = (
     staticDir: options.staticDir ?? null,
     logger,
   });
+
+  /** Resolves once the analysis's code stages have ended. */
+  const complete = (analysisId: AnalysisId) =>
+    new Promise<void>((resolve, reject) => {
+      const off = events.subscribe(analysisId, (event) => {
+        if (event.type === "done") {
+          off();
+          resolve();
+        }
+      });
+      // Done before subscribing, too.
+      store.getAnalysis(analysisId).then((analysis) => {
+        if (analysis !== null && analysis.status !== "running") {
+          off();
+          resolve();
+        }
+      }, reject);
+    });
 
   /** A request from the UI's own tab: allowed host and the session token. */
   const request = (path: string, init: RequestInit = {}) =>
@@ -123,7 +141,20 @@ const setupApp = (
     return { status: response.status, body: null, error };
   };
 
-  return { app, clock, github, bitbucket, threads, store, events, logger, useCases, request, call };
+  return {
+    app,
+    clock,
+    github,
+    bitbucket,
+    threads,
+    store,
+    events,
+    logger,
+    useCases,
+    request,
+    call,
+    complete,
+  };
 };
 
 const { id } = smallFeatureAnalysis;
@@ -257,7 +288,7 @@ describe("GET /api/status", () => {
       version: "1.2.3",
       hosts: { github: { configured: true, error: null }, bitbucket: { configured: false } },
       jira: { configured: true },
-      model: { enabled: true },
+      model: { available: true, via: "the fake model", reason: null },
     });
   });
 });
@@ -729,9 +760,11 @@ describe("GET /api/analyses/:id/attachment", () => {
 describe("GET /api/analyses/:id/events", () => {
   it("forwards a running analysis's events in order, then done", async () => {
     const model = new GatedModel();
-    const { call, request, events } = setupApp({ model });
+    const { call, request, events, complete } = setupApp({ model });
     const started = await call("startAnalysis", { body: { url: smallFeature.pullRequest.url } });
     const analysisId = started.body?.analysisId ?? "";
+    await complete(AnalysisId.parse(analysisId));
+    await call("runModel", { params: { id: analysisId } });
     await model.entered;
 
     const response = await request(eventsPath(analysisId));

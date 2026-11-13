@@ -1,4 +1,9 @@
-import { type Analysis, StageName, type StageStatus } from "../../../../src/domain/review/index.ts";
+import {
+  type Analysis,
+  MODEL_STAGES,
+  StageName,
+  type StageStatus,
+} from "../../../../src/domain/review/index.ts";
 
 const STAGE_NAMES: Readonly<Record<StageName, string>> = {
   collect: "Collect",
@@ -35,21 +40,24 @@ const MARKS: Readonly<Record<StageStatus, string>> = {
 };
 
 /**
- * The pipeline's stages and where each one is. While Collect runs, it also says how many of
- * the PR's files are in hand, so a slow host shows as progress rather than a stall.
+ * The stages running now and where each one is: the code's, or the model's once a reviewer asks
+ * for it. While Collect runs, it also says how many of the PR's files are in hand, so a slow
+ * host shows as progress rather than a stall.
  */
 export const ProgressStrip = ({
   stages,
+  shown,
   filesFetched,
 }: {
   readonly stages: Analysis["stages"];
+  readonly shown: readonly StageName[];
   readonly filesFetched: Analysis["filesFetched"];
 }) => (
   <ol
     className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border bg-surface-subtle px-3 py-2"
     aria-label="Analysis progress"
   >
-    {StageName.options.map((stage) => {
+    {shown.map((stage) => {
       const status = stages[stage];
       return (
         <li key={stage} data-status={status} className={TONES[status]}>
@@ -68,3 +76,7 @@ export const ProgressStrip = ({
 );
 
 export const stageName = (stage: StageName): string => STAGE_NAMES[stage];
+
+export const CODE_STAGES: readonly StageName[] = StageName.options.filter(
+  (stage) => !(MODEL_STAGES as readonly StageName[]).includes(stage),
+);

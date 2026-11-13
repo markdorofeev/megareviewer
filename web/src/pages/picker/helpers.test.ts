@@ -13,7 +13,11 @@ describe("setupItems", () => {
         text: "Not configured: set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN",
       },
       { name: "Jira", state: "ok", text: "Configured" },
-      { name: "Claude", state: "ok", text: "On" },
+      {
+        name: "Claude",
+        state: "ok",
+        text: "Claude Code, on your Pro plan: Analyze with Claude on a review adds intent, decisions and the tour's titles",
+      },
     ]);
   });
 
@@ -23,7 +27,11 @@ describe("setupItems", () => {
       ...fixtureStatus,
       hosts: { github: off, bitbucket: off },
       jira: { configured: false },
-      model: { enabled: false },
+      model: {
+        available: false,
+        via: null,
+        reason: "Claude Code isn't installed; or set ANTHROPIC_API_KEY to use the Anthropic API.",
+      },
     });
     expect(items.map((item) => [item.name, item.state])).toEqual([
       ["GitHub", "missing"],
@@ -33,7 +41,7 @@ describe("setupItems", () => {
     ]);
     expect(items[0]?.text).toBe("Not configured: set GITHUB_TOKEN or run gh auth login");
     expect(items[3]?.text).toBe(
-      "Off: start megareviewer with --ai to add intent, decisions and a guided tour from Claude",
+      "Unavailable: Claude Code isn't installed; or set ANTHROPIC_API_KEY to use the Anthropic API.",
     );
   });
 

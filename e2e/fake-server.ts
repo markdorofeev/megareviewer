@@ -54,7 +54,7 @@ const start = async (ai: boolean): Promise<{ child: ChildProcess; url: string }>
 };
 
 export const test = base.extend<{ ai: boolean; server: FakeServer }>({
-  /** Whether the model passes run; `test.use({ ai: false })` runs without them, as without --ai. */
+  /** Whether Analyze with Claude can run; `test.use({ ai: false })` serves it as unavailable. */
   ai: [true, { option: true }],
   server: async ({ playwright, ai }, use) => {
     const { child, url } = await start(ai);
@@ -74,7 +74,7 @@ export { expect };
 export const PR = {
   smallFeature: "https://github.com/acme/shop/pull/101",
   refactorMove: "https://github.com/acme/shop/pull/102",
-  /** small-feature again; its first analysis fails at the intent stage. */
+  /** small-feature again; Claude's first run on it fails at the intent stage. */
   intentFailsOnce: "https://github.com/acme/shop/pull/104",
 } as const;
 

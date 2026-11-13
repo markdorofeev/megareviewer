@@ -66,7 +66,7 @@ const setup = () => {
     hosts: { github: host },
     tickets: new FakeTicketSource({ configured: false }),
     model: new FakeAnalysisModel(),
-    modelEnabled: true,
+    modelAvailability: async () => ({ available: true, via: "the fake model" }),
     store: new InMemoryAnalysisStore(),
     fileCache,
     checkouts: new FakeLocalCheckouts(),

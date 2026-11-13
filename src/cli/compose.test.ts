@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
-import Anthropic from "@anthropic-ai/sdk";
 import { afterEach, describe, expect, it } from "vitest";
 import { StatusResponse, TOKEN_HEADER } from "../../contracts/index.ts";
 import {
@@ -19,21 +18,8 @@ import {
   InMemoryFileCache,
   RecordingLogger,
   smallFeatureAnalysis,
-  smallFeatureInput,
-  smallFeatureIntent,
-  smallFeatureSkeleton,
 } from "../application/testing/index.ts";
-import {
-  anthropicConfigured,
-  assemble,
-  type Composition,
-  compose,
-  describeTransport,
-  NO_ANTHROPIC_CREDENTIALS,
-  newSessionToken,
-  selectTransport,
-  unconfiguredModel,
-} from "./compose.ts";
+import { assemble, type Composition, compose, newSessionToken } from "./compose.ts";
 import type { Config } from "./config.ts";
 import { serve } from "./serve.ts";
 
@@ -66,7 +52,7 @@ const fakeComposition = () => {
       hosts: { github: new FakeGitHost({ host: "github", fixtures: allFixtures, clock }) },
       tickets: new FakeTicketSource(),
       model: new FakeAnalysisModel(),
-      modelEnabled: true,
+      modelAvailability: async () => ({ available: true, via: "the fake model" }),
       store: new InMemoryAnalysisStore(),
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
@@ -121,7 +107,7 @@ describe("assemble and serve", () => {
         hosts: {},
         tickets: new FakeTicketSource(),
         model: new FakeAnalysisModel(),
-        modelEnabled: true,
+        modelAvailability: async () => ({ available: true, via: "the fake model" }),
         store,
         fileCache: new InMemoryFileCache(),
         checkouts: new FakeLocalCheckouts(),
@@ -141,7 +127,7 @@ describe("assemble and serve", () => {
         hosts: {},
         tickets: new FakeTicketSource(),
         model: new FakeAnalysisModel(),
-        modelEnabled: false,
+        modelAvailability: async () => ({ available: true, via: "the fake model" }),
         store: new InMemoryAnalysisStore(),
         fileCache: new InMemoryFileCache(),
         checkouts: new FakeLocalCheckouts(),
@@ -153,7 +139,10 @@ describe("assemble and serve", () => {
       { staticDir: null, version: "1", sessionToken: "fixed", close: async () => {} },
     );
     expect(composition.sessionToken).toBe("fixed");
-    expect(composition.modelEnabled).toBe(false);
+    expect(await composition.modelAvailability()).toEqual({
+      available: true,
+      via: "the fake model",
+    });
   });
 });
 
@@ -173,7 +162,6 @@ describe("compose", () => {
   const options = {
     grammarsDir: GRAMMARS,
     staticDir: null,
-    ai: null,
     checkoutDir: "/nowhere",
     version: "1.2.3",
   };
@@ -229,98 +217,6 @@ describe("compose", () => {
     const result = await compose(config, { ...options, logger: new RecordingLogger() });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/^Can't open the database at .*upgrade/i);
-  });
-});
-
-describe("Anthropic credentials", () => {
-  it("counts an API key as configured", async () => {
-    const client = new Anthropic({ apiKey: "sk-ant-test" });
-    expect(await anthropicConfigured(client, new RecordingLogger())).toBe(true);
-  });
-
-  it("fails every pass of the unconfigured model with the fix", async () => {
-    const model = unconfiguredModel("claude/p1");
-    expect(model.version).toBe("claude/p1");
-    const failure = {
-      ok: false,
-      error: { kind: "unauthorized", message: NO_ANTHROPIC_CREDENTIALS },
-    };
-    expect(await model.checkSize(smallFeatureInput)).toEqual(failure);
-    expect(await model.intent(smallFeatureInput)).toEqual(failure);
-    expect(
-      await model.tour(smallFeatureInput, smallFeatureIntent, [], [], {
-        tour: smallFeatureSkeleton,
-        parts: [],
-      }),
-    ).toEqual(failure);
-  });
-});
-
-describe("selectTransport", () => {
-  const signedIn = {
-    state: "signed-in",
-    version: "2.1.303",
-    plan: "pro",
-    billing: "plan",
-  } as const;
-  const claudeCode = { kind: "claude-code", version: "2.1.303", plan: "pro", billing: "plan" };
-
-  it("runs on Claude Code when it's signed in, whatever the API has", () => {
-    expect(selectTransport("auto", signedIn, true)).toEqual({ ok: true, value: claudeCode });
-    expect(selectTransport("claude-code", signedIn, false)).toEqual({
-      ok: true,
-      value: claudeCode,
-    });
-  });
-
-  it("falls back to the API when Claude Code isn't there", () => {
-    expect(selectTransport("auto", { state: "not-installed" }, true)).toEqual({
-      ok: true,
-      value: { kind: "api" },
-    });
-    expect(selectTransport("api", null, true)).toEqual({ ok: true, value: { kind: "api" } });
-  });
-
-  it("names both fixes when neither can run the passes", () => {
-    const result = selectTransport("auto", { state: "signed-out", version: "2.1.303" }, false);
-    expect(result).toEqual({
-      ok: false,
-      error: expect.stringMatching(/run `claude` and sign in.*ANTHROPIC_API_KEY/),
-    });
-  });
-
-  it("doesn't fall back when one is forced", () => {
-    expect(selectTransport("claude-code", { state: "not-installed" }, true)).toEqual({
-      ok: false,
-      error: expect.stringContaining(
-        "--ai-via claude-code needs Claude Code. Claude Code isn't installed",
-      ),
-    });
-    expect(selectTransport("api", null, false)).toEqual({
-      ok: false,
-      error: `--ai-via api: ${NO_ANTHROPIC_CREDENTIALS}`,
-    });
-  });
-
-  it("asks for an update of a Claude Code older than the one recorded", () => {
-    const old = { ...signedIn, version: "2.0.9" };
-    expect(selectTransport("claude-code", old, true)).toEqual({
-      ok: false,
-      error: expect.stringContaining(
-        "Claude Code 2.0.9 is older than 2.1.303: run `claude update`",
-      ),
-    });
-    expect(selectTransport("auto", old, true)).toEqual({ ok: true, value: { kind: "api" } });
-  });
-
-  it("says who pays on the startup line", () => {
-    expect(
-      describeTransport({ kind: "claude-code", version: "2.1.303", plan: "pro", billing: "plan" }),
-    ).toBe("Claude Code, on your Pro plan");
-    expect(
-      describeTransport({ kind: "claude-code", version: "2.1.303", plan: null, billing: "api" }),
-    ).toBe("Claude Code, billed to your Anthropic Console account");
-    expect(describeTransport({ kind: "api" })).toBe("Anthropic API, billed to your account");
   });
 });
 

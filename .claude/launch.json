@@ -67,21 +67,6 @@
         "../delphi-code"
       ],
       "port": 4998
-    },
-    {
-      "name": "real-server-delphi-ai",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "run",
-        "dev:server",
-        "--port",
-        "4997",
-        "--no-open",
-        "--ai",
-        "--checkout",
-        "../delphi-code"
-      ],
-      "port": 4997
     }
   ]
 }

@@ -37,7 +37,7 @@ const responses: Record<RouteName, unknown> = {
       bitbucket: { configured: false, user: null, error: null },
     },
     jira: { configured: false },
-    model: { enabled: true },
+    model: { available: true, via: "Claude Code, on your Pro plan", reason: null },
   },
   listPullRequests: {
     items: [
@@ -62,6 +62,7 @@ const responses: Record<RouteName, unknown> = {
   },
   getFileContent: { content: "export const total = 1;\n" },
   retryAnalysis: { analysisId: smallFeatureAnalysis.id },
+  runModel: { analysisId: smallFeatureAnalysis.id },
   putVerdict: verdict,
   previewPublication: smallFeaturePublication,
   publish: receipt,

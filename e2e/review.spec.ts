@@ -10,15 +10,26 @@ const openPicker = async (page: Page) => {
   await expect(page.getByRole("heading", { name: "Review a pull request" })).toBeVisible();
 };
 
-/** Analyzes a PR from its URL and waits until the review is complete. */
-const openReview = async (page: Page, url: string, title: string) => {
+/** Asks Claude on the open review and waits until its passes are done. */
+const analyzeWithClaude = async (page: Page) => {
+  await page.getByRole("button", { name: "Analyze with Claude" }).click();
+  await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
+  await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
+};
+
+/**
+ * Analyzes a PR from its URL and waits until the review is complete, then, unless `claude` is
+ * false, asks Claude on it and waits for that too.
+ */
+const openReview = async (page: Page, url: string, title: string, claude = true) => {
   await openPicker(page);
   await page.getByLabel("Pull request URL").fill(url);
-  await page.getByRole("button", { name: "Analyze" }).click();
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
   // The progress strip goes once the analysis is complete.
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
+  if (claude) await analyzeWithClaude(page);
 };
 
 const decision = (page: Page, path: string) => ({
@@ -56,9 +67,11 @@ test("the token bootstraps the session and leaves the URL", async ({ page, brows
   expect(anonymous.status).toBe(401);
 });
 
-test("analyzes a PR from its URL", async ({ page }) => {
-  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
+test("analyzes a PR from its URL, and asks Claude on it", async ({ page }) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+  await expect(page.getByRole("button", { name: "Analyze with Claude" })).toBeVisible();
+  await analyzeWithClaude(page);
+  await expect(page.getByRole("button", { name: "Analyze with Claude" })).toHaveCount(0);
   await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
 });
@@ -69,6 +82,7 @@ test("analyzes a PR picked from the list", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Fix crash when refunding store-credit orders", level: 1 }),
   ).toBeVisible();
+  await analyzeWithClaude(page);
   await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
 });
 
@@ -289,19 +303,18 @@ test("a publish that fails part-way posts only the rest on retry", async ({ page
   ]);
 });
 
-test("a failed analysis shows where it failed, and retries", async ({ page }) => {
-  await openPicker(page);
-  await page.getByLabel("Pull request URL").fill(PR.intentFailsOnce);
-  await page.getByRole("button", { name: "Analyze" }).click();
+test("Claude's failure leaves the review, says why, and tries again", async ({ page }) => {
+  await openReview(page, PR.intentFailsOnce, SMALL_FEATURE_TITLE, false);
+  await page.getByRole("button", { name: "Analyze with Claude" }).click();
 
-  const progress = page.getByRole("list", { name: "Analysis progress" });
-  await expect(progress.getByText("Intent: failed")).toBeAttached();
-  await expect(progress.getByText("Collect: done")).toBeAttached();
-  const failure = page.getByRole("alert").filter({ hasText: "The analysis failed at the intent" });
-  await expect(failure).toContainText("Retry the analysis");
+  const failure = page.getByRole("alert").filter({ hasText: "Claude couldn't finish" });
+  await expect(failure).toBeVisible();
+  // The code's review is all there.
+  await expect(page.locator("[data-slot=file-card]").first()).toBeVisible();
 
-  await failure.getByRole("button", { name: "Retry" }).click();
+  await page.getByRole("button", { name: "Try again" }).click();
   await expect(failure).toBeHidden();
+  await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
 });
 
@@ -318,6 +331,7 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
 
   await page.goto(`/review/${analysisId}`);
   await expect(page.getByRole("status").filter({ hasText: "new commits" })).toBeVisible();
+  await analyzeWithClaude(page);
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish the review" });
@@ -367,7 +381,7 @@ test.describe("without the model", () => {
   test.use({ ai: false });
 
   test("opens a file from the overview and publishes", async ({ page, server }) => {
-    await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+    await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
     await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
     // No decisions without the model; the host's threads are still there.
     await expect(page.locator("[data-slot=decision]")).toHaveCount(0);

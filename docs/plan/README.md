@@ -160,6 +160,10 @@ The page shows only the reviewer's own drafts. This slice brings the PR's existi
 
 The `ModelUsage` change goes in its own PR first.
 
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 42 | [Claude from a button on the review](42-model-from-the-page.md) | 41 | `--ai` removed; the model run on an open analysis, its route and button |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

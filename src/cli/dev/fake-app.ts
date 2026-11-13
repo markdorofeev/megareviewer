@@ -37,7 +37,7 @@ export const intentFailsOnce: PullRequestFixture = {
 
 export const fakeFixtures: readonly PullRequestFixture[] = [...allFixtures, intentFailsOnce];
 
-/** The model fails its first intent pass for `url` as overloaded; a retried analysis succeeds. */
+/** The model fails its first intent pass for `url` as overloaded; the next run succeeds. */
 export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisModel => {
   let failed = false;
   return {
@@ -48,7 +48,7 @@ export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisMo
       failed = true;
       return err({
         kind: "overloaded",
-        message: "The fake model fails this PR's first intent pass. Retry the analysis.",
+        message: "The fake model fails this PR's first intent pass. Try again.",
       });
     },
     risk: (input, intent, options) => model.risk(input, intent, options),
@@ -145,8 +145,8 @@ export const createFakeApp = async (options: {
   readonly version: string;
   readonly staticDir: string | null;
   readonly sessionToken?: string;
-  /** Run the fake model passes, as `--ai` does. On unless false. */
-  readonly modelEnabled?: boolean;
+  /** Whether Analyze with Claude can run the fake model. Available unless false. */
+  readonly modelAvailable?: boolean;
 }): Promise<FakeApp> => {
   const clock = systemClock;
   const github = new FakeGitHost({ host: "github", fixtures: fakeFixtures, clock });
@@ -165,7 +165,10 @@ export const createFakeApp = async (options: {
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
       model: failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url),
-      modelEnabled: options.modelEnabled ?? true,
+      modelAvailability: async () =>
+        options.modelAvailable === false
+          ? { available: false, reason: "fake mode started with --no-ai" }
+          : { available: true, via: "the fake model" },
       store: new InMemoryAnalysisStore(),
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),

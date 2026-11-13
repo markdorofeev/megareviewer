@@ -5,6 +5,10 @@ import {
   analysisId,
   type CheckoutStatus,
   type HostKind,
+  inProgress,
+  MODEL_STAGES,
+  mapModelStages,
+  modelRunnable,
   type PullRequest,
   type PullRequestRef,
   parsePullRequestUrl,
@@ -16,7 +20,7 @@ import type { GitHost } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { pipelineVersion } from "./pipeline-version.ts";
-import { runPipeline } from "./run-pipeline.ts";
+import { runModel, runPipeline } from "./run-pipeline.ts";
 import { lookUpCheckout } from "./unchanged-callers.ts";
 
 /** More than enough to find every analysis that was running when megareviewer stopped. */
@@ -84,6 +88,7 @@ const newAnalysis = (
   warnings: [],
   usage: [],
   error: null,
+  modelError: null,
   createdAt,
   updatedAt: deps.clock.now(),
 });
@@ -102,7 +107,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     const key: AnalysisKey = {
       ref: pullRequest.ref,
       headSha: pullRequest.headSha,
-      pipelineVersion: pipelineVersion(deps.model, deps.modelEnabled, checkout.status === "read"),
+      pipelineVersion: pipelineVersion(checkout.status === "read"),
     };
     const existing = await deps.store.findByKey(key);
     const id = existing?.id ?? analysisId(key);
@@ -152,11 +157,74 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     },
 
     /**
-     * Fails every analysis still marked running, which only a stop mid-run leaves behind.
-     * Call once at startup. Returns how many it failed.
+     * Runs the model's passes on a complete analysis, adding to it. A run already going is
+     * joined; one that's done or can't run is refused.
+     */
+    async runModel(id: AnalysisId): Promise<Result<{ analysisId: AnalysisId }, UseCaseError>> {
+      let analysis = await deps.store.getAnalysis(id);
+      if (analysis === null) return err(appError("not-found", `No analysis ${id}`));
+      const running = inFlight.get(id);
+      if (running !== undefined) {
+        if (inProgress(analysis)) return ok({ analysisId: id });
+        // A run that has announced its end but not left the map yet.
+        await running;
+        analysis = await deps.store.getAnalysis(id);
+        if (analysis === null) return err(appError("not-found", `No analysis ${id}`));
+      }
+      const { pullRequest } = analysis;
+      if (analysis.status !== "complete" || pullRequest === null) {
+        return err(appError("analysis-not-complete", "The analysis isn't complete yet"));
+      }
+      if (!modelRunnable(analysis)) {
+        return err(appError("bad-request", "Claude has already analyzed this pull request"));
+      }
+      const availability = await deps.modelAvailability();
+      if (!availability.available) {
+        return err(appError("model-unavailable", availability.reason));
+      }
+      const host = hostFor(deps, analysis.key.ref.repo.host);
+      if (!host.ok) return host;
+      const checkout =
+        analysis.checkout === "read"
+          ? await lookUpCheckout(deps.checkouts, pullRequest.ref.repo, analysis.key.headSha)
+          : null;
+      // No await from here on until the run is in the map, so two requests can't both start it.
+      if (inFlight.has(id)) return ok({ analysisId: id });
+      const run = runModel(deps, host.value, analysis, pullRequest, checkout?.at ?? null)
+        .catch((error: unknown) => {
+          deps.logger.error("Couldn't record the model run", { analysisId: id, error });
+        })
+        .finally(() => inFlight.delete(id));
+      inFlight.set(id, run);
+      return ok({ analysisId: id });
+    },
+
+    /**
+     * Fails every analysis still marked running, and every model run, which only a stop mid-run
+     * leaves behind. Call once at startup. Returns how many it failed.
      */
     async recoverInterruptedAnalyses(): Promise<number> {
-      const interrupted = (await deps.store.listRecent(RECOVERY_SCAN_LIMIT)).filter(
+      const recent = await deps.store.listRecent(RECOVERY_SCAN_LIMIT);
+      const stopped = recent.filter(
+        (analysis) =>
+          analysis.status === "complete" && inProgress(analysis) && !inFlight.has(analysis.id),
+      );
+      for (const analysis of stopped) {
+        const stage = MODEL_STAGES.find((name) => analysis.stages[name] === "running") ?? "intent";
+        await deps.store.saveAnalysis({
+          ...analysis,
+          stages: mapModelStages(analysis.stages, (status) =>
+            status === "running" ? "failed" : status === "pending" ? "skipped" : status,
+          ),
+          modelError: {
+            stage,
+            code: "interrupted",
+            message: "megareviewer stopped while Claude analyzed the pull request",
+          },
+          updatedAt: deps.clock.now(),
+        });
+      }
+      const interrupted = recent.filter(
         (analysis) => analysis.status === "running" && !inFlight.has(analysis.id),
       );
       for (const analysis of interrupted) {
@@ -176,10 +244,9 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           updatedAt: deps.clock.now(),
         });
       }
-      if (interrupted.length > 0) {
-        deps.logger.info("Marked interrupted analyses as failed", { count: interrupted.length });
-      }
-      return interrupted.length;
+      const count = interrupted.length + stopped.length;
+      if (count > 0) deps.logger.info("Marked interrupted analyses as failed", { count });
+      return count;
     },
   };
 };

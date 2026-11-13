@@ -9,6 +9,7 @@ import type {
   GitHost,
   LocalCheckouts,
   Logger,
+  ModelAvailability,
   ReviewThreads,
   TicketSource,
 } from "../ports/index.ts";
@@ -20,8 +21,8 @@ export interface AppDeps {
   readonly threads: Partial<Record<HostKind, ReviewThreads>>;
   readonly tickets: TicketSource;
   readonly model: AnalysisModel;
-  /** Whether the model passes run. Off, the analysis is built by deterministic code alone. */
-  readonly modelEnabled: boolean;
+  /** Whether `model` can run its passes now. Asked by the status and before every model run. */
+  readonly modelAvailability: () => Promise<ModelAvailability>;
   readonly store: AnalysisStore;
   readonly fileCache: FileCache;
   readonly parser: CodeParser;

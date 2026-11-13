@@ -6,6 +6,8 @@ import {
   type Decision,
   type DecisionId,
   HunkComment,
+  inProgress,
+  MODEL_STAGES,
   pullRequestUrl,
   type ReviewThread,
 } from "../../../../src/domain/review/index.ts";
@@ -33,6 +35,7 @@ import {
 } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
+import { AnalyzeWithClaude } from "./AnalyzeWithClaude.tsx";
 import { callMarks } from "./calls.tsx";
 import { DecisionCard, DecisionMention, decisionAnchor } from "./DecisionCard.tsx";
 import { Dialog } from "./Dialog.tsx";
@@ -54,7 +57,7 @@ import {
 } from "./model.ts";
 import { Overview } from "./Overview.tsx";
 import { fileOverview, type OverviewNode } from "./overview.ts";
-import { ProgressStrip, stageName } from "./ProgressStrip.tsx";
+import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { Rail } from "./Rail.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
@@ -86,7 +89,7 @@ const ReviewLoader = ({
   readonly analysisId: AnalysisId;
   readonly restart: () => void;
 }) => {
-  const { view, error, refetch } = useAnalysisView(analysisId);
+  const { view, error, refetch, follow } = useAnalysisView(analysisId);
   if (view === null) {
     if (error?.code === "not-found") {
       return (
@@ -113,7 +116,7 @@ const ReviewLoader = ({
     }
     return <ReviewSkeleton />;
   }
-  return <Review view={view} refetch={refetch} restart={restart} />;
+  return <Review view={view} refetch={refetch} follow={follow} restart={restart} />;
 };
 
 const ReviewSkeleton = () => (
@@ -221,18 +224,22 @@ const epochOf = (analysis: object): number => {
 const Review = ({
   view,
   refetch,
+  follow,
   restart,
 }: {
   readonly view: AnalysisView;
   readonly refetch: () => Promise<void>;
+  readonly follow: () => void;
   readonly restart: () => void;
 }) => {
   const { client } = useApi();
-  // Until the status says otherwise, a missing intent is still coming from the model.
-  const modelOn = useStatus().status?.model.enabled !== false;
+  const modelStatus = useStatus().status?.model ?? null;
   const { analysis, publication } = view;
   const analysisId = analysis.id;
   const complete = analysis.status === "complete";
+  // Claude's passes, running on the complete analysis since the reviewer asked for them.
+  const modelRunning = complete && inProgress(analysis);
+  const runModel = useMutation(client.runModel);
   const readOnly = publication !== null || !complete;
 
   const index = useMemo(() => partIndex(analysis), [analysis]);
@@ -690,17 +697,9 @@ const Review = ({
   };
   const before = (
     <>
-      {modelOn && analysis.status === "running" && analysis.stages.decisions !== "done" && (
+      {modelRunning && analysis.stages.decisions !== "done" && (
         <p className="text-muted-foreground">Finding the decisions the code makes…</p>
       )}
-      {analysis.stages.decisions === "done" &&
-        !complete &&
-        publication === null &&
-        analysis.decisions.length > 0 && (
-          <p className="text-muted-foreground">
-            You can give verdicts once the analysis is complete.
-          </p>
-        )}
       {places.unplaced.length > 0 && (
         <section className="flex flex-col gap-2" aria-label="Decisions on no change shown here">
           {places.unplaced.map(card)}
@@ -720,14 +719,26 @@ const Review = ({
         intent={
           <IntentLine
             analysis={analysis}
-            modelOn={modelOn}
+            intentComing={modelRunning && analysis.intent === null}
             mismatchAt={mismatchAt}
             onMismatch={goToMismatch}
             onDetails={() => {
               detailsReturnFocus.current = true;
               setShowDetails(true);
             }}
-          />
+          >
+            <AnalyzeWithClaude
+              analysis={analysis}
+              via={modelStatus?.via ?? null}
+              starting={runModel.pending}
+              error={runModel.error === null ? null : errorMessage(runModel.error)}
+              onRun={async () => {
+                const result = await runModel.run(analysisId);
+                if (!result.ok) return;
+                follow();
+              }}
+            />
+          </IntentLine>
         }
         tools={
           <>
@@ -761,7 +772,13 @@ const Review = ({
         }}
       />
 
-      {!complete && <ProgressStrip stages={analysis.stages} filesFetched={analysis.filesFetched} />}
+      {(!complete || modelRunning) && (
+        <ProgressStrip
+          stages={analysis.stages}
+          shown={modelRunning ? MODEL_STAGES : CODE_STAGES}
+          filesFetched={analysis.filesFetched}
+        />
+      )}
       {analysis.error !== null && (
         <div className={cn(DANGER, "flex flex-col items-start gap-2")} role="alert">
           <p>

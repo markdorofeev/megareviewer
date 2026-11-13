@@ -123,12 +123,53 @@ export const Analysis = z
     tour: Tour.nullable(),
     warnings: z.array(z.string()).readonly(),
     usage: z.array(ModelUsage).readonly(),
+    /** Why the analysis failed; never set by the model passes, which have `modelError`. */
     error: AnalysisError.nullable(),
+    /**
+     * Why the last model run failed. The analysis itself stays complete: the code's review is
+     * there with or without the model.
+     */
+    modelError: AnalysisError.nullable().default(null),
     createdAt: Timestamp,
     updatedAt: Timestamp,
   })
   .readonly();
 export type Analysis = z.infer<typeof Analysis>;
+
+export const MODEL_STAGES = [
+  "intent",
+  "risk",
+  "decisions",
+  "tour",
+] as const satisfies readonly StageName[];
+
+/** The stages with each model stage's status replaced by `next` of it. */
+export const mapModelStages = (
+  stages: Analysis["stages"],
+  next: (status: StageStatus) => StageStatus,
+): Analysis["stages"] => ({
+  ...stages,
+  intent: next(stages.intent),
+  risk: next(stages.risk),
+  decisions: next(stages.decisions),
+  tour: next(stages.tour),
+});
+
+/**
+ * Still changing: the code's stages are running, or the model is. Once the code's are done, a
+ * model stage is pending only while a run hasn't reached it.
+ */
+export const inProgress = (analysis: Analysis): boolean =>
+  analysis.status === "running" ||
+  MODEL_STAGES.some(
+    (stage) => analysis.stages[stage] === "running" || analysis.stages[stage] === "pending",
+  );
+
+/** Whether the model can be asked to run: the code's analysis is complete and the model isn't running or done. */
+export const modelRunnable = (analysis: Analysis): boolean =>
+  analysis.status === "complete" &&
+  !inProgress(analysis) &&
+  !MODEL_STAGES.every((stage) => analysis.stages[stage] === "done");
 
 /** Deterministic, so the same PR at the same head SHA and pipeline version maps to one analysis. */
 export const analysisId = (key: AnalysisKey): AnalysisId => {

@@ -26,7 +26,7 @@ const fake = await createFakeApp({
   logger,
   version: `${packageJson.version}-fake`,
   staticDir: values.static ?? null,
-  modelEnabled: values["no-ai"] !== true,
+  modelAvailable: values["no-ai"] !== true,
   ...(values.token !== undefined && { sessionToken: values.token }),
 });
 const server = await serve(fake.app, Number(values.port));

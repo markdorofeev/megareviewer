@@ -38,7 +38,13 @@ export const StatusResponse = z
     version: z.string(),
     hosts: z.object({ github: HostStatus, bitbucket: HostStatus }).readonly(),
     jira: z.object({ configured: z.boolean() }).readonly(),
-    model: z.object({ enabled: z.boolean() }).readonly(),
+    /**
+     * Whether "Analyze with Claude" can run: `via` says what runs it and who pays ("Claude Code,
+     * on your Pro plan"), `reason` why it can't.
+     */
+    model: z
+      .object({ available: z.boolean(), via: z.string().nullable(), reason: z.string().nullable() })
+      .readonly(),
   })
   .readonly();
 export type StatusResponse = z.infer<typeof StatusResponse>;
@@ -134,6 +140,7 @@ export const ErrorCode = z.enum([
   "analysis-not-complete",
   "host-error",
   "model-error",
+  "model-unavailable",
   "internal",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
@@ -148,6 +155,7 @@ export const ERROR_STATUS = {
   "analysis-not-complete": 409,
   "host-error": 502,
   "model-error": 502,
+  "model-unavailable": 503,
   internal: 500,
 } as const satisfies Record<ErrorCode, number>;
 
@@ -217,6 +225,18 @@ export const routes = {
   retryAnalysis: {
     method: "POST",
     path: "/api/analyses/:id/retry",
+    params: AnalysisParams,
+    request: null,
+    response: AnalysisIdResponse,
+  },
+  /**
+   * Runs the model's passes on a complete analysis, adding to it in place; its events follow the
+   * run. Answers model-unavailable when nothing can run them, and bad-request when they're
+   * running or done.
+   */
+  runModel: {
+    method: "POST",
+    path: "/api/analyses/:id/model",
     params: AnalysisParams,
     request: null,
     response: AnalysisIdResponse,

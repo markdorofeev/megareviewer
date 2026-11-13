@@ -4,7 +4,7 @@ import type {
   PullRequestListResponse,
   StatusResponse,
 } from "../../../contracts/index.ts";
-import type { AnalysisId } from "../../../src/domain/review/index.ts";
+import { type AnalysisId, inProgress } from "../../../src/domain/review/index.ts";
 import type { Result } from "../../../src/domain/shared/index.ts";
 import type { ApiClient } from "./client.ts";
 import type { ApiError } from "./errors.ts";
@@ -85,6 +85,9 @@ export const useAnalysisView = (id: AnalysisId) => {
   // Only the newest request may update the state, so responses can't land out of order.
   const latest = useRef(0);
   const lastView = useRef<AnalysisView | null>(null);
+  // Following again, after a model run starts on an analysis whose stream had ended.
+  const [round, setRound] = useState(0);
+  const followed = useRef<AnalysisId | null>(null);
 
   const refetch = useCallback(async () => {
     latest.current += 1;
@@ -99,9 +102,14 @@ export const useAnalysisView = (id: AnalysisId) => {
     );
   }, [client, id]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new round follows again.
   useEffect(() => {
-    lastView.current = null;
-    setState({ view: null, error: null, loading: true });
+    // Only another analysis starts from nothing; following the same one again keeps the view.
+    if (followed.current !== id) {
+      followed.current = id;
+      lastView.current = null;
+      setState({ view: null, error: null, loading: true });
+    }
     void refetch();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = subscribe(id, (event) => {
@@ -113,7 +121,7 @@ export const useAnalysisView = (id: AnalysisId) => {
       // A view that already shows the end needs no refetch: opening a complete analysis
       // gets `done` straight away.
       const shown = lastView.current;
-      if (shown !== null && shown.analysis.status !== "running") return;
+      if (shown !== null && !inProgress(shown.analysis)) return;
       void refetch();
     });
     return () => {
@@ -121,9 +129,12 @@ export const useAnalysisView = (id: AnalysisId) => {
       unsubscribe();
       latest.current += 1;
     };
-  }, [id, refetch, subscribe]);
+  }, [id, refetch, subscribe, round]);
 
-  return { ...state, refetch };
+  /** Follows the analysis's events again, as after starting a model run on it. */
+  const follow = useCallback(() => setRound((count) => count + 1), []);
+
+  return { ...state, refetch, follow };
 };
 
 /** A call that changes something, with its pending state and last error. */

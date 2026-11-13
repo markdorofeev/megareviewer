@@ -19,11 +19,10 @@ describe("statusIndicator", () => {
     });
   });
 
-  it("needs setup without a host, and is ready with the model off", () => {
+  it("needs setup without a host, and is ready without Claude", () => {
     expect(statusIndicator(withHosts({ github: off }), null).label).toBe("Setup needed");
-    expect(statusIndicator({ ...fixtureStatus, model: { enabled: false } }, null).label).toBe(
-      "Ready",
-    );
+    const unavailable = { available: false, via: null, reason: "Claude Code isn't installed" };
+    expect(statusIndicator({ ...fixtureStatus, model: unavailable }, null).label).toBe("Ready");
   });
 
   it("names a host whose user lookup failed, with its reason", () => {

@@ -5,6 +5,7 @@ import {
   AnalysisId,
   type HostError,
   type ModelError,
+  modelRunnable,
   type StageName,
   type StageStatus,
   type Tour,
@@ -13,7 +14,7 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
-import type { AnalysisInput, CodeParser } from "../ports/index.ts";
+import type { AnalysisInput, CodeParser, ModelAvailability } from "../ports/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
@@ -58,7 +59,10 @@ const setup = (
     parser?: CodeParser;
     onlyGithub?: boolean;
     fileCache?: InMemoryFileCache;
+    /** Whether analyze() runs the model after the code's analysis, as the button does. */
     modelEnabled?: boolean;
+    /** What modelAvailability answers; available unless given. */
+    availability?: ModelAvailability;
     checkouts?: FakeLocalCheckouts;
   } = {},
 ) => {
@@ -95,7 +99,8 @@ const setup = (
       hosts: options.onlyGithub ? { github } : { github, bitbucket },
       tickets,
       model,
-      modelEnabled: options.modelEnabled ?? true,
+      modelAvailability: async () =>
+        options.availability ?? { available: true, via: "the fake model" },
       store,
       fileCache,
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
@@ -121,11 +126,24 @@ const setup = (
     return analysis;
   };
 
+  /** Runs the model on a complete analysis, as the button does, and resolves once it's done. */
+  const runModel = async (id: AnalysisId): Promise<Analysis> => {
+    const before = doneCount(id);
+    const ran = await useCases.runModel(id);
+    if (!ran.ok) throw new Error(ran.error.message);
+    await done(id, before + 1);
+    return stored(id);
+  };
+
+  /** The analysis once its code stages end, and the model's run too unless it's off. */
   const analyze = async (fixture: PullRequestFixture = smallFeature, count = 1) => {
     const started = await useCases.startAnalysis(fixture.pullRequest.url);
     if (!started.ok) throw new Error(started.error.message);
-    await done(started.value.analysisId, count);
-    return stored(started.value.analysisId);
+    const id = started.value.analysisId;
+    await done(id, count);
+    const analysis = await stored(id);
+    if (options.modelEnabled === false || !modelRunnable(analysis)) return analysis;
+    return runModel(id);
   };
 
   return {
@@ -142,6 +160,13 @@ const setup = (
     done,
     stored,
     analyze,
+    runModel,
+    /** How many times prep started, so how many code runs there were. */
+    preps: () =>
+      emitted.filter(
+        ({ event }) =>
+          event.type === "updated" && event.stage === "prep" && event.status === "running",
+      ).length,
   };
 };
 
@@ -194,7 +219,8 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("16+fake-model/1");
+    expect(analysis.key.pipelineVersion).toBe("17");
+    expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
     );
@@ -240,6 +266,13 @@ describe("the analysis pipeline", () => {
       "collect:done",
       "prep:running",
       "prep:done",
+      // The code's analysis ends with the model's stages not run.
+      "intent:skipped",
+      "risk:skipped",
+      "decisions:skipped",
+      "tour:skipped",
+      "done",
+      // Then the model's run, as the button starts it.
       "intent:running",
       "intent:done",
       "risk:running",
@@ -431,10 +464,11 @@ describe("the analysis pipeline", () => {
       const { analyze } = setup({ model });
       const analysis = await analyze();
 
-      expect(analysis.status).toBe("failed");
-      expect(analysis.stages.prep).toBe("failed");
-      expect(analysis.error).toEqual({
-        stage: "prep",
+      expect(analysis.status).toBe("complete");
+      expect(analysis.stages.prep).toBe("done");
+      expect(analysis.stages.intent).toBe("failed");
+      expect(analysis.modelError).toEqual({
+        stage: "intent",
         code: "model-error",
         message: `The pull request is too large to analyze, even without full file contents: ${inputTokens(noContents)} input tokens is over the limit of ${inputTokens(noContents) - 1}`,
       });
@@ -448,7 +482,7 @@ describe("the analysis pipeline", () => {
       const model = new FakeAnalysisModel({ maxInputTokens: 1 });
       const { analyze } = setup({ model });
       const analysis = await analyze(refactorMove);
-      expect(analysis.error?.message).toMatch(/^The pull request is too large to analyze/);
+      expect(analysis.modelError?.message).toMatch(/^The pull request is too large to analyze/);
       expect(model.callsTo("checkSize")).toHaveLength(1);
     });
 
@@ -457,8 +491,8 @@ describe("the analysis pipeline", () => {
       model.checkSize = async () => err(modelError("unauthorized", "Bad API key"));
       const { analyze } = setup({ model });
       const analysis = await analyze();
-      expect(analysis.error).toEqual({
-        stage: "prep",
+      expect(analysis.modelError).toEqual({
+        stage: "intent",
         code: "model-error",
         message: "Bad API key",
       });
@@ -474,27 +508,28 @@ describe("the analysis pipeline", () => {
       model.checkSize = async () => answers.shift() ?? ok({ inputTokens: 1 });
       const { analyze } = setup({ model });
       const analysis = await analyze();
-      expect(analysis.error?.message).toBe("Connection reset");
+      expect(analysis.modelError?.message).toBe("Connection reset");
     });
   });
 
   describe("intent", () => {
-    it("fails the analysis on a model error and keeps what was done", async () => {
+    it("records a model error, keeping the code's analysis complete", async () => {
       const model = new FakeAnalysisModel();
       model.script("intent", err(modelError("overloaded", "Overloaded")));
       const { analyze, emitted } = setup({ model });
       const analysis = await analyze();
 
-      expect(analysis.status).toBe("failed");
+      expect(analysis.status).toBe("complete");
+      expect(analysis.error).toBeNull();
       expect(analysis.stages).toEqual({
         collect: "done",
         prep: "done",
         intent: "failed",
-        risk: "pending",
-        decisions: "pending",
-        tour: "pending",
+        risk: "skipped",
+        decisions: "skipped",
+        tour: "skipped",
       });
-      expect(analysis.error).toEqual({
+      expect(analysis.modelError).toEqual({
         stage: "intent",
         code: "model-error",
         message: "Overloaded",
@@ -528,7 +563,7 @@ describe("the analysis pipeline", () => {
       );
       const { analyze } = setup({ model });
       const analysis = await analyze();
-      expect(analysis.error).toEqual({
+      expect(analysis.modelError).toEqual({
         stage: "intent",
         code: "model-error",
         message: "Still wrong",
@@ -642,16 +677,20 @@ describe("the analysis pipeline", () => {
       );
     });
 
-    it("fails the analysis on a model error and keeps the decisions", async () => {
+    it("records a model error and keeps the decisions, and the rules' risk", async () => {
       const model = new FakeAnalysisModel();
       model.script("risk", err(modelError("rate-limited", "Slow down")));
       const { analyze } = setup({ model });
       const analysis = await analyze();
-      expect(analysis.status).toBe("failed");
-      expect(analysis.error).toEqual({ stage: "risk", code: "model-error", message: "Slow down" });
-      expect(analysis.stages).toMatchObject({ risk: "failed", decisions: "done", tour: "pending" });
+      expect(analysis.status).toBe("complete");
+      expect(analysis.modelError).toEqual({
+        stage: "risk",
+        code: "model-error",
+        message: "Slow down",
+      });
+      expect(analysis.stages).toMatchObject({ risk: "failed", decisions: "done", tour: "skipped" });
       expect(analysis.decisions).toHaveLength(3);
-      expect(analysis.risk).toEqual([]);
+      expect(analysis.risk.map((risk) => risk.source)).not.toContain("model");
       expect(model.callsTo("tour")).toEqual([]);
     });
   });
@@ -700,12 +739,12 @@ describe("the analysis pipeline", () => {
       expect(model.callsTo("decisions")).toHaveLength(1);
     });
 
-    it("fails the analysis on a model error and keeps the risk", async () => {
+    it("records a model error and keeps the risk", async () => {
       const model = new FakeAnalysisModel();
       model.script("decisions", err(modelError("refusal", "Refused")));
       const { analyze } = setup({ model });
       const analysis = await analyze();
-      expect(analysis.error).toEqual({
+      expect(analysis.modelError).toEqual({
         stage: "decisions",
         code: "model-error",
         message: "Refused",
@@ -904,7 +943,7 @@ describe("starting analyses", () => {
   });
 
   it("runs one pipeline for concurrent requests", async () => {
-    const { useCases, model, done } = setup();
+    const { useCases, done, preps } = setup();
     const [first, second] = await Promise.all([
       useCases.startAnalysis(url),
       useCases.startAnalysis(url),
@@ -913,24 +952,24 @@ describe("starting analyses", () => {
     if (!first?.ok) throw new Error("not started");
     await done(first.value.analysisId);
     expect(await useCases.startAnalysis(url)).toEqual(first);
-    expect(model.callsTo("intent")).toHaveLength(1);
+    expect(preps()).toBe(1);
   });
 
   it("joins a run in flight", async () => {
-    const { useCases, model, done } = setup();
+    const { useCases, done, preps } = setup();
     const first = await useCases.startAnalysis(url);
     const second = await useCases.startAnalysis(url);
     expect(second).toEqual(first);
     if (!first.ok) throw new Error("not started");
     await done(first.value.analysisId);
-    expect(model.callsTo("intent")).toHaveLength(1);
+    expect(preps()).toBe(1);
   });
 
   it("runs a failed analysis again under the same ID", async () => {
-    const model = new FakeAnalysisModel();
-    model.script("intent", err(modelError("overloaded")));
-    const { analyze, clock } = setup({ model });
+    const { analyze, clock, github } = setup();
+    github.failNext("getFiles", hostError("network"));
     const failed = await analyze();
+    expect(failed.status).toBe("failed");
     clock.advance(1000);
     const again = await analyze(smallFeature, 2);
     expect(again.id).toBe(failed.id);
@@ -1000,14 +1039,15 @@ describe("recoverInterruptedAnalyses", () => {
 });
 
 describe("retryAnalysis", () => {
-  const failingModel = () => {
-    const model = new FakeAnalysisModel();
-    model.script("intent", err(modelError("overloaded")));
-    return model;
+  /** A setup whose first analysis fails fetching the PR's files. */
+  const failing = () => {
+    const ready = setup();
+    ready.github.failNext("getFiles", hostError("network"));
+    return ready;
   };
 
   it("runs a failed analysis again", async () => {
-    const { analyze, useCases, done, stored } = setup({ model: failingModel() });
+    const { analyze, useCases, done, stored } = failing();
     const failed = await analyze();
     expect(await useCases.retryAnalysis(failed.id)).toEqual(ok({ analysisId: failed.id }));
     await done(failed.id, 2);
@@ -1015,7 +1055,7 @@ describe("retryAnalysis", () => {
   });
 
   it("analyzes the new commits under a new ID when the PR changed", async () => {
-    const { analyze, useCases, github, done, stored } = setup({ model: failingModel() });
+    const { analyze, useCases, github, done, stored } = failing();
     const failed = await analyze();
     const newHead = "1".repeat(40);
     github.setHeadSha(smallFeature.pullRequest.ref, newHead);
@@ -1041,7 +1081,7 @@ describe("retryAnalysis", () => {
   });
 
   it("reports host errors when re-fetching the PR", async () => {
-    const { analyze, useCases, github } = setup({ model: failingModel() });
+    const { analyze, useCases, github } = failing();
     const failed = await analyze();
     github.failNext("getPullRequest", hostError("unauthorized"));
     expect(await useCases.retryAnalysis(failed.id)).toEqual(
@@ -1066,7 +1106,7 @@ describe("without the model", () => {
       decisions: "skipped",
       tour: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("16+no-model");
+    expect(analysis.key.pipelineVersion).toBe("17");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
@@ -1152,9 +1192,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
-      expect(analysis.key.pipelineVersion).toBe(
-        `16+${modelEnabled ? "fake-model/1" : "no-model"}+checkout`,
-      );
+      expect(analysis.key.pipelineVersion).toBe("17+checkout");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1230,7 +1268,7 @@ describe("with a local checkout", () => {
       });
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
-      expect(analysis.key.pipelineVersion).toBe("16+no-model");
+      expect(analysis.key.pipelineVersion).toBe("17");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },
@@ -1239,5 +1277,93 @@ describe("with a local checkout", () => {
   it("says none was found without a checkout", async () => {
     const { analyze } = setup({ modelEnabled: false });
     expect((await analyze()).checkout).toBe("none");
+  });
+});
+
+describe("runModel", () => {
+  const codeOnly = async (options: Parameters<typeof setup>[0] = {}) => {
+    const ready = setup({ ...options, modelEnabled: false });
+    return { ...ready, analysis: await ready.analyze() };
+  };
+
+  it("adds the model's results to the code's analysis, keeping its ID", async () => {
+    const { analysis, runModel, model } = await codeOnly();
+    expect(analysis.intent).toBeNull();
+    const after = await runModel(analysis.id);
+    expect(after.id).toBe(analysis.id);
+    expect(after.status).toBe("complete");
+    expect(after.intent).not.toBeNull();
+    expect(after.decisions).toHaveLength(3);
+    expect(after.tour?.builtBy).toBe("model");
+    expect(Object.values(after.stages)).toEqual(Array(6).fill("done"));
+    expect(model.callsTo("intent")).toHaveLength(1);
+  });
+
+  it("runs again after a failure, clearing the error", async () => {
+    const model = new FakeAnalysisModel();
+    model.script("intent", err(modelError("overloaded", "Overloaded")));
+    const { analysis, runModel } = await codeOnly({ model });
+    const failed = await runModel(analysis.id);
+    expect(failed.modelError?.message).toBe("Overloaded");
+    const again = await runModel(analysis.id);
+    expect(again.modelError).toBeNull();
+    expect(again.stages.tour).toBe("done");
+  });
+
+  it("refuses what it can't run, and says why", async () => {
+    const { analysis, useCases, runModel } = await codeOnly();
+    await runModel(analysis.id);
+    expect(await useCases.runModel(analysis.id)).toEqual(
+      err({ code: "bad-request", message: "Claude has already analyzed this pull request" }),
+    );
+    expect(await useCases.runModel(AnalysisId.parse("a_0000000000000000"))).toEqual(
+      err({ code: "not-found", message: "No analysis a_0000000000000000" }),
+    );
+
+    const unavailable = await codeOnly({
+      availability: { available: false, reason: "Claude Code isn't signed in" },
+    });
+    expect(await unavailable.useCases.runModel(unavailable.analysis.id)).toEqual(
+      err({ code: "model-unavailable", message: "Claude Code isn't signed in" }),
+    );
+    expect(unavailable.model.calls).toEqual([]);
+  });
+
+  it("refuses an analysis that isn't complete", async () => {
+    const { useCases, store, analysis } = await codeOnly();
+    await store.saveAnalysis({ ...analysis, status: "failed" });
+    expect(await useCases.runModel(analysis.id)).toEqual(
+      err({ code: "analysis-not-complete", message: "The analysis isn't complete yet" }),
+    );
+  });
+
+  it("joins a run in flight", async () => {
+    const { analysis, useCases, done, model } = await codeOnly();
+    const [first, second] = await Promise.all([
+      useCases.runModel(analysis.id),
+      useCases.runModel(analysis.id),
+    ]);
+    expect(first).toEqual(ok({ analysisId: analysis.id }));
+    expect(second).toEqual(first);
+    await done(analysis.id, 2);
+    expect(model.callsTo("intent")).toHaveLength(1);
+  });
+
+  it("is failed by recovery when a stop interrupted it, leaving the analysis complete", async () => {
+    const { analysis, useCases, store } = await codeOnly();
+    await store.saveAnalysis({
+      ...analysis,
+      stages: { ...analysis.stages, intent: "running", risk: "pending" },
+    });
+    expect(await useCases.recoverInterruptedAnalyses()).toBe(1);
+    const recovered = await store.getAnalysis(analysis.id);
+    expect(recovered?.status).toBe("complete");
+    expect(recovered?.stages).toMatchObject({ intent: "failed", risk: "skipped" });
+    expect(recovered?.modelError).toEqual({
+      stage: "intent",
+      code: "interrupted",
+      message: "megareviewer stopped while Claude analyzed the pull request",
+    });
+    expect(recovered !== undefined && recovered !== null && modelRunnable(recovered)).toBe(true);
   });
 });

@@ -38,12 +38,16 @@ export const setupItems = (status: StatusResponse): readonly SetupItem[] => {
           state: "optional",
           text: "Not configured: set JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN to read linked tickets",
         },
-    status.model.enabled
-      ? { name: "Claude", state: "ok", text: "On" }
+    status.model.available
+      ? {
+          name: "Claude",
+          state: "ok",
+          text: `${status.model.via}: Analyze with Claude on a review adds intent, decisions and the tour's titles`,
+        }
       : {
           name: "Claude",
           state: "optional",
-          text: "Off: start megareviewer with --ai to add intent, decisions and a guided tour from Claude",
+          text: `Unavailable: ${status.model.reason}`,
         },
   ];
 };

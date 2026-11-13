@@ -7,7 +7,7 @@ import type { ClaudeRun } from "./run-claude.ts";
 const modelError = (kind: ModelErrorKind, message: string): ModelError => ({ kind, message });
 
 export const NOT_INSTALLED =
-  "Claude Code couldn't be started. Install it (https://code.claude.com), or start megareviewer with --ai-via api.";
+  "Claude Code couldn't be started. Install it (https://code.claude.com), then restart megareviewer.";
 export const NOT_SIGNED_IN =
   "Claude Code isn't signed in. Run `claude` and sign in, then try again.";
 

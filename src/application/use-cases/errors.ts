@@ -14,6 +14,7 @@ export type ErrorCode =
   | "analysis-not-complete"
   | "host-error"
   | "model-error"
+  | "model-unavailable"
   | "internal";
 
 export interface UseCaseError {

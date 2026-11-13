@@ -1,16 +1,11 @@
 import type { PipelineVersion } from "../../domain/review/index.ts";
-import type { AnalysisModel } from "../ports/index.ts";
 
 /** Bump whenever pipeline logic changes what an analysis contains. */
-export const PIPELINE_VERSION = "16";
+export const PIPELINE_VERSION = "17";
 
 /**
- * Says whether the model ran and whether a local checkout was read, so turning either on analyzes
- * again instead of reusing the result.
+ * Says whether a local checkout was read, so a checkout that gains the PR's head commit analyzes
+ * again instead of reusing the result. The model isn't in it: its passes add to the analysis.
  */
-export const pipelineVersion = (
-  model: AnalysisModel,
-  modelEnabled: boolean,
-  checkoutRead: boolean,
-): PipelineVersion =>
-  `${PIPELINE_VERSION}+${modelEnabled ? model.version : "no-model"}${checkoutRead ? "+checkout" : ""}`;
+export const pipelineVersion = (checkoutRead: boolean): PipelineVersion =>
+  `${PIPELINE_VERSION}${checkoutRead ? "+checkout" : ""}`;

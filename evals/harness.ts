@@ -9,7 +9,7 @@ import {
   type PullRequestFixture,
 } from "../src/application/testing/index.ts";
 import { createUseCases } from "../src/application/use-cases/index.ts";
-import type { Analysis } from "../src/domain/review/index.ts";
+import { type Analysis, inProgress, modelRunnable } from "../src/domain/review/index.ts";
 import { err, ok, type Result } from "../src/domain/shared/index.ts";
 
 export const systemClock = { now: () => new Date().toISOString() };
@@ -31,8 +31,9 @@ export interface AnalyzeOptions {
 
 /**
  * Runs the analysis pipeline on one case, as the CLI would: the case's PR on a fake host, its
- * tickets in a fake Jira, the given model and parser, an in-memory store. Resolves with the
- * analysis once it completes or fails; an error only when it didn't start or ran out of time.
+ * tickets in a fake Jira, the given model and parser, an in-memory store. Once the code's
+ * analysis completes, runs the model on it, as "Analyze with Claude" does. Resolves with the
+ * analysis once both end; an error only when it didn't start or ran out of time.
  */
 export const analyzeCase = async (
   fixture: PullRequestFixture,
@@ -46,7 +47,7 @@ export const analyzeCase = async (
       hosts: { [host]: new FakeGitHost({ host, fixtures: [fixture], clock: systemClock }) },
       tickets: new FakeTicketSource({ tickets: fixture.tickets }),
       model: options.model,
-      modelEnabled: true,
+      modelAvailability: async () => ({ available: true, via: "the eval's model" }),
       store,
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
@@ -63,9 +64,16 @@ export const analyzeCase = async (
   if (!started.ok) return err(`${started.error.code}: ${started.error.message}`);
   const id = started.value.analysisId;
 
+  let modelAsked = false;
+  /** The analysis once nothing runs on it, after asking for the model once the code's is done. */
   const finished = async (): Promise<Analysis | null> => {
     const analysis = await store.getAnalysis(id);
-    return analysis !== null && analysis.status !== "running" ? analysis : null;
+    if (analysis === null || inProgress(analysis)) return null;
+    if (modelAsked || !modelRunnable(analysis)) return analysis;
+    modelAsked = true;
+    const ran = await useCases.runModel(id);
+    if (!ran.ok) throw new Error(`${ran.error.code}: ${ran.error.message}`);
+    return null;
   };
 
   let unsubscribe = () => {};

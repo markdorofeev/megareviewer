@@ -37,14 +37,14 @@ export const MOCK_TOKEN = "mock";
 /** How long each simulated stage takes. */
 export const MOCK_STAGE_MS = 600;
 
-/** Starting an analysis for a PR with this number fails it at the risk stage; a retry succeeds. */
+/** Starting an analysis for a PR with this number fails it at the prep stage; a retry succeeds. */
 export const MOCK_FAILING_PR_NUMBER = 500;
 
 /** Starting an analysis for a PR with this number analyzes a PR with 240 hunks. */
 export const MOCK_LARGE_PR_NUMBER = 900;
 
-const FAILING_STAGE: StageName = "risk";
-const FAILURE_MESSAGE = "The model's response didn't match the risk schema twice in a row";
+const FAILING_STAGE: StageName = "prep";
+const FAILURE_MESSAGE = "megareviewer hit an internal error during the analysis";
 
 export interface MockRequest {
   readonly method: string;
@@ -264,6 +264,8 @@ export const createMockApi = (
       const response: AnalysisIdResponse = { analysisId: fixture.id };
       return success(response);
     },
+    runModel: ({ id }) =>
+      findAnalysis(id) ?? failure("model-unavailable", "the mock API doesn't run Claude"),
     putVerdict: (params, body) => {
       const missing = findAnalysis(params.id) ?? requireComplete();
       if (missing !== null) return missing;

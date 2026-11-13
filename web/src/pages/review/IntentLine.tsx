@@ -1,4 +1,5 @@
 import { InfoIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
 import { Button } from "../../ui/button.tsx";
 
@@ -46,17 +47,21 @@ export const firstSentence = (text: string): string => {
  */
 export const IntentLine = ({
   analysis,
-  modelOn,
+  intentComing,
   mismatchAt,
   onMismatch,
   onDetails,
+  children,
 }: {
   readonly analysis: Analysis;
-  readonly modelOn: boolean;
+  /** The model is running and hasn't given the intent yet. */
+  readonly intentComing: boolean;
   /** The mismatch the chip names. */
   readonly mismatchAt: number;
   readonly onMismatch: (index: number) => void;
   readonly onDetails: () => void;
+  /** After the Details button: what asks Claude for the intent, or says how that went. */
+  readonly children?: ReactNode;
 }) => {
   const { intent, pullRequest } = analysis;
   const mismatches = intent?.mismatches ?? [];
@@ -79,7 +84,7 @@ export const IntentLine = ({
             {plainIntent(intent.inferred.summary)}
           </span>
         </p>
-      ) : modelOn && analysis.status === "running" ? (
+      ) : intentComing ? (
         <p className="text-muted-foreground" aria-busy="true">
           Working out the intent…
         </p>
@@ -104,6 +109,7 @@ export const IntentLine = ({
           <InfoIcon aria-hidden="true" />
         </Button>
       )}
+      {children}
       {mismatch !== undefined && (
         <button
           type="button"

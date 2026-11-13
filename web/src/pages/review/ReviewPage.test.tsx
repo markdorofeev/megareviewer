@@ -177,13 +177,14 @@ describe("ReviewPage states", () => {
     expect(progress.textContent).not.toContain("files");
   });
 
-  it("shows each part of a running analysis as soon as its data exists", async () => {
+  it("shows each part of Claude's run as soon as its data exists", async () => {
     const { setView } = renderReview({
       view: { ...fixture, analysis: analysisInProgress(analysis, 2) },
     });
     await loaded();
     const progress = screen.getByRole("list", { name: "Analysis progress" });
-    expect(progress.textContent).toContain("Prepare: done");
+    // The model's stages only: the code's are done.
+    expect(progress.textContent).not.toContain("Prepare");
     expect(progress.textContent).toContain("Intent: running");
     expect(screen.getByText("Working out the intent…")).toBeTruthy();
     expect(fileCards()).toContain("src/routes/orders.ts");
@@ -194,14 +195,9 @@ describe("ReviewPage states", () => {
     expect(await screen.findByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
     expect(screen.getByText("Finding the decisions the code makes…")).toBeTruthy();
 
+    // Decisions can be given verdicts while the tour pass still runs.
     setView({ ...fixture, analysis: analysisInProgress(analysis, 5) });
-    expect(
-      await screen.findByText("You can give verdicts once the analysis is complete."),
-    ).toBeTruthy();
-    expect(approve(OWNERSHIP).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: /^Publish review…/ }).hasAttribute("disabled")).toBe(
-      true,
-    );
+    await waitFor(() => expect(approve(OWNERSHIP).hasAttribute("disabled")).toBe(false));
 
     setView(fixture);
     await waitFor(() =>
@@ -211,7 +207,7 @@ describe("ReviewPage states", () => {
 
   it("shows where a failed analysis stopped, what it has, and retries it", async () => {
     const { requests } = renderReview({
-      view: { ...fixture, analysis: analysisFailed(analysis, "risk", "The model gave up") },
+      view: { ...fixture, analysis: analysisFailed(analysis, "prep", "The parser crashed") },
       respond: (request) =>
         request.url === `${viewPath}/retry`
           ? jsonResponse(200, { analysisId: otherId })
@@ -219,10 +215,12 @@ describe("ReviewPage states", () => {
     });
     await loaded();
     expect(screen.getByRole("alert").textContent).toContain(
-      "The analysis failed at the risk stage: The model gave up",
+      "The analysis failed at the prepare stage: The parser crashed",
     );
-    expect(screen.getByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
-    expect(fileCards()).toContain("src/routes/orders.ts");
+    expect(
+      screen.getByText("The diff couldn't be read, so there are no changes to show."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Analyze with Claude/ })).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(requests.some((request) => request.url === `${viewPath}/retry`)).toBe(true);
@@ -232,7 +230,7 @@ describe("ReviewPage states", () => {
   it("starts afresh when a retry runs again under the same ID", async () => {
     let view: AnalysisView = {
       ...fixture,
-      analysis: analysisFailed(analysis, "risk", "The model gave up"),
+      analysis: analysisFailed(analysis, "prep", "The parser crashed"),
     };
     const { subscribers } = renderReview({
       respond: (request) => {
@@ -247,6 +245,65 @@ describe("ReviewPage states", () => {
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Collecting the pull request…")).toBeTruthy();
     expect(subscribers(id)).toBe(1);
+  });
+
+  it("asks Claude on the open analysis, and follows its run", async () => {
+    // The code's analysis, before anyone asked for the model.
+    const codeOnly = {
+      ...fixture,
+      analysis: {
+        ...analysisFailed(analysis, "intent", "unused"),
+        stages: {
+          ...analysis.stages,
+          intent: "skipped",
+          risk: "skipped",
+          decisions: "skipped",
+          tour: "skipped",
+        },
+        modelError: null,
+      } as const,
+    };
+    const { requests, setView } = renderReview({
+      view: codeOnly,
+      respond: (request) =>
+        request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
+    });
+    await loaded();
+    const button = screen.getByRole("button", { name: "Analyze with Claude" });
+    // What runs it, once the status has loaded.
+    await waitFor(() =>
+      expect(button.getAttribute("title")).toBe("Runs on Claude Code, on your Pro plan"),
+    );
+    const loads = () => requests.filter((request) => request.url === viewPath).length;
+    const before = loads();
+
+    await userEvent.click(button);
+    expect(requests.some((request) => request.url === `${viewPath}/model`)).toBe(true);
+    // Following the analysis again loads it again, without leaving the page.
+    await waitFor(() => expect(loads()).toBe(before + 1));
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
+
+    setView({ ...fixture, analysis: analysisInProgress(analysis, 2) });
+    expect(await screen.findByText("Working out the intent…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Analyze with Claude" })).toBeNull();
+  });
+
+  it("says why Claude couldn't finish, and tries again", async () => {
+    const { requests } = renderReview({
+      view: { ...fixture, analysis: analysisFailed(analysis, "risk", "Overloaded") },
+      respond: (request) =>
+        request.url === `${viewPath}/model`
+          ? failure(503, "model-unavailable", "Claude Code isn't signed in")
+          : undefined,
+    });
+    await loaded();
+    expect(screen.getByRole("alert").textContent).toBe("Claude couldn't finish: Overloaded");
+    // The code's review is all there.
+    expect(fileCards()).toContain("src/routes/orders.ts");
+
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(requests.some((request) => request.url === `${viewPath}/model`)).toBe(true);
+    expect(await screen.findByText("Claude can't run: Claude Code isn't signed in.")).toBeTruthy();
   });
 
   it("says when the analysis doesn't exist, with a way back to the picker", async () => {

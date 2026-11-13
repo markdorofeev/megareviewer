@@ -161,7 +161,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "16+fake-model/1",
+  pipelineVersion: "17",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -372,6 +372,7 @@ export const smallFeatureAnalysis: Analysis = {
     },
   ],
   error: null,
+  modelError: null,
   createdAt: "2026-10-21T09:00:00Z",
   updatedAt: "2026-10-21T09:01:10Z",
 };
