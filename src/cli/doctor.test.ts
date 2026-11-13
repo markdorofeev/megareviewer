@@ -58,8 +58,8 @@ describe("runDoctor", () => {
       "✓ GitHub: signed in as lee-park (token from gh auth token)",
       "✓ Bitbucket: signed in as Lee Park, listing PRs in acme",
       "✓ Jira: signed in at https://acme.atlassian.net",
-      "✓ Claude Code: 2.1.303, signed in: Analyze with Claude runs here, on your Pro plan",
-      "✓ Anthropic API: credentials work, claude-haiku-5-5 is available: Analyze with Claude's fallback when Claude Code can't run it",
+      "✓ Claude Code: 2.1.303, signed in: Request AI review runs here, on your Pro plan",
+      "✓ Anthropic API: credentials work, claude-haiku-5-5 is available: the fallback for Request AI review when Claude Code can't run it",
       "✓ Checkout: /home/lee/src/shop, a checkout of github.com/acme/shop\n    Callers outside a PR need its head commit: if a review says it's missing, run `git fetch` there.",
       "✓ Home: /home/lee/.megareviewer is writable and the database opens",
     ]);
@@ -158,7 +158,7 @@ describe("runDoctor", () => {
       anthropic: { configured: false, retrieveModel: async () => ok(undefined) },
     });
     expect(missing[5]).toBe(
-      "– Anthropic API: not configured: Analyze with Claude's fallback when Claude Code can't run it\n    Set ANTHROPIC_API_KEY or run `ant auth login` to use it.",
+      "– Anthropic API: not configured: the fallback for Request AI review when Claude Code can't run it\n    Set ANTHROPIC_API_KEY or run `ant auth login` to use it.",
     );
     const rejected = await lines({
       anthropic: { configured: true, retrieveModel: async () => err("401 invalid x-api-key") },
@@ -169,11 +169,11 @@ describe("runDoctor", () => {
   it.each<[DoctorDeps["claudeCode"], string]>([
     [
       { state: "not-installed" },
-      "– Claude Code: not installed: Analyze with Claude runs on the Anthropic API instead, if it's configured\n    Install Claude Code (https://code.claude.com) and sign in with `claude` to analyze on your Claude plan.",
+      "– Claude Code: not installed: Request AI review runs on the Anthropic API instead, if it's configured\n    Install Claude Code (https://code.claude.com) and sign in with `claude` to analyze on your Claude plan.",
     ],
     [
       { state: "signed-out", version: "2.1.303" },
-      "– Claude Code: 2.1.303, not signed in: Analyze with Claude runs on the Anthropic API instead, if it's configured\n    Run `claude` and sign in to analyze on your Claude plan.",
+      "– Claude Code: 2.1.303, not signed in: Request AI review runs on the Anthropic API instead, if it's configured\n    Run `claude` and sign in to analyze on your Claude plan.",
     ],
     [
       { state: "signed-in", version: "2.0.9", plan: "max", billing: "plan" },
@@ -181,7 +181,7 @@ describe("runDoctor", () => {
     ],
     [
       { state: "signed-in", version: "2.1.303", plan: null, billing: "api" },
-      "✓ Claude Code: 2.1.303, signed in: Analyze with Claude runs here, billed to your Anthropic Console account",
+      "✓ Claude Code: 2.1.303, signed in: Request AI review runs here, billed to your Anthropic Console account",
     ],
     [
       { state: "failed", message: "`claude auth status` gave no status: no output" },

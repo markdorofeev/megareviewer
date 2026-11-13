@@ -1093,6 +1093,9 @@ const Review = ({
           <ClaudeElement
             analysis={live}
             via={modelStatus?.via ?? null}
+            unavailable={
+              modelStatus?.available === false ? (modelStatus.reason ?? "Claude can't run") : null
+            }
             running={landing.running}
             startedAt={modelStartedAt}
             starting={runModel.pending}

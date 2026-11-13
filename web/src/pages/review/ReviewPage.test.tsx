@@ -13,6 +13,7 @@ import {
   fixtureAnalysisView,
   fixtureHunks,
   fixtureParts,
+  fixtureStatus,
   largeAnalysisView,
 } from "../../../dev/fixtures/index.ts";
 import { mockFetch } from "../../../dev/mock-fetch.ts";
@@ -84,6 +85,30 @@ const renderReview = (
   };
   return { ...result, ...api, requests, setView };
 };
+
+/** The code's analysis, before anyone asked for the model. */
+const codeOnly: AnalysisView = {
+  ...fixture,
+  analysis: {
+    ...analysisFailed(analysis, "intent", "unused"),
+    stages: {
+      ...analysis.stages,
+      intent: "skipped",
+      risk: "skipped",
+      decisions: "skipped",
+      tour: "skipped",
+    },
+    modelError: null,
+  },
+};
+
+/** The text an element's aria-describedby points to. */
+const description = (element: Element): string =>
+  (element.getAttribute("aria-describedby") ?? "")
+    .split(" ")
+    .map((id) => document.getElementById(id)?.textContent ?? "")
+    .join(" ")
+    .trim();
 
 const loaded = () =>
   screen.findByRole("heading", { level: 1, name: "Add order receipts endpoint" });
@@ -246,7 +271,7 @@ describe("ReviewPage states", () => {
     expect(
       screen.getByText("The diff couldn't be read, so there are no changes to show."),
     ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Analyze with Claude/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Request AI review/ })).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(requests.some((request) => request.url === `${viewPath}/retry`)).toBe(true);
@@ -274,32 +299,17 @@ describe("ReviewPage states", () => {
   });
 
   it("asks Claude on the open analysis, and follows its run", async () => {
-    // The code's analysis, before anyone asked for the model.
-    const codeOnly = {
-      ...fixture,
-      analysis: {
-        ...analysisFailed(analysis, "intent", "unused"),
-        stages: {
-          ...analysis.stages,
-          intent: "skipped",
-          risk: "skipped",
-          decisions: "skipped",
-          tour: "skipped",
-        },
-        modelError: null,
-      } as const,
-    };
     const { requests, setView } = renderReview({
       view: codeOnly,
       respond: (request) =>
         request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
     });
     await loaded();
-    const button = within(reviewBar()).getByRole("button", { name: "Analyze with Claude" });
+    const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
     // What runs it, once the status has loaded.
-    await waitFor(() =>
-      expect(button.getAttribute("title")).toBe("Runs on Claude Code, on your Pro plan"),
-    );
+    await waitFor(() => expect(description(button)).toBe("Runs on Claude Code, on your Pro plan"));
+    expect(button.getAttribute("data-slot")).toBe("request-review");
+    expect(button.className).not.toContain("border-border");
     const loads = () => requests.filter((request) => request.url === viewPath).length;
     const before = loads();
 
@@ -311,7 +321,44 @@ describe("ReviewPage states", () => {
 
     setView({ ...fixture, analysis: analysisInProgress(analysis, 2) });
     expect(await screen.findByText("Claude is reading this PR")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Analyze with Claude" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Request AI review" })).toBeNull();
+  });
+
+  it("disables the button when Claude can't run, and says why", async () => {
+    const reason = "Claude Code isn't signed in: run `claude` and sign in";
+    const { requests } = renderReview({
+      view: codeOnly,
+      respond: (request) =>
+        request.url === "/api/status"
+          ? jsonResponse(200, {
+              ...fixtureStatus,
+              model: { available: false, via: null, reason },
+            })
+          : undefined,
+    });
+    await loaded();
+    const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
+    await waitFor(() => expect(button.getAttribute("aria-disabled")).toBe("true"));
+    expect(description(button)).toBe(reason);
+    // Still focusable, so the keyboard reaches the reason too.
+    expect(button.hasAttribute("disabled")).toBe(false);
+
+    await userEvent.click(button);
+    expect(requests.some((request) => request.url === `${viewPath}/model`)).toBe(false);
+  });
+
+  it("offers Try again in outline when Claude found nothing before failing", async () => {
+    renderReview({
+      view: { ...fixture, analysis: analysisFailed(analysis, "intent", "Overloaded") },
+    });
+    await loaded();
+    // Quieter than Publish, the bar's one filled button once Claude has run.
+    const again = within(reviewBar()).getByRole("button", { name: "Try again" });
+    expect(again.getAttribute("data-slot")).toBe("request-review");
+    expect(again.className).toContain("border-border");
+    expect(within(reviewBar()).getByRole("alert").textContent).toBe(
+      "Claude couldn't finish: Overloaded",
+    );
   });
 
   it("says why Claude couldn't finish, and tries again", async () => {

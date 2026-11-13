@@ -42,7 +42,7 @@ export const setupItems = (status: StatusResponse): readonly SetupItem[] => {
       ? {
           name: "Claude",
           state: "ok",
-          text: `${status.model.via}: Analyze with Claude on a review adds intent, decisions and the tour's titles`,
+          text: `${status.model.via}: Request AI review, on a review, adds intent, decisions and the tour's titles`,
         }
       : {
           name: "Claude",

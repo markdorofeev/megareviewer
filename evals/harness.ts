@@ -32,7 +32,7 @@ export interface AnalyzeOptions {
 /**
  * Runs the analysis pipeline on one case, as the CLI would: the case's PR on a fake host, its
  * tickets in a fake Jira, the given model and parser, an in-memory store. Once the code's
- * analysis completes, runs the model on it, as "Analyze with Claude" does. Resolves with the
+ * analysis completes, runs the model on it, as "Request AI review" does. Resolves with the
  * analysis once both end; an error only when it didn't start or ran out of time.
  */
 export const analyzeCase = async (

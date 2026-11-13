@@ -152,6 +152,7 @@ export const LandingDemo = () => {
         <ClaudeElement
           analysis={run === "running" ? DESIGN_RUN : ran}
           via="Claude Code, on your Pro plan"
+          unavailable={null}
           running={landing.running}
           startedAt={null}
           starting={false}

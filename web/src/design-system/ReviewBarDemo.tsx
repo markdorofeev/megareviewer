@@ -47,6 +47,7 @@ const BarDemo = ({
   narrowedAt = null,
   dismissed = [],
   running = false,
+  unavailable = null,
   hairline = null,
   stuck = false,
   published = false,
@@ -58,6 +59,8 @@ const BarDemo = ({
   readonly narrowedAt?: PointKind | null;
   readonly dismissed?: readonly string[];
   readonly running?: boolean;
+  /** Why Claude can't run, which disables its button. */
+  readonly unavailable?: string | null;
   readonly hairline?: HairlineState | null;
   readonly stuck?: boolean;
   readonly published?: boolean;
@@ -87,6 +90,7 @@ const BarDemo = ({
             <ClaudeElement
               analysis={run}
               via="Claude Code, on your Pro plan"
+              unavailable={unavailable}
               running={running}
               startedAt={running ? Date.now() - 42_000 : null}
               starting={false}
@@ -130,7 +134,30 @@ const BarDemo = ({
 /** The bar under the header in each state a reviewer sees it in, and the stepper's. */
 export const ReviewBarStates = (): ReactNode => (
   <div className="flex flex-col gap-4">
-    <BarDemo label="Before Claude runs" run={DESIGN_RUN} points={[]} />
+    <BarDemo
+      label="Before Claude runs: hover or focus the button for what runs it"
+      run={DESIGN_RUN}
+      points={[]}
+    />
+    <BarDemo
+      label="Claude can't run: the button is disabled, and says why on hover or focus"
+      run={DESIGN_RUN}
+      points={[]}
+      unavailable="Claude Code isn't signed in: run `claude` and sign in; or set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API."
+    />
+    <BarDemo
+      label="Claude couldn't finish: Try again, in outline beside Publish"
+      run={{
+        ...DESIGN_RUN,
+        stages: { ...DESIGN_RUN.stages, intent: "failed" },
+        modelError: {
+          stage: "intent",
+          code: "model-error",
+          message: "Your Claude plan's usage limit is reached. It resets at 18:00.",
+        },
+      }}
+      points={[]}
+    />
     <BarDemo
       label="While Claude reads, the hairline on the bar's edge"
       run={DESIGN_RUN}

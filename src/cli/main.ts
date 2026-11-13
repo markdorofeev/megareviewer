@@ -50,7 +50,7 @@ const printSummary = (
   const jira =
     config.jira === null ? "not configured: ticket keys aren't fetched" : config.jira.baseUrl;
   const claude = model.available
-    ? `${model.via}: Analyze with Claude on a review adds intent, decisions and the tour's titles`
+    ? `${model.via}: Request AI review, on a review, adds intent, decisions and the tour's titles`
     : `unavailable: ${model.reason}`;
   const repos = checkout?.repos.map(repoName).join(", ") ?? "";
   const local =

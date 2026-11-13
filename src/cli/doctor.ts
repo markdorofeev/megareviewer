@@ -128,7 +128,7 @@ const checkJira = async (deps: DoctorDeps): Promise<Check> => {
       );
 };
 
-/** What Analyze with Claude runs on first. Without it, reviews run without the model, or on the API. */
+/** What Request AI review runs on first. Without it, reviews run without the model, or on the API. */
 const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
   const title = "Claude Code";
   switch (claudeCode.state) {
@@ -136,14 +136,14 @@ const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
       return check(
         "skip",
         title,
-        "not installed: Analyze with Claude runs on the Anthropic API instead, if it's configured",
+        "not installed: Request AI review runs on the Anthropic API instead, if it's configured",
         "Install Claude Code (https://code.claude.com) and sign in with `claude` to analyze on your Claude plan.",
       );
     case "signed-out":
       return check(
         "skip",
         title,
-        `${claudeCode.version}, not signed in: Analyze with Claude runs on the Anthropic API instead, if it's configured`,
+        `${claudeCode.version}, not signed in: Request AI review runs on the Anthropic API instead, if it's configured`,
         "Run `claude` and sign in to analyze on your Claude plan.",
       );
     case "failed":
@@ -165,7 +165,7 @@ const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
       return check(
         "pass",
         title,
-        `${claudeCode.version}, signed in: Analyze with Claude runs here, ${pays}`,
+        `${claudeCode.version}, signed in: Request AI review runs here, ${pays}`,
       );
     }
   }
@@ -177,7 +177,7 @@ const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
     return check(
       "skip",
       title,
-      "not configured: Analyze with Claude's fallback when Claude Code can't run it",
+      "not configured: the fallback for Request AI review when Claude Code can't run it",
       "Set ANTHROPIC_API_KEY or run `ant auth login` to use it.",
     );
   }
@@ -186,7 +186,7 @@ const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
     ? check(
         "pass",
         title,
-        `credentials work, ${MODEL} is available: Analyze with Claude's fallback when Claude Code can't run it`,
+        `credentials work, ${MODEL} is available: the fallback for Request AI review when Claude Code can't run it`,
       )
     : check(
         "fail",

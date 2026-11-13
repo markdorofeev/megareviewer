@@ -16,7 +16,7 @@ describe("setupItems", () => {
       {
         name: "Claude",
         state: "ok",
-        text: "Claude Code, on your Pro plan: Analyze with Claude on a review adds intent, decisions and the tour's titles",
+        text: "Claude Code, on your Pro plan: Request AI review, on a review, adds intent, decisions and the tour's titles",
       },
     ]);
   });

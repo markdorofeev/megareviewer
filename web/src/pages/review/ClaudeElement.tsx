@@ -1,5 +1,5 @@
-import { EyeIcon, EyeOffIcon, SparklesIcon } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { EyeIcon, EyeOffIcon, InfoIcon, LockIcon, SparklesIcon } from "lucide-react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import {
   type Analysis,
   modelRunnable,
@@ -13,6 +13,7 @@ export type ClaudeRun = Pick<Analysis, "status" | "stages" | "modelError">;
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 
 /** Seconds since `since`, ticking while it runs. */
 const useElapsed = (since: number | null): number => {
@@ -86,6 +87,66 @@ const Chip = ({
   );
 };
 
+/**
+ * Asks Claude for its passes. Filled before the run, the bar's strongest call to action; outline as
+ * Try again after a failed run, so it doesn't outweigh Publish. Its tooltip says what runs it and
+ * who pays, or why Claude can't run, when the button stays focusable but disabled.
+ */
+const RequestReview = ({
+  via,
+  unavailable,
+  starting,
+  failed,
+  onRun,
+}: {
+  readonly via: string | null;
+  readonly unavailable: string | null;
+  readonly starting: boolean;
+  readonly failed: boolean;
+  readonly onRun: () => void;
+}) => {
+  const descriptionId = useId();
+  const note = unavailable ?? (via === null ? null : `Runs on ${via}`);
+  const button = (
+    <Button
+      variant={failed ? "outline" : "default"}
+      size="sm"
+      data-slot="request-review"
+      disabled={starting || unavailable !== null}
+      focusableWhenDisabled
+      aria-describedby={note === null ? undefined : descriptionId}
+      onClick={onRun}
+    />
+  );
+  const label = (
+    <>
+      {unavailable === null ? (
+        <SparklesIcon aria-hidden="true" className={cn(failed && "text-primary")} />
+      ) : (
+        <LockIcon aria-hidden="true" />
+      )}
+      {starting ? "Starting…" : failed ? "Try again" : "Request AI review"}
+    </>
+  );
+  return (
+    <>
+      <Tooltip disabled={note === null}>
+        <TooltipTrigger render={button}>{label}</TooltipTrigger>
+        <TooltipContent side="bottom" align="start">
+          {unavailable !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
+          {note}
+        </TooltipContent>
+      </Tooltip>
+      {/* The tooltip is for the eye; a screen reader reads the same words as the description. */}
+      {note !== null && (
+        <span id={descriptionId} hidden>
+          {note}
+        </span>
+      )}
+    </>
+  );
+};
+
 /** The passes whose results aren't in, and why, when a run ended early. */
 const missingNote = (analysis: ClaudeRun): string | null => {
   const missing = (["findings", "risk", "decisions"] as const).filter(
@@ -103,6 +164,7 @@ const missingNote = (analysis: ClaudeRun): string | null => {
 export const ClaudeElement = ({
   analysis,
   via,
+  unavailable,
   running,
   startedAt,
   starting,
@@ -118,6 +180,8 @@ export const ClaudeElement = ({
   readonly analysis: ClaudeRun;
   /** What runs the passes and who pays, from the status; null when it isn't known yet. */
   readonly via: string | null;
+  /** Why Claude can't run, from the status; null when it can or that isn't known yet. */
+  readonly unavailable: string | null;
   readonly running: boolean;
   /** When this page saw the run start, for the time since. */
   readonly startedAt: number | null;
@@ -226,16 +290,13 @@ export const ClaudeElement = ({
   const failed = analysis.modelError;
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <Button
-        variant="outline"
-        size="xs"
-        disabled={starting}
-        title={via === null ? undefined : `Runs on ${via}`}
-        onClick={onRun}
-      >
-        <SparklesIcon aria-hidden="true" />
-        {starting ? "Starting…" : failed === null ? "Analyze with Claude" : "Try again"}
-      </Button>
+      <RequestReview
+        via={via}
+        unavailable={unavailable}
+        starting={starting}
+        failed={failed !== null}
+        onRun={onRun}
+      />
       {(error ?? failed) !== null && (
         <span
           role="alert"

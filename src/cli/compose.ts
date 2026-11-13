@@ -41,7 +41,7 @@ export interface ComposeOptions {
 export interface Composition {
   readonly useCases: UseCases;
   readonly sessionToken: string;
-  /** Whether "Analyze with Claude" can run, and on what. */
+  /** Whether "Request AI review" can run, and on what. */
   modelAvailability(): Promise<ModelAvailability>;
   /** The HTTP app for a server listening on `port`, which its Host check needs. */
   app(port: number): Hono;

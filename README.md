@@ -2,7 +2,7 @@
 
 Turns a GitHub or Bitbucket Cloud pull request into a guided review. Changes are ordered as a tour that follows the call graph, with each test next to the code it tests. Risky changes (dependencies, schemas, auth, CI, removed tests) stand out, and mechanical ones are collapsed with proof. Your review is posted back to the PR.
 
-On any review, Analyze with Claude adds what the PR was asked to do next to what the code actually does, plain-language titles for the tour's steps, and its points on the code: what looks wrong, as a draft comment under its line you can add to your review as it is; contract changes that deserve a hard look, as a band over their lines; and why the code makes its choices, as footnotes you can hide. Saying nothing means it's fine. You pick the verdict when you publish.
+On any review, the Request AI review button adds what the PR was asked to do next to what the code actually does, plain-language titles for the tour's steps, and its points on the code: what looks wrong, as a draft comment under its line you can add to your review as it is; contract changes that deserve a hard look, as a band over their lines; and why the code makes its choices, as footnotes you can hide. Saying nothing means it's fine. You pick the verdict when you publish.
 
 ## Run
 
@@ -41,7 +41,7 @@ Set them as environment variables. You need at least one git host.
 | `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD` | Used instead of the two above when they aren't set: your Bitbucket username and an app password with Account: read, Repositories: read and Pull requests: write. Atlassian removed app passwords in July 2026, so they only work where Bitbucket still accepts them |
 | `BITBUCKET_WORKSPACE` | Optional. The workspace whose PRs the picker lists. It scans the 50 most recently updated repositories; a pasted PR URL always works |
 
-**Claude.** Only for Analyze with Claude, which runs your Claude Code when it's installed and signed in, so the analysis comes out of your Claude plan's usage. megareviewer never sees your Claude credentials: it runs the `claude` on your PATH, which uses its own sign-in. Without Claude Code, it uses the Anthropic API, with `ANTHROPIC_API_KEY` or a profile from `ant auth login`, billed to your account. Either way, analyses use Claude Haiku 5.5.
+**Claude.** Only for the Request AI review button, which runs your Claude Code when it's installed and signed in, so the analysis comes out of your Claude plan's usage. megareviewer never sees your Claude credentials: it runs the `claude` on your PATH, which uses its own sign-in. Without Claude Code, it uses the Anthropic API, with `ANTHROPIC_API_KEY` or a profile from `ant auth login`, billed to your account. Either way, analyses use Claude Haiku 5.5.
 
 **Jira.** Optional: without it, ticket keys are shown but not fetched.
 
@@ -53,7 +53,7 @@ Set them as environment variables. You need at least one git host.
 
 ## Privacy
 
-Until you press Analyze with Claude, your code goes nowhere but your machine and your git host. Then the PR's code also goes to Anthropic for the analysis: through your Claude Code, under your own Claude plan and its privacy settings, or to the Anthropic API under your API account's. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and what you did with each point are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
+Until you press Request AI review, your code goes nowhere but your machine and your git host. Then the PR's code also goes to Anthropic for the analysis: through your Claude Code, under your own Claude plan and its privacy settings, or to the Anthropic API under your API account's. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and what you did with each point are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
 
 ## Contributing
 

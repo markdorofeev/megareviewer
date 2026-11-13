@@ -39,7 +39,7 @@ export const StatusResponse = z
     hosts: z.object({ github: HostStatus, bitbucket: HostStatus }).readonly(),
     jira: z.object({ configured: z.boolean() }).readonly(),
     /**
-     * Whether "Analyze with Claude" can run: `via` says what runs it and who pays ("Claude Code,
+     * Whether "Request AI review" can run: `via` says what runs it and who pays ("Claude Code,
      * on your Pro plan"), `reason` why it can't.
      */
     model: z

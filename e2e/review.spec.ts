@@ -12,7 +12,7 @@ const openPicker = async (page: Page) => {
 
 /** Asks Claude on the open review and waits until its passes are done. */
 const analyzeWithClaude = async (page: Page) => {
-  await page.getByRole("button", { name: "Analyze with Claude" }).click();
+  await page.getByRole("button", { name: "Request AI review" }).click();
   await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
   await landed(page);
@@ -77,9 +77,9 @@ test("the token bootstraps the session and leaves the URL", async ({ page, brows
 
 test("analyzes a PR from its URL, and asks Claude on it", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
-  await expect(page.getByRole("button", { name: "Analyze with Claude" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request AI review" })).toBeVisible();
   await analyzeWithClaude(page);
-  await expect(page.getByRole("button", { name: "Analyze with Claude" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Request AI review" })).toHaveCount(0);
   await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
 });
@@ -239,7 +239,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     expect(before).toBeGreaterThan(0);
 
     // Clicked where it is: a click that scrolls up to the button would move the window itself.
-    await page.getByRole("button", { name: "Analyze with Claude" }).dispatchEvent("click");
+    await page.getByRole("button", { name: "Request AI review" }).dispatchEvent("click");
     await expect(page.locator("[data-slot=point]").first()).toBeAttached();
     await landed(page);
     // Cards opened above the line, and the line didn't move.
@@ -264,7 +264,7 @@ test.describe("the bar, with many of Claude's points", () => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1024, height: 720 });
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
-    await page.getByRole("button", { name: "Analyze with Claude" }).click();
+    await page.getByRole("button", { name: "Request AI review" }).click();
     await expect(page.locator("[data-slot=point-chip]").first()).toBeVisible({ timeout: 60_000 });
     await landed(page);
     const bar = page.locator("[data-slot=review-bar]");
@@ -423,7 +423,7 @@ test("a publish that fails part-way posts only the rest on retry", async ({ page
 
 test("Claude's failure leaves the review, says why, and tries again", async ({ page }) => {
   await openReview(page, PR.intentFailsOnce, SMALL_FEATURE_TITLE, false);
-  await page.getByRole("button", { name: "Analyze with Claude" }).click();
+  await page.getByRole("button", { name: "Request AI review" }).click();
 
   const failure = page.getByRole("alert").filter({ hasText: /missing:|couldn't finish/ });
   await expect(failure).toBeVisible();

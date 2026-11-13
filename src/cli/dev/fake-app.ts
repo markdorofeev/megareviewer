@@ -151,7 +151,7 @@ export const createFakeApp = async (options: {
   readonly version: string;
   readonly staticDir: string | null;
   readonly sessionToken?: string;
-  /** Whether Analyze with Claude can run the fake model. Available unless false. */
+  /** Whether Request AI review can run the fake model. Available unless false. */
   readonly modelAvailable?: boolean;
   /** Plays the recorded model run as this scenario instead of answering from the fake model. */
   readonly scenario?: Scenario;

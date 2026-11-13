@@ -61,7 +61,7 @@ const start = async (
 };
 
 export const test = base.extend<{ ai: boolean; scenario: string | null; server: FakeServer }>({
-  /** Whether Analyze with Claude can run; `test.use({ ai: false })` serves it as unavailable. */
+  /** Whether Request AI review can run; `test.use({ ai: false })` serves it as unavailable. */
   ai: [true, { option: true }],
   /** The scenario Claude's run plays, as `--scenario` names it; `test.use({ scenario: "many" })`. */
   scenario: [null, { option: true }],
