@@ -491,9 +491,8 @@ const Review = ({
         const same = (other: HunkComment) =>
           other.hunkId === hunkId && other.side === comment.side && other.line === comment.line;
         const written = { hunkId, ...comment };
-        // A draft with nothing in it is removed; a severity or a suggestion is something.
-        const empty =
-          comment.body === "" && comment.severity === undefined && comment.suggestion === undefined;
+        // A draft with nothing in it is removed; a suggestion is something.
+        const empty = comment.body === "" && comment.suggestion === undefined;
         if (!previous.some(same)) return empty ? previous : [...previous, written];
         return empty
           ? previous.filter((other) => !same(other))
@@ -693,7 +692,7 @@ const Review = ({
   };
 
   /**
-   * Raises a point: a comment on its lines with its text, its severity and its suggestion, which
+   * Raises a point: a comment on its lines with its text and its suggestion, which
    * posts with the review under their name. With `add` it's saved as it is; otherwise the comment
    * box opens on it for the reviewer to edit. A draft already on those lines keeps what's in it:
    * the point's text goes after it, or, raised before, the draft opens as the reviewer left it.
@@ -722,7 +721,6 @@ const Review = ({
         comment.hunkId === hunkId && comment.side === place.side && comment.line === place.line,
     );
     const extras = {
-      ...(point.severity === null ? {} : { severity: point.severity }),
       ...(point.suggestion === null ? {} : { suggestion: point.suggestion }),
     };
     if (draft === undefined) {

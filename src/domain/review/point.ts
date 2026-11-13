@@ -12,7 +12,6 @@ import { PointLines } from "./point-lines.ts";
 import { Timestamp } from "./primitives.ts";
 import type { RiskAssessment } from "./risk.ts";
 import { classifyByRules } from "./risk-rules.ts";
-import { Severity } from "./thread.ts";
 
 export { PointLines };
 
@@ -32,6 +31,13 @@ export const MismatchId = z
   .regex(/^m[1-9][0-9]*$/)
   .brand<"MismatchId">();
 export type MismatchId = z.infer<typeof MismatchId>;
+
+/**
+ * How much Claude thinks a finding matters, while it's Claude's: a comment the reviewer adds to
+ * the review carries none.
+ */
+export const Severity = z.enum(["minor", "major", "blocking"]);
+export type Severity = z.infer<typeof Severity>;
 
 /** Something in the code that looks wrong, on the lines it rests on: a draft comment. */
 export const Finding = z

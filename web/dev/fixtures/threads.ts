@@ -23,7 +23,7 @@ export const fixtureThreads: ThreadList = {
         {
           id: "PRRC_tax1",
           author: lee,
-          body: "**major:** This retries with no backoff, so a tax service that's down gets three calls in a row.",
+          body: "This retries with no backoff, so a tax service that's down gets three calls in a row.",
           createdAt: "2026-10-20T09:00:00Z",
           originalCommit: head,
         },
@@ -51,7 +51,7 @@ export const fixtureThreads: ThreadList = {
         {
           id: "PRRC_attempts1",
           author: lee,
-          body: "**minor:** Name says what it counts.\n\n```suggestion\nconst MAX_TAX_ATTEMPTS = 3;\n```",
+          body: "Name says what it counts.\n\n```suggestion\nconst MAX_TAX_ATTEMPTS = 3;\n```",
           createdAt: "2026-10-20T09:05:00Z",
           originalCommit: head,
         },

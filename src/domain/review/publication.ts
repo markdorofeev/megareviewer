@@ -2,7 +2,6 @@ import { z } from "zod";
 import { type Hunk, HunkId, hunkHasLine } from "../diff/index.ts";
 import type { Analysis } from "./analysis.ts";
 import { HttpUrl, Timestamp } from "./primitives.ts";
-import { Severity } from "./thread.ts";
 import { composeBody } from "./thread-body.ts";
 
 export const PublicationVerdict = z.enum(["approve", "request_changes", "comment"]);
@@ -30,7 +29,6 @@ export const HunkComment = z
     line: z.number().int().positive(),
     startLine: z.number().int().positive().optional(),
     body: z.string(),
-    severity: Severity.optional(),
     /** The lines that replace the commented ones; posted as a ```suggestion block. */
     suggestion: z.array(z.string()).readonly().optional(),
   })
@@ -112,7 +110,7 @@ export const buildPublication = (input: {
   const comments: PublicationComment[] = [];
   for (const comment of input.hunkComments ?? []) {
     const hunk = hunkOf.get(comment.hunkId);
-    // A severity alone says nothing; a suggestion does, even an empty one, which deletes lines.
+    // A suggestion says something without text, even an empty one, which deletes lines.
     if (hunk === undefined || (comment.body.trim() === "" && comment.suggestion === undefined)) {
       continue;
     }

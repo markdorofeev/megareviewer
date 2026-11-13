@@ -23,7 +23,7 @@ export const smallFeatureThreads: readonly ReviewThread[] = [
       {
         id: "PRRC_cache1",
         author: sam,
-        body: "**major:** This cache never evicts. A busy shop keeps every receipt in memory until the process restarts.",
+        body: "This cache never evicts. A busy shop keeps every receipt in memory until the process restarts.",
         createdAt: "2026-10-20T09:00:00Z",
         originalCommit: headSha,
       },
@@ -51,7 +51,7 @@ export const smallFeatureThreads: readonly ReviewThread[] = [
       {
         id: "PRRC_ttl1",
         author: sam,
-        body: "**minor:** Easier to read with a separator.\n\n```suggestion\nconst RECEIPT_TTL_MS = 60 * 60 * 1_000;\n```",
+        body: "Easier to read with a separator.\n\n```suggestion\nconst RECEIPT_TTL_MS = 60 * 60 * 1_000;\n```",
         createdAt: "2026-10-20T09:05:00Z",
         originalCommit: headSha,
       },

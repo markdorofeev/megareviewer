@@ -65,7 +65,6 @@ export {
   type ReviewThreadProps,
   ReviewThreadView,
   relativeTime,
-  SeverityChip,
   SuggestionDiff,
   ThreadBody,
   threadPlace,

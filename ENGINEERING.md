@@ -38,7 +38,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Analysis | All of the above for one PR at one head SHA and pipeline version |
 | Publication | The review sent back to the git host |
 | Review thread | A conversation the host keeps on lines of a file: its comments, whether it's resolved or outdated. Read live, never part of an analysis |
-| Severity | How much a comment matters: *minor*, *major* or *blocking*, carried in its body |
+| Severity | How much Claude thinks a finding matters: *minor*, *major* or *blocking*. Comments carry none |
 | Suggestion | The lines a comment proposes in place of the ones it's on |
 
 ### Bounded contexts

@@ -1,36 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  composeBody,
-  parseBlocks,
-  parseBody,
-  parseSpans,
-  splitSeverity,
-  suggestionOf,
-} from "./thread-body.ts";
-
-describe("splitSeverity", () => {
-  it.each([
-    ["**major:** Retries forever", "major", "Retries forever"],
-    ["**minor:** Name it", "minor", "Name it"],
-    ["**blocking:**\nLeaks the token", "blocking", "Leaks the token"],
-    ["**blocking:**", "blocking", ""],
-  ] as const)("reads %j", (body, severity, rest) => {
-    expect(splitSeverity(body)).toEqual({ severity, rest });
-  });
-
-  it.each([
-    "**Major:** capitalized",
-    "major: no bold",
-    "**major**: colon outside",
-    " **major:** leading space",
-    "Looks fine. **major:** in the middle",
-    "**nit:** not a level",
-    "**major:**glued",
-    "*major:* italics",
-  ])("gives no severity for the near miss %j", (body) => {
-    expect(splitSeverity(body)).toEqual({ severity: null, rest: body });
-  });
-});
+import { composeBody, parseBlocks, parseBody, parseSpans, suggestionOf } from "./thread-body.ts";
 
 describe("parseSpans", () => {
   it("reads code spans and leaves the rest as text", () => {
@@ -149,9 +118,8 @@ describe("parseBlocks", () => {
 });
 
 describe("parseBody and suggestionOf", () => {
-  it("reads the severity, then the blocks", () => {
-    expect(parseBody("**major:** Use `const`\n```suggestion\nconst a = 1;\n```")).toEqual({
-      severity: "major",
+  it("reads the blocks", () => {
+    expect(parseBody("Use `const`\n```suggestion\nconst a = 1;\n```")).toEqual({
       blocks: [
         {
           kind: "paragraph",
@@ -165,6 +133,12 @@ describe("parseBody and suggestionOf", () => {
     });
   });
 
+  it("keeps a prefix like **major:** in the text", () => {
+    expect(parseBody("**major:** Retries forever").blocks).toEqual([
+      { kind: "paragraph", spans: [{ kind: "text", text: "**major:** Retries forever" }] },
+    ]);
+  });
+
   it("finds no suggestion when there are two", () => {
     expect(suggestionOf("```suggestion\na\n```\n```suggestion\nb\n```")).toBeNull();
     expect(suggestionOf("no suggestion")).toBeNull();
@@ -173,20 +147,14 @@ describe("parseBody and suggestionOf", () => {
 
 describe("composeBody", () => {
   it("writes what parseBody reads back", () => {
-    const body = composeBody({
-      body: " Use const ",
-      severity: "minor",
-      suggestion: ["const a = 1;"],
-    });
-    expect(body).toBe("**minor:** Use const\n\n```suggestion\nconst a = 1;\n```");
-    expect(parseBody(body).severity).toBe("minor");
+    const body = composeBody({ body: " Use const ", suggestion: ["const a = 1;"] });
+    expect(body).toBe("Use const\n\n```suggestion\nconst a = 1;\n```");
     expect(suggestionOf(body)).toEqual(["const a = 1;"]);
   });
 
-  it("writes a suggestion alone, and a severity alone", () => {
+  it("writes a suggestion alone, and text alone", () => {
     expect(composeBody({ body: "", suggestion: [] })).toBe("```suggestion\n```");
-    expect(composeBody({ body: "", severity: "major" })).toBe("**major:**");
-    expect(composeBody({ body: "plain", severity: null, suggestion: null })).toBe("plain");
+    expect(composeBody({ body: "plain", suggestion: null })).toBe("plain");
   });
 
   it("fences a suggestion that holds fences with more backticks", () => {

@@ -652,7 +652,7 @@ describe("points", () => {
     // The SHOP-142 mismatch is a line of the finding that shows it, not a card of its own.
     expect(finding.textContent).toContain("Contradicts what was asked:");
     expect(screen.queryByRole("article", { name: /^SHOP-142 says/ })).toBeNull();
-    expect(finding.textContent).toContain("blocking");
+    expect(finding.querySelector("[data-slot=severity]")?.textContent).toBe("■blocking");
     expect(within(finding).getByText("Suggested change")).toBeTruthy();
   });
 
@@ -679,7 +679,7 @@ describe("points", () => {
     expect(kinds).toEqual(["risk", "risk", "finding", ...Array(6).fill("risk")]);
   });
 
-  it("add a finding to the review as a draft with its severity and suggestion", async () => {
+  it("add a finding to the review as a draft with its suggestion", async () => {
     const { requests } = renderReview();
     await loaded();
     await userEvent.click(addToReview(FINDING));
@@ -696,10 +696,11 @@ describe("points", () => {
       hunkId: h.receiptRoute,
       side: "new",
       line: 15,
-      severity: "blocking",
       suggestion: ["  const order = await findOrder(req.user.id, req.params.id);"],
     });
     expect(draft.body).toMatch(/^Any signed-in user can read every customer's receipt\n\n/);
+    // The severity was Claude's: the reviewer's comment carries none.
+    expect(draft.severity).toBeUndefined();
     // The card folds above the draft that holds it now.
     expect(pointCard(FINDING).textContent).toContain("In your review, below");
     expect(within(mainArea()).getByText("Draft · posts with your review")).toBeTruthy();
@@ -1474,7 +1475,7 @@ describe("comments on hunks", () => {
     expect(document.activeElement).toBe(field);
     await userEvent.type(field, "x");
     await userEvent.clear(field);
-    // Tab moves to the box's severity; Esc leaves the box.
+    // Esc leaves the box.
     await userEvent.keyboard("{Escape}");
     expect(within(mainArea()).queryByRole("textbox", { name: /^Comment on/ })).toBeNull();
     expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");

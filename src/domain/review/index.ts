@@ -56,6 +56,7 @@ export {
   PointState,
   type PointsInput,
   pointsOf,
+  Severity,
   strippable,
   validateFindings,
 } from "./point.ts";
@@ -90,7 +91,6 @@ export {
 } from "./risk-rules.ts";
 export {
   ReviewThread,
-  Severity,
   ThreadComment,
   ThreadCommentId,
   ThreadId,
@@ -106,7 +106,6 @@ export {
   parseBody,
   parseSpans,
   type Span,
-  splitSeverity,
   suggestionOf,
 } from "./thread-body.ts";
 export { extractTicketKeys } from "./ticket-keys.ts";

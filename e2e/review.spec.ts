@@ -467,7 +467,7 @@ test("replies to a thread and resolves it", async ({ page }) => {
   const changes = page.getByRole("region", { name: "Changes" });
 
   const cache = changes.getByRole("article", { name: "Thread on line 4", exact: true });
-  await expect(cache.getByText("major")).toBeVisible();
+  await expect(cache.getByText(/^This cache never evicts\./)).toBeVisible();
   await cache.getByRole("button", { name: "Reply…" }).click();
   const reply = cache.getByRole("textbox", { name: "Reply to the thread on line 4" });
   await expect(reply).toBeFocused();

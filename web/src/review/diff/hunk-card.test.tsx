@@ -216,7 +216,7 @@ describe("HunkCard", () => {
     const user = userEvent.setup();
     const onOpenComment = vi.fn();
     const onComment = vi.fn();
-    const comment = { ...draft, severity: "major" as const, suggestion: ["count"] };
+    const comment = { ...draft, suggestion: ["count"] };
     const props = { cards: [second], comments: [comment], onOpenComment, onComment };
     const { rerender } = renderWith(<Cards {...props} openComment={comment} />);
     expect(
@@ -235,7 +235,6 @@ describe("HunkCard", () => {
     if (saved === null) throw new Error("no draft");
     expect(within(saved).queryByRole("textbox")).toBeNull();
     expect(within(saved).getByText("Draft · posts with your review")).toBeTruthy();
-    expect(saved.querySelector("[data-slot=severity]")?.textContent).toBe("▲major");
     expect(saved.querySelector("[data-slot=thread-body]")?.textContent).toBe("Name it count.");
     expect(saved.querySelector("[data-kind=del]")?.textContent).toContain("b");
     expect(saved.querySelector("[data-kind=add]")?.textContent).toContain("count");
@@ -292,7 +291,7 @@ describe("HunkCard", () => {
   it("removes a draft with no text when it's added", async () => {
     const user = userEvent.setup();
     const onComment = vi.fn();
-    const empty = { ...draft, body: "  ", severity: "minor" as const };
+    const empty = { ...draft, body: "  " };
     renderWith(
       <Cards
         cards={[second]}
@@ -327,14 +326,14 @@ describe("HunkCard", () => {
     });
   });
 
-  it("gives the comment box no severity picker or suggestion editor, and keeps a draft's from before", async () => {
+  it("gives the comment box no suggestion editor, and keeps a draft's from before", async () => {
     const user = userEvent.setup();
     const onComment = vi.fn();
     const comment = { side: "new" as const, line: 42, startLine: 40, body: "Simplify" };
     renderWith(
       <Cards
         cards={[second]}
-        comments={[{ ...comment, severity: "minor", suggestion: ["a"] }]}
+        comments={[{ ...comment, suggestion: ["a"] }]}
         openComment={comment}
         onOpenComment={vi.fn()}
         onComment={onComment}
@@ -342,16 +341,13 @@ describe("HunkCard", () => {
       />,
     );
     expect(screen.getByText(/Bitbucket can't anchor a range/)).toBeTruthy();
-    expect(screen.queryByRole("group", { name: "Severity" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^(minor|major|blocking)$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Suggest a change" })).toBeNull();
     expect(screen.queryByRole("textbox", { name: "Suggested lines" })).toBeNull();
-    // A draft written before the controls went keeps its severity and suggestion as its text changes.
+    // A draft written before the toggle went keeps its suggestion as its text changes.
     await user.type(screen.getByRole("textbox", { name: "Comment on lines 40–42" }), "!");
     expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, {
       ...comment,
       body: "Simplify!",
-      severity: "minor",
       suggestion: ["a"],
     });
   });

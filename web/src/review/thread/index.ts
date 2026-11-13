@@ -5,7 +5,6 @@ export {
   CHIP,
   type ReviewThreadProps,
   ReviewThreadView,
-  SeverityChip,
   threadPlace,
 } from "./review-thread.tsx";
 export { SuggestionDiff } from "./suggestion-diff.tsx";

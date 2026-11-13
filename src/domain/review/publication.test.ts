@@ -68,7 +68,7 @@ describe("comments on hunks", () => {
     expect(publication.summary).not.toContain("on the code");
   });
 
-  it("writes a severity and a suggestion into the body, and keeps a range", () => {
+  it("writes a suggestion into the body, and keeps a range", () => {
     const publication = buildPublication({
       analysis: withoutDecisions,
       summary: "",
@@ -80,16 +80,15 @@ describe("comments on hunks", () => {
           line: added + 1,
           startLine: added,
           body: "Name it",
-          severity: "minor",
           suggestion: ["const total = 1;"],
         },
-        // A suggestion says something without text; a severity alone doesn't.
+        // A suggestion says something without text; blank text alone doesn't.
         { hunkId: target.id, side: "new", line: added, body: "", suggestion: [] },
-        { hunkId: target.id, side: "old", line: deleted, body: " ", severity: "major" },
+        { hunkId: target.id, side: "old", line: deleted, body: " " },
       ],
     });
     expect(publication.comments.map(({ body, startLine }) => ({ body, startLine }))).toEqual([
-      { body: "**minor:** Name it\n\n```suggestion\nconst total = 1;\n```", startLine: added },
+      { body: "Name it\n\n```suggestion\nconst total = 1;\n```", startLine: added },
       { body: "```suggestion\n```", startLine: undefined },
     ]);
   });

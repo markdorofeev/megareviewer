@@ -184,7 +184,6 @@ describe("postComment", () => {
     const posted = await useCases.postComment(id, {
       ...comment,
       startLine: first,
-      severity: "minor",
     });
     expect(posted).toEqual({ ok: true, value: null });
     const list = await useCases.getThreads(id);
@@ -193,7 +192,7 @@ describe("postComment", () => {
       side: "new",
       line: second,
       startLine: first,
-      comments: [{ body: "**minor:** Why 600?", originalCommit: smallFeature.pullRequest.headSha }],
+      comments: [{ body: "Why 600?", originalCommit: smallFeature.pullRequest.headSha }],
     });
   });
 

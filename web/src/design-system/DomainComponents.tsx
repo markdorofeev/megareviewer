@@ -389,10 +389,7 @@ const DraftDemo = () => {
         onComment={(_, comment) => {
           const same = (other: LineComment) =>
             other.side === comment.side && other.line === comment.line;
-          const empty =
-            comment.body === "" &&
-            comment.severity === undefined &&
-            comment.suggestion === undefined;
+          const empty = comment.body === "" && comment.suggestion === undefined;
           const rest = comments.filter((other) => !same(other));
           setComments(empty ? rest : [...rest, comment]);
         }}

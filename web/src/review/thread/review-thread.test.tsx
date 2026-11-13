@@ -27,7 +27,7 @@ const thread = (fields: Partial<ReviewThread> = {}): ReviewThread => ({
     {
       id: "c1",
       author: sam,
-      body: "**major:** Cache never evicts.",
+      body: "Cache never evicts.",
       createdAt: "2026-10-21T09:55:00Z",
       originalCommit: null,
     },
@@ -78,7 +78,7 @@ const show = (props: Partial<ReviewThreadProps> = {}) => {
 };
 
 describe("ReviewThreadView", () => {
-  it("shows each comment's author, Author chip, time and severity, with a rule between people", () => {
+  it("shows each comment's author, Author chip and time, with a rule between people", () => {
     show();
     const article = screen.getByRole("article", { name: "Thread on line 4" });
     expect(article.dataset.state).toBe("open");
@@ -88,7 +88,6 @@ describe("ReviewThreadView", () => {
     const time = within(article).getByText("5m ago");
     expect(time.getAttribute("title")).toMatch(/2026/);
     expect(within(article).getByText("3h ago")).toBeTruthy();
-    expect(article.querySelector("[data-slot=severity]")?.textContent).toBe("▲major");
     expect(within(article).getByText("Cache never evicts.")).toBeTruthy();
     expect(article.querySelectorAll("[data-slot=thread-divider]")).toHaveLength(1);
   });

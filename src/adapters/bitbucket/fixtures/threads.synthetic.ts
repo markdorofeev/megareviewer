@@ -35,7 +35,7 @@ export const bitbucketThreadExchanges: Exchange[] = [
         values: [
           comment({
             id: 101,
-            content: { raw: "**major:** This drops the error's cause." },
+            content: { raw: "This drops the error's cause." },
             created_on: "2026-01-02T09:00:00.000000+00:00",
             inline: { path: "pipe/pipe.py", from: null, to: 42 },
           }),

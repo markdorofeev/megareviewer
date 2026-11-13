@@ -1,5 +1,4 @@
 import { attachmentHost } from "./attachments.ts";
-import { Severity } from "./thread.ts";
 
 // A comment body is untrusted host content. It's read into a few kinds of block, and everything
 // else stays literal text: no HTML, no links, no images.
@@ -85,22 +84,8 @@ export type BodyBlock =
   | { readonly kind: "suggestion"; readonly lines: readonly string[] };
 
 export interface ParsedBody {
-  readonly severity: Severity | null;
   readonly blocks: readonly BodyBlock[];
 }
-
-const SEVERITY_PREFIX = /^\*\*(minor|major|blocking):\*\*(?:[ \t]+|\n|$)/;
-
-/**
- * The severity a body starts with, exactly as megareviewer writes it (`**major:** …`), and the
- * rest. Any other text, `**Major:**` or `major:` among them, has no severity: one is never guessed.
- */
-export const splitSeverity = (body: string): { severity: Severity | null; rest: string } => {
-  const match = SEVERITY_PREFIX.exec(body);
-  const level = Severity.safeParse(match?.[1]);
-  if (match === null || !level.success) return { severity: null, rest: body };
-  return { severity: level.data, rest: body.slice(match[0].length) };
-};
 
 /** An opening fence: its backticks and info string. Tildes and indented fences aren't read. */
 const OPENING = /^(`{3,})([^`]*)$/;
@@ -195,11 +180,8 @@ export const parseBlocks = (body: string): BodyBlock[] => {
   return blocks;
 };
 
-/** A body read for showing: its severity, then its blocks. */
-export const parseBody = (body: string): ParsedBody => {
-  const { severity, rest } = splitSeverity(body);
-  return { severity, blocks: parseBlocks(rest) };
-};
+/** A body read for showing, as its blocks. */
+export const parseBody = (body: string): ParsedBody => ({ blocks: parseBlocks(body) });
 
 /** The suggestion a body makes, or null without exactly one well-formed block. */
 export const suggestionOf = (body: string): readonly string[] | null => {
@@ -215,16 +197,14 @@ const fenceFor = (lines: readonly string[]): string => {
 };
 
 /**
- * A comment's body as it's posted: its severity first, as `**major:**`, then the text, then the
- * suggestion as a ```suggestion block, which GitHub renders as one.
+ * A comment's body as it's posted: the text, then the suggestion as a ```suggestion block, which
+ * GitHub renders as one.
  */
 export const composeBody = (input: {
   readonly body: string;
-  readonly severity?: Severity | null | undefined;
   readonly suggestion?: readonly string[] | null | undefined;
 }): string => {
-  const text = input.body.trim();
-  const head = input.severity == null ? text : `**${input.severity}:** ${text}`.trimEnd();
+  const head = input.body.trim();
   if (input.suggestion == null) return head;
   const fence = fenceFor(input.suggestion);
   const block = [`${fence}suggestion`, ...input.suggestion, fence].join("\n");

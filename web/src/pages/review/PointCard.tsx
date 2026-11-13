@@ -6,17 +6,11 @@ import {
   type PointId,
   type PointState,
   parseBody,
+  type Severity,
 } from "../../../../src/domain/review/index.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
-import {
-  CHIP,
-  lineRef,
-  RefChip,
-  SeverityChip,
-  SuggestionDiff,
-  ThreadBody,
-} from "../../review/thread/index.ts";
+import { CHIP, lineRef, RefChip, SuggestionDiff, ThreadBody } from "../../review/thread/index.ts";
 import { Button } from "../../ui/button.tsx";
 
 export const pointAnchor = (id: PointId): string => `point-${id}`;
@@ -101,6 +95,31 @@ const Folded = ({
     </article>
   );
 };
+
+// Spelled out because Tailwind only generates the classes it finds whole in the source.
+const SEVERITY: Readonly<Record<Severity, { readonly glyph: string; readonly className: string }>> =
+  {
+    blocking: {
+      glyph: "■",
+      className: "text-severity-blocker bg-review-changes-bg border-severity-blocker/25",
+    },
+    major: {
+      glyph: "▲",
+      className: "text-severity-major bg-severity-major-bg border-severity-major/25",
+    },
+    minor: {
+      glyph: "●",
+      className: "text-severity-minor bg-review-pending-bg border-severity-minor/25",
+    },
+  };
+
+/** How much Claude thinks a finding matters, while it's Claude's. */
+const SeverityChip = ({ severity }: { readonly severity: Severity }) => (
+  <span data-slot="severity" className={cn(CHIP, SEVERITY[severity].className)}>
+    <span aria-hidden="true">{SEVERITY[severity].glyph}</span>
+    {severity}
+  </span>
+);
 
 const MOTION = "animate-in duration-(--duration-slow) fade-in-0 slide-in-from-top-1";
 const RING = "shadow-[inset_0_0_0_2px_var(--ring)]";

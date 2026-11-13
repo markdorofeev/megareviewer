@@ -68,7 +68,7 @@ const COLOR_GROUPS: readonly { readonly title: string; readonly tokens: readonly
     tokens: ["thread-bg", "thread-border", "thread-marker", "suggestion-bg"],
   },
   {
-    title: "CI and severity (no component uses them yet)",
+    title: "CI (no component uses them yet), and the severity of Claude's findings",
     tokens: [
       "ci-success",
       "ci-failure",

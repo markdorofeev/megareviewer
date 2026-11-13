@@ -20,7 +20,6 @@ import {
   type PointKind,
   parseBody,
   type RiskAssessment,
-  type Severity,
 } from "../../../../src/domain/review/index.ts";
 import { RISK_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
@@ -34,7 +33,6 @@ import {
   CommentCard,
   lineRef,
   RefChip,
-  SeverityChip,
   SuggestionDiff,
   ThreadBody,
 } from "../thread/index.ts";
@@ -58,7 +56,6 @@ export interface LinePlace {
 /** A comment the reviewer is writing on lines of this hunk. */
 export interface LineComment extends LinePlace {
   readonly body: string;
-  readonly severity?: Severity;
   /** The lines that replace the commented ones. */
   readonly suggestion?: readonly string[];
 }
@@ -477,8 +474,8 @@ export const HunkCard = memo(function HunkCard({
   );
 });
 
-/** What the comment box keeps: the text, and a severity and suggested lines from before the box lost their controls. */
-type CommentDraft = Pick<LineComment, "body" | "severity" | "suggestion">;
+/** What the comment box keeps: the text, and suggested lines from before the box lost its toggle. */
+type CommentDraft = Pick<LineComment, "body" | "suggestion">;
 
 /**
  * A draft under a line. While editing, its text saves as it's typed and Cancel restores it as it
@@ -533,11 +530,9 @@ const CommentRow = ({
   }, [editing]);
   const label = placeLabel(place);
   const body = comment?.body ?? "";
-  const severity = comment?.severity;
   const suggestion = comment?.suggestion;
   const draft: CommentDraft = {
     body,
-    ...(severity === undefined ? {} : { severity }),
     ...(suggestion === undefined ? {} : { suggestion }),
   };
   // The draft as it was when the box opened, which Cancel puts back.
@@ -640,7 +635,6 @@ const CommentRow = ({
                     ? "Draft · not posted"
                     : "Draft · posts with your review"}
               </span>
-              {severity !== undefined && <SeverityChip severity={severity} />}
               {range !== null && (
                 <span className="text-caption text-muted-foreground">{range}</span>
               )}

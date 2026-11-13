@@ -191,7 +191,7 @@ export const THREADS = {
       {
         id: "c_open1",
         author: sam,
-        body: "**major:** Five attempts at `1, 2, 4, 8 s` is 15 s before failing.\n\nCheckout times out at 10 s:\n\n```ts\nconst CHECKOUT_TIMEOUT_MS = 10_000;\n```",
+        body: "Five attempts at `1, 2, 4, 8 s` is 15 s before failing.\n\nCheckout times out at 10 s:\n\n```ts\nconst CHECKOUT_TIMEOUT_MS = 10_000;\n```",
         createdAt: "2026-10-21T09:40:00Z",
         originalCommit: null,
       },
@@ -211,7 +211,7 @@ export const THREADS = {
       {
         id: "c_resolved1",
         author: sam,
-        body: "**minor:** Does this need to be exported?",
+        body: "Does this need to be exported?",
         createdAt: "2026-10-20T15:00:00Z",
         originalCommit: null,
       },
@@ -225,7 +225,7 @@ export const THREADS = {
       {
         id: "c_outdated1",
         author: sam,
-        body: "**blocking:** AbortError isn't a network error; don't retry it.",
+        body: "AbortError isn't a network error; don't retry it.",
         createdAt: "2026-10-19T11:00:00Z",
         originalCommit: null,
       },
@@ -236,7 +236,7 @@ export const THREADS = {
       {
         id: "c_grouped1",
         author: sam,
-        body: "**minor:** `attempts` reads as how many have run, not how many may.",
+        body: "`attempts` reads as how many have run, not how many may.",
         createdAt: "2026-10-21T07:10:00Z",
         originalCommit: null,
       },

@@ -67,7 +67,7 @@ export const threadExchanges: Exchange[] = [
                   comment(
                     "PRRC_kwDOAbc11",
                     author("lee-park", "Lee Park"),
-                    "**major:** The message is lost when `value` is undefined.",
+                    "The message is lost when `value` is undefined.",
                     "2026-01-02T09:00:00Z",
                   ),
                 ],

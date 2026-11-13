@@ -2,13 +2,6 @@ import { z } from "zod";
 import { Sha, Timestamp } from "./primitives.ts";
 import { HostUser } from "./pull-request.ts";
 
-/**
- * How much a comment matters, carried in its body as `**major:**` and the like, since hosts have
- * none. Nits have no level: they're fixed, not discussed.
- */
-export const Severity = z.enum(["minor", "major", "blocking"]);
-export type Severity = z.infer<typeof Severity>;
-
 /** A host's ID for a thread: GitHub's node ID, or Bitbucket's first comment's ID. */
 export const ThreadId = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 export type ThreadId = z.infer<typeof ThreadId>;
