@@ -40,7 +40,11 @@ export type CallPeekHandle = HoverCardHandle<CallPayload>;
 /** One per page: the calls' triggers and the card they open share it. */
 export const createCallPeekHandle = (): CallPeekHandle => createHoverCardHandle<CallPayload>();
 
-/** A call in the code: under the pointer it's underlined, and resting there opens its code. */
+/**
+ * A call in the code: a dotted underline says it opens its code, solid under the pointer, and
+ * resting there opens it. The dots are in the text's own color, which passes on every line and
+ * word tint; muted grey was 2.85:1 on a changed word in dark.
+ */
 export const CallTrigger = ({
   handle,
   payload,
@@ -61,7 +65,7 @@ export const CallTrigger = ({
     closeDelay={PEEK_CLOSE_MS}
     render={<span />}
     data-slot="call"
-    className="decoration-primary underline-offset-3 hover:underline data-popup-open:underline"
+    className="underline decoration-current decoration-dotted underline-offset-3 hover:decoration-primary hover:decoration-solid data-popup-open:decoration-primary data-popup-open:decoration-solid"
   >
     {children}
   </HoverCardTrigger>
