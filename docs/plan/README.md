@@ -198,6 +198,16 @@ Every review runs on Haiku 5.5 through Claude. This slice lets the reviewer choo
 
 Stage 51 ships with Claude's models only, so the list, its detection and the button are settled before a second provider depends on them. Stages 52 and 53 each start with a check that can stop them: whether Codex's sandbox blocks the network, and whether opencode can be run without tools at all. Stage 53 waits for 52 because it reuses its lockdown rule and its nullable cost.
 
+## Eleventh slice: the page a review starts from
+
+The main page is a URL field, a setup strip and two lists. This slice rebuilds it after the `hunk-home-v3` design: the setup strip becomes a Connections button in the header, and a calendar shows the reviews and comments the reviewer posted.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 54 | [The main page: lists, connections in the header, review activity](54-main-page.md) | 13, 23, 40, 46 | `web/src/pages/picker/`, the header's Connections button, `src/domain/review/activity.ts`, the `thread_posts` table, the activity route |
+
+The activity types, the store's methods and the route go in their own PR first.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
