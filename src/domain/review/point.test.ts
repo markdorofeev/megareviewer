@@ -310,10 +310,24 @@ describe("linkMismatches", () => {
     ],
   };
 
-  it("gives a finding the first mismatch on its hunk, and none when no mismatch is there", () => {
+  const one = { ...intent, mismatches: intent.mismatches.slice(0, 2) };
+
+  it("gives a finding the one mismatch on its hunk, and none when no mismatch is there", () => {
     const elsewhere = finding({ hunkId: HunkId.parse("h_00000000000000aa") });
-    expect(linkMismatches([finding(), elsewhere], intent).map((one) => one.mismatch)).toEqual([
+    expect(linkMismatches([finding(), elsewhere], one).map((it) => it.mismatch)).toEqual([
       MismatchId.parse("m2"),
+      null,
+    ]);
+  });
+
+  it("gives a mismatch to one finding only", () => {
+    const [first, second] = linkMismatches([finding(), finding()], one);
+    expect([first?.mismatch, second?.mismatch]).toEqual([MismatchId.parse("m2"), null]);
+  });
+
+  it("leaves two mismatches on one hunk to themselves, rather than guess", () => {
+    expect(linkMismatches([finding(), finding()], intent).map((it) => it.mismatch)).toEqual([
+      null,
       null,
     ]);
   });

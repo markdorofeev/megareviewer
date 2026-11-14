@@ -50,6 +50,17 @@ const runPass = (pass: ModelPass, answer: FixtureAnswer, feedback?: readonly str
 describeAnalysisModelContract("claude", () => modelWith(recorded()).model);
 
 describe("ClaudeAnalysisModel", () => {
+  it("says once that the answer has begun, at the stream's first event", async () => {
+    let answering = 0;
+    const result = await modelWith(recorded()).model.intent(smallFeatureInput, {
+      onAnswering: () => {
+        answering += 1;
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(answering).toBe(1);
+  });
+
   it("names the model and the prompt version", () => {
     expect(modelWith({}).model.version).toBe(`claude-haiku-5-5/p${PROMPT_VERSION}`);
     expect(modelWith({}, { model: "claude-opus-5-5" }).model.version).toBe(

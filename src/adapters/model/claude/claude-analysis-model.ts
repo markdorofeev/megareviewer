@@ -87,7 +87,13 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
 
       let message: Message;
       try {
-        message = await client.beta.messages.stream(request).finalMessage();
+        // The answer's first event comes once the prompt is read, and so cached.
+        message = await client.beta.messages
+          .stream(request)
+          .on("streamEvent", (event) => {
+            if (event.type === "message_start") passOptions?.onAnswering?.();
+          })
+          .finalMessage();
       } catch (error) {
         const modelError = fromSdkError(error);
         logger.warn("Model pass failed", {

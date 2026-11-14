@@ -265,13 +265,18 @@ const modelStages = async (
   const knownHunks = new Set<HunkId>(hunks.keys());
 
   for (const stage of MODEL_STAGES) await tracker.setStage(stage, "running");
-  const intentRun = runIntent(model, input, knownHunks, deps).then(async (result) => {
+  // The intent pass writes the PR to the prompt cache; the others start once it's there, to read
+  // it rather than each write it again. A transport that can't tell starts them at the intent's end.
+  const { promise: cached, resolve: cacheWritten } = Promise.withResolvers<void>();
+  const intentRun = runIntent(model, input, knownHunks, deps, cacheWritten).then(async (result) => {
+    cacheWritten();
     await tracker.setStage("intent", result.outcome.ok ? "done" : "failed", (analysis) => ({
       ...(result.outcome.ok ? { intent: result.outcome.value } : {}),
       ...adding(result)(analysis),
     }));
     return result.outcome;
   });
+  await Promise.race([cached, intentRun]);
   const [intent, findings, risk, decisions] = await Promise.all([
     intentRun,
     runFindings(model, input, hunks, deps).then(async (result) => {

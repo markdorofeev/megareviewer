@@ -278,13 +278,20 @@ export const validateFindings = (
   });
 
 /**
- * Each finding with the first of the intent's mismatches that rests on its hunk, which the finding
- * then shows. The passes run side by side, so the findings pass can't name one itself.
+ * Each finding with the intent's mismatch on its hunk, which the finding then shows. The passes
+ * run side by side, so the findings pass can't name one itself: a finding takes a mismatch only
+ * when it's the one left on its hunk, and each mismatch goes to one finding. Two on a hunk can't
+ * be told apart by the hunk, so they stay points of their own rather than land on the wrong one.
  */
-export const linkMismatches = (findings: readonly Finding[], intent: Intent): Finding[] =>
-  findings.map((finding) => {
-    const at = intent.mismatches.findIndex((mismatch) =>
-      mismatch.hunkIds.includes(finding.lines.hunkId),
+export const linkMismatches = (findings: readonly Finding[], intent: Intent): Finding[] => {
+  const taken = new Set<number>();
+  return findings.map((finding) => {
+    const open = intent.mismatches.flatMap((mismatch, at) =>
+      !taken.has(at) && mismatch.hunkIds.includes(finding.lines.hunkId) ? [at] : [],
     );
-    return { ...finding, mismatch: at === -1 ? null : MismatchId.parse(`m${at + 1}`) };
+    const [only] = open;
+    if (open.length !== 1 || only === undefined) return { ...finding, mismatch: null };
+    taken.add(only);
+    return { ...finding, mismatch: MismatchId.parse(`m${only + 1}`) };
   });
+};

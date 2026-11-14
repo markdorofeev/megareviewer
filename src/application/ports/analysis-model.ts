@@ -60,6 +60,11 @@ export interface PassOutput<T> {
 export interface PassOptions {
   /** Validation problems with the previous attempt's output, for the model to fix. */
   readonly feedback?: readonly string[];
+  /**
+   * Called once the model has read the input and begun its answer, which is when the input is in
+   * the prompt cache. A transport that can't tell doesn't call it.
+   */
+  readonly onAnswering?: () => void;
 }
 
 // Output schemas of the passes whose shape isn't a domain type as is. Model output is untrusted

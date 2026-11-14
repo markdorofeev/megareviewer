@@ -134,6 +134,8 @@ export const createReplayAnalysisModel = (
     invalid: () => unknown,
   ): Promise<Result<PassOutput<T>, ModelError>> => {
     const recorded = recording.passes[pass];
+    // A replay has no cache to wait for.
+    passOptions?.onAnswering?.();
     await sleep(recorded.durationMs * speed);
     const failure = SCENARIO_ERRORS[scenario]?.[pass];
     if (failure !== undefined) return err(failure);

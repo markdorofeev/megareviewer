@@ -157,6 +157,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     derive: () => PassValues[P],
   ): Promise<Result<PassOutput<PassValues[P]>, ModelError>> {
     this.calls.push({ pass, input, options });
+    options?.onAnswering?.();
     const answer = this.scripts[pass].shift() ?? ok(derive());
     if (!answer.ok) return answer;
     const usage: ModelUsage = {

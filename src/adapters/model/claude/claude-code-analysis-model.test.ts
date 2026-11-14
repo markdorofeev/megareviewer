@@ -101,6 +101,17 @@ describe("ClaudeCodeAnalysisModel", () => {
     expect(usual.logger.entries.filter((entry) => entry.level === "warn")).toEqual([]);
   });
 
+  it("says once that the answer has begun, when the model's first message comes", async () => {
+    let answering = 0;
+    const result = await modelWith().model.intent(smallFeatureInput, {
+      onAnswering: () => {
+        answering += 1;
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(answering).toBe(1);
+  });
+
   it("runs every pass with the same system prompt file, which holds the PR data", async () => {
     const { model, calls } = modelWith();
     await model.intent(smallFeatureInput);

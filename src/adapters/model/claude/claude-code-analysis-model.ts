@@ -79,7 +79,11 @@ export const createClaudeCodeAnalysisModel = (
         attempt: passOptions?.feedback ? "retry" : "first",
       });
 
-      const called = await runStructuredCall(run, { ...call, onPlan: billing === "plan" });
+      const called = await runStructuredCall(run, {
+        ...call,
+        onPlan: billing === "plan",
+        ...(passOptions?.onAnswering === undefined ? {} : { onAnswering: passOptions.onAnswering }),
+      });
       if (!called.ok) {
         logger.warn("Model pass failed", {
           pass,

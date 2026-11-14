@@ -130,6 +130,7 @@ export const runIntent = async (
   input: AnalysisInput,
   knownHunks: ReadonlySet<HunkId>,
   deps: PassDeps,
+  onAnswering?: () => void,
 ): Promise<PassResult<Intent>> => {
   const unknownIn = (intent: Intent) =>
     validateHunkReferences(
@@ -138,7 +139,8 @@ export const runIntent = async (
     );
   const { outcome, usage, modelCalls } = await callChecked(
     "intent",
-    (options) => model.intent(input, options),
+    (options) =>
+      model.intent(input, onAnswering === undefined ? options : { ...options, onAnswering }),
     (intent) => unknownIn(intent).map(describeUnknown),
     deps,
   );

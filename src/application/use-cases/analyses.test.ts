@@ -17,7 +17,7 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
-import type { AnalysisInput, CodeParser } from "../ports/index.ts";
+import type { AnalysisInput, CodeParser, PassOptions } from "../ports/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
@@ -377,13 +377,19 @@ describe("the analysis pipeline", () => {
     expect(analysis.warnings).toHaveLength(1);
   });
 
-  it("runs the passes side by side, each timed: findings don't wait for the intent", async () => {
+  it("starts the other passes once the intent's answer begins, while it's still answering", async () => {
     const clock = new FixedClock("2026-10-21T09:00:00Z");
+    const findingsCalled = Promise.withResolvers<void>();
     const model = new (class extends FakeAnalysisModel {
-      override async intent(...args: Parameters<FakeAnalysisModel["intent"]>) {
-        await Promise.resolve();
+      override async intent(input: AnalysisInput, options?: PassOptions) {
+        options?.onAnswering?.();
+        await findingsCalled.promise;
         clock.advance(7_300);
-        return super.intent(...args);
+        return super.intent(input, options);
+      }
+      override async findings(input: AnalysisInput, options?: PassOptions) {
+        findingsCalled.resolve();
+        return super.findings(input, options);
       }
     })();
     const { analyze } = setup({ model, clock });
@@ -395,6 +401,22 @@ describe("the analysis pipeline", () => {
     for (const pass of ["findings", "risk", "decisions"]) {
       expect(usageOf(pass)?.startedAt).toBe(started);
     }
+  });
+
+  it("starts them at the intent's end when the transport can't tell when its answer began", async () => {
+    const clock = new FixedClock("2026-10-21T09:00:00Z");
+    const model = new (class extends FakeAnalysisModel {
+      override async intent(input: AnalysisInput, options?: PassOptions) {
+        clock.advance(7_300);
+        return super.intent(input, { feedback: options?.feedback ?? [] });
+      }
+    })();
+    const { analyze } = setup({ model, clock });
+    const analysis = await analyze();
+
+    const startOf = (pass: string) =>
+      Date.parse(analysis.usage.find((usage) => usage.pass === pass)?.startedAt ?? "");
+    expect(startOf("findings") - startOf("intent")).toBe(7_300);
   });
 
   it("traces every model call: why a pass ran again, and why one failed", async () => {
@@ -665,9 +687,9 @@ describe("the analysis pipeline", () => {
       const { analyze } = setup({ model });
       const analysis = await analyze();
       expect(analysis.status).toBe("complete");
-      expect(model.callsTo("intent").map((call) => call.options)).toEqual([
+      expect(model.callsTo("intent").map((call) => call.options?.feedback)).toEqual([
         undefined,
-        { feedback: ["riskClass: invalid enum"] },
+        ["riskClass: invalid enum"],
       ]);
       expect(analysis.usage.filter((usage) => usage.pass === "intent")).toHaveLength(1);
     });
@@ -700,9 +722,9 @@ describe("the analysis pipeline", () => {
       model.script("intent", ok(intent), ok(intent));
       const { analyze, logger } = setup({ model });
       const analysis = await analyze();
-      expect(model.callsTo("intent")[1]?.options).toEqual({
-        feedback: [`${unknownHunk} isn't a hunk of this pull request.`],
-      });
+      expect(model.callsTo("intent")[1]?.options?.feedback).toEqual([
+        `${unknownHunk} isn't a hunk of this pull request.`,
+      ]);
       expect(analysis.intent?.mismatches[0]?.hunkIds).toEqual([h1]);
       // The reviewer can't act on the model's mistake, so it's logged, not shown.
       expect(analysis.warnings).toEqual([]);
