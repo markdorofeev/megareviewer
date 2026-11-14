@@ -75,8 +75,14 @@ const Row = ({
       >
         <span className="flex min-w-0 flex-1 flex-col gap-1 self-stretch">
           <span className="truncate font-medium">{item.title}</span>
-          <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-muted-foreground @min-[480px]:flex-nowrap">
-            <span className="shrink-0 font-mono text-code-compact">{prLabel(item.ref)}</span>
+          {/* One line: the repository gives way first, and a long name is cut at 8 rem. */}
+          <span className="flex min-w-0 items-center gap-x-1.5 text-caption text-muted-foreground">
+            <span className="flex min-w-0 gap-[1ch] font-mono text-code-compact">
+              <span className="min-w-0 truncate">
+                {item.ref.repo.owner}/{item.ref.repo.repo}
+              </span>
+              <span className="shrink-0">#{item.ref.number}</span>
+            </span>
             <span
               aria-hidden="true"
               className={cn(
@@ -86,11 +92,18 @@ const Row = ({
             >
               {initialsOf(item.author.name)}
             </span>
-            <span className="max-w-48 min-w-0 truncate">{author}</span>
-            <time dateTime={item.updatedAt} title={fullDate(item.updatedAt)} className="shrink-0">
+            <span className="max-w-32 shrink-0 truncate">{author}</span>
+            <time
+              dateTime={item.updatedAt}
+              title={fullDate(item.updatedAt)}
+              className="shrink-0 whitespace-nowrap"
+            >
               {relativeTime(item.updatedAt, nowMs)}
             </time>
-            <Badge variant="outline" className="ml-auto text-muted-foreground @min-[480px]:hidden">
+            <Badge
+              variant="outline"
+              className="ml-auto shrink-0 text-muted-foreground @min-[480px]:hidden"
+            >
               {host}
             </Badge>
           </span>
@@ -102,7 +115,8 @@ const Row = ({
             <span className="text-muted-foreground">Esc to cancel</span>
           </span>
         ) : (
-          <span className="flex shrink-0 items-center gap-2">
+          // A narrow card has its host on the second line, so this column would only be a gap.
+          <span className="flex shrink-0 items-center gap-2 @max-[479px]:hidden">
             <Badge variant="outline" className="text-muted-foreground @max-[479px]:hidden">
               {host}
             </Badge>

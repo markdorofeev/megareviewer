@@ -274,4 +274,6 @@ It's read when the page opens and with the lists' reads after that.
 - **The lists are their own component,** `PullRequestLists`, which takes the status, the list and the start's failure as props, so the design system page shows each state without the API. `ConnectionsPopover` is the same for the button.
 - **The field's states start from `initial`,** a link and its problem, for the design system page; the page itself never passes it.
 - **The design system's focus walk takes three minutes at most,** with the main page's section: 337 stops, about 2 minutes when the four combinations run in parallel.
+- **A row's second line never wraps.** The repository truncates first, keeping its `#number`, and a name is cut at 8 rem; in a card narrower than 480 px the host's badge ends that line and the right column, which would only hold the chevron, goes. Wrapping was the first version, and a long repository pushed the badge onto a third line, short of the card's edge.
+- **Authors' initials take one of eight color pairs,** `--avatar-1` to `--avatar-8`, from a hash of the author's host ID, so a person keeps theirs on every row.
 - **The calendar is measured before its first paint** and its card clips, so a narrow window never scrolls sideways while 26 weeks wait for the measurement.
