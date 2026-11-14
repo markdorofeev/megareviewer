@@ -15,6 +15,7 @@ import {
   type Point,
   PointId,
   type PointKind,
+  type PointState,
   pointsOf,
   pullRequestUrl,
   type ReviewThread,
@@ -478,6 +479,17 @@ const Review = ({
     parseHunkComments,
   );
   const [openComment, setOpenComment] = useState<{ partId: PartId; place: LinePlace } | null>(null);
+  /**
+   * What a point's Comment or Edit changed before opening the box, which Cancel puts back: the
+   * draft that was on its lines, if any, and the point's state.
+   */
+  const raised = useRef<{
+    partId: PartId;
+    place: LinePlace;
+    before: HunkComment | undefined;
+    pointId: PointId;
+    state: PointState;
+  } | null>(null);
   // A comment shows in the part that holds its line.
   const commentsByPart = useMemo(() => commentsInParts(hunkComments, index), [hunkComments, index]);
   const commentsOf = useCallback(
@@ -502,6 +514,7 @@ const Review = ({
   );
   const openCommentOn = useCallback(
     (partId: PartId, place: LinePlace | null) => {
+      raised.current = null;
       setOpenComment((previous) => {
         // Extending a comment into a range takes its draft along to the range's last line.
         if (place?.startLine !== undefined && previous !== null && previous.partId === partId) {
@@ -522,6 +535,18 @@ const Review = ({
   );
 
   const pointStates = usePoints(analysisId, view.pointReviews);
+  const { setState: setPointState } = pointStates;
+  const cancelComment = useCallback(
+    (partId: PartId, place: LinePlace) => {
+      const undo = raised.current;
+      raised.current = null;
+      if (undo === null || undo.partId !== partId || undo.place.side !== place.side) return;
+      if (undo.place.line !== place.line) return;
+      writeComment(partId, undo.before ?? { ...undo.place, body: "" });
+      if (undo.state !== "raised") void setPointState(undo.pointId, undo.state);
+    },
+    [writeComment, setPointState],
+  );
 
   // The host's conversation on the code, read live, beside the analysis.
   const threads = useThreads(analysisId, analysis.stages.prep === "done");
@@ -738,17 +763,17 @@ const Review = ({
       });
     }
     setCurrentPoint(point.id);
+    const state = pointStates.stateOf(point.id);
     void pointStates.setState(point.id, "raised");
     if (add) return;
     const { startLine } = draft ?? place;
-    setOpenComment({
-      partId,
-      place: {
-        side: place.side,
-        line: place.line,
-        ...(startLine === undefined ? {} : { startLine }),
-      },
-    });
+    const opened = {
+      side: place.side,
+      line: place.line,
+      ...(startLine === undefined ? {} : { startLine }),
+    };
+    setOpenComment({ partId, place: opened });
+    raised.current = { partId, place: opened, before: draft, pointId: point.id, state };
     scrollTo(hunkAnchor(partId));
   };
   const commentOnFocused = () => {
@@ -758,7 +783,9 @@ const Review = ({
     const line = found?.hunk.lines.find((one) => one.kind !== "context");
     if (!complete || found === undefined || line === undefined) return;
     const place = commentPlace(line);
-    if (place !== null && current !== null) setOpenComment({ partId: current, place });
+    if (place === null || current === null) return;
+    raised.current = null;
+    setOpenComment({ partId: current, place });
   };
   /**
    * Opens the code a call runs: the call after the open one on the focused line, or the first,
@@ -1032,6 +1059,7 @@ const Review = ({
     commentsOf,
     openComment,
     onOpenComment: openCommentOn,
+    onCancelComment: cancelComment,
     // Line comments stay open once the review is published: they post now, on their own.
     onComment: complete ? writeComment : undefined,
     ...(complete ? { onCommentNow: postCommentNow } : {}),

@@ -152,6 +152,8 @@ export interface HunkCardProps {
   /** The line whose comment box is open and focused, if it's in this hunk. */
   readonly openComment?: LinePlace | null;
   readonly onOpenComment?: (id: PartId, place: LinePlace | null) => void;
+  /** Told when the box is cancelled, after it put back its draft, to undo what opened it. */
+  readonly onCancelComment?: (id: PartId, place: LinePlace) => void;
   readonly onComment?: (id: PartId, comment: LineComment) => void;
   /**
    * Posts a comment on its own, now, rather than with the review: an error message, or null once
@@ -209,6 +211,7 @@ export const HunkCard = memo(function HunkCard({
   comments = [],
   openComment = null,
   onOpenComment,
+  onCancelComment,
   onComment,
   onCommentNow,
   published = false,
@@ -430,6 +433,7 @@ export const HunkCard = memo(function HunkCard({
                         })
                       }
                       onDone={() => onOpenComment?.(id, null)}
+                      onCancel={() => onCancelComment?.(id, commentAt)}
                       published={published}
                       {...(onCommentNow === undefined
                         ? {}
@@ -492,6 +496,7 @@ const CommentRow = ({
   onChange,
   onEdit,
   onDone,
+  onCancel,
   onPostNow,
   published,
   pinned,
@@ -508,6 +513,7 @@ const CommentRow = ({
   readonly onChange?: (draft: CommentDraft) => void;
   readonly onEdit: () => void;
   readonly onDone: () => void;
+  readonly onCancel?: () => void;
   /** Posts the draft on its own, now: an error message, or null once it's posted. */
   readonly onPostNow?: (draft: CommentDraft) => Promise<string | null>;
   /** The review is published, so the draft can only post now. */
@@ -576,6 +582,7 @@ const CommentRow = ({
         ? { body: "" }
         : before,
     );
+    onCancel?.();
     onDone();
   };
 

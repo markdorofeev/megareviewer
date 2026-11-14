@@ -959,6 +959,38 @@ describe("points", () => {
     expect((field as HTMLTextAreaElement).value).toMatch(RISK);
   });
 
+  it("leave no draft and go back to open when the comment box is cancelled", async () => {
+    const { requests } = renderReview();
+    await loaded();
+    await userEvent.click(pointButton("Comment", RISK));
+    await userEvent.click(within(mainArea()).getByRole("button", { name: "Cancel" }));
+    expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");
+    expect(within(mainArea()).queryByText("Draft · posts with your review")).toBeNull();
+    expect(pointCard(RISK).textContent).not.toContain("Commented");
+    await waitFor(() =>
+      expect(putRequests(requests).at(-1)).toMatchObject({
+        url: expect.stringMatching(/\/points\/r(:|%3A)/),
+        body: { state: "open" },
+      }),
+    );
+  });
+
+  it("put back what the reviewer wrote when the box a finding opened is cancelled", async () => {
+    window.localStorage.setItem(
+      `megareviewer:hunk-comments:${id}`,
+      JSON.stringify([{ hunkId: h.receiptRoute, side: "new", line: 15, body: "My words." }]),
+    );
+    renderReview();
+    await loaded();
+    await userEvent.click(pointButton("Edit", FINDING));
+    await userEvent.click(within(mainArea()).getByRole("button", { name: "Cancel" }));
+    const [draft] = JSON.parse(
+      window.localStorage.getItem(`megareviewer:hunk-comments:${id}`) ?? "[]",
+    );
+    expect(draft).toMatchObject({ body: "My words." });
+    expect(addToReview(FINDING)).toBeTruthy();
+  });
+
   it("fold to one line when dismissed, and come back", async () => {
     const { requests } = renderReview();
     await loaded();

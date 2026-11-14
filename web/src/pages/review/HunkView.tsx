@@ -19,6 +19,7 @@ export interface HunkDeps {
   readonly commentsOf: (id: PartId) => readonly LineComment[];
   readonly openComment: { readonly partId: PartId; readonly place: LinePlace } | null;
   readonly onOpenComment: (id: PartId, place: LinePlace | null) => void;
+  readonly onCancelComment?: (id: PartId, place: LinePlace) => void;
   /** Without it, comments are read-only: the review is published. */
   readonly onComment?: (id: PartId, comment: LineComment) => void;
   /** Posts a comment on its own, now; without it, comments only go with the review. */
@@ -85,6 +86,7 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       comments={deps.commentsOf(id)}
       openComment={deps.openComment?.partId === id ? deps.openComment.place : null}
       onOpenComment={deps.onOpenComment}
+      {...(deps.onCancelComment === undefined ? {} : { onCancelComment: deps.onCancelComment })}
       onComment={deps.onComment}
       {...(deps.onCommentNow === undefined ? {} : { onCommentNow: deps.onCommentNow })}
       published={deps.published}
