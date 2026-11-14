@@ -3,14 +3,23 @@ import { loadConfig as loadAnthropicConfig } from "@anthropic-ai/sdk/core/creden
 import {
   CLAUDE_MODELS,
   type ClaudeCodeStatus,
+  CODEX_MODELS,
+  type CodexCatalogModel,
+  type CodexStatus,
   claudeCodeStatus,
+  codexStatus,
   compareVersions,
   createClaudeAnalysisModel,
   createClaudeCodeAnalysisModel,
+  createCodexAnalysisModel,
+  createRunCodex,
+  DEFAULT_CODEX_MODEL,
   DEFAULT_MODEL,
   MIN_CLAUDE_CODE_VERSION,
+  MIN_CODEX_VERSION,
   planName,
   type RunClaude,
+  type RunCodex,
 } from "../adapters/model/index.ts";
 import type { AnalysisModel, Logger, ModelCatalog } from "../application/ports/index.ts";
 import {
@@ -55,6 +64,26 @@ export const claudeCodeProblem = (status: ClaudeCodeStatus): string | null => {
   }
 };
 
+/** What runs the passes through Codex, and who pays. */
+export const describeCodex = (billing: ModelBilling): string =>
+  billing === "plan" ? "Codex, on your ChatGPT plan" : "Codex, billed to your OpenAI account";
+
+/** Why Codex can't run the passes, or null when it can. */
+export const codexProblem = (status: CodexStatus): string | null => {
+  switch (status.state) {
+    case "not-installed":
+      return "Codex isn't installed: install the Codex CLI, then run `codex login`";
+    case "signed-out":
+      return "Codex isn't signed in: run `codex login`";
+    case "failed":
+      return status.message;
+    case "signed-in":
+      return compareVersions(status.version, MIN_CODEX_VERSION) < 0
+        ? `Codex ${status.version} is older than ${MIN_CODEX_VERSION}: run \`codex update\``
+        : null;
+  }
+};
+
 /**
  * Whether the SDK will find credentials: an API key or auth token from the environment, or an
  * `ant auth login` profile. Without them its first request throws, which would be a bug report
@@ -75,9 +104,24 @@ export type ProviderStatus =
   | { readonly available: true; readonly via: string; readonly billing: ModelBilling }
   | { readonly available: false; readonly reason: string };
 
-interface Provider {
+/** A model a provider lists. */
+export interface ProviderModel {
+  readonly id: string;
+  readonly name: string;
+  /** Who made it: the page names a run's points by it. */
+  readonly family: string;
+}
+
+export interface CatalogProvider {
   readonly id: ModelProvider;
   readonly name: string;
+  /** Its default model, when it's the first that can run. */
+  readonly defaultModel: string;
+  /** The models it lists: all of megareviewer's, or the ones its status says it can run. */
+  models(status: ProviderStatus): readonly ProviderModel[];
+}
+
+interface Provider extends CatalogProvider {
   probe(): Promise<ProviderStatus>;
   model(model: string, status: ProviderStatus & { available: true }): AnalysisModel;
 }
@@ -112,18 +156,18 @@ const probeWithin = async (provider: Provider, timeoutMs: number): Promise<Provi
 
 /** Every listed model on every provider, in the providers' order, cheapest model first. */
 export const catalogOptions = (
-  providers: readonly { readonly id: ModelProvider; readonly name: string }[],
+  providers: readonly CatalogProvider[],
   statuses: readonly ProviderStatus[],
 ): ModelOptions => {
   const options = providers.flatMap((provider, index): ModelOption[] => {
     const status = statuses[index] ?? { available: false, reason: "not checked" };
-    return CLAUDE_MODELS.map((model) => ({
+    return provider.models(status).map((model) => ({
       id: modelOptionId(provider.id, model.id),
       provider: provider.id,
       providerName: provider.name,
       model: model.id,
       modelName: model.name,
-      family: "Claude",
+      family: model.family,
       via: status.available ? status.via : provider.name,
       measured: true,
       available: status.available,
@@ -134,12 +178,31 @@ export const catalogOptions = (
   const provider = firstAvailable ?? providers[0];
   return {
     options,
-    defaultId: provider === undefined ? null : modelOptionId(provider.id, DEFAULT_MODEL),
+    defaultId: provider === undefined ? null : modelOptionId(provider.id, provider.defaultModel),
   };
 };
 
+const CLAUDE: readonly ProviderModel[] = CLAUDE_MODELS.map(({ id, name }) => ({
+  id,
+  name,
+  family: "Claude",
+}));
+
+/**
+ * Codex's listed models: the ones megareviewer measured that the reviewer's account offers, or
+ * all of them while Codex can't say.
+ */
+export const codexModels = (
+  catalog: readonly CodexCatalogModel[] | null,
+): readonly ProviderModel[] =>
+  CODEX_MODELS.filter(
+    (model) => catalog === null || catalog.some((offered) => offered.slug === model.id),
+  ).map(({ id, name }) => ({ id, name, family: "GPT" }));
+
 export interface ModelCatalogOptions {
   readonly runClaude: RunClaude;
+  /** Default: the `codex` on the PATH. */
+  readonly runCodex?: RunCodex;
   readonly client?: Anthropic;
   readonly logger: Logger;
   readonly timeoutMs?: number;
@@ -147,26 +210,34 @@ export interface ModelCatalogOptions {
   readonly probe?: {
     readonly claudeCode: () => Promise<ClaudeCodeStatus>;
     readonly apiConfigured: () => Promise<boolean>;
+    readonly codex: () => Promise<CodexStatus>;
   };
 }
 
 /**
- * Claude's models on Claude Code, then on the Anthropic API. Both are asked at once; one that can
- * run is kept for the process, and one that can't is asked again on the next request.
+ * Claude's models on Claude Code, then on the Anthropic API, then OpenAI's on Codex. All are asked
+ * at once; one that can run is kept for the process, and one that can't is asked again on the
+ * next request.
  */
 export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog => {
   const { runClaude, logger } = options;
+  const runCodex = options.runCodex ?? createRunCodex();
   const client = options.client ?? new Anthropic();
   const timeoutMs = options.timeoutMs ?? PROBE_TIMEOUT_MS;
   const probe = options.probe ?? {
     claudeCode: () => claudeCodeStatus(runClaude),
     apiConfigured: () => anthropicConfigured(client, logger),
+    codex: () => codexStatus(runCodex),
   };
+  // What Codex last said it offers: the models it lists, their context windows and efforts.
+  let codexCatalog: readonly CodexCatalogModel[] | null = null;
 
   const providers: readonly Provider[] = [
     {
       id: "claude-code",
       name: "Claude Code",
+      defaultModel: DEFAULT_MODEL,
+      models: () => CLAUDE,
       async probe() {
         const status = await probe.claudeCode();
         const problem = claudeCodeProblem(status);
@@ -181,6 +252,8 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
     {
       id: "anthropic-api",
       name: "Anthropic API",
+      defaultModel: DEFAULT_MODEL,
+      models: () => CLAUDE,
       async probe() {
         return (await probe.apiConfigured())
           ? { available: true, via: API_VIA, billing: "api" }
@@ -190,6 +263,32 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
             };
       },
       model: (model) => createClaudeAnalysisModel({ client, logger, model }),
+    },
+    {
+      id: "codex",
+      name: "Codex",
+      defaultModel: DEFAULT_CODEX_MODEL,
+      models: (status) => codexModels(status.available ? codexCatalog : null),
+      async probe() {
+        const status = await probe.codex();
+        const problem = codexProblem(status);
+        if (status.state !== "signed-in" || problem !== null) {
+          return { available: false, reason: problem ?? "Codex can't run" };
+        }
+        codexCatalog = status.models;
+        return { available: true, via: describeCodex(status.billing), billing: status.billing };
+      },
+      model: (model, status) => {
+        const offered = codexCatalog?.find((candidate) => candidate.slug === model);
+        return createCodexAnalysisModel({
+          run: runCodex,
+          billing: status.billing,
+          model,
+          contextWindow: offered?.contextWindow ?? null,
+          efforts: offered?.efforts ?? [],
+          logger,
+        });
+      },
     },
   ];
 
@@ -228,7 +327,7 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
       const provider = providers.find((candidate) => candidate.id === providerId);
       const status = provider === undefined ? undefined : kept.get(provider.id);
       if (provider === undefined || status === undefined) return null;
-      if (!CLAUDE_MODELS.some((model) => model.id === modelId)) return null;
+      if (!provider.models(status).some((model) => model.id === modelId)) return null;
       const model = provider.model(modelId, status);
       models.set(optionId, model);
       return model;

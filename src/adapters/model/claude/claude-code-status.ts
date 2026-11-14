@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { ModelBilling } from "../../../domain/review/index.ts";
 import type { RunClaude } from "./run-claude.ts";
 
+export { compareVersions } from "../shared/run-command.ts";
+
 /** The version the fixtures were recorded on, and the oldest whose flags are known to lock a pass down. */
 export const MIN_CLAUDE_CODE_VERSION = "2.1.303";
 
@@ -62,16 +64,6 @@ export const claudeCodeStatus = async (run: RunClaude): Promise<ClaudeCodeStatus
     plan: onPlan ? (auth.data.subscriptionType ?? null) : null,
     billing: onPlan ? "plan" : "api",
   };
-};
-
-/** -1, 0 or 1 as `a` is older than, the same as or newer than `b`, both "x.y.z". */
-export const compareVersions = (a: string, b: string): number => {
-  const [left, right] = [a, b].map((version) => version.split(".").map(Number));
-  for (let index = 0; index < 3; index++) {
-    const difference = (left?.[index] ?? 0) - (right?.[index] ?? 0);
-    if (difference !== 0) return Math.sign(difference);
-  }
-  return 0;
 };
 
 const PLAN_NAMES: Readonly<Record<string, string>> = {

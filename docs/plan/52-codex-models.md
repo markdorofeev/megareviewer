@@ -120,6 +120,20 @@ Codex CLI 0.162.0 on macOS 15 (Seatbelt), signed in with ChatGPT, `gpt-6-luna` a
 
 So the bound holds with a different lockdown than the doc's. Every tool that can read anything outside the prompt shows as a stream item when it runs, and the network is closed to all of them. The one that doesn't show, code mode's `exec`, is turned off with `code_mode_host`, so it can't run either. The lockdown kills the process on any item but `reasoning`, `agent_message` and `error`.
 
+### Task 2: the cache at size
+
+delphi-code #2's rendered input from its eval case, 94,758 bytes, about 32,200 input tokens a call, `gpt-6-luna` at low effort, with the lockdown above, 2026-11-14. Each run is a new process, so a new thread.
+
+| Placement | Calls sharing the PR | Cache read on each later call |
+|---|---|---|
+| PR in the instructions file, the pass's task on stdin | 2, then 2 more a few minutes later | 0; 0; 30,208 (the same prompt as the first call) |
+| PR leading stdin, the task after it | 2, then 1 more | 0; 0; 0 |
+| PR in the instructions file, 6 tasks: one, then three at once, then two | 6 | 0, 4,224, 4,224, 0, 4,224 |
+
+- **The cache doesn't hold the PR across processes.** In 11 later calls sharing the PR, one read it from cache, and that one sent the same prompt as an earlier call. 4,224 tokens is the part before our instructions, Codex's tools and its own developer text. `cache_write_input_tokens` was 0 on every call.
+- **Why, from OpenAI's [prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching):** on GPT-5.6 and later a cache is looked up at message ends, the latest one, up to 20 earlier ones and the end of the first developer block, and it lives on one machine; a request reaches it only if it's routed there. Codex sends its thread's ID as `prompt_cache_key`, a new one per `codex exec`, and has no setting for it. With the PR on stdin it's one message with the pass's task, so no later pass can share it at all; in the instructions file it ends a block a later pass could read, when routing allows.
+- **Decided: the PR goes in the instructions file**, the only placement that can be read from cache, and one schema for every pass, as on Claude: with the cache this rare, a schema per pass wasn't measurable, and the union can't make it rarer. A run on delphi-code #2 pays for the PR five times, about 160k input tokens out of the ChatGPT plan's limits. Sharing one thread across passes (`codex exec resume`) was the way to a shared key, and was left: it carries each pass's answer into the next and writes the session to the reviewer's Codex history.
+
 ## Open issues
 
 - **Whether OpenAI's terms allow a published tool to run `codex exec` on a reviewer's plan.** Their pricing page describes an API key as the way to automate in shared environments such as CI and says nothing about a local tool. Read the terms, and ask OpenAI before the release that ships this. Until then the README says megareviewer "runs your Codex".

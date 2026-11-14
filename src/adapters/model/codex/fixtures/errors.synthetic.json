@@ -1,0 +1,134 @@
+{
+  "usage-limit": [
+    {
+      "type": "thread.started",
+      "thread_id": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "type": "turn.started"
+    },
+    {
+      "type": "error",
+      "message": "You've hit your usage limit. Upgrade to Pro or try again later."
+    },
+    {
+      "type": "turn.failed",
+      "error": {
+        "message": "You've hit your usage limit. Upgrade to Pro or try again later."
+      }
+    }
+  ],
+  "too-long": [
+    {
+      "type": "thread.started",
+      "thread_id": "00000000-0000-0000-0000-000000000002"
+    },
+    {
+      "type": "turn.started"
+    },
+    {
+      "type": "turn.failed",
+      "error": {
+        "message": "Codex ran out of room in the model's context window. Start a new thread or clear earlier history before retrying. (context_window_exceeded)"
+      }
+    }
+  ],
+  "refusal": [
+    {
+      "type": "thread.started",
+      "thread_id": "00000000-0000-0000-0000-000000000003"
+    },
+    {
+      "type": "turn.started"
+    },
+    {
+      "type": "turn.failed",
+      "error": {
+        "message": "The response was blocked by the content filter (content_filter)."
+      }
+    }
+  ],
+  "web-search": [
+    {
+      "type": "thread.started",
+      "thread_id": "00000000-0000-0000-0000-000000000005"
+    },
+    {
+      "type": "turn.started"
+    },
+    {
+      "type": "item.started",
+      "item": {
+        "id": "item_0",
+        "type": "web_search",
+        "query": "megareviewer"
+      }
+    }
+  ],
+  "no-answer": [
+    {
+      "type": "thread.started",
+      "thread_id": "00000000-0000-0000-0000-000000000006"
+    },
+    {
+      "type": "turn.started"
+    },
+    {
+      "type": "turn.completed",
+      "usage": {
+        "input_tokens": 100,
+        "cached_input_tokens": 0,
+        "output_tokens": 0
+      }
+    }
+  ],
+  "file-change": [
+    {
+      "type": "thread.started",
+      "thread_id": "00000000-0000-0000-0000-000000000004"
+    },
+    {
+      "type": "turn.started"
+    },
+    {
+      "type": "item.started",
+      "item": {
+        "id": "item_0",
+        "type": "file_change",
+        "changes": []
+      }
+    },
+    {
+      "type": "item.completed",
+      "item": {
+        "id": "item_1",
+        "type": "agent_message",
+        "text": "{\"answer\":{}}"
+      }
+    }
+  ],
+  "unknown-item": [
+    {
+      "type": "thread.started",
+      "thread_id": "00000000-0000-0000-0000-000000000007"
+    },
+    {
+      "type": "turn.started"
+    },
+    {
+      "type": "item.started",
+      "item": {
+        "id": "item_0",
+        "type": "some_future_tool"
+      }
+    },
+    {
+      "type": "item.completed",
+      "item": {
+        "id": "item_1",
+        "type": "agent_message",
+        "text": "{\"answer\":{}}"
+      }
+    }
+  ]
+}

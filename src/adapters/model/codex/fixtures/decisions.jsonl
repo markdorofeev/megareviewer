@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"01a1da1b-875d-7e82-830d-d48794f2aea7"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; enable `features.code_mode_host` and install `codex-code-mode-host`."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"{\"answer\":{\"pass\":\"decisions\",\"decisions\":[{\"title\":\"Why expose a receipt download route?\",\"category\":\"api\",\"whyItMatters\":\"This adds a public GET endpoint for downloading a plain-text receipt. It requires authentication and returns 404 when the order is not found for the current user.\",\"hunkIds\":[\"h_5c94b39812b2e8f8\"],\"lines\":{\"hunkId\":\"h_5c94b39812b2e8f8\",\"side\":\"new\",\"startLine\":33,\"line\":33}}]}}"}}
+{"type":"turn.completed","usage":{"input_tokens":9022,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":796,"reasoning_output_tokens":666}}

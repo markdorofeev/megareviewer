@@ -1,11 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import type { ClaudeCodeStatus, RunClaude } from "../adapters/model/index.ts";
+import type { ClaudeCodeStatus, CodexStatus, RunClaude } from "../adapters/model/index.ts";
 import { fakeModelOption, RecordingLogger } from "../application/testing/index.ts";
 import {
   anthropicConfigured,
+  codexModels,
   createModelCatalog,
   describeClaudeCode,
+  describeCodex,
   modelSummary,
   NO_ANTHROPIC_CREDENTIALS,
 } from "./model-access.ts";
@@ -25,6 +27,18 @@ const NOT_INSTALLED =
 const TOO_OLD = "Claude Code 2.0.9 is older than 2.1.303: run `claude update`";
 const NO_API = `No Anthropic API credentials: ${NO_ANTHROPIC_CREDENTIALS}`;
 
+const codexSignedIn: CodexStatus = {
+  state: "signed-in",
+  version: "0.162.0",
+  billing: "plan",
+  models: [
+    { slug: "gpt-6-sol", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
+    { slug: "gpt-6-luna", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
+    { slug: "gpt-6-astra", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
+  ],
+};
+const CODEX_MISSING = "Codex isn't installed: install the Codex CLI, then run `codex login`";
+
 const neverRun: RunClaude = async () => {
   throw new Error("the probe answers for Claude Code");
 };
@@ -34,6 +48,7 @@ const catalogWith = (
   claudeCode: readonly (ClaudeCodeStatus | "hang")[],
   api: readonly boolean[],
   timeoutMs?: number,
+  codex: CodexStatus = { state: "not-installed" },
 ) => {
   const asked = { claudeCode: 0, api: 0 };
   const next = <T>(answers: readonly T[], count: number): T => {
@@ -43,6 +58,9 @@ const catalogWith = (
   };
   const catalog = createModelCatalog({
     runClaude: neverRun,
+    runCodex: async () => {
+      throw new Error("the probe answers for Codex");
+    },
     client: new Anthropic({ apiKey: "sk-ant-test" }),
     logger: new RecordingLogger(),
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
@@ -52,6 +70,7 @@ const catalogWith = (
         return answer === "hang" ? new Promise(() => {}) : Promise.resolve(answer);
       },
       apiConfigured: async () => next(api, asked.api++),
+      codex: async () => codex,
     },
   });
   return { catalog, asked };
@@ -146,6 +165,8 @@ describe("createModelCatalog", () => {
       options: [
         ...listed("claude-code", expected.claudeCodeSuffix),
         ...listed("anthropic-api", expected.apiSuffix),
+        `codex/gpt-6-luna: ${CODEX_MISSING}`,
+        `codex/gpt-6-sol: ${CODEX_MISSING}`,
       ],
     });
   });
@@ -211,6 +232,63 @@ describe("createModelCatalog", () => {
     expect(catalog.model("anthropic-api/claude-haiku-5-5")?.version).toMatch(
       /^claude-haiku-5-5\/p\d+$/,
     );
+  });
+});
+
+describe("Codex's options", () => {
+  it("lists the measured models the account offers, on the ChatGPT plan, default Sol when alone", async () => {
+    const { catalog } = catalogWith([signedOut], [false], undefined, codexSignedIn);
+    expect(await summary(catalog)).toEqual({
+      defaultId: "codex/gpt-6-sol",
+      options: [
+        ...listed("claude-code", `: ${NOT_SIGNED_IN}`),
+        ...listed("anthropic-api", `: ${NO_API}`),
+        "codex/gpt-6-luna (Codex, on your ChatGPT plan)",
+        "codex/gpt-6-sol (Codex, on your ChatGPT plan)",
+      ],
+    });
+    const { options } = await catalog.options();
+    expect(options.at(-1)).toMatchObject({ family: "GPT", modelName: "GPT-6 Sol", measured: true });
+  });
+
+  it("leaves out a measured model the account's catalog doesn't have", () => {
+    expect(codexModels([{ slug: "gpt-6-sol", contextWindow: null, efforts: [] }])).toEqual([
+      { id: "gpt-6-sol", name: "GPT-6 Sol", family: "GPT" },
+    ]);
+    expect(codexModels(null).map((model) => model.id)).toEqual(["gpt-6-luna", "gpt-6-sol"]);
+  });
+
+  it.each<[CodexStatus, string]>([
+    [{ state: "signed-out", version: "0.162.0" }, "Codex isn't signed in: run `codex login`"],
+    [
+      { ...codexSignedIn, version: "0.150.2" },
+      "Codex 0.150.2 is older than 0.162.0: run `codex update`",
+    ],
+    [
+      { state: "failed", message: "`codex --version` failed: boom" },
+      "`codex --version` failed: boom",
+    ],
+  ])("disables its options with the fix", async (status, reason) => {
+    const { catalog } = catalogWith([signedIn], [false], undefined, status);
+    const { options, defaultId } = await catalog.options();
+    expect(options.filter((option) => option.provider === "codex")).toEqual([
+      expect.objectContaining({ available: false, reason }),
+      expect.objectContaining({ available: false, reason }),
+    ]);
+    expect(defaultId).toBe("claude-code/claude-sonnet-5-5");
+  });
+
+  it("serves the passes on Codex once it can run, on the model chosen", async () => {
+    const { catalog } = catalogWith([signedOut], [false], undefined, codexSignedIn);
+    expect(catalog.model("codex/gpt-6-luna")).toBeNull();
+    await catalog.options();
+    expect(catalog.model("codex/gpt-6-luna")?.version).toMatch(/^codex\/gpt-6-luna\/p\d+$/);
+    expect(catalog.model("codex/gpt-6-astra")).toBeNull();
+  });
+
+  it("says who pays", () => {
+    expect(describeCodex("plan")).toBe("Codex, on your ChatGPT plan");
+    expect(describeCodex("api")).toBe("Codex, billed to your OpenAI account");
   });
 });
 

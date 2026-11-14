@@ -29,5 +29,19 @@ export {
   type RunClaude,
   type RunClaudeOptions,
 } from "./claude/run-claude.ts";
+export {
+  type CodexAnalysisModelOptions,
+  createCodexAnalysisModel,
+  runCodexCall,
+} from "./codex/codex-analysis-model.ts";
+export { codexRequest } from "./codex/codex-request.ts";
+export {
+  type CodexCatalogModel,
+  type CodexStatus,
+  codexStatus,
+  MIN_CODEX_VERSION,
+} from "./codex/codex-status.ts";
+export { CODEX_MODELS, type CodexModel, codexModel, DEFAULT_CODEX_MODEL } from "./codex/models.ts";
+export { type CodexRun, createRunCodex, type RunCodex } from "./codex/run-codex.ts";
 export { EFFORTS, type Effort } from "./shared/effort.ts";
 export { renderInput } from "./shared/render-input.ts";

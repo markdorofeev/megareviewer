@@ -70,7 +70,7 @@ export const describeAnalysisModelContract = (
         smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
       );
       for (const item of result.value.value) expect(FindingDraft.parse(item)).toEqual(item);
-      expect(validateFindings(result.value.value, hunks)).toEqual([]);
+      expect(validateFindings(result.value.value, hunks, intent.mismatches.length)).toEqual([]);
       expectUsage(result.value, "findings");
     });
 

@@ -5,10 +5,14 @@ import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
 import {
   CLAUDE_MODELS,
   type ClaudeCodeStatus,
+  type CodexStatus,
   claudeCodeStatus,
+  codexStatus,
   createRunClaude,
+  createRunCodex,
   DEFAULT_MODEL,
   MIN_CLAUDE_CODE_VERSION,
+  MIN_CODEX_VERSION,
   planName,
 } from "../adapters/model/index.ts";
 import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
@@ -17,7 +21,13 @@ import type { HostKind, RepoRef } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
 import { createHosts, createTicketSource, systemClock } from "./compose.ts";
 import type { BitbucketCredential, Config, GitHubTokenSource } from "./config.ts";
-import { anthropicConfigured, claudeCodeProblem } from "./model-access.ts";
+import {
+  anthropicConfigured,
+  claudeCodeProblem,
+  codexModels,
+  codexProblem,
+  describeCodex,
+} from "./model-access.ts";
 import { NODE_FIX, nodeSupported } from "./node-version.ts";
 
 export interface Check {
@@ -35,6 +45,7 @@ export interface DoctorDeps {
   readonly hosts: Partial<Record<HostKind, GitHost>>;
   readonly tickets: TicketSource;
   readonly claudeCode: ClaudeCodeStatus;
+  readonly codex: CodexStatus;
   readonly anthropic: {
     readonly configured: boolean;
     /** Fetches the default model: free, and proves the credentials work. */
@@ -46,11 +57,12 @@ export interface DoctorDeps {
   readonly checkout: { readonly dir: string; readonly info: CheckoutInfo | null };
 }
 
-/** "Haiku 5.5, Sonnet 5.5 and Opus 5.5": what a provider offers in Request AI review's menu. */
-const MODEL_NAMES = (() => {
-  const names = CLAUDE_MODELS.map((model) => model.name);
-  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
-})();
+/** "Haiku 5.5, Sonnet 5.5 and Opus 5.5" */
+const listOf = (names: readonly string[]): string =>
+  names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+
+/** What a Claude provider offers in Request AI review's menu. */
+const MODEL_NAMES = listOf(CLAUDE_MODELS.map((model) => model.name));
 /** A key no Jira site has, so a working login answers "missing". */
 const PROBE_TICKET = "MEGAREVIEWER-0";
 
@@ -201,6 +213,54 @@ const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
       );
 };
 
+/** OpenAI's models through the reviewer's Codex, on their ChatGPT plan. */
+const checkCodex = ({ codex }: DoctorDeps): Check => {
+  const title = "Codex";
+  const all = listOf(codexModels(null).map((model) => model.name));
+  switch (codex.state) {
+    case "not-installed":
+      return check(
+        "skip",
+        title,
+        `not installed: ${all} on it are listed, disabled, in Request AI review's menu`,
+        "Install the Codex CLI and run `codex login` to analyze on your ChatGPT plan.",
+      );
+    case "signed-out":
+      return check(
+        "skip",
+        title,
+        `${codex.version}, not signed in: ${all} on it are listed, disabled, in Request AI review's menu`,
+        "Run `codex login` to analyze on your ChatGPT plan.",
+      );
+    case "failed":
+      return check("fail", title, codex.message, "Run `codex login status`.");
+    case "signed-in": {
+      if (codexProblem(codex) !== null) {
+        return check(
+          "fail",
+          title,
+          `${codex.version}, older than ${MIN_CODEX_VERSION}, the oldest megareviewer was checked with`,
+          "Run `codex update`.",
+        );
+      }
+      const offered = codexModels(codex.models).map((model) => model.name);
+      const via = describeCodex(codex.billing).replace(/^Codex, /, "");
+      return offered.length === 0
+        ? check(
+            "fail",
+            title,
+            `${codex.version}, signed in, ${via}, but its catalog has none of ${all}`,
+            "Run `codex debug models` to see the models your account has.",
+          )
+        : check(
+            "pass",
+            title,
+            `${codex.version}, signed in, ${via}: Request AI review offers ${listOf(offered)} on it`,
+          );
+    }
+  }
+};
+
 const HOST_DOMAINS: Readonly<Record<HostKind, string>> = {
   github: "github.com",
   bitbucket: "bitbucket.org",
@@ -243,6 +303,7 @@ export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
     checkJira(deps),
     checkClaudeCode(deps),
     checkAnthropic(deps),
+    checkCodex(deps),
   ]);
   const opened = deps.openStore();
   const store = opened.ok
@@ -277,6 +338,7 @@ export const createDoctorDeps = async (options: {
     hosts: createHosts(config, { version: options.version, clock: systemClock, logger }),
     tickets: createTicketSource(config, logger),
     claudeCode: await claudeCodeStatus(createRunClaude()),
+    codex: await codexStatus(createRunCodex()),
     anthropic: {
       configured: await anthropicConfigured(client, logger),
       async retrieveModel() {

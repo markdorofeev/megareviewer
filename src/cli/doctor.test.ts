@@ -30,6 +30,15 @@ const deps = (overrides: Partial<DoctorDeps> = {}): DoctorDeps => ({
   },
   tickets: new FakeTicketSource(),
   claudeCode: { state: "signed-in", version: "2.1.303", plan: "pro", billing: "plan" },
+  codex: {
+    state: "signed-in",
+    version: "0.162.0",
+    billing: "plan",
+    models: [
+      { slug: "gpt-6-luna", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
+      { slug: "gpt-6-sol", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
+    ],
+  },
   anthropic: { configured: true, retrieveModel: async () => ok(undefined) },
   openStore: () => ok(undefined),
   checkout: {
@@ -60,6 +69,7 @@ describe("runDoctor", () => {
       "✓ Jira: signed in at https://acme.atlassian.net",
       "✓ Claude Code: 2.1.303, signed in, on your Pro plan: Request AI review offers Haiku 5.5, Sonnet 5.5 and Opus 5.5 on it",
       "✓ Anthropic API: credentials work, billed to your account: Request AI review offers Haiku 5.5, Sonnet 5.5 and Opus 5.5 on it",
+      "✓ Codex: 0.162.0, signed in, on your ChatGPT plan: Request AI review offers GPT-6 Luna and GPT-6 Sol on it",
       "✓ Checkout: /home/lee/src/shop, a checkout of github.com/acme/shop\n    Callers outside a PR need its head commit: if a review says it's missing, run `git fetch` there.",
       "✓ Home: /home/lee/.megareviewer is writable and the database opens",
     ]);
@@ -189,6 +199,36 @@ describe("runDoctor", () => {
     ],
   ])("says what Claude Code can do: %j", async (claudeCode, line) => {
     expect((await lines({ claudeCode }))[4]).toBe(line);
+  });
+
+  it.each<[DoctorDeps["codex"], string]>([
+    [
+      { state: "not-installed" },
+      "– Codex: not installed: GPT-6 Luna and GPT-6 Sol on it are listed, disabled, in Request AI review's menu\n    Install the Codex CLI and run `codex login` to analyze on your ChatGPT plan.",
+    ],
+    [
+      { state: "signed-out", version: "0.162.0" },
+      "– Codex: 0.162.0, not signed in: GPT-6 Luna and GPT-6 Sol on it are listed, disabled, in Request AI review's menu\n    Run `codex login` to analyze on your ChatGPT plan.",
+    ],
+    [
+      { state: "signed-in", version: "0.150.0", billing: "plan", models: [] },
+      "✗ Codex: 0.150.0, older than 0.162.0, the oldest megareviewer was checked with\n    Run `codex update`.",
+    ],
+    [
+      {
+        state: "signed-in",
+        version: "0.162.0",
+        billing: "api",
+        models: [{ slug: "gpt-6-sol", contextWindow: null, efforts: [] }],
+      },
+      "✓ Codex: 0.162.0, signed in, billed to your OpenAI account: Request AI review offers GPT-6 Sol on it",
+    ],
+    [
+      { state: "signed-in", version: "0.162.0", billing: "plan", models: [] },
+      "✗ Codex: 0.162.0, signed in, on your ChatGPT plan, but its catalog has none of GPT-6 Luna and GPT-6 Sol\n    Run `codex debug models` to see the models your account has.",
+    ],
+  ])("says what Codex can do: %j", async (codex, line) => {
+    expect((await lines({ codex }))[6]).toBe(line);
   });
 
   it("fails when the home directory or database doesn't open", async () => {

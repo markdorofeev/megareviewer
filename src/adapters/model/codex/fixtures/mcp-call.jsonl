@@ -1,0 +1,8 @@
+{"type":"thread.started","thread_id":"01a1da0e-c3bc-7bc2-8d9b-2409c622e156"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"mcp_tool_call","server":"codex","tool":"list_mcp_resources","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"mcp_tool_call","server":"codex","tool":"list_mcp_resources","arguments":{},"result":{"content":[{"type":"text","text":"{\"resources\":[]}"}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"x","tool":"read_mcp_resource","arguments":{"server":"x","uri":"file:///etc/hosts"},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"x","tool":"read_mcp_resource","arguments":{"server":"x","uri":"file:///etc/hosts"},"result":null,"error":{"message":"resources/read failed: unknown MCP server 'x'"},"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"{\"result\":\"apply_patch error: patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings\\n{\\\"resources\\\":[]}\\nread_mcp_resource error: resources/read failed: unknown MCP server 'x'\"}"}}
+{"type":"turn.completed","usage":{"input_tokens":10882,"cached_input_tokens":8576,"cache_write_input_tokens":0,"output_tokens":223,"reasoning_output_tokens":0}}
