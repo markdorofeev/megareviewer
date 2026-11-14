@@ -6,7 +6,7 @@
  * cache key.
  */
 export const OPENCODE_PROMPT_VERSION = 1;
-export const OPENCODE_FINGERPRINT = "31301a12a34028ed";
+export const OPENCODE_FINGERPRINT = "3fefc6d49869f3de";
 
 /** Names the model on its provider; an effort for every pass, in place of each pass's own, too. */
 export const opencodeVersion = (providerID: string, model: string, effort?: string): string =>

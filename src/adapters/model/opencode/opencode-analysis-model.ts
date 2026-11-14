@@ -114,7 +114,11 @@ export interface OpencodeAnalysisModelOptions {
   readonly logger: Logger;
 }
 
-/** The five passes through the reviewer's opencode, a session each on one server. */
+/**
+ * The four passes through the reviewer's opencode, a session each on one server. opencode answers
+ * only once the session is idle, so `onAnswering` is never called: the other passes wait for the
+ * intent's end, as on Codex.
+ */
 export const createOpencodeAnalysisModel = (
   options: OpencodeAnalysisModelOptions,
 ): AnalysisModel => {
@@ -135,11 +139,11 @@ export const createOpencodeAnalysisModel = (
         : ok({ inputTokens });
     },
 
-    async runPass(pass, input, earlier, passOptions) {
+    async runPass(pass, input, intent, passOptions) {
       const request = opencodeRequest(
         pass,
         renderInput(input),
-        passMessage(pass, earlier, passOptions?.feedback),
+        passMessage(pass, intent, passOptions?.feedback),
         ref,
         {
           ...(options.variants === undefined ? {} : { variants: options.variants }),

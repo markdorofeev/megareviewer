@@ -141,6 +141,8 @@ So the stage's first condition fails as planned: 2.3.0 has no structured output 
 
 ## Notes for later stages
 
+- **Rebased onto stage 54,** which dropped the tour pass and starts risk and decisions once the intent's answer begins. opencode answers only when a session is idle, so it doesn't call `onAnswering`, and the other passes wait for the intent's end, as on Codex. The fixtures were recorded again on stage 54's prompts; the measurements above were taken with five passes, before it.
+
 - **The design differs from the doc's first version** (see **Decisions**): JSON asked for in the prompt, not structured output; the PR in session instruction entries; the reviewer's opencode config kept, since it defines their providers; opencode's free models left out.
 - **Where things are.** The adapter is `src/adapters/model/opencode/`; `evals/record-opencode.ts` records its fixtures. The catalog's `ProviderModel` gained an optional `via`, `providerName` and `measured`, so one provider's models can run through different providers and be unmeasured, and `CatalogProvider.defaultModel` is a function of its status. The menu groups options by provider and `via`, and a group of more than six shows the chosen and default options and a filter (`pinnedOf`, `matching` in `web/src/pages/review/model-choice.ts`).
 - **Lint fixes outside this stage:** `evals/harness.ts` and `evals/preflight.test.ts` had comma expressions Biome 2.5.15 fails, which kept `pnpm check` red; they're rewritten as blocks, with no change in behavior.

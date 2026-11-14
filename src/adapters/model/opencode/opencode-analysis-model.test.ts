@@ -83,12 +83,12 @@ describe("OpencodeAnalysisModel", () => {
   it("runs every pass as megareviewer's agent, the PR in the same entry, each at its effort", async () => {
     const { model, calls } = modelWith();
     await model.intent(smallFeatureInput);
-    await model.risk(smallFeatureInput, smallFeatureIntent);
-    await model.decisions(smallFeatureInput, smallFeatureIntent);
+    await model.findings(smallFeatureInput, smallFeatureIntent);
+    await model.risk(smallFeatureInput);
 
     const created = calls.filter((call) => call.method === "POST" && call.path === "/api/session");
     expect(created.map((call) => call.body)).toEqual(
-      ["medium", "low", "high"].map((variant) => ({
+      ["medium", "high", "low"].map((variant) => ({
         agent: AGENT,
         title: "megareviewer",
         model: { providerID: "anthropic", id: "claude-haiku-5-5", variant },
@@ -100,10 +100,11 @@ describe("OpencodeAnalysisModel", () => {
     expect(JSON.stringify(entries[0]?.body)).toContain("<pull_request_data>");
 
     const prompts = calls.filter((call) => call.path.endsWith("/prompt"));
-    expect(JSON.stringify(prompts[1]?.body)).toMatch(/Task: risk\./);
+    expect(JSON.stringify(prompts[1]?.body)).toMatch(/Task: findings\./);
     expect(JSON.stringify(prompts[1]?.body)).toContain("<earlier_results>");
-    expect(JSON.stringify(prompts[1]?.body)).toContain('\\"const\\":\\"risk\\"');
+    expect(JSON.stringify(prompts[1]?.body)).toContain('\\"const\\":\\"findings\\"');
     expect(JSON.stringify(prompts[1]?.body)).not.toContain('\\"const\\":\\"intent\\"');
+    expect(JSON.stringify(prompts[2]?.body)).not.toContain("<earlier_results>");
   });
 
   it("deletes each pass's session, answered or not", async () => {

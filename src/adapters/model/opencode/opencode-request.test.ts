@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  smallFeatureAnalysis,
-  smallFeatureInput,
-  smallFeatureIntent,
-} from "../../../application/testing/index.ts";
+import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
 import { ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { PassAnswer } from "../shared/output-schema.ts";
@@ -21,10 +17,6 @@ import {
 } from "./opencode-request.ts";
 import { OPENCODE_FINGERPRINT, OPENCODE_PROMPT_VERSION, opencodeVersion } from "./version.ts";
 
-const risk = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
-);
-const earlier = { intent: smallFeatureIntent, risk, decisions: smallFeatureAnalysis.decisions };
 const haiku = { providerID: "anthropic", id: "claude-haiku-5-5" };
 
 const requests = () =>
@@ -32,7 +24,7 @@ const requests = () =>
     opencodeRequest(
       pass,
       renderInput(smallFeatureInput),
-      passMessage(pass, earlier, ["problem"]),
+      passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"]),
       haiku,
       {
         variants: ["none", "low", "medium", "high", "xhigh", "max"],

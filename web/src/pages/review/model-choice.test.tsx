@@ -128,7 +128,6 @@ describe("a long group", () => {
             findings: "skipped",
             risk: "skipped",
             decisions: "skipped",
-            tour: "skipped",
           },
         })}
         choice={withOpencode}

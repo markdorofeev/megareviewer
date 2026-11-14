@@ -1,6 +1,6 @@
 // Records the opencode transport's fixtures from real runs of the installed `opencode`:
 // node evals/record-opencode.ts [provider/model]
-// The server's model, provider and default-model lists, then the five passes on small-feature, as
+// The server's model, provider and default-model lists, then the four passes on small-feature, as
 // the AnalysisModel contract suite sends them, on Haiku 5.5 through the reviewer's Anthropic
 // provider unless another model is named. Messages keep everything but `native`, the providers'
 // opaque signatures; the lists keep everything, which names no key.
@@ -15,19 +15,10 @@ import { opencodeRequest } from "../src/adapters/model/opencode/opencode-request
 import { createOpencodeServer } from "../src/adapters/model/opencode/opencode-server.ts";
 import { opencodeStatus } from "../src/adapters/model/opencode/opencode-status.ts";
 import { createRunOpencode } from "../src/adapters/model/opencode/run-opencode.ts";
-import {
-  type EarlierResults,
-  passMessage,
-  renderSkeleton,
-} from "../src/adapters/model/shared/prompts/passes.ts";
+import { passMessage } from "../src/adapters/model/shared/prompts/passes.ts";
 import { renderInput } from "../src/adapters/model/shared/render-input.ts";
-import {
-  smallFeatureAnalysis,
-  smallFeatureInput,
-  smallFeatureIntent,
-  smallFeatureSkeleton,
-} from "../src/application/testing/index.ts";
-import type { ModelPass } from "../src/domain/review/index.ts";
+import { smallFeatureInput, smallFeatureIntent } from "../src/application/testing/index.ts";
+import type { Intent, ModelPass } from "../src/domain/review/index.ts";
 
 const OUT = new URL("../src/adapters/model/opencode/fixtures/", import.meta.url);
 const [providerID, ...rest] = (process.argv[2] ?? "anthropic/claude-haiku-5-5").split("/");
@@ -72,24 +63,18 @@ try {
   const offered = status.models.find((m) => m.providerID === providerID && m.id === model);
   if (offered === undefined) throw new Error(`${providerID}/${model} isn't offered`);
 
-  // The contract suite's earlier results: the fixture analysis's own, not this model's.
-  const risk = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-    riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
-  );
-  const { decisions } = smallFeatureAnalysis;
-  const skeleton = renderSkeleton({ tour: smallFeatureSkeleton, parts: [] }, smallFeatureInput);
-  const passes: [ModelPass, EarlierResults | null][] = [
+  // The contract suite's intent for findings: the fixture analysis's own, not this model's.
+  const passes: [ModelPass, Intent | null][] = [
     ["intent", null],
-    ["findings", { intent: smallFeatureIntent }],
-    ["risk", { intent: smallFeatureIntent }],
-    ["decisions", { intent: smallFeatureIntent }],
-    ["tour", { intent: smallFeatureIntent, risk, decisions, skeleton }],
+    ["findings", smallFeatureIntent],
+    ["risk", null],
+    ["decisions", null],
   ];
-  for (const [pass, earlier] of passes) {
+  for (const [pass, intent] of passes) {
     const request = opencodeRequest(
       pass,
       renderInput(smallFeatureInput),
-      passMessage(pass, earlier, undefined),
+      passMessage(pass, intent, undefined),
       { providerID: offered.providerID, id: offered.id },
       { variants: offered.variants },
     );
