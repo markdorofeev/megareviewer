@@ -94,6 +94,35 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
         }
       });
 
+      it("label every hunk the risk pass classifies", () => {
+        const proved = new Set(analysis.proofs.map((proof) => proof.hunkId));
+        const classified = analysis.files
+          .flatMap((file) => file.hunks.map((hunk) => hunk.id))
+          .filter((hunkId) => !proved.has(hunkId));
+        expect(Object.keys(labels.risk).sort()).toEqual([...classified].sort());
+      });
+
+      it("say where each contract hunk's risk belongs, on lines it shows", () => {
+        const hunks = new Map(
+          analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
+        );
+        const contract = Object.entries(labels.risk).flatMap(([hunkId, label]) =>
+          label === "contract" ? [hunkId] : [],
+        );
+        expect(Object.keys(labels.riskAt).sort()).toEqual(contract.sort());
+        for (const [hunkId, places] of Object.entries(labels.riskAt)) {
+          expect(places.length, hunkId).toBeGreaterThan(0);
+          const hunk = hunks.get(HunkId.parse(hunkId));
+          if (hunk === undefined) throw new Error(`${hunkId} isn't a hunk of the case`);
+          for (const { hunkId: placeHunk, side, lines } of places) {
+            expect(placeHunk).toBe(hunkId);
+            expect(lines[0]).toBeLessThanOrEqual(lines[1]);
+            for (const line of lines)
+              expect(hunkHasLine(hunk, side, line), `${hunkId} ${line}`).toBe(true);
+          }
+        }
+      });
+
       it("place each finding on lines a hunk the model reads shows", () => {
         const proved = new Set(analysis.proofs.map((proof) => proof.hunkId));
         const hunks = new Map(

@@ -34,16 +34,41 @@ const finding = (id: string, mismatch: string | null, lines: PointLines): Findin
   mismatch: mismatch === null ? null : MismatchId.parse(mismatch),
 });
 
-/** The fixture analysis with the findings the labels expect, on their lines, naming mismatches. */
-const analysis: Analysis = {
-  ...smallFeatureAnalysis,
-  findings: [
-    finding("f1", "m1", on("h_fbaf18305007c20a", 13)),
-    finding("f2", null, on(receipts, 4)),
-    finding("f3", "m2", on(receipts, 3)),
-    stale,
-  ],
-};
+const receiptsConfig = "h_3822ea0f7192c70e";
+const receiptRoute = "h_5c94b39812b2e8f8";
+const importHunk = "h_88747b653fc82f6d";
+
+/** The model's risk on a hunk, with its own lines or none. */
+const riskOn = (
+  analysis: Analysis,
+  hunkId: string,
+  change: Partial<Analysis["risk"][number]>,
+): Analysis => ({
+  ...analysis,
+  risk: analysis.risk.map((risk) => (risk.hunkId === hunkId ? { ...risk, ...change } : risk)),
+});
+
+/**
+ * The fixture analysis with the findings the labels expect, on their lines, naming mismatches,
+ * and risks on the lines they're about where the hunk's first changed line is blank.
+ */
+const analysis: Analysis = riskOn(
+  riskOn(
+    {
+      ...smallFeatureAnalysis,
+      findings: [
+        finding("f1", "m1", on("h_fbaf18305007c20a", 13)),
+        finding("f2", null, on(receipts, 4)),
+        finding("f3", "m2", on(receipts, 3)),
+        stale,
+      ],
+    },
+    receiptsConfig,
+    { lines: { ...on(receiptsConfig, 33), line: 35 } },
+  ),
+  receiptRoute,
+  { lines: { ...on(receiptRoute, 33), line: 34 } },
+);
 
 /** The judge's answer when the analysis meets every expectation it can. */
 const oracleVerdict: JudgeVerdict = {
@@ -93,7 +118,9 @@ describe("scoreCase", () => {
     const score = scoreCase(analysis, labels, oracleVerdict);
     expect(score).toEqual({
       contractRecall: { hit: 4, total: 4 },
-      riskAccuracy: { hit: 5, total: 5 },
+      riskAccuracy: { hit: 6, total: 6 },
+      riskNoise: { hit: 0, total: 4 },
+      riskPlaced: { hit: 4, total: 4 },
       findingRecall: { hit: 3, total: 3 },
       findingNoise: { hit: 0, total: 4 },
       findingPlaced: { hit: 4, total: 4 },
@@ -111,7 +138,9 @@ describe("scoreCase", () => {
   it("gives nothing to an analysis that meets none", () => {
     const score = scoreCase(withRisk(analysis, "logic"), labels, nullVerdict);
     expect(score.contractRecall).toEqual({ hit: 0, total: 4 });
-    expect(score.riskAccuracy).toEqual({ hit: 1, total: 5 });
+    expect(score.riskAccuracy).toEqual({ hit: 2, total: 6 });
+    expect(score.riskNoise).toEqual({ hit: 0, total: 0 });
+    expect(score.riskPlaced).toEqual({ hit: 0, total: 0 });
     expect(score.findingRecall).toEqual({ hit: 0, total: 3 });
     expect(score.findingNoise).toEqual({ hit: 4, total: 4 });
     expect(score.findingPlaced).toEqual({ hit: 0, total: 0 });
@@ -206,10 +235,68 @@ describe("scoreCase", () => {
     });
   });
 
-  it("counts a labeled hunk proved mechanical as a miss", () => {
+  it("counts a labeled contract hunk proved mechanical as a miss", () => {
     const score = scoreCase(withRisk(analysis, "mechanical"), labels, oracleVerdict);
     expect(score.contractRecall.hit).toBe(0);
-    expect(score.riskAccuracy.hit).toBe(0);
+    expect(score.riskAccuracy).toEqual({ hit: 2, total: 6 });
+  });
+
+  describe("risk as the page shows it", () => {
+    it("counts a risk on a logic hunk as noise", () => {
+      const noisy = riskOn(analysis, importHunk, { riskClass: "contract" });
+      const score = scoreCase(noisy, labels, oracleVerdict);
+      expect(score.riskNoise).toEqual({ hit: 1, total: 5 });
+      expect(score.riskAccuracy).toEqual({ hit: 5, total: 6 });
+    });
+
+    it("counts a risk on an either hunk nowhere", () => {
+      const either: CaseLabels = { ...labels, risk: { ...labels.risk, [importHunk]: "either" } };
+      const noisy = riskOn(analysis, importHunk, { riskClass: "contract" });
+      const score = scoreCase(noisy, either, oracleVerdict);
+      expect(score.riskNoise).toEqual({ hit: 0, total: 4 });
+      expect(score.riskAccuracy).toEqual({ hit: 5, total: 5 });
+      expect(score.contractRecall).toEqual({ hit: 4, total: 4 });
+    });
+
+    it("counts the rules' contract, which the page doesn't show, as logic", () => {
+      const rule = { riskClass: "contract" as const, source: "rule" as const, lines: null };
+      const raised = riskOn(riskOn(analysis, receiptRoute, rule), importHunk, rule);
+      const score = scoreCase(raised, labels, oracleVerdict);
+      expect(score.contractRecall).toEqual({ hit: 3, total: 4 });
+      expect(score.riskNoise).toEqual({ hit: 0, total: 3 });
+      expect(score.riskAccuracy).toEqual({ hit: 5, total: 6 });
+      expect(score.riskPlaced).toEqual({ hit: 3, total: 3 });
+    });
+
+    it("places a risk on the lines its label names, or on its band's line when it fell back", () => {
+      const elsewhere = riskOn(analysis, receiptRoute, {
+        lines: { ...on(receiptRoute, 36), line: 38 },
+      });
+      expect(scoreCase(elsewhere, labels, oracleVerdict).riskPlaced).toEqual({ hit: 3, total: 4 });
+      // Its changes span 32–40, over the place at 33–34, but its band lands on blank line 32.
+      const fellBack = riskOn(analysis, receiptRoute, { lines: null });
+      expect(scoreCase(fellBack, labels, oracleVerdict).riskPlaced).toEqual({ hit: 3, total: 4 });
+      const outside = riskOn(analysis, receiptRoute, {
+        lines: { ...on("h_fbaf18305007c20a", 13) },
+      });
+      expect(scoreCase(outside, labels, oracleVerdict).riskPlaced).toEqual({ hit: 3, total: 4 });
+    });
+
+    it("leaves out risks on hunks without a riskAt", () => {
+      const noisy = riskOn(analysis, importHunk, { riskClass: "contract" });
+      expect(scoreCase(noisy, labels, oracleVerdict).riskPlaced).toEqual({ hit: 4, total: 4 });
+    });
+  });
+
+  it("counts a decision that restates the description as noise", () => {
+    const verdict: JudgeVerdict = {
+      ...oracleVerdict,
+      ratings: [0, 1, 2, 3].map((produced) => ({
+        produced,
+        rating: produced === 0 ? ("restates-description" as const) : ("meaningful" as const),
+      })),
+    };
+    expect(scoreCase(analysis, labels, verdict).decisionNoise).toEqual({ hit: 1, total: 4 });
   });
 
   it("ignores matches to produced items that don't exist", () => {
@@ -303,6 +390,8 @@ describe("summarize", () => {
     expect(summary.findingRecall).toEqual({ hit: 6, total: 9 });
     expect(summary.findingNoise).toEqual({ hit: 4, total: 12 });
     expect(summary.findingPlaced).toEqual({ hit: 8, total: 8 });
+    expect(summary.riskNoise).toEqual({ hit: 0, total: 8 });
+    expect(summary.riskPlaced).toEqual({ hit: 8, total: 8 });
     expect(summary.mismatchNamed).toEqual({ hit: 4, total: 4 });
     expect(summary.mismatchFalsePositives).toBe(3);
     expect(summary.injectionResistance).toEqual({ hit: 1, total: 1 });
@@ -315,6 +404,9 @@ describe("summarize", () => {
   it("checks targets, and leaves unmeasured ones open", () => {
     const summary = summarize(1, [perfect], []);
     expect(meetsTarget(summary, "contractRecall")).toBe(true);
+    expect(meetsTarget(summary, "riskNoise")).toBe(true);
+    expect(meetsTarget(summary, "riskPlaced")).toBe(true);
+    expect(meetsTarget(summarize(1, [poor], []), "riskNoise")).toBeNull();
     expect(meetsTarget(summary, "decisionNoise")).toBe(true);
     expect(meetsTarget(summary, "findingNoise")).toBe(true);
     expect(meetsTarget(summary, "decisionRecall")).toBeNull();

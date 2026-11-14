@@ -3,6 +3,10 @@ import type { CaseLabels } from "../../labels.ts";
 export const labels: CaseLabels = {
   risk: {
     h_b5e69834271ab368: "contract", // retries calls to the payment provider
+    h_a4aefd56480883b9: "logic", // the retry's constants, which the retry loop carries
+  },
+  riskAt: {
+    h_b5e69834271ab368: [{ hunkId: "h_b5e69834271ab368", side: "new", lines: [46, 52] }],
   },
   findings: [
     {

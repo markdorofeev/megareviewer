@@ -1,6 +1,6 @@
 # Stage 47: Evals that see noise and placement
 
-**Status:** Not started
+**Status:** Done (branch `claude/stage-46-start-42e206`): `pnpm check` passes; no paid run, as planned. See **Notes for later stages**
 **Depends on:** 45
 **Owns:** `evals/` except `evals/cases/delphi-account-connections/` (stage 48)
 
@@ -69,11 +69,11 @@ This stage makes all four measurable. It doesn't run the paid evals or write a b
 
 ## Definition of done
 
-- [ ] Every hunk of every case is labeled, and every contract hunk has a `riskAt`.
-- [ ] `riskNoise` and `riskPlaced` are in the scores, the summary and the README.
-- [ ] The judge rates `restates-description`, at `JUDGE_VERSION` 3.
-- [ ] `node evals/run.ts` without `--yes` prints its estimate and runs nothing; no paid run is needed for this stage.
-- [ ] `pnpm check` passes.
+- [x] Every hunk of every case is labeled, and every contract hunk has a `riskAt`.
+- [x] `riskNoise` and `riskPlaced` are in the scores, the summary and the README.
+- [x] The judge rates `restates-description`, at `JUDGE_VERSION` 3.
+- [x] `node evals/run.ts` without `--yes` prints its estimate and runs nothing; no paid run is needed for this stage.
+- [x] `pnpm check` passes.
 
 ## Open issues
 
@@ -81,4 +81,13 @@ None yet.
 
 ## Notes for later stages
 
-None yet.
+- **Started with stage 45 still *In progress*.** Its code, `pointsOf` with risk lines, is on `main`; only its prompts' real run is left, which this stage doesn't need.
+- **`riskPlaced` scores where the band lands, not all of `point.lines`.** A risk without lines of its own (none given, or outside its hunk) gets its hunk's whole changed range as `point.lines`, which overlaps nearly any place in the hunk, so a band on the imports would count as placed. For those, only the first changed line counts, where the page draws the band; a risk with its own lines is scored on them.
+- **The judge sees each ticket's description too,** not only its key and summary: the rating is about what "the description or a ticket already says and explains", and a ticket explains in its description.
+- **`baseline.ts` records `riskNoise` and `riskPlaced`** per case and in the summary, and compares them; `riskNoise` is lower-is-better. No `baseline.json` exists yet, so none had to be migrated.
+- **Labels changed:** in `large-retry-after`, `h_73f7b1dee1846492` went from contract to `"either"` (a doc comment, though it states a new requirement of a public option), and the body-read hunk `h_193ead7430db59ff`, unlabeled before, is contract: `json()`, `text()` and the other shortcuts can now throw `TimeoutError`.
+- **Hunks the prompt's rule can't decide,** labeled `"either"`:
+  - a doc comment on a public type that states a new requirement the code decides elsewhere (`large-retry-after`, `h_73f7b1dee1846492`);
+  - private helpers that implement a public behavior change applied in another hunk: "the hunk that makes the change carries it, once" doesn't say which hunk makes it (`h_e5b8f0108cd99bd7`);
+  - a hunk that reads like a refactor but changes which error a caller catches (`h_c3ce4ac3781b08ad`, `h_4e6dcb154464c3df`);
+  - a constant that sets a session lifetime, in a hunk apart from the one that applies it (`unrequested-behavior`, `h_8308e79dfd07ed71`).

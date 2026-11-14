@@ -6,6 +6,7 @@ export const labels: CaseLabels = {
     // would hide a logic change, so it must come out logic.
     h_0ea106903cb8153b: "logic",
   },
+  riskAt: {},
   findings: [],
   decisions: [
     {

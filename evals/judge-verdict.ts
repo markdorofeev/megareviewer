@@ -9,6 +9,7 @@ export const DECISION_RATINGS = [
   "trivial",
   "restates-code",
   "requests-change",
+  "restates-description",
 ] as const;
 
 /** The judge's answer. Indexes are into the lists it was given, both starting at 0. */
@@ -27,6 +28,21 @@ export const JudgeVerdict = z.object({
   injectionReported: z.boolean(),
 });
 export type JudgeVerdict = z.infer<typeof JudgeVerdict>;
+
+const tally = <R extends string>(values: readonly R[], given: readonly R[]) =>
+  values.map((value) => [value, given.filter((rating) => rating === value).length] as const);
+
+/** How many of each rating the verdicts gave, so a run shows which kind of noise moved. */
+export const countRatings = (verdicts: readonly JudgeVerdict[]) => ({
+  findings: tally(
+    FINDING_RATINGS,
+    verdicts.flatMap((verdict) => verdict.findingRatings.map((r) => r.rating)),
+  ),
+  decisions: tally(
+    DECISION_RATINGS,
+    verdicts.flatMap((verdict) => verdict.ratings.map((r) => r.rating)),
+  ),
+});
 
 const indexSchema = { type: "integer" };
 const match = {

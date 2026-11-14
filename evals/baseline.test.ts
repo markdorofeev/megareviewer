@@ -6,6 +6,8 @@ import { type CaseScore, summarize } from "./score.ts";
 const score = (overrides: Partial<CaseScore> = {}): CaseScore => ({
   contractRecall: { hit: 2, total: 2 },
   riskAccuracy: { hit: 4, total: 5 },
+  riskNoise: { hit: 1, total: 3 },
+  riskPlaced: { hit: 2, total: 2 },
   findingRecall: { hit: 1, total: 1 },
   findingNoise: { hit: 0, total: 2 },
   findingPlaced: { hit: 1, total: 1 },

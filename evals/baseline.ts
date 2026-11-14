@@ -22,6 +22,8 @@ export const Baseline = z.object({
     scored: z.number(),
     contractRecall: RatioSchema,
     riskAccuracy: RatioSchema,
+    riskNoise: RatioSchema,
+    riskPlaced: RatioSchema,
     findingRecall: RatioSchema,
     findingNoise: RatioSchema,
     findingPlaced: RatioSchema,
@@ -43,6 +45,8 @@ export const Baseline = z.object({
     z.object({
       contractRecall: RatioSchema,
       riskAccuracy: RatioSchema,
+      riskNoise: RatioSchema,
+      riskPlaced: RatioSchema,
       findingRecall: RatioSchema,
       findingNoise: RatioSchema,
       findingPlaced: RatioSchema,
@@ -65,6 +69,8 @@ export type Baseline = z.infer<typeof Baseline>;
 export const COMPARED = [
   "contractRecall",
   "riskAccuracy",
+  "riskNoise",
+  "riskPlaced",
   "findingRecall",
   "findingNoise",
   "findingPlaced",
@@ -80,6 +86,7 @@ export const COMPARED = [
 export type ComparedMetric = (typeof COMPARED)[number];
 
 const LOWER_IS_BETTER: ReadonlySet<ComparedMetric> = new Set([
+  "riskNoise",
   "findingNoise",
   "decisionNoise",
   "mismatchFalsePositives",

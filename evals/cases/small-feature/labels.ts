@@ -7,6 +7,16 @@ export const labels: CaseLabels = {
     h_3822ea0f7192c70e: "contract", // receipts config section
     h_88747b653fc82f6d: "logic", // import
     h_5c94b39812b2e8f8: "contract", // GET /orders/:id/receipt
+    h_a2e0236601ffc778: "logic", // receipt rendering and cache, called only by the new route
+  },
+  riskAt: {
+    h_fbaf18305007c20a: [{ hunkId: "h_fbaf18305007c20a", side: "new", lines: [13, 13] }],
+    h_2e2332fa455a2146: [{ hunkId: "h_2e2332fa455a2146", side: "new", lines: [22, 22] }],
+    h_3822ea0f7192c70e: [{ hunkId: "h_3822ea0f7192c70e", side: "new", lines: [33, 35] }],
+    h_5c94b39812b2e8f8: [
+      { hunkId: "h_5c94b39812b2e8f8", side: "new", lines: [33, 34] },
+      { hunkId: "h_5c94b39812b2e8f8", side: "new", lines: [39, 39] },
+    ],
   },
   findings: [
     {

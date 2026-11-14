@@ -5,6 +5,12 @@ export const labels: CaseLabels = {
     h_5d61f179c40933a9: "contract", // authentication boundary
     h_c0a62759085678d3: "logic", // tests
   },
+  riskAt: {
+    h_5d61f179c40933a9: [
+      { hunkId: "h_5d61f179c40933a9", side: "new", lines: [8, 12] },
+      { hunkId: "h_5d61f179c40933a9", side: "new", lines: [17, 19] },
+    ],
+  },
   findings: [
     {
       description:

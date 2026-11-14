@@ -3,6 +3,11 @@ import type { CaseLabels } from "../../labels.ts";
 export const labels: CaseLabels = {
   risk: {
     h_cf32c71b35173a7f: "contract", // new admin endpoint
+    h_50b0def4be0636d1: "logic", // the CSV, which only the new endpoint calls
+    h_12095e2945a2312b: "logic", // imports
+  },
+  riskAt: {
+    h_cf32c71b35173a7f: [{ hunkId: "h_cf32c71b35173a7f", side: "new", lines: [14, 15] }],
   },
   findings: [
     {

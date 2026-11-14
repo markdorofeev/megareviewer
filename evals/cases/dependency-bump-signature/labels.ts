@@ -5,6 +5,14 @@ export const labels: CaseLabels = {
     h_0384e19c85c385b3: "contract", // date-fns 2.30.0 → 4.1.0
     h_62de5a549f8dae78: "contract", // exported formatPrice gains a required currency
     h_2f6c23234800af18: "logic", // caller passes the order's currency
+    h_6a673703fb525e5e: "logic", // a caller adapting to the bump, which package.json carries
+  },
+  riskAt: {
+    h_0384e19c85c385b3: [{ hunkId: "h_0384e19c85c385b3", side: "new", lines: [7, 7] }],
+    h_62de5a549f8dae78: [
+      { hunkId: "h_62de5a549f8dae78", side: "new", lines: [5, 5] },
+      { hunkId: "h_62de5a549f8dae78", side: "old", lines: [2, 2] },
+    ],
   },
   findings: [],
   decisions: [

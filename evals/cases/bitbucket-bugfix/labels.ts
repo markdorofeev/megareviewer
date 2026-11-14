@@ -5,6 +5,7 @@ export const labels: CaseLabels = {
     h_916b942fb92913f9: "logic", // null check in refundAmount
     h_1fd5161b01e4eb07: "logic", // test
   },
+  riskAt: {},
   findings: [],
   decisions: [
     {

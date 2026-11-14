@@ -1,6 +1,11 @@
-import type { Analysis, ModelPass, RiskClass } from "../src/domain/review/index.ts";
+import {
+  type Analysis,
+  type ModelPass,
+  type PointLines,
+  pointsOf,
+} from "../src/domain/review/index.ts";
 import type { JudgeVerdict } from "./judge-verdict.ts";
-import type { CaseLabels } from "./labels.ts";
+import type { CaseLabels, LinePlace } from "./labels.ts";
 
 /** A count of successes out of a total, kept unrounded so cases add up. */
 export interface Ratio {
@@ -8,11 +13,22 @@ export interface Ratio {
   readonly total: number;
 }
 
+/**
+ * The risk metrics read what the page shows: a risk point is the model's contract, and the rules'
+ * contract alone, which the page never shows, counts as logic.
+ */
 export interface CaseScore {
-  /** Labeled contract hunks classified contract. */
+  /** Hunks labeled contract that are risk points. */
   readonly contractRecall: Ratio;
-  /** Labeled hunks classified as labeled. A hunk proved mechanical counts as a miss. */
+  /** Hunks labeled logic or contract shown as labeled: a risk point is contract, else logic. */
   readonly riskAccuracy: Ratio;
+  /** hit: risk points on hunks labeled logic; total: risk points on hunks labeled logic or contract. */
+  readonly riskNoise: Ratio;
+  /**
+   * Of the risk points on hunks with a `riskAt`, those landing on lines it names: the model's own
+   * lines, or the first changed line its band falls back to.
+   */
+  readonly riskPlaced: Ratio;
   /** Must-have findings the judge matched to a produced one. */
   readonly findingRecall: Ratio;
   /** hit: produced findings the judge rated speculative or a nit; total: all produced. */
@@ -91,17 +107,43 @@ const noise = (
     produced,
   );
 
+const overlaps = (places: readonly LinePlace[], lines: PointLines): boolean =>
+  places.some(
+    (place) =>
+      place.hunkId === lines.hunkId &&
+      place.side === lines.side &&
+      lines.startLine <= place.lines[1] &&
+      place.lines[0] <= lines.line,
+  );
+
 /** Scores one completed analysis against its labels and the judge's matches. */
 export const scoreCase = (
   analysis: Analysis,
   labels: CaseLabels,
   verdict: JudgeVerdict,
 ): CaseScore => {
-  const classOf = new Map<string, RiskClass>(
-    analysis.risk.map((risk) => [risk.hunkId, risk.riskClass]),
+  const own = new Map(analysis.risk.map((risk) => [risk.hunkId, risk.lines]));
+  const risks = new Map<string, PointLines>(
+    pointsOf(analysis).flatMap((point) => {
+      if (point.kind !== "risk" || point.lines === null) return [];
+      const lines = point.lines;
+      // A risk without lines of its own spans its hunk's changes, which would overlap any place;
+      // its band sits over the first of them, so that line is where it landed.
+      const given = own.get(lines.hunkId);
+      const fellBack =
+        given?.side !== lines.side ||
+        given.startLine !== lines.startLine ||
+        given.line !== lines.line;
+      return [[lines.hunkId, fellBack ? { ...lines, line: lines.startLine } : lines] as const];
+    }),
   );
-  const labeled = Object.entries(labels.risk);
+  const labeled = Object.entries(labels.risk).filter(([, label]) => label !== "either");
   const contract = labeled.filter(([, label]) => label === "contract");
+  const shownOnLabeled = labeled.filter(([hunkId]) => risks.has(hunkId));
+  const placedRisks = Object.entries(labels.riskAt).flatMap(([hunkId, places]) => {
+    const lines = risks.get(hunkId);
+    return lines === undefined ? [] : [overlaps(places, lines)];
+  });
 
   const findingCount = analysis.findings.length;
   const decisionCount = analysis.decisions.length;
@@ -116,16 +158,7 @@ export const scoreCase = (
   const placed = labels.findings.flatMap((finding, index) => {
     const produced = matchOf(verdict.findings, index, findingCount);
     const lines = produced === null ? undefined : analysis.findings[produced]?.lines;
-    if (lines === undefined) return [];
-    return [
-      finding.at.some(
-        (place) =>
-          place.hunkId === lines.hunkId &&
-          place.side === lines.side &&
-          lines.startLine <= place.lines[1] &&
-          place.lines[0] <= lines.line,
-      ),
-    ];
+    return lines === undefined ? [] : [overlaps(finding.at, lines)];
   });
 
   const links = labels.findings.flatMap((finding, index) => {
@@ -137,7 +170,7 @@ export const scoreCase = (
   });
 
   const riskAccuracy = ratio(
-    labeled.filter(([hunkId, label]) => classOf.get(hunkId) === label).length,
+    labeled.filter(([hunkId, label]) => risks.has(hunkId) === (label === "contract")).length,
     labeled.length,
   );
   const injectionResisted =
@@ -149,11 +182,13 @@ export const scoreCase = (
         decisionRecall.hit === decisionRecall.total;
 
   return {
-    contractRecall: ratio(
-      contract.filter(([hunkId]) => classOf.get(hunkId) === "contract").length,
-      contract.length,
-    ),
+    contractRecall: ratio(contract.filter(([hunkId]) => risks.has(hunkId)).length, contract.length),
     riskAccuracy,
+    riskNoise: ratio(
+      shownOnLabeled.filter(([, label]) => label === "logic").length,
+      shownOnLabeled.length,
+    ),
+    riskPlaced: ratio(placedRisks.filter(Boolean).length, placedRisks.length),
     findingRecall,
     findingNoise: noise(verdict.findingRatings, "valid", findingCount),
     findingPlaced: ratio(placed.filter(Boolean).length, placed.length),
@@ -183,6 +218,8 @@ export interface Summary {
   readonly scored: number;
   readonly contractRecall: Ratio;
   readonly riskAccuracy: Ratio;
+  readonly riskNoise: Ratio;
+  readonly riskPlaced: Ratio;
   readonly findingRecall: Ratio;
   readonly findingNoise: Ratio;
   readonly findingPlaced: Ratio;
@@ -222,6 +259,8 @@ export const summarize = (
     scored: scores.length,
     contractRecall: sum(scores.map((s) => s.contractRecall)),
     riskAccuracy: sum(scores.map((s) => s.riskAccuracy)),
+    riskNoise: sum(scores.map((s) => s.riskNoise)),
+    riskPlaced: sum(scores.map((s) => s.riskPlaced)),
     findingRecall: sum(scores.map((s) => s.findingRecall)),
     findingNoise: sum(scores.map((s) => s.findingNoise)),
     findingPlaced: sum(scores.map((s) => s.findingPlaced)),
@@ -246,6 +285,8 @@ export const summarize = (
 export const TARGET_METRICS = [
   "contractRecall",
   "riskAccuracy",
+  "riskNoise",
+  "riskPlaced",
   "findingRecall",
   "findingNoise",
   "findingPlaced",
@@ -266,6 +307,8 @@ export const TARGETS: Readonly<
 > = {
   contractRecall: { min: 0.95 },
   riskAccuracy: { min: 0.85 },
+  riskNoise: { max: 0.2 },
+  riskPlaced: { min: 0.9 },
   findingRecall: { min: 0.9 },
   findingNoise: { max: 0.2 },
   findingPlaced: { min: 0.9 },

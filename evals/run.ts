@@ -24,7 +24,7 @@ import { type EvalCase, evalCases } from "./cases/index.ts";
 import { estimateCost } from "./cost.ts";
 import { analyzeCase, quietLogger } from "./harness.ts";
 import { JUDGE_MODEL, JUDGE_VERSION, judgeCase } from "./judge.ts";
-import type { JudgeVerdict } from "./judge-verdict.ts";
+import { countRatings, type JudgeVerdict } from "./judge-verdict.ts";
 import {
   type CaseCost,
   type CaseScore,
@@ -281,6 +281,11 @@ for (const metric of COMPARED) {
   const delta = showDelta(metric, row?.delta, row?.worse ?? false);
   console.log(`${mark} ${metric.padEnd(24)} ${show(summary[metric]).padEnd(16)}${delta}`);
 }
+const ratings = countRatings(results.flatMap((result) => result.verdict ?? []));
+const tally = (counts: readonly (readonly [string, number])[]) =>
+  counts.map(([rating, n]) => `${rating} ${n}`).join(" · ");
+console.log(`\nFinding ratings: ${tally(ratings.findings)}`);
+console.log(`Decision ratings: ${tally(ratings.decisions)}`);
 console.log(
   `\nCost: $${summary.modelCostUsd.toFixed(2)} model + $${summary.judgeCostUsd.toFixed(2)} judge` +
     ` ($${summary.modelCostPerCaseUsd.toFixed(2)} model per case).` +
