@@ -22,15 +22,18 @@ export const UrlForm = ({
   start,
   onSubmit,
   onEdit,
+  initial,
 }: {
-  readonly inputRef: Ref<HTMLInputElement>;
+  readonly inputRef?: Ref<HTMLInputElement>;
   readonly start: FormStart | null;
   readonly onSubmit: (url: string, ref: PullRequestRef) => void;
   /** The link changed, so a failure about the old one goes. */
   readonly onEdit: () => void;
+  /** A link and its problem to start from, for the design system's examples. */
+  readonly initial?: { readonly url: string; readonly invalid: string | null };
 }) => {
-  const [url, setUrl] = useState("");
-  const [invalid, setInvalid] = useState<string | null>(null);
+  const [url, setUrl] = useState(initial?.url ?? "");
+  const [invalid, setInvalid] = useState<string | null>(initial?.invalid ?? null);
   const id = useId();
   const starting = start?.state === "starting";
 
@@ -59,18 +62,19 @@ export const UrlForm = ({
         noValidate
       >
         <div className="flex gap-2 max-sm:flex-col">
-          <div
-            className={cn(
-              "flex h-9 flex-1 items-center gap-2 rounded-md border border-input bg-card px-2.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring",
-              invalid !== null && "border-destructive",
-            )}
-          >
-            <LinkIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          <div className="relative flex-1">
+            <LinkIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            />
             <input
               ref={inputRef}
               id={`${id}-url`}
               aria-label="Pull request link"
-              className="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+              className={cn(
+                "h-9 w-full min-w-0 rounded-md border border-input bg-card pr-10 pl-8 placeholder:text-muted-foreground",
+                invalid !== null && "border-destructive",
+              )}
               type="url"
               inputMode="url"
               autoComplete="off"
@@ -86,7 +90,10 @@ export const UrlForm = ({
               aria-invalid={invalid !== null}
               aria-describedby={`${id}-message`}
             />
-            <KeyHint id="focusLink" />
+            <KeyHint
+              id="focusLink"
+              className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2"
+            />
           </div>
           <Button type="submit" size="lg" className="sm:w-28" aria-busy={starting}>
             {starting ? (

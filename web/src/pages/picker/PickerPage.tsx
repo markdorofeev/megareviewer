@@ -1,6 +1,4 @@
-import { GitPullRequestIcon, InboxIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import type { PullRequestListResponse, StatusResponse } from "../../../../contracts/index.ts";
 import {
   type HostKind,
   HostKind as HostKinds,
@@ -17,10 +15,9 @@ import {
 import { useConnections } from "../../app/connections-context.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
 import { isTextEntry } from "../../lib/keymap.ts";
-import { cn } from "../../lib/utils.ts";
-import { DANGER, WARNING } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
-import { HOST_NAMES, PullRequestList, prLabel } from "./PullRequestList.tsx";
+import { HOST_NAMES, prLabel } from "./PullRequestList.tsx";
+import { LINK_BUTTON, PullRequestLists, type RowFailure } from "./PullRequestLists.tsx";
 import { ReviewActivityCard } from "./ReviewActivity.tsx";
 import { type FormStart, UrlForm } from "./UrlForm.tsx";
 
@@ -37,24 +34,6 @@ type Start = {
   /** For a row: the list it's in. */
   readonly role: PullRequestSummary["role"] | null;
 } & ({ readonly state: "starting" } | { readonly state: "failed"; readonly error: ApiError });
-
-const NOTE = "mx-3 mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-caption";
-const LINK_BUTTON = "h-6 min-w-6 px-1 text-caption";
-
-const hostNames = (hosts: readonly HostKind[]): string =>
-  hosts.map((host) => HOST_NAMES[host]).join(" and ");
-
-/** Which hosts are listed, hidden or failed, from the status and the list. */
-const hostsOf = (status: StatusResponse | null, list: PullRequestListResponse | null) => {
-  const configured = status === null ? [] : HOSTS.filter((host) => status.hosts[host].configured);
-  // Failing in Connections already: its note sends the reviewer there.
-  const failing = configured.filter((host) => status?.hosts[host].error != null);
-  const listFailed = (list?.errors ?? []).filter((failure) => !failing.includes(failure.host));
-  const shown = configured.filter(
-    (host) => !failing.includes(host) && !listFailed.some((failure) => failure.host === host),
-  );
-  return { configured, failing, listFailed, shown };
-};
 
 export const PickerPage = ({ now = Date.now }: { readonly now?: () => number }) => {
   const { client } = useApi();
@@ -191,80 +170,15 @@ export const PickerPage = ({ now = Date.now }: { readonly now?: () => number }) 
           };
 
   const nowMs = now();
-  const list = lists.pullRequests;
-  const hosts = hostsOf(status, list);
-  const noHost = status !== null && hosts.configured.length === 0;
-  const everyHostFailed = list !== null && hosts.configured.length > 0 && hosts.shown.length === 0;
-  const onlyOne =
-    hosts.configured.length > 1 && hosts.shown.length === 1 && hosts.shown[0] !== undefined
-      ? `${HOST_NAMES[hosts.shown[0]]} only`
-      : null;
   const startingUrl = start?.state === "starting" && start.from === "row" ? start.url : null;
-  const openRow = (item: PullRequestSummary) => void open(item.url, item.ref, "row", item.role);
-
-  const requestFailed =
-    lists.error === null ? null : (
-      <p className={cn(DANGER, NOTE)} role="alert">
-        <span className="font-medium">Couldn't list pull requests.</span>
-        <span>{errorMessage(lists.error)}</span>
-        <Button variant="link" className={LINK_BUTTON} onClick={readAgain}>
-          Retry
-        </Button>
-      </p>
-    );
-
-  const rowFailed = (role: PullRequestSummary["role"]) =>
-    start?.state === "failed" && start.from === "row" && start.role === role ? (
-      <p className={cn(DANGER, NOTE)} role="alert">
-        <span>{failure(start)}</span>
-        <Button
-          variant="link"
-          className={LINK_BUTTON}
-          onClick={() => void open(start.url, start.ref, "row", start.role)}
-        >
-          Try again
-        </Button>
-      </p>
-    ) : null;
-
-  const failingNotes = hosts.failing.map((host) => (
-    <p key={host} className={cn(WARNING, NOTE)} role="status">
-      <span>
-        {HOST_NAMES[host]} pull requests are hidden until {HOST_NAMES[host]} works again.
-      </span>
-      <Button
-        variant="link"
-        className={LINK_BUTTON}
-        onClick={() => setOpen(true, { focusCheckAgain: true })}
-      >
-        Fix…
-      </Button>
-    </p>
-  ));
-
-  const listFailedNotes = hosts.listFailed.map((failed) => (
-    <p key={failed.host} className={cn(DANGER, NOTE)} role="alert">
-      <span className="font-medium">Couldn't load {HOST_NAMES[failed.host]} pull requests.</span>
-      <span>{failed.message}</span>
-      {hosts.shown.length > 0 && <span>{hostNames(hosts.shown)} pull requests are shown.</span>}
-      <Button variant="link" className={LINK_BUTTON} onClick={readAgain}>
-        Retry
-      </Button>
-    </p>
-  ));
-
-  const loadingFrom =
-    hosts.configured.length === 0 ? "Loading" : `Loading from ${hostNames(hosts.configured)}`;
-  const reviewItems = list?.items.filter((item) => item.role === "reviewer") ?? null;
-  const ownItems = list?.items.filter((item) => item.role === "author") ?? null;
-  const countOf = (items: readonly PullRequestSummary[] | null) =>
-    items === null ? (lists.error === null ? "…" : null) : everyHostFailed ? null : items.length;
-  const blockedMessage = (text: string, action?: ReactNode) => (
-    <div className="flex flex-col items-center gap-2 px-6 py-8 text-center text-caption text-muted-foreground">
-      <p>{text}</p>
-      {action}
-    </div>
-  );
+  const rowFailure: RowFailure | null =
+    start?.state === "failed" && start.from === "row" && start.role !== null
+      ? {
+          role: start.role,
+          message: failure(start),
+          onRetry: () => void open(start.url, start.ref, "row", start.role),
+        }
+      : null;
 
   return (
     <div className="mx-auto flex max-w-[1240px] flex-col gap-4">
@@ -277,77 +191,18 @@ export const PickerPage = ({ now = Date.now }: { readonly now?: () => number }) 
           if (start?.from === "form" && start.state === "failed") setStart(null);
         }}
       />
-      <div className="grid items-start gap-4 lg:grid-cols-[1.55fr_1fr]">
-        <PullRequestList
-          title="To review"
-          word={onlyOne ?? "Waiting for your review"}
-          items={reviewItems}
-          count={countOf(reviewItems)}
-          loading={loadingFrom}
-          skeletonRows={5}
-          notes={
-            <>
-              {list !== null && requestFailed}
-              {failingNotes}
-              {listFailedNotes}
-              {rowFailed("reviewer")}
-            </>
-          }
-          blocked={
-            noHost
-              ? blockedMessage(
-                  "Connect GitHub or Bitbucket to list pull requests.",
-                  <Button variant="outline" size="sm" onClick={openConnections}>
-                    Open Connections
-                  </Button>,
-                )
-              : list === null && lists.error !== null
-                ? requestFailed
-                : everyHostFailed
-                  ? false
-                  : undefined
-          }
-          empty={{
-            icon: InboxIcon,
-            title: "Nothing is waiting for you",
-            text: "When someone asks for your review on GitHub or Bitbucket, it appears here. To review something else, paste its link above.",
-          }}
-          nowMs={nowMs}
-          startingUrl={startingUrl}
-          onOpen={openRow}
-        />
-        <PullRequestList
-          title="Your pull requests"
-          word={onlyOne ?? "Open"}
-          items={ownItems}
-          count={countOf(ownItems)}
-          loading="Loading"
-          skeletonRows={3}
-          notes={
-            <>
-              {list !== null && requestFailed}
-              {rowFailed("author")}
-            </>
-          }
-          blocked={
-            noHost
-              ? blockedMessage("Connect GitHub or Bitbucket to list pull requests.")
-              : list === null && lists.error !== null
-                ? requestFailed
-                : everyHostFailed
-                  ? blockedMessage("Couldn't load pull requests.")
-                  : undefined
-          }
-          empty={{
-            icon: GitPullRequestIcon,
-            title: "No open pull requests",
-            text: "Pull requests you open on GitHub or Bitbucket appear here.",
-          }}
-          nowMs={nowMs}
-          startingUrl={startingUrl}
-          onOpen={openRow}
-        />
-      </div>
+      <PullRequestLists
+        status={status}
+        list={lists.pullRequests}
+        error={lists.error}
+        rowFailure={rowFailure}
+        startingUrl={startingUrl}
+        nowMs={nowMs}
+        onOpen={(item) => void open(item.url, item.ref, "row", item.role)}
+        onRetry={readAgain}
+        onOpenConnections={openConnections}
+        onFix={() => setOpen(true, { focusCheckAgain: true })}
+      />
       <ReviewActivityCard
         activity={activity.activity}
         error={activity.error}

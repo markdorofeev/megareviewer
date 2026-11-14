@@ -224,7 +224,7 @@ export const createFakeApp = async (options: {
           : createReplayAnalysisModel(recording, { scenario: options.scenario }),
         options.modelAvailable !== false,
       ),
-      store: new InMemoryAnalysisStore(),
+      store: new InMemoryAnalysisStore(clock),
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
       parser: options.parser,

@@ -192,7 +192,9 @@ const FILLS = [
 ];
 
 // Each activity level lies further from the card than the one before, so the shades read in order.
-const LADDERS = [["Review activity levels", ["card", "activity-1", "activity-2", "activity-3", "primary"]]];
+const LADDERS = [
+  ["Review activity levels", ["card", "activity-1", "activity-2", "activity-3", "primary"]],
+];
 
 let failed = 0;
 for (const [name, theme] of [

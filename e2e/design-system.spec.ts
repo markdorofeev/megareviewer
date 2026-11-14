@@ -33,6 +33,8 @@ const open = async (page: Page, { theme, palette }: Pick<Combination, "theme" | 
 
 for (const combination of COMBINATIONS) {
   test(`meets the accessibility checks, ${combination.name}`, async ({ page }) => {
+    // The focus walk presses Tab through every stop on the page, several hundred of them.
+    test.setTimeout(180_000);
     await open(page, combination);
     const html = page.locator("html");
     await expect(html).toHaveClass(combination.theme === "dark" ? "dark" : "");
@@ -51,7 +53,7 @@ for (const combination of COMBINATIONS) {
     // macOS job.
     test.skip(process.platform !== "darwin", "baselines are macOS screenshots");
     await open(page, combination);
-    for (const section of ["foundations", "screens"]) {
+    for (const section of ["foundations", "screens", "main-page"]) {
       await expect(page.locator(`#${section}`)).toHaveScreenshot(
         `${section}-${combination.name}.png`,
       );

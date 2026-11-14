@@ -268,4 +268,10 @@ It's read when the page opens and with the lists' reads after that.
 
 ## Notes for later stages
 
-_None yet._
+- **Claude's row reads the default model option,** since stage 51 made `status.model` a list of options: it's working when the default can run, named by its family, with its model and who pays as the detail, and optional with `lockedReason`'s fix otherwise.
+- **One Retry when the list request fails.** Both lists come from one request, so Retry is in To review's note only; Your pull requests says the same without it. Two Retry buttons side by side also read to the focus walk as a stuck focus.
+- **A host failing in Connections** takes the note with Fix… instead of its list's failure alert, since its list fails too: one place says it, not two.
+- **The lists are their own component,** `PullRequestLists`, which takes the status, the list and the start's failure as props, so the design system page shows each state without the API. `ConnectionsPopover` is the same for the button.
+- **The field's states start from `initial`,** a link and its problem, for the design system page; the page itself never passes it.
+- **The design system's focus walk takes three minutes at most,** with the main page's section: 337 stops, about 2 minutes when the four combinations run in parallel.
+- **The calendar is measured before its first paint** and its card clips, so a narrow window never scrolls sideways while 26 weeks wait for the measurement.

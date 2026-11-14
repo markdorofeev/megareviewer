@@ -5,6 +5,7 @@ import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
 import { DomainComponents } from "./DomainComponents.tsx";
 import { Foundations } from "./Foundations.tsx";
+import { MainPage } from "./MainPage.tsx";
 import { Primitives } from "./Primitives.tsx";
 import { Screens } from "./Screens.tsx";
 
@@ -22,6 +23,7 @@ const SECTIONS: readonly {
   { id: "primitives", title: "Primitives", content: <Primitives /> },
   { id: "components", title: "Review components", content: <DomainComponents /> },
   { id: "screens", title: "Screens", content: <Screens /> },
+  { id: "main-page", title: "Main page", content: <MainPage /> },
 ];
 
 const PALETTES: readonly { readonly value: DiffPalette; readonly label: string }[] = [

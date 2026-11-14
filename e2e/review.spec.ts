@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
 /** Opens the picker the way the CLI's link does. */
 const openPicker = async (page: Page) => {
   await page.goto(`/?token=${TOKEN}`);
-  await expect(page.getByRole("heading", { name: "Review a pull request" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Pull request link" })).toBeVisible();
 };
 
 /** Asks Claude on the open review and waits until its passes are done. */
@@ -35,7 +35,7 @@ const landed = async (page: Page) => {
  */
 const openReview = async (page: Page, url: string, title: string, claude = true) => {
   await openPicker(page);
-  await page.getByLabel("Pull request URL").fill(url);
+  await page.getByRole("textbox", { name: "Pull request link" }).fill(url);
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();

@@ -30,7 +30,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testMatch: "review.spec.ts",
+      testMatch: ["review.spec.ts", "main-page.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
         // PLAYWRIGHT_CHANNEL=chrome runs the installed Chrome instead of Playwright's own build.

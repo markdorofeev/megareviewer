@@ -176,6 +176,74 @@ export const ConnectionsPanel = ({
   </div>
 );
 
+/** The button and its popover, from what the connections are. */
+export const ConnectionsPopover = ({
+  connections,
+  version,
+  checking,
+  open,
+  onOpenChange,
+  onCheckAgain,
+  focusCheckAgain = false,
+}: {
+  readonly connections: Connections;
+  readonly version: string | null;
+  readonly checking: boolean;
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
+  readonly onCheckAgain: () => void;
+  /** Check again takes the focus as the popover opens, as from Fix… on a list. */
+  readonly focusCheckAgain?: boolean;
+}) => {
+  // Fix… opens the popover from outside its trigger, where the popover's own initial focus
+  // doesn't apply, so Check again takes the focus as it mounts.
+  const checkAgainRef = useCallback(
+    (element: HTMLButtonElement | null) => {
+      if (element !== null && focusCheckAgain) element.focus();
+    },
+    [focusCheckAgain],
+  );
+  const { label, tone, name } = connections.button;
+  return (
+    <Popover
+      {...(open === undefined ? {} : { open })}
+      {...(onOpenChange === undefined
+        ? {}
+        : { onOpenChange: (next: boolean) => onOpenChange(next) })}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            className={BUTTON_TONE[tone]}
+            data-tone={tone}
+            aria-label={name}
+          />
+        }
+      >
+        <ButtonGlyph tone={tone} />
+        {label}
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[min(340px,calc(100vw-24px))] p-2"
+        initialFocus={false}
+      >
+        <ConnectionsPanel
+          connections={connections}
+          version={version}
+          checking={checking}
+          onCheckAgain={() => {
+            if (!checking) onCheckAgain();
+          }}
+          checkAgainRef={checkAgainRef}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 /** The header's Connections button, on every page, and the popover behind it. */
 export const ConnectionsButton = ({ now = Date.now }: { readonly now?: () => number }) => {
   const context = useConnections();
@@ -188,17 +256,7 @@ export const ConnectionsButton = ({ now = Date.now }: { readonly now?: () => num
     listed,
     nowMs: now(),
   });
-  const checkAgain = useRef<HTMLButtonElement | null>(null);
-  // Fix… opens the popover from outside its trigger, where the popover's own initial focus
-  // doesn't apply, so Check again takes the focus as it mounts.
-  const checkAgainRef = useCallback(
-    (element: HTMLButtonElement | null) => {
-      checkAgain.current = element;
-      if (element !== null && focusCheckAgain) element.focus();
-    },
-    [focusCheckAgain],
-  );
-  const { label, tone, name } = connections.button;
+  const { label, tone } = connections.button;
 
   // Announced only once the first read is in, so opening the page says nothing.
   const [announced, setAnnounced] = useState("");
@@ -214,37 +272,15 @@ export const ConnectionsButton = ({ now = Date.now }: { readonly now?: () => num
 
   return (
     <>
-      <Popover open={open} onOpenChange={(next) => setOpen(next)}>
-        <PopoverTrigger
-          render={
-            <Button
-              variant="outline"
-              size="sm"
-              className={BUTTON_TONE[tone]}
-              data-tone={tone}
-              aria-label={name}
-            />
-          }
-        >
-          <ButtonGlyph tone={tone} />
-          {label}
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          className="w-[min(340px,calc(100vw-24px))] p-2"
-          initialFocus={false}
-        >
-          <ConnectionsPanel
-            connections={connections}
-            version={status?.version ?? null}
-            checking={checking}
-            onCheckAgain={() => {
-              if (!checking) context.checkAgain();
-            }}
-            checkAgainRef={checkAgainRef}
-          />
-        </PopoverContent>
-      </Popover>
+      <ConnectionsPopover
+        connections={connections}
+        version={status?.version ?? null}
+        checking={checking}
+        open={open}
+        onOpenChange={(next) => setOpen(next)}
+        onCheckAgain={context.checkAgain}
+        focusCheckAgain={focusCheckAgain}
+      />
       <span className="sr-only" aria-live="polite">
         {announced}
       </span>

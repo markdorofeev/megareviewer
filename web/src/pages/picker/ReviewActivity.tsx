@@ -3,8 +3,8 @@ import { LaptopIcon } from "lucide-react";
 import {
   type KeyboardEvent,
   type RefObject,
-  useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -65,12 +65,15 @@ const Square = ({ level, className }: { level: ActivityLevel; className?: string
   </span>
 );
 
-/** The card's content width, followed as it resizes; null where nothing measures it. */
+/** The element's width, read before the first paint and followed as it resizes; null in jsdom. */
 const useWidth = (element: RefObject<HTMLElement | null>): number | null => {
   const [width, setWidth] = useState<number | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const target = element.current;
-    if (target === null || typeof ResizeObserver === "undefined") return;
+    if (target === null) return;
+    const first = target.getBoundingClientRect().width;
+    if (first > 0) setWidth(first);
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(([entry]) => {
       if (entry !== undefined) setWidth(entry.contentRect.width);
     });
@@ -263,53 +266,56 @@ export const ReviewActivityCard = ({
           Reviews and comments posted from megareviewer on this machine
         </span>
       </div>
-      <div ref={body} className="px-4 py-4">
-        {shown === null || totals === null ? (
-          error !== null ? (
-            <p className={cn(DANGER, "flex flex-wrap items-baseline gap-x-2 text-caption")}>
-              <span className="font-medium">Couldn't read your review activity.</span>
-              <span>{errorMessage(error)}</span>
-              <Button variant="link" className="h-6 min-w-6 px-1 text-caption" onClick={onRetry}>
-                Try again
-              </Button>
-            </p>
+      {/* Clipped, so the calendar can't widen the page before it's measured. */}
+      <div className="overflow-hidden px-4 py-4">
+        <div ref={body}>
+          {shown === null || totals === null ? (
+            error !== null ? (
+              <p className={cn(DANGER, "flex flex-wrap items-baseline gap-x-2 text-caption")}>
+                <span className="font-medium">Couldn't read your review activity.</span>
+                <span>{errorMessage(error)}</span>
+                <Button variant="link" className="h-6 min-w-6 px-1 text-caption" onClick={onRetry}>
+                  Try again
+                </Button>
+              </p>
+            ) : (
+              <Skeleton
+                aria-label="Loading review activity"
+                className="h-[244px] w-full motion-reduce:animate-none"
+              />
+            )
           ) : (
-            <Skeleton
-              aria-label="Loading review activity"
-              className="h-[244px] w-full motion-reduce:animate-none"
-            />
-          )
-        ) : (
-          <div className={cn("flex gap-8", wide ? "flex-row" : "flex-col")}>
-            <div className="flex min-w-0 flex-col gap-3">
-              <Calendar days={shown} today={today} weeks={weeks} />
-              {nothingYet && (
-                <p className="rounded-md bg-muted px-3 py-2 text-caption text-muted-foreground">
-                  <span className="font-medium text-foreground">No reviews yet.</span> Open a pull
-                  request above and post your review. Each day you review fills a square here.
-                </p>
-              )}
-            </div>
-            <div className={cn("flex flex-col gap-3", wide && "w-[260px] shrink-0")}>
-              <div
-                className={cn(
-                  "grid gap-x-6 gap-y-3",
-                  wide || (width !== null && width < 520) ? "grid-cols-2" : "grid-cols-4",
+            <div className={cn("flex gap-8", wide ? "flex-row" : "flex-col")}>
+              <div className="flex min-w-0 flex-col gap-3">
+                <Calendar days={shown} today={today} weeks={weeks} />
+                {nothingYet && (
+                  <p className="rounded-md bg-muted px-3 py-2 text-caption text-muted-foreground">
+                    <span className="font-medium text-foreground">No reviews yet.</span> Open a pull
+                    request above and post your review. Each day you review fills a square here.
+                  </p>
                 )}
-              >
-                <Total value={totals.pullRequests} label="PRs reviewed" />
-                <Total value={totals.comments} label="comments posted" />
-                <Total value={totals.daysWithReviews} label="days with reviews" />
-                <Total value={totals.thisWeek} label="PRs this week" />
               </div>
-              {totals.busiest !== null && (
-                <p className="border-t pt-3 text-caption text-muted-foreground">
-                  {busiestDay(totals.busiest)}
-                </p>
-              )}
+              <div className={cn("flex flex-col gap-3", wide && "w-[260px] shrink-0")}>
+                <div
+                  className={cn(
+                    "grid gap-x-6 gap-y-3",
+                    wide || (width !== null && width < 520) ? "grid-cols-2" : "grid-cols-4",
+                  )}
+                >
+                  <Total value={totals.pullRequests} label="PRs reviewed" />
+                  <Total value={totals.comments} label="comments posted" />
+                  <Total value={totals.daysWithReviews} label="days with reviews" />
+                  <Total value={totals.thisWeek} label="PRs this week" />
+                </div>
+                {totals.busiest !== null && (
+                  <p className="border-t pt-3 text-caption text-muted-foreground">
+                    {busiestDay(totals.busiest)}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </section>
   );

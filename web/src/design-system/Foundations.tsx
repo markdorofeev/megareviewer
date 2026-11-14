@@ -85,6 +85,10 @@ const COLOR_GROUPS: readonly { readonly title: string; readonly tokens: readonly
     ],
   },
   {
+    title: "Review activity, by pull requests reviewed a day",
+    tokens: ["activity-1", "activity-2", "activity-3"],
+  },
+  {
     title: "Syntax",
     tokens: [
       "syntax-keyword",

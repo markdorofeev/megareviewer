@@ -183,7 +183,7 @@ export const PullRequestList = ({
         )}
         <span className="text-caption text-muted-foreground">{word}</span>
       </div>
-      {notes}
+      <div className="flex flex-col gap-2 p-3 empty:hidden">{notes}</div>
       {blocked ??
         (items === null ? (
           <div aria-busy="true" className="flex flex-col">
