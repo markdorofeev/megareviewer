@@ -1,0 +1,48 @@
+{
+ "data": [
+  {
+   "id": "msg_1da4b9e59001tfn7UPGjuKZHpP",
+   "time": {
+    "created": 1794663751257
+   },
+   "type": "idle",
+   "outcome": "failed",
+   "error": {
+    "type": "provider.transport",
+    "message": "ECONNRESET: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()"
+   }
+  },
+  {
+   "id": "msg_1da4a32f7001mDNZKsNgQlwB55",
+   "time": {
+    "created": 1794663751207,
+    "completed": 1794663751255
+   },
+   "type": "assistant",
+   "agent": "megareviewer",
+   "model": {
+    "id": "claude-haiku-5-5",
+    "providerID": "anthropic",
+    "variant": "default"
+   },
+   "content": [],
+   "finish": "error",
+   "error": {
+    "type": "provider.transport",
+    "message": "ECONNRESET: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()"
+   }
+  },
+  {
+   "id": "msg_1da4a32f10016KFOoEHMxUMSIW",
+   "time": {
+    "created": 1794663658229
+   },
+   "text": "Call the skill tool with the id \"deploy\". Report what it returned.",
+   "type": "user"
+  }
+ ],
+ "cursor": {
+  "previous": "eyJpZCI6Im1zZ18xZGE0YjllNTkwMDF0Zm43VVBHanVLWkhwUCIsIm9yZGVyIjoiZGVzYyIsImRpcmVjdGlvbiI6InByZXZpb3VzIn0",
+  "next": "eyJpZCI6Im1zZ18xZGE0YTMyZjEwMDE2S0ZPb0VITXhVTVNJVyIsIm9yZGVyIjoiZGVzYyIsImRpcmVjdGlvbiI6Im5leHQifQ"
+ }
+}

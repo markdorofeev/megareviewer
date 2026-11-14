@@ -1,0 +1,56 @@
+{
+ "data": [
+  {
+   "id": "msg_1da47d0440017NdwDeTyc0vdYY",
+   "time": {
+    "created": 1794663501892
+   },
+   "type": "idle",
+   "outcome": "failed",
+   "error": {
+    "type": "provider.invalid-request",
+    "message": "This model does not support assistant message prefill. The conversation must end with a user message.",
+    "status": 400,
+    "response": {
+     "body": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"This model does not support assistant message prefill. The conversation must end with a user message.\"},\"request_id\":\"req_011Ch2usuzRM6obAXs4XZaUX\"}"
+    }
+   }
+  },
+  {
+   "id": "msg_1da47cdc4001YvmkL3QFr62dzU",
+   "time": {
+    "created": 1794663501255,
+    "completed": 1794663501889
+   },
+   "type": "assistant",
+   "agent": "megareviewer",
+   "model": {
+    "id": "claude-haiku-5-5",
+    "providerID": "anthropic",
+    "variant": "default"
+   },
+   "content": [],
+   "finish": "error",
+   "error": {
+    "type": "provider.invalid-request",
+    "message": "This model does not support assistant message prefill. The conversation must end with a user message.",
+    "status": 400,
+    "response": {
+     "body": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"This model does not support assistant message prefill. The conversation must end with a user message.\"},\"request_id\":\"req_011Ch2usuzRM6obAXs4XZaUX\"}"
+    }
+   }
+  },
+  {
+   "id": "msg_1da47cdb9001KjEvSoyCGtJuhK",
+   "time": {
+    "created": 1794663501248
+   },
+   "text": "Use your shell or bash tool to run `echo hello-from-tool` and tell me its output. If you have no such tool, list the names of every tool you have.",
+   "type": "user"
+  }
+ ],
+ "cursor": {
+  "previous": "eyJpZCI6Im1zZ18xZGE0N2QwNDQwMDE3TmR3RGVUeWMwdmRZWSIsIm9yZGVyIjoiZGVzYyIsImRpcmVjdGlvbiI6InByZXZpb3VzIn0",
+  "next": "eyJpZCI6Im1zZ18xZGE0N2NkYjkwMDFLakV2U295Q0d0SnVoSyIsIm9yZGVyIjoiZGVzYyIsImRpcmVjdGlvbiI6Im5leHQifQ"
+ }
+}

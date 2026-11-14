@@ -8,11 +8,17 @@ import {
   type CodexStatus,
   claudeCodeStatus,
   codexStatus,
+  createOpencodeClient,
+  createOpencodeServer,
   createRunClaude,
   createRunCodex,
+  createRunOpencode,
   DEFAULT_MODEL,
   MIN_CLAUDE_CODE_VERSION,
   MIN_CODEX_VERSION,
+  MIN_OPENCODE_VERSION,
+  type OpencodeStatus,
+  opencodeStatus,
   planName,
 } from "../adapters/model/index.ts";
 import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
@@ -27,6 +33,7 @@ import {
   codexModels,
   codexProblem,
   describeCodex,
+  opencodeModels,
 } from "./model-access.ts";
 import { NODE_FIX, nodeSupported } from "./node-version.ts";
 
@@ -46,6 +53,7 @@ export interface DoctorDeps {
   readonly tickets: TicketSource;
   readonly claudeCode: ClaudeCodeStatus;
   readonly codex: CodexStatus;
+  readonly opencode: OpencodeStatus;
   readonly anthropic: {
     readonly configured: boolean;
     /** Fetches the default model: free, and proves the credentials work. */
@@ -261,6 +269,46 @@ const checkCodex = ({ codex }: DoctorDeps): Check => {
   }
 };
 
+/** The models of whichever providers the reviewer connected in opencode, at their own prices. */
+const checkOpencode = ({ opencode }: DoctorDeps): Check => {
+  const title = "opencode";
+  switch (opencode.state) {
+    case "not-installed":
+      return check(
+        "skip",
+        title,
+        "not installed: its row in Request AI review's menu is disabled",
+        "Install opencode (https://opencode.ai) and connect a provider with `opencode auth login` to analyze on the models you connected.",
+      );
+    case "outdated":
+      return check(
+        "fail",
+        title,
+        `${opencode.version}, older than ${MIN_OPENCODE_VERSION}, the first whose server megareviewer speaks`,
+        "Run `opencode upgrade`.",
+      );
+    case "failed":
+      return check("fail", title, opencode.message, "Run `opencode serve` to see why it doesn't start.");
+    case "running": {
+      const models = opencodeModels(opencode.models);
+      if (models.length === 0) {
+        return check(
+          "skip",
+          title,
+          `${opencode.version}, no provider connected`,
+          "Run `opencode auth login` to connect one.",
+        );
+      }
+      const providers = [...new Set(opencode.models.map((model) => model.providerName))];
+      return check(
+        "pass",
+        title,
+        `${opencode.version}: Request AI review offers ${models.length} ${models.length === 1 ? "model" : "models"} through ${listOf(providers)}, none measured by megareviewer's evals`,
+      );
+    }
+  }
+};
+
 const HOST_DOMAINS: Readonly<Record<HostKind, string>> = {
   github: "github.com",
   bitbucket: "bitbucket.org",
@@ -304,6 +352,7 @@ export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
     checkClaudeCode(deps),
     checkAnthropic(deps),
     checkCodex(deps),
+    checkOpencode(deps),
   ]);
   const opened = deps.openStore();
   const store = opened.ok
@@ -339,6 +388,14 @@ export const createDoctorDeps = async (options: {
     tickets: createTicketSource(config, logger),
     claudeCode: await claudeCodeStatus(createRunClaude()),
     codex: await codexStatus(createRunCodex()),
+    opencode: await (async () => {
+      const server = createOpencodeServer();
+      try {
+        return await opencodeStatus(createRunOpencode(), createOpencodeClient(server));
+      } finally {
+        server.stop();
+      }
+    })(),
     anthropic: {
       configured: await anthropicConfigured(client, logger),
       async retrieveModel() {

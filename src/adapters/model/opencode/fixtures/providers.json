@@ -1,0 +1,17 @@
+{
+ "location": {
+  "directory": "/private/var/folders/bh/sbt9m8rd61j9g4n20g9pd0v80000gn/T/megareviewer-opencode-daBfuP"
+ },
+ "data": [
+  {
+   "id": "anthropic",
+   "integrationID": "anthropic",
+   "name": "Anthropic",
+   "activation": "auto",
+   "package": "@opencode/ai/providers/anthropic",
+   "settings": {
+    "baseURL": "https://api.anthropic.com/v1"
+   }
+  }
+ ]
+}

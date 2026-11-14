@@ -39,6 +39,31 @@ const deps = (overrides: Partial<DoctorDeps> = {}): DoctorDeps => ({
       { slug: "gpt-6-sol", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
     ],
   },
+  opencode: {
+    state: "running",
+    version: "2.3.0",
+    models: [
+      {
+        providerID: "anthropic",
+        providerName: "Anthropic",
+        id: "claude-haiku-5-5",
+        name: "Claude Haiku 5.5",
+        variants: [],
+        contextTokens: null,
+        priced: true,
+      },
+      {
+        providerID: "ollama",
+        providerName: "Ollama",
+        id: "qwen3:8b",
+        name: "Qwen3 8B",
+        variants: [],
+        contextTokens: null,
+        priced: false,
+      },
+    ],
+    defaultModel: null,
+  },
   anthropic: { configured: true, retrieveModel: async () => ok(undefined) },
   openStore: () => ok(undefined),
   checkout: {
@@ -70,6 +95,7 @@ describe("runDoctor", () => {
       "✓ Claude Code: 2.1.303, signed in, on your Pro plan: Request AI review offers Haiku 5.5, Sonnet 5.5 and Opus 5.5 on it",
       "✓ Anthropic API: credentials work, billed to your account: Request AI review offers Haiku 5.5, Sonnet 5.5 and Opus 5.5 on it",
       "✓ Codex: 0.162.0, signed in, on your ChatGPT plan: Request AI review offers GPT-6 Luna and GPT-6 Sol on it",
+      "✓ opencode: 2.3.0: Request AI review offers 2 models through Anthropic and Ollama, none measured by megareviewer's evals",
       "✓ Checkout: /home/lee/src/shop, a checkout of github.com/acme/shop\n    Callers outside a PR need its head commit: if a review says it's missing, run `git fetch` there.",
       "✓ Home: /home/lee/.megareviewer is writable and the database opens",
     ]);
@@ -229,6 +255,27 @@ describe("runDoctor", () => {
     ],
   ])("says what Codex can do: %j", async (codex, line) => {
     expect((await lines({ codex }))[6]).toBe(line);
+  });
+
+  it.each<[DoctorDeps["opencode"], string]>([
+    [
+      { state: "not-installed" },
+      "– opencode: not installed: its row in Request AI review's menu is disabled\n    Install opencode (https://opencode.ai) and connect a provider with `opencode auth login` to analyze on the models you connected.",
+    ],
+    [
+      { state: "running", version: "2.3.0", models: [], defaultModel: null },
+      "– opencode: 2.3.0, no provider connected\n    Run `opencode auth login` to connect one.",
+    ],
+    [
+      { state: "outdated", version: "1.19.5" },
+      "✗ opencode: 1.19.5, older than 2.3.0, the first whose server megareviewer speaks\n    Run `opencode upgrade`.",
+    ],
+    [
+      { state: "failed", message: "`opencode serve` exited (1): boom" },
+      "✗ opencode: `opencode serve` exited (1): boom\n    Run `opencode serve` to see why it doesn't start.",
+    ],
+  ])("says what opencode can do: %j", async (opencode, line) => {
+    expect((await lines({ opencode }))[7]).toBe(line);
   });
 
   it("fails when the home directory or database doesn't open", async () => {

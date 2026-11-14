@@ -1,6 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import type { ClaudeCodeStatus, CodexStatus, RunClaude } from "../adapters/model/index.ts";
+import type {
+  ClaudeCodeStatus,
+  CodexStatus,
+  OpencodeModel,
+  OpencodeStatus,
+  RunClaude,
+} from "../adapters/model/index.ts";
 import { fakeModelOption, RecordingLogger } from "../application/testing/index.ts";
 import {
   anthropicConfigured,
@@ -10,6 +16,8 @@ import {
   describeCodex,
   modelSummary,
   NO_ANTHROPIC_CREDENTIALS,
+  OPENCODE_NOT_INSTALLED,
+  opencodeModels,
 } from "./model-access.ts";
 
 const signedIn: ClaudeCodeStatus = {
@@ -38,6 +46,32 @@ const codexSignedIn: CodexStatus = {
   ],
 };
 const CODEX_MISSING = "Codex isn't installed: install the Codex CLI, then run `codex login`";
+const OPENCODE_MISSING = `opencode/models: ${OPENCODE_NOT_INSTALLED}`;
+
+const opencodeModel = (
+  providerID: string,
+  providerName: string,
+  id: string,
+  name: string,
+): OpencodeModel => ({
+  providerID,
+  providerName,
+  id,
+  name,
+  variants: ["low", "medium", "high"],
+  contextTokens: 200_000,
+  priced: true,
+});
+const opencodeRunning: OpencodeStatus = {
+  state: "running",
+  version: "2.3.0",
+  models: [
+    opencodeModel("anthropic", "Anthropic", "claude-haiku-5-5", "Claude Haiku 5.5"),
+    opencodeModel("ollama", "Ollama", "qwen3-coder:30b", "Qwen3 Coder 30B"),
+    opencodeModel("odd", "Odd", "model with spaces", "Odd model"),
+  ],
+  defaultModel: "ollama/qwen3-coder:30b",
+};
 
 const neverRun: RunClaude = async () => {
   throw new Error("the probe answers for Claude Code");
@@ -49,6 +83,7 @@ const catalogWith = (
   api: readonly boolean[],
   timeoutMs?: number,
   codex: CodexStatus = { state: "not-installed" },
+  opencode: OpencodeStatus = { state: "not-installed" },
 ) => {
   const asked = { claudeCode: 0, api: 0 };
   const next = <T>(answers: readonly T[], count: number): T => {
@@ -71,6 +106,7 @@ const catalogWith = (
       },
       apiConfigured: async () => next(api, asked.api++),
       codex: async () => codex,
+      opencode: async () => opencode,
     },
   });
   return { catalog, asked };
@@ -167,6 +203,7 @@ describe("createModelCatalog", () => {
         ...listed("anthropic-api", expected.apiSuffix),
         `codex/gpt-6-luna: ${CODEX_MISSING}`,
         `codex/gpt-6-sol: ${CODEX_MISSING}`,
+        OPENCODE_MISSING,
       ],
     });
   });
@@ -245,10 +282,15 @@ describe("Codex's options", () => {
         ...listed("anthropic-api", `: ${NO_API}`),
         "codex/gpt-6-luna (Codex, on your ChatGPT plan)",
         "codex/gpt-6-sol (Codex, on your ChatGPT plan)",
+        OPENCODE_MISSING,
       ],
     });
     const { options } = await catalog.options();
-    expect(options.at(-1)).toMatchObject({ family: "GPT", modelName: "GPT-6 Sol", measured: true });
+    expect(options.find((option) => option.id === "codex/gpt-6-sol")).toMatchObject({
+      family: "GPT",
+      modelName: "GPT-6 Sol",
+      measured: true,
+    });
   });
 
   it("leaves out a measured model the account's catalog doesn't have", () => {
@@ -289,6 +331,69 @@ describe("Codex's options", () => {
   it("says who pays", () => {
     expect(describeCodex("plan")).toBe("Codex, on your ChatGPT plan");
     expect(describeCodex("api")).toBe("Codex, billed to your OpenAI account");
+  });
+});
+
+describe("opencode's options", () => {
+  const withOpencode = (status: OpencodeStatus) =>
+    catalogWith([signedOut], [false], undefined, { state: "not-installed" }, status);
+
+  it("lists every model it offers, unmeasured, each through its own provider", async () => {
+    const { catalog } = withOpencode(opencodeRunning);
+    const { options, defaultId } = await catalog.options();
+    expect(options.filter((option) => option.provider === "opencode")).toEqual([
+      expect.objectContaining({
+        id: "opencode/anthropic/claude-haiku-5-5",
+        modelName: "Claude Haiku 5.5",
+        family: "Claude",
+        via: "opencode, through Anthropic",
+        measured: false,
+        available: true,
+      }),
+      expect.objectContaining({
+        id: "opencode/ollama/qwen3-coder:30b",
+        via: "opencode, through Ollama",
+        family: "Qwen3",
+      }),
+    ]);
+    // The only provider that can run, so its own default is the run's.
+    expect(defaultId).toBe("opencode/ollama/qwen3-coder:30b");
+  });
+
+  it("leaves out a model whose ID an option can't carry", () => {
+    expect(opencodeModels(opencodeRunning.models).map((model) => model.id)).toEqual([
+      "anthropic/claude-haiku-5-5",
+      "ollama/qwen3-coder:30b",
+    ]);
+  });
+
+  it.each<[OpencodeStatus, string]>([
+    [{ state: "not-installed" }, OPENCODE_NOT_INSTALLED],
+    [
+      { ...opencodeRunning, models: [], defaultModel: null },
+      "opencode has no provider connected: run `opencode auth login`",
+    ],
+    [
+      { state: "outdated", version: "1.19.5" },
+      "opencode 1.19.5 is older than 2.3.0: run `opencode upgrade`",
+    ],
+    [{ state: "failed", message: "`opencode serve` exited (1): boom" }, "`opencode serve` exited (1): boom"],
+  ])("is one disabled row with the fix when it can't run", async (status, reason) => {
+    const { catalog } = withOpencode(status);
+    const { options } = await catalog.options();
+    expect(options.filter((option) => option.provider === "opencode")).toEqual([
+      expect.objectContaining({ id: "opencode/models", available: false, reason }),
+    ]);
+  });
+
+  it("serves the passes on a model it offers, once it can run", async () => {
+    const { catalog } = withOpencode(opencodeRunning);
+    expect(catalog.model("opencode/anthropic/claude-haiku-5-5")).toBeNull();
+    await catalog.options();
+    expect(catalog.model("opencode/anthropic/claude-haiku-5-5")?.version).toMatch(
+      /^opencode\/anthropic\/claude-haiku-5-5\/p\d+$/,
+    );
+    expect(catalog.model("opencode/anthropic/claude-opus-9")).toBeNull();
   });
 });
 

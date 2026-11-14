@@ -16,7 +16,7 @@ import {
 } from "../adapters/github/index.ts";
 import { createHttpApp } from "../adapters/http/index.ts";
 import { createJiraTicketSource, createUnconfiguredTicketSource } from "../adapters/jira/index.ts";
-import { createRunClaude, createRunCodex } from "../adapters/model/index.ts";
+import { createOpencodeServer, createRunClaude, createRunCodex } from "../adapters/model/index.ts";
 import { openSqliteAnalysisStore, type SqliteAnalysisStore } from "../adapters/sqlite/index.ts";
 import { createTreeSitterCodeParser } from "../adapters/treesitter/index.ts";
 import { createAnalysisEvents } from "../application/events/index.ts";
@@ -199,6 +199,7 @@ export const compose = async (
   const models = createModelCatalog({
     runClaude: createRunClaude({ signal: running.signal }),
     runCodex: createRunCodex({ signal: running.signal }),
+    opencodeServer: createOpencodeServer({ signal: running.signal }),
     logger,
   });
   try {

@@ -12,14 +12,24 @@ import {
   createClaudeAnalysisModel,
   createClaudeCodeAnalysisModel,
   createCodexAnalysisModel,
+  createOpencodeAnalysisModel,
+  createOpencodeClient,
+  createOpencodeServer,
   createRunCodex,
+  createRunOpencode,
   DEFAULT_CODEX_MODEL,
   DEFAULT_MODEL,
   MIN_CLAUDE_CODE_VERSION,
   MIN_CODEX_VERSION,
+  MIN_OPENCODE_VERSION,
+  type OpencodeModel,
+  type OpencodeServer,
+  type OpencodeStatus,
+  opencodeStatus,
   planName,
   type RunClaude,
   type RunCodex,
+  type RunOpencode,
 } from "../adapters/model/index.ts";
 import type { AnalysisModel, Logger, ModelCatalog } from "../application/ports/index.ts";
 import {
@@ -27,6 +37,7 @@ import {
   type ModelOption,
   type ModelOptionId,
   type ModelOptions,
+  ModelOptionId as ModelOptionIdSchema,
   type ModelProvider,
   modelOptionId,
 } from "../domain/review/index.ts";
@@ -84,6 +95,28 @@ export const codexProblem = (status: CodexStatus): string | null => {
   }
 };
 
+/** What runs a model through opencode: the reviewer's own provider, at its prices. */
+export const describeOpencode = (providerName: string): string => `opencode, through ${providerName}`;
+
+export const OPENCODE_NOT_INSTALLED =
+  "opencode isn't installed: install it (https://opencode.ai), then connect a provider with `opencode auth login`";
+
+/** Why opencode can't run the passes, or null when it can. */
+export const opencodeProblem = (status: OpencodeStatus): string | null => {
+  switch (status.state) {
+    case "not-installed":
+      return OPENCODE_NOT_INSTALLED;
+    case "failed":
+      return status.message;
+    case "outdated":
+      return `opencode ${status.version} is older than ${MIN_OPENCODE_VERSION}: run \`opencode upgrade\``;
+    case "running":
+      return status.models.length === 0
+        ? "opencode has no provider connected: run `opencode auth login`"
+        : null;
+  }
+};
+
 /**
  * Whether the SDK will find credentials: an API key or auth token from the environment, or an
  * `ant auth login` profile. Without them its first request throws, which would be a bug report
@@ -110,13 +143,17 @@ export interface ProviderModel {
   readonly name: string;
   /** Who made it: the page names a run's points by it. */
   readonly family: string;
+  /** What runs it and who pays, when that differs between a provider's models. */
+  readonly via?: string;
+  /** False for a model the evals haven't run on. Default: true. */
+  readonly measured?: boolean;
 }
 
 export interface CatalogProvider {
   readonly id: ModelProvider;
   readonly name: string;
   /** Its default model, when it's the first that can run. */
-  readonly defaultModel: string;
+  defaultModel(status: ProviderStatus): string;
   /** The models it lists: all of megareviewer's, or the ones its status says it can run. */
   models(status: ProviderStatus): readonly ProviderModel[];
 }
@@ -154,13 +191,15 @@ const probeWithin = async (provider: Provider, timeoutMs: number): Promise<Provi
   }
 };
 
+const NOT_CHECKED: ProviderStatus = { available: false, reason: "not checked" };
+
 /** Every listed model on every provider, in the providers' order, cheapest model first. */
 export const catalogOptions = (
   providers: readonly CatalogProvider[],
   statuses: readonly ProviderStatus[],
 ): ModelOptions => {
   const options = providers.flatMap((provider, index): ModelOption[] => {
-    const status = statuses[index] ?? { available: false, reason: "not checked" };
+    const status = statuses[index] ?? NOT_CHECKED;
     return provider.models(status).map((model) => ({
       id: modelOptionId(provider.id, model.id),
       provider: provider.id,
@@ -168,8 +207,8 @@ export const catalogOptions = (
       model: model.id,
       modelName: model.name,
       family: model.family,
-      via: status.available ? status.via : provider.name,
-      measured: true,
+      via: status.available ? (model.via ?? status.via) : provider.name,
+      measured: model.measured ?? true,
       available: status.available,
       reason: status.available ? null : status.reason,
     }));
@@ -178,7 +217,13 @@ export const catalogOptions = (
   const provider = firstAvailable ?? providers[0];
   return {
     options,
-    defaultId: provider === undefined ? null : modelOptionId(provider.id, provider.defaultModel),
+    defaultId:
+      provider === undefined
+        ? null
+        : modelOptionId(
+            provider.id,
+            provider.defaultModel(statuses[providers.indexOf(provider)] ?? NOT_CHECKED),
+          ),
   };
 };
 
@@ -199,10 +244,44 @@ export const codexModels = (
     (model) => catalog === null || catalog.some((offered) => offered.slug === model.id),
   ).map(({ id, name }) => ({ id, name, family: "GPT" }));
 
+/** The one row opencode's group has while it can't run, which the menu disables with the fix. */
+export const OPENCODE_PLACEHOLDER: ProviderModel = {
+  id: "models",
+  name: "Your opencode models",
+  family: "opencode",
+  measured: false,
+};
+
+/** "Claude Haiku 5.5" is a Claude, "GPT-6 Luna" a GPT: the first word of the name. */
+const familyOf = (name: string): string => name.split(/[\s-]/)[0] || name;
+
+/**
+ * The models the reviewer's opencode offers, as "provider/model", each run through the provider
+ * it's on. None is measured: they're whatever the reviewer connected.
+ */
+export const opencodeModels = (models: readonly OpencodeModel[]): readonly ProviderModel[] =>
+  models.flatMap((model) => {
+    const id = `${model.providerID}/${model.id}`;
+    // An ID the option ID can't carry isn't offered.
+    if (!ModelOptionIdSchema.safeParse(modelOptionId("opencode", id)).success) return [];
+    return [
+      {
+        id,
+        name: model.name,
+        family: familyOf(model.name),
+        via: describeOpencode(model.providerName),
+        measured: false,
+      },
+    ];
+  });
+
 export interface ModelCatalogOptions {
   readonly runClaude: RunClaude;
   /** Default: the `codex` on the PATH. */
   readonly runCodex?: RunCodex;
+  /** Default: the `opencode` on the PATH, and a server of its own, stopped with megareviewer. */
+  readonly runOpencode?: RunOpencode;
+  readonly opencodeServer?: OpencodeServer;
   readonly client?: Anthropic;
   readonly logger: Logger;
   readonly timeoutMs?: number;
@@ -211,11 +290,13 @@ export interface ModelCatalogOptions {
     readonly claudeCode: () => Promise<ClaudeCodeStatus>;
     readonly apiConfigured: () => Promise<boolean>;
     readonly codex: () => Promise<CodexStatus>;
+    readonly opencode: () => Promise<OpencodeStatus>;
   };
 }
 
 /**
- * Claude's models on Claude Code, then on the Anthropic API, then OpenAI's on Codex. All are asked
+ * Claude's models on Claude Code, then on the Anthropic API, then OpenAI's on Codex, then the
+ * models the reviewer's opencode offers. All are asked
  * at once; one that can run is kept for the process, and one that can't is asked again on the
  * next request.
  */
@@ -224,19 +305,24 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
   const runCodex = options.runCodex ?? createRunCodex();
   const client = options.client ?? new Anthropic();
   const timeoutMs = options.timeoutMs ?? PROBE_TIMEOUT_MS;
+  const opencodeClient = createOpencodeClient(options.opencodeServer ?? createOpencodeServer());
   const probe = options.probe ?? {
     claudeCode: () => claudeCodeStatus(runClaude),
     apiConfigured: () => anthropicConfigured(client, logger),
     codex: () => codexStatus(runCodex),
+    opencode: () => opencodeStatus(options.runOpencode ?? createRunOpencode(), opencodeClient),
   };
   // What Codex last said it offers: the models it lists, their context windows and efforts.
   let codexCatalog: readonly CodexCatalogModel[] | null = null;
+  // What opencode's server last listed, and its default model.
+  let opencodeOffered: readonly OpencodeModel[] = [];
+  let opencodeDefault: string | null = null;
 
   const providers: readonly Provider[] = [
     {
       id: "claude-code",
       name: "Claude Code",
-      defaultModel: DEFAULT_MODEL,
+      defaultModel: () => DEFAULT_MODEL,
       models: () => CLAUDE,
       async probe() {
         const status = await probe.claudeCode();
@@ -252,7 +338,7 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
     {
       id: "anthropic-api",
       name: "Anthropic API",
-      defaultModel: DEFAULT_MODEL,
+      defaultModel: () => DEFAULT_MODEL,
       models: () => CLAUDE,
       async probe() {
         return (await probe.apiConfigured())
@@ -267,7 +353,7 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
     {
       id: "codex",
       name: "Codex",
-      defaultModel: DEFAULT_CODEX_MODEL,
+      defaultModel: () => DEFAULT_CODEX_MODEL,
       models: (status) => codexModels(status.available ? codexCatalog : null),
       async probe() {
         const status = await probe.codex();
@@ -286,6 +372,43 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
           model,
           contextWindow: offered?.contextWindow ?? null,
           efforts: offered?.efforts ?? [],
+          logger,
+        });
+      },
+    },
+    {
+      id: "opencode",
+      name: "opencode",
+      defaultModel: (status) =>
+        (status.available ? (opencodeDefault ?? opencodeModels(opencodeOffered)[0]?.id) : null) ??
+        OPENCODE_PLACEHOLDER.id,
+      models: (status) =>
+        status.available ? opencodeModels(opencodeOffered) : [OPENCODE_PLACEHOLDER],
+      async probe() {
+        const status = await probe.opencode();
+        const problem = opencodeProblem(status);
+        if (status.state !== "running" || problem !== null) {
+          return { available: false, reason: problem ?? "opencode can't run" };
+        }
+        opencodeOffered = status.models;
+        const listed = opencodeModels(status.models);
+        opencodeDefault = listed.some((model) => model.id === status.defaultModel)
+          ? status.defaultModel
+          : null;
+        return { available: true, via: "opencode", billing: "api" };
+      },
+      model: (model) => {
+        const offered = opencodeOffered.find(
+          (candidate) => `${candidate.providerID}/${candidate.id}` === model,
+        );
+        if (offered === undefined) throw new Error(`opencode doesn't offer ${model}`);
+        return createOpencodeAnalysisModel({
+          client: opencodeClient,
+          providerID: offered.providerID,
+          model: offered.id,
+          variants: offered.variants,
+          contextTokens: offered.contextTokens,
+          priced: offered.priced,
           logger,
         });
       },
