@@ -86,7 +86,7 @@ test("analyzes a PR from its URL, and asks Claude on it", async ({ page }) => {
   await analyzeWithClaude(page);
   await expect(page.getByRole("button", { name: "Request AI review" })).toHaveCount(0);
   await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Details", exact: true })).toBeVisible();
 });
 
 test("analyzes a PR picked from the list", async ({ page }) => {
@@ -524,7 +524,7 @@ test.describe("without the model", () => {
 
   test("opens a file from the overview and publishes", async ({ page, server }) => {
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
-    await expect(page.getByRole("button", { name: "Details" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Details", exact: true })).toBeVisible();
     // No points without the model; the host's threads are still there.
     await expect(page.locator("[data-slot=point]")).toHaveCount(0);
     await expect(page.locator("[data-slot=review-thread]").first()).toBeVisible();
