@@ -1,13 +1,15 @@
 import { z } from "zod";
 
 /** What runs the model passes and decides who pays. */
-export const ModelProvider = z.enum(["claude-code", "anthropic-api", "codex"]);
+export const ModelProvider = z.enum(["claude-code", "anthropic-api", "codex", "opencode"]);
 export type ModelProvider = z.infer<typeof ModelProvider>;
 
 const PLANS: Readonly<Record<ModelProvider, string | null>> = {
   "claude-code": "Claude",
   "anthropic-api": null,
   codex: "ChatGPT",
+  // The reviewer's own keys, or a local model: no plan.
+  opencode: null,
 };
 
 /**
