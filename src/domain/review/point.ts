@@ -8,9 +8,6 @@ import type { RiskAssessment } from "./risk.ts";
 
 export { PointLines };
 
-export const MAX_FINDING_TITLE = 80;
-export const MAX_FINDING_EXPLANATION = 300;
-
 /** "f1", "f2", … in the order the model listed the findings. */
 export const FindingId = z
   .string()
@@ -247,11 +244,7 @@ export const pointLinesFit = (
 export type FindingProblem =
   | { readonly kind: "unknown-hunk"; readonly index: number; readonly hunkId: HunkId }
   | { readonly kind: "lines-outside"; readonly index: number; readonly hunkId: HunkId }
-  | {
-      readonly kind: "blank" | "too-long";
-      readonly index: number;
-      readonly field: "title" | "explanation";
-    }
+  | { readonly kind: "blank"; readonly index: number; readonly field: "title" }
   /** A suggestion on base-side lines, which a comment can't replace. */
   | { readonly kind: "suggestion-old-side"; readonly index: number }
   | { readonly kind: "unknown-mismatch"; readonly index: number; readonly mismatch: MismatchId };
@@ -261,8 +254,10 @@ export const strippable = (problem: FindingProblem): boolean =>
   problem.kind === "suggestion-old-side" || problem.kind === "unknown-mismatch";
 
 /**
- * Whether a draft finding names a hunk of the PR and lines that hunk shows, with text that fits, a
- * suggestion only for head-side lines and a mismatch the intent has.
+ * Whether a draft finding names a hunk of the PR and lines that hunk shows, with a title, a
+ * suggestion only for head-side lines and a mismatch the intent has. Text over the prompt's limits
+ * isn't a problem: a retry for it cost a whole findings pass, about two minutes, for words the
+ * card shows in full anyway.
  */
 export const validateFindings = (
   findings: readonly Omit<Finding, "id">[],
@@ -272,12 +267,6 @@ export const validateFindings = (
   findings.flatMap((finding, index): FindingProblem[] => {
     const problems: FindingProblem[] = [];
     if (finding.title.trim() === "") problems.push({ kind: "blank", index, field: "title" });
-    if (finding.title.length > MAX_FINDING_TITLE) {
-      problems.push({ kind: "too-long", index, field: "title" });
-    }
-    if (finding.explanation.length > MAX_FINDING_EXPLANATION) {
-      problems.push({ kind: "too-long", index, field: "explanation" });
-    }
     const { hunkId, side, startLine, line } = finding.lines;
     const hunk = hunks.get(hunkId);
     if (hunk === undefined) problems.push({ kind: "unknown-hunk", index, hunkId });

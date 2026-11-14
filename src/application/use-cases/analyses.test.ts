@@ -864,6 +864,21 @@ describe("the analysis pipeline", () => {
         { ...drafts[0], id: "f1", suggestion: null, mismatch: null },
       ]);
     });
+
+    it("keeps a finding whose text runs long as it is, without running the pass again", async () => {
+      const model = new FakeAnalysisModel();
+      const long = {
+        ...onLine("new"),
+        title: "t".repeat(81),
+        explanation: "e".repeat(301),
+        mismatch: null,
+      };
+      model.script("findings", ok([long]));
+      const { analyze } = setup({ model });
+      const analysis = await analyze();
+      expect(model.callsTo("findings")).toHaveLength(1);
+      expect(analysis.findings).toEqual([{ ...long, id: "f1" }]);
+    });
   });
 
   describe("decisions", () => {

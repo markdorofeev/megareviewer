@@ -263,7 +263,7 @@ describe("validateFindings", () => {
     expect(validateFindings([finding()], hunks)).toEqual([]);
   });
 
-  it("names an unknown hunk, lines the hunk doesn't show, and text that doesn't fit", () => {
+  it("names an unknown hunk, lines the hunk doesn't show, and a blank title, not long text", () => {
     const unknown = HunkId.parse("h_ffffffffffffffff");
     expect(
       validateFindings(
@@ -281,8 +281,6 @@ describe("validateFindings", () => {
       { kind: "lines-outside", index: 1, hunkId: receiptsHunk.id },
       { kind: "lines-outside", index: 2, hunkId: receiptsHunk.id },
       { kind: "blank", index: 3, field: "title" },
-      { kind: "too-long", index: 3, field: "explanation" },
-      { kind: "too-long", index: 4, field: "title" },
     ]);
   });
 

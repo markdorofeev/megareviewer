@@ -47,8 +47,6 @@ export {
   Finding,
   FindingId,
   type FindingProblem,
-  MAX_FINDING_EXPLANATION,
-  MAX_FINDING_TITLE,
   MismatchId,
   Point,
   PointId,

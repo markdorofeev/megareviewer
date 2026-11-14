@@ -9,8 +9,6 @@ import {
   type FindingProblem,
   type Intent,
   MAX_EXPLANATION,
-  MAX_FINDING_EXPLANATION,
-  MAX_FINDING_TITLE,
   MAX_TITLE,
   type ModelCall,
   type ModelError,
@@ -176,9 +174,7 @@ const FINDING_FEEDBACK = (problem: FindingProblem): string => {
     case "lines-outside":
       return `${finding}'s lines aren't lines ${problem.hunkId} shows on that side.`;
     case "blank":
-      return `${finding} has a blank ${problem.field}.`;
-    case "too-long":
-      return `${finding}'s ${problem.field} is longer than ${problem.field === "title" ? MAX_FINDING_TITLE : MAX_FINDING_EXPLANATION} characters.`;
+      return `${finding} has a blank title.`;
     case "suggestion-old-side":
       return `${finding} suggests a change for "-" lines; a suggestion replaces only new-side lines, so give none or rest the finding on new-side lines.`;
     case "unknown-mismatch":
