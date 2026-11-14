@@ -41,7 +41,11 @@ Set them as environment variables. You need at least one git host.
 | `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD` | Used instead of the two above when they aren't set: your Bitbucket username and an app password with Account: read, Repositories: read and Pull requests: write. Atlassian removed app passwords in July 2026, so they only work where Bitbucket still accepts them |
 | `BITBUCKET_WORKSPACE` | Optional. The workspace whose PRs the picker lists. It scans the 50 most recently updated repositories; a pasted PR URL always works |
 
-**Claude.** Only for the Request AI review button, which runs your Claude Code when it's installed and signed in, so the analysis comes out of your Claude plan's usage. megareviewer never sees your Claude credentials: it runs the `claude` on your PATH, which uses its own sign-in. Without Claude Code, it uses the Anthropic API, with `ANTHROPIC_API_KEY` or a profile from `ant auth login`, billed to your account. Either way, analyses use Claude Haiku 5.5.
+**The model.** Only for the Request AI review button, whose menu lists every model megareviewer offers, on each command or account that can run it; the ones your machine can't run are disabled, with the fix. Without a choice it runs Claude Sonnet 5.5 on the first of these that can:
+
+- **Claude Code,** when it's installed and signed in: the analysis comes out of your Claude plan's usage. megareviewer runs the `claude` on your PATH, which uses its own sign-in, and never sees your Claude credentials.
+- **The Anthropic API,** with `ANTHROPIC_API_KEY` or a profile from `ant auth login`, billed to your account.
+- **Codex,** when it's installed and signed in (`codex login`): OpenAI's GPT-6 Luna and GPT-6 Sol, on your ChatGPT plan's usage, or billed to your OpenAI account if Codex is signed in with an API key. megareviewer runs your Codex, the `codex` on your PATH, and never reads its credentials. Each pass runs in Codex's read-only sandbox, without your Codex config, and is stopped if the model uses a tool.
 
 **Jira.** Optional: without it, ticket keys are shown but not fetched.
 
@@ -53,7 +57,7 @@ Set them as environment variables. You need at least one git host.
 
 ## Privacy
 
-Until you press Request AI review, your code goes nowhere but your machine and your git host. Then the PR's code also goes to Anthropic for the analysis: through your Claude Code, under your own Claude plan and its privacy settings, or to the Anthropic API under your API account's. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and what you did with each point are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
+Until you press Request AI review, your code goes nowhere but your machine and your git host. Then the PR's code also goes to the model's maker for the analysis: to Anthropic through your Claude Code, under your own Claude plan and its privacy settings, or through the Anthropic API under your API account's; or, with Codex, to OpenAI under your own ChatGPT plan or OpenAI account and its settings. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and what you did with each point are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
 
 ## Contributing
 

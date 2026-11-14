@@ -34,8 +34,28 @@ describe("preflight", () => {
   it("asks for no API credentials with --via claude-code", async () => {
     const { check, asked } = checks(signedIn, false);
     const ready = await preflight("claude-code", check);
-    expect(ready).toEqual({ ok: true, value: { billing: "plan" } });
+    expect(ready).toEqual({ ok: true, value: { billing: "plan", codex: null } });
     expect(asked).toEqual(["claude-code"]);
+  });
+
+  it("needs a signed-in Codex for the passes on Codex, and gives its models", async () => {
+    const { check } = checks(signedIn, false);
+    const out = await preflight("codex", {
+      ...check,
+      codex: async () => ({ state: "signed-out", version: "0.162.0" }),
+    });
+    if (out.ok) throw new Error("expected preflight to fail");
+    expect(out.error).toMatch(/Codex, which needs to be signed in; it's signed-out/);
+
+    const models = [{ slug: "gpt-6-sol", contextWindow: 272_000, efforts: ["low"] }];
+    const ready = await preflight("codex", {
+      ...check,
+      codex: async () => ({ state: "signed-in", version: "0.162.0", billing: "plan", models }),
+    });
+    expect(ready).toEqual({
+      ok: true,
+      value: { billing: "plan", codex: { billing: "plan", models } },
+    });
   });
 
   it("needs API credentials for the passes on the API", async () => {

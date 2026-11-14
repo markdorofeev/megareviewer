@@ -1,8 +1,9 @@
 // Runs the golden set through the real pipeline and model, scores it and prints a summary:
-// node evals/run.ts [--case <name>]... [--via claude-code|api] [--model <id>] [--effort <level>]
+// node evals/run.ts [--case <name>]... [--via claude-code|api|codex] [--model <id>] [--effort <level>]
 //   [--baseline evals/baseline.json] [--write-baseline] --yes
 // Without --yes it prints the estimate and stops. The judge runs on a signed-in Claude Code, and so
-// do the passes, unless --via api runs them on the API (ANTHROPIC_API_KEY or `ant auth login`).
+// do the passes, unless --via api runs them on the API (ANTHROPIC_API_KEY or `ant auth login`) or
+// --via codex on a signed-in Codex, GPT-6 Sol unless --model says otherwise.
 // See evals/README.md.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -12,9 +13,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig } from "@anthropic-ai/sdk/core/credentials";
 import {
   claudeCodeStatus,
+  codexStatus,
   createClaudeAnalysisModel,
   createClaudeCodeAnalysisModel,
+  createCodexAnalysisModel,
   createRunClaude,
+  createRunCodex,
+  DEFAULT_CODEX_MODEL,
   DEFAULT_MODEL,
   EFFORTS,
 } from "../src/adapters/model/index.ts";
@@ -41,6 +46,7 @@ import {
 import { type CaseTiming, showTiming, timingOf } from "./timing.ts";
 
 const CASE_TIMEOUT_MS = 20 * 60 * 1000;
+const VIA_NAMES = { api: "the API", "claude-code": "Claude Code", codex: "Codex" } as const;
 const CONCURRENCY = 3;
 
 const { values } = parseArgs({
@@ -52,7 +58,7 @@ const { values } = parseArgs({
     via: { type: "string", default: "claude-code" },
     // An option's model for the passes, the default's when left out. The judge stays on Opus.
     model: { type: "string" },
-    // One effort for every pass in place of each pass's own; Claude Code only.
+    // One effort for every pass in place of each pass's own; not on the API.
     effort: { type: "string" },
     yes: { type: "boolean", default: false },
   },
@@ -79,11 +85,11 @@ const estimate = estimateCost(
 );
 const via = parseVia(values.via);
 if (via === null) {
-  console.error("--via must be api or claude-code.");
+  console.error("--via must be api, claude-code or codex.");
   process.exit(1);
 }
-if (values.effort !== undefined && via !== "claude-code") {
-  console.error("--effort runs the passes on Claude Code only; leave out --via api.");
+if (values.effort !== undefined && via === "api") {
+  console.error("--effort doesn't run on the API; leave out --via api.");
   process.exit(1);
 }
 const effort = values.effort === undefined ? undefined : EFFORTS.find((e) => e === values.effort);
@@ -92,8 +98,8 @@ if (values.effort !== undefined && effort === undefined) {
   process.exit(1);
 }
 console.log(
-  `${selected.length} case${selected.length === 1 ? "" : "s"}, the passes on ${via === "api" ? "the API" : "Claude Code"}` +
-    ` with ${values.model ?? `${DEFAULT_MODEL}, the default`}` +
+  `${selected.length} case${selected.length === 1 ? "" : "s"}, the passes on ${VIA_NAMES[via]}` +
+    ` with ${values.model ?? `${via === "codex" ? DEFAULT_CODEX_MODEL : DEFAULT_MODEL}, the default`}` +
     `${effort === undefined ? "" : ` at ${effort} effort`}, ` +
     `judged by ${JUDGE_MODEL} on Claude Code: about $${estimate.totalUsd.toFixed(2)} at API prices ` +
     `(${estimate.measured} at their baseline cost, ${estimate.assumed} at ` +
@@ -106,9 +112,11 @@ if (!values.yes) {
 }
 
 const runClaude = createRunClaude();
+const runCodex = createRunCodex();
 const client = via === "api" ? new Anthropic() : null;
 const ready = await preflight(via, {
   claudeCode: () => claudeCodeStatus(runClaude),
+  codex: () => codexStatus(runCodex),
   hasApiCredentials: async () =>
     client !== null &&
     (client.apiKey !== null || client.authToken !== null || (await loadConfig()) !== null),
@@ -118,6 +126,7 @@ if (!ready.ok) {
   process.exit(1);
 }
 const claudeCodeBilling = ready.value.billing;
+const codex = ready.value.codex;
 
 const parser = await createTreeSitterCodeParser({
   grammarsDir: fileURLToPath(new URL("../src/adapters/treesitter/grammars", import.meta.url)),
@@ -153,20 +162,32 @@ interface CaseResult {
 const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) => {
   const problems: string[] = [];
   const logger = quietLogger((line) => problems.push(line));
+  const codexModel = values.model ?? DEFAULT_CODEX_MODEL;
+  const offered = codex?.models.find((candidate) => candidate.slug === codexModel);
   const model =
-    client === null
-      ? createClaudeCodeAnalysisModel({
-          run: runClaude,
-          billing: claudeCodeBilling,
+    codex !== null
+      ? createCodexAnalysisModel({
+          run: runCodex,
+          billing: codex.billing,
+          model: codexModel,
+          contextWindow: offered?.contextWindow ?? null,
+          efforts: offered?.efforts ?? [],
           logger,
-          ...(values.model === undefined ? {} : { model: values.model }),
           ...(effort === undefined ? {} : { effort }),
         })
-      : createClaudeAnalysisModel({
-          client,
-          logger,
-          ...(values.model === undefined ? {} : { model: values.model }),
-        });
+      : client === null
+        ? createClaudeCodeAnalysisModel({
+            run: runClaude,
+            billing: claudeCodeBilling,
+            logger,
+            ...(values.model === undefined ? {} : { model: values.model }),
+            ...(effort === undefined ? {} : { effort }),
+          })
+        : createClaudeAnalysisModel({
+            client,
+            logger,
+            ...(values.model === undefined ? {} : { model: values.model }),
+          });
   modelVersion(model.version);
   const since = (started: number) => (performance.now() - started) / 1000;
   const analysisStarted = performance.now();

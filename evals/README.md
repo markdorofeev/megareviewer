@@ -12,12 +12,12 @@ That prints the estimated cost at API prices and stops. Add `--yes` to run, `--c
 
 | Part | Runs on | Needs |
 |---|---|---|
-| The passes | The signed-in Claude Code, on its plan, or with `--via api` the API | Anthropic credentials (`ANTHROPIC_API_KEY` or `ant auth login`) for the API |
+| The passes | The signed-in Claude Code, on its plan, or with `--via api` the API, or with `--via codex` the signed-in Codex, GPT-6 Sol unless `--model` says otherwise | Anthropic credentials (`ANTHROPIC_API_KEY` or `ant auth login`) for the API; `codex login` for Codex |
 | The judge | Always the signed-in Claude Code, on its plan | Claude Code signed in, checked before anything runs |
 
 So by default a run needs no API credentials, and charges nothing per token: the run comes out of the plan's usage limits, and its cost is shown at API prices only to tell a heavy run from a light one. A case the plan's rate limit stops is an error with Claude Code's reason.
 
-For the Claude Code transport, `node evals/record-claude-code.ts` records its fixtures from real runs, and `node evals/calibrate-claude-code.ts` measures the bytes per token its size estimate rests on. Both run on the signed-in Claude Code's plan.
+For the Claude Code transport, `node evals/record-claude-code.ts` records its fixtures from real runs, and `node evals/calibrate-claude-code.ts` measures the bytes per token its size estimate rests on. Both run on the signed-in Claude Code's plan. `node evals/record-codex.ts` and `node evals/calibrate-codex.ts` do the same for Codex, on its ChatGPT plan.
 
 Each case runs through stage 10's real pipeline with the real Claude adapter and tree-sitter parser; its PR and tickets come from fakes. A Claude Opus 5.5 judge ([judge.ts](judge.ts)) matches the produced findings, decisions and mismatches against the labels and rates each produced finding and decision. It reads the whole PR exactly as the passes did, the same rendered input, so it rates a finding against the code it rests on, in or outside the hunks it cites. It runs through the same locked-down `claude -p` as the passes, and a session on any model but Opus fails the case; a PR too large for its input fails the case too, rather than being cut. The full outputs go to `evals/results/<time>.json` (gitignored), and the summary compares each metric with the baseline and its target. A run worth keeping gets a write-up of its metrics in `evals/reports/<date>/`.
 
