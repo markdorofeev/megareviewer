@@ -168,6 +168,15 @@ The `ModelUsage` change goes in its own PR first.
 | 45 | [Claude's points on the lines, each kind its own weight](45-points-on-the-lines.md) | 44 | Findings as draft comments under their lines, risks as bands, decisions as footnotes; the findings and decisions prompts |
 | 46 | [The PR's state, its reviewers and CI in the header](46-pr-status.md) | 44 | The `PullRequestStatus` port and adapters, its route, the header's badges, CI summary and reviewers |
 
+## Eighth slice: measuring the prompts
+
+The risk and decisions prompts were changed for noise that showed on delphi-code #2 and that the evals can't see: risks on hunks no label covers, risks on the wrong lines, and decisions that repeat the description. This slice makes the evals see it, then adds the PR it showed on. Paid runs, repeats and the first baseline come after it.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 47 | [Evals that see noise and placement](47-eval-noise-metrics.md) | 45 | `evals/` except stage 48's case |
+| 48 | [delphi-code #2 as an eval case](48-delphi-eval-case.md) | 47 | `evals/cases/delphi-account-connections/` |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
