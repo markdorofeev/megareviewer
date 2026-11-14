@@ -31,11 +31,23 @@ describe("ConnectionsButton", () => {
     renderButton(withStatus(fixtureStatus));
     expect(button().textContent).toBe("Checking…");
     expect(button().dataset.tone).toBe("checking");
-    await screen.findByText("3 of 4 connected");
+    await screen.findByText("3 of 6 connected");
     expect(button().getAttribute("aria-label")).toBe(
-      "Connections: 3 working · 1 optional. Open for details.",
+      "Connections: 3 working · 3 optional. Open for details.",
     );
     expect(button().dataset.tone).toBe("ok");
+  });
+
+  it("says only Not connected on Request AI review's tools, which are all optional", async () => {
+    renderButton(withStatus(fixtureStatus));
+    await screen.findByText("3 of 6 connected");
+    await userEvent.click(button());
+    const rows = within(await screen.findByRole("list")).getAllByRole("listitem");
+    const label = (name: string) =>
+      rows.find((row) => row.textContent?.startsWith(name))?.textContent ?? "";
+    expect(label("Codex")).toMatch(/^CodexNot connectedAdds/);
+    expect(label("opencode")).toMatch(/^opencodeNot connectedAdds/);
+    expect(label("Bitbucket")).toMatch(/^BitbucketNot connected · Optional/);
   });
 
   it("is red with a failing host, and lists it first", async () => {
@@ -51,6 +63,8 @@ describe("ConnectionsButton", () => {
       "failing",
       "optional",
       "working",
+      "optional",
+      "optional",
       "working",
     ]);
     expect(rows[0]?.textContent).toMatch(/^GitHubFailingBad credentials/);
@@ -66,13 +80,13 @@ describe("ConnectionsButton", () => {
 
   it("opens with the keyboard, closes on Esc back to the button, and checks again", async () => {
     const { requests } = renderButton(withStatus(fixtureStatus));
-    await screen.findByText("3 of 4 connected");
+    await screen.findByText("3 of 6 connected");
     button().focus();
     await userEvent.keyboard("{Enter}");
     expect(await screen.findByText("megareviewer 0.0.0-mock")).toBeTruthy();
-    expect(screen.getByText("3 working · 1 optional · checked just now")).toBeTruthy();
+    expect(screen.getByText("3 working · 3 optional · checked just now")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Check again" }));
-    await screen.findByText("3 of 4 connected");
+    await screen.findByText("3 of 6 connected");
     expect(requests.filter((request) => request.url === "/api/status")).toHaveLength(2);
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByText("megareviewer 0.0.0-mock")).toBeNull();
@@ -81,7 +95,7 @@ describe("ConnectionsButton", () => {
 
   it("announces a change of its label after the first read", async () => {
     renderButton(withStatus(fixtureStatus));
-    await screen.findByText("3 of 4 connected");
+    await screen.findByText("3 of 6 connected");
     const live = document.querySelector("[aria-live=polite]");
     expect(live?.textContent).toBe("");
   });

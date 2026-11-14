@@ -35,7 +35,9 @@ const BUTTON_TONE: Readonly<Record<ButtonTone, string>> = {
 const ICONS: Readonly<Record<ConnectionKind, LucideIcon>> = {
   github: GitPullRequestIcon,
   bitbucket: GitPullRequestIcon,
-  model: SparklesIcon,
+  claude: SparklesIcon,
+  codex: SparklesIcon,
+  opencode: SparklesIcon,
   jira: TicketIcon,
 };
 
@@ -77,6 +79,9 @@ const STATE: Readonly<
   },
 };
 
+/** Request AI review's tools: every one is optional, so the word would be on each of them. */
+const MODEL_TOOLS: ReadonlySet<ConnectionKind> = new Set(["claude", "codex", "opencode"]);
+
 const Spinner = ({ className }: { readonly className?: string }) => (
   <LoaderCircleIcon
     aria-hidden="true"
@@ -95,6 +100,8 @@ const ButtonGlyph = ({ tone }: { readonly tone: ButtonTone }) =>
 
 const Row = ({ row }: { readonly row: Connection }) => {
   const state = STATE[row.state];
+  const label =
+    row.state === "optional" && MODEL_TOOLS.has(row.kind) ? "Not connected" : state.label;
   const Icon = ICONS[row.kind];
   const StateIcon = state.icon;
   return (
@@ -118,7 +125,7 @@ const Row = ({ row }: { readonly row: Connection }) => {
                 "animate-spin motion-reduce:animate-[spin_3s_linear_infinite]",
             )}
           />
-          {state.label}
+          {label}
         </span>
       </div>
       {row.detail !== "" && <p className="text-caption">{row.detail}</p>}

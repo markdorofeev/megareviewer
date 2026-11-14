@@ -62,7 +62,7 @@ describe("App", () => {
   it("shows the picker and the server's status", async () => {
     renderApp("/");
     expect(screen.getByRole("heading", { name: "Pull requests" })).toBeTruthy();
-    expect(await screen.findByText("3 of 4 connected")).toBeTruthy();
+    expect(await screen.findByText("3 of 6 connected")).toBeTruthy();
   });
 
   it("shows the review page for an analysis, with Connections in its header", async () => {
@@ -70,7 +70,7 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: "Add order receipts endpoint" }),
     ).toBeTruthy();
-    expect(await screen.findByText("3 of 4 connected")).toBeTruthy();
+    expect(await screen.findByText("3 of 6 connected")).toBeTruthy();
   });
 
   it("shows not-found with a link home for unknown paths", () => {

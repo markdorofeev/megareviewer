@@ -1,10 +1,9 @@
 import type { HostStatus, StatusResponse } from "../../../contracts/index.ts";
-import type { HostKind } from "../../../src/domain/review/index.ts";
+import type { HostKind, ModelOption, ModelProvider } from "../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage } from "../api/index.ts";
 import { relativeTime } from "../pages/picker/relative-time.ts";
-import { lockedReason } from "../pages/review/model-choice.ts";
 
-export type ConnectionKind = HostKind | "model" | "jira";
+export type ConnectionKind = HostKind | "claude" | "codex" | "opencode" | "jira";
 
 /** optional: not connected, and megareviewer works without it. Failing and not connected are issues. */
 export type ConnectionState = "working" | "failing" | "not-connected" | "optional" | "checking";
@@ -22,7 +21,7 @@ export interface Connection {
 export type ButtonTone = "checking" | "ok" | "warning" | "danger";
 
 export interface Connections {
-  /** Failing first, then not connected, then GitHub, Bitbucket, Claude, Jira. */
+  /** Failing first, then not connected, then GitHub, Bitbucket, Claude, Codex, opencode, Jira. */
   readonly rows: readonly Connection[];
   readonly button: { readonly label: string; readonly tone: ButtonTone; readonly name: string };
   readonly summary: string;
@@ -94,24 +93,81 @@ const host = (
   return { kind, name, state: "working", detail, fix: null };
 };
 
-const model = ({ options, defaultId }: StatusResponse["model"]): Connection => {
-  const chosen = options.find((option) => option.id === defaultId);
-  const name = chosen?.family ?? "Claude";
-  if (chosen?.available === true) {
-    return {
-      kind: "model",
-      name,
-      state: "working",
-      detail: `${chosen.modelName} through ${chosen.via}`,
-      fix: null,
-    };
+type ModelKind = Extract<ConnectionKind, "claude" | "codex" | "opencode">;
+
+const MODEL_TOOLS: Readonly<
+  Record<
+    ModelKind,
+    {
+      readonly name: string;
+      readonly providers: readonly ModelProvider[];
+      readonly adds: string;
+      readonly connect: string;
+    }
+  >
+> = {
+  claude: {
+    name: "Claude",
+    providers: ["claude-code", "anthropic-api"],
+    adds: "Adds intent, findings, risks and decisions with Request AI review.",
+    connect: "Run `claude` and sign in, or set ANTHROPIC_API_KEY.",
+  },
+  codex: {
+    name: "Codex",
+    providers: ["codex"],
+    adds: "Adds OpenAI's GPT models to Request AI review, on your ChatGPT plan.",
+    connect: "Install the Codex CLI and run `codex login`.",
+  },
+  opencode: {
+    name: "opencode",
+    providers: ["opencode"],
+    adds: "Adds the models of the providers you connected in opencode to Request AI review.",
+    connect:
+      "Install opencode (https://opencode.ai) and connect a provider with `opencode auth login`.",
+  },
+};
+
+/** "A", "A and B", "A, B and C" */
+const listOf = (items: readonly string[]): string =>
+  items.length <= 1
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} and ${items.at(-1) ?? ""}`;
+
+/** What a working tool offers: the model a run would use on Claude, the models on the others. */
+const offered = (kind: ModelKind, available: readonly ModelOption[], defaultId: string | null) => {
+  if (kind === "claude") {
+    const chosen = available.find((option) => option.id === defaultId) ?? available[0];
+    return chosen === undefined ? "" : `${chosen.modelName} through ${chosen.via}`;
   }
+  if (kind === "codex") {
+    return `${listOf(available.map((option) => option.modelName))} through ${available[0]?.via ?? "Codex"}`;
+  }
+  const behind = [...new Set(available.map((option) => option.via.replace(/^opencode, on /, "")))];
+  const models = available.length === 1 ? "1 model" : `${available.length} models`;
+  return `${models} through ${listOf(behind)}`;
+};
+
+/**
+ * One tool that runs Request AI review: working when any of its options can run, else optional,
+ * since megareviewer works without the model, with each of its providers' reasons as the fix.
+ */
+const modelTool = (
+  kind: ModelKind,
+  { options, defaultId }: StatusResponse["model"],
+): Connection => {
+  const { name, providers, adds, connect } = MODEL_TOOLS[kind];
+  const own = options.filter((option) => providers.includes(option.provider));
+  const available = own.filter((option) => option.available);
+  if (available.length > 0) {
+    return { kind, name, state: "working", detail: offered(kind, available, defaultId), fix: null };
+  }
+  const reasons = [...new Set(own.flatMap((option) => option.reason ?? []))];
   return {
-    kind: "model",
+    kind,
     name,
     state: "optional",
-    detail: "Adds intent, findings, risks and decisions with Request AI review.",
-    fix: lockedReason(options) ?? "No model can run.",
+    detail: adds,
+    fix: reasons.length > 0 ? reasons.join("; or ") : `${connect.slice(0, -1)}, ${RESTART}`,
   };
 };
 
@@ -139,7 +195,9 @@ const plural = (count: number, word: string) => (count === 1 ? `1 ${word}` : `${
 const PENDING_NAMES: readonly [ConnectionKind, string][] = [
   ["github", "GitHub"],
   ["bitbucket", "Bitbucket"],
-  ["model", "Claude"],
+  ["claude", "Claude"],
+  ["codex", "Codex"],
+  ["opencode", "opencode"],
   ["jira", "Jira"],
 ];
 
@@ -172,7 +230,7 @@ export const connectionsOf = (input: ConnectionsInput): Connections => {
         tone: "checking",
         name: "Connections: checking. Open for details.",
       },
-      summary: "Checking 4 connections…",
+      summary: `Checking ${PENDING_NAMES.length} connections…`,
       disconnected: null,
     };
   }
@@ -180,7 +238,9 @@ export const connectionsOf = (input: ConnectionsInput): Connections => {
   const rows = [
     host("github", github, bitbucket, listed, nowMs),
     host("bitbucket", bitbucket, github, listed, nowMs),
-    model(status.model),
+    modelTool("claude", status.model),
+    modelTool("codex", status.model),
+    modelTool("opencode", status.model),
     jira(status.jira.configured),
   ].sort((a, b) => RANK[a.state] - RANK[b.state]);
 

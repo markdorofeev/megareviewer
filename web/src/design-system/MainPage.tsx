@@ -47,29 +47,56 @@ const user = (name: string) => ({ configured: true, user: { id: name, name }, er
 const OFF = { configured: false, user: null, error: null };
 const FAILING = { configured: true, user: null, error: "Bitbucket rejected the API token (401)." };
 
+const modelOption = (
+  provider: StatusResponse["model"]["options"][number]["provider"],
+  providerName: string,
+  model: string,
+  modelName: string,
+  via: string,
+): StatusResponse["model"]["options"][number] => ({
+  id: `${provider}/${model}`,
+  provider,
+  providerName,
+  model,
+  modelName,
+  family: modelName.split(/[\s-]/)[0] ?? modelName,
+  via,
+  measured: provider !== "opencode",
+  available: true,
+  reason: null,
+});
+
 const MODEL: StatusResponse["model"] = {
   options: [
-    {
-      id: "claude-code/claude-sonnet-5-5",
-      provider: "claude-code",
-      providerName: "Claude Code",
-      model: "claude-sonnet-5-5",
-      modelName: "Sonnet 5.5",
-      family: "Claude",
-      via: "Claude Code, on your Pro plan",
-      measured: true,
-      available: true,
-      reason: null,
-    },
+    modelOption(
+      "claude-code",
+      "Claude Code",
+      "claude-sonnet-5-5",
+      "Sonnet 5.5",
+      "Claude Code, on your Pro plan",
+    ),
+    modelOption("codex", "Codex", "gpt-6-sol", "GPT-6 Sol", "Codex, on your ChatGPT plan"),
+    modelOption(
+      "opencode",
+      "opencode on Ollama",
+      "ollama/qwen3-coder:30b",
+      "Qwen3 Coder 30B",
+      "opencode, on Ollama",
+    ),
   ],
   defaultId: "claude-code/claude-sonnet-5-5",
+};
+const NOT_RUNNING: Readonly<Record<string, string>> = {
+  "claude-code": "Claude Code isn't signed in: run `claude` and sign in",
+  codex: "Codex isn't installed: install the Codex CLI, then run `codex login`",
+  opencode: "opencode has no provider connected: run `opencode auth login`",
 };
 const LOCKED: StatusResponse["model"] = {
   ...MODEL,
   options: MODEL.options.map((option) => ({
     ...option,
     available: false,
-    reason: "Claude Code isn't signed in: run `claude` and sign in",
+    reason: NOT_RUNNING[option.provider] ?? null,
   })),
 };
 
