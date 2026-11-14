@@ -4,7 +4,6 @@ import { type ApiError, errorMessage } from "../../api/index.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Input } from "../../ui/input.tsx";
-import { Kbd } from "../../ui/kbd.tsx";
 import { Label } from "../../ui/label.tsx";
 
 const UNSUPPORTED = errorMessage({ code: "unsupported-url", message: "" });
@@ -68,9 +67,7 @@ export const UrlForm = ({
         role="status"
       >
         {problem === null ? (
-          <>
-            Paste a GitHub or Bitbucket Cloud pull request link. Press <Kbd>/</Kbd> to focus.
-          </>
+          "Paste a GitHub or Bitbucket Cloud pull request link."
         ) : (
           <>
             <span aria-hidden="true">✕ </span>
