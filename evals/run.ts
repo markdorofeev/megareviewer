@@ -1,9 +1,9 @@
 // Runs the golden set through the real pipeline and model, scores it and prints a summary:
-// node evals/run.ts [--case <name>]... [--via api|claude-code] [--baseline evals/baseline.json]
-//   [--write-baseline] --yes
-// Without --yes it prints the estimate and stops. The judge runs on a signed-in Claude Code; the
-// passes run on the API (ANTHROPIC_API_KEY or `ant auth login`), or with --via claude-code on
-// Claude Code too, which then needs no API credentials. See evals/README.md.
+// node evals/run.ts [--case <name>]... [--via claude-code|api] [--model <id>] [--effort <level>]
+//   [--baseline evals/baseline.json] [--write-baseline] --yes
+// Without --yes it prints the estimate and stops. The judge runs on a signed-in Claude Code, and so
+// do the passes, unless --via api runs them on the API (ANTHROPIC_API_KEY or `ant auth login`).
+// See evals/README.md.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,7 @@ import {
   createClaudeAnalysisModel,
   createClaudeCodeAnalysisModel,
   createRunClaude,
+  EFFORTS,
 } from "../src/adapters/claude/index.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import { PIPELINE_VERSION } from "../src/application/use-cases/index.ts";
@@ -36,6 +37,7 @@ import {
   scoreCase,
   summarize,
 } from "./score.ts";
+import { type CaseTiming, showTiming, timingOf } from "./timing.ts";
 
 const CASE_TIMEOUT_MS = 20 * 60 * 1000;
 const CONCURRENCY = 3;
@@ -45,8 +47,12 @@ const { values } = parseArgs({
     case: { type: "string", multiple: true },
     baseline: { type: "string" },
     "write-baseline": { type: "boolean", default: false },
-    // The API by default, so runs stay comparable with the baseline, which was measured on it.
-    via: { type: "string", default: "api" },
+    // Claude Code by default, so runs stay comparable with the baseline, which was measured on it.
+    via: { type: "string", default: "claude-code" },
+    // Another model for the passes, to measure it; Claude Code only. The judge stays on Opus.
+    model: { type: "string" },
+    // One effort for every pass in place of each pass's own; Claude Code only, as --model.
+    effort: { type: "string" },
     yes: { type: "boolean", default: false },
   },
 });
@@ -75,8 +81,19 @@ if (via === null) {
   console.error("--via must be api or claude-code.");
   process.exit(1);
 }
+if ((values.model !== undefined || values.effort !== undefined) && via !== "claude-code") {
+  console.error("--model and --effort run the passes on Claude Code only; leave out --via api.");
+  process.exit(1);
+}
+const effort = values.effort === undefined ? undefined : EFFORTS.find((e) => e === values.effort);
+if (values.effort !== undefined && effort === undefined) {
+  console.error(`--effort must be one of ${EFFORTS.join(", ")}.`);
+  process.exit(1);
+}
 console.log(
-  `${selected.length} case${selected.length === 1 ? "" : "s"}, the passes on ${via === "api" ? "the API" : "Claude Code"}, ` +
+  `${selected.length} case${selected.length === 1 ? "" : "s"}, the passes on ${via === "api" ? "the API" : "Claude Code"}` +
+    `${values.model === undefined ? "" : ` with ${values.model}`}` +
+    `${effort === undefined ? "" : ` at ${effort} effort`}, ` +
     `judged by ${JUDGE_MODEL} on Claude Code: about $${estimate.totalUsd.toFixed(2)} at API prices ` +
     `(${estimate.measured} at their baseline cost, ${estimate.assumed} at ` +
     `$${estimate.assumedPerCaseUsd.toFixed(2)} each${baseline === null ? ", not measured yet" : ""}). ` +
@@ -126,7 +143,10 @@ interface CaseResult {
     | "tour"
     | "warnings"
     | "usage"
+    | "modelCalls"
   > | null;
+  /** Null when the analysis never started. */
+  readonly timing: CaseTiming | null;
 }
 
 const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) => {
@@ -134,26 +154,40 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
   const logger = quietLogger((line) => problems.push(line));
   const model =
     client === null
-      ? createClaudeCodeAnalysisModel({ run: runClaude, billing: claudeCodeBilling, logger })
+      ? createClaudeCodeAnalysisModel({
+          run: runClaude,
+          billing: claudeCodeBilling,
+          logger,
+          ...(values.model === undefined ? {} : { model: values.model }),
+          ...(effort === undefined ? {} : { effort }),
+        })
       : createClaudeAnalysisModel({ client, logger });
   modelVersion(model.version);
-  const started = performance.now();
-  const latency = () => (performance.now() - started) / 1000;
-  const failed = (error: string, analysis: Analysis | null, judgeUsd = 0): CaseResult => ({
-    name: evalCase.name,
-    status: "error",
-    error,
-    problems,
-    cost: {
-      modelUsd: analysis?.usage.reduce((total, usage) => total + usage.costUsd, 0) ?? 0,
-      judgeUsd,
-      latencyS: latency(),
-    },
-    score: null,
-    verdict: null,
-    judgeModels: [],
-    analysis,
-  });
+  const since = (started: number) => (performance.now() - started) / 1000;
+  const analysisStarted = performance.now();
+  const failed = (
+    error: string,
+    analysis: Analysis | null,
+    judge: { usd: number; s: number } | null = null,
+  ): CaseResult => {
+    const latencyS = since(analysisStarted) - (judge?.s ?? 0);
+    return {
+      name: evalCase.name,
+      status: "error",
+      error,
+      problems,
+      cost: {
+        modelUsd: analysis?.usage.reduce((total, usage) => total + usage.costUsd, 0) ?? 0,
+        judgeUsd: judge?.usd ?? 0,
+        latencyS,
+      },
+      score: null,
+      verdict: null,
+      judgeModels: [],
+      analysis,
+      timing: analysis === null ? null : timingOf(analysis, latencyS, judge?.s ?? null),
+    };
+  };
 
   const result = await analyzeCase(evalCase.fixture, {
     model,
@@ -163,7 +197,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
   });
   if (!result.ok) return failed(result.error, null);
   const { analysis, input } = result.value;
-  const latencyS = latency();
+  const latencyS = since(analysisStarted);
   if (analysis.status !== "complete") {
     const error = analysis.error;
     return failed(
@@ -173,10 +207,14 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
   }
 
   if (input === null) return failed("the model never ran, so there's nothing to judge", analysis);
+  const judgeStarted = performance.now();
   const judged = await judgeCase(runClaude, input, analysis, evalCase.labels, {
     onPlan: claudeCodeBilling === "plan",
   });
-  if (!judged.ok) return failed(judged.error.message, analysis, judged.error.costUsd);
+  const judgeS = since(judgeStarted);
+  if (!judged.ok) {
+    return failed(judged.error.message, analysis, { usd: judged.error.costUsd, s: judgeS });
+  }
   const { verdict, costUsd, models } = judged.value;
   return {
     name: evalCase.name,
@@ -192,6 +230,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
     verdict,
     judgeModels: models,
     analysis,
+    timing: timingOf(analysis, latencyS, judgeS),
   } satisfies CaseResult;
 };
 
@@ -241,6 +280,7 @@ await Promise.all(
           verdict: null,
           judgeModels: [],
           analysis: null,
+          timing: null,
         };
       }
       results.push(result);
@@ -249,7 +289,7 @@ await Promise.all(
       console.log(
         `${result.status === "scored" ? "✓" : "✗"} ${result.name}` +
           ` · $${(result.cost.modelUsd + result.cost.judgeUsd).toFixed(2)}` +
-          ` · ${result.cost.latencyS.toFixed(0)} s` +
+          ` · ${result.timing === null ? `${result.cost.latencyS.toFixed(0)} s` : showTiming(result.timing)}` +
           (result.error === null ? "" : ` · ${result.error}`) +
           (judgeModel === undefined ? "" : ` · judge answered by ${judgeModel}`),
       );
@@ -295,6 +335,13 @@ console.log(
     ` ($${summary.modelCostPerCaseUsd.toFixed(2)} model per case).` +
     ` Latency: ${summary.latencyS.max.toFixed(0)} s for the slowest case.`,
 );
+console.log("\nTime, slowest analysis first:");
+const width = Math.max(...results.map((result) => result.name.length));
+for (const result of [...results].sort((a, b) => b.cost.latencyS - a.cost.latencyS)) {
+  const time =
+    result.timing === null ? `${result.cost.latencyS.toFixed(0)} s` : showTiming(result.timing);
+  console.log(`  ${result.name.padEnd(width)}  ${time}`);
+}
 if (baseline !== null) {
   if (baseline.modelVersion !== modelVersion) {
     console.log(`Baseline was measured on ${baseline.modelVersion}, this run on ${modelVersion}.`);

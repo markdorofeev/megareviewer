@@ -26,7 +26,7 @@ export const preflight = async (
   if (via === "api" && !(await check.hasApiCredentials())) {
     return err(
       "No Anthropic credentials for the passes. Set ANTHROPIC_API_KEY or run `ant auth login`, " +
-        "or pass --via claude-code.",
+        "or leave out --via api.",
     );
   }
   return ok({ billing: status.billing });
