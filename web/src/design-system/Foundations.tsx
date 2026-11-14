@@ -275,7 +275,7 @@ const LANDING_MOTION = [
   { name: "--landing-span-tree", use: "By when the last row's mark has started" },
   { name: "--landing-at-code", use: "When the code's points start" },
   { name: "--landing-step-code", use: "Between points in view" },
-  { name: "--landing-bar", use: "A point's bar drawing down its lines" },
+  { name: "--landing-bar", use: "A point's mark drawing down its lines' numbers" },
   { name: "--landing-wash", use: "The kind's wash passing over the lines" },
   { name: "--landing-unfold", use: "A card unfolding under its lines" },
   { name: "--landing-total", use: "The landing, for one point in view" },

@@ -70,3 +70,47 @@ describe("DiffLine marks", () => {
     expect(unmarked.container.textContent).toBe(container.textContent);
   });
 });
+
+describe("a point's mark", () => {
+  const cells = (container: HTMLElement) => [
+    ...container.querySelectorAll<HTMLElement>("[role=gridcell]"),
+  ];
+  const marked = (container: HTMLElement) =>
+    cells(container).filter((cell) => cell.dataset.pointMark !== undefined);
+
+  it("is on the number beside the code, and no other cell", () => {
+    const { container } = render(
+      <DiffLine line={line({ kind: "context", oldNo: 6, newNo: 7 })} pointKind="risk" />,
+    );
+    const [old, current] = cells(container);
+    expect(marked(container)).toEqual([current]);
+    expect(current?.dataset.pointMark).toBe("risk");
+    expect(old?.dataset.pointMark).toBeUndefined();
+  });
+
+  it("is on the old number in the old side of a split", () => {
+    const { container } = render(
+      <DiffLine
+        line={line({ kind: "del", oldNo: 6, newNo: null })}
+        layout="split-old"
+        pointKind="finding"
+      />,
+    );
+    expect(marked(container).map((cell) => cell.textContent)).toEqual(["6"]);
+  });
+
+  it("isn't on a decision's lines", () => {
+    const { container } = render(<DiffLine line={line()} pointKind="decision" />);
+    expect(marked(container)).toEqual([]);
+  });
+
+  it("leaves the edge bar to the focus and the open comment box", () => {
+    const row = (props: { focused?: boolean; marked?: boolean }) =>
+      render(<DiffLine line={line()} pointKind="finding" {...props} />).container.querySelector(
+        "[role=row]",
+      )?.className ?? "";
+    expect(row({})).not.toMatch(/after:w-\[3px\]/);
+    expect(row({ focused: true })).toMatch(/after:bg-ring/);
+    expect(row({ marked: true })).toMatch(/after:bg-ring/);
+  });
+});

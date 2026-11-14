@@ -44,12 +44,12 @@ export interface PointActions {
   readonly onState: (id: PointId, state: PointState) => void;
 }
 
-const Kind = ({ kind, label }: { readonly kind: Point["kind"]; readonly label?: string }) => {
+const Kind = ({ kind }: { readonly kind: Point["kind"] }) => {
   const Icon = POINT_ICON[kind];
   return (
     <span className={cn("inline-flex items-center gap-1 font-medium", KIND_TEXT[kind])}>
       <Icon aria-hidden="true" className="size-3.5" />
-      {label ?? POINT_STATUS[kind].label}
+      {POINT_STATUS[kind].label}
     </span>
   );
 };
@@ -123,6 +123,27 @@ const SeverityChip = ({ severity }: { readonly severity: Severity }) => (
 
 const MOTION = "animate-in duration-(--duration-slow) fade-in-0 slide-in-from-top-1";
 const RING = "shadow-[inset_0_0_0_2px_var(--ring)]";
+/** The card a finding and a risk share, in the code's column. */
+const SHELL = "relative max-w-3xl rounded-lg border bg-thread-bg";
+/** Going to a card keeps the lines it rests on, above it, in view. */
+const SCROLL_UNDER_LINES =
+  "scroll-mt-[calc(6rem+var(--lines-above)*var(--text-code--line-height))] -outline-offset-2";
+/** A card folded to one line. */
+const FOLDED = cn(SHELL, "px-3 py-1.5");
+
+// Spelled out because Tailwind only generates the classes it finds whole in the source.
+const KIND_BAR: Readonly<Record<"finding" | "risk", string>> = {
+  finding: "bg-review-changes",
+  risk: "bg-risk-contract-solid",
+};
+
+/** The kind's bar inside a card's left edge. */
+const KindBar = ({ kind }: { readonly kind: "finding" | "risk" }) => (
+  <span
+    aria-hidden="true"
+    className={cn("absolute top-2 bottom-2 left-1.5 w-[3px] rounded-full", KIND_BAR[kind])}
+  />
+);
 
 /**
  * A finding: what looks wrong, as a draft comment under the line it rests on, with its severity
@@ -159,7 +180,7 @@ export const FindingCard = memo(function FindingCard({
         state={state}
         current={current}
         note="Dismissed"
-        className="max-w-3xl rounded-lg border bg-thread-bg px-3 py-1.5"
+        className={FOLDED}
         action={
           <Button
             variant="ghost"
@@ -197,14 +218,13 @@ export const FindingCard = memo(function FindingCard({
       tabIndex={-1}
       style={cssVars({ "--lines-above": linesAbove })}
       className={cn(
-        "relative flex max-w-3xl scroll-mt-[calc(6rem+var(--lines-above)*var(--text-code--line-height))] flex-col gap-2 rounded-lg border bg-thread-bg py-2.5 pr-4 pl-5 -outline-offset-2",
+        SHELL,
+        SCROLL_UNDER_LINES,
+        "flex flex-col gap-2 py-2.5 pr-4 pl-5",
         current && RING,
       )}
     >
-      <span
-        aria-hidden="true"
-        className="absolute top-2 bottom-2 left-1.5 w-[3px] rounded-full bg-review-changes"
-      />
+      <KindBar kind="finding" />
       <header className="flex flex-wrap items-center gap-2">
         <Kind kind="finding" />
         {point.severity !== null && <SeverityChip severity={point.severity} />}
@@ -284,13 +304,11 @@ export const FindingCard = memo(function FindingCard({
   );
 });
 
-const BAND = "border-l-3 border-l-risk-contract-solid bg-risk-contract-bg px-3 py-1.5";
-
 /**
- * A risk: a contract change worth a look, as a band over the range it starts, with the reason.
- * Comment opens the comment box on it; Dismiss folds it.
+ * A risk: code worth reading closely, as a note under the last of its lines, with what could
+ * break outside the PR. Comment opens the comment box on it; Dismiss folds it.
  */
-export const RiskBand = memo(function RiskBand({
+export const RiskNote = memo(function RiskNote({
   point,
   state,
   saving,
@@ -298,7 +316,12 @@ export const RiskBand = memo(function RiskBand({
   current,
   onRaise,
   onState,
-}: PointActions & { readonly point: Point }) {
+  linesAbove = 0,
+}: PointActions & {
+  readonly point: Point;
+  /** The lines of code above the note that it's about, which going to it keeps in view. */
+  readonly linesAbove?: number;
+}) {
   const id = useId();
   if (state === "dismissed") {
     return (
@@ -307,7 +330,7 @@ export const RiskBand = memo(function RiskBand({
         state={state}
         current={current}
         note="Dismissed"
-        className="border-l-3 border-l-risk-contract-solid px-3 py-1"
+        className={FOLDED}
         action={
           <Button
             variant="ghost"
@@ -331,44 +354,49 @@ export const RiskBand = memo(function RiskBand({
       data-current={current || undefined}
       aria-labelledby={`${id}-title`}
       tabIndex={-1}
+      style={cssVars({ "--lines-above": linesAbove })}
       className={cn(
-        "flex scroll-mt-24 flex-wrap items-center gap-x-3 gap-y-1 -outline-offset-2",
-        BAND,
+        SHELL,
+        SCROLL_UNDER_LINES,
+        "flex flex-col gap-0.5 py-1.5 pr-2 pl-5",
         current && RING,
       )}
     >
-      <Kind kind="risk" label="Risk · contract" />
-      {point.lines !== null && (
-        <RefChip>{lineRef(point.lines.side, point.lines.startLine, point.lines.line)}</RefChip>
-      )}
-      <h3 id={`${id}-title`} className="min-w-0 flex-1 basis-60 font-medium">
+      <KindBar kind="risk" />
+      <header className="flex flex-wrap items-center gap-2">
+        <Kind kind="risk" />
+        {point.lines !== null && (
+          <RefChip>{lineRef(point.lines.side, point.lines.startLine, point.lines.line)}</RefChip>
+        )}
+        {state === "raised" && (
+          <span className="text-caption text-muted-foreground">
+            <span aria-hidden="true">✓ </span>Commented
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="xs"
+            disabled={disabled || point.lines === null}
+            aria-label={`Comment: ${point.title}`}
+            onClick={() => onRaise(point, false)}
+          >
+            Comment
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            disabled={disabled}
+            aria-label={`Dismiss: ${point.title}`}
+            onClick={() => onState(point.id, "dismissed")}
+          >
+            Dismiss
+          </Button>
+        </span>
+      </header>
+      <h3 id={`${id}-title`} className="pb-0.5 font-normal">
         {point.title}
       </h3>
-      {state === "raised" && (
-        <span className="text-caption text-muted-foreground">
-          <span aria-hidden="true">✓ </span>Commented
-        </span>
-      )}
-      <span className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="xs"
-          disabled={disabled || point.lines === null}
-          aria-label={`Comment: ${point.title}`}
-          onClick={() => onRaise(point, false)}
-        >
-          Comment
-        </Button>
-        <Button
-          variant="ghost"
-          size="xs"
-          disabled={disabled}
-          aria-label={`Dismiss: ${point.title}`}
-          onClick={() => onState(point.id, "dismissed")}
-        >
-          Dismiss
-        </Button>
-      </span>
     </article>
   );
 });

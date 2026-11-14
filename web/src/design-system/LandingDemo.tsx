@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { mapModelStages, type Point, PointId } from "../../../src/domain/review/index.ts";
 import { ClaudeElement } from "../pages/review/ClaudeElement.tsx";
-import { DecisionChip, FindingCard, PointFold, RiskBand } from "../pages/review/PointCard.tsx";
+import { DecisionChip, FindingCard, PointFold, RiskNote } from "../pages/review/PointCard.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { tokenMs, useLanding } from "../pages/review/useLanding.ts";
 import { FileTree, HunkCard, type LinePlace, PINNED, type PointLine } from "../review/index.ts";
@@ -59,7 +59,7 @@ export const LandingDemo = () => {
   } as const;
   const card = (point: Point) =>
     point.kind === "risk" ? (
-      <RiskBand key={point.id} point={point} {...actions} />
+      <RiskNote key={point.id} point={point} {...actions} />
     ) : (
       <FindingCard
         key={point.id}
@@ -70,13 +70,13 @@ export const LandingDemo = () => {
         language="typescript"
       />
     );
-  const on = (place: LinePlace, kind: Point["kind"], line: "startLine" | "line") =>
+  const on = (place: LinePlace, kind: Point["kind"]) =>
     points.filter(
       (point) =>
         point.kind === kind &&
         point.lines !== null &&
         point.lines.side === place.side &&
-        point.lines[line] === place.line,
+        point.lines.line === place.line,
     );
   const fold = (together: readonly Point[], row: boolean, children: ReactNode) => {
     const [first] = together;
@@ -98,15 +98,11 @@ export const LandingDemo = () => {
     );
   };
   const pointsAt = (place: LinePlace) => {
-    const here = on(place, "finding", "line");
-    return fold(here, true, here.map(card));
-  };
-  const pointsOver = (place: LinePlace) => {
-    const here = on(place, "risk", "startLine");
+    const here = [...on(place, "finding"), ...on(place, "risk")];
     return fold(here, true, here.map(card));
   };
   const pointsAtEnd = (place: LinePlace) =>
-    on(place, "decision", "line").map((point) => (
+    on(place, "decision").map((point) => (
       <DecisionChip
         key={point.id}
         point={point}
@@ -182,7 +178,6 @@ export const LandingDemo = () => {
             afterHeader={fold(unlined, false, unlined.map(card))}
             pointLines={pointLines}
             pointsAt={pointsAt}
-            pointsOver={pointsOver}
             pointsAtEnd={pointsAtEnd}
             flagged={flagged}
           />

@@ -178,6 +178,14 @@ The risk and decisions prompts were changed for noise that showed on delphi-code
 | 48 | [delphi-code #2 as an eval case](48-delphi-eval-case.md) | 47 | `evals/cases/delphi-account-connections/` |
 | 49 | [A judge that reads the whole PR, on the Claude plan](49-judge-whole-pr-on-plan.md) | 47 | The judge and runner in `evals/`, the structured-call export in `src/adapters/claude/` |
 
+## Ninth slice: a risk that reads as part of the page
+
+On delphi-code #2 a risk's magenta band looked like another product's, was louder than a finding, and its bar down the lines went unseen.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 50 | [A risk as a note under its lines, in amber](50-risk-note.md) | 45 | The risk's note and the points' marks on line numbers in `web/src/pages/review/` and `web/src/review/diff/`, the risk tokens |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

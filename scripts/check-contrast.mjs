@@ -148,10 +148,21 @@ const PAIRS = [
   ["Resolved label on thread", "review-approved", "thread-bg", 4.5],
   ["Suggested change title", "primary", "thread-bg", 4.5],
   ["Draft comment bar (non-text)", "review-pending", "thread-bg", 3],
-  // hunk: Claude's points on the lines: a finding's card, a risk's band, a bug in the gutter.
+  // hunk: Claude's points on the lines: a finding's card, a risk's note, a bug in the gutter.
   ["Finding label on its card", "review-changes", "thread-bg", 4.5],
-  ["Risk band text", "foreground", "risk-contract-bg", 4.5],
-  ["Risk band muted text", "muted-foreground", "risk-contract-bg", 4.5],
+  ["Risk label on its note", "risk-contract", "thread-bg", 4.5],
+  // The rail of a point's mark on a line's number, on the mark's tint and on the row beside it.
+  ...[
+    ["Finding", "review-changes", "review-changes-bg"],
+    ["Risk", "risk-contract-solid", "risk-contract-bg"],
+  ].flatMap(([kind, rail, tint]) =>
+    [tint, "diff-add-bg", "diff-del-bg", "background"].map((surface) => [
+      `${kind} mark's rail on ${surface} (non-text)`,
+      rail,
+      surface,
+      3,
+    ]),
+  ),
   ["Finding flag on added gutter (non-text)", "review-changes", "diff-add-gutter", 3],
   ["Finding flag on unchanged gutter (non-text)", "review-changes", "diff-gutter-bg", 3],
   ["Open thread bar (non-text)", "thread-marker", "thread-bg", 3],

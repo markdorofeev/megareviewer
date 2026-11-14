@@ -190,6 +190,10 @@ test("the checks catch what they look for", async ({ page }) => {
     planted.innerHTML = `
       <button type="button" id="planted-1"></button>
       <span id="planted-1" style="color: #c8c8c8; background: #ffffff">faint text</span>
+      <style>.planted-fill { position: relative; isolation: isolate; background: #ffffff }
+        .planted-fill::before { content: ""; position: absolute; inset: 0; z-index: -1; background: #000000 }</style>
+      <span class="planted-fill" style="color: #c8c8c8">light on its fill</span>
+      <span class="planted-fill" style="color: #333333">dark on its fill</span>
       <span aria-labelledby="planted-missing">dangling</span>
       <div aria-hidden="true"><button type="button">hidden but focusable</button></div>
       <span style="display: inline-flex; gap: 2px">
@@ -210,6 +214,9 @@ test("the checks catch what they look for", async ({ page }) => {
   expect(found).toContain("button without a name");
   expect(found).toContain('id "planted-1" is used 2 times');
   expect(found).toMatch(/contrast 1\.\d+:1 < 4\.5:1 for <span> "faint text"/);
+  // A ::before that fills its element is what the text is read against.
+  expect(found).not.toContain("light on its fill");
+  expect(found).toMatch(/contrast 1\.\d+:1 < 4\.5:1 for <span> "dark on its fill"/);
   expect(found).toContain('aria-labelledby="planted-missing"');
   expect(found).toContain('focusable inside aria-hidden: <button> "hidden but focusable"');
   expect(found).toMatch(/target 12×12 px with others within 24 px: <button> "a"/);

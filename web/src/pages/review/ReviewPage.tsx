@@ -79,7 +79,7 @@ import {
   PointFold,
   PointMention,
   pointAnchor,
-  RiskBand,
+  RiskNote,
 } from "./PointCard.tsx";
 import { PointList } from "./PointList.tsx";
 import { PointStepper } from "./PointStepper.tsx";
@@ -263,18 +263,6 @@ const lastLineShown = (point: Point, hunk: Hunk): { key: string; rows: number } 
     : { key: `${lines.side}:${last.line}`, rows: last.at - first + 1 };
 };
 
-/** The "side:line" of the first of a point's lines a part shows, which a risk's band goes over. */
-const firstLineShown = (point: Point, hunk: Hunk): string | null => {
-  const { lines } = point;
-  if (lines === null) return null;
-  for (const one of hunk.lines) {
-    const place = commentPlace(one);
-    if (place === null || place.side !== lines.side) continue;
-    if (place.line >= lines.startLine && place.line <= lines.line) return placeKey(place);
-  }
-  return null;
-};
-
 /** Bitbucket can't anchor a comment on a range of lines. */
 const RANGE_NOTES = {
   github: undefined,
@@ -331,12 +319,11 @@ const Review = ({
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
   const landing = useLanding(modelRunning, pointIds);
   const places = useMemo(() => pointPlaces(points, order, index), [points, order, index]);
-  // Where each point goes on its part, by its kind: a finding's card under the last of its lines
-  // the part shows, a risk's band over the first, a decision's chip at the end of the last. A
+  // Where each point goes on its part, by its kind: a finding's card and a risk's note under the
+  // last of its lines the part shows, findings first, and a decision's chip at the end of it. A
   // point whose lines the part doesn't show goes under its header.
   const cardPlaces = useMemo(() => {
     const underLine = new Map<PartId, Map<string, Point[]>>();
-    const overLine = new Map<PartId, Map<string, Point[]>>();
     const atLineEnd = new Map<PartId, Map<string, Point[]>>();
     const underHeader = new Map<PartId, Point[]>();
     const rowsAbove = new Map<PointId, number>();
@@ -354,11 +341,8 @@ const Review = ({
       const part = index.parts.get(partId);
       for (const point of placed) {
         const last = part === undefined ? null : lastLineShown(point, part.hunk);
-        const first = part === undefined ? null : firstLineShown(point, part.hunk);
-        if (last === null || first === null) {
+        if (last === null) {
           underHeader.set(partId, [...(underHeader.get(partId) ?? []), point]);
-        } else if (point.kind === "risk") {
-          add(overLine, partId, first, point);
         } else if (point.kind === "decision") {
           add(atLineEnd, partId, last.key, point);
         } else {
@@ -367,7 +351,15 @@ const Review = ({
         }
       }
     }
-    return { underLine, overLine, atLineEnd, underHeader, rowsAbove };
+    for (const lines of underLine.values()) {
+      for (const [key, here] of lines) {
+        lines.set(key, [
+          ...here.filter((point) => point.kind === "finding"),
+          ...here.filter((point) => point.kind !== "finding"),
+        ]);
+      }
+    }
+    return { underLine, atLineEnd, underHeader, rowsAbove };
   }, [places, index]);
   // Points that share a fold land with its first: the fold is what's measured and unfolds.
   const foldOf = useMemo(() => {
@@ -376,8 +368,8 @@ const Review = ({
       const [lead] = together;
       for (const point of together) if (lead !== undefined) first.set(point.id, lead.id);
     };
-    for (const placed of [cardPlaces.underLine, cardPlaces.overLine])
-      for (const lines of placed.values()) for (const here of lines.values()) share(here);
+    for (const lines of cardPlaces.underLine.values())
+      for (const here of lines.values()) share(here);
     for (const [partId, here] of cardPlaces.underHeader) {
       share([...here, ...(places.mentions.get(partId) ?? NO_POINTS)]);
     }
@@ -886,8 +878,13 @@ const Review = ({
       />
     );
   };
-  const riskBand = (point: Point) => (
-    <RiskBand key={point.id} point={point} {...actionsOf(point)} />
+  const riskNote = (point: Point) => (
+    <RiskNote
+      key={point.id}
+      point={point}
+      {...actionsOf(point)}
+      linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
+    />
   );
   const decisionNote = (point: Point) => (
     <DecisionNote key={point.id} point={point} {...actionsOf(point)} />
@@ -897,9 +894,9 @@ const Review = ({
     point.kind === "finding"
       ? findingCard(point, partId)
       : point.kind === "risk"
-        ? riskBand(point)
+        ? riskNote(point)
         : decisionNote(point);
-  // The lines each part's points rest on, so they take the kind's bar. Where points overlap,
+  // The lines each part's points rest on, so they take the kind's mark. Where points overlap,
   // the one that matters most wins: a finding's line reads as a finding. A point landing in view
   // gives its lines their place in the timeline.
   const pointLines = useMemo(() => {
@@ -964,7 +961,7 @@ const Review = ({
       </>,
     );
   };
-  // Findings under the last of their lines, which they grow out from when they land, and the
+  // Findings and risks under the last of their lines, which they grow out from when they land, and the
   // footnotes of the decisions at the end of the line, when opened.
   const pointsAt = (id: PartId, place: LinePlace): ReactNode => {
     const key = placeKey(place);
@@ -981,7 +978,7 @@ const Review = ({
             className: PINNED,
             bodyClassName: "flex max-w-3xl flex-col gap-2 py-2 pr-3 pl-29 font-sans",
           },
-          here.map((point) => findingCard(point, id)),
+          here.map((point) => card(point, id)),
         )}
         {notes.length > 0 && (
           <LineRow inset>
@@ -990,11 +987,6 @@ const Review = ({
         )}
       </>
     );
-  };
-  // A risk's band over the first of its lines, which lands as a finding's card does.
-  const pointsOver = (id: PartId, place: LinePlace): ReactNode => {
-    const here = cardPlaces.overLine.get(id)?.get(placeKey(place)) ?? NO_POINTS;
-    return fold(here, { row: true, className: PINNED }, here.map(riskBand));
   };
   // A decision's chip at the end of its line.
   const pointsAtEnd = (id: PartId, place: LinePlace): ReactNode => {
@@ -1014,7 +1006,9 @@ const Review = ({
   const flaggedOf = useCallback(
     (id: PartId): ReadonlySet<string> | undefined => {
       const lines = cardPlaces.underLine.get(id);
-      return lines === undefined ? undefined : new Set(lines.keys());
+      if (lines === undefined) return undefined;
+      const flagged = [...lines].filter(([, here]) => here.some((p) => p.kind === "finding"));
+      return new Set(flagged.map(([key]) => key));
     },
     [cardPlaces],
   );
@@ -1068,7 +1062,6 @@ const Review = ({
     marksOf,
     pointsOn,
     pointsAt,
-    pointsOver,
     pointsAtEnd,
     flaggedOf,
     pointLinesOf,

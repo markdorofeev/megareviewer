@@ -857,18 +857,21 @@ describe("points", () => {
   const step = (name: "Next point" | "Previous point") =>
     userEvent.click(within(reviewBar()).getByRole("button", { name }));
 
-  it("sit where their kind goes: a risk over its range, a finding under its line, a decision at its end", async () => {
+  it("sit where their kind goes: a finding and a risk under their last line, a decision at its end", async () => {
     renderReview();
     await loaded();
     const card = cardOf(h.receiptRoute);
     const risk = within(card).getByRole("article", { name: RISK });
     const finding = within(card).getByRole("article", { name: FINDING });
-    // The risk is over the route it names, not the blank line that starts its hunk.
-    expect(comesBefore(lineRow(card, "added line 13"), risk)).toBe(true);
-    expect(comesBefore(risk, lineRow(card, "added line 14"))).toBe(true);
+    // The risk is under the last line of the route it names, so the code above it stays whole.
+    expect(risk.closest("[data-slot=point-fold]")?.previousElementSibling).toBe(
+      lineRow(card, "added line 21"),
+    );
     expect(comesBefore(lineRow(card, "added line 15"), finding)).toBe(true);
     expect(comesBefore(finding, lineRow(card, "added line 16"))).toBe(true);
     expect(lineRow(card, "added line 15").querySelector("[data-slot=finding-flag]")).not.toBeNull();
+    // Only a finding's line has the bug.
+    expect(lineRow(card, "added line 21").querySelector("[data-slot=finding-flag]")).toBeNull();
     expect(
       within(lineRow(card, "added line 20")).getByRole("button", { name: PLAIN_TEXT }),
     ).toBeTruthy();
@@ -891,15 +894,64 @@ describe("points", () => {
     expect(cardOf(h.dependency).dataset.highlighted === "true").toBe(true);
   });
 
-  it("mark a finding's and a risk's lines with their kind's bar, a finding's winning", async () => {
+  it("mark a finding's and a risk's lines on their numbers, a finding's winning", async () => {
     renderReview();
     await loaded();
-    const kinds = [...cardOf(h.receiptRoute).querySelectorAll("[data-point]")].map((row) =>
-      row.getAttribute("data-point"),
+    const card = cardOf(h.receiptRoute);
+    const kinds = [...card.querySelectorAll("[data-point-mark]")].map((cell) =>
+      cell.getAttribute("data-point-mark"),
     );
     // The risk covers the route it names, 14 to 21, not the blank line 13 before it; the finding
     // rests on 15. Decisions are footnotes and mark none.
     expect(kinds).toEqual(["risk", "finding", ...Array(6).fill("risk")]);
+    // The mark is on the number beside the code, not on the row's edge.
+    expect(lineRow(card, "added line 14").getAttribute("data-point")).toBe("risk");
+    expect(lineRow(card, "added line 14").className).not.toMatch(/after:/);
+  });
+
+  it("put a finding before a risk when both end on one line, in one fold", async () => {
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          findings: analysis.findings.map((finding) =>
+            finding.id === "f1"
+              ? { ...finding, lines: { ...finding.lines, startLine: 20, line: 21 } }
+              : finding,
+          ),
+        },
+      },
+    });
+    await loaded();
+    const card = cardOf(h.receiptRoute);
+    const risk = within(card).getByRole("article", { name: RISK });
+    const finding = within(card).getByRole("article", { name: FINDING });
+    expect(comesBefore(finding, risk)).toBe(true);
+    expect(finding.closest("[data-slot=point-fold]")).toBe(risk.closest("[data-slot=point-fold]"));
+    expect(lineRow(card, "added line 21").querySelector("[data-slot=finding-flag]")).not.toBeNull();
+  });
+
+  it("fold a dismissed risk to one line, and bring it back", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(pointButton("Dismiss", RISK));
+    const folded = pointCard(RISK);
+    expect(folded.dataset.state).toBe("dismissed");
+    expect(folded.textContent).toContain("Dismissed");
+    await userEvent.click(within(folded).getByRole("button", { name: "Undo" }));
+    expect(pointButton("Comment", RISK)).toBeTruthy();
+  });
+
+  it("keep a risk's lines in view when going to its note", async () => {
+    renderReview();
+    await loaded();
+    const note = pointCard(RISK);
+    // 14 to 21: the rows from its first line down to its last.
+    expect(note.style.getPropertyValue("--lines-above")).toBe("8");
+    expect(
+      note.closest("[data-slot=point-fold]")?.previousElementSibling?.getAttribute("data-point"),
+    ).toBe("risk");
   });
 
   it("add a finding to the review as a draft with its suggestion", async () => {

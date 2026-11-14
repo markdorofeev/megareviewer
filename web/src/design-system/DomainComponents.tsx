@@ -4,7 +4,7 @@ import type { Hunk } from "../../../src/domain/diff/index.ts";
 import { type Check, PointId, type Reviewer } from "../../../src/domain/review/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
 import { VERDICT_STATUS } from "../lib/status.ts";
-import { DecisionChip, DecisionNote, FindingCard, RiskBand } from "../pages/review/PointCard.tsx";
+import { DecisionChip, DecisionNote, FindingCard, RiskNote } from "../pages/review/PointCard.tsx";
 import {
   CiSummary,
   CollapsedHunk,
@@ -20,6 +20,7 @@ import {
   KeyHint,
   type LineComment,
   type LinePlace,
+  type PointLine,
   PrHeader,
   PullRequestStateBadge,
   ReviewerStack,
@@ -437,7 +438,8 @@ const Card = ({ children }: { readonly children: ReactNode }) => (
 
 /**
  * Claude's points one by one: a finding's card, then folded into the review and dismissed; a
- * risk's band and a dismissed one; a decision's chip and its footnote.
+ * risk's note and a dismissed one; a decision's chip and its footnote; and the marks a finding's
+ * and a risk's lines take on their numbers, on unchanged, deleted and added lines.
  */
 const PointStates = () => {
   const [finding, risk, decision] = POINTS;
@@ -482,8 +484,8 @@ const PointStates = () => {
         removed={null}
         language={null}
       />
-      <RiskBand point={risk} {...actions} />
-      <RiskBand
+      <RiskNote point={risk} {...actions} />
+      <RiskNote
         point={{
           ...risk,
           id: PointId.parse("r:h_00000000000000ff"),
@@ -503,9 +505,29 @@ const PointStates = () => {
         />
       </p>
       {open && <DecisionNote point={decision} {...actions} />}
+      {hunk !== undefined && (
+        <Card>
+          <HunkCard
+            hunk={hunk}
+            file={RETRY_FILE}
+            risk={null}
+            pointLines={MARKED_LINES}
+            flagged={new Set(["new:16", "new:23"])}
+          />
+        </Card>
+      )}
     </div>
   );
 };
+
+const mark = (kind: PointLine["kind"], keys: readonly string[]) =>
+  keys.map((key) => [key, { kind }] as const);
+
+/** A finding's and a risk's lines on the retry file's first hunk, by "side:line". */
+const MARKED_LINES: ReadonlyMap<string, PointLine> = new Map([
+  ...mark("risk", ["old:14", "new:14", "new:19", "new:20"]),
+  ...mark("finding", ["new:15", "new:16", "old:21", "new:21", "new:22", "new:23"]),
+]);
 
 const HEAD = "9e8d7c6b5a49382716051f2e3d4c5b6a79881726";
 

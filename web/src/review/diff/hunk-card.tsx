@@ -180,10 +180,8 @@ export interface HunkCardProps {
   readonly marks?: ReadonlyMap<number, readonly LineMark[]>;
   /** Lines one of Claude's points rests on, by "side:line", each with its kind. */
   readonly pointLines?: ReadonlyMap<string, PointLine>;
-  /** Claude's point cards under the last of their lines. */
+  /** Claude's findings and risks under the last of their lines. */
   readonly pointsAt?: (place: LinePlace) => ReactNode;
-  /** Rows over a line, e.g. a risk's band over the range it starts. */
-  readonly pointsOver?: (place: LinePlace) => ReactNode;
   /** After a line's code, e.g. a decision's chip. */
   readonly pointsAtEnd?: (place: LinePlace) => ReactNode;
   /** Lines with a finding's card under them, by "side:line": a bug in the number cell. */
@@ -222,7 +220,6 @@ export const HunkCard = memo(function HunkCard({
   marks,
   pointLines,
   pointsAt,
-  pointsOver,
   pointsAtEnd,
   flagged,
 }: HunkCardProps) {
@@ -349,13 +346,11 @@ export const HunkCard = memo(function HunkCard({
             const commentAt = open ? openComment : comment;
             const threads = place === null ? null : (threadsAt?.(place) ?? null);
             const points = place === null ? null : (pointsAt?.(place) ?? null);
-            const over = place === null ? null : (pointsOver?.(place) ?? null);
             const end = place === null ? null : (pointsAtEnd?.(place) ?? null);
             const key = place === null ? null : `${place.side}:${place.line}`;
             const point = key === null ? undefined : pointLines?.get(key);
             return (
               <Fragment key={line.key}>
-                {over}
                 <DiffLine
                   line={line}
                   cellRole="cell"

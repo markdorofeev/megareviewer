@@ -140,15 +140,29 @@ export const pageProblems = (page: Page): Promise<string[]> =>
       return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     };
 
+    // A ::before that fills its element paints over the element's own background, as a point's
+    // mark does on a line number.
+    const fill = (at: Element): string | null => {
+      const before = getComputedStyle(at, "::before");
+      const covers =
+        before.content !== "none" &&
+        before.position === "absolute" &&
+        [before.top, before.right, before.bottom, before.left].every((edge) => edge === "0px");
+      return covers ? before.backgroundColor : null;
+    };
+
     /** The opaque color behind an element, or null when an image or gradient is in the way. */
     const backdrop = (element: Element): number[] | null => {
       const layers: [number, number, number, number][] = [];
       for (let at: Element | null = element; at !== null; at = at.parentElement) {
         const style = getComputedStyle(at);
         if (style.backgroundImage !== "none") return null;
-        const color = rgba(style.backgroundColor);
-        if (color[3] > 0) layers.push(color);
-        if (color[3] >= 1) break;
+        const colors = [fill(at), style.backgroundColor].flatMap((one) =>
+          one === null ? [] : [rgba(one)],
+        );
+        const opaque = colors.find((color) => color[3] >= 1);
+        layers.push(...colors.filter((color) => color[3] > 0));
+        if (opaque !== undefined) break;
       }
       let result = [255, 255, 255];
       for (const layer of layers.reverse()) result = over(layer, result);

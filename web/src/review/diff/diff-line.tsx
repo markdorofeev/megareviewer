@@ -120,10 +120,12 @@ export const segments = (
 
 export type LineLayout = "unified" | "split-old" | "split-new";
 
-// Spelled out because Tailwind only generates the classes it finds whole in the source.
-const POINT_BAR: Readonly<Record<PointKind, string>> = {
-  finding: "after:bg-review-changes",
-  risk: "after:bg-risk-contract-solid",
+// Spelled out because Tailwind only generates the classes it finds whole in the source. The mark
+// is a pseudo-element rather than the cell's background so the landing can draw it down the lines.
+const POINT_MARK: Readonly<Record<PointKind, string>> = {
+  finding:
+    "isolate font-medium text-review-changes before:absolute before:inset-0 before:-z-1 before:bg-review-changes-bg before:shadow-[inset_-3px_0_0_var(--review-changes)]",
+  risk: "isolate font-medium text-risk-contract before:absolute before:inset-0 before:-z-1 before:bg-risk-contract-bg before:shadow-[inset_-3px_0_0_var(--risk-contract-solid)]",
   decision: "",
 };
 
@@ -138,11 +140,14 @@ export interface DiffLineProps {
   readonly selected?: boolean;
   /** A line an open comment box is on, marked by a bar at its edge. */
   readonly marked?: boolean;
-  /** A line one of Claude's points rests on: a bar at its edge in the kind's color. */
+  /**
+   * A line one of Claude's points rests on: the number beside the code takes the kind's tint and
+   * color, with a rail on its code side. A decision's lines take none.
+   */
   readonly pointKind?: PointKind | null;
   /**
    * The point is landing: its place among those in view, and this line's among its lines, so its
-   * bar draws down them and its wash passes over (globals.css).
+   * mark draws down them and its wash passes over (globals.css).
    */
   readonly pointLanding?: PointLanding;
   /** Shows a comment button in the gutter on hover and focus. */
@@ -199,17 +204,22 @@ export const DiffLine = memo(function DiffLine({
 }: DiffLineProps) {
   const kind = KIND[line.kind];
   const number = line.newNo ?? line.oldNo;
+  const markSide = layout === "split-old" ? "old" : "new";
   const gutter = (value: number | null, side: "old" | "new") => (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the grid's ↑ and ↓, with shift, do the same.
     // biome-ignore lint/a11y/noStaticElementInteractions: a cell of the grid; only the grid clicks it.
     <span
       role={cellRole}
       onClick={onGutterClick === undefined ? undefined : (event) => onGutterClick(line, event)}
+      data-point-mark={
+        pointKind !== null && pointKind !== "decision" && side === markSide ? pointKind : undefined
+      }
       className={cn(
         "tabular relative w-12 shrink-0 select-none text-right",
         // The number button takes the padding, so its fill reaches the cell's edges.
         numberButton?.side === side && value !== null ? "pr-0" : "pr-2",
         kind.gutter,
+        pointKind !== null && side === markSide && POINT_MARK[pointKind],
         onGutterClick !== undefined && "cursor-pointer hover:text-foreground",
       )}
     >
@@ -298,10 +308,8 @@ export const DiffLine = memo(function DiffLine({
         !selected &&
           onRowClick !== undefined &&
           "hover:before:pointer-events-none hover:before:absolute hover:before:inset-0 hover:before:z-[1] hover:before:bg-primary/8",
-        (focused || marked || pointKind !== null) &&
-          "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px]",
-        (focused || marked) && "after:bg-ring",
-        !focused && !marked && pointKind !== null && POINT_BAR[pointKind],
+        (focused || marked) &&
+          "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px] after:bg-ring",
       )}
     >
       {layout !== "split-new" && gutter(line.oldNo, "old")}

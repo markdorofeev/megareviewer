@@ -200,10 +200,12 @@
   --syntax-number: #92400E;
 
   /* hunk: risk classes (contract, logic, mechanical), added for megareviewer. Always paired with a
-     glyph and a label. Only contract has a hue, the one no diff, verdict or focus color uses;
-     logic and mechanical are greys, so attention goes where the risk is. The color-blind palette
-     needs no overrides. */
-  --risk-contract: #8B006F;   --risk-contract-bg: #FBEEF7;   --risk-contract-border: #EBC2DF;   --risk-contract-solid: #9E1C80;
+     glyph and a label. Only contract has a hue, amber, so Claude's points read as the error,
+     warning and info ladder (a finding red, a risk amber, a decision grey) without being learned;
+     the magenta before it was picked for being unused and read as another category. Logic and
+     mechanical are greys, so attention goes where the risk is. The color-blind palette needs no
+     overrides. */
+  --risk-contract: #8A5300;   --risk-contract-bg: #FCEFC9;   --risk-contract-border: #EBCF8B;   --risk-contract-solid: #B26A00;
   --risk-logic: #5B5B66;      --risk-logic-bg: #F4F4F6;      --risk-logic-border: #E4E4E7;      --risk-logic-solid: #8B8B94;
   --risk-mechanical: #71717A; --risk-mechanical-bg: #FAFAFA; --risk-mechanical-border: #E4E4E7; --risk-mechanical-solid: #D4D4D8;
 }
@@ -302,7 +304,7 @@
   --syntax-number: #FCD34D;
 
   /* hunk: risk classes */
-  --risk-contract: #EF7BCC;   --risk-contract-bg: #3F1B3A;   --risk-contract-border: #74346A;   --risk-contract-solid: #D9479F;
+  --risk-contract: #F0B95A;   --risk-contract-bg: #45330F;   --risk-contract-border: #72561E;   --risk-contract-solid: #D99A2B;
   --risk-logic: #A1A1AA;      --risk-logic-bg: #303030;      --risk-logic-border: #434343;      --risk-logic-solid: #6F6F7B;
   --risk-mechanical: #8D8D96; --risk-mechanical-bg: #1F1F1F; --risk-mechanical-border: #434343; --risk-mechanical-solid: #3F3F46;
 }
@@ -609,13 +611,13 @@
   );
 }
 
-/* The code: for each point in view, its bar draws down its lines, a wash of its kind passes over
-   them, then its card unfolds under them. Lines that don't land keep their bar at rest. */
+/* The code: for each point in view, its mark draws down its lines' numbers, a wash of its kind
+   passes over them, then its card unfolds under them. Lines that don't land keep their mark at
+   rest. */
 [role="row"][data-point="finding"] { --point-wash: color-mix(in oklab, var(--review-changes) 22%, transparent); }
 [role="row"][data-point="risk"] { --point-wash: color-mix(in oklab, var(--risk-contract-solid) 22%, transparent); }
-[role="row"][data-point="decision"] { --point-wash: color-mix(in oklab, var(--review-pending) 22%, transparent); }
 
-[data-landing="landing"] [role="row"][data-point-line]::after {
+[data-landing="landing"] [role="row"][data-point-line] [data-point-mark]::before {
   transform-origin: top;
   animation: landing-bar calc(var(--landing-bar) / var(--point-lines, 1)) linear both;
   animation-delay: calc(
