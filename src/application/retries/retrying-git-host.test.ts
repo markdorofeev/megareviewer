@@ -51,13 +51,13 @@ describe("retryingGitHost", () => {
     expect(delays).toEqual([1000, 2000, 4000]);
   });
 
-  it("logs each retry as a warning", async () => {
+  it("logs each retry as info", async () => {
     const { fake, host, logger } = setup();
     fake.failNext("listPullRequests", networkError);
 
     await host.listPullRequests();
 
-    expect(logger.entries.filter((entry) => entry.level === "warn")).toEqual([
+    expect(logger.entries.filter((entry) => entry.level === "info")).toEqual([
       expect.objectContaining({
         message: "Retrying the pull request list after a network error",
         fields: { host: "github", error: networkError.message, delayMs: 1000 },

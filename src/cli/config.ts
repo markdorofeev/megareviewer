@@ -130,7 +130,7 @@ export const loadConfig = async (
   const home =
     homeValue === null ? join(options.homeDir ?? homedir(), ".megareviewer") : resolve(homeValue);
 
-  const logValue = read("MEGAREVIEWER_LOG")?.toLowerCase() ?? "info";
+  const logValue = read("MEGAREVIEWER_LOG")?.toLowerCase() ?? "warn";
   const logLevel = LOG_LEVELS.find((level) => level === logValue);
   if (logLevel === undefined) {
     problems.push(`MEGAREVIEWER_LOG must be one of ${LOG_LEVELS.join(", ")}.`);
@@ -142,7 +142,7 @@ export const loadConfig = async (
       bitbucket: bitbucket === null ? null : { ...bitbucket, workspace },
       jira,
       home,
-      logLevel: logLevel ?? "info",
+      logLevel: logLevel ?? "warn",
     },
     problems,
   };

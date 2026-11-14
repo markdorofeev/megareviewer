@@ -179,10 +179,10 @@ describe("loadConfig: Jira", () => {
 });
 
 describe("loadConfig: home and log level", () => {
-  it("defaults to ~/.megareviewer and info", async () => {
+  it("defaults to ~/.megareviewer and warn", async () => {
     const { config } = await load(GITHUB);
     expect(config.home).toBe("/home/lee/.megareviewer");
-    expect(config.logLevel).toBe("info");
+    expect(config.logLevel).toBe("warn");
   });
 
   it("reads MEGAREVIEWER_HOME and MEGAREVIEWER_LOG", async () => {
@@ -195,9 +195,9 @@ describe("loadConfig: home and log level", () => {
     expect(config.logLevel).toBe("debug");
   });
 
-  it("reports an unknown log level and keeps info", async () => {
+  it("reports an unknown log level and keeps warn", async () => {
     const { config, problems } = await load({ ...GITHUB, MEGAREVIEWER_LOG: "verbose" });
-    expect(config.logLevel).toBe("info");
+    expect(config.logLevel).toBe("warn");
     expect(problems).toEqual(["MEGAREVIEWER_LOG must be one of debug, info, warn, error."]);
   });
 });

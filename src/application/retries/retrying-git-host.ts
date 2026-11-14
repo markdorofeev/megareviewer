@@ -23,7 +23,7 @@ const retrier =
     let result = await attempt();
     for (const delayMs of RETRY_DELAYS_MS) {
       if (result.ok || result.error.kind !== "network") return result;
-      logger.warn(`Retrying ${what} after a network error`, {
+      logger.info(`Retrying ${what} after a network error`, {
         host,
         error: result.error.message,
         delayMs,

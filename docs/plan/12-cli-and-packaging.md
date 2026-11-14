@@ -33,7 +33,7 @@ The only module that reads `process.env` or runs other programs. Returns a typed
 | Jira | `JIRA_BASE_URL` + `JIRA_EMAIL` + `JIRA_API_TOKEN` (all or none) |
 | Anthropic | Not read here. The SDK resolves `ANTHROPIC_API_KEY` or an `ant auth login` profile itself. `doctor` checks it. |
 | Home directory | `MEGAREVIEWER_HOME`, default `~/.megareviewer` |
-| Log level | `MEGAREVIEWER_LOG` (`debug`, `info`, `warn`, `error`; default `info`) |
+| Log level | `MEGAREVIEWER_LOG` (`debug`, `info`, `warn`, `error`; default `warn`) |
 
 At least one git host must be configured; otherwise exit 1 with instructions for both hosts.
 
