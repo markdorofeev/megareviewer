@@ -50,11 +50,26 @@ const recordingInput = (model: AnalysisModel) => {
   };
   const recording: AnalysisModel = {
     version: model.version,
-    checkSize: (given) => (keep(given), model.checkSize(given)),
-    intent: (given, options) => (keep(given), model.intent(given, options)),
-    findings: (given, intent, options) => (keep(given), model.findings(given, intent, options)),
-    risk: (given, options) => (keep(given), model.risk(given, options)),
-    decisions: (given, options) => (keep(given), model.decisions(given, options)),
+    checkSize: (given) => {
+      keep(given);
+      return model.checkSize(given);
+    },
+    intent: (given, options) => {
+      keep(given);
+      return model.intent(given, options);
+    },
+    findings: (given, intent, options) => {
+      keep(given);
+      return model.findings(given, intent, options);
+    },
+    risk: (given, options) => {
+      keep(given);
+      return model.risk(given, options);
+    },
+    decisions: (given, options) => {
+      keep(given);
+      return model.decisions(given, options);
+    },
   };
   return { model: recording, input: () => input };
 };

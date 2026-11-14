@@ -14,8 +14,14 @@ const checks = (status: ClaudeCodeStatus, credentials: boolean) => {
   return {
     asked,
     check: {
-      claudeCode: async () => (asked.push("claude-code"), status),
-      hasApiCredentials: async () => (asked.push("api"), credentials),
+      claudeCode: async () => {
+        asked.push("claude-code");
+        return status;
+      },
+      hasApiCredentials: async () => {
+        asked.push("api");
+        return credentials;
+      },
     },
   };
 };
