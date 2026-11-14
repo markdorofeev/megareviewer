@@ -4,6 +4,7 @@ import {
   type Analysis,
   AnalysisId,
   type HostError,
+  inProgress,
   MismatchId,
   type ModelCall,
   type ModelError,
@@ -476,6 +477,7 @@ describe("the analysis pipeline", () => {
       const analysis = await analyze();
       expect(analysis.status).toBe("failed");
       expect(analysis.stages.collect).toBe("failed");
+      expect(inProgress(analysis)).toBe(false);
       expect(analysis.error).toEqual({
         stage: "collect",
         code: "host-error",
@@ -1106,6 +1108,7 @@ describe("the analysis pipeline", () => {
       message: "megareviewer hit an internal error during the analysis",
     });
     expect(analysis.stages.prep).toBe("failed");
+    expect(inProgress(analysis)).toBe(false);
     expect(logger.entries.find((entry) => entry.level === "error")?.message).toBe(
       "The analysis pipeline crashed",
     );

@@ -818,6 +818,20 @@ describe("GET /api/analyses/:id/events", () => {
     for (const analysis of [
       smallFeatureAnalysis,
       { ...smallFeatureAnalysis, status: "failed" as const },
+      // As the pipeline leaves one whose code failed: the model's stages never left pending.
+      {
+        ...smallFeatureAnalysis,
+        status: "failed" as const,
+        stages: {
+          ...smallFeatureAnalysis.stages,
+          prep: "failed" as const,
+          intent: "pending" as const,
+          findings: "pending" as const,
+          risk: "pending" as const,
+          decisions: "pending" as const,
+          tour: "pending" as const,
+        },
+      },
     ]) {
       const counting = countingEvents();
       const { request, store } = setupApp({ events: counting.events });
