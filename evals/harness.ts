@@ -52,7 +52,7 @@ const recordingInput = (model: AnalysisModel) => {
     version: model.version,
     checkSize: (given) => (keep(given), model.checkSize(given)),
     intent: (given, options) => (keep(given), model.intent(given, options)),
-    findings: (given, options) => (keep(given), model.findings(given, options)),
+    findings: (given, intent, options) => (keep(given), model.findings(given, intent, options)),
     risk: (given, options) => (keep(given), model.risk(given, options)),
     decisions: (given, options) => (keep(given), model.decisions(given, options)),
   };

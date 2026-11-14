@@ -58,7 +58,6 @@ export {
   Finding,
   FindingId,
   type FindingProblem,
-  linkMismatches,
   MismatchId,
   Point,
   PointId,

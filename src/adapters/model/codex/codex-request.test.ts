@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { smallFeatureInput } from "../../../application/testing/index.ts";
+import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
 import { ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
@@ -10,7 +10,12 @@ import { CODEX_FINGERPRINT, CODEX_PROMPT_VERSION, codexVersion } from "./version
 
 const requests = (model = "gpt-6-luna") =>
   ModelPass.options.map((pass) =>
-    codexRequest(pass, renderInput(smallFeatureInput), passMessage(pass, ["problem"]), model),
+    codexRequest(
+      pass,
+      renderInput(smallFeatureInput),
+      passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"]),
+      model,
+    ),
   );
 
 const valueAfter = (args: readonly string[], flag: string) => args[args.indexOf(flag) + 1];

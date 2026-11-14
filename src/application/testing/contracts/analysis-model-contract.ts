@@ -7,7 +7,7 @@ import {
   ModelRisk,
   type PassOutput,
 } from "../../ports/index.ts";
-import { smallFeatureInput } from "../fixtures/index.ts";
+import { smallFeatureInput, smallFeatureIntent } from "../fixtures/index.ts";
 
 const expectUsage = (output: PassOutput<unknown>, pass: ModelUsage["pass"]) => {
   expect(ModelUsage.parse(output.usage)).toEqual(output.usage);
@@ -43,14 +43,16 @@ export const describeAnalysisModelContract = (
     });
 
     it("returns findings on lines of the PR's hunks", async () => {
-      const result = await model.findings(smallFeatureInput);
+      const result = await model.findings(smallFeatureInput, smallFeatureIntent);
       if (!result.ok) throw new Error(`findings failed: ${result.error.message}`);
 
       const hunks = new Map(
         smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
       );
       for (const item of result.value.value) expect(FindingDraft.parse(item)).toEqual(item);
-      expect(validateFindings(result.value.value, hunks)).toEqual([]);
+      expect(
+        validateFindings(result.value.value, hunks, smallFeatureIntent.mismatches.length),
+      ).toEqual([]);
       expectUsage(result.value, "findings");
     });
 

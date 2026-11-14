@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { smallFeatureInput } from "../../../application/testing/index.ts";
+import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
 import { ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
@@ -18,7 +18,7 @@ const fingerprint = (): string =>
         passRequest(
           pass,
           renderInput(smallFeatureInput),
-          passMessage(pass, ["problem"]),
+          passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"]),
           "claude-haiku-5-5",
         ),
       ),

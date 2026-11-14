@@ -246,21 +246,23 @@ export type FindingProblem =
   | { readonly kind: "lines-outside"; readonly index: number; readonly hunkId: HunkId }
   | { readonly kind: "blank"; readonly index: number; readonly field: "title" }
   /** A suggestion on base-side lines, which a comment can't replace. */
-  | { readonly kind: "suggestion-old-side"; readonly index: number };
+  | { readonly kind: "suggestion-old-side"; readonly index: number }
+  | { readonly kind: "unknown-mismatch"; readonly index: number; readonly mismatch: MismatchId };
 
-/** Problems that cost a finding only its suggestion, not its place. */
+/** Problems that cost a finding only its suggestion or mismatch, not its place. */
 export const strippable = (problem: FindingProblem): boolean =>
-  problem.kind === "suggestion-old-side";
+  problem.kind === "suggestion-old-side" || problem.kind === "unknown-mismatch";
 
 /**
- * Whether a draft finding names a hunk of the PR and lines that hunk shows, with a title and a
- * suggestion only for head-side lines. Text over the prompt's limits
+ * Whether a draft finding names a hunk of the PR and lines that hunk shows, with a title, a
+ * suggestion only for head-side lines and a mismatch the intent has. Text over the prompt's limits
  * isn't a problem: a retry for it cost a whole findings pass, about two minutes, for words the
  * card shows in full anyway.
  */
 export const validateFindings = (
-  findings: readonly Omit<Finding, "id" | "mismatch">[],
+  findings: readonly Omit<Finding, "id">[],
   hunks: ReadonlyMap<HunkId, Hunk>,
+  mismatches = 0,
 ): FindingProblem[] =>
   findings.flatMap((finding, index): FindingProblem[] => {
     const problems: FindingProblem[] = [];
@@ -274,24 +276,9 @@ export const validateFindings = (
     if (finding.suggestion !== null && side === "old") {
       problems.push({ kind: "suggestion-old-side", index });
     }
+    const mismatch = finding.mismatch;
+    if (mismatch !== null && Number(mismatch.slice(1)) > mismatches) {
+      problems.push({ kind: "unknown-mismatch", index, mismatch });
+    }
     return problems;
   });
-
-/**
- * Each finding with the intent's mismatch on its hunk, which the finding then shows. The passes
- * run side by side, so the findings pass can't name one itself: a finding takes a mismatch only
- * when it's the one left on its hunk, and each mismatch goes to one finding. Two on a hunk can't
- * be told apart by the hunk, so they stay points of their own rather than land on the wrong one.
- */
-export const linkMismatches = (findings: readonly Finding[], intent: Intent): Finding[] => {
-  const taken = new Set<number>();
-  return findings.map((finding) => {
-    const open = intent.mismatches.flatMap((mismatch, at) =>
-      !taken.has(at) && mismatch.hunkIds.includes(finding.lines.hunkId) ? [at] : [],
-    );
-    const [only] = open;
-    if (open.length !== 1 || only === undefined) return { ...finding, mismatch: null };
-    taken.add(only);
-    return { ...finding, mismatch: MismatchId.parse(`m${only + 1}`) };
-  });
-};

@@ -5,6 +5,7 @@ import {
   AnalysisId,
   type HostError,
   inProgress,
+  MismatchId,
   type ModelCall,
   type ModelError,
   type ModelOption,
@@ -377,33 +378,32 @@ describe("the analysis pipeline", () => {
     expect(analysis.warnings).toHaveLength(1);
   });
 
-  it("starts the other passes once the intent's answer begins, while it's still answering", async () => {
+  it("starts risk and decisions once the intent's answer begins, findings once it ends", async () => {
     const clock = new FixedClock("2026-10-21T09:00:00Z");
-    const findingsCalled = Promise.withResolvers<void>();
+    const riskCalled = Promise.withResolvers<void>();
     const model = new (class extends FakeAnalysisModel {
       override async intent(input: AnalysisInput, options?: PassOptions) {
         options?.onAnswering?.();
-        await findingsCalled.promise;
+        await riskCalled.promise;
         clock.advance(7_300);
         return super.intent(input, options);
       }
-      override async findings(input: AnalysisInput, options?: PassOptions) {
-        findingsCalled.resolve();
-        return super.findings(input, options);
+      override async risk(input: AnalysisInput, options?: PassOptions) {
+        riskCalled.resolve();
+        return super.risk(input, options);
       }
     })();
     const { analyze } = setup({ model, clock });
     const analysis = await analyze();
 
-    const usageOf = (pass: string) => analysis.usage.find((usage) => usage.pass === pass);
-    expect(usageOf("intent")?.durationMs).toBe(7_300);
-    const started = usageOf("intent")?.startedAt;
-    for (const pass of ["findings", "risk", "decisions"]) {
-      expect(usageOf(pass)?.startedAt).toBe(started);
-    }
+    const startOf = (pass: string) =>
+      Date.parse(analysis.usage.find((usage) => usage.pass === pass)?.startedAt ?? "");
+    expect(startOf("risk") - startOf("intent")).toBe(0);
+    expect(startOf("decisions") - startOf("intent")).toBe(0);
+    expect(startOf("findings") - startOf("intent")).toBe(7_300);
   });
 
-  it("starts them at the intent's end when the transport can't tell when its answer began", async () => {
+  it("starts risk and decisions at the intent's end when the transport can't tell when its answer began", async () => {
     const clock = new FixedClock("2026-10-21T09:00:00Z");
     const model = new (class extends FakeAnalysisModel {
       override async intent(input: AnalysisInput, options?: PassOptions) {
@@ -416,7 +416,7 @@ describe("the analysis pipeline", () => {
 
     const startOf = (pass: string) =>
       Date.parse(analysis.usage.find((usage) => usage.pass === pass)?.startedAt ?? "");
-    expect(startOf("findings") - startOf("intent")).toBe(7_300);
+    expect(startOf("risk") - startOf("intent")).toBe(7_300);
   });
 
   it("traces every model call: why a pass ran again, and why one failed", async () => {
@@ -872,9 +872,10 @@ describe("the analysis pipeline", () => {
       lines: { hunkId: hunk.id, side, startLine: added, line: added },
       severity: "major" as const,
       suggestion: ["fixed();"],
+      mismatch: null,
     });
 
-    it("gives a finding the intent's mismatch on its hunk, once both passes are in", async () => {
+    it("names the intent's mismatch a finding shows, from the intent it read", async () => {
       const model = new FakeAnalysisModel();
       model.script(
         "intent",
@@ -886,13 +887,27 @@ describe("the analysis pipeline", () => {
           ],
         }),
       );
-      model.script("findings", ok([onLine("new")]));
+      model.script("findings", ok([{ ...onLine("new"), mismatch: MismatchId.parse("m1") }]));
       const { analyze } = setup({ model });
       const analysis = await analyze();
       expect(analysis.findings.map((finding) => finding.mismatch)).toEqual(["m1"]);
     });
 
-    it("gives findings no mismatch when the intent pass fails, and keeps them", async () => {
+    it("keeps a finding wrong only in its suggestion or mismatch, without them", async () => {
+      const model = new FakeAnalysisModel();
+      const drafts = [{ ...onLine("new"), suggestion: null, mismatch: MismatchId.parse("m9") }];
+      model.script("findings", ok(drafts), ok(drafts));
+      const { analyze } = setup({ model });
+      const analysis = await analyze();
+      expect(model.callsTo("findings")[1]?.options).toEqual({
+        feedback: ["Finding 1 names m9, which isn't one of the intent's mismatches."],
+      });
+      expect(analysis.findings).toEqual([
+        { ...drafts[0], id: "f1", suggestion: null, mismatch: null },
+      ]);
+    });
+
+    it("still runs the findings when the intent pass fails, with no mismatch to name", async () => {
       const model = new FakeAnalysisModel();
       model.script("intent", err(modelError("overloaded", "Overloaded")));
       model.script("findings", ok([onLine("new")]));
@@ -910,7 +925,7 @@ describe("the analysis pipeline", () => {
       const { analyze } = setup({ model });
       const analysis = await analyze();
       expect(model.callsTo("findings")).toHaveLength(1);
-      expect(analysis.findings).toEqual([{ ...long, id: "f1", mismatch: null }]);
+      expect(analysis.findings).toEqual([{ ...long, id: "f1" }]);
     });
   });
 

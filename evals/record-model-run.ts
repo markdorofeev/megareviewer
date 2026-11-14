@@ -59,7 +59,8 @@ const recording = (model: AnalysisModel) => {
     version: model.version,
     checkSize: (input) => model.checkSize(input),
     intent: (input, options?: PassOptions) => record("intent", () => model.intent(input, options)),
-    findings: (input, options) => record("findings", () => model.findings(input, options)),
+    findings: (input, intent, options) =>
+      record("findings", () => model.findings(input, intent, options)),
     risk: (input, options) => record("risk", () => model.risk(input, options)),
     decisions: (input, options) => record("decisions", () => model.decisions(input, options)),
   };

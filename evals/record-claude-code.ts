@@ -58,7 +58,7 @@ const record = async (name: string, pass: ModelPass) => {
   const request = claudeCodeRequest(
     pass,
     renderInput(smallFeatureInput),
-    passMessage(pass, undefined),
+    passMessage(pass, null, undefined),
   );
   const ran = await run(request.args, { stdin: request.stdin, files: request.files });
   const lines = ran.lines.flatMap((line) => scrub(line) ?? []);

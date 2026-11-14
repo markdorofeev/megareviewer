@@ -1,4 +1,5 @@
-import type { ModelPass } from "../../../../domain/review/index.ts";
+import type { Intent, ModelPass } from "../../../../domain/review/index.ts";
+import { escapeText } from "../render-input.ts";
 
 /** What each pass asks for. Sent after the cached PR data, so changing one doesn't cost a cache. */
 export const PASS_INSTRUCTIONS: Readonly<Record<ModelPass, string>> = {
@@ -24,6 +25,7 @@ Each finding is a draft comment the reviewer can add to their review as it is, s
 - lines: the hunk it rests on (hunkId) and the lines in that hunk that show it, startLine to line (startLine equal to line for one line). side is "new" for numbers on "+" and unchanged lines, "old" for numbers on "-" lines. Use only line numbers the hunk shows.
 - severity: "blocking" when it must be fixed before merging (data exposed or lost, a security hole, a crash on a normal path), "major" when it's wrong but bounded, "minor" when it's worth fixing but the change works without it.
 - suggestion: when the fix is a change to those same lines, the lines that replace startLine to line, whole, with their indentation; only for side "new". null when the fix is elsewhere, longer than a few lines, or you aren't sure of it.
+- mismatch: when the finding is one of the intent's mismatches shown in the code, its ID ("m1"), so the reviewer reads it once. Otherwise null.
 
 Order them by how much they matter, most first. At most 10.`,
 
@@ -60,11 +62,44 @@ For each decision:
 Order them by how much they help a reader, most first. At most 8. A small or routine change may have none.`,
 };
 
-/** The pass's own message: the instruction, and what was wrong with the previous attempt, if anything. */
-export const passMessage = (pass: ModelPass, feedback: readonly string[] | undefined): string => {
+const ids = (hunkIds: readonly string[]): string =>
+  hunkIds.length === 0 ? "" : ` (${hunkIds.join(", ")})`;
+
+const renderIntent = (intent: Intent): string[] => [
+  "<intent>",
+  `Stated: ${intent.stated === null ? "none" : escapeText(intent.stated.summary)}`,
+  `Inferred: ${escapeText(intent.inferred.summary)}`,
+  ...intent.inferred.behaviorChanges.map((change) => `- ${escapeText(change)}`),
+  ...(intent.mismatches.length === 0 ? [] : ["Mismatches:"]),
+  ...intent.mismatches.map(
+    (mismatch, index) =>
+      `- m${index + 1} ${mismatch.kind}: ${escapeText(mismatch.description)}${ids(mismatch.hunkIds)}`,
+  ),
+  "</intent>",
+];
+
+/**
+ * The pass's own message: the intent's answer when the pass reads it (model output, so escaped
+ * like PR content), the instruction, and what was wrong with the previous attempt, if anything.
+ */
+export const passMessage = (
+  pass: ModelPass,
+  intent: Intent | null,
+  feedback: readonly string[] | undefined,
+): string => {
+  const earlier =
+    intent === null
+      ? []
+      : [
+          "Results of the earlier tasks on this pull request:",
+          "<earlier_results>",
+          ...renderIntent(intent),
+          "</earlier_results>",
+          "",
+        ];
   const problems =
     feedback === undefined || feedback.length === 0
       ? []
       : ["", `Your previous answer had these problems: ${feedback.join("; ")}. Fix them.`];
-  return [PASS_INSTRUCTIONS[pass], ...problems].join("\n");
+  return [...earlier, PASS_INSTRUCTIONS[pass], ...problems].join("\n");
 };

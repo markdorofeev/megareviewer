@@ -172,29 +172,34 @@ const FINDING_FEEDBACK = (problem: FindingProblem): string => {
       return `${finding} has a blank title.`;
     case "suggestion-old-side":
       return `${finding} suggests a change for "-" lines; a suggestion replaces only new-side lines, so give none or rest the finding on new-side lines.`;
+    case "unknown-mismatch":
+      return `${finding} names ${problem.mismatch}, which isn't one of the intent's mismatches.`;
   }
 };
 
 /**
- * Findings on lines the PR's hunks show, with no mismatch yet. One still invalid after the retry
- * is dropped and logged, not shown: the reviewer can't act on the model's mistake. One wrong only
- * in its suggestion keeps its place without it.
+ * Findings on lines the PR's hunks show, each with the intent's mismatch it shows, if any; the
+ * intent is null when its pass failed. One still invalid after the retry is dropped and logged,
+ * not shown: the reviewer can't act on the model's mistake. One wrong only in its suggestion or
+ * mismatch keeps its place without them.
  */
 export const runFindings = async (
   model: AnalysisModel,
   input: AnalysisInput,
+  intent: Intent | null,
   hunks: ReadonlyMap<HunkId, Hunk>,
   deps: PassDeps,
 ): Promise<PassResult<Finding[]>> => {
+  const mismatches = intent?.mismatches.length ?? 0;
   const { outcome, usage, modelCalls } = await callChecked(
     "findings",
-    (options) => model.findings(input, options),
-    (drafts) => validateFindings(drafts, hunks).map(FINDING_FEEDBACK),
+    (options) => model.findings(input, intent, options),
+    (drafts) => validateFindings(drafts, hunks, mismatches).map(FINDING_FEEDBACK),
     deps,
   );
   if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
   const drafts = outcome.value.value;
-  const problems = validateFindings(drafts, hunks);
+  const problems = validateFindings(drafts, hunks, mismatches);
   const invalid = new Set(problems.filter((one) => !strippable(one)).map((one) => one.index));
   if (invalid.size > 0) deps.logger.warn("Dropped invalid findings", { count: invalid.size });
   const stripped = (index: number, kind: FindingProblem["kind"]) =>
@@ -206,17 +211,12 @@ export const runFindings = async (
           {
             ...draft,
             ...(stripped(index, "suggestion-old-side") ? { suggestion: null } : {}),
+            ...(stripped(index, "unknown-mismatch") ? { mismatch: null } : {}),
           },
         ],
   );
   return {
-    outcome: ok(
-      kept.map((draft, index) => ({
-        ...draft,
-        id: FindingId.parse(`f${index + 1}`),
-        mismatch: null,
-      })),
-    ),
+    outcome: ok(kept.map((draft, index) => ({ ...draft, id: FindingId.parse(`f${index + 1}`) }))),
     usage,
     modelCalls,
     warnings: [],

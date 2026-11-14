@@ -184,7 +184,7 @@ export const createReplayAnalysisModel = (
           mismatches: [{ kind: "missing", description: "x", hunkIds: ["h_ffffffffffffffff"] }],
         }),
       ),
-    findings: (_input, passOptions) =>
+    findings: (_input, _intent, passOptions) =>
       play("findings", passOptions, findingsOf, () =>
         findingsOf(recording.passes.findings.answer).map((finding) => ({
           ...finding,

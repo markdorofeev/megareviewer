@@ -81,11 +81,8 @@ export const ModelRisk = z
   .readonly();
 export type ModelRisk = z.infer<typeof ModelRisk>;
 
-/**
- * A finding as the model writes it. The server numbers them, and links each to a mismatch of the
- * intent, which runs beside it.
- */
-export const FindingDraft = Finding.unwrap().omit({ id: true, mismatch: true }).readonly();
+/** A finding as the model writes it; the server numbers them. */
+export const FindingDraft = Finding.unwrap().omit({ id: true }).readonly();
 export type FindingDraft = z.infer<typeof FindingDraft>;
 
 export const DecisionDraft = Decision.unwrap().omit({ id: true }).readonly();
@@ -100,8 +97,10 @@ export interface AnalysisModel {
     input: AnalysisInput,
     options?: PassOptions,
   ): Promise<Result<PassOutput<Intent>, ModelError>>;
+  /** Reads the intent's answer, to name the mismatch a finding shows; null when it has none. */
   findings(
     input: AnalysisInput,
+    intent: Intent | null,
     options?: PassOptions,
   ): Promise<Result<PassOutput<FindingDraft[]>, ModelError>>;
   risk(

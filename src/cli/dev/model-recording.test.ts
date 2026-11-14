@@ -30,7 +30,7 @@ describe("the replayed model's scenarios", () => {
 
   it("finds nothing, and marks every hunk logic", async () => {
     const nothing = model("nothing-found");
-    const findings = await nothing.findings(smallFeatureInput);
+    const findings = await nothing.findings(smallFeatureInput, null);
     const risk = await nothing.risk(smallFeatureInput);
     expect(findings.ok && findings.value.value).toEqual([]);
     expect(risk.ok && risk.value.value.every((one) => one.riskClass === "logic")).toBe(true);
@@ -43,7 +43,7 @@ describe("the replayed model's scenarios", () => {
 
   it("reaches the plan's limit after the findings, with when it resets", async () => {
     const limited = model("limit-after-findings");
-    expect((await limited.findings(smallFeatureInput)).ok).toBe(true);
+    expect((await limited.findings(smallFeatureInput, null)).ok).toBe(true);
     const risk = await limited.risk(smallFeatureInput);
     expect(risk.ok).toBe(false);
     expect(!risk.ok && risk.error).toMatchObject({ kind: "rate-limited" });
@@ -51,14 +51,14 @@ describe("the replayed model's scenarios", () => {
   });
 
   it("declines the findings pass", async () => {
-    const result = await model("refusal").findings(smallFeatureInput);
+    const result = await model("refusal").findings(smallFeatureInput, null);
     expect(!result.ok && result.error.kind).toBe("refusal");
   });
 
   it("answers badly once, then well when the retry says what was wrong", async () => {
     const flaky = model("invalid-then-ok");
-    const first = await flaky.findings(smallFeatureInput);
-    const retry = await flaky.findings(smallFeatureInput, {
+    const first = await flaky.findings(smallFeatureInput, null);
+    const retry = await flaky.findings(smallFeatureInput, null, {
       feedback: ["Finding 1's lines"],
     });
     expect(first.ok && first.value.value[0]?.lines.startLine).toBe(100_000);

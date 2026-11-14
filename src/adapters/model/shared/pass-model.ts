@@ -5,7 +5,7 @@ import type {
   PassOptions,
   PassOutput,
 } from "../../../application/ports/index.ts";
-import type { ModelError, ModelPass, ModelUsage } from "../../../domain/review/index.ts";
+import type { Intent, ModelError, ModelPass, ModelUsage } from "../../../domain/review/index.ts";
 import { err, ok, type Result } from "../../../domain/shared/index.ts";
 import { invalidOutput } from "./errors.ts";
 import { PassAnswer } from "./output-schema.ts";
@@ -21,6 +21,7 @@ export interface AnsweredPass {
 export type RunPass = (
   pass: ModelPass,
   input: AnalysisInput,
+  intent: Intent | null,
   options: PassOptions | undefined,
 ) => Promise<Result<AnsweredPass, ModelError>>;
 
@@ -40,10 +41,11 @@ export const createPassModel = (transport: {
   const run = async <T>(
     pass: ModelPass,
     input: AnalysisInput,
+    intent: Intent | null,
     options: PassOptions | undefined,
     pick: (answer: Answer) => T | null,
   ): Promise<Result<PassOutput<T>, ModelError>> => {
-    const answered = await transport.runPass(pass, input, options);
+    const answered = await transport.runPass(pass, input, intent, options);
     if (!answered.ok) return answered;
     const answer = parseAnswer(answered.value.answer);
     if (!answer.ok) return answer;
@@ -59,18 +61,22 @@ export const createPassModel = (transport: {
     checkSize: transport.checkSize,
 
     intent: (input, options) =>
-      run("intent", input, options, (answer) => (answer.pass === "intent" ? answer.intent : null)),
+      run("intent", input, null, options, (answer) =>
+        answer.pass === "intent" ? answer.intent : null,
+      ),
 
-    findings: (input, options) =>
-      run("findings", input, options, (answer) =>
+    findings: (input, intent, options) =>
+      run("findings", input, intent, options, (answer) =>
         answer.pass === "findings" ? answer.findings : null,
       ),
 
     risk: (input, options) =>
-      run("risk", input, options, (answer) => (answer.pass === "risk" ? answer.assessments : null)),
+      run("risk", input, null, options, (answer) =>
+        answer.pass === "risk" ? answer.assessments : null,
+      ),
 
     decisions: (input, options) =>
-      run("decisions", input, options, (answer) =>
+      run("decisions", input, null, options, (answer) =>
         answer.pass === "decisions" ? answer.decisions : null,
       ),
   };

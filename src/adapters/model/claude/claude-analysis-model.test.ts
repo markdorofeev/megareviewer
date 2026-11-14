@@ -4,6 +4,7 @@ import {
   describeAnalysisModelContract,
   RecordingLogger,
   smallFeatureInput,
+  smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import { createClaudeAnalysisModel } from "./claude-analysis-model.ts";
@@ -43,7 +44,7 @@ const runPass = (pass: ModelPass, answer: FixtureAnswer, feedback?: readonly str
         ? model.risk(smallFeatureInput, options)
         : pass === "decisions"
           ? model.decisions(smallFeatureInput, options)
-          : model.findings(smallFeatureInput, options);
+          : model.findings(smallFeatureInput, smallFeatureIntent, options);
   return { ...setup, result };
 };
 

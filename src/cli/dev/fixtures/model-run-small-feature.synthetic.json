@@ -52,7 +52,8 @@
             "line": 13
           },
           "severity": "major",
-          "suggestion": null
+          "suggestion": null,
+          "mismatch": null
         }
       ],
       "durationMs": 9400,

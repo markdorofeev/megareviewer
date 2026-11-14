@@ -245,12 +245,7 @@ class GatedModel extends FakeAnalysisModel {
     return super.intent(input, options);
   }
 
-  // The passes run side by side, so each waits for the gate, not only the intent.
-  override async findings(input: AnalysisInput, options?: PassOptions) {
-    await this.gate.promise;
-    return super.findings(input, options);
-  }
-
+  // Risk and decisions start beside the intent, so they wait for the gate too.
   override async risk(input: AnalysisInput, options?: PassOptions) {
     await this.gate.promise;
     return super.risk(input, options);

@@ -96,6 +96,7 @@ export class FakeAnalysisModel implements AnalysisModel {
 
   async findings(
     input: AnalysisInput,
+    _intent: Intent | null,
     options?: PassOptions,
   ): Promise<Result<PassOutput<FindingDraft[]>, ModelError>> {
     return this.answer("findings", input, options, () =>
@@ -112,6 +113,7 @@ export class FakeAnalysisModel implements AnalysisModel {
                   lines: { hunkId: hunk.id, side: "new" as const, startLine: line, line },
                   severity: "major" as const,
                   suggestion: null,
+                  mismatch: null,
                 },
               ];
         })

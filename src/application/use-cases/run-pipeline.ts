@@ -6,7 +6,6 @@ import {
   codeTour,
   type FilesFetched,
   joinParts,
-  linkMismatches,
   MODEL_STAGES,
   type ModelRunOption,
   mapModelStages,
@@ -265,8 +264,8 @@ const modelStages = async (
   const knownHunks = new Set<HunkId>(hunks.keys());
 
   for (const stage of MODEL_STAGES) await tracker.setStage(stage, "running");
-  // The intent pass writes the PR to the prompt cache; the others start once it's there, to read
-  // it rather than each write it again. A transport that can't tell starts them at the intent's end.
+  // The intent pass writes the PR to the prompt cache; risk and decisions start once it's there, to
+  // read it rather than each write it again. A transport that can't tell starts them at its end.
   const { promise: cached, resolve: cacheWritten } = Promise.withResolvers<void>();
   const intentRun = runIntent(model, input, knownHunks, deps, cacheWritten).then(async (result) => {
     cacheWritten();
@@ -279,17 +278,11 @@ const modelStages = async (
   await Promise.race([cached, intentRun]);
   const [intent, findings, risk, decisions] = await Promise.all([
     intentRun,
-    runFindings(model, input, hunks, deps).then(async (result) => {
-      // A finding shows the intent's mismatch on its hunk, so it waits for the intent.
-      const intent = await intentRun;
-      const linked =
-        result.outcome.ok && intent.ok
-          ? linkMismatches(result.outcome.value, intent.value)
-          : result.outcome.ok
-            ? result.outcome.value
-            : null;
-      await tracker.setStage("findings", linked !== null ? "done" : "failed", (analysis) => ({
-        ...(linked !== null ? { findings: linked } : {}),
+    // Findings read the intent's mismatches, to name the one a finding shows, so they wait for it.
+    intentRun.then(async (intent) => {
+      const result = await runFindings(model, input, intent.ok ? intent.value : null, hunks, deps);
+      await tracker.setStage("findings", result.outcome.ok ? "done" : "failed", (analysis) => ({
+        ...(result.outcome.ok ? { findings: result.outcome.value } : {}),
         ...adding(result)(analysis),
       }));
       return result.outcome;

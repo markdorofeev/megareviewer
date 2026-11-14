@@ -132,7 +132,7 @@ describe("failingIntentOnce", () => {
     expect(intent.ok).toBe(true);
     if (!intent.ok) return;
     await model.checkSize(input);
-    await model.findings(input);
+    await model.findings(input, intent.value.value);
     await model.risk(input);
     await model.decisions(input);
     expect(model.version).toBe(inner.version);

@@ -11,8 +11,8 @@ import { codexRequest } from "../src/adapters/model/codex/codex-request.ts";
 import { createRunCodex } from "../src/adapters/model/codex/run-codex.ts";
 import { passMessage } from "../src/adapters/model/shared/prompts/passes.ts";
 import { renderInput } from "../src/adapters/model/shared/render-input.ts";
-import { smallFeatureInput } from "../src/application/testing/index.ts";
-import type { ModelPass } from "../src/domain/review/index.ts";
+import { smallFeatureInput, smallFeatureIntent } from "../src/application/testing/index.ts";
+import type { Intent, ModelPass } from "../src/domain/review/index.ts";
 
 const OUT = new URL("../src/adapters/model/codex/fixtures/", import.meta.url);
 const MODEL = "gpt-6-luna";
@@ -20,11 +20,11 @@ mkdirSync(OUT, { recursive: true });
 
 const run = createRunCodex();
 
-const record = async (name: string, pass: ModelPass) => {
+const record = async (name: string, pass: ModelPass, intent: Intent | null = null) => {
   const request = codexRequest(
     pass,
     renderInput(smallFeatureInput),
-    passMessage(pass, undefined),
+    passMessage(pass, intent, undefined),
     MODEL,
   );
   const ran = await run(request.args, {
@@ -37,7 +37,8 @@ const record = async (name: string, pass: ModelPass) => {
 };
 
 await record("intent", "intent");
-await record("findings", "findings");
+// The contract suite's intent: the fixture analysis's own, not this model's.
+await record("findings", "findings", smallFeatureIntent);
 await record("risk", "risk");
 await record("decisions", "decisions");
 

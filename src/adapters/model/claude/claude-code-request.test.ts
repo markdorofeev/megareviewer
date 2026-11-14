@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { smallFeatureInput } from "../../../application/testing/index.ts";
+import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
 import { ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
@@ -19,7 +19,12 @@ const HAIKU = "claude-haiku-5-5";
 
 const requests = (model: string = HAIKU) =>
   ModelPass.options.map((pass) =>
-    claudeCodeRequest(pass, renderInput(smallFeatureInput), passMessage(pass, ["problem"]), model),
+    claudeCodeRequest(
+      pass,
+      renderInput(smallFeatureInput),
+      passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"]),
+      model,
+    ),
   );
 
 const flag = (args: readonly string[], name: string) => args[args.indexOf(name) + 1];
