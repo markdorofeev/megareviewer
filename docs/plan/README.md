@@ -186,6 +186,18 @@ On delphi-code #2 a risk's magenta band looked like another product's, was loude
 |---|---|---|---|
 | 50 | [A risk as a note under its lines, in amber](50-risk-note.md) | 45 | The risk's note and the points' marks on line numbers in `web/src/pages/review/` and `web/src/review/diff/`, the risk tokens |
 
+## Tenth slice: the reviewer's choice of model
+
+Every review runs on Haiku 5.5 through Claude. This slice lets the reviewer choose the model on the page, among the ones the commands on their machine can run, with the rest shown disabled and why.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 51 | [A choice of model, among what's installed](51-model-choice.md) | 42, 45 | `src/adapters/claude/` moved to `src/adapters/model/`, the `ModelCatalog` port, the model routes, the split button on Request AI review |
+| 52 | [OpenAI's models through Codex](52-codex-models.md) | 51 | `src/adapters/model/codex/`, Codex's provider in `src/cli/` |
+| 53 | [Models through opencode](53-opencode-models.md) | 51, 52 | `src/adapters/model/opencode/`, opencode's provider in `src/cli/` |
+
+Stage 51 ships with Claude's models only, so the list, its detection and the button are settled before a second provider depends on them. Stages 52 and 53 each start with a check that can stop them: whether Codex's sandbox blocks the network, and whether opencode can be run without tools at all. Stage 53 waits for 52 because it reuses its lockdown rule and its nullable cost.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
