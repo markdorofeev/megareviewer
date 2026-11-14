@@ -181,6 +181,23 @@
   --activity-1: #D8D6F9;
   --activity-2: #AEAAF3;
   --activity-3: #807AEC;
+  /* hunk: authors' initials, one pair per author, picked by a hash of their ID. */
+  --avatar-1-bg: #E0E7FF;
+  --avatar-1-fg: #3730A3;
+  --avatar-2-bg: #CCFBF1;
+  --avatar-2-fg: #115E59;
+  --avatar-3-bg: #FEF3C7;
+  --avatar-3-fg: #92400E;
+  --avatar-4-bg: #FFE4E6;
+  --avatar-4-fg: #9F1239;
+  --avatar-5-bg: #E0F2FE;
+  --avatar-5-fg: #075985;
+  --avatar-6-bg: #EDE9FE;
+  --avatar-6-fg: #5B21B6;
+  --avatar-7-bg: #DCFCE7;
+  --avatar-7-fg: #166534;
+  --avatar-8-bg: #FAE8FF;
+  --avatar-8-fg: #86198F;
 
   /* PR state */
   --pr-open: #4F46E5;
@@ -287,6 +304,22 @@
   --activity-1: #37374F;
   --activity-2: #515283;
   --activity-3: #6D6FBC;
+  --avatar-1-bg: #2E3260;
+  --avatar-1-fg: #C7D2FE;
+  --avatar-2-bg: #134E4A;
+  --avatar-2-fg: #99F6E4;
+  --avatar-3-bg: #4A3410;
+  --avatar-3-fg: #FDE68A;
+  --avatar-4-bg: #4C1D2A;
+  --avatar-4-fg: #FECDD3;
+  --avatar-5-bg: #0C3B5A;
+  --avatar-5-fg: #BAE6FD;
+  --avatar-6-bg: #3B2A6B;
+  --avatar-6-fg: #DDD6FE;
+  --avatar-7-bg: #14432A;
+  --avatar-7-fg: #BBF7D0;
+  --avatar-8-bg: #4A1D52;
+  --avatar-8-fg: #F5D0FE;
 
   /* PR state */
   --pr-open: #A5B4FC;
@@ -431,6 +464,22 @@
   --color-activity-1: var(--activity-1);
   --color-activity-2: var(--activity-2);
   --color-activity-3: var(--activity-3);
+  --color-avatar-1-bg: var(--avatar-1-bg);
+  --color-avatar-1-fg: var(--avatar-1-fg);
+  --color-avatar-2-bg: var(--avatar-2-bg);
+  --color-avatar-2-fg: var(--avatar-2-fg);
+  --color-avatar-3-bg: var(--avatar-3-bg);
+  --color-avatar-3-fg: var(--avatar-3-fg);
+  --color-avatar-4-bg: var(--avatar-4-bg);
+  --color-avatar-4-fg: var(--avatar-4-fg);
+  --color-avatar-5-bg: var(--avatar-5-bg);
+  --color-avatar-5-fg: var(--avatar-5-fg);
+  --color-avatar-6-bg: var(--avatar-6-bg);
+  --color-avatar-6-fg: var(--avatar-6-fg);
+  --color-avatar-7-bg: var(--avatar-7-bg);
+  --color-avatar-7-fg: var(--avatar-7-fg);
+  --color-avatar-8-bg: var(--avatar-8-bg);
+  --color-avatar-8-fg: var(--avatar-8-fg);
   --color-pr-open: var(--pr-open);
   --color-pr-open-bg: var(--pr-open-bg);
   --color-pr-merged: var(--pr-merged);

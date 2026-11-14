@@ -49,6 +49,12 @@ const PAIRS = [
   ["Connections with an issue", "review-pending", "review-pending-bg", 4.5],
   ["Connections failing", "destructive", "review-changes-bg", 4.5],
   ["Connected check", "ci-success", "background", 3],
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [
+    `Avatar ${n} initials`,
+    `avatar-${n}-fg`,
+    `avatar-${n}-bg`,
+    4.5,
+  ]),
   ["Body text", "foreground", "background", 4.5],
   ["Secondary text", "muted-foreground", "background", 4.5],
   ["Secondary on muted", "muted-foreground", "muted", 4.5],

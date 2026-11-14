@@ -89,6 +89,10 @@ const COLOR_GROUPS: readonly { readonly title: string; readonly tokens: readonly
     tokens: ["activity-1", "activity-2", "activity-3"],
   },
   {
+    title: "Authors' initials, one pair per author",
+    tokens: [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => [`avatar-${n}-bg`, `avatar-${n}-fg`]),
+  },
+  {
     title: "Syntax",
     tokens: [
       "syntax-keyword",

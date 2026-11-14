@@ -16,6 +16,7 @@ import { testApi } from "../../testing/api.tsx";
 import { fakeFetch, jsonResponse, type RecordedRequest } from "../../testing/fetch.ts";
 import { TooltipProvider } from "../../ui/tooltip.tsx";
 import { PickerPage } from "./PickerPage.tsx";
+import { avatarColors } from "./PullRequestList.tsx";
 
 const NOW = Date.parse("2026-10-21T10:00:00Z");
 const reviewPath = `/review/${fixtureAnalysisView.analysis.id}`;
@@ -459,5 +460,13 @@ describe("PickerPage's review activity", () => {
     renderPicker({ "GET /api/review-activity": () => Promise.reject(new TypeError("down")) });
     expect(await within(region()).findByText("Couldn't read your review activity.")).toBeTruthy();
     expect(within(region()).getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+});
+
+describe("avatarColors", () => {
+  it("gives an author the same colors every time, and authors different ones", () => {
+    expect(avatarColors("sam-rivera")).toBe(avatarColors("sam-rivera"));
+    const ids = ["sam-rivera", "lee-park", "jo-tanaka", "priya", "lsato", "jkim", "rnovak", "mina"];
+    expect(new Set(ids.map(avatarColors)).size).toBeGreaterThan(3);
   });
 });
