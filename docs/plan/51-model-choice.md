@@ -1,6 +1,6 @@
 # Stage 51: A choice of model, among what's installed
 
-**Status:** In progress (branch `claude/stage-51-bfbe95`)
+**Status:** Done (branch `claude/stage-51-bfbe95`, no PR): `pnpm check` and `pnpm e2e` pass, checked in the browser on the fake app and live on delphi-code #2; signing out and in wasn't checked live (see **Notes for later stages**)
 **Depends on:** 42, 45
 **Owns:** `src/adapters/claude/` moved to `src/adapters/model/`, `src/cli/model-access.ts`, `compose.ts`, `doctor.ts`, the model's part of `src/application/use-cases/status.ts` and `analyses.ts`, the model routes in `src/adapters/http/`, `web/src/pages/review/ClaudeElement.tsx` and the strings that name the model, the model option of `evals/`
 
@@ -70,15 +70,24 @@ In its own PR first, with a line in stage 02's change log and the new terms in E
 
 ## Definition of done
 
-- [ ] `pnpm check` passes.
-- [ ] On delphi-code #2, a run on Sonnet 5.5 through Claude Code completes, and the usage line and Run details name it.
-- [ ] Remove AI review, then a run on Haiku 5.5, works on the same analysis, and its points replace the first run's.
-- [ ] With Claude Code signed out and no API credentials, every option is disabled with its fix, and signing in enables them without a restart.
-- [ ] The eval scores of each listed model are in a report under `evals/reports/`.
-- [ ] ARCHITECTURE.md, DESIGN.md and ENGINEERING.md updated as above.
+- [x] `pnpm check` passes.
+- [x] On delphi-code #2, a run on Sonnet 5.5 through Claude Code completes, and the usage line and Run details name it.
+- [x] Remove AI review, then a run on Haiku 5.5, works on the same analysis, and its points replace the first run's.
+- [ ] With Claude Code signed out and no API credentials, every option is disabled with its fix, and signing in enables them without a restart. Covered by the catalog's tests and the page's; not checked live, which would sign the reviewer out.
+- [x] The eval scores of each listed model are in a report under `evals/reports/`.
+- [x] ARCHITECTURE.md, DESIGN.md and ENGINEERING.md updated as above.
 
 ## Open issues
 
 - **Which models each Claude plan serves through Claude Code.** If a plan refuses a model, its option should say so before the reviewer tries. `claude auth status` gives the plan's name; whether that's enough to tell isn't known.
 
 ## Notes for later stages
+
+- **Sonnet 5.5 is the default.** Decided here on the 2026-11-14 eval reports; ARCHITECTURE.md has the reason. `evals/baseline.json` is still Haiku's, so a plain `node evals/run.ts` now runs Sonnet against a Haiku baseline until it's written again with `--write-baseline`. `--model` works with `--via api` too now; `--effort` is still Claude Code only.
+- **Where things are.** The model table is `src/adapters/model/claude/models.ts` (`CLAUDE_MODELS`, `DEFAULT_MODEL`, `effortFor`); `MODEL` in `request.ts` is only the default's name. The catalog is `createModelCatalog` in `src/cli/model-access.ts`: a provider is `{ id, name, probe(), model(model, status) }`, so Codex and opencode are one entry each, plus a `ModelProvider` value in `src/domain/review/model-option.ts`. `catalogOptions` lists `CLAUDE_MODELS` for every provider; a provider with models of its own needs it to take each provider's list. Every option says `family: "Claude"` and `measured: true` today.
+- **The adapter tests pin Haiku 5.5,** which their fixtures were recorded on, so the prompt fingerprints didn't change. A test that wants the default says so.
+- **A missing `runModel` body is the default.** The HTTP layer reads an empty body as `undefined` for every route; a route whose schema isn't optional still answers bad-request for it.
+- **No server-side refusal fallbacks** on Sonnet or Opus through the API, which the claude-api skill suggests by default: a pass answered by another model would be named after the chosen one. A refusal is the run's `modelError`.
+- **Base UI's focus guards.** An open menu puts `aria-hidden` focus guards in the page, which `e2e/a11y.ts` flagged as focusable inside `aria-hidden`; it exempts `data-base-ui-focus-guard` now. The design-system spec opens the model menu in all four combinations.
+- **On delphi-code #2,** Sonnet through Claude Code ran every pass first time in about 1.5 minutes, $0.74 at API prices on the plan: one finding (tests that read the developer's real keychain) and 5 decisions. Haiku after Remove AI review took about 4 minutes, its findings pass 140 s, $0.31: one other finding (forgetting a token reports success when the keychain may keep it) and 8 decisions.
+- **The launch config `real-server-delphi`** passes `--checkout ../delphi-code`, which from a worktree under `.claude/worktrees` isn't the checkout, so that run read no unchanged callers and got its own analysis ID.
