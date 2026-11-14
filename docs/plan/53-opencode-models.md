@@ -1,6 +1,6 @@
 # Stage 53: Models through opencode
 
-**Status:** Not started
+**Status:** In progress (branch `claude/stage-53-ed2c4f`)
 **Depends on:** 51, 52
 **Owns:** `src/adapters/model/opencode/`, opencode's provider in `src/cli/model-access.ts` and `doctor.ts`, the opencode parts of `README.md` and `ARCHITECTURE.md`
 
