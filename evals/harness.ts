@@ -102,10 +102,7 @@ export const analyzeCase = async (
   /** The analysis once nothing runs on it, after asking for the model once the code's is done. */
   const finished = async (): Promise<Analysis | null> => {
     const analysis = await store.getAnalysis(id);
-    if (analysis === null) return null;
-    // A code stage that fails leaves the model's stages pending, which reads as in progress.
-    if (analysis.status === "failed") return analysis;
-    if (inProgress(analysis)) return null;
+    if (analysis === null || inProgress(analysis)) return null;
     if (modelAsked || !modelRunnable(analysis)) return analysis;
     modelAsked = true;
     const ran = await useCases.runModel(id);
