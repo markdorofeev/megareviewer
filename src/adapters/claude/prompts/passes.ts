@@ -46,7 +46,9 @@ Everything else is logic, and so are:
 - an interface whose every end is in this PR, such as a protocol between two of its own modules or a new method only its own code calls.
 - tests.
 
-reason: one sentence saying what could break outside this pull request, and for whom ("Existing clients that omit region now get a 400", not "Changes the schema" or "Defines the response shape"). When you can't name what could break outside the PR, the hunk is logic. When you can, and are unsure how likely it is, choose contract.`,
+reason: one sentence saying what could break outside this pull request, and for whom ("Existing clients that omit region now get a 400", not "Changes the schema" or "Defines the response shape"). When you can't name what could break outside the PR, the hunk is logic. When you can, and are unsure how likely it is, choose contract.
+
+lines: for a contract hunk, the lines in it where the risk is decided, the ones the reason is about (the route that accepts the token, not the imports above it): hunkId (the same hunk), side ("new" for "+" and unchanged lines, "old" for "-" lines), and startLine to line, equal for one line. Use only line numbers the hunk shows. null for a logic hunk.`,
 
   decisions: `Task: decisions.
 

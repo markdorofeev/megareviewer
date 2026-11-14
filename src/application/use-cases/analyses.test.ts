@@ -200,11 +200,17 @@ const configRule = (hunkId: HunkId) => ({
   riskClass: "contract" as const,
   reason: "changes app config (app.yaml)",
   source: "rule" as const,
+  lines: null,
 });
 const configHunks = new Set(smallFeatureFiles[0]?.hunks.map((hunk) => hunk.id));
 /** Well-formed, but not a hunk of any fixture. */
 const unknownHunk = HunkId.parse("h_ffffffffffffffff");
-const logic = (hunkId: HunkId) => ({ hunkId, riskClass: "logic" as const, reason: "Logic" });
+const logic = (hunkId: HunkId) => ({
+  hunkId,
+  riskClass: "logic" as const,
+  reason: "Logic",
+  lines: null,
+});
 
 const modelError = (kind: ModelError["kind"], message = `${kind} happened`): ModelError => ({
   kind,
@@ -244,7 +250,13 @@ describe("the analysis pipeline", () => {
       smallFeatureHunks.map((hunkId) =>
         configHunks.has(hunkId)
           ? configRule(hunkId)
-          : { hunkId, riskClass: "logic", reason: "Ordinary code change", source: "model" },
+          : {
+              hunkId,
+              riskClass: "logic",
+              reason: "Ordinary code change",
+              source: "model",
+              lines: null,
+            },
       ),
     );
     expect(analysis.decisions.map((decision) => decision.id)).toEqual(["d1", "d2", "d3"]);
@@ -747,6 +759,35 @@ describe("the analysis pipeline", () => {
         "The model didn't classify 2 hunks, so they're shown as logic",
       ]);
       expect(model.callsTo("tour")[0]).toBeDefined();
+    });
+
+    it("keeps a contract hunk's lines only when that hunk shows them", async () => {
+      const [, , , h4, h5, h6] = smallFeatureHunks;
+      if (h4 === undefined || h5 === undefined || h6 === undefined) throw new Error("six hunks");
+      const hunk = smallFeatureFiles.flatMap((file) => file.hunks).find((one) => one.id === h4);
+      const line = hunk?.lines.find((one) => one.newLine !== null)?.newLine;
+      if (line == null) throw new Error("small-feature's fourth hunk has new lines");
+      const lines = { hunkId: h4, side: "new" as const, startLine: line, line };
+      const contract = (id: HunkId, at: typeof lines) => ({
+        ...logic(id),
+        riskClass: "contract" as const,
+        lines: at,
+      });
+      const model = new FakeAnalysisModel();
+      model.script(
+        "risk",
+        ok([
+          ...[h1, h2, h3].map(logic),
+          contract(h4, lines),
+          // Another hunk's lines, and lines on a logic hunk, aren't kept.
+          contract(h5, lines),
+          { ...logic(h6), lines: { ...lines, hunkId: h6 } },
+        ]),
+      );
+      const { analyze } = setup({ model });
+      const analysis = await analyze();
+      const linesOf = (id: HunkId) => analysis.risk.find((risk) => risk.hunkId === id)?.lines;
+      expect([linesOf(h4), linesOf(h5), linesOf(h6)]).toEqual([lines, null, null]);
     });
 
     it("warns about ignored classifications when every hunk is still covered", async () => {

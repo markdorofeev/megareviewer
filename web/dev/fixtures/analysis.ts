@@ -448,30 +448,35 @@ const modelRisk: readonly RiskAssessment[] = [
     riskClass: "contract",
     reason: "Adds a runtime dependency.",
     source: "model",
+    lines: null,
   },
   {
     hunkId: h.routeImports,
     riskClass: "logic",
     reason: "Imports for the new route.",
     source: "model",
+    lines: null,
   },
   {
     hunkId: h.receiptRoute,
     riskClass: "contract",
     reason: "Adds a public endpoint, GET /orders/:id/receipt, that clients will build on.",
     source: "model",
+    lines: { hunkId: h.receiptRoute, side: "new", startLine: 14, line: 21 },
   },
   {
     hunkId: h.receiptFormatting,
     riskClass: "logic",
     reason: "Changes how dates and prices appear on receipts.",
     source: "model",
+    lines: null,
   },
   {
     hunkId: h.retryAndCache,
     riskClass: "logic",
     reason: "Retries tax service calls and caches rendered receipts in memory.",
     source: "model",
+    lines: null,
   },
 ];
 
@@ -670,6 +675,7 @@ const analysis: Analysis = {
               riskClass: "mechanical",
               reason: proof.detail,
               source: "proof",
+              lines: null,
             },
           ],
     ),

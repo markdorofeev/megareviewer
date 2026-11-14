@@ -4,7 +4,6 @@ import {
   type CoverageProblem,
   type Decision,
   DecisionId,
-  decisionLinesFit,
   type Finding,
   FindingId,
   type FindingProblem,
@@ -17,6 +16,7 @@ import {
   type ModelError,
   type ModelPass,
   type ModelUsage,
+  pointLinesFit,
   type RiskAssessment,
   strippable,
   type Tour,
@@ -243,6 +243,7 @@ export const runRisk = async (
   input: AnalysisInput,
   intent: Intent,
   required: ReadonlySet<HunkId>,
+  hunks: ReadonlyMap<HunkId, Hunk>,
   deps: PassDeps,
 ): Promise<PassResult<RiskOutcome>> => {
   const { outcome, usage, modelCalls } = await callChecked(
@@ -253,10 +254,16 @@ export const runRisk = async (
   );
   if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
 
-  // Keep the first assessment per required hunk; drop the rest.
+  // Keep the first assessment per required hunk; drop the rest. Lines only a contract hunk
+  // shows are kept; others fall back to its first changed lines, which isn't worth a retry.
   const kept = new Map<HunkId, ModelRisk>();
   for (const risk of outcome.value.value) {
-    if (required.has(risk.hunkId) && !kept.has(risk.hunkId)) kept.set(risk.hunkId, risk);
+    if (!required.has(risk.hunkId) || kept.has(risk.hunkId)) continue;
+    const fits =
+      risk.riskClass === "contract" &&
+      risk.lines !== null &&
+      pointLinesFit([risk.hunkId], risk.lines, hunks);
+    kept.set(risk.hunkId, { ...risk, lines: fits ? risk.lines : null });
   }
   const missing = [...required].filter((hunkId) => !kept.has(hunkId));
   // Unclassified hunks show as ordinary logic: visible, never collapsed.
@@ -264,6 +271,7 @@ export const runRisk = async (
     hunkId,
     riskClass: "logic" as const,
     reason: "Not classified by the model",
+    lines: null,
   }));
   const warnings =
     outcome.value.problems.length === 0
@@ -319,9 +327,7 @@ export const runDecisions = async (
         // Lines outside its hunks fall back to its first hunk's: a footnote on the wrong line
         // isn't worth a retry.
         const lines =
-          draft.lines !== null && decisionLinesFit(hunkIds, draft.lines, hunks)
-            ? draft.lines
-            : null;
+          draft.lines !== null && pointLinesFit(hunkIds, draft.lines, hunks) ? draft.lines : null;
         return { ...draft, id: DecisionId.parse(`d${index + 1}`), hunkIds, lines };
       }),
     ),

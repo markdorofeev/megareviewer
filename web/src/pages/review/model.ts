@@ -99,7 +99,13 @@ export const partIndex = (analysis: Analysis) => {
   const riskOf = (id: PartId): RiskAssessment => {
     const hunkId = hunkIdOf(id);
     return (
-      risk.get(hunkId) ?? { hunkId, riskClass: "logic", reason: UNCLASSIFIED, source: "fallback" }
+      risk.get(hunkId) ?? {
+        hunkId,
+        riskClass: "logic",
+        reason: UNCLASSIFIED,
+        source: "fallback",
+        lines: null,
+      }
     );
   };
   const items = (ids: readonly PartId[]): PartItem[] =>

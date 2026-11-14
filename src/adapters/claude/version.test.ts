@@ -13,7 +13,7 @@ import { passRequest } from "./request.ts";
 import { PROMPT_FINGERPRINT, PROMPT_VERSION, VERSION } from "./version.ts";
 
 const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason }],
+  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
 );
 const earlier = { intent: smallFeatureIntent, risk, decisions: smallFeatureAnalysis.decisions };
 

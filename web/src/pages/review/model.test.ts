@@ -38,6 +38,7 @@ describe("partIndex", () => {
       riskClass: "logic",
       reason: "Not classified yet.",
       source: "fallback",
+      lines: null,
     });
   });
 

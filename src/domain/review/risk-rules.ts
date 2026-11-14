@@ -243,12 +243,13 @@ export const classifyByRules = (
       .map((hunk): RiskAssessment => {
         const reasons = ruleReasons(hunk, file);
         return reasons.length === 0
-          ? { hunkId: hunk.id, riskClass: "logic", reason: NO_RULE, source: "rule" }
+          ? { hunkId: hunk.id, riskClass: "logic", reason: NO_RULE, source: "rule", lines: null }
           : {
               hunkId: hunk.id,
               riskClass: "contract",
               reason: reasons.join("; "),
               source: "rule",
+              lines: null,
             };
       }),
   );

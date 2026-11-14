@@ -14,6 +14,7 @@ import {
   type Intent,
   type ModelError,
   type ModelUsage,
+  PointLines,
   type Ticket,
   type Tour,
   TourStepTitle,
@@ -73,6 +74,8 @@ export const ModelRisk = z
     hunkId: HunkId,
     riskClass: z.enum(["logic", "contract"]),
     reason: z.string(),
+    /** For a contract hunk, the lines where the risk is decided; null for logic. */
+    lines: PointLines.nullable().default(null),
   })
   .readonly();
 export type ModelRisk = z.infer<typeof ModelRisk>;

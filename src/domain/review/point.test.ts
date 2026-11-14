@@ -169,9 +169,27 @@ describe("pointsOf", () => {
       findings: [],
       decisions: [],
       risk: [
-        { hunkId: authHunk.id, riskClass: "contract", reason: "Session TTL.", source: "model" },
-        { hunkId: receiptsHunk.id, riskClass: "logic", reason: "Renders.", source: "model" },
-        { hunkId: receiptsHunk.id, riskClass: "contract", reason: "A path rule.", source: "rule" },
+        {
+          hunkId: authHunk.id,
+          riskClass: "contract",
+          reason: "Session TTL.",
+          source: "model",
+          lines: null,
+        },
+        {
+          hunkId: receiptsHunk.id,
+          riskClass: "logic",
+          reason: "Renders.",
+          source: "model",
+          lines: null,
+        },
+        {
+          hunkId: receiptsHunk.id,
+          riskClass: "contract",
+          reason: "A path rule.",
+          source: "rule",
+          lines: null,
+        },
       ],
     });
     expect(points.map((point) => [point.id, point.title])).toEqual([
@@ -190,9 +208,51 @@ describe("pointsOf", () => {
       intent: null,
       findings: [],
       decisions: [],
-      risk: [{ hunkId: removedHunk.id, riskClass: "contract", reason: "x", source: "model" }],
+      risk: [
+        {
+          hunkId: removedHunk.id,
+          riskClass: "contract",
+          reason: "x",
+          source: "model",
+          lines: null,
+        },
+      ],
     });
     expect(point?.lines).toEqual({ hunkId: removedHunk.id, side: "old", startLine: 5, line: 6 });
+  });
+
+  it("lands a risk on the lines the model names, or on its hunk's changes when it shows none of them", () => {
+    const routes = fileChange(
+      { path: "src/routes.ts", status: "modified", language: "typescript" },
+      [
+        hunk("src/routes.ts", "@@ -1,1 +1,4 @@", [
+          " const router = Router();",
+          '+import { save } from "./tokens";',
+          "+",
+          '+router.put("/token", save);',
+        ]),
+      ],
+    );
+    const routeHunk = routes.hunks[0];
+    if (routeHunk === undefined) throw new Error("built with a hunk");
+    const riskOn = (startLine: number, line: number) =>
+      pointsOf({
+        files: [routes],
+        intent: null,
+        findings: [],
+        decisions: [],
+        risk: [
+          {
+            hunkId: routeHunk.id,
+            riskClass: "contract",
+            reason: "Accepts a token.",
+            source: "model",
+            lines: { hunkId: routeHunk.id, side: "new", startLine, line },
+          },
+        ],
+      })[0]?.lines;
+    expect(riskOn(4, 4)).toEqual({ hunkId: routeHunk.id, side: "new", startLine: 4, line: 4 });
+    expect(riskOn(4, 9)).toEqual({ hunkId: routeHunk.id, side: "new", startLine: 2, line: 4 });
   });
 });
 

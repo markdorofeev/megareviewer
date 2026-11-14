@@ -108,8 +108,15 @@ const risk: RiskAssessment[] = files.flatMap((file, at) =>
             riskClass: "contract",
             reason: "Changes an exported function.",
             source: "rule",
+            lines: null,
           }
-        : { hunkId: hunk.id, riskClass: "logic", reason: "No rule matched.", source: "rule" },
+        : {
+            hunkId: hunk.id,
+            riskClass: "logic",
+            reason: "No rule matched.",
+            source: "rule",
+            lines: null,
+          },
   ),
 );
 

@@ -77,7 +77,7 @@ const record = async (name: string, pass: ModelPass, earlier: EarlierResults | n
 
 // The contract suite's earlier results: the fixture analysis's own, not this model's.
 const risk = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason }],
+  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
 );
 const { decisions } = smallFeatureAnalysis;
 const skeleton = renderSkeleton({ tour: smallFeatureSkeleton, parts: [] }, smallFeatureInput);

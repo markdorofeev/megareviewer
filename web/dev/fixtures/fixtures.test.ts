@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AnalysisView, PullRequestListResponse, StatusResponse } from "../../../contracts/index.ts";
 import { hunkIdOf } from "../../../src/domain/diff/index.ts";
 import {
-  decisionLinesFit,
+  pointLinesFit,
   validateHunkReferences,
   validateRiskCoverage,
   validateTour,
@@ -79,7 +79,7 @@ describe("the fixture analysis", () => {
     for (const decision of analysis.decisions) {
       expect(decision.lines).not.toBeNull();
       if (decision.lines === null) continue;
-      expect(decisionLinesFit(decision.hunkIds, decision.lines, hunks)).toBe(true);
+      expect(pointLinesFit(decision.hunkIds, decision.lines, hunks)).toBe(true);
     }
   });
 

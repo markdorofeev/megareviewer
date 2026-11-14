@@ -24,7 +24,7 @@ import {
 // pass's request is the same on every run and can be recorded once.
 const intent = smallFeatureIntent;
 const risk = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason }],
+  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
 );
 const decisions = smallFeatureAnalysis.decisions;
 const skeleton = { tour: smallFeatureSkeleton, parts: [] };

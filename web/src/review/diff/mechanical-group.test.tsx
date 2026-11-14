@@ -52,7 +52,15 @@ const proofs: readonly MechanicalProof[] = [
 const risk: readonly RiskAssessment[] = proofs.flatMap((each) =>
   each.hunkId === null
     ? []
-    : [{ hunkId: each.hunkId, riskClass: "mechanical", reason: each.detail, source: "proof" }],
+    : [
+        {
+          hunkId: each.hunkId,
+          riskClass: "mechanical",
+          reason: each.detail,
+          source: "proof",
+          lines: null,
+        },
+      ],
 );
 
 const renderGroup = (groupProofs = proofs) =>

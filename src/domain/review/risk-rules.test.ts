@@ -69,6 +69,7 @@ describe("classifyByRules", () => {
       riskClass: "logic",
       reason: "No contract rule matched.",
       source: "rule",
+      lines: null,
     });
   });
 
@@ -238,12 +239,14 @@ describe("raiseByRules", () => {
     riskClass,
     reason,
     source: "model" as const,
+    lines: null,
   });
   const rule = (n: number, riskClass: "logic" | "contract", reason: string) => ({
     hunkId: h(n),
     riskClass,
     reason,
     source: "rule" as const,
+    lines: null,
   });
 
   it("keeps the model's class unless a rule says contract", () => {

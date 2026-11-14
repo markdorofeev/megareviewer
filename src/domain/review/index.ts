@@ -44,7 +44,6 @@ export {
 } from "./intent.ts";
 export { type JoinedParts, joinParts } from "./join-parts.ts";
 export {
-  decisionLinesFit,
   Finding,
   FindingId,
   type FindingProblem,
@@ -58,6 +57,7 @@ export {
   PointReview,
   PointState,
   type PointsInput,
+  pointLinesFit,
   pointsOf,
   Severity,
   strippable,

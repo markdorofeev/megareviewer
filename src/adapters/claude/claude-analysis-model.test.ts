@@ -30,7 +30,7 @@ const modelWith = (answers: Answers, options: { maxInputTokens?: number } = {}) 
 const recorded = (): Answers => smallFeature;
 
 const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason }],
+  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
 );
 const { decisions } = smallFeatureAnalysis;
 const skeleton = { tour: smallFeatureSkeleton, parts: [] };

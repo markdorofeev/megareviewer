@@ -122,6 +122,7 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
             riskClass: "mechanical" as const,
             reason: proof.detail,
             source: "proof" as const,
+            lines: null,
           },
         ],
   );
@@ -288,7 +289,7 @@ const modelStages = async (
       }));
       return result.outcome;
     }),
-    runRisk(model, input, intent, required, deps).then(async (result) => {
+    runRisk(model, input, intent, required, hunks, deps).then(async (result) => {
       const assessments = result.outcome.ok
         ? [...proofRisk, ...raiseByRules(result.outcome.value.assessments, ruleRisk)]
         : [];

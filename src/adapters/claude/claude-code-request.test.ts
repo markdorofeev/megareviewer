@@ -15,7 +15,7 @@ import { renderInput } from "./render-input.ts";
 import { CLAUDE_CODE_FINGERPRINT, CLAUDE_CODE_PROMPT_VERSION } from "./version.ts";
 
 const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason }],
+  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
 );
 const earlier = { intent: smallFeatureIntent, risk, decisions: smallFeatureAnalysis.decisions };
 

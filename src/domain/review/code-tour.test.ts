@@ -63,7 +63,13 @@ const hint = (from: number, to: number, use: CallGraphHint["use"] = "call"): Cal
 });
 
 const contract = (...ns: number[]): RiskAssessment[] =>
-  ns.map((n) => ({ hunkId: h(n), riskClass: "contract", reason: "r", source: "rule" }));
+  ns.map((n) => ({
+    hunkId: h(n),
+    riskClass: "contract",
+    reason: "r",
+    source: "rule",
+    lines: null,
+  }));
 
 const all = (files: readonly FileChange[]) =>
   new Set(files.flatMap((f) => f.hunks.map((one) => one.id)));

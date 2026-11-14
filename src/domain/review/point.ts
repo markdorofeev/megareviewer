@@ -186,6 +186,9 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     if (risk.source !== "model" || risk.riskClass !== "contract") return [];
     const landed = landing([risk.hunkId]);
     if (landed.lines === null) return [];
+    // On the lines the model says decide it, when its hunk shows them; else the hunk's changes.
+    const own = risk.lines;
+    const fits = own !== null && pointLinesFit([risk.hunkId], own, hunks);
     return [
       {
         id: PointId.parse(`r:${risk.hunkId}`),
@@ -193,6 +196,7 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         title: risk.reason,
         explanation: "",
         ...landed,
+        ...(fits ? { lines: own } : {}),
         ...NONE,
       },
     ];
@@ -203,8 +207,7 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     const own = decision.lines;
     const hunk = own === null ? undefined : hunks.get(own.hunkId);
     // Its own line when one of its hunks shows it, else its first hunk's changed lines.
-    const fits =
-      own !== null && hunk !== undefined && decisionLinesFit(decision.hunkIds, own, hunks);
+    const fits = own !== null && hunk !== undefined && pointLinesFit(decision.hunkIds, own, hunks);
     return {
       id: PointId.parse(decision.id),
       kind: "decision",
@@ -225,8 +228,8 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
   return [...findings, ...mismatches, ...risks, ...decisions];
 };
 
-/** Whether a decision's own lines are in one of its hunks, which shows them. */
-export const decisionLinesFit = (
+/** Whether a point's own lines are in one of its hunks, which shows them. */
+export const pointLinesFit = (
   hunkIds: readonly HunkId[],
   lines: PointLines,
   hunks: ReadonlyMap<HunkId, Hunk>,

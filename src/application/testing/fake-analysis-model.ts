@@ -144,6 +144,7 @@ export class FakeAnalysisModel implements AnalysisModel {
           hunkId: hunk.id,
           riskClass: "logic" as const,
           reason: "Ordinary code change",
+          lines: null,
         })),
       ),
     );

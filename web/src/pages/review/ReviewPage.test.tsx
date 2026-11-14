@@ -691,7 +691,9 @@ describe("points", () => {
     const card = cardOf(h.receiptRoute);
     const risk = within(card).getByRole("article", { name: RISK });
     const finding = within(card).getByRole("article", { name: FINDING });
-    expect(comesBefore(risk, lineRow(card, "added line 13"))).toBe(true);
+    // The risk is over the route it names, not the blank line that starts its hunk.
+    expect(comesBefore(lineRow(card, "added line 13"), risk)).toBe(true);
+    expect(comesBefore(risk, lineRow(card, "added line 14"))).toBe(true);
     expect(comesBefore(lineRow(card, "added line 15"), finding)).toBe(true);
     expect(comesBefore(finding, lineRow(card, "added line 16"))).toBe(true);
     expect(lineRow(card, "added line 15").querySelector("[data-slot=finding-flag]")).not.toBeNull();
@@ -723,9 +725,9 @@ describe("points", () => {
     const kinds = [...cardOf(h.receiptRoute).querySelectorAll("[data-point]")].map((row) =>
       row.getAttribute("data-point"),
     );
-    // The risk covers the hunk's nine added lines, 13 to 21; the finding rests on 15. Decisions
-    // are footnotes and mark none.
-    expect(kinds).toEqual(["risk", "risk", "finding", ...Array(6).fill("risk")]);
+    // The risk covers the route it names, 14 to 21, not the blank line 13 before it; the finding
+    // rests on 15. Decisions are footnotes and mark none.
+    expect(kinds).toEqual(["risk", "finding", ...Array(6).fill("risk")]);
   });
 
   it("add a finding to the review as a draft with its suggestion", async () => {
@@ -781,7 +783,7 @@ describe("points", () => {
     renderReview();
     await loaded();
     await userEvent.click(pointButton("Comment", RISK));
-    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 13–21/ });
+    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on lines 14–21/ });
     expect((field as HTMLTextAreaElement).value).toMatch(RISK);
   });
 

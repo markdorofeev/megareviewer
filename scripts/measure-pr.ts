@@ -94,7 +94,15 @@ export const measure = async (
   const proofRisk = prepared.proofs.flatMap((proof): RiskAssessment[] =>
     proof.hunkId === null
       ? []
-      : [{ hunkId: proof.hunkId, riskClass: "mechanical", reason: proof.detail, source: "proof" }],
+      : [
+          {
+            hunkId: proof.hunkId,
+            riskClass: "mechanical",
+            reason: proof.detail,
+            source: "proof",
+            lines: null,
+          },
+        ],
   );
   const risk = [
     ...proofRisk,
