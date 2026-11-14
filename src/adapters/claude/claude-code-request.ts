@@ -78,9 +78,11 @@ export const passCall = (
   pass: ModelPass,
   renderedInput: string,
   message: string,
+  model: string = MODEL,
+  effort: Effort = PASS_EFFORT[pass],
 ): StructuredCall => ({
-  model: MODEL,
-  effort: PASS_EFFORT[pass],
+  model,
+  effort,
   systemPrompt: claudeCodeSystemPrompt(renderedInput),
   schema: PASS_ANSWER_FORMAT.schema,
   message,

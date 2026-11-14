@@ -15,6 +15,7 @@ import {
   type SyntheticRun,
   syntheticLines,
 } from "./fixtures/fake-run-claude.ts";
+import type { Effort } from "./request.ts";
 import type { ClaudeRun } from "./run-claude.ts";
 import { CLAUDE_CODE_VERSION } from "./version.ts";
 
@@ -22,7 +23,12 @@ const recorded = (pass: ModelPass | null) => recordedLines(pass ?? "intent");
 
 const modelWith = (
   answer: Parameters<typeof createFakeRunClaude>[0] = recorded,
-  options: { billing?: ModelBilling; maxInputTokens?: number } = {},
+  options: {
+    billing?: ModelBilling;
+    maxInputTokens?: number;
+    model?: string;
+    effort?: Effort;
+  } = {},
 ) => {
   const fake = createFakeRunClaude(answer);
   const logger = new RecordingLogger();
@@ -31,6 +37,8 @@ const modelWith = (
     billing: options.billing ?? "plan",
     logger,
     ...(options.maxInputTokens === undefined ? {} : { maxInputTokens: options.maxInputTokens }),
+    ...(options.model === undefined ? {} : { model: options.model }),
+    ...(options.effort === undefined ? {} : { effort: options.effort }),
   });
   return { model, calls: fake.calls, logger };
 };
@@ -60,6 +68,37 @@ describe("ClaudeCodeAnalysisModel", () => {
   it("has a version of its own, so the API's analyses aren't served for it", () => {
     expect(modelWith().model.version).toBe(CLAUDE_CODE_VERSION);
     expect(CLAUDE_CODE_VERSION).toMatch(/^claude-code\/claude-haiku-5-5\/p\d+$/);
+  });
+
+  it("runs another model when asked, with a version that names it", async () => {
+    const { model, calls } = modelWith(recorded, { model: "claude-sonnet-5-5" });
+    expect(model.version).toMatch(/^claude-code\/claude-sonnet-5-5\/p\d+$/);
+    await model.intent(smallFeatureInput);
+    const args = calls[0]?.args ?? [];
+    expect(args[args.indexOf("--model") + 1]).toBe("claude-sonnet-5-5");
+  });
+
+  it("runs every pass at one effort when asked, and names it in the version", async () => {
+    const { model, calls } = modelWith(recorded, { effort: "medium" });
+    expect(model.version).toMatch(/^claude-code\/claude-haiku-5-5@medium\/p\d+$/);
+    await model.intent(smallFeatureInput);
+    await model.decisions(smallFeatureInput, smallFeatureIntent);
+    const efforts = calls.map((call) => call.args[call.args.indexOf("--effort") + 1]);
+    expect(efforts).toEqual(["medium", "medium"]);
+  });
+
+  it("warns when Claude Code answers on another model than the one asked for", async () => {
+    const asked = modelWith(recorded, { model: "claude-sonnet-5-5" });
+    await asked.model.intent(smallFeatureInput);
+    expect(asked.logger.entries).toContainEqual({
+      level: "warn",
+      message: "Model pass answered by another model",
+      fields: { pass: "intent", model: "claude-sonnet-5-5", served: ["claude-haiku-5-5"] },
+    });
+
+    const usual = modelWith();
+    await usual.model.intent(smallFeatureInput);
+    expect(usual.logger.entries.filter((entry) => entry.level === "warn")).toEqual([]);
   });
 
   it("runs every pass with the same system prompt file, which holds the PR data", async () => {

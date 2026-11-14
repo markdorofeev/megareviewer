@@ -9,7 +9,8 @@ export const MAX_TOKENS = 64_000;
 /** The largest PR, in input tokens, either transport sends. */
 export const MAX_INPUT_TOKENS = 400_000;
 
-export type Effort = "low" | "medium" | "high";
+export const EFFORTS = ["low", "medium", "high"] as const;
+export type Effort = (typeof EFFORTS)[number];
 
 /** ARCHITECTURE.md's pass table. */
 export const PASS_EFFORT: Readonly<Record<ModelPass, Effort>> = {

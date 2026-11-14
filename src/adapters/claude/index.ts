@@ -17,7 +17,7 @@ export {
   planName,
 } from "./claude-code-status.ts";
 export { renderInput } from "./render-input.ts";
-export { MAX_INPUT_TOKENS } from "./request.ts";
+export { EFFORTS, type Effort, MAX_INPUT_TOKENS } from "./request.ts";
 export {
   type ClaudeRun,
   createRunClaude,

@@ -18,4 +18,8 @@ export const VERSION = `${MODEL}/p${PROMPT_VERSION}`;
 export const CLAUDE_CODE_PROMPT_VERSION = 5;
 export const CLAUDE_CODE_FINGERPRINT = "55879685811b3037";
 
-export const CLAUDE_CODE_VERSION = `claude-code/${MODEL}/p${CLAUDE_CODE_PROMPT_VERSION}`;
+/** An effort for every pass, in place of each pass's own, is named after the model. */
+export const claudeCodeVersion = (model: string, effort?: string): string =>
+  `claude-code/${model}${effort === undefined ? "" : `@${effort}`}/p${CLAUDE_CODE_PROMPT_VERSION}`;
+
+export const CLAUDE_CODE_VERSION = claudeCodeVersion(MODEL);

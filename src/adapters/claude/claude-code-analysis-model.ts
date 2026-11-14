@@ -7,9 +7,9 @@ import { tooLarge } from "./errors.ts";
 import { createPassModel } from "./pass-model.ts";
 import { passMessage } from "./prompts/passes.ts";
 import { renderInput } from "./render-input.ts";
-import { MAX_INPUT_TOKENS } from "./request.ts";
+import { type Effort, MAX_INPUT_TOKENS, MODEL } from "./request.ts";
 import { createRunClaude, type RunClaude } from "./run-claude.ts";
-import { CLAUDE_CODE_VERSION } from "./version.ts";
+import { claudeCodeVersion } from "./version.ts";
 
 export interface ClaudeCodeAnalysisModelOptions {
   /** Default: the `claude` on the PATH. */
@@ -17,6 +17,10 @@ export interface ClaudeCodeAnalysisModelOptions {
   /** "plan" when Claude Code is signed in to a Claude plan, which its status says. */
   readonly billing: ModelBilling;
   readonly maxInputTokens?: number;
+  /** Default: MODEL. Another one only to measure it, as the evals' --model does. */
+  readonly model?: string;
+  /** Default: each pass's own. One for every pass, only to measure it, as --effort does. */
+  readonly effort?: Effort;
   readonly logger: Logger;
 }
 
@@ -42,9 +46,11 @@ export const createClaudeCodeAnalysisModel = (
   const run = options.run ?? createRunClaude();
   const maxInputTokens = options.maxInputTokens ?? MAX_INPUT_TOKENS;
   const { logger, billing } = options;
+  const model = options.model ?? MODEL;
+  const { effort } = options;
 
   return createPassModel({
-    version: CLAUDE_CODE_VERSION,
+    version: claudeCodeVersion(model, effort),
 
     async checkSize(input) {
       const inputTokens = estimateTokens(
@@ -61,6 +67,8 @@ export const createClaudeCodeAnalysisModel = (
         pass,
         renderInput(input),
         passMessage(pass, earlier, passOptions?.feedback),
+        model,
+        effort,
       );
       logger.debug("Model pass started", {
         pass,
@@ -78,7 +86,11 @@ export const createClaudeCodeAnalysisModel = (
         return err(called.error);
       }
 
-      const { result, version } = called.value;
+      const { result, version, models } = called.value;
+      const others = models.filter((served) => served !== model);
+      if (others.length > 0) {
+        logger.warn("Model pass answered by another model", { pass, model, served: others });
+      }
       const usage: ModelUsage = {
         pass,
         inputTokens: result.inputTokens,
