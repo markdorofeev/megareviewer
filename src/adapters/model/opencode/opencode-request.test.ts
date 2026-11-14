@@ -10,7 +10,15 @@ import { PassAnswer } from "../shared/output-schema.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import { answerJson } from "./opencode-output.ts";
-import { opencodeConfig, opencodeRequest, passSchema, variantFor } from "./opencode-request.ts";
+import {
+  entryBytes,
+  opencodeConfig,
+  opencodeRequest,
+  passSchema,
+  prEntries,
+  prEntry,
+  variantFor,
+} from "./opencode-request.ts";
 import { OPENCODE_FINGERPRINT, OPENCODE_PROMPT_VERSION, opencodeVersion } from "./version.ts";
 
 const risk = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
@@ -33,10 +41,12 @@ const requests = () =>
   );
 
 describe("opencodeRequest", () => {
-  it("puts the same PR entry in every pass, so later passes read it from cache", () => {
-    const entries = new Set(requests().map((request) => request.entry));
+  it("puts the same PR entries in every pass, so later passes read them from cache", () => {
+    const entries = new Set(requests().map((request) => JSON.stringify(request.entries)));
     expect(entries.size).toBe(1);
-    expect([...entries][0]).toMatch(/^Everything after this line is the pull request data\./);
+    expect(requests()[0]?.entries).toEqual([
+      { key: "pull-request-00", value: expect.stringMatching(/^Everything after this line/) },
+    ]);
   });
 
   it("ends each pass's prompt with the schema of its own answer only", () => {
@@ -63,6 +73,32 @@ describe("opencodeRequest", () => {
       title: "megareviewer",
       model: { providerID: "anthropic", id: "claude-haiku-5-5" },
     });
+  });
+});
+
+describe("prEntries", () => {
+  it("splits a PR over the entry limit between lines, in keys opencode joins in order", () => {
+    const lines = Array.from({ length: 30 }, (_, index) => `line ${index} ${"é".repeat(20)}`);
+    const entries = prEntries(lines.join("\n"), 200);
+    expect(entries.length).toBeGreaterThan(3);
+    expect(entries.map((entry) => entry.key)).toEqual(entries.map((entry) => entry.key).sort());
+    for (const entry of entries) expect(entryBytes(entry.value)).toBeLessThanOrEqual(200);
+    expect(entries.map((entry) => entry.value).join("")).toBe(prEntry(lines.join("\n")));
+    for (const entry of entries.slice(0, -1)) expect(entry.value.endsWith("\n")).toBe(true);
+  });
+
+  it("cuts a line longer than the limit where it has to", () => {
+    const entries = prEntries("x".repeat(1000), 200);
+    expect(entries.map((entry) => entry.value).join("")).toBe(prEntry("x".repeat(1000)));
+    for (const entry of entries) expect(entryBytes(entry.value)).toBeLessThanOrEqual(200);
+  });
+
+  it("counts an entry as opencode does, its escapes included", () => {
+    // On 2.3.0, 250,000 bytes of rendered PR were refused as 264,714.
+    expect(entryBytes('a "b"\n')).toBe(Buffer.byteLength('a \\"b\\"\\n'));
+    for (const entry of prEntries('"\n'.repeat(200), 200)) {
+      expect(entryBytes(entry.value)).toBeLessThanOrEqual(200);
+    }
   });
 });
 

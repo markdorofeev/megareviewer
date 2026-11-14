@@ -66,11 +66,11 @@ const opencodeOptions = (
   models.map(([model, modelName]) => ({
     id: `opencode/${providerID}/${model}`,
     provider: "opencode",
-    providerName: `opencode via ${providerName}`,
+    providerName: `opencode on ${providerName}`,
     model: `${providerID}/${model}`,
     modelName,
     family: modelName.split(" ")[0] ?? modelName,
-    via: `opencode, through ${providerName}`,
+    via: `opencode, on ${providerName}`,
     measured: false,
     available: true,
     reason: null,

@@ -96,8 +96,7 @@ export const codexProblem = (status: CodexStatus): string | null => {
 };
 
 /** What runs a model through opencode: the reviewer's own provider, at its prices. */
-export const describeOpencode = (providerName: string): string =>
-  `opencode, through ${providerName}`;
+export const describeOpencode = (providerName: string): string => `opencode, on ${providerName}`;
 
 export const OPENCODE_NOT_INSTALLED =
   "opencode isn't installed: install it (https://opencode.ai), then connect a provider with `opencode auth login`";
@@ -273,7 +272,7 @@ export const opencodeModels = (models: readonly OpencodeModel[]): readonly Provi
         name: model.name,
         family: familyOf(model.name),
         via: describeOpencode(model.providerName),
-        providerName: `opencode via ${model.providerName}`,
+        providerName: `opencode on ${model.providerName}`,
         measured: false,
       },
     ];

@@ -75,8 +75,8 @@ describe("byProvider with opencode", () => {
     ).toEqual([
       ["Claude Code, on your Pro plan", 3],
       ["Anthropic API", 3],
-      ["opencode, through Anthropic", 12],
-      ["opencode, through Ollama", 2],
+      ["opencode, on Anthropic", 12],
+      ["opencode, on Ollama", 2],
     ]);
   });
 });
@@ -145,7 +145,7 @@ describe("a long group", () => {
     await userEvent.click(screen.getByRole("button", { name: /^Model:/ }));
     const menu = await screen.findByRole("menu");
     const field = within(menu).getByRole("textbox", {
-      name: "Filter 11 more models through opencode, through Anthropic",
+      name: "Filter 11 more models through opencode, on Anthropic",
     });
     expect(within(menu).getAllByRole("menuitemradio", { name: /Claude Haiku 5\.5/ })).toHaveLength(
       1,

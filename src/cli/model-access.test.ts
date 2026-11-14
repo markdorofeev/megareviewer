@@ -346,15 +346,15 @@ describe("opencode's options", () => {
         id: "opencode/anthropic/claude-haiku-5-5",
         modelName: "Claude Haiku 5.5",
         family: "Claude",
-        via: "opencode, through Anthropic",
+        via: "opencode, on Anthropic",
         // A run says which provider behind opencode it ran on.
-        providerName: "opencode via Anthropic",
+        providerName: "opencode on Anthropic",
         measured: false,
         available: true,
       }),
       expect.objectContaining({
         id: "opencode/ollama/qwen3-coder:30b",
-        via: "opencode, through Ollama",
+        via: "opencode, on Ollama",
         family: "Qwen3",
       }),
     ]);

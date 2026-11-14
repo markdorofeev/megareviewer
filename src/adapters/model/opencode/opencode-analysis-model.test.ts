@@ -94,7 +94,7 @@ describe("OpencodeAnalysisModel", () => {
         model: { providerID: "anthropic", id: "claude-haiku-5-5", variant },
       })),
     );
-    const entries = calls.filter((call) => call.path.endsWith(`/entries/${PR_ENTRY}`));
+    const entries = calls.filter((call) => call.path.endsWith(`/entries/${PR_ENTRY}-00`));
     expect(entries).toHaveLength(3);
     expect(new Set(entries.map((call) => JSON.stringify(call.body))).size).toBe(1);
     expect(JSON.stringify(entries[0]?.body)).toContain("<pull_request_data>");

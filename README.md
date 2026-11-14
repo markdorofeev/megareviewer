@@ -46,6 +46,7 @@ Set them as environment variables. You need at least one git host.
 - **Claude Code,** when it's installed and signed in: the analysis comes out of your Claude plan's usage. megareviewer runs the `claude` on your PATH, which uses its own sign-in, and never sees your Claude credentials.
 - **The Anthropic API,** with `ANTHROPIC_API_KEY` or a profile from `ant auth login`, billed to your account.
 - **Codex,** when it's installed and signed in (`codex login`): OpenAI's GPT-6 Luna and GPT-6 Sol, on your ChatGPT plan's usage, or billed to your OpenAI account if Codex is signed in with an API key. megareviewer runs your Codex, the `codex` on your PATH, and never reads its credentials. Each pass runs in Codex's read-only sandbox, without your Codex config, and is stopped if the model uses a tool.
+- **opencode,** 2.3.0 or later, when it's installed and has a provider connected (`opencode auth login`, an API key in your environment, or a provider in your opencode config, local ones included): every model those providers offer, billed by each provider at its own prices, or free on a local one. megareviewer starts its own `opencode serve` on 127.0.0.1 and never reads opencode's credentials. It reads your opencode config, since that's where your providers are, but not the project's, and leaves out opencode's own free models. Each pass runs as an agent that's denied every tool, and its answer is discarded if the model used one anyway. These models are marked *unmeasured*: megareviewer's evals haven't run on them, so how often their findings are wrong isn't known, and small or local models may fail a pass more often.
 
 **Jira.** Optional: without it, ticket keys are shown but not fetched.
 
@@ -57,7 +58,7 @@ Set them as environment variables. You need at least one git host.
 
 ## Privacy
 
-Until you press Request AI review, your code goes nowhere but your machine and your git host. Then the PR's code also goes to the model's maker for the analysis: to Anthropic through your Claude Code, under your own Claude plan and its privacy settings, or through the Anthropic API under your API account's; or, with Codex, to OpenAI under your own ChatGPT plan or OpenAI account and its settings. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and what you did with each point are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
+Until you press Request AI review, your code goes nowhere but your machine and your git host. Then the PR's code also goes to the model's maker for the analysis: to Anthropic through your Claude Code, under your own Claude plan and its privacy settings, or through the Anthropic API under your API account's; or, with Codex, to OpenAI under your own ChatGPT plan or OpenAI account and its settings; or, with opencode, to whichever provider the chosen model is on, under your account there, or nowhere off your machine for a local model. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and what you did with each point are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
 
 ## Contributing
 

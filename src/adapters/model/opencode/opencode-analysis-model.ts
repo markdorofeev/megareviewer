@@ -10,13 +10,7 @@ import { renderInput } from "../shared/render-input.ts";
 import type { OpencodeClient } from "./opencode-client.ts";
 import { fromHttpError, fromTurn, usedTool } from "./opencode-errors.ts";
 import { answerJson, type OpencodeTokens, readTurn } from "./opencode-output.ts";
-import {
-  type OpencodeRequest,
-  opencodeRequest,
-  PR_ENTRY,
-  passText,
-  prEntry,
-} from "./opencode-request.ts";
+import { type OpencodeRequest, opencodeRequest, passText, prEntry } from "./opencode-request.ts";
 import { opencodeVersion } from "./version.ts";
 
 /**
@@ -63,10 +57,16 @@ export const runOpencodeCall = async (
   const id = session.data.data.id;
   try {
     const steps = [
-      () =>
-        client.request("PUT", `/api/experimental/session/${id}/instructions/entries/${PR_ENTRY}`, {
-          body: { value: request.entry },
-        }),
+      ...request.entries.map(
+        (entry) => () =>
+          client.request(
+            "PUT",
+            `/api/experimental/session/${id}/instructions/entries/${entry.key}`,
+            {
+              body: { value: entry.value },
+            },
+          ),
+      ),
       () => client.request("POST", `/api/session/${id}/prompt`, { body: { text: request.prompt } }),
     ];
     for (const step of steps) {
