@@ -11,6 +11,8 @@ export {
   inProgress,
   MODEL_STAGES,
   ModelBilling,
+  ModelCall,
+  ModelCallOutcome,
   ModelPass,
   ModelUsage,
   mapModelStages,

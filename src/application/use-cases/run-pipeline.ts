@@ -87,11 +87,17 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
 
 type Tracker = ReturnType<typeof createTracker>;
 
-/** Appends to the analysis's warnings and usage, for patches. */
+/** Appends to the analysis's warnings, usage and traced model calls, for patches. */
 const adding =
-  (added: { warnings?: readonly string[]; usage?: Analysis["usage"] }) => (analysis: Analysis) => ({
+  (added: {
+    warnings?: readonly string[];
+    usage?: Analysis["usage"];
+    modelCalls?: Analysis["modelCalls"];
+  }) =>
+  (analysis: Analysis) => ({
     warnings: [...analysis.warnings, ...(added.warnings ?? [])],
     usage: [...analysis.usage, ...(added.usage ?? [])],
+    modelCalls: [...analysis.modelCalls, ...(added.modelCalls ?? [])],
   });
 
 /** What the code alone makes of a collected PR: proofs, risk from rules, and the code's tour. */

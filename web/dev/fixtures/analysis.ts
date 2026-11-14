@@ -17,6 +17,7 @@ import {
   DecisionId,
   FindingId,
   MismatchId,
+  type ModelCall,
   type ModelUsage,
   type PullRequest,
   type RiskAssessment,
@@ -513,6 +514,38 @@ const usage: readonly ModelUsage[] = [
   },
 ];
 
+const call = (
+  pass: ModelCall["pass"],
+  startedAt: string,
+  durationMs: number,
+  more: Partial<ModelCall> = {},
+): ModelCall => ({
+  pass,
+  attempt: 1,
+  startedAt,
+  durationMs,
+  outcome: "ok",
+  problems: [],
+  error: null,
+  ...more,
+});
+
+// The findings pass's first answer put a finding on lines its hunk doesn't show, so it ran again.
+const modelCalls: readonly ModelCall[] = [
+  call("intent", "2026-10-21T09:00:20.000Z", 11_200),
+  call("findings", "2026-10-21T09:00:31.200Z", 64_800, {
+    outcome: "problems",
+    problems: [
+      `Finding 2's lines aren't lines ${h.retryAndCache} shows on that side.`,
+      "Finding 4's explanation is longer than 300 characters.",
+    ],
+  }),
+  call("risk", "2026-10-21T09:00:31.200Z", 18_400),
+  call("decisions", "2026-10-21T09:00:31.200Z", 33_100),
+  call("findings", "2026-10-21T09:01:36.000Z", 52_300, { attempt: 2 }),
+  call("tour", "2026-10-21T09:02:28.300Z", 12_900),
+];
+
 const callGraph: CallGraphHint[] = [
   {
     fromPartId: h.receiptRoute,
@@ -768,6 +801,7 @@ const analysis: Analysis = {
     "Couldn't fetch Jira tickets: Jira answered 503",
   ],
   usage,
+  modelCalls,
   error: null,
   modelError: null,
   createdAt: "2026-10-21T09:42:10Z",

@@ -5,6 +5,7 @@ import {
   AnalysisId,
   type HostError,
   MismatchId,
+  type ModelCall,
   type ModelError,
   modelRunnable,
   PointId,
@@ -378,6 +379,78 @@ describe("the analysis pipeline", () => {
     // The tour waits for the slowest of the three passes before it.
     const findingsStart = Date.parse(usageOf("findings")?.startedAt ?? "");
     expect(Date.parse(usageOf("tour")?.startedAt ?? "") - findingsStart).toBe(41_200);
+  });
+
+  it("traces every model call: why a pass ran again, and why one failed", async () => {
+    const clock = new FixedClock("2026-10-21T09:00:00Z");
+    const model = new FakeAnalysisModel();
+    model.script(
+      "risk",
+      ok(smallFeatureHunks.slice(1).map(logic)),
+      ok(smallFeatureHunks.map(logic)),
+    );
+    model.script("decisions", err(modelError("overloaded", "Overloaded")));
+    const { analyze, logger } = setup({ model, clock });
+    const analysis = await analyze();
+
+    const missing = `${h1} has no risk class. Classify every hunk sent in full exactly once.`;
+    const started = clock.now();
+    // The parallel passes are saved as they finish, in no set order.
+    const order = (call: ModelCall) => `${call.pass}/${call.attempt}`;
+    const calls = analysis.modelCalls.filter((call) => call.pass !== "intent");
+    expect([...calls].sort((a, b) => order(a).localeCompare(order(b)))).toEqual([
+      {
+        pass: "decisions",
+        attempt: 1,
+        startedAt: started,
+        durationMs: 0,
+        outcome: "failed",
+        problems: [],
+        error: modelError("overloaded", "Overloaded"),
+      },
+      {
+        pass: "findings",
+        attempt: 1,
+        startedAt: started,
+        durationMs: 0,
+        outcome: "ok",
+        problems: [],
+        error: null,
+      },
+      {
+        pass: "risk",
+        attempt: 1,
+        startedAt: started,
+        durationMs: 0,
+        outcome: "problems",
+        problems: [missing],
+        error: null,
+      },
+      {
+        pass: "risk",
+        attempt: 2,
+        startedAt: started,
+        durationMs: 0,
+        outcome: "ok",
+        problems: [],
+        error: null,
+      },
+    ]);
+    expect(analysis.modelError?.stage).toBe("decisions");
+    expect(logger.entries).toContainEqual(
+      expect.objectContaining({
+        level: "info",
+        message: "Model call answered",
+        fields: expect.objectContaining({ pass: "risk", attempt: 1, problems: [missing] }),
+      }),
+    );
+    expect(logger.entries).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        message: "Model call failed",
+        fields: expect.objectContaining({ pass: "decisions", kind: "overloaded" }),
+      }),
+    );
   });
 
   describe("collect", () => {

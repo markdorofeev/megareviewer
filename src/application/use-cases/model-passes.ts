@@ -13,6 +13,7 @@ import {
   MAX_FINDING_EXPLANATION,
   MAX_FINDING_TITLE,
   MAX_TITLE,
+  type ModelCall,
   type ModelError,
   type ModelPass,
   type ModelUsage,
@@ -42,6 +43,8 @@ export interface PassResult<T> {
   readonly outcome: Result<T, ModelError>;
   /** Every successful call, retries included. */
   readonly usage: readonly ModelUsage[];
+  /** Every call, failed ones included. */
+  readonly modelCalls: readonly ModelCall[];
   readonly warnings: readonly string[];
 }
 
@@ -52,56 +55,70 @@ export interface PassDeps {
   readonly clock: Clock;
 }
 
-/** Calls a pass with its usage stamped with when it started and how long it took. */
-const timed = async <T>(
-  pass: ModelPass,
-  call: PassCall<T>,
-  { logger, clock }: PassDeps,
-  options?: PassOptions,
-): Promise<Result<PassOutput<T>, ModelError>> => {
-  const startedAt = clock.now();
-  const result = await call(options);
-  const durationMs = Math.max(0, Date.parse(clock.now()) - Date.parse(startedAt));
-  logger.info("Model pass took", { pass, durationMs, ok: result.ok });
-  return result.ok
-    ? ok({ ...result.value, usage: { ...result.value.usage, startedAt, durationMs } })
-    : result;
-};
-
 /**
  * Calls a pass, and once more with feedback when its answer is invalid: unparseable, or with
  * the problems `check` finds. The answer comes back with whatever problems are left, for the
- * caller to repair; when the retry fails outright, the first answer is repaired instead.
+ * caller to repair; when the retry fails outright, the first answer is repaired instead. Every
+ * call is traced, with when it ran and what came of it.
  */
 const callChecked = async <T>(
   pass: ModelPass,
   call: PassCall<T>,
   check: (value: T) => string[],
-  deps: PassDeps,
+  { logger, clock }: PassDeps,
 ): Promise<{
   outcome: Result<{ value: T; problems: string[] }, ModelError>;
   usage: ModelUsage[];
+  modelCalls: ModelCall[];
 }> => {
   const usage: ModelUsage[] = [];
-  const checked = (output: PassOutput<T>) => {
-    usage.push(output.usage);
-    return { value: output.value, problems: check(output.value) };
+  const modelCalls: ModelCall[] = [];
+  const attempt = async (
+    number: number,
+    options?: PassOptions,
+  ): Promise<Result<{ value: T; problems: string[] }, ModelError>> => {
+    const startedAt = clock.now();
+    const result = await call(options);
+    const durationMs = Math.max(0, Date.parse(clock.now()) - Date.parse(startedAt));
+    const problems = result.ok ? check(result.value.value) : [];
+    if (result.ok) usage.push({ ...result.value.usage, startedAt, durationMs });
+    modelCalls.push({
+      pass,
+      attempt: number,
+      startedAt,
+      durationMs,
+      outcome: !result.ok ? "failed" : problems.length > 0 ? "problems" : "ok",
+      problems,
+      error: result.ok ? null : result.error,
+    });
+    if (!result.ok) {
+      logger.warn("Model call failed", {
+        pass,
+        attempt: number,
+        durationMs,
+        kind: result.error.kind,
+        message: result.error.message,
+      });
+      return result;
+    }
+    logger.info("Model call answered", { pass, attempt: number, durationMs, problems });
+    return ok({ value: result.value.value, problems });
   };
-  const first = await timed(pass, call, deps);
-  if (!first.ok && first.error.kind !== "invalid-output") return { outcome: first, usage };
-  const firstChecked = first.ok ? checked(first.value) : null;
-  if (firstChecked?.problems.length === 0) return { outcome: ok(firstChecked), usage };
-  const feedback = first.ok ? (firstChecked?.problems ?? []) : [first.error.message];
 
-  deps.logger.info("Retrying a model pass with feedback", { pass, problems: feedback.length });
-  const second = await timed(pass, call, deps, { feedback });
-  if (second.ok) return { outcome: ok(checked(second.value)), usage };
-  if (firstChecked === null) return { outcome: second, usage };
-  deps.logger.warn("A model pass retry failed; repairing the first answer", {
+  const first = await attempt(1);
+  if (!first.ok && first.error.kind !== "invalid-output")
+    return { outcome: first, usage, modelCalls };
+  if (first.ok && first.value.problems.length === 0) return { outcome: first, usage, modelCalls };
+  const feedback = first.ok ? first.value.problems : [first.error.message];
+
+  logger.info("Retrying a model pass with feedback", { pass, problems: feedback.length });
+  const second = await attempt(2, { feedback });
+  if (second.ok || !first.ok) return { outcome: second, usage, modelCalls };
+  logger.warn("A model pass retry failed; repairing the first answer", {
     pass,
     error: second.error.message,
   });
-  return { outcome: ok(firstChecked), usage };
+  return { outcome: first, usage, modelCalls };
 };
 
 type Feedback = Readonly<Record<CoverageProblem["kind"], (id: PartId) => string>>;
@@ -128,15 +145,15 @@ export const runIntent = async (
       knownHunks,
       intent.mismatches.flatMap((mismatch) => mismatch.hunkIds),
     );
-  const { outcome, usage } = await callChecked(
+  const { outcome, usage, modelCalls } = await callChecked(
     "intent",
     (options) => model.intent(input, options),
     (intent) => unknownIn(intent).map(describeUnknown),
     deps,
   );
-  if (!outcome.ok) return { outcome, usage, warnings: [] };
+  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
   const { value: intent, problems } = outcome.value;
-  if (problems.length === 0) return { outcome: ok(intent), usage, warnings: [] };
+  if (problems.length === 0) return { outcome: ok(intent), usage, modelCalls, warnings: [] };
   // Not a warning on the page: the reviewer can't act on the model's mistake.
   deps.logger.warn("Dropped unknown hunk references from intent mismatches", {
     count: unknownIn(intent).length,
@@ -148,7 +165,7 @@ export const runIntent = async (
       hunkIds: mismatch.hunkIds.filter((id) => knownHunks.has(id)),
     })),
   };
-  return { outcome: ok(repaired), usage, warnings: [] };
+  return { outcome: ok(repaired), usage, modelCalls, warnings: [] };
 };
 
 const FINDING_FEEDBACK = (problem: FindingProblem): string => {
@@ -182,13 +199,13 @@ export const runFindings = async (
   deps: PassDeps,
 ): Promise<PassResult<Finding[]>> => {
   const mismatches = intent.mismatches.length;
-  const { outcome, usage } = await callChecked(
+  const { outcome, usage, modelCalls } = await callChecked(
     "findings",
     (options) => model.findings(input, intent, options),
     (drafts) => validateFindings(drafts, hunks, mismatches).map(FINDING_FEEDBACK),
     deps,
   );
-  if (!outcome.ok) return { outcome, usage, warnings: [] };
+  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
   const drafts = outcome.value.value;
   const problems = validateFindings(drafts, hunks, mismatches);
   const invalid = new Set(problems.filter((one) => !strippable(one)).map((one) => one.index));
@@ -209,6 +226,7 @@ export const runFindings = async (
   return {
     outcome: ok(kept.map((draft, index) => ({ ...draft, id: FindingId.parse(`f${index + 1}`) }))),
     usage,
+    modelCalls,
     warnings: [],
   };
 };
@@ -227,13 +245,13 @@ export const runRisk = async (
   required: ReadonlySet<HunkId>,
   deps: PassDeps,
 ): Promise<PassResult<RiskOutcome>> => {
-  const { outcome, usage } = await callChecked(
+  const { outcome, usage, modelCalls } = await callChecked(
     "risk",
     (options) => model.risk(input, intent, options),
     (risk) => validateRiskCoverage(risk, required).map(describeProblem(RISK_FEEDBACK)),
     deps,
   );
-  if (!outcome.ok) return { outcome, usage, warnings: [] };
+  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
 
   // Keep the first assessment per required hunk; drop the rest.
   const kept = new Map<HunkId, ModelRisk>();
@@ -262,6 +280,7 @@ export const runRisk = async (
       forTour: [...kept.values(), ...fallbacks],
     }),
     usage,
+    modelCalls,
     warnings,
   };
 };
@@ -279,13 +298,13 @@ export const runDecisions = async (
       knownHunks,
       drafts.flatMap((draft) => draft.hunkIds),
     );
-  const { outcome, usage } = await callChecked(
+  const { outcome, usage, modelCalls } = await callChecked(
     "decisions",
     (options) => model.decisions(input, intent, options),
     (drafts) => unknownIn(drafts).map(describeUnknown),
     deps,
   );
-  if (!outcome.ok) return { outcome, usage, warnings: [] };
+  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
   const { value: drafts, problems } = outcome.value;
   if (problems.length > 0) {
     // Not a warning on the page: the reviewer can't act on the model's mistake.
@@ -307,6 +326,7 @@ export const runDecisions = async (
       }),
     ),
     usage,
+    modelCalls,
     warnings: [],
   };
 };
@@ -355,9 +375,14 @@ export const runTour = async (
     readonly view: TourSkeleton;
   },
   deps: PassDeps,
-): Promise<{ tour: Tour; usage: readonly ModelUsage[]; warnings: readonly string[] }> => {
+): Promise<{
+  tour: Tour;
+  usage: readonly ModelUsage[];
+  modelCalls: readonly ModelCall[];
+  warnings: readonly string[];
+}> => {
   const { skeleton } = context;
-  const { outcome, usage } = await callChecked(
+  const { outcome, usage, modelCalls } = await callChecked(
     "tour",
     (options) =>
       model.tour(input, context.intent, context.risk, context.decisions, context.view, options),
@@ -367,6 +392,7 @@ export const runTour = async (
   const fallback = (reason: string) => ({
     tour: skeleton,
     usage,
+    modelCalls,
     warnings: [`${reason}, so its steps keep the code's titles`],
   });
   if (!outcome.ok) {
@@ -375,5 +401,5 @@ export const runTour = async (
   if (outcome.value.problems.length > 0) {
     return fallback("The model's titles for the guided tour weren't valid");
   }
-  return { tour: applyTourTitles(skeleton, outcome.value.value), usage, warnings: [] };
+  return { tour: applyTourTitles(skeleton, outcome.value.value), usage, modelCalls, warnings: [] };
 };

@@ -8,6 +8,8 @@ import {
   DecisionId,
   FindingId,
   type Intent,
+  type ModelCall,
+  type ModelPass,
   type Publication,
   type Tour,
   TourStepId,
@@ -201,6 +203,16 @@ export const smallFeatureIntent: Intent = {
 const d = DecisionId.parse;
 const s = TourStepId.parse;
 
+const answered = (pass: ModelPass, startedAt: string, durationMs: number): ModelCall => ({
+  pass,
+  attempt: 1,
+  startedAt,
+  durationMs,
+  outcome: "ok",
+  problems: [],
+  error: null,
+});
+
 export const smallFeatureAnalysis: Analysis = {
   id: analysisId(key),
   key,
@@ -388,6 +400,12 @@ export const smallFeatureAnalysis: Analysis = {
       costUsd: 0.03,
       billing: "api",
     },
+  ],
+  modelCalls: [
+    answered("intent", "2026-10-21T09:00:20Z", 9_400),
+    answered("risk", "2026-10-21T09:00:30Z", 8_100),
+    answered("decisions", "2026-10-21T09:00:30Z", 21_600),
+    answered("tour", "2026-10-21T09:00:52Z", 17_300),
   ],
   error: null,
   modelError: null,

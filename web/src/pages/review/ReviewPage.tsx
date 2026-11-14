@@ -54,6 +54,7 @@ import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
+import { ModelCalls } from "./ModelCalls.tsx";
 import {
   changeTotals,
   commentsInParts,
@@ -1281,13 +1282,14 @@ const Review = ({
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-3">
+      <footer className="flex items-center justify-end gap-3">
+        <ModelCalls calls={live.modelCalls} />
         {complete && !modelRunning && hasModelRun(live) && (
           // A new run of the code's stages under the same ID: the page starts afresh to follow it.
           <RemoveModelRun analysisId={analysisId} onRemoved={restart} />
         )}
         <UsageFooter usage={live.usage} />
-      </div>
+      </footer>
 
       {publishing && (
         <PublishDialog

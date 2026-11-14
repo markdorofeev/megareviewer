@@ -90,6 +90,7 @@ const newAnalysis = (
   tour: null,
   warnings: [],
   usage: [],
+  modelCalls: [],
   error: null,
   modelError: null,
   createdAt,

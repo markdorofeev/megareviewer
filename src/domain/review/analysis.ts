@@ -10,6 +10,7 @@ import {
 } from "../diff/index.ts";
 import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
+import { ModelError } from "./errors.ts";
 import { Intent, Ticket } from "./intent.ts";
 import { Finding } from "./point.ts";
 import { Sha, Timestamp } from "./primitives.ts";
@@ -77,6 +78,26 @@ export const ModelUsage = z
   })
   .readonly();
 export type ModelUsage = z.infer<typeof ModelUsage>;
+
+/** An answer the checks passed, one they found problems in, or no answer. */
+export const ModelCallOutcome = z.enum(["ok", "problems", "failed"]);
+export type ModelCallOutcome = z.infer<typeof ModelCallOutcome>;
+
+/** One call of a pass, kept to trace a run: when it ran, and why it was retried or failed. */
+export const ModelCall = z
+  .object({
+    pass: ModelPass,
+    /** 2 for the retry the checks' problems asked for. */
+    attempt: z.number().int().positive(),
+    startedAt: Timestamp,
+    durationMs: z.number().int().nonnegative(),
+    outcome: ModelCallOutcome,
+    /** What the checks found wrong with the answer: what a retry is told, or what was dropped. */
+    problems: z.array(z.string()).readonly(),
+    error: ModelError.nullable(),
+  })
+  .readonly();
+export type ModelCall = z.infer<typeof ModelCall>;
 
 export const AnalysisError = z
   .object({
@@ -146,6 +167,8 @@ export const Analysis = z
     tour: Tour.nullable(),
     warnings: z.array(z.string()).readonly(),
     usage: z.array(ModelUsage).readonly(),
+    /** Defaults for analyses stored before model calls were traced. */
+    modelCalls: z.array(ModelCall).readonly().default([]),
     /** Why the analysis failed; never set by the model passes, which have `modelError`. */
     error: AnalysisError.nullable(),
     /**

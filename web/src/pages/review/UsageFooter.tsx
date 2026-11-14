@@ -40,7 +40,7 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
   const timed = usage.some((entry) => entry.durationMs !== undefined);
 
   return (
-    <footer className="group relative flex justify-end">
+    <div className="group relative flex justify-end">
       <button
         type="button"
         className="peer tabular min-h-6 rounded-sm text-caption text-muted-foreground hover:text-foreground"
@@ -82,6 +82,6 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
           ))}
         </tbody>
       </table>
-    </footer>
+    </div>
   );
 };

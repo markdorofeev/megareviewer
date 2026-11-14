@@ -296,7 +296,7 @@ export const createMockApi = (
       if (timer !== null || !hasModelRun(analysis())) {
         return failure("bad-request", "Claude hasn't analyzed this pull request");
       }
-      fixture = { ...withoutModel(fixtureView.analysis), usage: [] };
+      fixture = { ...withoutModel(fixtureView.analysis), usage: [], modelCalls: [] };
       modelStagesDone = null;
       // The code's stages run again; a publication stays, as on the server.
       const published = publication;

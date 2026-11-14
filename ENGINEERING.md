@@ -35,6 +35,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed |
 | Unchanged caller | Code outside the PR that calls a definition the PR changes, or names it as a type. Read from a checkout |
 | Call site | A use, at a line and column of a part, of a definition the PR changes: where the page shows the code a call runs |
+| Model call | One request of a model pass, with when it ran, how long it took, and what came of it: an answer, an answer with problems, which a retry is told, or an error |
 | Analysis | All of the above for one PR at one head SHA and pipeline version |
 | Publication | The review sent back to the git host |
 | Review thread | A conversation the host keeps on lines of a file: its comments, whether it's resolved or outdated. Read live, never part of an analysis |
