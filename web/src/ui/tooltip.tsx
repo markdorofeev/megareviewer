@@ -24,16 +24,22 @@ function TooltipContent({
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
+  collisionBoundary,
   children,
   shortcut,
   ...props
 }: TooltipPrimitive.Popup.Props & {
   /** hunk: the action's key, shown after the label, e.g. "n". */
   readonly shortcut?: string;
-} & Pick<TooltipPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
+} & Pick<
+    TooltipPrimitive.Positioner.Props,
+    // hunk: collisionBoundary, so a tooltip can be kept inside its card.
+    "align" | "alignOffset" | "side" | "sideOffset" | "collisionBoundary"
+  >) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Positioner
+        collisionBoundary={collisionBoundary}
         align={align}
         alignOffset={alignOffset}
         side={side}

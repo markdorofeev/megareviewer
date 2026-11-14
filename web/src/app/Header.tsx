@@ -1,9 +1,6 @@
 import { useRef } from "react";
-import type { StatusResponse } from "../../../contracts/index.ts";
-import { type ApiError, errorMessage } from "../api/index.ts";
 import { usePageDisplayChoice } from "../lib/page-display.tsx";
 import { type ThemePreference, useTheme } from "../lib/theme.ts";
-import { cn } from "../lib/utils.ts";
 import { Button } from "../ui/button.tsx";
 import {
   DropdownMenu,
@@ -16,46 +13,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
+import { ConnectionsButton } from "./ConnectionsButton.tsx";
 import { Link } from "./Link.tsx";
-
-interface Indicator {
-  readonly tone: "ok" | "warning" | "danger" | "muted";
-  readonly label: string;
-  readonly detail: string;
-}
-
-export const statusIndicator = (
-  status: StatusResponse | null,
-  error: ApiError | null,
-): Indicator => {
-  if (error !== null) return { tone: "danger", label: "Disconnected", detail: errorMessage(error) };
-  if (status === null) return { tone: "muted", label: "Connecting…", detail: "" };
-  const version = `megareviewer ${status.version}`;
-  const { github, bitbucket } = status.hosts;
-  if (!github.configured && !bitbucket.configured) {
-    return { tone: "warning", label: "Setup needed", detail: version };
-  }
-  const failing = [
-    { name: "GitHub", error: github.error },
-    { name: "Bitbucket", error: bitbucket.error },
-  ].flatMap(({ name, error }) => (error === null ? [] : [{ name, error }]));
-  if (failing.length > 0) {
-    const names = failing.map(({ name }) => name).join(" and ");
-    return {
-      tone: "warning",
-      label: failing.length === 1 ? `${names} problem` : `${names} problems`,
-      detail: [...failing.map(({ name, error }) => `${name}: ${error}`), version].join("\n"),
-    };
-  }
-  return { tone: "ok", label: "Ready", detail: version };
-};
-
-const TONE: Readonly<Record<Indicator["tone"], string>> = {
-  ok: "bg-review-approved",
-  warning: "bg-review-pending",
-  danger: "bg-destructive",
-  muted: "bg-muted-foreground",
-};
 
 const THEMES: readonly { readonly value: ThemePreference; readonly label: string }[] = [
   { value: "light", label: "Light" },
@@ -143,30 +102,14 @@ export const DisplayMenu = () => {
   );
 };
 
-export const Header = ({
-  status,
-  error,
-}: {
-  readonly status: StatusResponse | null;
-  readonly error: ApiError | null;
-}) => {
-  const indicator = statusIndicator(status, error);
-  return (
-    <header className="flex h-12 items-center justify-between gap-4 border-b bg-surface-subtle px-4 sm:px-6">
-      <Link to="/" className="text-heading font-semibold text-foreground hover:no-underline">
-        megareviewer
-      </Link>
-      <div className="flex items-center gap-2">
-        <span
-          role="status"
-          title={indicator.detail}
-          className="flex items-center gap-2 text-muted-foreground"
-        >
-          <span aria-hidden="true" className={cn("size-2 rounded-full", TONE[indicator.tone])} />
-          {indicator.label}
-        </span>
-        <DisplayMenu />
-      </div>
-    </header>
-  );
-};
+export const Header = () => (
+  <header className="flex h-12 items-center justify-between gap-4 border-b bg-background px-4 sm:px-6">
+    <Link to="/" className="text-heading font-semibold text-foreground hover:no-underline">
+      megareviewer
+    </Link>
+    <div className="flex items-center gap-2">
+      <ConnectionsButton />
+      <DisplayMenu />
+    </div>
+  </header>
+);

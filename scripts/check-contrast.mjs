@@ -39,6 +39,16 @@ const ratio = (a, b) => {
 
 // [label, foreground token, background token, target]
 const PAIRS = [
+  // hunk: the main page: its text on the page, the field's and squares' borders, the busiest
+  // day's dot, and the Connections button's tones.
+  ["Text on the main page", "foreground", "surface-subtle", 4.5],
+  ["Secondary text on the main page", "muted-foreground", "surface-subtle", 4.5],
+  ["Input border on card (non-text)", "input", "card", 3],
+  ["Primary border on card (non-text)", "primary", "card", 3],
+  ["Busiest day's dot (non-text)", "primary-foreground", "primary", 3],
+  ["Connections with an issue", "review-pending", "review-pending-bg", 4.5],
+  ["Connections failing", "destructive", "review-changes-bg", 4.5],
+  ["Connected check", "ci-success", "background", 3],
   ["Body text", "foreground", "background", 4.5],
   ["Secondary text", "muted-foreground", "background", 4.5],
   ["Secondary on muted", "muted-foreground", "muted", 4.5],
@@ -181,6 +191,9 @@ const FILLS = [
   ["Active tree row on card", "surface-row", "card"],
 ];
 
+// Each activity level lies further from the card than the one before, so the shades read in order.
+const LADDERS = [["Review activity levels", ["card", "activity-1", "activity-2", "activity-3", "primary"]]];
+
 let failed = 0;
 for (const [name, theme] of [
   ["light", light],
@@ -198,6 +211,13 @@ for (const [name, theme] of [
       );
     }
   }
+  for (const [label, steps] of LADDERS) {
+    const distances = steps.map((token) => ratio(theme[token], theme[steps[0]]));
+    if (distances.some((distance, index) => index > 0 && distance <= distances[index - 1])) {
+      failed++;
+      console.error(`FAIL ${name.padEnd(8)} ${label}: not in order of contrast with --${steps[0]}`);
+    }
+  }
   for (const [label, fill, surface] of FILLS) {
     if (!theme[fill] || !theme[surface])
       throw new Error(`Missing token ${fill} or ${surface} in ${name}`);
@@ -209,5 +229,5 @@ for (const [name, theme] of [
 }
 if (failed) process.exit(1);
 console.log(
-  `All ${(PAIRS.length + FILLS.length) * 4} contrast checks pass (light, dark, color-blind light, color-blind dark).`,
+  `All ${(PAIRS.length + FILLS.length + LADDERS.length) * 4} contrast checks pass (light, dark, color-blind light, color-blind dark).`,
 );

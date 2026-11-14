@@ -177,6 +177,10 @@
   --ci-running-bg: #EEF0FD;
   --ci-queued: #5B5B66;
   --ci-skipped: #71717A;
+  /* hunk: review activity's squares, primary mixed into card at 22, 46 and 72%. */
+  --activity-1: #D8D6F9;
+  --activity-2: #AEAAF3;
+  --activity-3: #807AEC;
 
   /* PR state */
   --pr-open: #4F46E5;
@@ -280,6 +284,9 @@
   --ci-running-bg: #26283F;
   --ci-queued: #A1A1AA;
   --ci-skipped: #8D8D96;
+  --activity-1: #37374F;
+  --activity-2: #515283;
+  --activity-3: #6D6FBC;
 
   /* PR state */
   --pr-open: #A5B4FC;
@@ -421,6 +428,9 @@
   --color-ci-running-bg: var(--ci-running-bg);
   --color-ci-queued: var(--ci-queued);
   --color-ci-skipped: var(--ci-skipped);
+  --color-activity-1: var(--activity-1);
+  --color-activity-2: var(--activity-2);
+  --color-activity-3: var(--activity-3);
   --color-pr-open: var(--pr-open);
   --color-pr-open-bg: var(--pr-open-bg);
   --color-pr-merged: var(--pr-merged);

@@ -4,7 +4,11 @@ import type {
   PullRequestListResponse,
   StatusResponse,
 } from "../../../contracts/index.ts";
-import { type AnalysisId, inProgress } from "../../../src/domain/review/index.ts";
+import {
+  type AnalysisId,
+  inProgress,
+  type ReviewActivity,
+} from "../../../src/domain/review/index.ts";
 import type { Result } from "../../../src/domain/shared/index.ts";
 import type { ApiClient } from "./client.ts";
 import type { ApiError } from "./errors.ts";
@@ -69,6 +73,14 @@ export const usePullRequests = () => {
     useCallback(() => client.listPullRequests(), [client]),
   );
   return { pullRequests: data, ...rest };
+};
+
+export const useReviewActivity = () => {
+  const { client } = useApi();
+  const { data, ...rest } = useQuery<ReviewActivity>(
+    useCallback(() => client.getReviewActivity(), [client]),
+  );
+  return { activity: data, ...rest };
 };
 
 /** Refetches arrive in bursts, one per stage event; this coalesces them. */

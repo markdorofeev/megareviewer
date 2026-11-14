@@ -5,13 +5,14 @@ import {
   createApiClient,
   type EventStream,
   subscribeToAnalysis,
-  useStatus,
 } from "../api/index.ts";
 import { PageDisplayProvider } from "../lib/page-display.tsx";
+import { cn } from "../lib/utils.ts";
 import { PickerPage } from "../pages/picker/index.ts";
 import { ReviewPage } from "../pages/review/index.ts";
 import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
+import { ConnectionsProvider } from "./connections-context.tsx";
 import { Header } from "./Header.tsx";
 import { NotFoundPage } from "./NotFoundPage.tsx";
 import { matchRoute, usePathname } from "./router.ts";
@@ -54,21 +55,27 @@ export const App = ({ token, fetch, openEventStream }: AppProps) => {
 
 const Shell = () => {
   const route = matchRoute(usePathname());
-  const status = useStatus();
   return (
     <TooltipProvider>
       <PageDisplayProvider>
-        <Header status={status.status} error={status.error} />
-        <main className="px-4 py-5 sm:px-6">
-          {route.page === "picker" ? (
-            <PickerPage status={status.status} />
-          ) : route.page === "review" ? (
-            <ReviewPage analysisId={route.analysisId} />
-          ) : (
-            <NotFoundPage />
-          )}
-        </main>
-        <Toaster />
+        <ConnectionsProvider>
+          <Header />
+          <main
+            className={cn(
+              "px-4 py-5 sm:px-6",
+              route.page === "picker" && "min-h-[calc(100dvh-3rem)] bg-surface-subtle",
+            )}
+          >
+            {route.page === "picker" ? (
+              <PickerPage />
+            ) : route.page === "review" ? (
+              <ReviewPage analysisId={route.analysisId} />
+            ) : (
+              <NotFoundPage />
+            )}
+          </main>
+          <Toaster />
+        </ConnectionsProvider>
       </PageDisplayProvider>
     </TooltipProvider>
   );

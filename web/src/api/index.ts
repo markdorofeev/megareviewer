@@ -9,6 +9,7 @@ export {
   useApi,
   useMutation,
   usePullRequests,
+  useReviewActivity,
   useStatus,
 } from "./hooks.ts";
 export { errorMessage } from "./messages.ts";

@@ -61,15 +61,16 @@ describe("App", () => {
 
   it("shows the picker and the server's status", async () => {
     renderApp("/");
-    expect(screen.getByRole("heading", { name: "Review a pull request" })).toBeTruthy();
-    expect(await screen.findByText("Ready")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Pull requests" })).toBeTruthy();
+    expect(await screen.findByText("3 of 4 connected")).toBeTruthy();
   });
 
-  it("shows the review page for an analysis", async () => {
+  it("shows the review page for an analysis, with Connections in its header", async () => {
     renderApp(`/review/${fixtureAnalysisView.analysis.id}`);
     expect(
       await screen.findByRole("heading", { name: "Add order receipts endpoint" }),
     ).toBeTruthy();
+    expect(await screen.findByText("3 of 4 connected")).toBeTruthy();
   });
 
   it("shows not-found with a link home for unknown paths", () => {
