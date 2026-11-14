@@ -8,7 +8,7 @@ export {
   type PassOptions,
   type PassOutput,
 } from "./analysis-model.ts";
-export type { AnalysisStore } from "./analysis-store.ts";
+export type { AnalysisStore, ThreadPostKind } from "./analysis-store.ts";
 export type { Clock } from "./clock.ts";
 export type {
   CodeParser,

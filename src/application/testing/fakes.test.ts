@@ -95,7 +95,7 @@ describeTicketSourceContract("fake", {
   unconfigured: () => new FakeTicketSource({ configured: false }),
 });
 
-describeAnalysisStoreContract("in-memory", () => new InMemoryAnalysisStore());
+describeAnalysisStoreContract("in-memory", (clock) => new InMemoryAnalysisStore(clock));
 describeFileCacheContract("in-memory", () => new InMemoryFileCache());
 
 describeLocalCheckoutContract("fake", async () => {

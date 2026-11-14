@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 // so a hint can't name a key that does something else. Single-key shortcuts never fire while
 // typing, and the reviewer can turn them off (WCAG 2.1.4); shortcuts with a modifier stay on.
 
-export type ShortcutScope = "global" | "diff" | "overview" | "tree" | "composer";
+export type ShortcutScope = "global" | "diff" | "overview" | "tree" | "composer" | "picker";
 
 export type ShortcutId =
   | "nextFile"
@@ -23,7 +23,11 @@ export type ShortcutId =
   | "openReview"
   | "submit"
   | "close"
-  | "help";
+  | "help"
+  | "focusLink"
+  | "moveRow"
+  | "openRow"
+  | "cancelOpening";
 
 /** One key press: `key` as KeyboardEvent.key has it, and the modifiers that must be held. */
 export interface KeyChord {
@@ -109,6 +113,27 @@ export const KEYMAP: readonly Shortcut[] = [
     action: "Show all shortcuts",
     scope: "global",
   },
+  { id: "focusLink", chords: [{ key: "/" }], action: "Paste a pull request link", scope: "picker" },
+  {
+    id: "moveRow",
+    chords: [
+      { key: "ArrowUp" },
+      { key: "ArrowDown" },
+      { key: "ArrowLeft" },
+      { key: "ArrowRight" },
+      { key: "Home" },
+      { key: "End" },
+    ],
+    action: "Move between a list's pull requests, or the activity calendar's days",
+    scope: "picker",
+  },
+  { id: "openRow", chords: [{ key: "Enter" }], action: "Open the pull request", scope: "picker" },
+  {
+    id: "cancelOpening",
+    chords: [{ key: "Escape" }],
+    action: "Stop waiting for a review to open",
+    scope: "picker",
+  },
 ];
 
 const BY_ID: ReadonlyMap<ShortcutId, Shortcut> = new Map(KEYMAP.map((entry) => [entry.id, entry]));
@@ -140,6 +165,8 @@ const SYMBOLS: Readonly<Record<string, string>> = {
   ArrowRight: "→",
   Enter: "↵",
   Escape: "Esc",
+  Home: "Home",
+  End: "End",
 };
 
 /** A chord as a hint shows it, one string per key: ["⌘", "↵"], ["⇧", "R"]. */

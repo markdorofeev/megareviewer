@@ -9,6 +9,7 @@ import {
   type PublicationReceipt,
 } from "../../../domain/review/index.ts";
 import type { AnalysisStore } from "../../ports/index.ts";
+import { FixedClock } from "../fixed-clock.ts";
 import { smallFeatureAnalysis } from "../fixtures/index.ts";
 
 const analysisFor = (headSha: string, updatedAt: string): Analysis => {
@@ -37,12 +38,15 @@ const receipt: PublicationReceipt = {
 
 export const describeAnalysisStoreContract = (
   name: string,
-  createStore: () => AnalysisStore | Promise<AnalysisStore>,
+  /** The store records its own posts at the clock's time. */
+  createStore: (clock: FixedClock) => AnalysisStore | Promise<AnalysisStore>,
 ): void => {
   describe(`AnalysisStore contract: ${name}`, () => {
     let store: AnalysisStore;
+    let clock: FixedClock;
     beforeEach(async () => {
-      store = await createStore();
+      clock = new FixedClock("2026-10-21T10:00:00.000Z");
+      store = await createStore(clock);
     });
 
     it("starts empty", async () => {
@@ -53,6 +57,56 @@ export const describeAnalysisStoreContract = (
       expect(await store.getPointReviews(a.id)).toEqual([]);
       expect([...(await store.getPostedComments(a.id))]).toEqual([]);
       expect(await store.getPublication(a.id)).toBeNull();
+      expect(await store.getReviewActivity("2026-01-01T00:00:00Z")).toEqual({
+        reviews: [],
+        comments: [],
+      });
+    });
+
+    it("reads a review, its comments but the summary, a reply and a comment posted now as activity", async () => {
+      await store.saveAnalysis(a);
+      await store.saveAnalysis(b);
+      await store.recordPostedComment(a.id, summaryKey, "1");
+      clock.advance(1000);
+      await store.recordPostedComment(a.id, d3Key, "2");
+      await store.recordPublication(a.id, receipt);
+      clock.advance(1000);
+      await store.recordThreadPost(b.id, "reply");
+      clock.advance(1000);
+      await store.recordThreadPost(a.id, "comment");
+
+      const activity = await store.getReviewActivity("2026-10-21T00:00:00Z");
+      expect(activity.reviews).toEqual([
+        { at: receipt.publishedAt, pullRequest: smallFeatureAnalysis.key.ref },
+      ]);
+      expect([...activity.comments].sort()).toEqual([
+        "2026-10-21T10:00:01.000Z",
+        "2026-10-21T10:00:02.000Z",
+        "2026-10-21T10:00:03.000Z",
+      ]);
+    });
+
+    it("reads nothing before since", async () => {
+      await store.saveAnalysis(a);
+      await store.recordPostedComment(a.id, d3Key, "2");
+      await store.recordPublication(a.id, receipt);
+      await store.recordThreadPost(a.id, "reply");
+
+      expect(await store.getReviewActivity("2026-10-21T10:10:00.001Z")).toEqual({
+        reviews: [],
+        comments: [],
+      });
+      expect((await store.getReviewActivity("2026-10-21T10:10:00Z")).reviews).toHaveLength(1);
+    });
+
+    it("counts a retried publish's comments once", async () => {
+      await store.saveAnalysis(a);
+      await store.recordPostedComment(a.id, d3Key, "2");
+      clock.advance(60_000);
+      await store.recordPostedComment(a.id, d3Key, "2");
+      await store.recordPublication(a.id, receipt);
+
+      expect((await store.getReviewActivity("2026-10-21T00:00:00Z")).comments).toHaveLength(1);
     });
 
     it("round-trips an analysis", async () => {

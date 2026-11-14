@@ -67,6 +67,15 @@ const responses: Record<RouteName, unknown> = {
       defaultId: "claude-code/claude-sonnet-5-5",
     },
   },
+  getReviewActivity: {
+    reviews: [
+      {
+        at: "2026-10-21T09:10:00Z",
+        pullRequest: { repo: { host: "github", owner: "acme", repo: "shop" }, number: 101 },
+      },
+    ],
+    comments: ["2026-10-21T09:10:00Z"],
+  },
   listPullRequests: {
     items: [
       {

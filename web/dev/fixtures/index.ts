@@ -1,3 +1,4 @@
+export { activeReviewerActivity, newReviewerActivity } from "./activity.ts";
 export { fixtureAnalysisView, fixtureHunks, fixtureParts } from "./analysis.ts";
 export { largeAnalysisView } from "./large.ts";
 export { fixturePullRequestStatus } from "./pull-request-status.ts";

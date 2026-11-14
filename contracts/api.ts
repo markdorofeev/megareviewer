@@ -15,6 +15,7 @@ import {
   PublicationVerdict,
   PullRequestStatus,
   PullRequestSummary,
+  ReviewActivity,
   StageName,
   StageStatus,
   ThreadComment,
@@ -205,6 +206,17 @@ export const routes = {
     params: NoParams,
     request: null,
     response: PullRequestListResponse,
+  },
+  /**
+   * The reviews and comments posted from megareviewer on this machine in the last 27 weeks: the
+   * page shows 26, and sorts them into its own local days.
+   */
+  getReviewActivity: {
+    method: "GET",
+    path: "/api/review-activity",
+    params: NoParams,
+    request: null,
+    response: ReviewActivity,
   },
   /** Starts an analysis, or returns the existing one for the same PR, head SHA and pipeline. */
   startAnalysis: {

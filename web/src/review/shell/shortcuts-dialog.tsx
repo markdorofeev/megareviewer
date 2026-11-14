@@ -25,6 +25,7 @@ const SCOPES: readonly { readonly scope: ShortcutScope; readonly title: string }
   { scope: "overview", title: "In the overview" },
   { scope: "tree", title: "In the file tree" },
   { scope: "composer", title: "Writing a comment or review" },
+  { scope: "picker", title: "On the pull requests page" },
 ];
 
 export interface ShortcutsDialogProps {

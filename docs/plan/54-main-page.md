@@ -1,6 +1,6 @@
 # Stage 54: The main page: lists, connections in the header, review activity
 
-**Status:** Not started
+**Status:** In progress (branch `claude/stage-54-b42383`)
 **Depends on:** 13, 23, 46, and 40's replies and Comment now, which are on main
 **Owns:** `web/src/pages/picker/`, `web/src/app/Header.tsx` and the Connections button beside it, `src/domain/review/activity.ts`, `parsePullRequestUrl`'s scheme rule, the `thread_posts` table and the activity read in `src/adapters/sqlite/`, the activity use case and route, the `picker` scope in `web/src/lib/keymap.ts`, the activity tokens in `web/src/styles/globals.css`, the page's examples in `web/src/design-system/`, its e2e spec
 

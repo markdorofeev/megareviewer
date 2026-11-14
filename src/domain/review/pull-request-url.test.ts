@@ -32,6 +32,9 @@ describe("parsePullRequestUrl", () => {
       "https://Bitbucket.org/acme/payments/pull-requests/42/overview?x=1#y",
       bitbucket("acme", "payments", 42),
     ],
+    ["github.com/acme/shop/pull/101", github("acme", "shop", 101)],
+    ["  GitHub.com/acme/shop/pull/101/files", github("acme", "shop", 101)],
+    ["bitbucket.org/acme/payments/pull-requests/42", bitbucket("acme", "payments", 42)],
   ])("accepts %s", (url, expected) => {
     expect(parsePullRequestUrl(url)).toEqual(ok(expected));
   });
@@ -39,7 +42,9 @@ describe("parsePullRequestUrl", () => {
   it.each([
     ["not a url"],
     [""],
-    ["github.com/acme/shop/pull/1"],
+    ["github.com:8443/acme/shop/pull/1"],
+    ["www.github.com/acme/shop/pull/1"],
+    ["github.com.evil.com/acme/shop/pull/1"],
     ["http://github.com/acme/shop/pull/1"],
     ["ftp://github.com/acme/shop/pull/1"],
     ["https://github.com:8443/acme/shop/pull/1"],

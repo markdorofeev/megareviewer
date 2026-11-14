@@ -47,6 +47,8 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Check | One CI result on a commit: *passed*, *failed*, *running* or *skipped* |
 | Severity | How much Claude thinks a finding matters: *minor*, *major* or *blocking*. Comments carry none |
 | Suggestion | The lines a comment proposes in place of the ones it's on |
+| Connection | A service megareviewer reads from, GitHub, Bitbucket, Claude or Jira, and whether it works |
+| Review activity | The reviews and comments the reviewer posted from megareviewer on this machine, by day |
 
 ### Bounded contexts
 

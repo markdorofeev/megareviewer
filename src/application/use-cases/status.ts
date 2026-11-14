@@ -5,6 +5,7 @@ import {
   type ModelOptions,
   type PullRequestRef,
   type PullRequestSummary,
+  type ReviewActivity,
 } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
 import type { AppDeps } from "./deps.ts";
@@ -31,6 +32,9 @@ export interface Status {
 }
 
 const HOSTS: readonly HostKind[] = HostKinds.options;
+
+/** The page shows 26 weeks; one more covers any time zone's edge of the first day. */
+export const ACTIVITY_WEEKS = 27;
 
 /** PRs opened here before that are looked up on their hosts, so the lookup stays small. */
 export const OPENED_PULL_REQUESTS = 50;
@@ -82,6 +86,12 @@ export const createStatusUseCases = (deps: AppDeps, version: string) => ({
         return failed === null ? [] : [{ host, message: failed.error.message }];
       }),
     };
+  },
+
+  /** What the reviewer posted from megareviewer in the last ACTIVITY_WEEKS weeks. */
+  async getReviewActivity(): Promise<ReviewActivity> {
+    const since = Date.parse(deps.clock.now()) - ACTIVITY_WEEKS * 7 * 24 * 60 * 60 * 1000;
+    return deps.store.getReviewActivity(new Date(since).toISOString());
   },
 
   async getStatus(): Promise<Status> {

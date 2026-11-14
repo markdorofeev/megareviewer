@@ -75,6 +75,7 @@ export const createApiClient = (options: ApiClientOptions) => {
   const routeCalls = {
     getStatus: () => send(routes.getStatus, {}),
     listPullRequests: () => send(routes.listPullRequests, {}),
+    getReviewActivity: () => send(routes.getReviewActivity, {}),
     startAnalysis: (body: StartAnalysisRequest) => send(routes.startAnalysis, {}, body),
     getAnalysis: (id: AnalysisId) => send(routes.getAnalysis, { id }),
     getFileContent: (id: AnalysisId, side: "base" | "head", path: string) =>

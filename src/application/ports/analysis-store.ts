@@ -6,7 +6,12 @@ import type {
   PointReview,
   PublicationReceipt,
   PullRequestRef,
+  ReviewActivity,
+  Timestamp,
 } from "../../domain/review/index.ts";
+
+/** A post the reviewer made on a PR's conversation at once, outside a review. */
+export type ThreadPostKind = "reply" | "comment";
 
 export interface AnalysisStore {
   getAnalysis(id: AnalysisId): Promise<Analysis | null>;
@@ -25,4 +30,11 @@ export interface AnalysisStore {
   recordPostedComment(id: AnalysisId, key: CommentKey, hostCommentId: string): Promise<void>;
   getPublication(id: AnalysisId): Promise<PublicationReceipt | null>;
   recordPublication(id: AnalysisId, receipt: PublicationReceipt): Promise<void>;
+  /** Records, at the store's clock, a reply or a comment the host accepted. */
+  recordThreadPost(id: AnalysisId, kind: ThreadPostKind): Promise<void>;
+  /**
+   * The reviews published and the comments posted at or after `since`: a review's comments but
+   * its summary, and every thread post.
+   */
+  getReviewActivity(since: Timestamp): Promise<ReviewActivity>;
 }

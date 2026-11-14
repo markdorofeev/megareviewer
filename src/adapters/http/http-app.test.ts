@@ -310,6 +310,13 @@ describe("GET /api/status", () => {
   });
 });
 
+describe("GET /api/review-activity", () => {
+  it("answers nothing on an empty store", async () => {
+    const { call } = setupApp();
+    expect((await call("getReviewActivity")).body).toEqual({ reviews: [], comments: [] });
+  });
+});
+
 describe("GET /api/pull-requests", () => {
   it("lists every host's PRs and the hosts that failed", async () => {
     const { call, bitbucket } = setupApp();

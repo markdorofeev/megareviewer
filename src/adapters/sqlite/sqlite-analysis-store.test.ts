@@ -68,8 +68,12 @@ const receipt: PublicationReceipt = {
   postedCommentIds: {},
 };
 
-describeAnalysisStoreContract("sqlite-memory", () => openStore(":memory:"));
-describeAnalysisStoreContract("sqlite-file", () => openStore(tempPath()));
+describeAnalysisStoreContract("sqlite-memory", (clock) =>
+  openStore(":memory:", new RecordingLogger(), clock),
+);
+describeAnalysisStoreContract("sqlite-file", (clock) =>
+  openStore(tempPath(), new RecordingLogger(), clock),
+);
 describeFileCacheContract("sqlite-memory", () => openStore(":memory:"));
 describeFileCacheContract("sqlite-file", () => openStore(tempPath()));
 

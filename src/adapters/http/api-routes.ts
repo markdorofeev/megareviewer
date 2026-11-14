@@ -92,6 +92,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   const handlers: Handlers = {
     getStatus: async () => ok(await useCases.getStatus()),
     listPullRequests: async () => ok(await useCases.listPullRequests()),
+    getReviewActivity: async () => ok(await useCases.getReviewActivity()),
     startAnalysis: ({ body }) => useCases.startAnalysis(body.url),
     getAnalysis: ({ params }) => useCases.getAnalysisView(params.id),
     getFileContent: ({ params }) => useCases.getFileContent(params.id, params.side, params.path),
@@ -117,6 +118,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   };
   register(app, routes.getStatus, handlers.getStatus);
   register(app, routes.listPullRequests, handlers.listPullRequests);
+  register(app, routes.getReviewActivity, handlers.getReviewActivity);
   register(app, routes.startAnalysis, handlers.startAnalysis);
   register(app, routes.getAnalysis, handlers.getAnalysis);
   register(app, routes.getFileContent, handlers.getFileContent);

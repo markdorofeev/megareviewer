@@ -68,6 +68,17 @@ export const MIGRATIONS: readonly string[] = [
     FROM decision_reviews;
   DROP TABLE decision_reviews;
   `,
+  // Replies and comments posted at once, for the review activity: a review and its comments are
+  // already in publications and published_comments.
+  `
+  CREATE TABLE thread_posts (
+    id INTEGER PRIMARY KEY,
+    analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('reply', 'comment')),
+    posted_at TEXT NOT NULL
+  );
+  CREATE INDEX thread_posts_posted_at ON thread_posts (posted_at);
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

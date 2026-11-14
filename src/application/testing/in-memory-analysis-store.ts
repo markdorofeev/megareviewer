@@ -7,8 +7,11 @@ import type {
   PointReview,
   PublicationReceipt,
   PullRequestRef,
+  ReviewActivity,
+  Timestamp,
 } from "../../domain/review/index.ts";
-import type { AnalysisStore } from "../ports/index.ts";
+import type { AnalysisStore, Clock, ThreadPostKind } from "../ports/index.ts";
+import { FixedClock } from "./fixed-clock.ts";
 
 const sameKey = (a: AnalysisKey, b: AnalysisKey): boolean =>
   a.ref.repo.host === b.ref.repo.host &&
@@ -22,8 +25,22 @@ const sameKey = (a: AnalysisKey, b: AnalysisKey): boolean =>
 export class InMemoryAnalysisStore implements AnalysisStore {
   private readonly analyses = new Map<AnalysisId, Analysis>();
   private readonly pointReviews = new Map<AnalysisId, Map<PointId, PointReview>>();
-  private readonly postedComments = new Map<AnalysisId, Map<CommentKey, string>>();
+  private readonly postedComments = new Map<
+    AnalysisId,
+    Map<CommentKey, { readonly id: string; readonly at: Timestamp }>
+  >();
   private readonly publications = new Map<AnalysisId, PublicationReceipt>();
+  private readonly threadPosts: {
+    readonly id: AnalysisId;
+    readonly kind: ThreadPostKind;
+    readonly at: Timestamp;
+  }[] = [];
+
+  private readonly clock: Clock;
+
+  constructor(clock: Clock = new FixedClock()) {
+    this.clock = clock;
+  }
 
   async getAnalysis(id: AnalysisId): Promise<Analysis | null> {
     return structuredClone(this.analyses.get(id) ?? null);
@@ -72,12 +89,14 @@ export class InMemoryAnalysisStore implements AnalysisStore {
   }
 
   async getPostedComments(id: AnalysisId): Promise<ReadonlyMap<CommentKey, string>> {
-    return new Map(this.postedComments.get(id));
+    return new Map(
+      [...(this.postedComments.get(id) ?? [])].map(([key, posted]) => [key, posted.id] as const),
+    );
   }
 
   async recordPostedComment(id: AnalysisId, key: CommentKey, hostCommentId: string): Promise<void> {
-    const posted = this.postedComments.get(id) ?? new Map<CommentKey, string>();
-    posted.set(key, hostCommentId);
+    const posted = this.postedComments.get(id) ?? new Map();
+    posted.set(key, { id: hostCommentId, at: this.clock.now() });
     this.postedComments.set(id, posted);
   }
 
@@ -87,5 +106,26 @@ export class InMemoryAnalysisStore implements AnalysisStore {
 
   async recordPublication(id: AnalysisId, receipt: PublicationReceipt): Promise<void> {
     this.publications.set(id, structuredClone(receipt));
+  }
+
+  async recordThreadPost(id: AnalysisId, kind: ThreadPostKind): Promise<void> {
+    this.threadPosts.push({ id, kind, at: this.clock.now() });
+  }
+
+  async getReviewActivity(since: Timestamp): Promise<ReviewActivity> {
+    const after = (at: Timestamp) => Date.parse(at) >= Date.parse(since);
+    const reviews = [...this.publications].flatMap(([id, receipt]) => {
+      const analysis = this.analyses.get(id);
+      return analysis === undefined || !after(receipt.publishedAt)
+        ? []
+        : [{ at: receipt.publishedAt, pullRequest: structuredClone(analysis.key.ref) }];
+    });
+    const comments = [
+      ...[...this.postedComments.values()].flatMap((posted) =>
+        [...posted].flatMap(([key, { at }]) => (key === "summary" ? [] : [at])),
+      ),
+      ...this.threadPosts.map((post) => post.at),
+    ].filter(after);
+    return { reviews, comments };
   }
 }

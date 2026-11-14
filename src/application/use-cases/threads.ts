@@ -99,7 +99,9 @@ export const createThreadUseCases = (deps: AppDeps) => {
         threadId,
         body.trim(),
       );
-      return reply.ok ? reply : err(fromHostError(reply.error));
+      if (!reply.ok) return err(fromHostError(reply.error));
+      await deps.store.recordThreadPost(id, "reply");
+      return reply;
     },
 
     /**
@@ -146,7 +148,9 @@ export const createThreadUseCases = (deps: AppDeps) => {
         body,
         headSha,
       });
-      return posted.ok ? ok(null) : err(fromHostError(posted.error));
+      if (!posted.ok) return err(fromHostError(posted.error));
+      await deps.store.recordThreadPost(id, "comment");
+      return ok(null);
     },
 
     async resolveThread(

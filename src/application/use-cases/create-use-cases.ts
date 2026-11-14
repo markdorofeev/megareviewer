@@ -25,6 +25,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     publishReview: review.publishReview,
     listPullRequests: status.listPullRequests,
     getStatus: status.getStatus,
+    getReviewActivity: status.getReviewActivity,
     getThreads: threads.getThreads,
     getPullRequestStatus: pullRequestStatus.getPullRequestStatus,
     getAttachment: threads.getAttachment,

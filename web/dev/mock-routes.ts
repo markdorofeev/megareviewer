@@ -27,6 +27,7 @@ import {
   StageName,
 } from "../../src/domain/review/index.ts";
 import {
+  activeReviewerActivity,
   fixtureAnalysisView,
   fixturePullRequestStatus,
   fixturePullRequests,
@@ -250,6 +251,7 @@ export const createMockApi = (
   > = {
     getStatus: () => success(fixtureStatus),
     listPullRequests: () => success(fixturePullRequests),
+    getReviewActivity: () => success(activeReviewerActivity(Date.now())),
     startAnalysis: (_, body) => {
       const request = routes.startAnalysis.request.safeParse(body);
       if (!request.success) {

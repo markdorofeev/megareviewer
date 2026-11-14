@@ -27,7 +27,7 @@ const setup = async (options: { threads?: readonly ReviewThread[]; noThreads?: b
   const github = new FakeGitHost({ host: "github", fixtures: allFixtures, clock });
   const threads = new FakeReviewThreads({ host: "github", clock });
   threads.setThreads(ref, { threads: options.threads ?? smallFeatureThreadList.threads });
-  const store = new InMemoryAnalysisStore();
+  const store = new InMemoryAnalysisStore(clock);
   const fileCache = new InMemoryFileCache();
   const useCases = createUseCases(
     {
@@ -152,14 +152,20 @@ describe("replyToThread and resolveThread", () => {
     const thread = list.ok ? list.value.threads.find((one) => one.id === "PRRT_cache") : undefined;
     expect(thread?.resolved).toBe(true);
     expect(thread?.comments.at(-1)?.body).toBe("Capped.");
+    // A reply is review activity; resolving isn't.
+    expect(await useCases.getReviewActivity()).toEqual({
+      reviews: [],
+      comments: ["2026-10-21T10:00:00.000Z"],
+    });
   });
 
-  it("passes the host's refusal on", async () => {
+  it("passes the host's refusal on, recording nothing", async () => {
     const { useCases, id } = await setup();
     expect(await useCases.replyToThread(id, "PRRT_nope", "x")).toMatchObject({
       ok: false,
       error: { code: "not-found" },
     });
+    expect((await useCases.getReviewActivity()).comments).toEqual([]);
     expect(await useCases.resolveThread(id, "PRRT_nope", true)).toMatchObject({
       ok: false,
       error: { code: "not-found" },
@@ -186,6 +192,7 @@ describe("postComment", () => {
       startLine: first,
     });
     expect(posted).toEqual({ ok: true, value: null });
+    expect((await useCases.getReviewActivity()).comments).toHaveLength(1);
     const list = await useCases.getThreads(id);
     expect(list.ok && list.value.threads.at(-1)).toMatchObject({
       path: hunk.path,
@@ -215,9 +222,10 @@ describe("postComment", () => {
     expect(list.ok && list.value.threads.length).toBe(smallFeatureThreadList.threads.length);
   });
 
-  it("passes the host's refusal on", async () => {
+  it("passes the host's refusal on, recording nothing", async () => {
     const { useCases, threads, id } = await setup();
     threads.failNext("comment", { kind: "rejected", message: "No.", retryAfterSeconds: null });
     expect(await useCases.postComment(id, comment)).toMatchObject({ ok: false });
+    expect((await useCases.getReviewActivity()).comments).toEqual([]);
   });
 });

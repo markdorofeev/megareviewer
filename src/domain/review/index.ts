@@ -1,4 +1,17 @@
 export {
+  type ActivityDay,
+  type ActivityLevel,
+  type ActivityTotals,
+  activityDays,
+  activityLevel,
+  activityTotals,
+  addDays,
+  LocalDate,
+  PublishedReview,
+  ReviewActivity,
+  weekdayOf,
+} from "./activity.ts";
+export {
   Analysis,
   AnalysisError,
   AnalysisId,

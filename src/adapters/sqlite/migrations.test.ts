@@ -31,6 +31,7 @@ describe("migrate", () => {
       "point_reviews",
       "publications",
       "published_comments",
+      "thread_posts",
     ]);
   });
 

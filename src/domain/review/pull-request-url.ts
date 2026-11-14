@@ -12,15 +12,20 @@ const NUMBER = /^[1-9][0-9]*$/;
 const isName = (segment: string | undefined): segment is string =>
   segment !== undefined && NAME.test(segment) && segment !== "." && segment !== "..";
 
+/** A link pasted without its scheme, "github.com/acme/web/pull/3307", is read as https. */
+const withScheme = (url: string): string =>
+  /^(github\.com|bitbucket\.org)\//i.test(url) ? `https://${url}` : url;
+
 /**
- * Accepts github.com and bitbucket.org PR URLs, with any trailing path, query or fragment.
+ * Accepts github.com and bitbucket.org PR URLs, with any trailing path, query or fragment, and
+ * with or without `https://`.
  * Owner and repo are lowercased: both hosts treat them case-insensitively, and one PR
  * should map to one analysis however its URL was typed.
  */
 export const parsePullRequestUrl = (url: string): Result<PullRequestRef, "unsupported-url"> => {
   let parsed: URL;
   try {
-    parsed = new URL(url.trim());
+    parsed = new URL(withScheme(url.trim()));
   } catch {
     return err("unsupported-url");
   }

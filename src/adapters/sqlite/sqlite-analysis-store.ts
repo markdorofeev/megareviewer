@@ -7,6 +7,7 @@ import type {
   FileAt,
   FileCache,
   Logger,
+  ThreadPostKind,
 } from "../../application/ports/index.ts";
 import {
   Analysis,
@@ -15,8 +16,10 @@ import {
   CommentKey,
   PointReview,
   PublicationReceipt,
+  PublishedReview,
   PullRequestRef,
   type RepoRef,
+  Timestamp,
 } from "../../domain/review/index.ts";
 import { MIGRATIONS, migrate } from "./migrations.ts";
 
@@ -42,6 +45,14 @@ const PointReviewRow = z.object({
 const PostedCommentRow = z.object({ comment_key: z.string(), host_comment_id: z.string() });
 const ReceiptRow = z.object({ receipt: z.string() });
 const FileRow = z.object({ content: z.string().nullable() });
+const ReviewRow = z.object({
+  at: z.string(),
+  host: z.string(),
+  owner: z.string(),
+  repo: z.string(),
+  number: z.number(),
+});
+const AtRow = z.object({ at: z.string() });
 const RefRow = z.object({
   host: z.string(),
   owner: z.string(),
@@ -153,6 +164,21 @@ export const openSqliteAnalysisStore = (
      VALUES (?, ?, ?, ?)
      ON CONFLICT (analysis_id) DO UPDATE SET
        url = excluded.url, published_at = excluded.published_at, receipt = excluded.receipt`,
+  );
+  const insertThreadPost = db.prepare(
+    "INSERT INTO thread_posts (analysis_id, kind, posted_at) VALUES (?, ?, ?)",
+  );
+  // julianday, since hosts' timestamps and the clock's differ in their fractional seconds.
+  const selectReviews = db.prepare(
+    `SELECT p.published_at AS at, a.host, a.owner, a.repo, a.number
+     FROM publications p JOIN analyses a ON a.id = p.analysis_id
+     WHERE julianday(p.published_at) >= julianday(?)`,
+  );
+  const selectCommentTimes = db.prepare(
+    `SELECT posted_at AS at FROM published_comments
+     WHERE comment_key <> 'summary' AND julianday(posted_at) >= julianday(?)
+     UNION ALL
+     SELECT posted_at AS at FROM thread_posts WHERE julianday(posted_at) >= julianday(?)`,
   );
 
   const toAnalysis = (row: unknown): Analysis | null => {
@@ -274,6 +300,26 @@ export const openSqliteAnalysisStore = (
 
     async recordPublication(id: AnalysisId, receipt: PublicationReceipt) {
       upsertPublication.run(id, receipt.url, receipt.publishedAt, JSON.stringify(receipt));
+    },
+
+    async recordThreadPost(id: AnalysisId, kind: ThreadPostKind) {
+      insertThreadPost.run(id, kind, clock.now());
+    },
+
+    async getReviewActivity(since: Timestamp) {
+      const reviews = selectReviews.all(since).flatMap((raw) => {
+        const { at, host, owner, repo, number } = ReviewRow.parse(raw);
+        const review = PublishedReview.safeParse({
+          at,
+          pullRequest: { repo: { host, owner, repo }, number },
+        });
+        return review.success ? [review.data] : [];
+      });
+      const comments = selectCommentTimes.all(since, since).flatMap((raw) => {
+        const at = Timestamp.safeParse(AtRow.parse(raw).at);
+        return at.success ? [at.data] : [];
+      });
+      return { reviews, comments };
     },
 
     async get(repo: RepoRef, { sha, path }: FileAt) {
