@@ -25,15 +25,21 @@ Not documented: the flags of `opencode models` and `opencode auth list`, token u
 
 ## Decisions
 
-Each holds only if the spike confirms what it rests on.
+Rewritten after the spike (see **Measurements**): 2.3.0 is V2, without the `format` field the first version of these rested on. The user chose to go on with JSON asked for in the prompt.
 
-- **The server, not `opencode run`.** Structured output and the list of connected providers are documented only on the HTTP API. One `opencode serve` is started on the first use, on `127.0.0.1` with a random port and a random password, and stopped with megareviewer. A process per pass with `opencode run`, as for Claude Code and Codex, was the alternative: without a schema the answer would be JSON by request only, checked by Zod and retried more often.
-- **`fetch`, not the SDK.** The calls are four routes; `@opencode-ai/sdk` would be a runtime dependency in a package that installs none.
-- **Detection is the server's own answer.** `opencode --version` says it's installed; the options are the models of the providers `GET /provider` lists as `connected`. megareviewer never reads opencode's stored credentials.
+- **The server, not `opencode run`.** The list of models with their context sizes, prices and efforts, and per-message usage and cost, are on the HTTP API. One `opencode serve --hostname 127.0.0.1 --port 0` is started on the first use, in a new empty directory, with a random password, and stopped with megareviewer; it prints the port it took. A process per pass with `opencode run` was the alternative: a server per pass, and its JSON events carry less.
+- **`fetch`, not the SDK.** The calls are a handful of routes; `@opencode-ai/sdk` would be a runtime dependency in a package that installs none.
+- **JSON asked for in the prompt, checked by Zod.** The pass's task ends with the JSON schema of its own answer (one variant of `PassAnswer`, not the union) and asks for one JSON object and nothing else. The answer's text is parsed, a code fence around it tolerated, and checked by the same Zod schema as every provider's; the pipeline retries an invalid answer once with what was wrong. Provider-native structured output through a provider's `body` was the alternative: each provider package names the field differently, the config is fixed per server, so one schema for all passes, and Anthropic refuses the union.
+- **The PR in a session instruction entry.** `PUT /api/experimental/session/:id/instructions/entries/pr` puts the PR data in the system prompt, before a cache breakpoint, so a later pass reads it from cache: 41,148 of 41,242 tokens on delphi-code #2 through Anthropic. A synthetic message before the task read nothing from cache, and the PR in the task's own message can't be shared. The route is experimental; a version check guards it.
+- **Our instructions as an agent's.** The config defines an agent, `megareviewer`, whose `system` is the shared system prompt, so it's sent first. opencode adds its own blocks after it (the model's name, the date and working directory, a line about worktrees); they can't be turned off.
+- **The reviewer's opencode config stays.** Their providers, local ones among them, are defined there, so the server reads it; the agent's permissions, the tool check and a config of ours on top of theirs are the lockdown. The project's config isn't read (`OPENCODE_DISABLE_PROJECT_CONFIG`), nor Claude Code's (`OPENCODE_DISABLE_CLAUDE_CODE`). Pointing `OPENCODE_CONFIG_DIR` at an empty directory was the alternative; it would hide every provider configured in a file, which is how local models are added.
+- **opencode's free models are left out** (`OPENCODE_DISABLE_FREE_MODELS`). They're on unless turned off, through opencode's own inference service, which the reviewer never connected; their code would go there.
+- **Detection is the server's own answer.** `opencode --version` says it's installed and which version; the options are `GET /api/model`'s models. megareviewer never reads opencode's stored credentials.
 - **Every option is unmeasured.** The models are whatever the reviewer connected, and the evals can't run on all of them, so stage 51's rule can't hold here. They're listed with the "unmeasured" chip instead, and the README says what that means. Listing only models measured elsewhere was the alternative; it would leave out local models, which are the reason to use opencode.
-- **Models that Claude Code or Codex also offer stay listed here too.** The bill differs: opencode uses the reviewer's API keys.
-- **The lockdown is the same rule as Codex's.** A config megareviewer passes denies every tool, and the answer's parts are checked: anything but text, reasoning and the `StructuredOutput` call fails the pass and discards the answer.
-- **Cost is whatever opencode reports,** as an estimate if it gives one and absent if it doesn't, using stage 52's nullable `costUsd`. megareviewer keeps no price table for models it can't enumerate.
+- **Models that Claude Code or Codex also offer stay listed here too.** The bill differs: opencode uses the reviewer's own keys.
+- **The lockdown.** The agent's permissions end with a rule denying everything, which leaves the model one tool, `skill`, that can't be removed; every assistant message's content is checked, and anything but text and reasoning, or a second step, fails the pass and discards the answer.
+- **Sessions are deleted after the pass,** since opencode keeps them in the reviewer's own history, and each gets a title so opencode doesn't spend a call naming it.
+- **Cost is whatever opencode reports,** from its model catalog, and absent for a model the catalog has no price for, using stage 52's nullable `costUsd`. megareviewer keeps no price table for models it can't enumerate.
 
 ## Read first
 
@@ -104,6 +110,18 @@ opencode 2.3.0 (`~/.opencode/bin/opencode`), macOS 15, the Anthropic provider fr
 - **Auth.** Basic auth with the password; without it, or with a wrong one, `/api/*` answers 401.
 - **Sessions go into the reviewer's opencode history.** They're stored in `~/.local/share/opencode/opencode.db`, the data directory the reviewer's stored credentials live in, and listed by `GET /api/session`; `DELETE /api/session/:id` removes one (204).
 - **A provider that can't be reached** fails after about 80 seconds of retries, as `provider.transport`.
+
+- **Where the PR caches.** delphi-code #2's rendered input, 94,758 bytes, two passes with different tasks, each in a new session, `claude-haiku-5-5` at `low`:
+
+  | Placement | First pass: cache read / write | Second pass: cache read / write |
+  |---|---|---|
+  | Instruction entry (`PUT /api/experimental/session/:id/instructions/entries/pr`), lands in the system prompt before its last breakpoint | 1,175 / 40,063 | 41,148 / 90 |
+  | Synthetic message (`POST /api/session/:id/synthetic`) before the task | 1,627 / 39,599 | 1,627 / 39,599 |
+
+  In the task's own message the PR can't be shared at all, since the breakpoint is at the message's end.
+- **A session without a title costs a call:** opencode's `title` agent names it on the session's model. Given a `title` when it's created, it doesn't.
+- **`--port 0` works,** and the server prints the port it took: "server listening on http://127.0.0.1:50711".
+- **One provider lists many models:** the Anthropic key alone gives 20, each with `variants` such as `none`, `low` … `max`.
 
 So the stage's first condition fails as planned: 2.3.0 has no structured output a prompt can ask for. What's left is a schema per provider package in the server's config, which Anthropic refuses for the union, or JSON asked for in the prompt and checked by Zod. The lockdown holds as far as tools go, with `skill` the one left.
 
