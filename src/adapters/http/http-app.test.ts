@@ -244,6 +244,22 @@ class GatedModel extends FakeAnalysisModel {
     await this.gate.promise;
     return super.intent(input, options);
   }
+
+  // The passes run side by side, so each waits for the gate, not only the intent.
+  override async findings(input: AnalysisInput, options?: PassOptions) {
+    await this.gate.promise;
+    return super.findings(input, options);
+  }
+
+  override async risk(input: AnalysisInput, options?: PassOptions) {
+    await this.gate.promise;
+    return super.risk(input, options);
+  }
+
+  override async decisions(input: AnalysisInput, options?: PassOptions) {
+    await this.gate.promise;
+    return super.decisions(input, options);
+  }
 }
 
 /** Counts live subscriptions, to see that a closed stream unsubscribes. */
@@ -830,7 +846,6 @@ describe("GET /api/analyses/:id/events", () => {
           findings: "pending" as const,
           risk: "pending" as const,
           decisions: "pending" as const,
-          tour: "pending" as const,
         },
       },
     ]) {

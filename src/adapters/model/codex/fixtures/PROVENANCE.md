@@ -4,7 +4,7 @@ Recorded with Codex CLI 0.162.0 on macOS, signed in with ChatGPT, on 2026-11-14.
 
 | File | How |
 |---|---|
-| `intent.jsonl` … `tour.jsonl` | `node evals/record-codex.ts`: each pass on small-feature, GPT-6 Luna |
+| `intent.jsonl` … `decisions.jsonl` | `node evals/record-codex.ts`: each pass on small-feature, GPT-6 Luna, when the findings, risk and decisions passes were also sent the intent's answer |
 | `not-signed-in.jsonl` | The same script, with an empty `CODEX_HOME` |
 | `command.jsonl` | Stage 52's task 1: the shell tool turned back on, the model asked to `curl` a local listener, which the sandbox refused |
 | `mcp-call.jsonl` | Task 1: code mode asked to call `list_mcp_resources` and `read_mcp_resource` |

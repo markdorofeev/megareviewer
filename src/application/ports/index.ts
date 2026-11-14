@@ -7,9 +7,6 @@ export {
   ModelRisk,
   type PassOptions,
   type PassOutput,
-  TourDraft,
-  type TourSkeleton,
-  TourStepDraft,
 } from "./analysis-model.ts";
 export type { AnalysisStore } from "./analysis-store.ts";
 export type { Clock } from "./clock.ts";

@@ -5,7 +5,6 @@ import {
   AnalysisId,
   type HostError,
   inProgress,
-  MismatchId,
   type ModelCall,
   type ModelError,
   type ModelOption,
@@ -13,7 +12,6 @@ import {
   PointId,
   type StageName,
   type StageStatus,
-  type Tour,
   validateRiskCoverage,
   validateTour,
 } from "../../domain/review/index.ts";
@@ -237,7 +235,7 @@ describe("the analysis pipeline", () => {
 
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
-    expect(Object.values(analysis.stages)).toEqual(Array(7).fill("done"));
+    expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
     expect(analysis.key.pipelineVersion).toBe("18");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
@@ -269,15 +267,14 @@ describe("the analysis pipeline", () => {
     );
     expect(analysis.decisions.map((decision) => decision.id)).toEqual(["d1", "d2", "d3"]);
     expect(analysis.tour?.steps.map((step) => step.id)).toEqual(["s1", "s2"]);
-    expect(analysis.tour?.builtBy).toBe("model");
+    expect(analysis.tour?.builtBy).toBe("code");
     expect(analysis.warnings).toEqual([]);
     expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
-    expect(analysis.usage.map((usage) => usage.pass)).toEqual([
-      "intent",
-      "findings",
-      "risk",
+    expect(analysis.usage.map((usage) => usage.pass).sort()).toEqual([
       "decisions",
-      "tour",
+      "findings",
+      "intent",
+      "risk",
     ]);
 
     const updates = emitted.flatMap(({ event }) =>
@@ -297,19 +294,17 @@ describe("the analysis pipeline", () => {
       "findings:skipped",
       "risk:skipped",
       "decisions:skipped",
-      "tour:skipped",
       "done",
-      // Then the model's run, as the button starts it.
+      // Then the model's run, as the button starts it: every pass at once.
       "intent:running",
-      "intent:done",
       "findings:running",
       "risk:running",
       "decisions:running",
-      "findings:done",
+      "intent:done",
       "risk:done",
       "decisions:done",
-      "tour:running",
-      "tour:done",
+      // Last: a finding takes the intent's mismatch on its hunk, so it waits for the intent.
+      "findings:done",
       "done",
     ]);
     for (const { event, savedStages } of emitted) {
@@ -354,11 +349,11 @@ describe("the analysis pipeline", () => {
     ]);
     expect(analysis.risk.every((risk) => risk.source === "proof")).toBe(true);
     expect(analysis.risk).toHaveLength(4);
-    expect(analysis.tour).toEqual({ steps: [], builtBy: "model" });
+    expect(analysis.tour).toEqual({ steps: [], builtBy: "code" });
     expect(analysis.warnings).toEqual([
       "pnpm-lock.yaml changed without a change to package.json or pnpm-workspace.yaml",
     ]);
-    for (const pass of ["intent", "findings", "risk", "decisions", "tour"] as const) {
+    for (const pass of ["intent", "findings", "risk", "decisions"] as const) {
       expect(model.callsTo(pass)).toHaveLength(1);
     }
     const input = firstInput(model, "intent");
@@ -382,23 +377,24 @@ describe("the analysis pipeline", () => {
     expect(analysis.warnings).toHaveLength(1);
   });
 
-  it("stamps each pass's usage with when it started and how long it took", async () => {
+  it("runs the passes side by side, each timed: findings don't wait for the intent", async () => {
     const clock = new FixedClock("2026-10-21T09:00:00Z");
     const model = new (class extends FakeAnalysisModel {
-      override async findings(...args: Parameters<FakeAnalysisModel["findings"]>) {
-        clock.advance(41_200);
-        return super.findings(...args);
+      override async intent(...args: Parameters<FakeAnalysisModel["intent"]>) {
+        await Promise.resolve();
+        clock.advance(7_300);
+        return super.intent(...args);
       }
     })();
     const { analyze } = setup({ model, clock });
     const analysis = await analyze();
 
     const usageOf = (pass: string) => analysis.usage.find((usage) => usage.pass === pass);
-    expect(usageOf("findings")?.durationMs).toBe(41_200);
-    expect(usageOf("risk")?.durationMs).toBe(0);
-    // The tour waits for the slowest of the three passes before it.
-    const findingsStart = Date.parse(usageOf("findings")?.startedAt ?? "");
-    expect(Date.parse(usageOf("tour")?.startedAt ?? "") - findingsStart).toBe(41_200);
+    expect(usageOf("intent")?.durationMs).toBe(7_300);
+    const started = usageOf("intent")?.startedAt;
+    for (const pass of ["findings", "risk", "decisions"]) {
+      expect(usageOf(pass)?.startedAt).toBe(started);
+    }
   });
 
   it("traces every model call: why a pass ran again, and why one failed", async () => {
@@ -646,10 +642,9 @@ describe("the analysis pipeline", () => {
         collect: "done",
         prep: "done",
         intent: "failed",
-        findings: "skipped",
-        risk: "skipped",
-        decisions: "skipped",
-        tour: "skipped",
+        findings: "done",
+        risk: "done",
+        decisions: "done",
       });
       expect(analysis.modelError).toEqual({
         stage: "intent",
@@ -659,7 +654,8 @@ describe("the analysis pipeline", () => {
       expect(analysis.files).toHaveLength(3);
       expect(analysis.tickets).toEqual(smallFeature.tickets);
       expect(model.callsTo("intent")).toHaveLength(1);
-      expect(model.callsTo("risk")).toEqual([]);
+      // The other passes don't need the intent, so what they found stays.
+      expect(analysis.risk.map((risk) => risk.source)).toContain("model");
       expect(emitted.at(-1)?.event).toEqual({ type: "done" });
     });
 
@@ -767,7 +763,6 @@ describe("the analysis pipeline", () => {
       expect(analysis.warnings).toEqual([
         "The model didn't classify 2 hunks, so they're shown as logic",
       ]);
-      expect(model.callsTo("tour")[0]).toBeDefined();
     });
 
     it("keeps a contract hunk's lines only when that hunk shows them", async () => {
@@ -839,10 +834,9 @@ describe("the analysis pipeline", () => {
         code: "model-error",
         message: "Slow down",
       });
-      expect(analysis.stages).toMatchObject({ risk: "failed", decisions: "done", tour: "skipped" });
+      expect(analysis.stages).toMatchObject({ risk: "failed", decisions: "done" });
       expect(analysis.decisions).toHaveLength(3);
       expect(analysis.risk.map((risk) => risk.source)).not.toContain("model");
-      expect(model.callsTo("tour")).toEqual([]);
     });
   });
 
@@ -856,36 +850,45 @@ describe("the analysis pipeline", () => {
       lines: { hunkId: hunk.id, side, startLine: added, line: added },
       severity: "major" as const,
       suggestion: ["fixed();"],
-      mismatch: MismatchId.parse("m9"),
     });
 
-    it("keeps a finding wrong only in its suggestion or mismatch, without them", async () => {
+    it("gives a finding the intent's mismatch on its hunk, once both passes are in", async () => {
       const model = new FakeAnalysisModel();
-      const drafts = [{ ...onLine("new"), suggestion: null }];
-      model.script("findings", ok(drafts), ok(drafts));
+      model.script(
+        "intent",
+        ok({
+          stated: null,
+          inferred: { summary: "Adds receipts.", behaviorChanges: [] },
+          mismatches: [
+            { kind: "unrequested", description: "Caches receipts.", hunkIds: [hunk.id] },
+          ],
+        }),
+      );
+      model.script("findings", ok([onLine("new")]));
       const { analyze } = setup({ model });
       const analysis = await analyze();
-      expect(model.callsTo("findings")[1]?.options).toEqual({
-        feedback: ["Finding 1 names m9, which isn't one of the intent's mismatches."],
-      });
-      expect(analysis.findings).toEqual([
-        { ...drafts[0], id: "f1", suggestion: null, mismatch: null },
-      ]);
+      expect(analysis.findings.map((finding) => finding.mismatch)).toEqual(["m1"]);
+    });
+
+    it("gives findings no mismatch when the intent pass fails, and keeps them", async () => {
+      const model = new FakeAnalysisModel();
+      model.script("intent", err(modelError("overloaded", "Overloaded")));
+      model.script("findings", ok([onLine("new")]));
+      const { analyze } = setup({ model });
+      const analysis = await analyze();
+      expect(analysis.modelError?.stage).toBe("intent");
+      expect(analysis.stages.findings).toBe("done");
+      expect(analysis.findings.map((finding) => finding.mismatch)).toEqual([null]);
     });
 
     it("keeps a finding whose text runs long as it is, without running the pass again", async () => {
       const model = new FakeAnalysisModel();
-      const long = {
-        ...onLine("new"),
-        title: "t".repeat(81),
-        explanation: "e".repeat(301),
-        mismatch: null,
-      };
+      const long = { ...onLine("new"), title: "t".repeat(81), explanation: "e".repeat(301) };
       model.script("findings", ok([long]));
       const { analyze } = setup({ model });
       const analysis = await analyze();
       expect(model.callsTo("findings")).toHaveLength(1);
-      expect(analysis.findings).toEqual([{ ...long, id: "f1" }]);
+      expect(analysis.findings).toEqual([{ ...long, id: "f1", mismatch: null }]);
     });
   });
 
@@ -969,39 +972,6 @@ describe("the analysis pipeline", () => {
   });
 
   describe("tour", () => {
-    const stepsOf = (analysis: Analysis) =>
-      (analysis.tour?.steps ?? []).map(({ partIds, kind, via, entries }) => ({
-        partIds,
-        kind,
-        via,
-        entries,
-      }));
-    const titlesFor = (skeleton: Tour | undefined) => ({
-      steps: (skeleton?.steps ?? []).map((step) => ({
-        stepId: step.id,
-        title: `Behavior of ${step.id}`,
-        explanation: `What to check in ${step.id}.`,
-      })),
-      merges: [],
-    });
-
-    it("titles the code's tour: the same steps as without the model", async () => {
-      const withoutModel = await setup({ modelEnabled: false }).analyze();
-      const { analyze, model } = setup();
-      const analysis = await analyze();
-
-      const skeleton = model.callsTo("tour")[0]?.skeleton?.tour;
-      expect(skeleton?.steps.map((step) => step.title)).toEqual(
-        withoutModel.tour?.steps.map((step) => step.title),
-      );
-      expect(stepsOf(analysis)).toEqual(stepsOf(withoutModel));
-      expect(analysis.tour?.builtBy).toBe("model");
-      expect(analysis.tour?.steps.map((step) => step.codeTitle)).toEqual(
-        withoutModel.tour?.steps.map((step) => step.title),
-      );
-      expect(analysis.warnings).toEqual([]);
-    });
-
     it("shows the code's tour from prep on, before the model passes", async () => {
       const { analyze, store } = setup();
       await analyze();
@@ -1010,92 +980,10 @@ describe("the analysis pipeline", () => {
       expect(afterPrep?.tour?.builtBy).toBe("code");
     });
 
-    it("uses valid titles on the second try", async () => {
-      const model = new FakeAnalysisModel();
-      model.script("tour", ok({ steps: [], merges: [] }));
-      const { analyze } = setup({ model });
-      const first = await setup({ modelEnabled: false }).analyze();
-      model.script("tour", ok(titlesFor(first.tour ?? undefined)));
-      const analysis = await analyze();
-
-      expect(model.callsTo("tour")[1]?.options?.feedback).toContain(
-        "s1 has no title. Title every step of the tour exactly once.",
-      );
-      expect(analysis.tour?.builtBy).toBe("model");
-      expect(analysis.tour?.steps[0]).toMatchObject({
-        title: "Behavior of s1",
-        explanation: "What to check in s1.",
-        codeTitle: first.tour?.steps[0]?.title,
-        merged: [],
-      });
-      expect(stepsOf(analysis)).toEqual(stepsOf(first));
-    });
-
-    it("tells the model what was wrong with its titles", async () => {
-      const model = new FakeAnalysisModel();
-      const invalid = {
-        steps: [
-          { stepId: "s1", title: "x".repeat(81), explanation: " " },
-          { stepId: "s1", title: "Again", explanation: "Again." },
-          { stepId: "s9", title: "Unknown", explanation: "Unknown." },
-        ],
-        merges: [
-          { stepId: "s1", intoStepId: "s2", reason: "A flow." },
-          { stepId: "s8", intoStepId: "s7", reason: "" },
-          { stepId: "s8", intoStepId: "s1", reason: "Again." },
-          { stepId: "s2", intoStepId: "s1", reason: "Into a merged step." },
-        ],
-      };
-      model.script("tour", ok(invalid));
-      const { analyze } = setup({ model });
-      await analyze();
-
-      expect(model.callsTo("tour")[1]?.options?.feedback).toEqual([
-        "s1's title is longer than 80 characters.",
-        "s1 has a blank explanation.",
-        "s1 is titled more than once.",
-        "s9 isn't a step of the tour, so don't title it.",
-        "s2 has no title. Title every step of the tour exactly once.",
-        "s1 is a flow, and only supporting steps can be merged.",
-        "s1 is merged into s2, which is merged itself.",
-        "s8 isn't a step of the tour, so it can't be merged.",
-        "s8 is merged into s7, which isn't a step of the tour.",
-        "The merge of s8 has no reason.",
-        "s8 is merged more than once.",
-        "s2 is merged into s1, which is merged itself.",
-      ]);
-    });
-
-    it("keeps the code's titles when the titles are invalid twice", async () => {
-      const model = new FakeAnalysisModel();
-      const invalid = { steps: [{ stepId: "s99", title: "All", explanation: "x" }], merges: [] };
-      model.script("tour", ok(invalid), ok(invalid));
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
+    it("keeps the code's tour: the model doesn't title it", async () => {
       const withoutModel = await setup({ modelEnabled: false }).analyze();
-
-      expect(model.callsTo("tour")).toHaveLength(2);
-      expect(analysis.status).toBe("complete");
+      const analysis = await setup().analyze();
       expect(analysis.tour).toEqual(withoutModel.tour);
-      expect(analysis.warnings).toEqual([
-        "The model's titles for the guided tour weren't valid, so its steps keep the code's titles",
-      ]);
-    });
-
-    it("keeps the code's titles on a model error and still completes", async () => {
-      const model = new FakeAnalysisModel();
-      model.script("tour", err(modelError("overloaded", "Overloaded")));
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
-
-      expect(model.callsTo("tour")).toHaveLength(1);
-      expect(analysis.status).toBe("complete");
-      expect(analysis.stages.tour).toBe("done");
-      expect(analysis.tour?.builtBy).toBe("code");
-      expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
-      expect(analysis.warnings).toEqual([
-        "The guided tour couldn't be titled (Overloaded), so its steps keep the code's titles",
-      ]);
     });
   });
 
@@ -1320,7 +1208,6 @@ describe("without the model", () => {
       findings: "skipped",
       risk: "skipped",
       decisions: "skipped",
-      tour: "skipped",
     });
     expect(analysis.key.pipelineVersion).toBe("18");
     expect(analysis.intent).toBeNull();
@@ -1510,8 +1397,8 @@ describe("runModel", () => {
     expect(after.status).toBe("complete");
     expect(after.intent).not.toBeNull();
     expect(after.decisions).toHaveLength(3);
-    expect(after.tour?.builtBy).toBe("model");
-    expect(Object.values(after.stages)).toEqual(Array(7).fill("done"));
+    expect(after.tour?.builtBy).toBe("code");
+    expect(Object.values(after.stages)).toEqual(Array(6).fill("done"));
     expect(model.callsTo("intent")).toHaveLength(1);
   });
 
@@ -1523,7 +1410,7 @@ describe("runModel", () => {
     expect(failed.modelError?.message).toBe("Overloaded");
     const again = await runModel(analysis.id);
     expect(again.modelError).toBeNull();
-    expect(again.stages.tour).toBe("done");
+    expect(again.stages.decisions).toBe("done");
   });
 
   it("refuses what it can't run, and says why", async () => {
@@ -1677,7 +1564,7 @@ describe("removeModelRun", () => {
     await remove();
     expect(await store.getPointReviews(codeOnly.id)).toEqual([]);
     const again = await runModel(codeOnly.id);
-    expect(again.stages.tour).toBe("done");
+    expect(again.stages.decisions).toBe("done");
   });
 
   it("keeps the record of a published review", async () => {

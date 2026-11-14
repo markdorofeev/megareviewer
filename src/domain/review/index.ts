@@ -58,6 +58,7 @@ export {
   Finding,
   FindingId,
   type FindingProblem,
+  linkMismatches,
   MismatchId,
   Point,
   PointId,
@@ -137,21 +138,11 @@ export {
 export { extractTicketKeys } from "./ticket-keys.ts";
 export { Tour, TourStep, TourStepId } from "./tour.ts";
 export {
-  applyTourTitles,
-  MAX_EXPLANATION,
-  MAX_TITLE,
-  TourMerge,
-  TourStepTitle,
-  TourTitles,
-} from "./tour-titles.ts";
-export {
   CoverageProblem,
   partsOfHunks,
   type RiskProblem,
   type TourProblem,
-  type TourTitlesProblem,
   validateHunkReferences,
   validateRiskCoverage,
   validateTour,
-  validateTourTitles,
 } from "./validation.ts";

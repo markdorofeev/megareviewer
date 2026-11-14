@@ -1,10 +1,4 @@
-import type {
-  Decision,
-  Intent,
-  ModelError,
-  ModelPass,
-  ModelUsage,
-} from "../../domain/review/index.ts";
+import type { Intent, ModelError, ModelPass, ModelUsage } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type {
   AnalysisInput,
@@ -14,8 +8,6 @@ import type {
   ModelRisk,
   PassOptions,
   PassOutput,
-  TourDraft,
-  TourSkeleton,
 } from "../ports/index.ts";
 
 export interface PassValues {
@@ -23,7 +15,6 @@ export interface PassValues {
   findings: FindingDraft[];
   risk: ModelRisk[];
   decisions: DecisionDraft[];
-  tour: TourDraft;
 }
 
 /** A scripted answer to one pass call: a value (valid or not) or an error. */
@@ -33,8 +24,6 @@ export interface ModelCall {
   readonly pass: ModelPass | "checkSize";
   readonly input: AnalysisInput;
   readonly options: PassOptions | undefined;
-  /** The code's tour, for tour calls. */
-  readonly skeleton?: TourSkeleton;
 }
 
 /** Roughly what a tokenizer would count, enough to exercise size budgets. */
@@ -46,7 +35,7 @@ const filesToReview = (input: AnalysisInput) => input.files.filter((file) => fil
 /**
  * Returns scripted answers per pass, in order, and derives plausible ones from the input
  * when none are left: a finding on the first added line, every hunk sent in full is logic, one
- * decision per file, and the code's tour keeps its titles.
+ * decision per file.
  */
 export class FakeAnalysisModel implements AnalysisModel {
   readonly version: string;
@@ -57,7 +46,6 @@ export class FakeAnalysisModel implements AnalysisModel {
     findings: [],
     risk: [],
     decisions: [],
-    tour: [],
   };
 
   constructor(options: { version?: string; maxInputTokens?: number } = {}) {
@@ -88,7 +76,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     input: AnalysisInput,
     options?: PassOptions,
   ): Promise<Result<PassOutput<Intent>, ModelError>> {
-    return this.answer("intent", input, options, undefined, () => {
+    return this.answer("intent", input, options, () => {
       const { description } = input.pullRequest;
       const sources = [
         ...(description.trim() === "" ? [] : [{ kind: "description" as const, ref: null }]),
@@ -108,10 +96,9 @@ export class FakeAnalysisModel implements AnalysisModel {
 
   async findings(
     input: AnalysisInput,
-    _intent: Intent,
     options?: PassOptions,
   ): Promise<Result<PassOutput<FindingDraft[]>, ModelError>> {
-    return this.answer("findings", input, options, undefined, () =>
+    return this.answer("findings", input, options, () =>
       input.files
         .flatMap((file) => file.hunks)
         .flatMap((hunk) => {
@@ -125,7 +112,6 @@ export class FakeAnalysisModel implements AnalysisModel {
                   lines: { hunkId: hunk.id, side: "new" as const, startLine: line, line },
                   severity: "major" as const,
                   suggestion: null,
-                  mismatch: null,
                 },
               ];
         })
@@ -135,10 +121,9 @@ export class FakeAnalysisModel implements AnalysisModel {
 
   async risk(
     input: AnalysisInput,
-    _intent: Intent,
     options?: PassOptions,
   ): Promise<Result<PassOutput<ModelRisk[]>, ModelError>> {
-    return this.answer("risk", input, options, undefined, () =>
+    return this.answer("risk", input, options, () =>
       input.files.flatMap((file) =>
         file.hunks.map((hunk) => ({
           hunkId: hunk.id,
@@ -152,10 +137,9 @@ export class FakeAnalysisModel implements AnalysisModel {
 
   async decisions(
     input: AnalysisInput,
-    _intent: Intent,
     options?: PassOptions,
   ): Promise<Result<PassOutput<DecisionDraft[]>, ModelError>> {
-    return this.answer("decisions", input, options, undefined, () =>
+    return this.answer("decisions", input, options, () =>
       filesToReview(input).map((file) => ({
         title: `Changes ${file.path}`,
         category: "behavior" as const,
@@ -166,32 +150,13 @@ export class FakeAnalysisModel implements AnalysisModel {
     );
   }
 
-  async tour(
-    input: AnalysisInput,
-    _intent: Intent,
-    _risk: readonly ModelRisk[],
-    _decisions: readonly Decision[],
-    skeleton: TourSkeleton,
-    options?: PassOptions,
-  ): Promise<Result<PassOutput<TourDraft>, ModelError>> {
-    return this.answer("tour", input, options, skeleton, () => ({
-      steps: skeleton.tour.steps.map((step) => ({
-        stepId: step.id,
-        title: step.title,
-        explanation: "Derived by the fake model.",
-      })),
-      merges: [],
-    }));
-  }
-
   private async answer<P extends ModelPass>(
     pass: P,
     input: AnalysisInput,
     options: PassOptions | undefined,
-    skeleton: TourSkeleton | undefined,
     derive: () => PassValues[P],
   ): Promise<Result<PassOutput<PassValues[P]>, ModelError>> {
-    this.calls.push({ pass, input, options, ...(skeleton === undefined ? {} : { skeleton }) });
+    this.calls.push({ pass, input, options });
     const answer = this.scripts[pass].shift() ?? ok(derive());
     if (!answer.ok) return answer;
     const usage: ModelUsage = {

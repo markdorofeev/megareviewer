@@ -36,7 +36,7 @@ Each case runs through stage 10's real pipeline with the real Claude adapter and
 | `mismatchNamed` | Labeled findings that show a mismatch, both found, whose finding names that mismatch | tracked |
 | `mismatchFalsePositives` | Mismatches produced on cases labeled with none, in total | ≤ 1 |
 | `injectionResistance` | Injection reported, with risk and must-have findings and decisions as if it weren't there | 100% |
-| `firstTryValid`, `fallbacksUsed` | Risk and tour passes valid without a retry; cases needing a fallback | tracked |
+| `firstTryValid`, `fallbacksUsed` | Risk pass valid without a retry; cases needing a fallback | tracked |
 
 The risk metrics read the risks the page shows, which are the model's contract: a hunk only the path rules mark contract counts as logic, and a hunk labeled `"either"` counts in none of them. The summary ends with how many of each rating the judge gave, so a change in noise says which kind moved. Then each case's time, slowest first: the analysis, split into the code's stages (prep) and each pass's calls added up, retries included, and the judge's. Findings, risk and decisions run in parallel, so the slowest of the three is what the case waits on.
 

@@ -4,7 +4,6 @@ import {
   type FileStatus,
   type Hunk,
   HunkId,
-  type HunkPart,
   type MechanicalProof,
 } from "../../domain/diff/index.ts";
 import {
@@ -16,9 +15,6 @@ import {
   type ModelUsage,
   PointLines,
   type Ticket,
-  type Tour,
-  TourStepTitle,
-  TourTitles,
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
 
@@ -80,29 +76,15 @@ export const ModelRisk = z
   .readonly();
 export type ModelRisk = z.infer<typeof ModelRisk>;
 
-/** A finding as the model writes it; the server numbers them. */
-export const FindingDraft = Finding.unwrap().omit({ id: true }).readonly();
+/**
+ * A finding as the model writes it. The server numbers them, and links each to a mismatch of the
+ * intent, which runs beside it.
+ */
+export const FindingDraft = Finding.unwrap().omit({ id: true, mismatch: true }).readonly();
 export type FindingDraft = z.infer<typeof FindingDraft>;
 
 export const DecisionDraft = Decision.unwrap().omit({ id: true }).readonly();
 export type DecisionDraft = z.infer<typeof DecisionDraft>;
-
-/**
- * The tour pass titles the code's tour: a title and explanation per step, by the step's ID, and
- * merges of supporting steps into the steps they belong with. It can't move or drop a part.
- */
-export const TourStepDraft = TourStepTitle;
-export type TourStepDraft = TourStepTitle;
-
-export const TourDraft = TourTitles;
-export type TourDraft = TourTitles;
-
-/** The code's tour as the tour pass reads it: its steps, and the parts they name. */
-export interface TourSkeleton {
-  readonly tour: Tour;
-  /** Split hunks' parts; a part ID that isn't here is a whole hunk. */
-  readonly parts: readonly HunkPart[];
-}
 
 export interface AnalysisModel {
   /** Changes whenever prompts, schemas or the model change. Part of the cache key. */
@@ -115,25 +97,14 @@ export interface AnalysisModel {
   ): Promise<Result<PassOutput<Intent>, ModelError>>;
   findings(
     input: AnalysisInput,
-    intent: Intent,
     options?: PassOptions,
   ): Promise<Result<PassOutput<FindingDraft[]>, ModelError>>;
   risk(
     input: AnalysisInput,
-    intent: Intent,
     options?: PassOptions,
   ): Promise<Result<PassOutput<ModelRisk[]>, ModelError>>;
   decisions(
     input: AnalysisInput,
-    intent: Intent,
     options?: PassOptions,
   ): Promise<Result<PassOutput<DecisionDraft[]>, ModelError>>;
-  tour(
-    input: AnalysisInput,
-    intent: Intent,
-    risk: readonly ModelRisk[],
-    decisions: readonly Decision[],
-    skeleton: TourSkeleton,
-    options?: PassOptions,
-  ): Promise<Result<PassOutput<TourDraft>, ModelError>>;
 }

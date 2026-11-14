@@ -52,8 +52,7 @@
             "line": 13
           },
           "severity": "major",
-          "suggestion": null,
-          "mismatch": null
+          "suggestion": null
         }
       ],
       "durationMs": 9400,
@@ -151,33 +150,6 @@
         "cacheReadTokens": 0,
         "cacheWriteTokens": 0,
         "outputTokens": 121,
-        "costUsd": 0,
-        "billing": "api"
-      }
-    },
-    "tour": {
-      "answer": {
-        "steps": [
-          {
-            "stepId": "s1",
-            "title": "GET /orders/:id/receipt",
-            "explanation": "Derived by the fake model."
-          },
-          {
-            "stepId": "s2",
-            "title": "Other changes in config",
-            "explanation": "Derived by the fake model."
-          }
-        ],
-        "merges": []
-      },
-      "durationMs": 6300,
-      "usage": {
-        "pass": "tour",
-        "inputTokens": 2889,
-        "cacheReadTokens": 0,
-        "cacheWriteTokens": 0,
-        "outputTokens": 53,
         "costUsd": 0,
         "billing": "api"
       }

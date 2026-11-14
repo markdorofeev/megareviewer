@@ -7,11 +7,8 @@ import {
   ModelRisk,
   type PassOptions,
   type PassOutput,
-  TourDraft,
-  type TourSkeleton,
 } from "../../application/ports/index.ts";
 import {
-  type Decision,
   Intent,
   type ModelError,
   type ModelErrorKind,
@@ -42,7 +39,6 @@ export const ModelRecording = z
       findings: RecordedPass,
       risk: RecordedPass,
       decisions: RecordedPass,
-      tour: RecordedPass,
     }),
   })
   .readonly();
@@ -84,37 +80,14 @@ const SCENARIO_ERRORS: Partial<Record<Scenario, Partial<Record<ModelPass, ModelE
       "rate-limited",
       `Your Claude plan's usage limit is reached. It resets at ${RESET_AT}.`,
     ),
-    tour: modelError(
-      "rate-limited",
-      `Your Claude plan's usage limit is reached. It resets at ${RESET_AT}.`,
-    ),
   },
   refusal: { findings: modelError("refusal", "Claude declined to answer this task.") },
   "not-signed-in": Object.fromEntries(
-    (["intent", "findings", "risk", "decisions", "tour"] as const).map((pass) => [
+    (["intent", "findings", "risk", "decisions"] as const).map((pass) => [
       pass,
       modelError("unauthorized", "Claude Code isn't signed in. Run `claude` and sign in."),
     ]),
   ),
-};
-
-/**
- * The recorded titles, for the tour the page actually built: a step the recording doesn't name
- * keeps the code's title, so a recording still answers after the tour changes.
- */
-const titlesFor = (recorded: TourDraft, skeleton: TourSkeleton): TourDraft => {
-  const titled = new Map(recorded.steps.map((step) => [step.stepId, step]));
-  const steps = skeleton.tour.steps.map((step) => {
-    const recordedStep = titled.get(step.id);
-    return recordedStep === undefined
-      ? { stepId: step.id, title: step.title, explanation: step.explanation }
-      : recordedStep;
-  });
-  const ids = new Set<string>(skeleton.tour.steps.map((step) => step.id));
-  return {
-    steps,
-    merges: recorded.merges.filter((merge) => ids.has(merge.stepId) && ids.has(merge.intoStepId)),
-  };
 };
 
 /** Parses a pass's recorded answer, which the recording holds as the model wrote it. */
@@ -209,41 +182,20 @@ export const createReplayAnalysisModel = (
           mismatches: [{ kind: "missing", description: "x", hunkIds: ["h_ffffffffffffffff"] }],
         }),
       ),
-    findings: (_input, _intent, passOptions) =>
+    findings: (_input, passOptions) =>
       play("findings", passOptions, findingsOf, () =>
         findingsOf(recording.passes.findings.answer).map((finding) => ({
           ...finding,
           lines: { ...finding.lines, startLine: 100_000, line: 100_001 },
         })),
       ),
-    risk: (_input, _intent, passOptions) => play("risk", passOptions, riskOf, () => []),
-    decisions: (_input, _intent, passOptions) =>
+    risk: (_input, passOptions) => play("risk", passOptions, riskOf, () => []),
+    decisions: (_input, passOptions) =>
       play("decisions", passOptions, decisionsOf, () =>
         decisionsOf(recording.passes.decisions.answer).map((draft) => ({
           ...draft,
           hunkIds: ["h_ffffffffffffffff"],
         })),
-      ),
-    tour: (
-      _input: AnalysisInput,
-      _intent: Intent,
-      _risk: readonly ModelRisk[],
-      _decisions: readonly Decision[],
-      skeleton: TourSkeleton,
-      passOptions?: PassOptions,
-    ) =>
-      play(
-        "tour",
-        passOptions,
-        (answer) => titlesFor(parsed(TourDraft, answer, "tour"), skeleton),
-        () => ({
-          steps: skeleton.tour.steps.map((step) => ({
-            stepId: step.id,
-            title: "",
-            explanation: "",
-          })),
-          merges: [],
-        }),
       ),
   };
 };

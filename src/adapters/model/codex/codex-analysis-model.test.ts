@@ -3,7 +3,6 @@ import {
   describeAnalysisModelContract,
   RecordingLogger,
   smallFeatureInput,
-  smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelBilling, ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import { createCodexAnalysisModel, OVERHEAD_TOKENS } from "./codex-analysis-model.ts";
@@ -67,15 +66,15 @@ describe("CodexAnalysisModel", () => {
   it("runs every pass with the same instructions and schema, the PR in the instructions", async () => {
     const { model, calls } = modelWith();
     await model.intent(smallFeatureInput);
-    await model.risk(smallFeatureInput, smallFeatureIntent);
-    await model.decisions(smallFeatureInput, smallFeatureIntent);
+    await model.risk(smallFeatureInput);
+    await model.decisions(smallFeatureInput);
     expect(calls).toHaveLength(3);
     const instructions = calls.map((call) => call.options.files?.[INSTRUCTIONS_FILE]);
     expect(new Set(instructions).size).toBe(1);
     expect(instructions[0]).toContain("<pull_request_data>");
     expect(new Set(calls.map((call) => call.options.files?.[SCHEMA_FILE])).size).toBe(1);
     expect(calls[1]?.options.stdin).toMatch(/^Task: risk\./m);
-    expect(calls[1]?.options.stdin).toContain("<earlier_results>");
+    expect(calls[1]?.options.stdin).not.toContain("<earlier_results>");
     const efforts = calls.map((call) =>
       call.args.find((arg) => arg.startsWith("model_reasoning_effort=")),
     );

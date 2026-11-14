@@ -9,7 +9,6 @@ import type { ModelError, ModelPass, ModelUsage } from "../../../domain/review/i
 import { err, ok, type Result } from "../../../domain/shared/index.ts";
 import { invalidOutput } from "./errors.ts";
 import { PassAnswer } from "./output-schema.ts";
-import { type EarlierResults, renderSkeleton } from "./prompts/passes.ts";
 
 export type Answer = PassAnswer["answer"];
 
@@ -22,7 +21,6 @@ export interface AnsweredPass {
 export type RunPass = (
   pass: ModelPass,
   input: AnalysisInput,
-  earlier: EarlierResults | null,
   options: PassOptions | undefined,
 ) => Promise<Result<AnsweredPass, ModelError>>;
 
@@ -33,7 +31,7 @@ export const parseAnswer = (json: unknown): Result<Answer, ModelError> => {
     : err(invalidOutput(z.prettifyError(answer.error)));
 };
 
-/** The five passes over a transport's `runPass`, which every pass shares. */
+/** The four passes over a transport's `runPass`, which every pass shares. */
 export const createPassModel = (transport: {
   readonly version: string;
   readonly checkSize: AnalysisModel["checkSize"];
@@ -42,11 +40,10 @@ export const createPassModel = (transport: {
   const run = async <T>(
     pass: ModelPass,
     input: AnalysisInput,
-    earlier: EarlierResults | null,
     options: PassOptions | undefined,
     pick: (answer: Answer) => T | null,
   ): Promise<Result<PassOutput<T>, ModelError>> => {
-    const answered = await transport.runPass(pass, input, earlier, options);
+    const answered = await transport.runPass(pass, input, options);
     if (!answered.ok) return answered;
     const answer = parseAnswer(answered.value.answer);
     if (!answer.ok) return answer;
@@ -62,32 +59,19 @@ export const createPassModel = (transport: {
     checkSize: transport.checkSize,
 
     intent: (input, options) =>
-      run("intent", input, null, options, (answer) =>
-        answer.pass === "intent" ? answer.intent : null,
-      ),
+      run("intent", input, options, (answer) => (answer.pass === "intent" ? answer.intent : null)),
 
-    findings: (input, intent, options) =>
-      run("findings", input, { intent }, options, (answer) =>
+    findings: (input, options) =>
+      run("findings", input, options, (answer) =>
         answer.pass === "findings" ? answer.findings : null,
       ),
 
-    risk: (input, intent, options) =>
-      run("risk", input, { intent }, options, (answer) =>
-        answer.pass === "risk" ? answer.assessments : null,
-      ),
+    risk: (input, options) =>
+      run("risk", input, options, (answer) => (answer.pass === "risk" ? answer.assessments : null)),
 
-    decisions: (input, intent, options) =>
-      run("decisions", input, { intent }, options, (answer) =>
+    decisions: (input, options) =>
+      run("decisions", input, options, (answer) =>
         answer.pass === "decisions" ? answer.decisions : null,
-      ),
-
-    tour: (input, intent, risk, decisions, skeleton, options) =>
-      run(
-        "tour",
-        input,
-        { intent, risk, decisions, skeleton: renderSkeleton(skeleton, input) },
-        options,
-        (answer) => (answer.pass === "tour" ? answer.tour : null),
       ),
   };
 };

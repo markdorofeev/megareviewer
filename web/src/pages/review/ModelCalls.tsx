@@ -14,7 +14,6 @@ const PASS_NAMES: Readonly<Record<ModelPass, string>> = {
   findings: "Findings",
   risk: "Risk",
   decisions: "Decisions",
-  tour: "Tour",
 };
 
 /** "+1:05" from the run's first call, so parallel passes and waits read at a glance. */

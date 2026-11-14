@@ -99,12 +99,7 @@ describe("the fixture analysis", () => {
 
   it("has two warnings and usage for every pass", () => {
     expect(analysis.warnings).toHaveLength(2);
-    expect(analysis.usage.map((usage) => usage.pass)).toEqual([
-      "intent",
-      "risk",
-      "decisions",
-      "tour",
-    ]);
+    expect(analysis.usage.map((usage) => usage.pass)).toEqual(["intent", "risk", "decisions"]);
   });
 });
 

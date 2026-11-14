@@ -3,7 +3,6 @@ import {
   describeAnalysisModelContract,
   RecordingLogger,
   smallFeatureInput,
-  smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelBilling, ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import type { Effort } from "../shared/effort.ts";
@@ -83,7 +82,7 @@ describe("ClaudeCodeAnalysisModel", () => {
     const { model, calls } = modelWith(recorded, { effort: "medium" });
     expect(model.version).toMatch(/^claude-code\/claude-haiku-5-5@medium\/p\d+$/);
     await model.intent(smallFeatureInput);
-    await model.decisions(smallFeatureInput, smallFeatureIntent);
+    await model.decisions(smallFeatureInput);
     const efforts = calls.map((call) => call.args[call.args.indexOf("--effort") + 1]);
     expect(efforts).toEqual(["medium", "medium"]);
   });
@@ -105,14 +104,14 @@ describe("ClaudeCodeAnalysisModel", () => {
   it("runs every pass with the same system prompt file, which holds the PR data", async () => {
     const { model, calls } = modelWith();
     await model.intent(smallFeatureInput);
-    await model.risk(smallFeatureInput, smallFeatureIntent);
-    await model.decisions(smallFeatureInput, smallFeatureIntent);
+    await model.risk(smallFeatureInput);
+    await model.decisions(smallFeatureInput);
     expect(calls).toHaveLength(3);
     const prompts = calls.map((call) => call.options.files?.[SYSTEM_PROMPT_FILE]);
     expect(new Set(prompts).size).toBe(1);
     expect(prompts[0]).toContain("<pull_request_data>");
     expect(calls[1]?.options.stdin).toMatch(/^Task: risk\./m);
-    expect(calls[1]?.options.stdin).toContain("<earlier_results>");
+    expect(calls[1]?.options.stdin).not.toContain("<earlier_results>");
   });
 
   it("reports what the pass used, at API prices, billed to the plan", async () => {

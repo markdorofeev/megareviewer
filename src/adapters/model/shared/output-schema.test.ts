@@ -14,11 +14,11 @@ describe("the answer format", () => {
   const json = JSON.stringify(schema);
 
   it("is a union of the four passes, one variant each", () => {
-    expect(json.match(/"const":"(intent|risk|decisions|tour)"/g)).toEqual([
+    expect(json.match(/"const":"(intent|findings|risk|decisions)"/g)).toEqual([
       '"const":"intent"',
+      '"const":"findings"',
       '"const":"risk"',
       '"const":"decisions"',
-      '"const":"tour"',
     ]);
     expect(json).not.toContain("oneOf");
   });

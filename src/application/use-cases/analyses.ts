@@ -102,7 +102,6 @@ const newAnalysis = (
     findings: "pending",
     risk: "pending",
     decisions: "pending",
-    tour: "pending",
   },
   filesFetched: null,
   pullRequest,

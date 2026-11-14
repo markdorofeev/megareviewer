@@ -12,7 +12,6 @@ const STAGE_NAMES: Readonly<Record<StageName, string>> = {
   findings: "Findings",
   risk: "Risk",
   decisions: "Decisions",
-  tour: "Tour",
 };
 
 const STATUS_NAMES: Readonly<Record<StageStatus, string>> = {

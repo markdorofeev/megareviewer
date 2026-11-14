@@ -140,7 +140,6 @@ const analysis: Analysis = {
     intent: "skipped",
     risk: "skipped",
     decisions: "skipped",
-    tour: "skipped",
   },
   pullRequest,
   files,

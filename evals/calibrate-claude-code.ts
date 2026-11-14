@@ -44,7 +44,6 @@ const capturingModel = (onInput: (input: AnalysisInput) => void): AnalysisModel 
     findings: fail,
     risk: fail,
     decisions: fail,
-    tour: fail,
   };
 };
 
@@ -63,7 +62,7 @@ for (const evalCase of evalCases) {
     console.log(`${evalCase.name}: no input captured`);
     continue;
   }
-  const message = `${passMessage("intent", null, undefined)}\n\nFor this measurement only, answer the risk task with no assessments.`;
+  const message = `${passMessage("intent", undefined)}\n\nFor this measurement only, answer the risk task with no assessments.`;
   const request = claudeCodeRequest("risk", renderInput(input), message);
   const bytes = Object.values(request.files).reduce(
     (total, file) => total + Buffer.byteLength(file, "utf8"),

@@ -22,7 +22,7 @@ const parser = await createTreeSitterCodeParser({
   grammarsDir: fileURLToPath(new URL("../src/adapters/treesitter/grammars", import.meta.url)),
 });
 const run = createRunCodex();
-const message = `${passMessage("intent", null, undefined)}\n\nFor this measurement only, answer the risk task with no assessments.`;
+const message = `${passMessage("intent", undefined)}\n\nFor this measurement only, answer the risk task with no assessments.`;
 
 /** A call's prompt bytes and the input tokens Codex reported for it. */
 const measure = async (rendered: string): Promise<{ bytes: number; tokens: number } | string> => {
@@ -50,7 +50,6 @@ const capturingModel = (onInput: (input: AnalysisInput) => void): AnalysisModel 
     findings: fail,
     risk: fail,
     decisions: fail,
-    tour: fail,
   };
 };
 

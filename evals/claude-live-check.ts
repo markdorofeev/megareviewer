@@ -1,29 +1,22 @@
 // Live check of the Claude adapter against the real API: node evals/claude-live-check.ts [--record]
 // Needs Anthropic credentials (ANTHROPIC_API_KEY or `ant auth login`) and spends money, so CI
-// never runs it. Runs checkSize and the four passes on the small-feature and prompt-injection
-// fixtures, prints each pass's answer, usage and cost, and fails unless passes 2–4 read the PR
-// from the prompt cache. --record writes the small-feature responses to
+// never runs it. Runs checkSize and three passes on the small-feature and prompt-injection
+// fixtures, intent first, prints each pass's answer, usage and cost, and fails unless passes 2–3
+// read the PR from the prompt cache. --record writes the small-feature responses to
 // src/adapters/model/claude/fixtures/small-feature.json, in the format the adapter's tests replay.
 // It lives here because only tests, the dev server and evals may use the test fixtures.
 
 import { writeFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClaudeAnalysisModel } from "../src/adapters/model/index.ts";
-import type {
-  AnalysisInput,
-  AnalysisModel,
-  Logger,
-  ModelRisk,
-  TourSkeleton,
-} from "../src/application/ports/index.ts";
+import type { AnalysisInput, AnalysisModel, Logger } from "../src/application/ports/index.ts";
 import {
   type PullRequestFixture,
   promptInjection,
   smallFeatureInput,
-  smallFeatureSkeleton,
 } from "../src/application/testing/index.ts";
 import { findMechanicalProofs, parseUnifiedDiff } from "../src/domain/diff/index.ts";
-import { codeTour, DecisionId, type ModelUsage } from "../src/domain/review/index.ts";
+import type { ModelUsage } from "../src/domain/review/index.ts";
 
 const print = (text: string): void => {
   process.stdout.write(`${text}\n`);
@@ -36,13 +29,8 @@ const logger: Logger = {
   error: (message, fields) => print(`error: ${message} ${JSON.stringify(fields ?? {})}`),
 };
 
-/**
- * The analysis input the pipeline would build: hunks with a proof go as stats, the rest in full. And
- * the code's tour of them.
- */
-const inputFrom = (
-  fixture: PullRequestFixture,
-): { input: AnalysisInput; skeleton: TourSkeleton } => {
+/** The analysis input the pipeline would build: hunks with a proof go as stats, the rest in full. */
+const inputFrom = (fixture: PullRequestFixture): AnalysisInput => {
   const parsed = parseUnifiedDiff(fixture.pullRequest.diff);
   if (!parsed.ok) throw new Error(`${fixture.name}: ${parsed.error.message}`);
   const contents = (files: Readonly<Record<string, string>>) =>
@@ -54,18 +42,6 @@ const inputFrom = (
   });
   const proofOf = new Map(proofs.flatMap((proof) => (proof.hunkId ? [[proof.hunkId, proof]] : [])));
   const { pullRequest } = fixture;
-  // The code's tour without call-graph hints or definitions: enough for the tour pass to title.
-  const skeleton = codeTour({
-    files: parsed.value,
-    required: new Set(
-      parsed.value.flatMap((file) =>
-        file.hunks.flatMap((hunk) => (proofOf.has(hunk.id) ? [] : [hunk.id])),
-      ),
-    ),
-    callGraph: [],
-    risk: [],
-    definitions: new Map(),
-  });
   const input: AnalysisInput = {
     pullRequest: {
       title: pullRequest.title,
@@ -97,7 +73,7 @@ const inputFrom = (
     }),
     callGraph: [],
   };
-  return { input, skeleton: { tour: skeleton, parts: [] } };
+  return input;
 };
 
 /** Requests and responses of the passes, for --record. */
@@ -133,12 +109,7 @@ const report = (name: string, pass: string, usage: ModelUsage, value: unknown): 
   }
 };
 
-const check = async (
-  model: AnalysisModel,
-  name: string,
-  input: AnalysisInput,
-  skeleton: TourSkeleton,
-) => {
+const check = async (model: AnalysisModel, name: string, input: AnalysisInput) => {
   const size = await model.checkSize(input);
   if (!size.ok) throw new Error(`${name} checkSize: ${size.error.message}`);
   print(`\n${name}: ${size.value.inputTokens} input tokens`);
@@ -147,25 +118,13 @@ const check = async (
   if (!intent.ok) throw new Error(`${name} intent: ${intent.error.message}`);
   report(name, "intent", intent.value.usage, intent.value.value);
 
-  const [risk, decisions] = await Promise.all([
-    model.risk(input, intent.value.value),
-    model.decisions(input, intent.value.value),
-  ]);
+  const [risk, decisions] = await Promise.all([model.risk(input), model.decisions(input)]);
   if (!risk.ok) throw new Error(`${name} risk: ${risk.error.message}`);
   if (!decisions.ok) throw new Error(`${name} decisions: ${decisions.error.message}`);
   report(name, "risk", risk.value.usage, risk.value.value);
   report(name, "decisions", decisions.value.usage, decisions.value.value);
 
-  const numbered = decisions.value.value.map((draft, index) => ({
-    ...draft,
-    id: DecisionId.parse(`d${index + 1}`),
-  }));
-  const riskValue: readonly ModelRisk[] = risk.value.value;
-  const tour = await model.tour(input, intent.value.value, riskValue, numbered, skeleton);
-  if (!tour.ok) throw new Error(`${name} tour: ${tour.error.message}`);
-  report(name, "tour", tour.value.usage, tour.value.value);
-
-  const total = [intent, risk, decisions, tour].reduce(
+  const total = [intent, risk, decisions].reduce(
     (sum, result) => sum + (result.value.usage.costUsd ?? 0),
     0,
   );
@@ -178,10 +137,7 @@ const main = async (): Promise<void> => {
   const model = createClaudeAnalysisModel({ client, logger });
   print(`model version ${model.version}`);
 
-  await check(model, "small-feature", smallFeatureInput, {
-    tour: smallFeatureSkeleton,
-    parts: [],
-  });
+  await check(model, "small-feature", smallFeatureInput);
   if (record) {
     const out = new URL(
       "../src/adapters/model/claude/fixtures/small-feature.json",
@@ -190,11 +146,10 @@ const main = async (): Promise<void> => {
     await writeFile(out, `${JSON.stringify(recording, null, 2)}\n`);
     print(`\nwrote ${out.pathname}`);
   }
-  const injection = inputFrom(promptInjection);
-  await check(model, "prompt-injection", injection.input, injection.skeleton);
+  await check(model, "prompt-injection", inputFrom(promptInjection));
 
   if (failures.length > 0) throw new Error(failures.join("\n"));
-  print("\nCache reads confirmed for passes 2–4. Check the prompt-injection answers by eye.");
+  print("\nCache reads confirmed for passes 2–3. Check the prompt-injection answers by eye.");
 };
 
 await main();

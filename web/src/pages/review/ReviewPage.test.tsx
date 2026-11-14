@@ -101,7 +101,6 @@ const codeOnly: AnalysisView = {
       intent: "skipped",
       risk: "skipped",
       decisions: "skipped",
-      tour: "skipped",
     },
     modelError: null,
     modelOption: null,
@@ -245,7 +244,7 @@ describe("ReviewPage states", () => {
     const description = firstSentence(analysis.pullRequest?.description ?? "");
     expect(screen.getByText(description)).toBeTruthy();
     expect(fileCards()).toContain("src/routes/orders.ts");
-    expect(within(mainArea()).getAllByRole("region", { name: /, lines / })).toHaveLength(5);
+    expect(within(mainArea()).getAllByRole("region", { name: /, lines / })).toHaveLength(6);
     expect(within(mainArea()).getByRole("heading", { name: "Mechanical changes 5" })).toBeTruthy();
 
     // The intent is the first result: Claude's sentence swaps in where the description was,
@@ -428,6 +427,22 @@ describe("ReviewPage states", () => {
     expect(within(reviewBar()).getByRole("alert").textContent).toBe(
       "Claude couldn't finish: Overloaded",
     );
+  });
+
+  it("says the intent is missing when only its pass failed, the others side by side", async () => {
+    renderReview({
+      view: {
+        ...fixture,
+        analysis: {
+          ...analysis,
+          intent: null,
+          stages: { ...analysis.stages, intent: "failed" },
+          modelError: { stage: "intent", code: "model-error", message: "Overloaded" },
+        },
+      },
+    });
+    await loaded();
+    expect(within(reviewBar()).getByRole("alert").textContent).toBe("intent missing: Overloaded");
   });
 
   it("says why Claude couldn't finish, and tries again", async () => {
@@ -721,11 +736,11 @@ describe("header", () => {
     await loaded();
     const usage = screen.getByRole("button", { name: /Usage:/ });
     expect(usage.textContent).toBe(
-      "Sonnet 5.5 through Claude Code · Usage: 93k tokens in · 115k cache read · 8k out · $0.77",
+      "Sonnet 5.5 through Claude Code · Usage: 87k tokens in · 77k cache read · 7k out · $0.65",
     );
     const breakdown = document.getElementById(usage.getAttribute("aria-describedby") ?? "");
     if (breakdown === null) throw new Error("no breakdown");
-    expect(within(breakdown).getAllByRole("row")).toHaveLength(5);
+    expect(within(breakdown).getAllByRole("row")).toHaveLength(4);
     expect(within(breakdown).getByRole("row", { name: /Intent/ }).textContent).toBe(
       "Intent80k01k$0.36",
     );

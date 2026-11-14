@@ -248,7 +248,7 @@ const RequestReview = ({
 
 /** The passes whose results aren't in, and why, when a run ended early. */
 const missingNote = (analysis: ClaudeRun): string | null => {
-  const missing = (["findings", "risk", "decisions"] as const).filter(
+  const missing = (["intent", "findings", "risk", "decisions"] as const).filter(
     (stage) => analysis.stages[stage] !== "done",
   );
   if (missing.length === 0 || analysis.modelError === null) return null;

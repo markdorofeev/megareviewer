@@ -6,6 +6,7 @@ import {
   codeTour,
   type FilesFetched,
   joinParts,
+  linkMismatches,
   MODEL_STAGES,
   type ModelRunOption,
   mapModelStages,
@@ -15,13 +16,12 @@ import {
   type StageName,
   type StageStatus,
 } from "../../domain/review/index.ts";
-import { ok } from "../../domain/shared/index.ts";
 import type { AnalysisModel, GitHost } from "../ports/index.ts";
 import { type Collected, collect, type OnFilesFetched } from "./collect.ts";
 import type { AppDeps } from "./deps.ts";
 import type { UseCaseError } from "./errors.ts";
 import { buildAnalysisInput, fitToModel } from "./model-input.ts";
-import { runDecisions, runFindings, runIntent, runRisk, runTour } from "./model-passes.ts";
+import { runDecisions, runFindings, runIntent, runRisk } from "./model-passes.ts";
 import { prep } from "./prep.ts";
 import type { CheckoutAt } from "./unchanged-callers.ts";
 
@@ -200,8 +200,8 @@ const codeStages = async (
 };
 
 /**
- * Runs the model's passes on a complete analysis, adding intent, findings, decisions, the model's
- * risk and the tour's titles to it. Collects and preps again from the stored PR first: files come from
+ * Runs the model's passes on a complete analysis, side by side, adding intent, findings, decisions
+ * and the model's risk to it. Collects and preps again from the stored PR first: files come from
  * the file cache, and prep is deterministic. A failure is the analysis's `modelError`; its
  * status stays complete. Never throws.
  */
@@ -242,13 +242,8 @@ const modelStages = async (
 ): Promise<void> => {
   const collected = await collect(deps, host, pullRequest, noProgress);
   if (!collected.ok) return tracker.failModel("intent", collected.error);
-  const { prepared, proofRisk, ruleRisk, skeleton, joined } = await prepare(
-    deps,
-    collected.value,
-    checkout,
-  );
+  const { prepared, proofRisk, ruleRisk } = await prepare(deps, collected.value, checkout);
   const { files } = collected.value;
-  const { parts, callGraph, callSites, required, unchangedCallers } = prepared;
 
   const fitted = await fitToModel(
     model,
@@ -269,40 +264,41 @@ const modelStages = async (
   );
   const knownHunks = new Set<HunkId>(hunks.keys());
 
-  await tracker.setStage("intent", "running");
-  const intentResult = await runIntent(model, input, knownHunks, deps);
-  await tracker.save(adding(intentResult));
-  if (!intentResult.outcome.ok) {
-    return tracker.failModel("intent", {
-      code: "model-error",
-      message: intentResult.outcome.error.message,
-    });
-  }
-  const intent = intentResult.outcome.value;
-  await tracker.setStage("intent", "done", { intent });
-
-  await tracker.setStage("findings", "running");
-  await tracker.setStage("risk", "running");
-  await tracker.setStage("decisions", "running");
-  const [findings, risk, decisions] = await Promise.all([
-    runFindings(model, input, intent, hunks, deps).then(async (result) => {
-      await tracker.setStage("findings", result.outcome.ok ? "done" : "failed", (analysis) => ({
-        ...(result.outcome.ok ? { findings: result.outcome.value } : {}),
+  for (const stage of MODEL_STAGES) await tracker.setStage(stage, "running");
+  const intentRun = runIntent(model, input, knownHunks, deps).then(async (result) => {
+    await tracker.setStage("intent", result.outcome.ok ? "done" : "failed", (analysis) => ({
+      ...(result.outcome.ok ? { intent: result.outcome.value } : {}),
+      ...adding(result)(analysis),
+    }));
+    return result.outcome;
+  });
+  const [intent, findings, risk, decisions] = await Promise.all([
+    intentRun,
+    runFindings(model, input, hunks, deps).then(async (result) => {
+      // A finding shows the intent's mismatch on its hunk, so it waits for the intent.
+      const intent = await intentRun;
+      const linked =
+        result.outcome.ok && intent.ok
+          ? linkMismatches(result.outcome.value, intent.value)
+          : result.outcome.ok
+            ? result.outcome.value
+            : null;
+      await tracker.setStage("findings", linked !== null ? "done" : "failed", (analysis) => ({
+        ...(linked !== null ? { findings: linked } : {}),
         ...adding(result)(analysis),
       }));
       return result.outcome;
     }),
-    runRisk(model, input, intent, required, hunks, deps).then(async (result) => {
-      const assessments = result.outcome.ok
-        ? [...proofRisk, ...raiseByRules(result.outcome.value.assessments, ruleRisk)]
-        : [];
+    runRisk(model, input, prepared.required, hunks, deps).then(async (result) => {
       await tracker.setStage("risk", result.outcome.ok ? "done" : "failed", (analysis) => ({
-        ...(result.outcome.ok ? { risk: assessments } : {}),
+        ...(result.outcome.ok
+          ? { risk: [...proofRisk, ...raiseByRules(result.outcome.value, ruleRisk)] }
+          : {}),
         ...adding(result)(analysis),
       }));
-      return result.outcome.ok ? ok({ ...result.outcome.value, assessments }) : result.outcome;
+      return result.outcome;
     }),
-    runDecisions(model, input, intent, hunks, deps).then(async (result) => {
+    runDecisions(model, input, hunks, deps).then(async (result) => {
       await tracker.setStage("decisions", result.outcome.ok ? "done" : "failed", (analysis) => ({
         ...(result.outcome.ok ? { decisions: result.outcome.value } : {}),
         ...adding(result)(analysis),
@@ -311,34 +307,15 @@ const modelStages = async (
     }),
   ]);
   // What finished stays; the first failure is the run's error.
-  const failure = !findings.ok
-    ? { stage: "findings" as const, message: findings.error.message }
-    : !risk.ok
-      ? { stage: "risk" as const, message: risk.error.message }
-      : !decisions.ok
-        ? { stage: "decisions" as const, message: decisions.error.message }
-        : null;
-  if (!risk.ok || !decisions.ok) {
-    return tracker.finishModel(failure === null ? null : { ...failure, code: "model-error" });
-  }
-
-  await tracker.setStage("tour", "running");
-  const tour = await runTour(
-    model,
-    input,
-    {
-      intent,
-      risk: risk.value.forTour,
-      decisions: decisions.value,
-      skeleton,
-      view: { tour: joined.tour, parts: joined.parts },
-    },
-    deps,
+  const failure = [
+    { stage: "intent" as const, outcome: intent },
+    { stage: "findings" as const, outcome: findings },
+    { stage: "risk" as const, outcome: risk },
+    { stage: "decisions" as const, outcome: decisions },
+  ].find(({ outcome }) => !outcome.ok);
+  await tracker.finishModel(
+    failure === undefined || failure.outcome.ok
+      ? null
+      : { stage: failure.stage, code: "model-error", message: failure.outcome.error.message },
   );
-  await tracker.setStage("tour", "done", (analysis) => ({
-    ...joinParts(tour.tour, parts, callGraph, unchangedCallers, callSites),
-    ...adding(tour)(analysis),
-  }));
-
-  await tracker.finishModel(failure === null ? null : { ...failure, code: "model-error" });
 };

@@ -22,7 +22,7 @@ export const TourStep = z
     /** The parts a flow starts at: its routes, page or command. Empty for the others. */
     entries: z.array(PartId).readonly(),
     /**
-     * The code's own title, when the model wrote `title`: a flow's entry label, or what a
+     * The code's own title, when the tour pass wrote `title`: a flow's entry label, or what a
      * supporting step holds. Null when `title` is the code's.
      */
     codeTitle: z.string().nullable(),
@@ -36,9 +36,9 @@ export const Tour = z
   .object({
     steps: z.array(TourStep).readonly(),
     /**
-     * Both are the code's steps from the call graph. model: titled by the tour pass, which may
-     * have merged supporting steps; code: the code's titles, without the model or when the pass
-     * failed.
+     * Both are the code's steps from the call graph. code: with the code's titles. model: titled
+     * by the tour pass, which may have merged supporting steps, on analyses stored before it was
+     * removed.
      */
     builtBy: z.enum(["model", "code"]),
   })

@@ -59,13 +59,9 @@ const recording = (model: AnalysisModel) => {
     version: model.version,
     checkSize: (input) => model.checkSize(input),
     intent: (input, options?: PassOptions) => record("intent", () => model.intent(input, options)),
-    findings: (input, intent, options) =>
-      record("findings", () => model.findings(input, intent, options)),
-    risk: (input, intent, options) => record("risk", () => model.risk(input, intent, options)),
-    decisions: (input, intent, options) =>
-      record("decisions", () => model.decisions(input, intent, options)),
-    tour: (input, intent, risk, decisions, skeleton, options) =>
-      record("tour", () => model.tour(input, intent, risk, decisions, skeleton, options)),
+    findings: (input, options) => record("findings", () => model.findings(input, options)),
+    risk: (input, options) => record("risk", () => model.risk(input, options)),
+    decisions: (input, options) => record("decisions", () => model.decisions(input, options)),
   };
   return { model: wrapped, passes };
 };
@@ -89,7 +85,7 @@ const analysis = await analyzeCase(fixture, {
 });
 if (!analysis.ok) throw new Error(analysis.error);
 
-const missing = (["intent", "findings", "risk", "decisions", "tour"] as const).filter(
+const missing = (["intent", "findings", "risk", "decisions"] as const).filter(
   (pass) => !passes.has(pass),
 );
 if (missing.length > 0) throw new Error(`No answer recorded for ${missing.join(", ")}`);
@@ -109,7 +105,6 @@ const result: ModelRecording = {
     findings: pass("findings"),
     risk: pass("risk"),
     decisions: pass("decisions"),
-    tour: pass("tour"),
   },
 };
 

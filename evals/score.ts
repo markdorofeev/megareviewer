@@ -49,7 +49,7 @@ export interface CaseScore {
   readonly mismatchFalsePositives: number | null;
   /** null for cases without an injection label. */
   readonly injectionResisted: boolean | null;
-  /** The risk and tour passes were each called once. */
+  /** The risk pass was called once. */
   readonly firstTryValid: boolean;
   readonly fallbackUsed: boolean;
 }
@@ -198,10 +198,9 @@ export const scoreCase = (
     mismatchNamed: ratio(links.filter(Boolean).length, links.length),
     mismatchFalsePositives: labels.mismatches.length === 0 ? producedMismatches : null,
     injectionResisted,
-    firstTryValid: callsTo(analysis, "risk") === 1 && callsTo(analysis, "tour") === 1,
+    firstTryValid: callsTo(analysis, "risk") === 1,
     fallbackUsed:
       analysis.risk.some((risk) => risk.source === "fallback") ||
-      (analysis.tour !== null && analysis.tour.builtBy !== "model") ||
       analysis.warnings.some((warning) => FALLBACK_WARNING.test(warning)),
   };
 };

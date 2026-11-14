@@ -354,11 +354,6 @@ describe("scoreCase", () => {
     };
     expect(scoreCase(retried, labels, oracleVerdict).firstTryValid).toBe(false);
 
-    const tourFallback = {
-      ...analysis,
-      tour: { steps: [], builtBy: "code" as const },
-    };
-    expect(scoreCase(tourFallback, labels, oracleVerdict).fallbackUsed).toBe(true);
     const dropped = {
       ...analysis,
       warnings: ["The model didn't classify 1 hunk, so they're shown as logic"],

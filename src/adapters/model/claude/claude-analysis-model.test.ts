@@ -1,13 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import type { ModelRisk } from "../../../application/ports/index.ts";
 import {
   describeAnalysisModelContract,
   RecordingLogger,
-  smallFeatureAnalysis,
   smallFeatureInput,
-  smallFeatureIntent,
-  smallFeatureSkeleton,
 } from "../../../application/testing/index.ts";
 import type { ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import { createClaudeAnalysisModel } from "./claude-analysis-model.ts";
@@ -35,12 +31,6 @@ const modelWith = (answers: Answers, options: { maxInputTokens?: number; model?:
 
 const recorded = (): Answers => smallFeature;
 
-const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
-);
-const { decisions } = smallFeatureAnalysis;
-const skeleton = { tour: smallFeatureSkeleton, parts: [] };
-
 /** Runs one pass of the small-feature fixture, answered with `answer`. */
 const runPass = (pass: ModelPass, answer: FixtureAnswer, feedback?: readonly string[]) => {
   const setup = modelWith({ passes: { [pass]: answer } });
@@ -50,10 +40,10 @@ const runPass = (pass: ModelPass, answer: FixtureAnswer, feedback?: readonly str
     pass === "intent"
       ? model.intent(smallFeatureInput, options)
       : pass === "risk"
-        ? model.risk(smallFeatureInput, smallFeatureIntent, options)
+        ? model.risk(smallFeatureInput, options)
         : pass === "decisions"
-          ? model.decisions(smallFeatureInput, smallFeatureIntent, options)
-          : model.tour(smallFeatureInput, smallFeatureIntent, risk, decisions, skeleton, options);
+          ? model.decisions(smallFeatureInput, options)
+          : model.findings(smallFeatureInput, options);
   return { ...setup, result };
 };
 
@@ -71,15 +61,14 @@ describe("ClaudeAnalysisModel", () => {
     const runAllPasses = async () => {
       const { model, requests } = modelWith(recorded());
       await model.intent(smallFeatureInput);
-      await model.risk(smallFeatureInput, smallFeatureIntent);
-      await model.decisions(smallFeatureInput, smallFeatureIntent);
-      await model.tour(smallFeatureInput, smallFeatureIntent, risk, decisions, skeleton);
+      await model.risk(smallFeatureInput);
+      await model.decisions(smallFeatureInput);
       return requests;
     };
 
     it("sends every pass the same prefix, up to a cache breakpoint after the PR data", async () => {
       const requests = await runAllPasses();
-      expect(requests).toHaveLength(4);
+      expect(requests).toHaveLength(3);
       const prefix = (index: number) => {
         const body = requests[index]?.body;
         return JSON.stringify([
@@ -90,7 +79,7 @@ describe("ClaudeAnalysisModel", () => {
           body?.messages[0],
         ]);
       };
-      for (const index of [1, 2, 3]) expect(prefix(index)).toBe(prefix(0));
+      for (const index of [1, 2]) expect(prefix(index)).toBe(prefix(0));
 
       const data = requests[0]?.body.messages[0];
       expect(data?.role).toBe("user");
@@ -106,7 +95,7 @@ describe("ClaudeAnalysisModel", () => {
     it("sets each pass's effort after the cached prefix", async () => {
       const requests = await runAllPasses();
       expect(requests.map((request) => request.body.messages[1])).toEqual(
-        ["medium", "low", "high", "medium"].map((effort) => ({
+        ["medium", "low", "high"].map((effort) => ({
           role: "system",
           content: [],
           output_config: { effort },
@@ -129,31 +118,17 @@ describe("ClaudeAnalysisModel", () => {
       ]);
     });
 
-    it("gives later passes the earlier results", async () => {
+    it("asks each pass for its own task alone, so the passes can run side by side", async () => {
       const requests = await runAllPasses();
-      const instruction = (index: number) =>
-        requests[index]?.body.messages[2]?.content[0]?.text ?? "";
-
-      expect(instruction(0)).not.toContain("<earlier_results>");
-      for (const index of [1, 2]) {
-        expect(instruction(index)).toContain(smallFeatureIntent.inferred.summary);
-        expect(instruction(index)).not.toContain("<risk>");
-      }
-      const tour = instruction(3);
-      expect(tour).toContain(`${risk[0]?.hunkId} ${risk[0]?.riskClass}: ${risk[0]?.reason}`);
-      expect(tour).toContain(`d1 [api] ${decisions[0]?.title}`);
-      const [route, imports] = smallFeatureSkeleton.steps[0]?.partIds ?? [];
-      expect(tour).toContain(
-        [
-          '<step id="s1" kind="flow">',
-          "code's title: GET /orders/:id/receipt",
-          "code's explanation: Read by the code.",
-          `entries: ${route}`,
-          `reads: ${route}, ${imports}`,
-          "</step>",
-        ].join("\n"),
+      const instructions = requests.map(
+        (request) => request.body.messages[2]?.content[0]?.text ?? "",
       );
-      expect(tour).toContain('<step id="s3" kind="supporting">');
+      expect(instructions.map((text) => /^Task: (\w+)\./.exec(text)?.[1])).toEqual([
+        "intent",
+        "risk",
+        "decisions",
+      ]);
+      for (const text of instructions) expect(text).not.toContain("<earlier_results>");
     });
 
     it("appends the feedback on the previous answer when given", async () => {
@@ -252,7 +227,7 @@ describe("ClaudeAnalysisModel", () => {
       ["server error", errors.http.serverError, "overloaded"],
       ["bad request", errors.http.badRequest, "unexpected"],
       ["no network", "no-network", "network"],
-    ] as const)("maps %s", (_, answer, kind) => failsWith("tour", answer, kind));
+    ] as const)("maps %s", (_, answer, kind) => failsWith("decisions", answer, kind));
 
     it("logs the failure", async () => {
       const { result, logger } = runPass("intent", errors.http.overloaded);

@@ -261,7 +261,7 @@ describe("analysisInProgress", () => {
   it("keeps earlier stages' results when a model stage fails, leaving the analysis complete", () => {
     const failed = analysisFailed(analysis, "risk", "Bad output");
     expect(failed.status).toBe("complete");
-    expect(failed.stages).toMatchObject({ intent: "done", risk: "failed", tour: "skipped" });
+    expect(failed.stages).toMatchObject({ intent: "done", risk: "failed", decisions: "skipped" });
     expect(failed.intent).toEqual(analysis.intent);
     expect(failed.decisions).toEqual([]);
     expect(failed.error).toBeNull();

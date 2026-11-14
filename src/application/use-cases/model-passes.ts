@@ -1,6 +1,5 @@
 import type { Hunk, HunkId, PartId } from "../../domain/diff/index.ts";
 import {
-  applyTourTitles,
   type CoverageProblem,
   type Decision,
   DecisionId,
@@ -8,8 +7,6 @@ import {
   FindingId,
   type FindingProblem,
   type Intent,
-  MAX_EXPLANATION,
-  MAX_TITLE,
   type ModelCall,
   type ModelError,
   type ModelPass,
@@ -17,12 +14,9 @@ import {
   pointLinesFit,
   type RiskAssessment,
   strippable,
-  type Tour,
-  type TourTitlesProblem,
   validateFindings,
   validateHunkReferences,
   validateRiskCoverage,
-  validateTourTitles,
 } from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
 import type {
@@ -33,7 +27,6 @@ import type {
   ModelRisk,
   PassOptions,
   PassOutput,
-  TourSkeleton,
 } from "../ports/index.ts";
 import { count } from "./text.ts";
 
@@ -177,33 +170,29 @@ const FINDING_FEEDBACK = (problem: FindingProblem): string => {
       return `${finding} has a blank title.`;
     case "suggestion-old-side":
       return `${finding} suggests a change for "-" lines; a suggestion replaces only new-side lines, so give none or rest the finding on new-side lines.`;
-    case "unknown-mismatch":
-      return `${finding} names ${problem.mismatch}, which isn't one of the intent's mismatches.`;
   }
 };
 
 /**
- * Findings on lines the PR's hunks show. One still invalid after the retry is dropped and
- * logged, not shown: the reviewer can't act on the model's mistake. One wrong only in its
- * suggestion or mismatch keeps its place without them.
+ * Findings on lines the PR's hunks show, with no mismatch yet. One still invalid after the retry
+ * is dropped and logged, not shown: the reviewer can't act on the model's mistake. One wrong only
+ * in its suggestion keeps its place without it.
  */
 export const runFindings = async (
   model: AnalysisModel,
   input: AnalysisInput,
-  intent: Intent,
   hunks: ReadonlyMap<HunkId, Hunk>,
   deps: PassDeps,
 ): Promise<PassResult<Finding[]>> => {
-  const mismatches = intent.mismatches.length;
   const { outcome, usage, modelCalls } = await callChecked(
     "findings",
-    (options) => model.findings(input, intent, options),
-    (drafts) => validateFindings(drafts, hunks, mismatches).map(FINDING_FEEDBACK),
+    (options) => model.findings(input, options),
+    (drafts) => validateFindings(drafts, hunks).map(FINDING_FEEDBACK),
     deps,
   );
   if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
   const drafts = outcome.value.value;
-  const problems = validateFindings(drafts, hunks, mismatches);
+  const problems = validateFindings(drafts, hunks);
   const invalid = new Set(problems.filter((one) => !strippable(one)).map((one) => one.index));
   if (invalid.size > 0) deps.logger.warn("Dropped invalid findings", { count: invalid.size });
   const stripped = (index: number, kind: FindingProblem["kind"]) =>
@@ -215,36 +204,34 @@ export const runFindings = async (
           {
             ...draft,
             ...(stripped(index, "suggestion-old-side") ? { suggestion: null } : {}),
-            ...(stripped(index, "unknown-mismatch") ? { mismatch: null } : {}),
           },
         ],
   );
   return {
-    outcome: ok(kept.map((draft, index) => ({ ...draft, id: FindingId.parse(`f${index + 1}`) }))),
+    outcome: ok(
+      kept.map((draft, index) => ({
+        ...draft,
+        id: FindingId.parse(`f${index + 1}`),
+        mismatch: null,
+      })),
+    ),
     usage,
     modelCalls,
     warnings: [],
   };
 };
 
-export interface RiskOutcome {
-  /** The model's assessments, one per required hunk, with fallbacks for the ones it missed. */
-  readonly assessments: readonly RiskAssessment[];
-  /** The same, as the tour pass takes them. */
-  readonly forTour: readonly ModelRisk[];
-}
-
+/** The model's assessments, one per required hunk, with fallbacks for the ones it missed. */
 export const runRisk = async (
   model: AnalysisModel,
   input: AnalysisInput,
-  intent: Intent,
   required: ReadonlySet<HunkId>,
   hunks: ReadonlyMap<HunkId, Hunk>,
   deps: PassDeps,
-): Promise<PassResult<RiskOutcome>> => {
+): Promise<PassResult<RiskAssessment[]>> => {
   const { outcome, usage, modelCalls } = await callChecked(
     "risk",
-    (options) => model.risk(input, intent, options),
+    (options) => model.risk(input, options),
     (risk) => validateRiskCoverage(risk, required).map(describeProblem(RISK_FEEDBACK)),
     deps,
   );
@@ -276,13 +263,10 @@ export const runRisk = async (
         ? [`The model didn't classify ${count(missing.length, "hunk")}, so they're shown as logic`]
         : ["Ignored risk classifications for unknown or repeated hunks"];
   return {
-    outcome: ok({
-      assessments: [
-        ...[...kept.values()].map((risk) => ({ ...risk, source: "model" as const })),
-        ...fallbacks.map((risk) => ({ ...risk, source: "fallback" as const })),
-      ],
-      forTour: [...kept.values(), ...fallbacks],
-    }),
+    outcome: ok([
+      ...[...kept.values()].map((risk) => ({ ...risk, source: "model" as const })),
+      ...fallbacks.map((risk) => ({ ...risk, source: "fallback" as const })),
+    ]),
     usage,
     modelCalls,
     warnings,
@@ -292,7 +276,6 @@ export const runRisk = async (
 export const runDecisions = async (
   model: AnalysisModel,
   input: AnalysisInput,
-  intent: Intent,
   hunks: ReadonlyMap<HunkId, Hunk>,
   deps: PassDeps,
 ): Promise<PassResult<Decision[]>> => {
@@ -304,7 +287,7 @@ export const runDecisions = async (
     );
   const { outcome, usage, modelCalls } = await callChecked(
     "decisions",
-    (options) => model.decisions(input, intent, options),
+    (options) => model.decisions(input, options),
     (drafts) => unknownIn(drafts).map(describeUnknown),
     deps,
   );
@@ -331,77 +314,4 @@ export const runDecisions = async (
     modelCalls,
     warnings: [],
   };
-};
-
-const TITLES_FEEDBACK: (problem: TourTitlesProblem) => string = (problem) => {
-  const { stepId } = problem;
-  switch (problem.kind) {
-    case "missing":
-      return `${stepId} has no title. Title every step of the tour exactly once.`;
-    case "duplicate":
-      return `${stepId} is titled more than once.`;
-    case "unknown":
-      return `${stepId} isn't a step of the tour, so don't title it.`;
-    case "blank":
-      return `${stepId} has a blank ${problem.field}.`;
-    case "too-long":
-      return `${stepId}'s ${problem.field} is longer than ${problem.field === "title" ? MAX_TITLE : MAX_EXPLANATION} characters.`;
-    case "merge-of-flow":
-      return `${stepId} is a flow, and only supporting steps can be merged.`;
-    case "merge-unknown":
-      return `${stepId} isn't a step of the tour, so it can't be merged.`;
-    case "merged-twice":
-      return `${stepId} is merged more than once.`;
-    case "merge-no-reason":
-      return `The merge of ${stepId} has no reason.`;
-    case "merge-into-unknown":
-      return `${stepId} is merged into ${problem.intoStepId}, which isn't a step of the tour.`;
-    case "merge-into-merged":
-      return `${stepId} is merged into ${problem.intoStepId}, which is merged itself.`;
-  }
-};
-
-/**
- * Titles the code's tour. Never fails: when the model's titles are still invalid after a retry,
- * or the pass fails, the steps keep the code's titles. `skeleton` is the tour as the code built
- * it; `view` is the same steps as the model reads them, with the parts joined back.
- */
-export const runTour = async (
-  model: AnalysisModel,
-  input: AnalysisInput,
-  context: {
-    readonly intent: Intent;
-    readonly risk: readonly ModelRisk[];
-    readonly decisions: readonly Decision[];
-    readonly skeleton: Tour;
-    readonly view: TourSkeleton;
-  },
-  deps: PassDeps,
-): Promise<{
-  tour: Tour;
-  usage: readonly ModelUsage[];
-  modelCalls: readonly ModelCall[];
-  warnings: readonly string[];
-}> => {
-  const { skeleton } = context;
-  const { outcome, usage, modelCalls } = await callChecked(
-    "tour",
-    (options) =>
-      model.tour(input, context.intent, context.risk, context.decisions, context.view, options),
-    (titles) => validateTourTitles(titles, skeleton).map(TITLES_FEEDBACK),
-    deps,
-  );
-  const fallback = (reason: string) => ({
-    tour: skeleton,
-    usage,
-    modelCalls,
-    warnings: [`${reason}, so its steps keep the code's titles`],
-  });
-  if (!outcome.ok) {
-    return fallback(`The guided tour couldn't be titled (${outcome.error.message})`);
-  }
-  if (outcome.value.problems.length > 0) {
-    return fallback("The model's titles for the guided tour weren't valid");
-  }
-  return { tour: applyTourTitles(skeleton, outcome.value.value), usage, modelCalls, warnings: [] };
 };

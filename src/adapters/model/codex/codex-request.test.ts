@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRisk } from "../../../application/ports/index.ts";
-import {
-  smallFeatureAnalysis,
-  smallFeatureInput,
-  smallFeatureIntent,
-} from "../../../application/testing/index.ts";
+import { smallFeatureInput } from "../../../application/testing/index.ts";
 import { ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
@@ -13,19 +8,9 @@ import { codexRequest, DISABLED_FEATURES, INSTRUCTIONS_FILE } from "./codex-requ
 import { codexEffort } from "./models.ts";
 import { CODEX_FINGERPRINT, CODEX_PROMPT_VERSION, codexVersion } from "./version.ts";
 
-const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
-);
-const earlier = { intent: smallFeatureIntent, risk, decisions: smallFeatureAnalysis.decisions };
-
 const requests = (model = "gpt-6-luna") =>
   ModelPass.options.map((pass) =>
-    codexRequest(
-      pass,
-      renderInput(smallFeatureInput),
-      passMessage(pass, earlier, ["problem"]),
-      model,
-    ),
+    codexRequest(pass, renderInput(smallFeatureInput), passMessage(pass, ["problem"]), model),
   );
 
 const valueAfter = (args: readonly string[], flag: string) => args[args.indexOf(flag) + 1];
@@ -60,11 +45,10 @@ describe("codexRequest", () => {
       ["gpt-6-sol", "model_reasoning_effort=high"],
       ["gpt-6-sol", "model_reasoning_effort=low"],
       ["gpt-6-sol", "model_reasoning_effort=high"],
-      ["gpt-6-sol", "model_reasoning_effort=medium"],
     ]);
   });
 
-  it("keeps the cached part byte-identical across the five passes of one input", () => {
+  it("keeps the cached part byte-identical across the four passes of one input", () => {
     const all = requests();
     expect(new Set(all.map((request) => JSON.stringify(request.files))).size).toBe(1);
     expect(all[0]?.files[INSTRUCTIONS_FILE]).toContain("<pull_request_data>");

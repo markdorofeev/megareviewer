@@ -56,7 +56,7 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
       const request = passRequest(
         "intent",
         renderInput(input),
-        passMessage("intent", null, undefined),
+        passMessage("intent", undefined),
         model,
       );
       let inputTokens: number;
@@ -73,11 +73,11 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
         : ok({ inputTokens });
     },
 
-    async runPass(pass, input, earlier, passOptions) {
+    async runPass(pass, input, passOptions) {
       const request = passRequest(
         pass,
         renderInput(input),
-        passMessage(pass, earlier, passOptions?.feedback),
+        passMessage(pass, passOptions?.feedback),
         model,
       );
       logger.debug("Model pass started", {

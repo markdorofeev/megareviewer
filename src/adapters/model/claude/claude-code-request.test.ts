@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRisk } from "../../../application/ports/index.ts";
-import {
-  smallFeatureAnalysis,
-  smallFeatureInput,
-  smallFeatureIntent,
-} from "../../../application/testing/index.ts";
+import { smallFeatureInput } from "../../../application/testing/index.ts";
 import { ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
@@ -19,22 +14,12 @@ import {
 import { CLAUDE_MODELS } from "./models.ts";
 import { CLAUDE_CODE_FINGERPRINT, CLAUDE_CODE_PROMPT_VERSION } from "./version.ts";
 
-const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
-  riskClass === "mechanical" ? [] : [{ hunkId, riskClass, reason, lines: null }],
-);
-const earlier = { intent: smallFeatureIntent, risk, decisions: smallFeatureAnalysis.decisions };
-
 /** The fingerprint was taken on Haiku 5.5, the model the prompts were tuned on. */
 const HAIKU = "claude-haiku-5-5";
 
 const requests = (model: string = HAIKU) =>
   ModelPass.options.map((pass) =>
-    claudeCodeRequest(
-      pass,
-      renderInput(smallFeatureInput),
-      passMessage(pass, earlier, ["problem"]),
-      model,
-    ),
+    claudeCodeRequest(pass, renderInput(smallFeatureInput), passMessage(pass, ["problem"]), model),
   );
 
 const flag = (args: readonly string[], name: string) => args[args.indexOf(name) + 1];
@@ -43,8 +28,8 @@ describe("Claude Code request", () => {
   it.each([
     ["intent", "medium"],
     ["risk", "low"],
+    ["findings", "high"],
     ["decisions", "high"],
-    ["tour", "medium"],
   ] as const)("runs the %s pass at %s effort", (pass, effort) => {
     const args = claudeCodePassArgs(pass, HAIKU);
     expect(flag(args, "--model")).toBe(HAIKU);

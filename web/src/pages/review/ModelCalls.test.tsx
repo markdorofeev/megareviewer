@@ -19,14 +19,7 @@ const failed: ModelCall = {
 describe("ModelCalls", () => {
   it("lists every call in the order it started, a retry after its first try", () => {
     const passes = chronological(calls).map((call) => `${call.pass}/${call.attempt}`);
-    expect(passes).toEqual([
-      "intent/1",
-      "findings/1",
-      "risk/1",
-      "decisions/1",
-      "findings/2",
-      "tour/1",
-    ]);
+    expect(passes).toEqual(["intent/1", "findings/1", "risk/1", "decisions/1", "findings/2"]);
   });
 
   it("says why a pass ran again, and why one failed", () => {
@@ -38,7 +31,7 @@ describe("ModelCalls", () => {
 
     expect(
       within(dialog).getByText(
-        /^On Sonnet 5\.5 through Claude Code\. 141\.2 s from the first call/,
+        /^On Sonnet 5\.5 through Claude Code\. 128\.3 s from the first call/,
       ),
     ).toBeTruthy();
     const findings = within(dialog).getAllByRole("row")[2];

@@ -508,15 +508,6 @@ const usage: readonly ModelUsage[] = [
     costUsd: 0.21,
     billing: "api",
   },
-  {
-    pass: "tour",
-    inputTokens: 5_870,
-    cacheReadTokens: 38_400,
-    cacheWriteTokens: 0,
-    outputTokens: 1_530,
-    costUsd: 0.12,
-    billing: "api",
-  },
 ];
 
 const call = (
@@ -548,7 +539,6 @@ const modelCalls: readonly ModelCall[] = [
   call("risk", "2026-10-21T09:00:31.200Z", 18_400),
   call("decisions", "2026-10-21T09:00:31.200Z", 33_100),
   call("findings", "2026-10-21T09:01:36.000Z", 52_300, { attempt: 2 }),
-  call("tour", "2026-10-21T09:02:28.300Z", 12_900),
 ];
 
 const callGraph: CallGraphHint[] = [
@@ -579,7 +569,6 @@ const analysis: Analysis = {
     findings: "done",
     risk: "done",
     decisions: "done",
-    tour: "done",
   },
   filesFetched: null,
   pullRequest,

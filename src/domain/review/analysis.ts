@@ -19,15 +19,7 @@ import { PullRequest, PullRequestRef } from "./pull-request.ts";
 import { RiskAssessment } from "./risk.ts";
 import { Tour } from "./tour.ts";
 
-export const StageName = z.enum([
-  "collect",
-  "prep",
-  "intent",
-  "findings",
-  "risk",
-  "decisions",
-  "tour",
-]);
+export const StageName = z.enum(["collect", "prep", "intent", "findings", "risk", "decisions"]);
 export type StageName = z.infer<typeof StageName>;
 
 /** skipped: a model pass that didn't run because the model is off. */
@@ -53,7 +45,7 @@ export const AnalysisKey = z
   .readonly();
 export type AnalysisKey = z.infer<typeof AnalysisKey>;
 
-export const ModelPass = z.enum(["intent", "findings", "risk", "decisions", "tour"]);
+export const ModelPass = z.enum(["intent", "findings", "risk", "decisions"]);
 export type ModelPass = z.infer<typeof ModelPass>;
 
 const TokenCount = z.number().int().nonnegative();
@@ -112,6 +104,29 @@ export const AnalysisError = z
   .readonly();
 export type AnalysisError = z.infer<typeof AnalysisError>;
 
+/** Analyses stored while the model titled the tour have a pass for it, which is left out. */
+const withoutTourPass = (entries: unknown) =>
+  Array.isArray(entries)
+    ? entries.filter(
+        (entry: unknown) =>
+          typeof entry !== "object" ||
+          entry === null ||
+          !("pass" in entry) ||
+          entry.pass !== "tour",
+      )
+    : entries;
+
+/**
+ * Analyses stored before the findings pass lack its stage; those from while the model titled the
+ * tour have a stage for that, which is left out.
+ */
+const currentStages = (stages: unknown) => {
+  if (typeof stages !== "object" || stages === null) return stages;
+  return Object.fromEntries(
+    Object.entries({ findings: "skipped", ...stages }).filter(([stage]) => stage !== "tour"),
+  );
+};
+
 export const AnalysisStatus = z.enum(["running", "complete", "failed"]);
 export type AnalysisStatus = z.infer<typeof AnalysisStatus>;
 
@@ -133,16 +148,7 @@ export const Analysis = z
     id: AnalysisId,
     key: AnalysisKey,
     status: AnalysisStatus,
-    // Analyses stored before the findings pass have no stage for it.
-    stages: z
-      .preprocess(
-        (stages) =>
-          typeof stages === "object" && stages !== null && !("findings" in stages)
-            ? { ...stages, findings: "skipped" }
-            : stages,
-        z.record(StageName, StageStatus),
-      )
-      .readonly(),
+    stages: z.preprocess(currentStages, z.record(StageName, StageStatus)).readonly(),
     /** null until Collect starts fetching. Defaults for analyses stored before it existed. */
     filesFetched: FilesFetched.nullable().default(null),
     pullRequest: PullRequest.nullable(),
@@ -170,9 +176,9 @@ export const Analysis = z
     decisions: z.array(Decision).readonly(),
     tour: Tour.nullable(),
     warnings: z.array(z.string()).readonly(),
-    usage: z.array(ModelUsage).readonly(),
+    usage: z.preprocess(withoutTourPass, z.array(ModelUsage)).readonly(),
     /** Defaults for analyses stored before model calls were traced. */
-    modelCalls: z.array(ModelCall).readonly().default([]),
+    modelCalls: z.preprocess(withoutTourPass, z.array(ModelCall)).readonly().default([]),
     /** Why the analysis failed; never set by the model passes, which have `modelError`. */
     error: AnalysisError.nullable(),
     /**
@@ -193,7 +199,6 @@ export const MODEL_STAGES = [
   "findings",
   "risk",
   "decisions",
-  "tour",
 ] as const satisfies readonly StageName[];
 
 /** The stages with each model stage's status replaced by `next` of it. */
@@ -206,7 +211,6 @@ export const mapModelStages = (
   findings: next(stages.findings),
   risk: next(stages.risk),
   decisions: next(stages.decisions),
-  tour: next(stages.tour),
 });
 
 /**

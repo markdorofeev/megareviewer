@@ -1,4 +1,3 @@
-import { hunkIdOf, renameHints } from "../../src/domain/diff/index.ts";
 import {
   type Analysis,
   MODEL_STAGES,
@@ -36,20 +35,14 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
       findings: status("findings"),
       risk: status("risk"),
       decisions: status("decisions"),
-      tour: status("tour"),
     },
     pullRequest: done("collect") ? analysis.pullRequest : null,
     tickets: done("collect") ? analysis.tickets : [],
     missingTicketKeys: done("collect") ? analysis.missingTicketKeys : [],
     files: done("prep") ? analysis.files : [],
     proofs: done("prep") ? analysis.proofs : [],
-    // Parts come with the tour; until then every hunk is whole.
-    parts: done("tour") ? analysis.parts : [],
-    callGraph: done("tour")
-      ? analysis.callGraph
-      : done("prep")
-        ? renameHints(analysis.callGraph, hunkIdOf)
-        : [],
+    parts: done("prep") ? analysis.parts : [],
+    callGraph: done("prep") ? analysis.callGraph : [],
     intent: done("intent") ? analysis.intent : null,
     findings: done("findings") ? analysis.findings : [],
     risk: done("risk")
@@ -58,7 +51,7 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
         ? analysis.risk.filter((assessment) => assessment.source === "proof")
         : [],
     decisions: done("decisions") ? analysis.decisions : [],
-    tour: done("tour") ? analysis.tour : null,
+    tour: done("prep") ? analysis.tour : null,
     warnings: [],
     usage: analysis.usage.filter((usage) => done(usage.pass)),
     error: null,

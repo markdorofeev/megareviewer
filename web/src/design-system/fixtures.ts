@@ -330,7 +330,6 @@ export const DESIGN_RUN: ClaudeRun = {
     findings: "skipped",
     risk: "skipped",
     decisions: "skipped",
-    tour: "skipped",
   },
   modelError: null,
 };

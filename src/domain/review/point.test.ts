@@ -4,6 +4,7 @@ import { HunkId } from "../diff/index.ts";
 import {
   type Finding,
   FindingId,
+  linkMismatches,
   MismatchId,
   pointsOf,
   strippable,
@@ -284,19 +285,36 @@ describe("validateFindings", () => {
     ]);
   });
 
-  it("names a suggestion on old-side lines and a mismatch the intent doesn't have", () => {
+  it("names a suggestion on old-side lines, which costs the finding only its suggestion", () => {
     const onOld = {
       ...finding(),
       lines: { hunkId: receiptsHunk.id, side: "old" as const, startLine: 9, line: 9 },
       suggestion: ["x();"],
     };
-    const problems = validateFindings(
-      [onOld, { ...finding(), mismatch: MismatchId.parse("m2") }],
-      hunks,
-      1,
-    );
-    expect(problems).toContainEqual({ kind: "suggestion-old-side", index: 0 });
-    expect(problems).toContainEqual({ kind: "unknown-mismatch", index: 1, mismatch: "m2" });
-    expect(problems.filter((problem) => problem.index === 1).every(strippable)).toBe(true);
+    const problems = validateFindings([onOld], hunks);
+    const suggestion = { kind: "suggestion-old-side", index: 0 } as const;
+    expect(problems).toContainEqual(suggestion);
+    expect(strippable(suggestion)).toBe(true);
+  });
+});
+
+describe("linkMismatches", () => {
+  const other = HunkId.parse("h_00000000000000ff");
+  const intent = {
+    stated: null,
+    inferred: { summary: "Caches receipts.", behaviorChanges: [] },
+    mismatches: [
+      { kind: "unrequested" as const, description: "Raises the rate limit.", hunkIds: [other] },
+      { kind: "missing" as const, description: "No invalidation.", hunkIds: [receiptsHunk.id] },
+      { kind: "missing" as const, description: "No metrics.", hunkIds: [receiptsHunk.id] },
+    ],
+  };
+
+  it("gives a finding the first mismatch on its hunk, and none when no mismatch is there", () => {
+    const elsewhere = finding({ hunkId: HunkId.parse("h_00000000000000aa") });
+    expect(linkMismatches([finding(), elsewhere], intent).map((one) => one.mismatch)).toEqual([
+      MismatchId.parse("m2"),
+      null,
+    ]);
   });
 });

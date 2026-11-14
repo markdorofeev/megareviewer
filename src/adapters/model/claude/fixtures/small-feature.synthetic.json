@@ -146,42 +146,6 @@
         "server_tool_use": null,
         "service_tier": "standard"
       }
-    },
-    "tour": {
-      "id": "msg_synthetic_tour",
-      "type": "message",
-      "role": "assistant",
-      "model": "claude-haiku-5-5",
-      "content": [
-        {
-          "type": "thinking",
-          "thinking": "",
-          "signature": "c2lnbmF0dXJlLXN5bnRoZXRpYy04"
-        },
-        {
-          "type": "text",
-          "text": "{\"answer\":{\"pass\":\"tour\",\"tour\":{\"steps\":[{\"stepId\":\"s1\",\"title\":\"The new endpoint\",\"explanation\":\"Requests for a receipt load the user's order and hand it to the renderer.\"},{\"stepId\":\"s2\",\"title\":\"Rendering and caching receipts\",\"explanation\":\"The receipt is plain text, cached per order for an hour.\"},{\"stepId\":\"s3\",\"title\":\"Configuration\",\"explanation\":\"New receipt settings, and an unrelated rate limit change.\"}],\"merges\":[]}}}",
-          "citations": null
-        }
-      ],
-      "stop_reason": "end_turn",
-      "stop_sequence": null,
-      "stop_details": null,
-      "container": null,
-      "context_management": null,
-      "usage": {
-        "input_tokens": 1203,
-        "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 6012,
-        "cache_creation": {
-          "ephemeral_5m_input_tokens": 0,
-          "ephemeral_1h_input_tokens": 0
-        },
-        "output_tokens": 520,
-        "iterations": null,
-        "server_tool_use": null,
-        "service_tier": "standard"
-      }
     }
   }
 }

@@ -78,7 +78,7 @@ export const afterModelRun = (analysis: Analysis, scenario: Scenario): Analysis 
         ...analysis,
         decisions: [],
         risk: analysis.risk.filter((risk) => risk.source !== "model"),
-        stages: stages(analysis.stages, { risk: "failed", decisions: "skipped", tour: "skipped" }),
+        stages: stages(analysis.stages, { risk: "failed", decisions: "skipped" }),
         modelError: rateLimited,
       };
     case "refusal":

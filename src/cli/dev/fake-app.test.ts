@@ -8,7 +8,6 @@ import {
   smallFeature,
   smallFeatureInput,
   smallFeaturePublication,
-  smallFeatureSkeleton,
 } from "../../application/testing/index.ts";
 import { CommentKey } from "../../domain/review/index.ts";
 import { createFakeApp, failingIntentOnce, intentFailsOnce } from "./fake-app.ts";
@@ -133,16 +132,16 @@ describe("failingIntentOnce", () => {
     expect(intent.ok).toBe(true);
     if (!intent.ok) return;
     await model.checkSize(input);
-    await model.risk(input, intent.value.value);
-    await model.decisions(input, intent.value.value);
-    await model.tour(input, intent.value.value, [], [], { tour: smallFeatureSkeleton, parts: [] });
+    await model.findings(input);
+    await model.risk(input);
+    await model.decisions(input);
     expect(model.version).toBe(inner.version);
     expect(inner.calls.map((call) => call.pass)).toEqual([
       "intent",
       "checkSize",
+      "findings",
       "risk",
       "decisions",
-      "tour",
     ]);
   });
 });

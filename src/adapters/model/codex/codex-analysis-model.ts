@@ -98,7 +98,7 @@ export const createCodexAnalysisModel = (options: CodexAnalysisModelOptions): An
 
     async checkSize(input) {
       const inputTokens = estimateTokens(
-        codexInstructions(renderInput(input)) + passMessage("intent", null, undefined),
+        codexInstructions(renderInput(input)) + passMessage("intent", undefined),
       );
       logger.debug("Estimated the input", { inputTokens, maxInputTokens });
       return inputTokens > maxInputTokens
@@ -106,11 +106,11 @@ export const createCodexAnalysisModel = (options: CodexAnalysisModelOptions): An
         : ok({ inputTokens });
     },
 
-    async runPass(pass, input, earlier, passOptions) {
+    async runPass(pass, input, passOptions) {
       const request = codexRequest(
         pass,
         renderInput(input),
-        passMessage(pass, earlier, passOptions?.feedback),
+        passMessage(pass, passOptions?.feedback),
         model,
         {
           ...(options.efforts === undefined ? {} : { efforts: options.efforts }),
