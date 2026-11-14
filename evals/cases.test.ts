@@ -81,7 +81,7 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
           timeoutMs: 30_000,
         });
         if (!result.ok) throw new Error(result.error);
-        analysis = result.value;
+        analysis = result.value.analysis;
       });
 
       it("refer to hunks the model classifies (none proved mechanical)", () => {

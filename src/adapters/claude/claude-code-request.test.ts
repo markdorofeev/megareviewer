@@ -7,7 +7,11 @@ import {
 } from "../../application/testing/index.ts";
 import { ModelPass } from "../../domain/review/index.ts";
 import { fnv1a64 } from "../../domain/shared/index.ts";
-import { claudeCodeArgs, claudeCodeRequest, SYSTEM_PROMPT_FILE } from "./claude-code-request.ts";
+import {
+  claudeCodePassArgs,
+  claudeCodeRequest,
+  SYSTEM_PROMPT_FILE,
+} from "./claude-code-request.ts";
 import { PASS_ANSWER_FORMAT } from "./output-schema.ts";
 import { passMessage } from "./prompts/passes.ts";
 import { SYSTEM_PROMPT } from "./prompts/system.ts";
@@ -37,13 +41,13 @@ describe("Claude Code request", () => {
     ["decisions", "high"],
     ["tour", "medium"],
   ] as const)("runs the %s pass on Haiku at %s effort", (pass, effort) => {
-    const args = claudeCodeArgs(pass);
+    const args = claudeCodePassArgs(pass);
     expect(flag(args, "--model")).toBe("claude-haiku-5-5");
     expect(flag(args, "--effort")).toBe(effort);
   });
 
   it("locks the session down: no tools, servers, commands, settings or saved session", () => {
-    const args = claudeCodeArgs("intent");
+    const args = claudeCodePassArgs("intent");
     expect(args[0]).toBe("-p");
     expect(flag(args, "--tools")).toBe("");
     expect(flag(args, "--setting-sources")).toBe("");

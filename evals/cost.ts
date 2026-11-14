@@ -1,6 +1,6 @@
 import type { Baseline } from "./baseline.ts";
 
-/** Per case before anything was measured: a few cents of Haiku passes plus the Opus judge. */
+/** Per case before anything was measured, at API prices: a few cents of Haiku passes plus the Opus judge. */
 export const UNMEASURED_COST_PER_CASE_USD = 0.15;
 
 export interface CostEstimate {

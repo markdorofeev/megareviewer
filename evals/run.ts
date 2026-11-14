@@ -1,9 +1,9 @@
 // Runs the golden set through the real pipeline and model, scores it and prints a summary:
 // node evals/run.ts [--case <name>]... [--via api|claude-code] [--baseline evals/baseline.json]
 //   [--write-baseline] --yes
-// Spends money: without --yes it prints the estimated cost and stops. Needs Anthropic
-// credentials (ANTHROPIC_API_KEY or `ant auth login`) for the judge, and with --via claude-code
-// a signed-in Claude Code for the passes. See evals/README.md.
+// Without --yes it prints the estimate and stops. The judge runs on a signed-in Claude Code; the
+// passes run on the API (ANTHROPIC_API_KEY or `ant auth login`), or with --via claude-code on
+// Claude Code too, which then needs no API credentials. See evals/README.md.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,7 @@ import { estimateCost } from "./cost.ts";
 import { analyzeCase, quietLogger } from "./harness.ts";
 import { JUDGE_MODEL, JUDGE_VERSION, judgeCase } from "./judge.ts";
 import { countRatings, type JudgeVerdict } from "./judge-verdict.ts";
+import { parseVia, preflight } from "./preflight.ts";
 import {
   type CaseCost,
   type CaseScore,
@@ -69,36 +70,36 @@ const estimate = estimateCost(
   selected.map((c) => c.name),
   baseline,
 );
-console.log(
-  `${selected.length} case${selected.length === 1 ? "" : "s"}, judged by ${JUDGE_MODEL}: about $${estimate.totalUsd.toFixed(2)} ` +
-    `(${estimate.measured} at their baseline cost, ${estimate.assumed} at ` +
-    `$${estimate.assumedPerCaseUsd.toFixed(2)} each${baseline === null ? ", not measured yet" : ""}).`,
-);
-if (!values.yes) {
-  console.log("Nothing was run. Pass --yes to run and pay for it.");
-  process.exit(1);
-}
-
-const client = new Anthropic();
-if (client.apiKey === null && client.authToken === null && (await loadConfig()) === null) {
-  console.error("No Anthropic credentials. Set ANTHROPIC_API_KEY or run `ant auth login`.");
-  process.exit(1);
-}
-
-if (values.via !== "api" && values.via !== "claude-code") {
+const via = parseVia(values.via);
+if (via === null) {
   console.error("--via must be api or claude-code.");
   process.exit(1);
 }
-const runClaude = createRunClaude();
-let claudeCodeBilling: "api" | "plan" = "plan";
-if (values.via === "claude-code") {
-  const status = await claudeCodeStatus(runClaude);
-  if (status.state !== "signed-in") {
-    console.error(`--via claude-code needs Claude Code signed in; it's ${status.state}.`);
-    process.exit(1);
-  }
-  claudeCodeBilling = status.billing;
+console.log(
+  `${selected.length} case${selected.length === 1 ? "" : "s"}, the passes on ${via === "api" ? "the API" : "Claude Code"}, ` +
+    `judged by ${JUDGE_MODEL} on Claude Code: about $${estimate.totalUsd.toFixed(2)} at API prices ` +
+    `(${estimate.measured} at their baseline cost, ${estimate.assumed} at ` +
+    `$${estimate.assumedPerCaseUsd.toFixed(2)} each${baseline === null ? ", not measured yet" : ""}). ` +
+    "What runs on Claude Code comes out of its plan's usage limits instead.",
+);
+if (!values.yes) {
+  console.log("Nothing was run. Pass --yes to run it.");
+  process.exit(1);
 }
+
+const runClaude = createRunClaude();
+const client = via === "api" ? new Anthropic() : null;
+const ready = await preflight(via, {
+  claudeCode: () => claudeCodeStatus(runClaude),
+  hasApiCredentials: async () =>
+    client !== null &&
+    (client.apiKey !== null || client.authToken !== null || (await loadConfig()) !== null),
+});
+if (!ready.ok) {
+  console.error(ready.error);
+  process.exit(1);
+}
+const claudeCodeBilling = ready.value.billing;
 
 const parser = await createTreeSitterCodeParser({
   grammarsDir: fileURLToPath(new URL("../src/adapters/treesitter/grammars", import.meta.url)),
@@ -132,7 +133,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
   const problems: string[] = [];
   const logger = quietLogger((line) => problems.push(line));
   const model =
-    values.via === "claude-code"
+    client === null
       ? createClaudeCodeAnalysisModel({ run: runClaude, billing: claudeCodeBilling, logger })
       : createClaudeAnalysisModel({ client, logger });
   modelVersion(model.version);
@@ -161,7 +162,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
     timeoutMs: CASE_TIMEOUT_MS,
   });
   if (!result.ok) return failed(result.error, null);
-  const analysis = result.value;
+  const { analysis, input } = result.value;
   const latencyS = latency();
   if (analysis.status !== "complete") {
     const error = analysis.error;
@@ -171,7 +172,10 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
     );
   }
 
-  const judged = await judgeCase(client, analysis, evalCase.labels);
+  if (input === null) return failed("the model never ran, so there's nothing to judge", analysis);
+  const judged = await judgeCase(runClaude, input, analysis, evalCase.labels, {
+    onPlan: claudeCodeBilling === "plan",
+  });
   if (!judged.ok) return failed(judged.error.message, analysis, judged.error.costUsd);
   const { verdict, costUsd, models } = judged.value;
   return {
@@ -287,7 +291,7 @@ const tally = (counts: readonly (readonly [string, number])[]) =>
 console.log(`\nFinding ratings: ${tally(ratings.findings)}`);
 console.log(`Decision ratings: ${tally(ratings.decisions)}`);
 console.log(
-  `\nCost: $${summary.modelCostUsd.toFixed(2)} model + $${summary.judgeCostUsd.toFixed(2)} judge` +
+  `\nCost at API prices: $${summary.modelCostUsd.toFixed(2)} model + $${summary.judgeCostUsd.toFixed(2)} judge, the judge's on the Claude plan` +
     ` ($${summary.modelCostPerCaseUsd.toFixed(2)} model per case).` +
     ` Latency: ${summary.latencyS.max.toFixed(0)} s for the slowest case.`,
 );

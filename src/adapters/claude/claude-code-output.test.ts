@@ -10,7 +10,9 @@ describe("parseClaudeCodeStream", () => {
       mcpServers: [],
       apiKeySource: "none",
       version: "2.1.303",
+      model: null,
     });
+    expect(stream.models).toEqual(["claude-haiku-5-5"]);
     expect(stream.rateLimit).toMatchObject({ status: "allowed", window: "five_hour" });
     expect(stream.error).toBeNull();
     expect(stream.result).toMatchObject({
@@ -33,6 +35,17 @@ describe("parseClaudeCodeStream", () => {
       JSON.stringify({ type: "system", subtype: "thinking_tokens", estimated_tokens: 50 }),
       JSON.stringify({ type: "something_new" }),
     ]);
-    expect(stream).toEqual({ init: null, rateLimit: null, error: null, result: null });
+    expect(stream).toEqual({ init: null, rateLimit: null, error: null, result: null, models: [] });
+  });
+
+  it("reads the model a session was started on, and each model that answered once", () => {
+    const [init = "", ...rest] = recordedLines("risk");
+    const stream = parseClaudeCodeStream([
+      JSON.stringify({ ...JSON.parse(init), model: "claude-opus-5-5" }),
+      ...rest,
+      JSON.stringify({ type: "assistant", message: { model: "claude-sonnet-5-5", content: [] } }),
+    ]);
+    expect(stream.init?.model).toBe("claude-opus-5-5");
+    expect(stream.models).toEqual(["claude-haiku-5-5", "claude-sonnet-5-5"]);
   });
 });

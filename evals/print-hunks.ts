@@ -26,11 +26,11 @@ const result = await analyzeCase(found.fixture, {
   logger: quietLogger((line) => console.error(line)),
   timeoutMs: 60_000,
 });
-if (!result.ok || result.value.status !== "complete") {
-  console.error(result.ok ? result.value.error : result.error);
+if (!result.ok || result.value.analysis.status !== "complete") {
+  console.error(result.ok ? result.value.analysis.error : result.error);
   process.exit(1);
 }
-const analysis = result.value;
+const { analysis } = result.value;
 const proofOf = new Map(analysis.proofs.map((proof) => [proof.hunkId, proof]));
 
 for (const file of analysis.files) {

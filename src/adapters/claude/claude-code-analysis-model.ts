@@ -1,9 +1,8 @@
 import type { AnalysisModel, Logger } from "../../application/ports/index.ts";
 import type { ModelBilling, ModelError, ModelUsage } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
-import { fromClaudeCodeRun, lockdownProblem, notLockedDown } from "./claude-code-errors.ts";
-import { parseClaudeCodeStream, parseInit } from "./claude-code-output.ts";
-import { claudeCodeRequest, claudeCodeSystemPrompt } from "./claude-code-request.ts";
+import { runStructuredCall } from "./claude-code-call.ts";
+import { claudeCodeSystemPrompt, passCall } from "./claude-code-request.ts";
 import { tooLarge } from "./errors.ts";
 import { createPassModel } from "./pass-model.ts";
 import { passMessage } from "./prompts/passes.ts";
@@ -58,7 +57,7 @@ export const createClaudeCodeAnalysisModel = (
     },
 
     async runPass(pass, input, earlier, passOptions) {
-      const request = claudeCodeRequest(
+      const call = passCall(
         pass,
         renderInput(input),
         passMessage(pass, earlier, passOptions?.feedback),
@@ -69,35 +68,17 @@ export const createClaudeCodeAnalysisModel = (
         attempt: passOptions?.feedback ? "retry" : "first",
       });
 
-      let lockdown: string | null = null;
-      let checked = false;
-      const ran = await run(request.args, {
-        stdin: request.stdin,
-        files: request.files,
-        onLine(line) {
-          if (checked) return "continue";
-          const init = parseInit(line);
-          if (init === null) return "continue";
-          checked = true;
-          lockdown = lockdownProblem(init, billing === "plan");
-          return lockdown === null ? "continue" : "stop";
-        },
-      });
-
-      const fail = (error: ModelError) => {
-        logger.warn("Model pass failed", { pass, kind: error.kind, message: error.message });
-        return err(error);
-      };
-      if (lockdown !== null) return fail(notLockedDown(lockdown));
-      const stream = parseClaudeCodeStream(ran.lines);
-      const failure = fromClaudeCodeRun(ran, stream);
-      if (failure !== null) return fail(failure);
-      // A run with an answer but no init event was never checked for tools.
-      if (stream.init === null || stream.result === null) {
-        return fail(notLockedDown("it reported no session"));
+      const called = await runStructuredCall(run, { ...call, onPlan: billing === "plan" });
+      if (!called.ok) {
+        logger.warn("Model pass failed", {
+          pass,
+          kind: called.error.kind,
+          message: called.error.message,
+        });
+        return err(called.error);
       }
 
-      const { result } = stream;
+      const { result, version } = called.value;
       const usage: ModelUsage = {
         pass,
         inputTokens: result.inputTokens,
@@ -110,10 +91,10 @@ export const createClaudeCodeAnalysisModel = (
       logger.info("Model pass finished", {
         ...usage,
         transport: "claude-code",
-        claudeCode: stream.init.version,
+        claudeCode: version,
         stopReason: result.stopReason,
       });
-      return ok({ answer: result.structuredOutput, usage });
+      return ok({ answer: called.value.answer, usage });
     },
   });
 };

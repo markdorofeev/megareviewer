@@ -1,6 +1,6 @@
 # Stage 49: A judge that reads the whole PR, on the Claude plan
 
-**Status:** Not started
+**Status:** Done (branch `claude/stage-46-start-42e206`): `pnpm check` passes, and small-feature was judged live on the plan; see **Notes for later stages**
 **Depends on:** 47
 **Owns:** `evals/judge.ts`, `evals/judge-verdict.ts`, `evals/harness.ts`, `evals/run.ts`, `evals/cost.ts`, `evals/README.md`; the structured-call export in `src/adapters/claude/`
 
@@ -60,16 +60,23 @@ This stage gives the judge the PR exactly as the passes read it, and runs it thr
 
 ## Definition of done
 
-- [ ] The judge reads the whole PR as the passes did, and runs through Claude Code on Opus.
-- [ ] The passes and the judge share one locked-down structured call; the passes' fingerprints didn't change.
-- [ ] `node evals/run.ts --via claude-code` needs no API credentials.
-- [ ] One case judged live (`--case small-feature --via claude-code --yes`) with its verdict, the session's model and the cost estimate recorded below. It runs on the plan; ask the user first.
-- [ ] `pnpm check` passes.
+- [x] The judge reads the whole PR as the passes did, and runs through Claude Code on Opus.
+- [x] The passes and the judge share one locked-down structured call; the passes' fingerprints didn't change.
+- [x] `node evals/run.ts --via claude-code` needs no API credentials.
+- [x] One case judged live (`--case small-feature --via claude-code --yes`) with its verdict, the session's model and the cost estimate recorded below. It runs on the plan; ask the user first.
+- [x] `pnpm check` passes.
 
 ## Open issues
 
-- **Opus on the plan.** Whether the reviewer's plan runs `claude-opus-5-5` under `claude -p`, and how much of its usage a full run takes, is measured by the live case above. If the plan can't run Opus, stop and ask; don't fall back to another model silently.
+- **Opus on the plan:** settled. The live run's judge session ran on `claude-opus-5-5` under `claude -p`. How much of the plan's usage a full 14-case run takes is still unmeasured.
 
 ## Notes for later stages
 
-None yet.
+- **The shared call** is `runStructuredCall` in `src/adapters/claude/claude-code-call.ts`, taking a `StructuredCall` (model, effort, system prompt, schema, message) and `onPlan`. The passes build theirs with `passCall`, and `claudeCodeRequest` is built from the same call, so the fingerprinted request is the one sent; `CLAUDE_CODE_FINGERPRINT` didn't change.
+- **The judge's model is read from every answer, not only the init event.** The recorded fixtures' init events carry no `model`, while every assistant message names the model that answered; a session whose init or answers name any model but `claude-opus-5-5`, or none, fails the case.
+- **The runner's checks are in `evals/preflight.ts`,** so the rule that Claude Code is checked first and API credentials only for `--via api` is tested without spawning anything. `--via` still defaults to `api`.
+- **The harness now returns a failed analysis.** A code stage that fails leaves the model's stages `pending`, which `inProgress` reads as running, so `analyzeCase` waited for its 20-minute timeout on any failed case. It now returns a failed analysis at once. The domain's `inProgress` still reads such an analysis as in progress; that's outside this stage.
+- **`JUDGE_VERSION` is 4.**
+- **Live run, 2026-11-14:** `node evals/run.ts --case small-feature --via claude-code --yes` on Claude Code 2.1.303, signed in to a Claude plan, with no API key. It scored in 40 s, and the judge's session ran on `claude-opus-5-5` alone, answering on the first try. Claude Code's estimate at API prices was $0.0096 for the five passes and $0.075 for the judge: reading the whole PR, the judge costs about eight times the passes.
+  - **Verdict:** findings 3 of 3 must-haves found, the fourth (stale receipts) missed; all 4 produced rated valid. The expected decision wasn't matched; of the 4 produced, 3 were rated meaningful and "Why keep the receipt cache in process memory" requests-change. Both mismatches were found and named by their findings.
+  - **Scores:** riskNoise 0/2, riskPlaced 2/2, contractRecall 2/4. The two misses are the config hunks for the receipt cache's lifetime and the receipts section: the model called them logic, since nothing reads them yet, and only the path rules kept them contract. The labels follow the prompt's rule that configuration is contract; whether a config key nothing reads is one is for the prompt stage to decide.

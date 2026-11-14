@@ -7,6 +7,13 @@ const Init = z.object({
   mcp_servers: z.array(z.object({ name: z.string() }).loose()),
   apiKeySource: z.string().optional(),
   claude_code_version: z.string().optional(),
+  model: z.string().optional(),
+});
+
+/** Any answer, for the model that gave it. */
+const Assistant = z.object({
+  type: z.literal("assistant"),
+  message: z.object({ model: z.string() }),
 });
 
 const RateLimit = z.object({
@@ -52,6 +59,8 @@ export interface ClaudeCodeInit {
   /** "none" when Claude Code runs on the account it's signed in to, not an API key. */
   readonly apiKeySource: string | null;
   readonly version: string | null;
+  /** The model the session was started on. */
+  readonly model: string | null;
 }
 
 export interface ClaudeCodeResult {
@@ -80,6 +89,8 @@ export interface ClaudeCodeStream {
   /** The last error Claude Code reported for an answer, and its text. */
   readonly error: { readonly code: string; readonly text: string } | null;
   readonly result: ClaudeCodeResult | null;
+  /** Every model that answered, in order of first answer. */
+  readonly models: readonly string[];
 }
 
 const json = (line: string): unknown => {
@@ -98,6 +109,7 @@ export const parseInit = (line: string): ClaudeCodeInit | null => {
         mcpServers: init.data.mcp_servers.map((server) => server.name),
         apiKeySource: init.data.apiKeySource ?? null,
         version: init.data.claude_code_version ?? null,
+        model: init.data.model ?? null,
       }
     : null;
 };
@@ -108,9 +120,12 @@ export const parseClaudeCodeStream = (lines: readonly string[]): ClaudeCodeStrea
   let rateLimit: ClaudeCodeStream["rateLimit"] = null;
   let error: ClaudeCodeStream["error"] = null;
   let result: ClaudeCodeStream["result"] = null;
+  const models = new Set<string>();
 
   for (const line of lines) {
     const event = json(line);
+    const answered = Assistant.safeParse(event);
+    if (answered.success) models.add(answered.data.message.model);
     const parsedInit = Init.safeParse(event);
     if (parsedInit.success) {
       init ??= parseInit(line);
@@ -150,5 +165,5 @@ export const parseClaudeCodeStream = (lines: readonly string[]): ClaudeCodeStrea
       };
     }
   }
-  return { init, rateLimit, error, result };
+  return { init, rateLimit, error, result, models: [...models] };
 };
