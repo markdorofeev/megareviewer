@@ -170,12 +170,13 @@ The `ModelUsage` change goes in its own PR first.
 
 ## Eighth slice: measuring the prompts
 
-The risk and decisions prompts were changed for noise that showed on delphi-code #2 and that the evals can't see: risks on hunks no label covers, risks on the wrong lines, and decisions that repeat the description. This slice makes the evals see it, then adds the PR it showed on. Paid runs, repeats and the first baseline come after it.
+The risk and decisions prompts were changed for noise that showed on delphi-code #2 and that the evals can't see: risks on hunks no label covers, risks on the wrong lines, and decisions that repeat the description. This slice makes the evals see it, adds the PR it showed on, and moves the judge onto the whole PR and the reviewer's Claude plan. Repeats and the first baseline come after it.
 
 | # | Stage | Depends on | Owns |
 |---|---|---|---|
 | 47 | [Evals that see noise and placement](47-eval-noise-metrics.md) | 45 | `evals/` except stage 48's case |
 | 48 | [delphi-code #2 as an eval case](48-delphi-eval-case.md) | 47 | `evals/cases/delphi-account-connections/` |
+| 49 | [A judge that reads the whole PR, on the Claude plan](49-judge-whole-pr-on-plan.md) | 47 | The judge and runner in `evals/`, the structured-call export in `src/adapters/claude/` |
 
 ## How to pick up a stage
 
