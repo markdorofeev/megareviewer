@@ -36,8 +36,8 @@ import {
   type ModelBilling,
   type ModelOption,
   type ModelOptionId,
-  type ModelOptions,
   ModelOptionId as ModelOptionIdSchema,
+  type ModelOptions,
   type ModelProvider,
   modelOptionId,
 } from "../domain/review/index.ts";
@@ -96,7 +96,8 @@ export const codexProblem = (status: CodexStatus): string | null => {
 };
 
 /** What runs a model through opencode: the reviewer's own provider, at its prices. */
-export const describeOpencode = (providerName: string): string => `opencode, through ${providerName}`;
+export const describeOpencode = (providerName: string): string =>
+  `opencode, through ${providerName}`;
 
 export const OPENCODE_NOT_INSTALLED =
   "opencode isn't installed: install it (https://opencode.ai), then connect a provider with `opencode auth login`";
@@ -145,6 +146,8 @@ export interface ProviderModel {
   readonly family: string;
   /** What runs it and who pays, when that differs between a provider's models. */
   readonly via?: string;
+  /** The name a run is recorded under, when the provider runs it through another. */
+  readonly providerName?: string;
   /** False for a model the evals haven't run on. Default: true. */
   readonly measured?: boolean;
 }
@@ -203,7 +206,7 @@ export const catalogOptions = (
     return provider.models(status).map((model) => ({
       id: modelOptionId(provider.id, model.id),
       provider: provider.id,
-      providerName: provider.name,
+      providerName: model.providerName ?? provider.name,
       model: model.id,
       modelName: model.name,
       family: model.family,
@@ -270,6 +273,7 @@ export const opencodeModels = (models: readonly OpencodeModel[]): readonly Provi
         name: model.name,
         family: familyOf(model.name),
         via: describeOpencode(model.providerName),
+        providerName: `opencode via ${model.providerName}`,
         measured: false,
       },
     ];

@@ -32,10 +32,7 @@ const LISTENING = /listening on (http:\/\/127\.0\.0\.1:\d+)/;
  * project's config and Claude Code's aren't read, opencode's free models are left out since the
  * reviewer never connected the service they run on, and nothing runs in the background.
  */
-export const opencodeEnv = (
-  env: NodeJS.ProcessEnv,
-  password: string,
-): Record<string, string> => ({
+export const opencodeEnv = (env: NodeJS.ProcessEnv, password: string): Record<string, string> => ({
   ...Object.fromEntries(
     Object.entries(env).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])),
   ),

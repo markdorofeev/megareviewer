@@ -20,7 +20,9 @@ const Tokens = z
   })
   .loose();
 
-const Content = z.object({ type: z.string(), text: z.string().optional(), name: z.string().optional() }).loose();
+const Content = z
+  .object({ type: z.string(), text: z.string().optional(), name: z.string().optional() })
+  .loose();
 
 const Assistant = z
   .object({

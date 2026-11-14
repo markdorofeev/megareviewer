@@ -288,7 +288,12 @@ const checkOpencode = ({ opencode }: DoctorDeps): Check => {
         "Run `opencode upgrade`.",
       );
     case "failed":
-      return check("fail", title, opencode.message, "Run `opencode serve` to see why it doesn't start.");
+      return check(
+        "fail",
+        title,
+        opencode.message,
+        "Run `opencode serve` to see why it doesn't start.",
+      );
     case "running": {
       const models = opencodeModels(opencode.models);
       if (models.length === 0) {

@@ -8,5 +8,6 @@ export {
   fixtureStatus,
   lockedModelOptions,
   NO_API_CREDENTIALS,
+  opencodeModelOptions,
 } from "./status.ts";
 export { fixtureThreads } from "./threads.ts";

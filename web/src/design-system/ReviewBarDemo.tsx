@@ -7,7 +7,11 @@ import {
   type PointKind,
   type PointState,
 } from "../../../src/domain/review/index.ts";
-import { fixtureModelOptions, lockedModelOptions } from "../../dev/fixtures/index.ts";
+import {
+  fixtureModelOptions,
+  lockedModelOptions,
+  opencodeModelOptions,
+} from "../../dev/fixtures/index.ts";
 import { ClaudeElement, type ClaudeRun } from "../pages/review/ClaudeElement.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
@@ -144,6 +148,12 @@ export const ReviewBarStates = (): ReactNode => (
       run={DESIGN_RUN}
       points={[]}
       models={lockedModelOptions}
+    />
+    <BarDemo
+      label="With opencode: each provider behind it is a group, and a long one shows the chosen and default models, with a field to filter for the rest"
+      run={DESIGN_RUN}
+      points={[]}
+      models={opencodeModelOptions}
     />
     <BarDemo
       label="Claude couldn't finish: Try again, in outline beside Publish"

@@ -1,12 +1,25 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { fixtureModelOptions, lockedModelOptions } from "../../../dev/fixtures/index.ts";
+import {
+  fixtureModelOptions,
+  lockedModelOptions,
+  opencodeModelOptions,
+} from "../../../dev/fixtures/index.ts";
 import { ClaudeElement, type ClaudeRun } from "./ClaudeElement.tsx";
-import { byProvider, lockedReason, type ModelChoice } from "./model-choice.ts";
+import {
+  byProvider,
+  LONG_GROUP,
+  lockedReason,
+  type ModelChoice,
+  matching,
+  pinnedOf,
+} from "./model-choice.ts";
 
 const choice: ModelChoice = {
   options: fixtureModelOptions.options,
   chosen: fixtureModelOptions.options[1] ?? null,
+  defaultId: fixtureModelOptions.defaultId,
   locked: null,
   choose: () => {},
 };
@@ -52,6 +65,102 @@ describe("byProvider", () => {
       ["Claude Code", 3],
       ["Anthropic API", 3],
     ]);
+  });
+});
+
+describe("byProvider with opencode", () => {
+  it("makes each provider behind opencode a group of its own", () => {
+    expect(
+      byProvider(opencodeModelOptions.options).map(([first, group]) => [first.via, group.length]),
+    ).toEqual([
+      ["Claude Code, on your Pro plan", 3],
+      ["Anthropic API", 3],
+      ["opencode, through Anthropic", 12],
+      ["opencode, through Ollama", 2],
+    ]);
+  });
+});
+
+describe("a long group", () => {
+  const anthropic = opencodeModelOptions.options.filter((option) =>
+    option.id.startsWith("opencode/anthropic/"),
+  );
+  const sonnet = anthropic.find((option) => option.model === "anthropic/claude-sonnet-5-5") ?? null;
+
+  it("shows a short group whole", () => {
+    const short = anthropic.slice(0, LONG_GROUP);
+    expect(pinnedOf(short, null, null)).toBe(short);
+  });
+
+  it("shows the chosen and default options of a long one, else its first", () => {
+    expect(pinnedOf(anthropic, sonnet, null)).toEqual([sonnet]);
+    expect(pinnedOf(anthropic, null, "opencode/anthropic/claude-opus-5-5")).toEqual([anthropic[2]]);
+    expect(pinnedOf(anthropic, null, null)).toEqual([anthropic[0]]);
+  });
+
+  it("filters the rest by every word, in the name or the ID, and none before a query", () => {
+    const pinned = pinnedOf(anthropic, sonnet, null);
+    expect(matching(anthropic, pinned, "")).toEqual([]);
+    expect(matching(anthropic, pinned, "opus fast").map((option) => option.modelName)).toEqual([
+      "Claude Opus 5.5 Fast",
+    ]);
+    expect(matching(anthropic, pinned, "SONNET").map((option) => option.modelName)).toEqual([
+      "Claude Sonnet 5",
+      "Claude Sonnet 4.6",
+    ]);
+    expect(matching(anthropic, pinned, "4-6").map((option) => option.modelName)).toEqual([
+      "Claude Sonnet 4.6",
+    ]);
+  });
+
+  it("opens with the field, and the models typed for under it, marked unmeasured", async () => {
+    const withOpencode: ModelChoice = {
+      ...choice,
+      options: opencodeModelOptions.options,
+      defaultId: opencodeModelOptions.defaultId,
+    };
+    render(
+      <ClaudeElement
+        analysis={run({
+          stages: {
+            ...run({}).stages,
+            intent: "skipped",
+            findings: "skipped",
+            risk: "skipped",
+            decisions: "skipped",
+            tour: "skipped",
+          },
+        })}
+        choice={withOpencode}
+        running={false}
+        startedAt={null}
+        starting={false}
+        error={null}
+        points={[]}
+        narrowed={null}
+        onNarrow={() => {}}
+        onRun={() => {}}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^Model:/ }));
+    const menu = await screen.findByRole("menu");
+    const field = within(menu).getByRole("textbox", {
+      name: "Filter 11 more models through opencode, through Anthropic",
+    });
+    expect(within(menu).getAllByRole("menuitemradio", { name: /Claude Haiku 5\.5/ })).toHaveLength(
+      1,
+    );
+    expect(within(menu).queryByRole("menuitemradio", { name: /Opus 5\.5 Fast/ })).toBeNull();
+    await userEvent.type(field, "opus fast");
+    expect(field).toMatchObject({ value: "opus fast" });
+    const fast = within(menu).getByRole("menuitemradio", { name: /Opus 5\.5 Fast/ });
+    expect(fast.textContent).toMatch(/unmeasured$/);
+    // From the field, an arrow goes to the option beside it, not the menu's first.
+    await userEvent.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(fast);
+    await userEvent.clear(field);
+    await userEvent.type(field, "gemini");
+    expect(within(menu).getByText("No model matches")).toBeTruthy();
   });
 });
 

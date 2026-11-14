@@ -111,7 +111,10 @@ export const opencodeStatus = async (
   if (!models.ok) return { state: "failed", message: describeHttpError(models.error) };
   const parsed = parseModels(models.value, providers.ok ? providers.value : null);
   if (parsed === null) {
-    return { state: "failed", message: "opencode's server listed its models in a shape megareviewer doesn't know" };
+    return {
+      state: "failed",
+      message: "opencode's server listed its models in a shape megareviewer doesn't know",
+    };
   }
   const chosen = fallback.ok ? DefaultModel.safeParse(fallback.value) : null;
   const defaultModel =

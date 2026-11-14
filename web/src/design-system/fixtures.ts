@@ -340,6 +340,7 @@ export const useDemoChoice = (status: ModelOptions): ModelChoice => {
   return {
     options: status.options,
     chosen: status.options.find((option) => option.id === chosenId) ?? null,
+    defaultId: status.defaultId,
     locked: lockedReason(status.options),
     choose: setChosenId,
   };

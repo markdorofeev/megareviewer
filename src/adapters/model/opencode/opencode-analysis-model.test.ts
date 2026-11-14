@@ -5,7 +5,7 @@ import {
   smallFeatureInput,
   smallFeatureIntent,
 } from "../../../application/testing/index.ts";
-import type { ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
+import type { ModelErrorKind } from "../../../domain/review/index.ts";
 import {
   createFakeOpencodeClient,
   recorded,
@@ -109,7 +109,10 @@ describe("OpencodeAnalysisModel", () => {
   it("deletes each pass's session, answered or not", async () => {
     const answered = modelWith();
     await answered.model.intent(smallFeatureInput);
-    expect(answered.calls.at(-1)).toMatchObject({ method: "DELETE", path: "/api/session/ses_fake1" });
+    expect(answered.calls.at(-1)).toMatchObject({
+      method: "DELETE",
+      path: "/api/session/ses_fake1",
+    });
 
     const calls = await expectFailure(recorded("provider-error"), "unexpected");
     expect(calls.at(-1)).toMatchObject({ method: "DELETE", path: "/api/session/ses_fake1" });
@@ -170,7 +173,10 @@ describe("OpencodeAnalysisModel", () => {
       ],
       [
         "a skill loaded",
-        sessionWith("intent", (messages) => [{ type: "skill", name: "deploy", text: "…" }, ...messages]),
+        sessionWith("intent", (messages) => [
+          { type: "skill", name: "deploy", text: "…" },
+          ...messages,
+        ]),
       ],
       [
         "a second step",
@@ -199,7 +205,10 @@ describe("OpencodeAnalysisModel", () => {
     it.each<[Record<string, unknown>, ModelErrorKind]>([
       [{ type: "provider.auth", message: "invalid x-api-key", status: 401 }, "unauthorized"],
       [{ type: "provider.rate-limit", message: "Too many requests", status: 429 }, "rate-limited"],
-      [{ type: "provider.context-overflow", message: "prompt is too long", status: 400 }, "too-large"],
+      [
+        { type: "provider.context-overflow", message: "prompt is too long", status: 400 },
+        "too-large",
+      ],
       [{ type: "provider.overloaded", message: "Overloaded", status: 529 }, "overloaded"],
       [{ type: "provider.content-filter", message: "blocked" }, "refusal"],
     ])("maps %o to %s", async (error, kind) => {
@@ -249,6 +258,3 @@ describe("OpencodeAnalysisModel", () => {
     expect(small.ok ? null : small.error.kind).toBe("too-large");
   });
 });
-
-// The passes the fake answers by default, so a test of another pass needs no setup of its own.
-export const PASSES: readonly ModelPass[] = ["intent", "findings", "risk", "decisions", "tour"];

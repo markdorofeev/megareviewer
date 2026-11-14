@@ -31,7 +31,9 @@ const loopback: OpencodeFetch = (url, init) =>
       const chunks: Buffer[] = [];
       res.on("data", (chunk: Buffer) => chunks.push(chunk));
       res.on("end", () =>
-        resolve(new Response(Buffer.concat(chunks).toString("utf8"), { status: res.statusCode ?? 0 })),
+        resolve(
+          new Response(Buffer.concat(chunks).toString("utf8"), { status: res.statusCode ?? 0 }),
+        ),
       );
     });
     req.on("error", reject);

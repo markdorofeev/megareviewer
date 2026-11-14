@@ -347,6 +347,8 @@ describe("opencode's options", () => {
         modelName: "Claude Haiku 5.5",
         family: "Claude",
         via: "opencode, through Anthropic",
+        // A run says which provider behind opencode it ran on.
+        providerName: "opencode via Anthropic",
         measured: false,
         available: true,
       }),
@@ -377,7 +379,10 @@ describe("opencode's options", () => {
       { state: "outdated", version: "1.19.5" },
       "opencode 1.19.5 is older than 2.3.0: run `opencode upgrade`",
     ],
-    [{ state: "failed", message: "`opencode serve` exited (1): boom" }, "`opencode serve` exited (1): boom"],
+    [
+      { state: "failed", message: "`opencode serve` exited (1): boom" },
+      "`opencode serve` exited (1): boom",
+    ],
   ])("is one disabled row with the fix when it can't run", async (status, reason) => {
     const { catalog } = withOpencode(status);
     const { options } = await catalog.options();

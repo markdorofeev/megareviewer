@@ -50,7 +50,10 @@ export const createFakeOpencodeClient = (
       if (path.endsWith("/prompt")) {
         const { body } = options;
         const text =
-          typeof body === "object" && body !== null && "text" in body && typeof body.text === "string"
+          typeof body === "object" &&
+          body !== null &&
+          "text" in body &&
+          typeof body.text === "string"
             ? body.text
             : "";
         const pass = ModelPass.safeParse(PASS.exec(text)?.[1]);

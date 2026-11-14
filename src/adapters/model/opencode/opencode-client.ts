@@ -43,7 +43,10 @@ export const createOpencodeClient = (
       });
     } catch (error) {
       if (error instanceof Error && error.name === "TimeoutError") return err({ kind: "timeout" });
-      return err({ kind: "network", message: error instanceof Error ? error.message : String(error) });
+      return err({
+        kind: "network",
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
     const text = await response.text();
     if (!response.ok) return err({ kind: "status", status: response.status, body: text });

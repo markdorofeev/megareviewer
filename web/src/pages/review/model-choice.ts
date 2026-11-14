@@ -14,6 +14,8 @@ export interface ModelChoice {
    * Null until the status is in, or when no option is known.
    */
   readonly chosen: ModelOption | null;
+  /** The server's default, which a long group shows before its filter. */
+  readonly defaultId: ModelOptionId | null;
   /** Why nothing can run, each provider's reason once; null when something can. */
   readonly locked: string | null;
   readonly choose: (id: ModelOptionId) => void;
@@ -22,20 +24,59 @@ export interface ModelChoice {
 const parseId = (stored: unknown): string | null | undefined =>
   typeof stored === "string" ? stored : undefined;
 
-/** The options' providers, in their order, each with its options. */
+/**
+ * The options grouped by what runs them and who pays, in their order, each group with its options:
+ * a provider's, or, for opencode, each provider behind it. A provider that can't run is one group.
+ */
 export const byProvider = (
   options: readonly ModelOption[],
 ): readonly (readonly [ModelOption, readonly ModelOption[]])[] => {
   const groups = new Map<string, ModelOption[]>();
   for (const option of options) {
-    const group = groups.get(option.provider) ?? [];
+    const key = option.available ? `${option.provider} ${option.via}` : option.provider;
+    const group = groups.get(key) ?? [];
     group.push(option);
-    groups.set(option.provider, group);
+    groups.set(key, group);
   }
   return [...groups.values()].flatMap((group) => {
     const [first] = group;
     return first === undefined ? [] : [[first, group] as const];
   });
+};
+
+/** More options than this in a group, and the rest are behind a filter. */
+export const LONG_GROUP = 6;
+
+/**
+ * What a group shows before its filter: all of a short group; of a long one, the chosen option and
+ * the default, else its first.
+ */
+export const pinnedOf = (
+  group: readonly ModelOption[],
+  chosen: ModelOption | null,
+  defaultId: ModelOptionId | null,
+): readonly ModelOption[] => {
+  if (group.length <= LONG_GROUP) return group;
+  const pinned = group.filter((option) => option.id === chosen?.id || option.id === defaultId);
+  return pinned.length > 0 ? pinned : group.slice(0, 1);
+};
+
+/** A long group's other options whose name or ID has every word of the query. */
+export const matching = (
+  group: readonly ModelOption[],
+  pinned: readonly ModelOption[],
+  query: string,
+): readonly ModelOption[] => {
+  const words = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word !== "");
+  if (words.length === 0) return [];
+  return group.filter(
+    (option) =>
+      !pinned.includes(option) &&
+      words.every((word) => `${option.modelName} ${option.model}`.toLowerCase().includes(word)),
+  );
 };
 
 /** Each provider's reason, once, when no option can run. */
@@ -57,5 +98,11 @@ export const useModelChoice = (status: ModelOptions | null): ModelChoice => {
     options.find((option) => option.id === status?.defaultId) ??
     null;
   const choose = useCallback((id: ModelOptionId) => setStored(() => id), [setStored]);
-  return { options, chosen, locked: status === null ? null : lockedReason(options), choose };
+  return {
+    options,
+    chosen,
+    defaultId: status?.defaultId ?? null,
+    locked: status === null ? null : lockedReason(options),
+    choose,
+  };
 };

@@ -38,6 +38,54 @@ export const fixtureModelOptions: ModelOptions = {
   defaultId: "claude-code/claude-sonnet-5-5",
 };
 
+const OPENCODE_ANTHROPIC = [
+  ["claude-haiku-5-5", "Claude Haiku 5.5"],
+  ["claude-sonnet-5-5", "Claude Sonnet 5.5"],
+  ["claude-opus-5-5", "Claude Opus 5.5"],
+  ["claude-opus-5-5-fast", "Claude Opus 5.5 Fast"],
+  ["claude-fable-5-2", "Claude Fable 5.2"],
+  ["claude-fable-5-2-fast", "Claude Fable 5.2 Fast"],
+  ["claude-fable-5-1", "Claude Fable 5.1"],
+  ["claude-opus-5", "Claude Opus 5"],
+  ["claude-sonnet-5", "Claude Sonnet 5"],
+  ["claude-haiku-5", "Claude Haiku 5"],
+  ["claude-sonnet-4-6", "Claude Sonnet 4.6"],
+  ["claude-haiku-4-5", "Claude Haiku 4.5"],
+] as const;
+
+const OPENCODE_OLLAMA = [
+  ["qwen3-coder:30b", "Qwen3 Coder 30B"],
+  ["llama3.3:70b", "Llama 3.3 70B"],
+] as const;
+
+const opencodeOptions = (
+  providerID: string,
+  providerName: string,
+  models: readonly (readonly [string, string])[],
+): ModelOption[] =>
+  models.map(([model, modelName]) => ({
+    id: `opencode/${providerID}/${model}`,
+    provider: "opencode",
+    providerName: `opencode via ${providerName}`,
+    model: `${providerID}/${model}`,
+    modelName,
+    family: modelName.split(" ")[0] ?? modelName,
+    via: `opencode, through ${providerName}`,
+    measured: false,
+    available: true,
+    reason: null,
+  }));
+
+/** As `fixtureModelOptions`, with an Anthropic key's dozen models and two local ones in opencode. */
+export const opencodeModelOptions: ModelOptions = {
+  options: [
+    ...fixtureModelOptions.options,
+    ...opencodeOptions("anthropic", "Anthropic", OPENCODE_ANTHROPIC),
+    ...opencodeOptions("ollama", "Ollama", OPENCODE_OLLAMA),
+  ],
+  defaultId: fixtureModelOptions.defaultId,
+};
+
 /** Neither Claude Code nor the API can run. */
 export const lockedModelOptions: ModelOptions = {
   options: [

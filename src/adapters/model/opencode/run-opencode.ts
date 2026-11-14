@@ -13,7 +13,9 @@ export const createRunOpencode = (
     command: options.command ?? "opencode",
     env: (env) =>
       Object.fromEntries(
-        Object.entries(env).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])),
+        Object.entries(env).flatMap(([name, value]) =>
+          value === undefined ? [] : [[name, value]],
+        ),
       ),
     prefix: "megareviewer-opencode-",
     timeoutMs: 30_000,

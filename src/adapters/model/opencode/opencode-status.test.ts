@@ -10,7 +10,8 @@ const versionRun =
   (run: Partial<CommandRun>): RunCommand =>
   async () => ({ code: 0, started: true, lines: [], stderr: "", killed: null, ...run });
 
-const dataOf = (list: unknown): unknown[] => z.object({ data: z.array(z.unknown()) }).parse(list).data;
+const dataOf = (list: unknown): unknown[] =>
+  z.object({ data: z.array(z.unknown()) }).parse(list).data;
 
 const installed = versionRun({ lines: ["opencode v2.3.0"] });
 
@@ -78,10 +79,12 @@ describe("opencodeStatus", () => {
     }));
     const status = await opencodeStatus(installed, client);
     if (status.state !== "running") throw new Error(status.state);
-    expect(status.models.map(({ providerName, id, priced }) => [providerName, id, priced])).toEqual([
-      ["Anthropic", "claude-fable-5-2", true],
-      ["Ollama", "qwen3:8b", false],
-    ]);
+    expect(status.models.map(({ providerName, id, priced }) => [providerName, id, priced])).toEqual(
+      [
+        ["Anthropic", "claude-fable-5-2", true],
+        ["Ollama", "qwen3:8b", false],
+      ],
+    );
   });
 
   it("runs with no models when nothing is connected", async () => {
@@ -101,7 +104,10 @@ describe("opencodeStatus", () => {
   it("fails with why when the server can't be reached or lists something else", async () => {
     const down: OpencodeClient = {
       async request() {
-        return err({ kind: "server", problem: { kind: "failed", message: "`opencode serve` exited (1): boom" } });
+        return err({
+          kind: "server",
+          problem: { kind: "failed", message: "`opencode serve` exited (1): boom" },
+        });
       },
     };
     expect(await opencodeStatus(installed, down)).toEqual({

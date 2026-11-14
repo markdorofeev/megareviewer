@@ -21,9 +21,15 @@ const haiku = { providerID: "anthropic", id: "claude-haiku-5-5" };
 
 const requests = () =>
   ModelPass.options.map((pass) =>
-    opencodeRequest(pass, renderInput(smallFeatureInput), passMessage(pass, earlier, ["problem"]), haiku, {
-      variants: ["none", "low", "medium", "high", "xhigh", "max"],
-    }),
+    opencodeRequest(
+      pass,
+      renderInput(smallFeatureInput),
+      passMessage(pass, earlier, ["problem"]),
+      haiku,
+      {
+        variants: ["none", "low", "medium", "high", "xhigh", "max"],
+      },
+    ),
   );
 
 describe("opencodeRequest", () => {
@@ -94,7 +100,9 @@ describe("prompt version", () => {
   });
 
   it("names the provider and model, and an effort for every pass", () => {
-    expect(opencodeVersion("ollama", "qwen3:8b")).toBe(`opencode/ollama/qwen3:8b/p${OPENCODE_PROMPT_VERSION}`);
+    expect(opencodeVersion("ollama", "qwen3:8b")).toBe(
+      `opencode/ollama/qwen3:8b/p${OPENCODE_PROMPT_VERSION}`,
+    );
     expect(opencodeVersion("ollama", "qwen3:8b", "low")).toBe(
       `opencode/ollama/qwen3:8b@low/p${OPENCODE_PROMPT_VERSION}`,
     );

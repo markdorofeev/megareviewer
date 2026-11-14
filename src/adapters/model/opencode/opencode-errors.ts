@@ -26,7 +26,8 @@ export const fromHttpError = (error: OpencodeHttpError): ModelError => {
 
 const AUTH = /auth|unauthori[sz]ed|api.?key|credential|forbidden/i;
 const LIMIT = /rate.?limit|quota|too many requests|usage.?limit/i;
-const TOO_LARGE = /context.?(overflow|length|window)|too long|too large|maximum context|input exceeds/i;
+const TOO_LARGE =
+  /context.?(overflow|length|window)|too long|too large|maximum context|input exceeds/i;
 const FILTER = /content.?filter|refus|safety/i;
 const OVERLOADED = /overload|unavailable|server.?error|internal error/i;
 const NETWORK = /transport|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|timed? ?out|connect/i;
