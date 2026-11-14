@@ -1,0 +1,40 @@
+{
+  "ref": {
+    "repo": {
+      "host": "github",
+      "owner": "markdorofeev",
+      "repo": "delphi-code"
+    },
+    "number": 2
+  },
+  "url": "https://github.com/markdorofeev/delphi-code/pull/2",
+  "title": "Show and connect Bitbucket and GitHub accounts on the setup page",
+  "description": "## What changed\n\nThe setup page gets a **Bitbucket and GitHub accounts** section:\n\n- **See connections.** Each service shows *Connected as <account>* (and where the credentials came from), *Not working* (with the service's refusal), or *Not connected*. **Check again** re-reads credentials, so `gh auth login` or newly stored git credentials show up without restarting `delphi-code ui`. Connected services link straight to the repository picker.\n- **Connect with a token.** **Connect** / **Use another token** opens a form linking to the service's token page with the permissions it needs (Bitbucket also asks for the Atlassian account email). **Check and save** asks the service who the token belongs to and saves it only if accepted. **Forget saved token** removes it.\n\n## How it works\n\n- `GET /api/account-connections`, plus `PUT` / `DELETE /api/account-connections/{domain}/token` (same-origin only).\n- The account lookup (`/user` on GitHub, `/2.0/user` on Bitbucket) runs in the existing network child process in `infrastructure/hosts.py`, so the server process stays offline.\n- Saved tokens live in a Delphi Code entry in the OS keychain (`infrastructure/keychain.py`: macOS `security`, with the secret passed on stdin so it never appears in a process listing; `secret-tool` on Linux). Git credentials are not touched: `git credential approve` would also write to `~/.git-credentials` in plain text when the `store` helper is configured, and could displace credentials the user's own git relies on.\n- Precedence: environment variables, then the saved token, then `gh` and git credentials. Listing and cloning both use a saved token (Bitbucket clones as `x-bitbucket-api-token-auth`).\n- `configured_hosts()` became `known_hosts()` and returns every service; `ConnectedHostingServices` filters by credentials, so the picker still offers only connected services.\n\n## For reviewers\n\n- Bitbucket answers a rejected token with an empty 401, so the rejection names the two usual causes: a token made with *Create API token* rather than *Create API token with scopes*, or an email that isn't the Atlassian sign-in email.\n- Tests use `tests/fake_keychain.py` in place of `security` / `secret-tool`, so they never touch the real keychain.\n- Tried in the browser against real accounts: GitHub showed *Connected as markdorof*, and a made-up Bitbucket token was rejected without anything being saved. Saving a real token end to end hasn't been tried yet.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n",
+  "author": {
+    "id": "markdorofeev",
+    "name": "markdorofeev"
+  },
+  "sourceBranch": "account-connections",
+  "targetBranch": "main",
+  "baseSha": "3d7d144060f40497d1cec36c904f7651857fcb1c",
+  "headSha": "c07d2c5fd38f075a007c1f9dc38304ef8ffd4f4d",
+  "commits": [
+    {
+      "sha": "b4bdfcdfbc0f50edde78997cbf3a9cb71a426ba7",
+      "message": "Show connected Bitbucket and GitHub accounts on the setup page\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+      "author": "Mark Dorofeev"
+    },
+    {
+      "sha": "1fd77866b2bdb4f5c88e5a55631924449a20fe6c",
+      "message": "Merge remote-tracking branch 'origin/main' into account-connections",
+      "author": "Mark Dorofeev"
+    },
+    {
+      "sha": "c07d2c5fd38f075a007c1f9dc38304ef8ffd4f4d",
+      "message": "Let the setup page connect Bitbucket and GitHub with a saved token\n\nA pasted token is checked with the service, then kept in a Delphi Code\nkeychain entry (macOS security or secret-tool) instead of git credentials.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+      "author": "Mark Dorofeev"
+    }
+  ],
+  "createdAt": "2026-10-17T13:22:49Z",
+  "updatedAt": "2026-11-12T12:25:11Z"
+}

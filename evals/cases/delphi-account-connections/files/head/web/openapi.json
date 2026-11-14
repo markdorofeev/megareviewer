@@ -1,0 +1,2408 @@
+{
+  "components": {
+    "schemas": {
+      "AccountConnectionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The signed-in account, when the service answered",
+            "title": "Account"
+          },
+          "credentials_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the credentials were found, or null when none were",
+            "title": "Credentials Source"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "how_to_connect": {
+            "title": "How To Connect",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the service refused or could not be reached",
+            "title": "Problem"
+          },
+          "saved_token": {
+            "description": "Whether Delphi Code keeps a token for this service in the keychain",
+            "title": "Saved Token",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "connected",
+              "failed",
+              "not_connected"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "token_page": {
+            "description": "Where to create a token for this service",
+            "title": "Token Page",
+            "type": "string"
+          },
+          "token_permissions": {
+            "title": "Token Permissions",
+            "type": "string"
+          },
+          "username_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What to ask for besides the token, or null when only it is needed",
+            "title": "Username Label"
+          }
+        },
+        "required": [
+          "domain",
+          "name",
+          "state",
+          "account",
+          "credentials_source",
+          "problem",
+          "how_to_connect",
+          "token_page",
+          "token_permissions",
+          "username_label",
+          "saved_token"
+        ],
+        "title": "AccountConnectionResponse",
+        "type": "object"
+      },
+      "AccountConnectionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/AccountConnectionResponse"
+            },
+            "title": "Connections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "connections"
+        ],
+        "title": "AccountConnectionsResponse",
+        "type": "object"
+      },
+      "AccountTokenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "description": "An API token for the hosting service",
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account the token belongs to, when the service needs it",
+            "title": "Username"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "AccountTokenRequest",
+        "type": "object"
+      },
+      "AddRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "ignore": {
+            "description": "Extra gitignore-style patterns to skip",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ignore",
+            "type": "array"
+          },
+          "language": {
+            "description": "Languages, such as python or typescript",
+            "items": {
+              "type": "string"
+            },
+            "title": "Language",
+            "type": "array"
+          },
+          "max_bytes": {
+            "default": 1048576,
+            "description": "Skip files larger than this",
+            "minimum": 1.0,
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "no_sync": {
+            "default": false,
+            "description": "Only update the registry",
+            "title": "No Sync",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "Project-relative globs, such as src/*",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Branch or tag of remote repositories",
+            "title": "Ref"
+          },
+          "sources": {
+            "description": "Project directories or host/owner/repository",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "title": "AddRequest",
+        "type": "object"
+      },
+      "AgentConnectionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "plugin_brings_the_skill": {
+            "title": "Plugin Brings The Skill",
+            "type": "boolean"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "title",
+          "outcome",
+          "config",
+          "detail",
+          "skill",
+          "plugin_brings_the_skill"
+        ],
+        "title": "AgentConnectionResponse",
+        "type": "object"
+      },
+      "CrossProjectSearchHitsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "title": "Project",
+            "type": "null"
+          },
+          "projects": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "projects",
+          "query",
+          "results"
+        ],
+        "title": "CrossProjectSearchHitsResponse",
+        "type": "object"
+      },
+      "DiagnosticsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cocoindex_storage": {
+            "title": "Cocoindex Storage",
+            "type": "string"
+          },
+          "dependencies": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Dependencies",
+            "type": "object"
+          },
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "dimensions": {
+            "title": "Dimensions",
+            "type": "integer"
+          },
+          "index_directory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Directory"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_sha256": {
+            "title": "Model Sha256",
+            "type": "string"
+          },
+          "network_guard": {
+            "title": "Network Guard",
+            "type": "string"
+          },
+          "offline": {
+            "title": "Offline",
+            "type": "boolean"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "self_distance": {
+            "title": "Self Distance",
+            "type": "number"
+          },
+          "sqlite": {
+            "title": "Sqlite",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "project",
+          "key",
+          "index_directory",
+          "model",
+          "model_sha256",
+          "dimensions",
+          "self_distance",
+          "device",
+          "cocoindex_storage",
+          "offline",
+          "network_guard",
+          "sqlite",
+          "dependencies"
+        ],
+        "title": "DiagnosticsResponse",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "FileChangesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "num_adds": {
+            "default": 0,
+            "title": "Num Adds",
+            "type": "integer"
+          },
+          "num_deletes": {
+            "default": 0,
+            "title": "Num Deletes",
+            "type": "integer"
+          },
+          "num_errors": {
+            "default": 0,
+            "title": "Num Errors",
+            "type": "integer"
+          },
+          "num_execution_starts": {
+            "default": 0,
+            "title": "Num Execution Starts",
+            "type": "integer"
+          },
+          "num_reprocesses": {
+            "default": 0,
+            "title": "Num Reprocesses",
+            "type": "integer"
+          },
+          "num_unchanged": {
+            "default": 0,
+            "title": "Num Unchanged",
+            "type": "integer"
+          }
+        },
+        "title": "FileChangesResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HostingServiceResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_noun": {
+            "title": "Owner Noun",
+            "type": "string"
+          },
+          "suggested_owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Owner"
+          }
+        },
+        "required": [
+          "domain",
+          "name",
+          "owner_noun",
+          "suggested_owner"
+        ],
+        "title": "HostingServiceResponse",
+        "type": "object"
+      },
+      "HostingServicesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "hosting_services": {
+            "items": {
+              "$ref": "#/components/schemas/HostingServiceResponse"
+            },
+            "title": "Hosting Services",
+            "type": "array"
+          }
+        },
+        "required": [
+          "hosting_services"
+        ],
+        "title": "HostingServicesResponse",
+        "type": "object"
+      },
+      "IndexRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "ignore": {
+            "description": "Extra gitignore-style patterns to skip",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ignore",
+            "type": "array"
+          },
+          "language": {
+            "description": "Languages, such as python or typescript",
+            "items": {
+              "type": "string"
+            },
+            "title": "Language",
+            "type": "array"
+          },
+          "max_bytes": {
+            "default": 1048576,
+            "description": "Skip files larger than this",
+            "minimum": 1.0,
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "path": {
+            "description": "Project-relative globs, such as src/*",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "project": {
+            "description": "Absolute project path, indexed key or folder name",
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "IndexRequest",
+        "type": "object"
+      },
+      "IndexStateResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "chunks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunks"
+          },
+          "files": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Files"
+          },
+          "ignores": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ignores"
+          },
+          "index_directory": {
+            "title": "Index Directory",
+            "type": "string"
+          },
+          "indexed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexed At"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Languages"
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Bytes"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "model_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Sha256"
+          },
+          "paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paths"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "ready": {
+            "default": false,
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "schema_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Version"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "key",
+          "index_directory"
+        ],
+        "title": "IndexStateResponse",
+        "type": "object"
+      },
+      "IndexingOutcomeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "chunks": {
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "incremental": {
+            "$ref": "#/components/schemas/FileChangesResponse"
+          },
+          "index_directory": {
+            "title": "Index Directory",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project",
+          "key",
+          "index_directory",
+          "files",
+          "chunks",
+          "skipped",
+          "incremental"
+        ],
+        "title": "IndexingOutcomeResponse",
+        "type": "object"
+      },
+      "ListedProjectResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "index_directory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Directory"
+          },
+          "indexed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexed At"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "tracked": {
+            "title": "Tracked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "tracked",
+          "source",
+          "project",
+          "index_directory",
+          "ready",
+          "indexed_at"
+        ],
+        "title": "ListedProjectResponse",
+        "type": "object"
+      },
+      "ModelSetupResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "agents": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AgentConnectionResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agents"
+          },
+          "diagnostics": {
+            "$ref": "#/components/schemas/DiagnosticsResponse"
+          },
+          "index_root": {
+            "title": "Index Root",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "reused": {
+            "title": "Reused",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "model",
+          "index_root",
+          "reused",
+          "diagnostics"
+        ],
+        "title": "ModelSetupResponse",
+        "type": "object"
+      },
+      "OwnerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ],
+        "title": "OwnerResponse",
+        "type": "object"
+      },
+      "OwnersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "owners": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OwnerResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owners these credentials can list, or null when the owner must be typed",
+            "title": "Owners"
+          }
+        },
+        "required": [
+          "owners"
+        ],
+        "title": "OwnersResponse",
+        "type": "object"
+      },
+      "PickedChangesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "description": "Repository keys to track, such as github.com/acme/api",
+            "items": {
+              "type": "string"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "ignore": {
+            "description": "Extra gitignore-style patterns to skip",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ignore",
+            "type": "array"
+          },
+          "language": {
+            "description": "Languages, such as python or typescript",
+            "items": {
+              "type": "string"
+            },
+            "title": "Language",
+            "type": "array"
+          },
+          "max_bytes": {
+            "default": 1048576,
+            "description": "Skip files larger than this",
+            "minimum": 1.0,
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "no_sync": {
+            "default": false,
+            "description": "Only update the registry",
+            "title": "No Sync",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "Project-relative globs, such as src/*",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Branch or tag of the added repositories",
+            "title": "Ref"
+          },
+          "removed": {
+            "description": "Repository keys to stop tracking",
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "title": "PickedChangesRequest",
+        "type": "object"
+      },
+      "ProjectIndexedResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "chunks": {
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "incremental": {
+            "$ref": "#/components/schemas/FileChangesResponse"
+          },
+          "index_directory": {
+            "title": "Index Directory",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "ok": {
+            "const": true,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "unchanged": {
+            "const": false,
+            "title": "Unchanged",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project",
+          "key",
+          "index_directory",
+          "files",
+          "chunks",
+          "skipped",
+          "incremental",
+          "source",
+          "ok",
+          "unchanged"
+        ],
+        "title": "ProjectIndexedResponse",
+        "type": "object"
+      },
+      "ProjectListingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "registry": {
+            "title": "Registry",
+            "type": "string"
+          },
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/ListedProjectResponse"
+            },
+            "title": "Repos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "registry",
+          "repos"
+        ],
+        "title": "ProjectListingResponse",
+        "type": "object"
+      },
+      "ProjectRemovalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted_index": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted Index"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "untracked": {
+            "title": "Untracked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "untracked",
+          "deleted_index"
+        ],
+        "title": "ProjectRemovalResponse",
+        "type": "object"
+      },
+      "ProjectSearchHitsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "index_directory": {
+            "title": "Index Directory",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "key",
+          "index_directory",
+          "query",
+          "results"
+        ],
+        "title": "ProjectSearchHitsResponse",
+        "type": "object"
+      },
+      "ProjectSyncFailedResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorResponse"
+          },
+          "ok": {
+            "const": false,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "ok",
+          "error"
+        ],
+        "title": "ProjectSyncFailedResponse",
+        "type": "object"
+      },
+      "ProjectUpToDateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "index_directory": {
+            "title": "Index Directory",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "ok": {
+            "const": true,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "project": {
+            "title": "Project",
+            "type": "null"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "unchanged": {
+            "const": true,
+            "title": "Unchanged",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source",
+          "ok",
+          "unchanged",
+          "project",
+          "key",
+          "index_directory"
+        ],
+        "title": "ProjectUpToDateResponse",
+        "type": "object"
+      },
+      "RepositoriesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "repositories": {
+            "items": {
+              "$ref": "#/components/schemas/RepositoryResponse"
+            },
+            "title": "Repositories",
+            "type": "array"
+          }
+        },
+        "required": [
+          "repositories"
+        ],
+        "title": "RepositoriesResponse",
+        "type": "object"
+      },
+      "RepositoryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "private": {
+            "title": "Private",
+            "type": "boolean"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "host",
+          "owner",
+          "slug",
+          "description",
+          "private"
+        ],
+        "title": "RepositoryResponse",
+        "type": "object"
+      },
+      "SearchHitResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "distance": {
+            "title": "Distance",
+            "type": "number"
+          },
+          "end_line": {
+            "title": "End Line",
+            "type": "integer"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "start_line": {
+            "title": "Start Line",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "path",
+          "language",
+          "text",
+          "start_line",
+          "end_line",
+          "distance",
+          "score"
+        ],
+        "title": "SearchHitResponse",
+        "type": "object"
+      },
+      "SetupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Prepared model directory to import",
+            "title": "From"
+          }
+        },
+        "title": "SetupRequest",
+        "type": "object"
+      },
+      "SyncReportResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "registry": {
+            "title": "Registry",
+            "type": "string"
+          },
+          "repos": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProjectIndexedResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/ProjectUpToDateResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/ProjectSyncFailedResponse"
+                }
+              ]
+            },
+            "title": "Repos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "registry",
+          "repos"
+        ],
+        "title": "SyncReportResponse",
+        "type": "object"
+      },
+      "SyncRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "projects": {
+            "description": "Tracked project paths, keys or names; empty for all",
+            "items": {
+              "type": "string"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "title": "SyncRequest",
+        "type": "object"
+      },
+      "TrackedSourceResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "key"
+        ],
+        "title": "TrackedSourceResponse",
+        "type": "object"
+      },
+      "TrackingReportResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cancelled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled"
+          },
+          "registry": {
+            "title": "Registry",
+            "type": "string"
+          },
+          "removed": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/UntrackedProjectResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed"
+          },
+          "repos": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TrackedSourceResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/ProjectIndexedResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/ProjectUpToDateResponse"
+                },
+                {
+                  "$ref": "#/components/schemas/ProjectSyncFailedResponse"
+                }
+              ]
+            },
+            "title": "Repos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "registry",
+          "repos"
+        ],
+        "title": "TrackingReportResponse",
+        "type": "object"
+      },
+      "UntrackedProjectResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted_index": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted Index"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "deleted_index"
+        ],
+        "title": "UntrackedProjectResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Delphi Code"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/account-connections": {
+      "get": {
+        "operationId": "account_connections_api_account_connections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountConnectionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Account Connections"
+      }
+    },
+    "/api/account-connections/{domain}/token": {
+      "delete": {
+        "operationId": "forget_account_token_api_account_connections__domain__token_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forget Account Token"
+      },
+      "put": {
+        "operationId": "save_account_token_api_account_connections__domain__token_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Account Token"
+      }
+    },
+    "/api/doctor": {
+      "get": {
+        "operationId": "doctor_api_doctor_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Doctor"
+      }
+    },
+    "/api/hosting-services": {
+      "get": {
+        "operationId": "hosting_services_api_hosting_services_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostingServicesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Hosting Services"
+      }
+    },
+    "/api/hosting-services/{domain}/owners": {
+      "get": {
+        "operationId": "owners_api_hosting_services__domain__owners_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owners"
+      }
+    },
+    "/api/hosting-services/{domain}/owners/{owner}/repositories": {
+      "get": {
+        "operationId": "repositories_api_hosting_services__domain__owners__owner__repositories_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "title": "Owner",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoriesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Repositories"
+      }
+    },
+    "/api/projects": {
+      "delete": {
+        "operationId": "remove_api_projects_delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keep_index",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Keep Index",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectRemovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove"
+      },
+      "get": {
+        "operationId": "list_projects_api_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "indexed",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Indexed",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectListingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Projects"
+      },
+      "post": {
+        "operationId": "add_api_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackingReportResponse",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Newline-delimited JSON: one object per progress event ({\"event\": ...}), then a last line that is either {\"done\": RESULT} or {\"failed\": ERROR, \"data\": ...}. A failure before the first event is an ordinary error response."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add"
+      }
+    },
+    "/api/projects/index": {
+      "post": {
+        "operationId": "index_api_projects_index_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexingOutcomeResponse",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Newline-delimited JSON: one object per progress event ({\"event\": ...}), then a last line that is either {\"done\": RESULT} or {\"failed\": ERROR, \"data\": ...}. A failure before the first event is an ordinary error response."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Index"
+      }
+    },
+    "/api/projects/picked": {
+      "post": {
+        "operationId": "apply_picked_changes_api_projects_picked_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PickedChangesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackingReportResponse",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Newline-delimited JSON: one object per progress event ({\"event\": ...}), then a last line that is either {\"done\": RESULT} or {\"failed\": ERROR, \"data\": ...}. A failure before the first event is an ordinary error response."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Picked Changes"
+      }
+    },
+    "/api/projects/status": {
+      "get": {
+        "operationId": "status_api_projects_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Status"
+      }
+    },
+    "/api/projects/sync": {
+      "post": {
+        "operationId": "sync_api_projects_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SyncRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncReportResponse",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Newline-delimited JSON: one object per progress event ({\"event\": ...}), then a last line that is either {\"done\": RESULT} or {\"failed\": ERROR, \"data\": ...}. A failure before the first event is an ordinary error response."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync"
+      }
+    },
+    "/api/search": {
+      "get": {
+        "operationId": "search_api_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProjectSearchHitsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CrossProjectSearchHitsResponse"
+                    }
+                  ],
+                  "title": "Response Search Api Search Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search"
+      }
+    },
+    "/api/setup": {
+      "post": {
+        "operationId": "setup_api_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSetupResponse",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Newline-delimited JSON: one object per progress event ({\"event\": ...}), then a last line that is either {\"done\": RESULT} or {\"failed\": ERROR, \"data\": ...}. A failure before the first event is an ordinary error response."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Setup"
+      }
+    }
+  }
+}

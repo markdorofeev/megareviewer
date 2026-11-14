@@ -1,6 +1,6 @@
 # Stage 48: delphi-code #2 as an eval case
 
-**Status:** Not started
+**Status:** Done (branch `claude/stage-46-start-42e206`): `pnpm check` passes; no paid run, as planned. See **Notes for later stages**
 **Depends on:** 47
 **Owns:** `evals/cases/delphi-account-connections/`, its entry in `evals/cases/index.ts`
 
@@ -107,10 +107,10 @@ Not expected, because the description says each with its reason and none has a c
 
 ## Definition of done
 
-- [ ] The case is imported at `c07d2c5`, with `PROVENANCE.md` and delphi-code's license.
-- [ ] Every hunk has a risk label, every contract hunk a `riskAt`, and every labeled finding was confirmed in the code.
-- [ ] `pnpm check` passes, with the case's label checks.
-- [ ] The cost estimate is recorded below.
+- [x] The case is imported at `c07d2c5`, with `PROVENANCE.md` and delphi-code's license.
+- [x] Every hunk has a risk label, every contract hunk a `riskAt`, and every labeled finding was confirmed in the code.
+- [x] `pnpm check` passes, with the case's label checks.
+- [x] The cost estimate is recorded below.
 
 ## Open issues
 
@@ -118,4 +118,12 @@ None yet.
 
 ## Notes for later stages
 
-None yet.
+- **Cost estimate:** `node evals/run.ts --case delphi-account-connections` prints "about $0.15", the default for a case with no measured cost, not a measurement. The first paid run records the real one.
+- **Labels follow the list above.** One hunk it doesn't name was checked: `h_66ed69b5f388df2e` renames `configured_hosts` to `known_hosts`, and nothing outside the PR calls it, so it's logic. `h_41ad920c36c36c34`'s `riskAt` names 340 and 346 as single-line places.
+- **Every candidate finding held, two reworded:**
+  - The revoked GitHub token, `hosts.py` 343–353: tried first among the stored sources and never checked. `mustHave`.
+  - The Bitbucket clone with only `BITBUCKET_APP_PASSWORD` set. `mustHave`.
+  - The tests reading the real keychain: `sources.py` (unchanged, line 169) calls `clone_credentials()` on every git operation, and `test_sources.py`'s `setUp` removes `BITBUCKET_APP_PASSWORD`, so its Bitbucket clones reach `_saved_token()` and the real `security`. It rests on `hosts.py` 266–267, where the read starts, and on the test hunk. `mustHave`, since the description says the opposite.
+  - Forget doesn't report success: the DELETE returns 200 and the row is replaced with a fresh read, which still shows the token saved, with no reason. Labeled as a silent failure.
+  - A failing keychain command also makes a save fail with "did not keep the token", besides reading as no token.
+- **Decisions give a reason only where the code shows one,** such as the read-back failing the save with "did not keep the token"; the hex encoding's reason isn't in the code, so its label is the question alone.

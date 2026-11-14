@@ -1,0 +1,1785 @@
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index 31c662e..b46a433 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -22,11 +22,11 @@ The aim is code a newcomer can read top to bottom without a guide.
+ |---|---|---|
+ | Front end: CLI | `cli/` | `main.py` (argparse; picks the port implementations, calls one controller, writes its data as JSON or its views as text), `controllers/` (one function per command), `terminal/` (everything drawn on or asked in the terminal) |
+ | Front end: MCP | `mcp_server/` | `tools.py` defines one MCP tool per command except `connect` and `disconnect`, calls services directly and returns their data; `stdio_protocol.py` is JSON-RPC over stdio, no SDK |
+-| Front end: HTTP | `http_api/` | `app.py` (`create_app(delphi_code, settings)`), one router per resource in `routes/` (`hosting_services.py` lets a browser drive the repository picker itself: list hosting services, owners and repositories, then post the picked changes), `response_models.py` (pydantic mirrors of each result's `to_json()`, so OpenAPI describes them), `failures.py` (`FailureKind` to HTTP status), `security.py` (token, and same-origin for writes), `progress_stream.py` (writes run one at a time in a worker thread and stream `Progress` events as NDJSON, ending with `done` or `failed`; a failure before the first event is an ordinary error response); `server.py` (`LoopbackServer` binds 127.0.0.1 itself and runs uvicorn on that socket); `web_ui_files.py` serves the built web UI from `delphi_code/web/` without a token, answers client routes with its `index.html`, and adds the page's security headers; `web_ui_launch.py` (`serve`, which `delphi-code ui` runs: reuses a live server named in `web-ui-server.json` in the data directory, or starts one with a new token, records it there readable only by the owner, and removes the record on exit); FastAPI, pydantic and uvicorn are imported only here |
++| Front end: HTTP | `http_api/` | `app.py` (`create_app(delphi_code, settings)`), one router per resource in `routes/` (`hosting_services.py` reports which Bitbucket and GitHub accounts are connected and lets a browser drive the repository picker itself: list hosting services, owners and repositories, then post the picked changes), `response_models.py` (pydantic mirrors of each result's `to_json()`, so OpenAPI describes them), `failures.py` (`FailureKind` to HTTP status), `security.py` (token, and same-origin for writes), `progress_stream.py` (writes run one at a time in a worker thread and stream `Progress` events as NDJSON, ending with `done` or `failed`; a failure before the first event is an ordinary error response); `server.py` (`LoopbackServer` binds 127.0.0.1 itself and runs uvicorn on that socket); `web_ui_files.py` serves the built web UI from `delphi_code/web/` without a token, answers client routes with its `index.html`, and adds the page's security headers; `web_ui_launch.py` (`serve`, which `delphi-code ui` runs: reuses a live server named in `web-ui-server.json` in the data directory, or starts one with a new token, records it there readable only by the owner, and removes the record on exit); FastAPI, pydantic and uvicorn are imported only here |
+ | Front end: web UI | `web/` (source), built into `delphi_code/web/` | a React and TypeScript single-page app served by `http_api`; it talks to the core only through `/api`. `src/api/` holds the client generated from the API's OpenAPI schema (`schema.d.ts`), the token handoff, failures, and `runStreamedWrite` for NDJSON writes. Screens start writes through `useWriteActivity().startWrite`, which runs one at a time like the server, shows its progress in the shared `ActivityPanel`, and refreshes the project and search queries when it ends. Routes live in `src/routes/`. `vite-plugins/thirdPartyLicensesFile.ts` writes `third-party-licenses.txt` into each build with the license texts of every bundled package |
+ | Services | `services/` | what a command does; each returns one typed result from `domain/`, the same for every front end. `application.py` (`DelphiCode`) is the one entrance: it holds the store, registry and model location and has one method per use case. The modules behind it: `indexing`, `searching`, `tracking`, `remote_repositories`, `project_catalog`, `model_installation`, `diagnostics`, `agent_connections`, plus the `Progress` port |
+-| Infrastructure | `infrastructure/` | disk, git, network and libraries: `store`, `registry`, `model`, `vector_index`, `files`, `sources`, `hosts`, `project_identity`, `model_assets`, `paths`, `offline`, `agent_configs` (each agent's MCP config file or CLI) |
+-| Domain | `domain/` | pure rules with no I/O: `errors`, `keys`, `manifest`, `selection`, `tracking_changes`, `agent_connection`, the results services return (`search_hits`, `indexing_outcomes`, `tracking_report`, `project_listing`, `index_state`, `diagnostics`), and `hosting_services` (`HostingService`, `Owner`, `Repository`: what front ends see of Bitbucket and GitHub, while `infrastructure/hosts.py` keeps the API clients) |
++| Infrastructure | `infrastructure/` | disk, git, network and libraries: `store`, `registry`, `model`, `vector_index`, `files`, `sources`, `hosts`, `keychain` (tokens saved from the web UI, through macOS `security` or `secret-tool`), `project_identity`, `model_assets`, `paths`, `offline`, `agent_configs` (each agent's MCP config file or CLI) |
++| Domain | `domain/` | pure rules with no I/O: `errors`, `keys`, `manifest`, `selection`, `tracking_changes`, `agent_connection`, the results services return (`search_hits`, `indexing_outcomes`, `tracking_report`, `project_listing`, `index_state`, `diagnostics`), and `hosting_services` (`HostingService`, `AccountConnection`, `Owner`, `Repository`: what front ends see of Bitbucket and GitHub, while `infrastructure/hosts.py` keeps the API clients) |
+ 
+ Front ends reach the core only through `DelphiCode` (built once per process with `DelphiCode.from_environment()`), `services.progress`, and `domain` types; the other imports are `infrastructure.log_file` to set up logging and `infrastructure.web_ui_server_record` for the running web UI server's record. They never import each other, except that `cli/main.py` starts the other front ends' servers through their `serve`, imported inside the command that runs them so the CLI never loads their libraries otherwise. Nothing below a front end imports it, and no module outside `cli/` sees an `argparse.Namespace`. `infrastructure/hosts.py` and `infrastructure/model_download.py` also run as standalone scripts in a separate process, so they never import package modules unconditionally (`hosts.py` imports `domain.errors` only under `if __package__`).
+ 
+diff --git a/delphi_code/domain/hosting_services.py b/delphi_code/domain/hosting_services.py
+index d2200d7..807995c 100644
+--- a/delphi_code/domain/hosting_services.py
++++ b/delphi_code/domain/hosting_services.py
+@@ -1,4 +1,5 @@
+ from dataclasses import dataclass
++from enum import StrEnum
+ 
+ 
+ @dataclass(frozen=True)
+@@ -47,3 +48,48 @@ def to_json(self) -> dict:
+             "description": self.description,
+             "private": self.private,
+         }
++
++
++@dataclass(frozen=True)
++class TokenForm:
++    token_page: str
++    token_permissions: str
++    username_label: str | None = None
++
++
++class ConnectionState(StrEnum):
++    CONNECTED = "connected"
++    FAILED = "failed"
++    NOT_CONNECTED = "not_connected"
++
++
++@dataclass(frozen=True)
++class AccountConnection:
++    service: HostingService
++    how_to_connect: str
++    token_form: TokenForm
++    saved_token: bool = False
++    credentials_source: str | None = None
++    account: str | None = None
++    problem: str | None = None
++
++    @property
++    def state(self) -> ConnectionState:
++        if self.credentials_source is None:
++            return ConnectionState.NOT_CONNECTED
++        return ConnectionState.FAILED if self.problem else ConnectionState.CONNECTED
++
++    def to_json(self) -> dict:
++        return {
++            "domain": self.service.domain,
++            "name": self.service.name,
++            "state": self.state,
++            "account": self.account,
++            "credentials_source": self.credentials_source,
++            "problem": self.problem,
++            "how_to_connect": self.how_to_connect,
++            "token_page": self.token_form.token_page,
++            "token_permissions": self.token_form.token_permissions,
++            "username_label": self.token_form.username_label,
++            "saved_token": self.saved_token,
++        }
+diff --git a/delphi_code/http_api/app.py b/delphi_code/http_api/app.py
+index 1bfff3f..84380f2 100644
+--- a/delphi_code/http_api/app.py
++++ b/delphi_code/http_api/app.py
+@@ -31,6 +31,7 @@ def create_app(delphi_code: DelphiCode, settings: ApiSettings) -> FastAPI:
+         projects.changes_projects,
+         hosting_services.router,
+         hosting_services.changes_tracking,
++        hosting_services.connection_changes,
+         diagnostics.router,
+         installation.router,
+     )
+diff --git a/delphi_code/http_api/request_models.py b/delphi_code/http_api/request_models.py
+index 174c1ae..352a774 100644
+--- a/delphi_code/http_api/request_models.py
++++ b/delphi_code/http_api/request_models.py
+@@ -44,3 +44,8 @@ class PickedChangesRequest(FileSelectionRequest):
+ 
+     def changes(self) -> TrackingChanges:
+         return TrackingChanges(self.added, self.removed)
++
++
++class AccountTokenRequest(RequestModel):
++    token: str = Field(min_length=1, description="An API token for the hosting service")
++    username: str | None = Field(None, description="The account the token belongs to, when the service needs it")
+diff --git a/delphi_code/http_api/response_models.py b/delphi_code/http_api/response_models.py
+index 5637e5a..eba9388 100644
+--- a/delphi_code/http_api/response_models.py
++++ b/delphi_code/http_api/response_models.py
+@@ -200,6 +200,24 @@ class HostingServicesResponse(ResponseModel):
+     hosting_services: list[HostingServiceResponse]
+ 
+ 
++class AccountConnectionResponse(ResponseModel):
++    domain: str
++    name: str
++    state: Literal["connected", "failed", "not_connected"]
++    account: str | None = Field(description="The signed-in account, when the service answered")
++    credentials_source: str | None = Field(description="Where the credentials were found, or null when none were")
++    problem: str | None = Field(description="Why the service refused or could not be reached")
++    how_to_connect: str
++    token_page: str = Field(description="Where to create a token for this service")
++    token_permissions: str
++    username_label: str | None = Field(description="What to ask for besides the token, or null when only it is needed")
++    saved_token: bool = Field(description="Whether Delphi Code keeps a token for this service in the keychain")
++
++
++class AccountConnectionsResponse(ResponseModel):
++    connections: list[AccountConnectionResponse]
++
++
+ class OwnerResponse(ResponseModel):
+     slug: str
+     name: str
+diff --git a/delphi_code/http_api/routes/hosting_services.py b/delphi_code/http_api/routes/hosting_services.py
+index 468c8e2..3eda3b0 100644
+--- a/delphi_code/http_api/routes/hosting_services.py
++++ b/delphi_code/http_api/routes/hosting_services.py
+@@ -5,12 +5,37 @@
+ from ...services.application import DelphiCode
+ from ..progress_stream import NdjsonResponse, streamed_responses, streamed_write
+ from ..request_context import delphi_code_of
+-from ..request_models import PickedChangesRequest
+-from ..response_models import HostingServicesResponse, OwnersResponse, RepositoriesResponse, TrackingReportResponse
++from ..request_models import AccountTokenRequest, PickedChangesRequest
++from ..response_models import (
++    AccountConnectionResponse,
++    AccountConnectionsResponse,
++    HostingServicesResponse,
++    OwnersResponse,
++    RepositoriesResponse,
++    TrackingReportResponse,
++)
+ from ..security import require_same_origin
+ 
+ router = APIRouter()
+ changes_tracking = APIRouter(dependencies=[Depends(require_same_origin)])
++connection_changes = APIRouter(dependencies=[Depends(require_same_origin)])
++
++
++@router.get("/api/account-connections", response_model=AccountConnectionsResponse)
++def account_connections(delphi_code: Annotated[DelphiCode, Depends(delphi_code_of)]) -> dict:
++    return {"connections": [connection.to_json() for connection in delphi_code.account_connections()]}
++
++
++@connection_changes.put("/api/account-connections/{domain}/token", response_model=AccountConnectionResponse)
++def save_account_token(
++    delphi_code: Annotated[DelphiCode, Depends(delphi_code_of)], domain: str, body: AccountTokenRequest
++) -> dict:
++    return delphi_code.connect_account(domain, body.token.strip(), (body.username or "").strip() or None).to_json()
++
++
++@connection_changes.delete("/api/account-connections/{domain}/token", response_model=AccountConnectionResponse)
++def forget_account_token(delphi_code: Annotated[DelphiCode, Depends(delphi_code_of)], domain: str) -> dict:
++    return delphi_code.forget_saved_token(domain).to_json()
+ 
+ 
+ @router.get("/api/hosting-services", response_model=HostingServicesResponse)
+diff --git a/delphi_code/infrastructure/hosts.py b/delphi_code/infrastructure/hosts.py
+index eae00ae..89082a6 100644
+--- a/delphi_code/infrastructure/hosts.py
++++ b/delphi_code/infrastructure/hosts.py
+@@ -13,12 +13,14 @@
+ 
+ if __package__:
+     from ..domain.errors import Failure, FailureKind
+-    from ..domain.hosting_services import HostingService, Owner, Repository
++    from ..domain.hosting_services import HostingService, Owner, Repository, TokenForm
++    from .keychain import forget_secret, save_secret, saved_secret
+ 
+ PAGE_LENGTH = 100
+ REQUEST_TIMEOUT_SECONDS = 60
+ LISTING_TIMEOUT_SECONDS = 300
+ API_TOKEN_GIT_USERNAME = "x-bitbucket-api-token-auth"
++SAVED_TOKEN_SOURCE = "token saved by Delphi Code"
+ 
+ 
+ class ApiCredentials(NamedTuple):
+@@ -26,6 +28,11 @@ class ApiCredentials(NamedTuple):
+     source: str
+ 
+ 
++class SavedToken(NamedTuple):
++    token: str
++    username: str | None
++
++
+ class RepositoryHost:
+     domain: str
+     name: str
+@@ -34,6 +41,10 @@ class RepositoryHost:
+     credentials_hint: str
+     rejected_credentials_hint = ""
+     missing_permission_hint = ""
++    token_page: str
++    token_permissions: str
++    token_username_label: str | None = None
++    rejected_token_hint = "Check that it is current and not revoked"
+ 
+     def __init__(self, api_authorization=None):
+         self._given_api_authorization = api_authorization
+@@ -54,21 +65,64 @@ def suggested_owner(self):
+     def clone_credentials(self):
+         raise NotImplementedError
+ 
++    @property
++    def token_form(self) -> "TokenForm":
++        return TokenForm(self.token_page, self.token_permissions, self.token_username_label)
++
++    def with_token(self, token: str, username: str | None = None) -> "RepositoryHost":
++        return type(self)(self._authorization_for(token, username))
++
++    @property
++    def has_saved_token(self) -> bool:
++        return self._saved_token() is not None
++
++    def save_token(self, token: str, username: str | None = None):
++        secret = json.dumps({"token": token, "username": username})
++        save_secret(self.domain, f"Delphi Code token for {self.name}", secret)
++
++    def forget_saved_token(self):
++        forget_secret(self.domain)
++
+     def has_api_credentials(self):
+         return self._available_api_credentials is not None
+ 
++    @property
++    def credentials_source(self):
++        credentials = self._available_api_credentials
++        return credentials.source if credentials else None
++
++    def account(self) -> str:
++        return self._run_in_child_process("account")
++
+     def description(self) -> "HostingService":
+         return HostingService(self.domain, self.name, self.owner_noun, self.suggested_owner())
+ 
+     def owners(self):
+-        return [Owner(**item) for item in self._list_in_child_process("owners")]
++        return [Owner(**item) for item in self._run_in_child_process("owners")]
+ 
+     def repositories(self, owner):
+-        return [Repository(**item) for item in self._list_in_child_process("repositories", owner)]
++        return [Repository(**item) for item in self._run_in_child_process("repositories", owner)]
+ 
+     def _find_api_credentials(self):
+         raise NotImplementedError
+ 
++    def _authorization_for(self, token, username):
++        raise NotImplementedError
++
++    def _saved_credentials(self):
++        saved = self._saved_token()
++        return ApiCredentials(self._authorization_for(*saved), SAVED_TOKEN_SOURCE) if saved else None
++
++    def _saved_token(self):
++        try:
++            fields = json.loads(saved_secret(self.domain) or "null")
++            return SavedToken(fields["token"], fields.get("username")) if fields else None
++        except (ValueError, KeyError, TypeError, AttributeError):
++            return None
++
++    def _account_name(self):
++        raise NotImplementedError
++
+     def _list_owners(self):
+         raise NotImplementedError
+ 
+@@ -133,12 +187,12 @@ def _fetch_json(self, url):
+         with urlopen(Request(url, headers=headers), timeout=REQUEST_TIMEOUT_SECONDS, context=tls) as response:
+             return json.load(response), (response.headers.get("Link") if response.headers else None) or ""
+ 
+-    def _list_in_child_process(self, listing, *arguments) -> list[dict]:
++    def _run_in_child_process(self, request, *arguments) -> Any:
+         credentials = self._api_credentials
+         environment = dict(os.environ, DELPHI_CODE_API_AUTHORIZATION=credentials.authorization)
+         try:
+             result = subprocess.run(
+-                [sys.executable, __file__, self.domain, listing, *arguments],
++                [sys.executable, __file__, self.domain, request, *arguments],
+                 capture_output=True,
+                 text=True,
+                 timeout=LISTING_TIMEOUT_SECONDS,
+@@ -188,6 +242,16 @@ class Bitbucket(RepositoryHost):
+         "Listing needs an API token with the scopes read:user:bitbucket, read:workspace:bitbucket and "
+         "read:repository:bitbucket, or an app password with Account, Workspace membership and Repositories read access"
+     )
++    token_page = "https://id.atlassian.com/manage-profile/security/api-tokens"
++    token_permissions = (
++        "Choose Create API token with scopes, not Create API token: Bitbucket refuses tokens without scopes. "
++        "Pick the Bitbucket app and grant read:user:bitbucket, read:workspace:bitbucket and read:repository:bitbucket"
++    )
++    token_username_label = "Atlassian account email"
++    rejected_token_hint = (
++        "Bitbucket accepts only tokens made with Create API token with scopes for the Bitbucket app, "
++        "and the email must be the one your Atlassian account signs in with"
++    )
+     _repository_fields = "next,values.slug,values.description,values.is_private"
+ 
+     def permalink_template(self, owner, repository, commit):
+@@ -199,7 +263,8 @@ def suggested_owner(self):
+     def clone_credentials(self):
+         username, password = os.environ.get("BITBUCKET_USERNAME"), os.environ.get("BITBUCKET_APP_PASSWORD")
+         if not password:
+-            return None
++            saved = self._saved_token()
++            return (API_TOKEN_GIT_USERNAME, saved.token) if saved else None
+         if username and "@" not in username:
+             return username, password
+         if username or os.environ.get("BITBUCKET_EMAIL"):
+@@ -211,12 +276,21 @@ def _find_api_credentials(self):
+         username, password = os.environ.get(username_variable), os.environ.get("BITBUCKET_APP_PASSWORD")
+         if username and password:
+             source = f"{username_variable} and BITBUCKET_APP_PASSWORD from the environment"
++        elif saved := self._saved_credentials():
++            return saved
+         else:
+             stored = _git_stored_credentials(self.domain)
+             if stored is None:
+                 return None
+             (username, password), source = stored, f"git credentials stored for {self.domain}"
+-        return ApiCredentials("Basic " + base64.b64encode(f"{username}:{password}".encode()).decode(), source)
++        return ApiCredentials(self._authorization_for(password, username), source)
++
++    def _authorization_for(self, token, username):
++        return "Basic " + base64.b64encode(f"{username}:{token}".encode()).decode()
++
++    def _account_name(self):
++        user, _ = self._fetch_json(f"{self._api_base}/user")
++        return user.get("username") or user.get("nickname") or user["display_name"]
+ 
+     def _workspaces_url(self):
+         return f"{self._api_base}/user/workspaces?pagelen={PAGE_LENGTH}"
+@@ -255,26 +329,36 @@ class GitHub(RepositoryHost):
+     missing_permission_hint = (
+         "Listing needs a classic token with the repo scope, or a fine-grained token with Metadata read access"
+     )
++    token_page = "https://github.com/settings/tokens/new?scopes=repo&description=Delphi%20Code"
++    token_permissions = "Create a classic token with the repo scope"
+     _next_link = re.compile(r'<([^>]+)>;\s*rel="next"')
+ 
+     def permalink_template(self, owner, repository, commit):
+         return f"{self.web_url(owner, repository)}/blob/{commit}/{{path}}#L{{start}}-L{{end}}"
+ 
+     def clone_credentials(self):
+-        token = _github_environment_token()
++        token = _github_environment_token() or self._saved_bare_token()
+         return ("x-access-token", token) if token else None
+ 
+     def _find_api_credentials(self):
+         for source, find_token in (
+             ("GITHUB_TOKEN or GH_TOKEN from the environment", _github_environment_token),
++            (SAVED_TOKEN_SOURCE, self._saved_bare_token),
+             ("token from gh auth token", lambda: _gh_token(self.domain)),
+             (f"token stored in git credentials for {self.domain}", lambda: _git_stored_token(self.domain)),
+         ):
+             token = find_token()
+             if token:
+-                return ApiCredentials(f"Bearer {token}", source)
++                return ApiCredentials(self._authorization_for(token, None), source)
+         return None
+ 
++    def _authorization_for(self, token, username):
++        return f"Bearer {token}"
++
++    def _saved_bare_token(self):
++        saved = self._saved_token()
++        return saved.token if saved else None
++
+     def owners(self):
+         owners = sorted({repository.owner for repository in self._accessible_repositories}, key=str.lower)
+         return [Owner(owner, owner) for owner in owners]
+@@ -284,7 +368,11 @@ def repositories(self, owner):
+ 
+     @cached_property
+     def _accessible_repositories(self):
+-        return [Repository(**item) for item in self._list_in_child_process("repositories")]
++        return [Repository(**item) for item in self._run_in_child_process("repositories")]
++
++    def _account_name(self):
++        user, _ = self._fetch_json(f"{self._api_base}/user")
++        return user["login"]
+ 
+     def _repositories_url(self):
+         query = urlencode(
+@@ -313,8 +401,8 @@ def _page_values(self, page):
+ HOSTS_BY_DOMAIN = {host.domain: host for host in HOSTS}
+ 
+ 
+-def configured_hosts():
+-    return [host for host in (host_type() for host_type in HOSTS) if host.has_api_credentials()]
++def known_hosts():
++    return [host_type() for host_type in HOSTS]
+ 
+ 
+ def _github_environment_token():
+@@ -392,10 +480,11 @@ def _listed(value):
+ 
+ 
+ def main(arguments):
+-    domain, listing, *listing_arguments = arguments
++    domain, request, *request_arguments = arguments
+     host = HOSTS_BY_DOMAIN[domain](os.environ["DELPHI_CODE_API_AUTHORIZATION"])
++    answers = {"account": host._account_name, "owners": host._list_owners, "repositories": host._list_repositories}
+     try:
+-        items = host._list_owners() if listing == "owners" else host._list_repositories(*listing_arguments)
++        answer = answers[request](*request_arguments)
+     except HTTPError as exc:
+         reason = _service_error_message(_error_body(exc)) or exc.reason
+         path = urlsplit(exc.url).path if exc.url else None
+@@ -404,7 +493,7 @@ def main(arguments):
+     except (URLError, OSError, ValueError, KeyError, TypeError) as exc:
+         print(json.dumps({"error": {"status": None, "message": str(exc)}}))
+         return 1
+-    print(json.dumps(items))
++    print(json.dumps(answer))
+     return 0
+ 
+ 
+diff --git a/delphi_code/infrastructure/keychain.py b/delphi_code/infrastructure/keychain.py
+new file mode 100644
+index 0000000..b5b72b4
+--- /dev/null
++++ b/delphi_code/infrastructure/keychain.py
+@@ -0,0 +1,59 @@
++import shutil
++import subprocess
++import sys
++
++from ..domain.errors import Failure, FailureKind
++
++KEYCHAIN_SERVICE = "delphi-code"
++KEYCHAIN_TIMEOUT_SECONDS = 30
++KEYCHAIN_MISSING_MESSAGE = (
++    "Saving a token needs the macOS keychain or secret-tool from libsecret; "
++    "set the token in the environment before starting delphi-code instead"
++)
++
++
++def saved_secret(account: str) -> str | None:
++    if _uses_macos_keychain():
++        found = _run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"])
++    elif shutil.which("secret-tool"):
++        found = _run(["secret-tool", "lookup", "service", KEYCHAIN_SERVICE, "account", account])
++    else:
++        return None
++    if found is None or found.returncode != 0:
++        return None
++    return found.stdout.strip() or None
++
++
++def save_secret(account: str, label: str, secret: str):
++    if _uses_macos_keychain():
++        # security -i reads the command from stdin, so the secret never appears in a process listing
++        command = (
++            f'add-generic-password -U -s {KEYCHAIN_SERVICE} -a {account} -l "{label}" -X {secret.encode().hex()}\n'
++        )
++        _run(["security", "-i"], command)
++    elif shutil.which("secret-tool"):
++        _run(["secret-tool", "store", f"--label={label}", "service", KEYCHAIN_SERVICE, "account", account], secret)
++    else:
++        raise Failure("keychain_missing", KEYCHAIN_MISSING_MESSAGE, FailureKind.PREREQUISITE_MISSING)
++    if saved_secret(account) != secret:
++        raise Failure(
++            "keychain_failed", f"The keychain did not keep the token for {account}", FailureKind.OPERATION_FAILED
++        )
++
++
++def forget_secret(account: str):
++    if _uses_macos_keychain():
++        _run(["security", "delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account])
++    elif shutil.which("secret-tool"):
++        _run(["secret-tool", "clear", "service", KEYCHAIN_SERVICE, "account", account])
++
++
++def _uses_macos_keychain() -> bool:
++    return sys.platform == "darwin" and shutil.which("security") is not None
++
++
++def _run(command: list[str], stdin: str | None = None) -> subprocess.CompletedProcess | None:
++    try:
++        return subprocess.run(command, input=stdin, capture_output=True, text=True, timeout=KEYCHAIN_TIMEOUT_SECONDS)
++    except (OSError, subprocess.TimeoutExpired):
++        return None
+diff --git a/delphi_code/services/application.py b/delphi_code/services/application.py
+index 777a552..117df4b 100644
+--- a/delphi_code/services/application.py
++++ b/delphi_code/services/application.py
+@@ -5,7 +5,7 @@
+ 
+ from ..domain.agent_connection import AgentConnectionsReport
+ from ..domain.diagnostics import Diagnostics, ModelSetup
+-from ..domain.hosting_services import HostingService, Owner, Repository
++from ..domain.hosting_services import AccountConnection, HostingService, Owner, Repository
+ from ..domain.index_state import IndexState
+ from ..domain.indexing_outcomes import IndexingOutcome, SyncReport
+ from ..domain.project_listing import ProjectListing
+@@ -93,6 +93,15 @@ def disconnect_agents(self, command: str, agents: list[str]) -> AgentConnections
+ 
+         return disconnect_agents(command, agents)
+ 
++    def account_connections(self) -> list[AccountConnection]:
++        return self._hosting_services.account_connections()
++
++    def connect_account(self, domain: str, token: str, username: str | None = None) -> AccountConnection:
++        return self._hosting_services.connect_account(domain, token, username)
++
++    def forget_saved_token(self, domain: str) -> AccountConnection:
++        return self._hosting_services.forget_saved_token(domain)
++
+     def hosting_services_with_credentials(self, refresh: bool = False) -> list[HostingService]:
+         return self._hosting_services.with_credentials(refresh)
+ 
+diff --git a/delphi_code/services/remote_repositories.py b/delphi_code/services/remote_repositories.py
+index 7a090b4..b5345f5 100644
+--- a/delphi_code/services/remote_repositories.py
++++ b/delphi_code/services/remote_repositories.py
+@@ -5,7 +5,7 @@
+ from typing import TYPE_CHECKING
+ 
+ from ..domain.errors import Failure, FailureKind
+-from ..domain.hosting_services import HostingService, Owner, Repository
++from ..domain.hosting_services import AccountConnection, HostingService, Owner, Repository
+ from ..domain.selection import FileSelection
+ from ..domain.tracking_changes import TrackingChanges
+ from ..domain.tracking_report import TrackingReport
+@@ -29,6 +29,43 @@ def __init__(self, find_hosts: Callable[[], Sequence[RepositoryHost]] | None = N
+         self._find_hosts = find_hosts
+         self._hosts_by_domain: dict[str, RepositoryHost] = {}
+ 
++    def account_connections(self) -> list[AccountConnection]:
++        hosts = self._known_hosts()
++        self._hosts_by_domain = {host.domain: host for host in hosts if host.has_api_credentials()}
++        return [_account_connection(host) for host in hosts]
++
++    def connect_account(self, domain: str, token: str, username: str | None) -> AccountConnection:
++        host = self._known_host(domain)
++        if not token:
++            raise Failure("usage", f"Paste a {host.name} token", FailureKind.INVALID_REQUEST)
++        if host.token_form.username_label and not username:
++            raise Failure(
++                "usage", f"{host.name} needs your {host.token_form.username_label}", FailureKind.INVALID_REQUEST
++            )
++        try:
++            host.with_token(token, username).account()
++        except Failure as failure:
++            if failure.code != "remote_auth_failed":
++                raise
++            raise Failure(
++                "remote_auth_failed", f"{host.name} rejected this token. {host.rejected_token_hint}", failure.kind
++            ) from failure
++        host.save_token(token, username)
++        return self._refreshed_connection(domain)
++
++    def forget_saved_token(self, domain: str) -> AccountConnection:
++        self._known_host(domain).forget_saved_token()
++        return self._refreshed_connection(domain)
++
++    def _refreshed_connection(self, domain: str) -> AccountConnection:
++        return next(connection for connection in self.account_connections() if connection.service.domain == domain)
++
++    def _known_host(self, domain: str) -> RepositoryHost:
++        host = next((host for host in self._known_hosts() if host.domain == domain), None)
++        if host is None:
++            raise Failure("not_found", f"Delphi Code does not know {domain}", FailureKind.NOT_FOUND)
++        return host
++
+     def with_credentials(self, refresh: bool = False) -> list[HostingService]:
+         if refresh:
+             self._hosts_by_domain = {}
+@@ -72,17 +109,17 @@ def repositories_of_owner(self, service: HostingService, owner: str, progress: P
+ 
+     def _connected(self) -> dict[str, RepositoryHost]:
+         if not self._hosts_by_domain:
+-            self._hosts_by_domain = {host.domain: host for host in self._hosts_with_credentials()}
++            self._hosts_by_domain = {host.domain: host for host in self._known_hosts() if host.has_api_credentials()}
+         if not self._hosts_by_domain:
+             raise Failure("remote_auth_missing", MISSING_CREDENTIALS_MESSAGE, FailureKind.PREREQUISITE_MISSING)
+         return self._hosts_by_domain
+ 
+-    def _hosts_with_credentials(self) -> Sequence[RepositoryHost]:
++    def _known_hosts(self) -> Sequence[RepositoryHost]:
+         if self._find_hosts is not None:
+             return self._find_hosts()
+-        from ..infrastructure.hosts import configured_hosts
++        from ..infrastructure.hosts import known_hosts
+ 
+-        return configured_hosts()
++        return known_hosts()
+ 
+     def _host_of(self, service: HostingService) -> RepositoryHost:
+         host = self._connected().get(service.domain)
+@@ -93,6 +130,22 @@ def _host_of(self, service: HostingService) -> RepositoryHost:
+         return host
+ 
+ 
++def _account_connection(host: RepositoryHost) -> AccountConnection:
++    connection = AccountConnection(
++        host.description(),
++        host.credentials_hint,
++        host.token_form,
++        saved_token=host.has_saved_token,
++        credentials_source=host.credentials_source,
++    )
++    if connection.credentials_source is None:
++        return connection
++    try:
++        return replace(connection, account=host.account())
++    except Failure as failure:
++        return replace(connection, problem=str(failure))
++
++
+ def tracked_keys(registry: Registry) -> set[str]:
+     return {entry.current_key() for entry in registry.entries()}
+ 
+diff --git a/tests/fake_keychain.py b/tests/fake_keychain.py
+new file mode 100644
+index 0000000..1ba2d7e
+--- /dev/null
++++ b/tests/fake_keychain.py
+@@ -0,0 +1,35 @@
++import json
++import os
++from pathlib import Path
++import shlex
++import sys
++
++NOT_FOUND = 44
++
++
++def main(tool, arguments):
++    store = Path(os.environ["FAKE_KEYCHAIN"])
++    secrets = json.loads(store.read_text()) if store.exists() else {}
++    if tool == "security" and arguments == ["-i"]:
++        tool, arguments = "security", shlex.split(sys.stdin.read())
++    command, options = arguments[0], arguments[1:]
++    if tool == "security":
++        account = options[options.index("-a") + 1]
++        secret = bytes.fromhex(options[options.index("-X") + 1]).decode() if "-X" in options else None
++    else:
++        account = options[options.index("account") + 1]
++        secret = sys.stdin.read() if command == "store" else None
++    if command in ("add-generic-password", "store"):
++        secrets[account] = secret
++    elif command in ("delete-generic-password", "clear"):
++        secrets.pop(account, None)
++    elif account in secrets:
++        print(secrets[account])
++    else:
++        return NOT_FOUND
++    store.write_text(json.dumps(secrets))
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv[1], sys.argv[2:]))
+diff --git a/tests/fakes.py b/tests/fakes.py
+index 9770d00..8699cf8 100644
+--- a/tests/fakes.py
++++ b/tests/fakes.py
+@@ -4,8 +4,8 @@
+ import numpy as np
+ 
+ from delphi_code.domain.diagnostics import Diagnostics
+-from delphi_code.domain.errors import Failure
+-from delphi_code.domain.hosting_services import HostingService
++from delphi_code.domain.errors import Failure, FailureKind
++from delphi_code.domain.hosting_services import HostingService, TokenForm
+ from delphi_code.domain.index_state import IndexCounts
+ from delphi_code.domain.indexing_outcomes import IndexingOutcome
+ from delphi_code.domain.manifest import IndexedRevision
+@@ -67,11 +67,50 @@ def application(model_location: str = "/models/m", repository_hosts=None) -> Del
+ 
+ class FakeHost:
+     owner_noun = "workspace"
+-
+-    def __init__(self, owners, repositories, name="Bitbucket", suggested_owner=None):
++    credentials_hint = "set FAKE_TOKEN"
++    valid_token = "valid-token"
++    rejected_token_hint = "Check the token"
++
++    def __init__(
++        self,
++        owners,
++        repositories,
++        name="Bitbucket",
++        suggested_owner=None,
++        credentials_source="FAKE_TOKEN from the environment",
++        account="me",
++        username_label=None,
++    ):
+         self._owners, self._repositories, self.name = owners, repositories, name
+         self.domain = f"{name.lower()}.example"
+         self._suggested_owner = suggested_owner
++        self.credentials_source, self._account = credentials_source, account
++        self.token_form = TokenForm(f"https://{self.domain}/tokens", "read access", username_label)
++        self.saved_token = None
++
++    @property
++    def has_saved_token(self):
++        return self.saved_token is not None
++
++    def with_token(self, token, username=None):
++        rejected = Failure("remote_auth_failed", "401", FailureKind.REMOTE_FAILED)
++        return FakeHost([], [], self.name, account=self._account if token == self.valid_token else rejected)
++
++    def save_token(self, token, username=None):
++        self.saved_token = (token, username)
++        self.credentials_source = "token saved by Delphi Code"
++
++    def forget_saved_token(self):
++        self.saved_token = None
++        self.credentials_source = None
++
++    def has_api_credentials(self):
++        return self.credentials_source is not None
++
++    def account(self):
++        if isinstance(self._account, Failure):
++            raise self._account
++        return self._account
+ 
+     def description(self):
+         return HostingService(self.domain, self.name, self.owner_noun, self._suggested_owner)
+diff --git a/tests/test_http_api.py b/tests/test_http_api.py
+index bf6a36b..2401896 100644
+--- a/tests/test_http_api.py
++++ b/tests/test_http_api.py
+@@ -195,6 +195,61 @@ def test_lists_hosting_services_and_rereads_credentials(self):
+         listed = client.get("/api/hosting-services", headers=AUTHORIZED).json()["hosting_services"]
+         self.assertEqual([service["name"] for service in listed], ["Bitbucket", "GitHub"])
+ 
++    def test_account_connections_name_the_account_or_the_problem(self):
++        rejected = Failure("remote_auth_failed", "GitHub rejected the token", FailureKind.REMOTE_FAILED)
++        client = self.client_with_hosts(
++            [
++                FakeHost([], [], account="acme-bot"),
++                FakeHost([], [], name="GitHub", account=rejected),
++                FakeHost([], [], name="Gitea", credentials_source=None),
++            ]
++        )
++        connections = client.get("/api/account-connections", headers=AUTHORIZED).json()["connections"]
++        self.assertEqual(
++            [(row["name"], row["state"], row["account"], row["problem"]) for row in connections],
++            [
++                ("Bitbucket", "connected", "acme-bot", None),
++                ("GitHub", "failed", None, "GitHub rejected the token"),
++                ("Gitea", "not_connected", None, None),
++            ],
++        )
++        self.assertEqual(connections[0]["credentials_source"], "FAKE_TOKEN from the environment")
++        self.assertEqual(connections[2]["how_to_connect"], "set FAKE_TOKEN")
++
++    def test_a_verified_token_is_saved_and_can_be_forgotten(self):
++        github = FakeHost([], [], name="GitHub", credentials_source=None, account="octo")
++        client = self.client_with_hosts([github])
++        url = "/api/account-connections/github.example/token"
++        rejected = client.put(url, json={"token": "revoked"}, headers=AUTHORIZED)
++        self.assertEqual((rejected.status_code, rejected.json()["error"]["code"]), (502, "remote_auth_failed"))
++        self.assertIn("GitHub rejected this token", rejected.json()["error"]["message"])
++        self.assertIsNone(github.saved_token)
++        saved = client.put(url, json={"token": " valid-token "}, headers=AUTHORIZED).json()
++        self.assertEqual((saved["state"], saved["account"], saved["saved_token"]), ("connected", "octo", True))
++        self.assertEqual(github.saved_token, ("valid-token", None))
++        forgotten = client.delete(url, headers=AUTHORIZED).json()
++        self.assertEqual((forgotten["state"], forgotten["saved_token"]), ("not_connected", False))
++
++    def test_saving_a_token_checks_the_request(self):
++        bitbucket = FakeHost([], [], credentials_source=None, username_label="Atlassian account email")
++        client = self.client_with_hosts([bitbucket])
++        cases = [
++            ("bitbucket.example", {"token": "valid-token"}, 400, "usage"),
++            ("bitbucket.example", {"token": "   ", "username": "me@example.com"}, 400, "usage"),
++            ("gitea.example", {"token": "valid-token"}, 404, "not_found"),
++        ]
++        for domain, body, status, code in cases:
++            with self.subTest(domain=domain, body=body):
++                response = client.put(f"/api/account-connections/{domain}/token", json=body, headers=AUTHORIZED)
++                self.assertEqual((response.status_code, response.json()["error"]["code"]), (status, code))
++        foreign = client.put(
++            "/api/account-connections/bitbucket.example/token",
++            json={"token": "valid-token", "username": "me@example.com"},
++            headers={**AUTHORIZED, "Origin": "http://attacker.example"},
++        )
++        self.assertEqual(foreign.status_code, 403)
++        self.assertIsNone(bitbucket.saved_token)
++
+     def test_lists_owners_and_their_repositories(self):
+         client = self.client_with_hosts([FakeHost([Owner("acme", "Acme")], ACME)])
+         owners = client.get("/api/hosting-services/bitbucket.example/owners", headers=AUTHORIZED).json()
+diff --git a/tests/test_picker.py b/tests/test_picker.py
+index 5313bef..ebef8e4 100644
+--- a/tests/test_picker.py
++++ b/tests/test_picker.py
+@@ -25,9 +25,10 @@
+ from delphi_code.domain.hosting_services import Owner, Repository
+ from delphi_code.domain.tracking_changes import TrackingChanges
+ from delphi_code.infrastructure import hosts
+-from delphi_code.infrastructure.hosts import Bitbucket, GitHub, configured_hosts
++from delphi_code.infrastructure.hosts import Bitbucket, GitHub
+ from delphi_code.services.progress import SILENT, Progress
+ 
++FAKE_KEYCHAIN = Path(__file__).with_name("fake_keychain.py")
+ CREDENTIAL_VARIABLES = ("BITBUCKET_USERNAME", "BITBUCKET_APP_PASSWORD", "BITBUCKET_EMAIL", "GITHUB_TOKEN", "GH_TOKEN")
+ 
+ 
+@@ -169,16 +170,16 @@ def add_picked(self, prompts):
+     def test_needs_a_terminal_before_asking_for_credentials(self):
+         with (
+             patch.object(sys.stdin, "isatty", return_value=False),
+-            patch("delphi_code.infrastructure.hosts.configured_hosts") as configured,
++            patch("delphi_code.infrastructure.hosts.known_hosts") as known,
+             self.assertRaises(Failure) as raised,
+         ):
+             self.add_picked(TerminalPrompts())
+         self.assertEqual(raised.exception.code, "usage")
+-        configured.assert_not_called()
++        known.assert_not_called()
+ 
+     def test_needs_credentials_for_some_host(self):
+         with (
+-            patch("delphi_code.infrastructure.hosts.configured_hosts", return_value=[]),
++            patch("delphi_code.infrastructure.hosts.known_hosts", return_value=[]),
+             self.assertRaises(Failure) as raised,
+         ):
+             self.add_picked(TerminalPrompts({}))
+@@ -352,6 +353,11 @@ def test_github_pages_follow_link_headers(self):
+             ],
+         )
+ 
++    def test_account_names_come_from_each_service(self):
++        self.serve({"/2.0/user": {"username": "acme-bot", "display_name": "Acme Bot"}, "/user": {"login": "octo"}})
++        self.assertEqual(self.listed("bitbucket.org", "account"), (0, "acme-bot"))
++        self.assertEqual(self.listed("github.com", "account"), (0, "octo"))
++
+     def test_http_errors_are_reported_as_json(self):
+         self.serve({"/2.0/user/workspaces": HttpFailure(401)})
+         self.assertEqual(
+@@ -468,10 +474,16 @@ def isolate_git_and_gh(self, gh_token=None):
+         if gh_token:
+             (tools / "gh").write_text(f"#!/bin/sh\necho {gh_token}\n")
+             (tools / "gh").chmod(0o755)
++        for keychain_tool in ("security", "secret-tool"):
++            (tools / keychain_tool).write_text(
++                f'#!/bin/sh\nexec "{sys.executable}" "{FAKE_KEYCHAIN}" {keychain_tool} "$@"\n'
++            )
++            (tools / keychain_tool).chmod(0o755)
+         self.enterContext(
+             patch.dict(
+                 os.environ,
+                 {
++                    "FAKE_KEYCHAIN": str(self.root / "keychain.json"),
+                     "GIT_CONFIG_GLOBAL": str(config),
+                     "GIT_CONFIG_NOSYSTEM": "1",
+                     "HOME": str(self.root),
+@@ -505,10 +517,32 @@ def test_github_credentials_prefer_environment_then_gh_then_git(self):
+         with patch.dict(os.environ, {"GITHUB_TOKEN": "env-token"}):
+             self.assertEqual(self.authorization_sent(GitHub()), "Bearer env-token")
+ 
+-    def test_only_configured_hosts_are_offered(self):
++    def test_saved_tokens_come_after_the_environment_and_before_other_credentials(self):
++        self.isolate_git_and_gh().write_text("https://me:stored-token@github.com\n")
++        GitHub().save_token("saved-token")
++        self.assertEqual(self.authorization_sent(GitHub()), "Bearer saved-token")
++        self.assertEqual(GitHub().credentials_source, "token saved by Delphi Code")
++        self.assertEqual(GitHub().clone_credentials(), ("x-access-token", "saved-token"))
++        with patch.dict(os.environ, {"GITHUB_TOKEN": "env-token"}):
++            self.assertEqual(self.authorization_sent(GitHub()), "Bearer env-token")
++        GitHub().forget_saved_token()
++        self.assertFalse(GitHub().has_saved_token)
++        self.assertEqual(self.authorization_sent(GitHub()), "Bearer stored-token")
++
++    def test_saved_bitbucket_tokens_sign_in_with_the_email_and_clone_as_api_tokens(self):
++        self.isolate_git_and_gh()
++        Bitbucket().save_token("saved-token", "me@example.com")
++        expected = "Basic " + base64.b64encode(b"me@example.com:saved-token").decode()
++        self.assertEqual(self.authorization_sent(Bitbucket()), expected)
++        self.assertEqual(Bitbucket().clone_credentials(), ("x-bitbucket-api-token-auth", "saved-token"))
++
++    def test_only_hosts_with_credentials_are_offered(self):
+         self.isolate_git_and_gh()
+-        self.assertEqual(configured_hosts(), [])
++        offered = lambda: [service.name for service in application().hosting_services_with_credentials(refresh=True)]
++        with self.assertRaises(Failure) as raised:
++            offered()
++        self.assertEqual(raised.exception.code, "remote_auth_missing")
+         with patch.dict(os.environ, {"GITHUB_TOKEN": "token"}):
+-            self.assertEqual([host.name for host in configured_hosts()], ["GitHub"])
++            self.assertEqual(offered(), ["GitHub"])
+             with patch.dict(os.environ, {"BITBUCKET_USERNAME": "me", "BITBUCKET_APP_PASSWORD": "pw"}):
+-                self.assertEqual([host.name for host in configured_hosts()], ["Bitbucket", "GitHub"])
++                self.assertEqual(offered(), ["Bitbucket", "GitHub"])
+diff --git a/tests/test_sources.py b/tests/test_sources.py
+index b598c05..ea492fe 100644
+--- a/tests/test_sources.py
++++ b/tests/test_sources.py
+@@ -257,7 +257,7 @@ def test_remote_index_rejects_plain_index_and_lists_commit(self):
+ 
+     def pick(self, changes):
+         self.enterContext(patch("delphi_code.cli.terminal.prompts.TerminalPrompts.require_terminal"))
+-        self.enterContext(patch("delphi_code.infrastructure.hosts.configured_hosts", return_value=[Bitbucket()]))
++        self.enterContext(patch("delphi_code.infrastructure.hosts.known_hosts", return_value=[Bitbucket("Basic x")]))
+         return self.enterContext(
+             patch("delphi_code.cli.controllers.repository_picking.pick_tracking_changes", return_value=changes)
+         )
+diff --git a/web/openapi.json b/web/openapi.json
+index cd5e225..e1d0667 100644
+--- a/web/openapi.json
++++ b/web/openapi.json
+@@ -1,6 +1,154 @@
+ {
+   "components": {
+     "schemas": {
++      "AccountConnectionResponse": {
++        "additionalProperties": false,
++        "properties": {
++          "account": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "The signed-in account, when the service answered",
++            "title": "Account"
++          },
++          "credentials_source": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "Where the credentials were found, or null when none were",
++            "title": "Credentials Source"
++          },
++          "domain": {
++            "title": "Domain",
++            "type": "string"
++          },
++          "how_to_connect": {
++            "title": "How To Connect",
++            "type": "string"
++          },
++          "name": {
++            "title": "Name",
++            "type": "string"
++          },
++          "problem": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "Why the service refused or could not be reached",
++            "title": "Problem"
++          },
++          "saved_token": {
++            "description": "Whether Delphi Code keeps a token for this service in the keychain",
++            "title": "Saved Token",
++            "type": "boolean"
++          },
++          "state": {
++            "enum": [
++              "connected",
++              "failed",
++              "not_connected"
++            ],
++            "title": "State",
++            "type": "string"
++          },
++          "token_page": {
++            "description": "Where to create a token for this service",
++            "title": "Token Page",
++            "type": "string"
++          },
++          "token_permissions": {
++            "title": "Token Permissions",
++            "type": "string"
++          },
++          "username_label": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "What to ask for besides the token, or null when only it is needed",
++            "title": "Username Label"
++          }
++        },
++        "required": [
++          "domain",
++          "name",
++          "state",
++          "account",
++          "credentials_source",
++          "problem",
++          "how_to_connect",
++          "token_page",
++          "token_permissions",
++          "username_label",
++          "saved_token"
++        ],
++        "title": "AccountConnectionResponse",
++        "type": "object"
++      },
++      "AccountConnectionsResponse": {
++        "additionalProperties": false,
++        "properties": {
++          "connections": {
++            "items": {
++              "$ref": "#/components/schemas/AccountConnectionResponse"
++            },
++            "title": "Connections",
++            "type": "array"
++          }
++        },
++        "required": [
++          "connections"
++        ],
++        "title": "AccountConnectionsResponse",
++        "type": "object"
++      },
++      "AccountTokenRequest": {
++        "additionalProperties": false,
++        "properties": {
++          "token": {
++            "description": "An API token for the hosting service",
++            "minLength": 1,
++            "title": "Token",
++            "type": "string"
++          },
++          "username": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "The account the token belongs to, when the service needs it",
++            "title": "Username"
++          }
++        },
++        "required": [
++          "token"
++        ],
++        "title": "AccountTokenRequest",
++        "type": "object"
++      },
+       "AddRequest": {
+         "additionalProperties": false,
+         "properties": {
+@@ -1569,6 +1717,110 @@
+   },
+   "openapi": "3.1.0",
+   "paths": {
++    "/api/account-connections": {
++      "get": {
++        "operationId": "account_connections_api_account_connections_get",
++        "responses": {
++          "200": {
++            "content": {
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/AccountConnectionsResponse"
++                }
++              }
++            },
++            "description": "Successful Response"
++          }
++        },
++        "summary": "Account Connections"
++      }
++    },
++    "/api/account-connections/{domain}/token": {
++      "delete": {
++        "operationId": "forget_account_token_api_account_connections__domain__token_delete",
++        "parameters": [
++          {
++            "in": "path",
++            "name": "domain",
++            "required": true,
++            "schema": {
++              "title": "Domain",
++              "type": "string"
++            }
++          }
++        ],
++        "responses": {
++          "200": {
++            "content": {
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/AccountConnectionResponse"
++                }
++              }
++            },
++            "description": "Successful Response"
++          },
++          "422": {
++            "content": {
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/HTTPValidationError"
++                }
++              }
++            },
++            "description": "Validation Error"
++          }
++        },
++        "summary": "Forget Account Token"
++      },
++      "put": {
++        "operationId": "save_account_token_api_account_connections__domain__token_put",
++        "parameters": [
++          {
++            "in": "path",
++            "name": "domain",
++            "required": true,
++            "schema": {
++              "title": "Domain",
++              "type": "string"
++            }
++          }
++        ],
++        "requestBody": {
++          "content": {
++            "application/json": {
++              "schema": {
++                "$ref": "#/components/schemas/AccountTokenRequest"
++              }
++            }
++          },
++          "required": true
++        },
++        "responses": {
++          "200": {
++            "content": {
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/AccountConnectionResponse"
++                }
++              }
++            },
++            "description": "Successful Response"
++          },
++          "422": {
++            "content": {
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/HTTPValidationError"
++                }
++              }
++            },
++            "description": "Validation Error"
++          }
++        },
++        "summary": "Save Account Token"
++      }
++    },
+     "/api/doctor": {
+       "get": {
+         "operationId": "doctor_api_doctor_get",
+diff --git a/web/src/api/schema.d.ts b/web/src/api/schema.d.ts
+index 67fb94a..a648f67 100644
+--- a/web/src/api/schema.d.ts
++++ b/web/src/api/schema.d.ts
+@@ -4,6 +4,41 @@
+  */
+ 
+ export interface paths {
++    "/api/account-connections": {
++        parameters: {
++            query?: never;
++            header?: never;
++            path?: never;
++            cookie?: never;
++        };
++        /** Account Connections */
++        get: operations["account_connections_api_account_connections_get"];
++        put?: never;
++        post?: never;
++        delete?: never;
++        options?: never;
++        head?: never;
++        patch?: never;
++        trace?: never;
++    };
++    "/api/account-connections/{domain}/token": {
++        parameters: {
++            query?: never;
++            header?: never;
++            path?: never;
++            cookie?: never;
++        };
++        get?: never;
++        /** Save Account Token */
++        put: operations["save_account_token_api_account_connections__domain__token_put"];
++        post?: never;
++        /** Forget Account Token */
++        delete: operations["forget_account_token_api_account_connections__domain__token_delete"];
++        options?: never;
++        head?: never;
++        patch?: never;
++        trace?: never;
++    };
+     "/api/doctor": {
+         parameters: {
+             query?: never;
+@@ -197,6 +232,70 @@ export interface paths {
+ export type webhooks = Record<string, never>;
+ export interface components {
+     schemas: {
++        /** AccountConnectionResponse */
++        AccountConnectionResponse: {
++            /**
++             * Account
++             * @description The signed-in account, when the service answered
++             */
++            account: string | null;
++            /**
++             * Credentials Source
++             * @description Where the credentials were found, or null when none were
++             */
++            credentials_source: string | null;
++            /** Domain */
++            domain: string;
++            /** How To Connect */
++            how_to_connect: string;
++            /** Name */
++            name: string;
++            /**
++             * Problem
++             * @description Why the service refused or could not be reached
++             */
++            problem: string | null;
++            /**
++             * Saved Token
++             * @description Whether Delphi Code keeps a token for this service in the keychain
++             */
++            saved_token: boolean;
++            /**
++             * State
++             * @enum {string}
++             */
++            state: "connected" | "failed" | "not_connected";
++            /**
++             * Token Page
++             * @description Where to create a token for this service
++             */
++            token_page: string;
++            /** Token Permissions */
++            token_permissions: string;
++            /**
++             * Username Label
++             * @description What to ask for besides the token, or null when only it is needed
++             */
++            username_label: string | null;
++        };
++        /** AccountConnectionsResponse */
++        AccountConnectionsResponse: {
++            /** Connections */
++            connections: components["schemas"]["AccountConnectionResponse"][];
++        };
++        /** AccountTokenRequest */
++        AccountTokenRequest: {
++            /**
++             * Token
++             * @description An API token for the hosting service
++             */
++            token: string;
++            /**
++             * Username
++             * @description The account the token belongs to, when the service needs it
++             */
++            username?: string | null;
++        };
+         /** AddRequest */
+         AddRequest: {
+             /**
+@@ -755,6 +854,92 @@ export interface components {
+ }
+ export type $defs = Record<string, never>;
+ export interface operations {
++    account_connections_api_account_connections_get: {
++        parameters: {
++            query?: never;
++            header?: never;
++            path?: never;
++            cookie?: never;
++        };
++        requestBody?: never;
++        responses: {
++            /** @description Successful Response */
++            200: {
++                headers: {
++                    [name: string]: unknown;
++                };
++                content: {
++                    "application/json": components["schemas"]["AccountConnectionsResponse"];
++                };
++            };
++        };
++    };
++    save_account_token_api_account_connections__domain__token_put: {
++        parameters: {
++            query?: never;
++            header?: never;
++            path: {
++                domain: string;
++            };
++            cookie?: never;
++        };
++        requestBody: {
++            content: {
++                "application/json": components["schemas"]["AccountTokenRequest"];
++            };
++        };
++        responses: {
++            /** @description Successful Response */
++            200: {
++                headers: {
++                    [name: string]: unknown;
++                };
++                content: {
++                    "application/json": components["schemas"]["AccountConnectionResponse"];
++                };
++            };
++            /** @description Validation Error */
++            422: {
++                headers: {
++                    [name: string]: unknown;
++                };
++                content: {
++                    "application/json": components["schemas"]["HTTPValidationError"];
++                };
++            };
++        };
++    };
++    forget_account_token_api_account_connections__domain__token_delete: {
++        parameters: {
++            query?: never;
++            header?: never;
++            path: {
++                domain: string;
++            };
++            cookie?: never;
++        };
++        requestBody?: never;
++        responses: {
++            /** @description Successful Response */
++            200: {
++                headers: {
++                    [name: string]: unknown;
++                };
++                content: {
++                    "application/json": components["schemas"]["AccountConnectionResponse"];
++                };
++            };
++            /** @description Validation Error */
++            422: {
++                headers: {
++                    [name: string]: unknown;
++                };
++                content: {
++                    "application/json": components["schemas"]["HTTPValidationError"];
++                };
++            };
++        };
++    };
+     doctor_api_doctor_get: {
+         parameters: {
+             query: {
+diff --git a/web/src/picker/CredentialsGuide.tsx b/web/src/picker/CredentialsGuide.tsx
+index 23df63d..6f18c76 100644
+--- a/web/src/picker/CredentialsGuide.tsx
++++ b/web/src/picker/CredentialsGuide.tsx
+@@ -1,9 +1,18 @@
++import { Link } from "@tanstack/react-router";
++
+ export function CredentialsGuide() {
+   return (
+     <section className="grid gap-2 rounded-lg border p-4 text-sm">
+       <h2 className="font-medium">Connect Bitbucket or GitHub</h2>
+       <p className="text-muted-foreground">Delphi Code found no credentials. Any of these works:</p>
+       <ul className="grid list-disc gap-1 pl-5">
++        <li>
++          Paste a token on the{" "}
++          <Link to="/setup" className="underline underline-offset-4">
++            Setup page
++          </Link>
++          .
++        </li>
+         <li>
+           Sign in with <code className="font-mono">gh auth login</code>, or store git credentials for bitbucket.org or
+           github.com. Then reload this page.
+diff --git a/web/src/routes/setup.test.tsx b/web/src/routes/setup.test.tsx
+index 46973a5..905dec9 100644
+--- a/web/src/routes/setup.test.tsx
++++ b/web/src/routes/setup.test.tsx
+@@ -24,9 +24,28 @@ const DIAGNOSTICS = {
+ function answerProjects() {
+   apiServer.use(
+     http.get(`${TEST_API_ORIGIN}/api/projects`, () => HttpResponse.json({ registry: "/repos.toml", repos: [] })),
++    http.get(`${TEST_API_ORIGIN}/api/account-connections`, () => HttpResponse.json({ connections: [] })),
+   );
+ }
+ 
++const NO_CONNECTION = {
++  account: null,
++  credentials_source: null,
++  problem: null,
++  how_to_connect: "set GITHUB_TOKEN",
++  token_page: "https://github.com/settings/tokens/new",
++  token_permissions: "Create a classic token with the repo scope",
++  username_label: null,
++  saved_token: false,
++};
++const BITBUCKET_NOT_CONNECTED = {
++  ...NO_CONNECTION,
++  domain: "bitbucket.org",
++  name: "Bitbucket",
++  state: "not_connected",
++  username_label: "Atlassian account email",
++};
++
+ describe("the setup page", () => {
+   it("runs the installation checks in the folder the server started in unless a project is picked", async () => {
+     answerProjects();
+@@ -46,6 +65,104 @@ describe("the setup page", () => {
+     expect(checkedProject).toBe(".");
+   });
+ 
++  it("shows which Bitbucket and GitHub accounts are connected and checks them again on request", async () => {
++    answerProjects();
++    let checks = 0;
++    apiServer.use(
++      http.get(`${TEST_API_ORIGIN}/api/account-connections`, () => {
++        checks += 1;
++        return HttpResponse.json({
++          connections: [
++            {
++              ...NO_CONNECTION,
++              domain: "bitbucket.org",
++              name: "Bitbucket",
++              state: "connected",
++              account: "acme-bot",
++              credentials_source: "git credentials stored for bitbucket.org",
++            },
++            checks === 1
++              ? { ...NO_CONNECTION, domain: "github.com", name: "GitHub", state: "not_connected" }
++              : {
++                  ...NO_CONNECTION,
++                  domain: "github.com",
++                  name: "GitHub",
++                  state: "failed",
++                  credentials_source: "token from gh auth token",
++                  problem: "GitHub rejected the token from gh auth token",
++                },
++          ],
++        });
++      }),
++    );
++    renderAppAt("/setup");
++
++    const bitbucket = await screen.findByRole("listitem", { name: "Bitbucket" });
++    expect(within(bitbucket).getByText("Connected as acme-bot")).toBeTruthy();
++    expect(within(bitbucket).getByText("Using the git credentials stored for bitbucket.org.")).toBeTruthy();
++    expect(within(bitbucket).getByRole("link", { name: "Pick repositories" }).getAttribute("href")).toBe(
++      "/projects/from-account?service=bitbucket.org",
++    );
++    const github = screen.getByRole("listitem", { name: "GitHub" });
++    expect(within(github).getByText("Not connected")).toBeTruthy();
++    expect(within(github).getByText("Connect with a token here, or set GITHUB_TOKEN.")).toBeTruthy();
++
++    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
++
++    expect(await screen.findByText("GitHub rejected the token from gh auth token")).toBeTruthy();
++    expect(within(screen.getByRole("listitem", { name: "GitHub" })).getByText("Not working")).toBeTruthy();
++  });
++
++  it("checks a pasted token, saves it, and can forget it again", async () => {
++    answerProjects();
++    const sentBodies: unknown[] = [];
++    apiServer.use(
++      http.get(`${TEST_API_ORIGIN}/api/account-connections`, () =>
++        HttpResponse.json({ connections: [BITBUCKET_NOT_CONNECTED] }),
++      ),
++      http.put(`${TEST_API_ORIGIN}/api/account-connections/bitbucket.org/token`, async ({ request }) => {
++        const body = (await request.json()) as { token: string };
++        sentBodies.push(body);
++        return body.token === "valid"
++          ? HttpResponse.json({
++              ...BITBUCKET_NOT_CONNECTED,
++              state: "connected",
++              account: "acme-bot",
++              credentials_source: "token saved by Delphi Code",
++              saved_token: true,
++            })
++          : HttpResponse.json(
++              { error: { code: "remote_auth_failed", message: "Bitbucket rejected this token" } },
++              { status: 502 },
++            );
++      }),
++      http.delete(`${TEST_API_ORIGIN}/api/account-connections/bitbucket.org/token`, () =>
++        HttpResponse.json(BITBUCKET_NOT_CONNECTED),
++      ),
++    );
++    renderAppAt("/setup");
++
++    fireEvent.click(await screen.findByRole("button", { name: "Connect" }));
++    const form = screen.getByRole("form", { name: "Bitbucket token" });
++    expect(within(form).getByRole("link", { name: "Create a Bitbucket token" }).getAttribute("target")).toBe("_blank");
++    fireEvent.change(within(form).getByLabelText("Atlassian account email"), { target: { value: "me@example.com" } });
++    fireEvent.change(within(form).getByLabelText("Token"), { target: { value: "revoked" } });
++    fireEvent.click(within(form).getByRole("button", { name: "Check and save" }));
++    expect(await within(form).findByText("Bitbucket rejected this token")).toBeTruthy();
++
++    fireEvent.change(within(form).getByLabelText("Token"), { target: { value: "valid" } });
++    fireEvent.click(within(form).getByRole("button", { name: "Check and save" }));
++
++    expect(await screen.findByText("Connected as acme-bot")).toBeTruthy();
++    expect(screen.queryByRole("form", { name: "Bitbucket token" })).toBeNull();
++    expect(sentBodies.at(-1)).toEqual({ token: "valid", username: "me@example.com" });
++
++    fireEvent.click(screen.getByRole("button", { name: "Forget saved token" }));
++
++    expect(await screen.findByText("Not connected")).toBeTruthy();
++    expect(screen.queryByRole("button", { name: "Forget saved token" })).toBeNull();
++  });
++
+   it("imports a prepared model and reports it in the activity panel", async () => {
+     answerProjects();
+     let sentBody: unknown;
+diff --git a/web/src/routes/setup.tsx b/web/src/routes/setup.tsx
+index 5eb18f8..9aa1e15 100644
+--- a/web/src/routes/setup.tsx
++++ b/web/src/routes/setup.tsx
+@@ -1,4 +1,5 @@
+ import { createFileRoute } from "@tanstack/react-router";
++import { ConnectionsSection } from "@/setup/ConnectionsSection";
+ import { DoctorSection } from "@/setup/DoctorSection";
+ import { ModelSetupSection } from "@/setup/ModelSetupSection";
+ 
+@@ -11,6 +12,7 @@ function SetupPage() {
+     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
+       <h1 className="font-semibold text-lg">Setup</h1>
+       <ModelSetupSection />
++      <ConnectionsSection />
+       <DoctorSection />
+     </div>
+   );
+diff --git a/web/src/setup/ConnectionsSection.tsx b/web/src/setup/ConnectionsSection.tsx
+new file mode 100644
+index 0000000..8e73148
+--- /dev/null
++++ b/web/src/setup/ConnectionsSection.tsx
+@@ -0,0 +1,197 @@
++import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
++import { Link } from "@tanstack/react-router";
++import { type FormEvent, useId, useState } from "react";
++import { dataOrFailure } from "@/api/apiClient";
++import { useApiConnection } from "@/api/apiContext";
++import type { components } from "@/api/schema";
++import { FailureMessage } from "@/components/FailureMessage";
++import { Badge } from "@/components/ui/badge";
++import { Button } from "@/components/ui/button";
++import { Input } from "@/components/ui/input";
++import { Label } from "@/components/ui/label";
++
++type AccountConnection = components["schemas"]["AccountConnectionResponse"];
++
++const CONNECTIONS_QUERY_KEY = ["account-connections"];
++
++export function ConnectionsSection() {
++  const { client } = useApiConnection();
++  const connections = useQuery({
++    queryKey: CONNECTIONS_QUERY_KEY,
++    queryFn: async () => dataOrFailure(await client.GET("/api/account-connections")).connections,
++  });
++
++  return (
++    <section aria-labelledby="connections-heading" className="grid gap-3 rounded-lg border p-4">
++      <div className="flex items-center justify-between gap-2">
++        <h2 id="connections-heading" className="font-medium">
++          Bitbucket and GitHub accounts
++        </h2>
++        <Button variant="outline" size="sm" onClick={() => connections.refetch()} disabled={connections.isFetching}>
++          {connections.isFetching ? "Checking…" : "Check again"}
++        </Button>
++      </div>
++      {connections.isPending && <p className="text-muted-foreground text-sm">Checking your accounts…</p>}
++      {connections.isError && <FailureMessage failure={connections.error} />}
++      {connections.data && (
++        <ul className="grid gap-4 text-sm">
++          {connections.data.map((connection) => (
++            <ConnectionRow key={connection.domain} connection={connection} />
++          ))}
++        </ul>
++      )}
++    </section>
++  );
++}
++
++function ConnectionRow({ connection }: { connection: AccountConnection }) {
++  const [enteringToken, setEnteringToken] = useState(false);
++  const replaceConnection = useConnectionReplacer();
++  const { client } = useApiConnection();
++  const forgetting = useMutation({
++    mutationFn: async () =>
++      dataOrFailure(
++        await client.DELETE("/api/account-connections/{domain}/token", {
++          params: { path: { domain: connection.domain } },
++        }),
++      ),
++    onSuccess: replaceConnection,
++  });
++
++  return (
++    <li aria-label={connection.name} className="grid gap-2">
++      <div className="flex flex-wrap items-center gap-2">
++        <span className="font-medium">{connection.name}</span>
++        <ConnectionBadge connection={connection} />
++        <div className="ml-auto flex flex-wrap items-center gap-2">
++          {connection.state === "connected" && (
++            <Link
++              to="/projects/from-account"
++              search={{ service: connection.domain }}
++              className="underline underline-offset-4"
++            >
++              Pick repositories
++            </Link>
++          )}
++          {!enteringToken && (
++            <Button variant="outline" size="sm" onClick={() => setEnteringToken(true)}>
++              {connection.state === "not_connected" ? "Connect" : "Use another token"}
++            </Button>
++          )}
++          {connection.saved_token && (
++            <Button variant="ghost" size="sm" onClick={() => forgetting.mutate()} disabled={forgetting.isPending}>
++              {forgetting.isPending ? "Forgetting…" : "Forget saved token"}
++            </Button>
++          )}
++        </div>
++      </div>
++      <p className="break-words text-muted-foreground">{connectionDetail(connection)}</p>
++      {forgetting.isError && <FailureMessage failure={forgetting.error} />}
++      {enteringToken && <TokenForm connection={connection} onDone={() => setEnteringToken(false)} />}
++    </li>
++  );
++}
++
++function TokenForm({ connection, onDone }: { connection: AccountConnection; onDone: () => void }) {
++  const ids = useId();
++  const { client } = useApiConnection();
++  const replaceConnection = useConnectionReplacer();
++  const [username, setUsername] = useState("");
++  const [token, setToken] = useState("");
++  const saving = useMutation({
++    mutationFn: async () =>
++      dataOrFailure(
++        await client.PUT("/api/account-connections/{domain}/token", {
++          params: { path: { domain: connection.domain } },
++          body: { token, username: connection.username_label ? username : null },
++        }),
++      ),
++    onSuccess: (saved) => {
++      replaceConnection(saved);
++      onDone();
++    },
++  });
++  const submit = (event: FormEvent) => {
++    event.preventDefault();
++    saving.mutate();
++  };
++
++  return (
++    <form aria-label={`${connection.name} token`} onSubmit={submit} className="grid gap-3 rounded-md bg-muted/50 p-3">
++      <p>
++        <a href={connection.token_page} target="_blank" rel="noreferrer" className="underline underline-offset-4">
++          Create a {connection.name} token
++        </a>{" "}
++        in a new tab. {connection.token_permissions}. Delphi Code checks it with {connection.name}, then keeps it in
++        your keychain.
++      </p>
++      {connection.username_label && (
++        <div className="grid gap-1.5">
++          <Label htmlFor={`${ids}-username`}>{connection.username_label}</Label>
++          <Input
++            id={`${ids}-username`}
++            type="email"
++            autoComplete="email"
++            value={username}
++            onChange={(event) => setUsername(event.target.value)}
++            required
++          />
++        </div>
++      )}
++      <div className="grid gap-1.5">
++        <Label htmlFor={`${ids}-token`}>Token</Label>
++        <Input
++          id={`${ids}-token`}
++          type="password"
++          autoComplete="off"
++          value={token}
++          onChange={(event) => setToken(event.target.value)}
++          required
++        />
++      </div>
++      {saving.isError && <FailureMessage failure={saving.error} />}
++      <div className="flex gap-2">
++        <Button type="submit" disabled={saving.isPending}>
++          {saving.isPending ? "Checking…" : "Check and save"}
++        </Button>
++        <Button type="button" variant="ghost" onClick={onDone}>
++          Cancel
++        </Button>
++      </div>
++    </form>
++  );
++}
++
++function useConnectionReplacer() {
++  const queryClient = useQueryClient();
++  return (changed: AccountConnection) => {
++    queryClient.setQueryData<AccountConnection[]>(CONNECTIONS_QUERY_KEY, (connections) =>
++      connections?.map((connection) => (connection.domain === changed.domain ? changed : connection)),
++    );
++    void queryClient.invalidateQueries({ queryKey: ["hosting-services"] });
++  };
++}
++
++function ConnectionBadge({ connection }: { connection: AccountConnection }) {
++  switch (connection.state) {
++    case "connected":
++      return (
++        <Badge variant="secondary">{connection.account ? `Connected as ${connection.account}` : "Connected"}</Badge>
++      );
++    case "failed":
++      return <Badge variant="destructive">Not working</Badge>;
++    case "not_connected":
++      return <Badge variant="outline">Not connected</Badge>;
++  }
++}
++
++function connectionDetail(connection: AccountConnection): string {
++  switch (connection.state) {
++    case "connected":
++      return `Using the ${connection.credentials_source}.`;
++    case "failed":
++      return connection.problem ?? "";
++    case "not_connected":
++      return `Connect with a token here, or ${connection.how_to_connect}.`;
++  }
++}

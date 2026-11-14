@@ -9,6 +9,8 @@ import type { CaseLabels } from "../labels.ts";
 import * as authMiddleware from "./auth-middleware/case.ts";
 import { labels as authMiddlewareLabels } from "./auth-middleware/labels.ts";
 import { labels as bitbucketBugfixLabels } from "./bitbucket-bugfix/labels.ts";
+import * as delphiAccountConnections from "./delphi-account-connections/case.ts";
+import { labels as delphiAccountConnectionsLabels } from "./delphi-account-connections/labels.ts";
 import * as dependencyBump from "./dependency-bump-signature/case.ts";
 import { labels as dependencyBumpLabels } from "./dependency-bump-signature/labels.ts";
 import * as descriptionContradicts from "./description-contradicts/case.ts";
@@ -131,6 +133,14 @@ export const evalCases: readonly EvalCase[] = [
     tests: "Tour quality and cost at size: about 1,500 changed lines",
     fixture: largeRetryAfter.fixture,
     labels: largeRetryAfterLabels,
+  },
+  {
+    name: "delphi-account-connections",
+    source: "imported",
+    tests:
+      "A 48-hunk full-stack PR whose description explains its choices: risk noise on API models, a generated client and plumbing between the PR's own modules; risks on hunks that open with imports; decisions that repeat the description",
+    fixture: delphiAccountConnections.fixture,
+    labels: delphiAccountConnectionsLabels,
   },
 ];
 
