@@ -33,6 +33,7 @@ const setup = async (options: { threads?: readonly ReviewThread[]; noThreads?: b
     {
       hosts: { github },
       threads: options.noThreads ? {} : { github: threads },
+      statuses: {},
       tickets: new FakeTicketSource(),
       model: new FakeAnalysisModel(),
       modelAvailability: async () => ({ available: true, via: "the fake model" }),

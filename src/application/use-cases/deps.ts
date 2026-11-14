@@ -10,6 +10,7 @@ import type {
   LocalCheckouts,
   Logger,
   ModelAvailability,
+  PullRequestStatusSource,
   ReviewThreads,
   TicketSource,
 } from "../ports/index.ts";
@@ -19,6 +20,8 @@ export interface AppDeps {
   readonly hosts: Partial<Record<HostKind, GitHost>>;
   /** The conversation on PRs' code, for the configured hosts. */
   readonly threads: Partial<Record<HostKind, ReviewThreads>>;
+  /** Where PRs stand on the configured hosts: state, reviewers and CI. */
+  readonly statuses: Partial<Record<HostKind, PullRequestStatusSource>>;
   readonly tickets: TicketSource;
   readonly model: AnalysisModel;
   /** Whether `model` can run its passes now. Asked by the status and before every model run. */

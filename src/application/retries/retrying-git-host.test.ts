@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { HostError } from "../../domain/review/index.ts";
 import {
   FakeGitHost,
+  FakePullRequestStatusSource,
   FakeReviewThreads,
   RecordingLogger,
   smallFeature,
   smallFeaturePublication,
   smallFeatureThreadList,
 } from "../testing/index.ts";
-import { retryingGitHost, retryingReviewThreads } from "./index.ts";
+import { retryingGitHost, retryingReviewThreads, retryingStatusSource } from "./index.ts";
 
 const networkError: HostError = {
   kind: "network",
@@ -162,5 +163,26 @@ describe("retryingReviewThreads", () => {
     expect(delays).toEqual([]);
     expect((await threads.reply(ref, "PRRT_cache", "x")).ok).toBe(true);
     expect((await threads.setResolved(ref, "PRRT_cache", true)).ok).toBe(true);
+  });
+});
+
+describe("retryingStatusSource", () => {
+  it("retries reading the status after a network failure, but not after a refusal", async () => {
+    const fake = new FakePullRequestStatusSource({ host: "github" });
+    const delays: number[] = [];
+    const source = retryingStatusSource(fake, {
+      logger: new RecordingLogger(),
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    });
+    fake.failNext(networkError);
+    expect((await source.getStatus(ref, "abc")).ok).toBe(true);
+    expect(delays).toEqual([1000]);
+    expect(source.host).toBe("github");
+
+    fake.failNext({ kind: "forbidden", message: "no", retryAfterSeconds: null });
+    expect((await source.getStatus(ref, "abc")).ok).toBe(false);
+    expect(delays).toEqual([1000]);
   });
 });

@@ -50,6 +50,14 @@ export { type UnchangedLine, UnchangedLines } from "./diff/unchanged-lines.tsx";
 export { CommentComposer } from "./pr/comment-composer.tsx";
 export { PrHeader, type PrSummary, type PrTab } from "./pr/pr-header.tsx";
 export {
+  CiSummary,
+  ciLabel,
+  PullRequestStateBadge,
+  ReviewerStack,
+  ReviewStatusBadge,
+  reviewersSpoken,
+} from "./pr/pr-status.tsx";
+export {
   type PendingComment,
   ReviewSubmitForm,
   ReviewSubmitPanel,

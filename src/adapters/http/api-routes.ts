@@ -103,6 +103,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     publish: ({ params, body }) =>
       useCases.publishReview(params.id, body.summary, body.allowStale, reviewInput(body)),
     getThreads: ({ params }) => useCases.getThreads(params.id),
+    getPullRequestStatus: ({ params }) => useCases.getPullRequestStatus(params.id),
     replyToThread: ({ params, body }) =>
       useCases.replyToThread(params.id, params.threadId, body.body),
     resolveThread: ({ params, body }) =>
@@ -124,6 +125,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   register(app, routes.previewPublication, handlers.previewPublication);
   register(app, routes.publish, handlers.publish);
   register(app, routes.getThreads, handlers.getThreads);
+  register(app, routes.getPullRequestStatus, handlers.getPullRequestStatus);
   register(app, routes.replyToThread, handlers.replyToThread);
   register(app, routes.resolveThread, handlers.resolveThread);
   register(app, routes.postComment, handlers.postComment);

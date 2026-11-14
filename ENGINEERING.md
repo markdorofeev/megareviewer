@@ -39,6 +39,10 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Analysis | All of the above for one PR at one head SHA and pipeline version |
 | Publication | The review sent back to the git host |
 | Review thread | A conversation the host keeps on lines of a file: its comments, whether it's resolved or outdated. Read live, never part of an analysis |
+| PR state | Where a PR is on its host: *open*, *draft*, *merged* or *closed* |
+| Reviewer | Someone asked to review a PR or who has, with the verdict of their latest review on the host, or none yet |
+| Review status | What a PR's reviews add up to on its host: *approved*, *changes requested*, or neither |
+| Check | One CI result on a commit: *passed*, *failed*, *running* or *skipped* |
 | Severity | How much Claude thinks a finding matters: *minor*, *major* or *blocking*. Comments carry none |
 | Suggestion | The lines a comment proposes in place of the ones it's on |
 

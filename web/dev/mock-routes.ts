@@ -28,6 +28,7 @@ import {
 } from "../../src/domain/review/index.ts";
 import {
   fixtureAnalysisView,
+  fixturePullRequestStatus,
   fixturePullRequests,
   fixtureStatus,
   fixtureThreads,
@@ -392,6 +393,7 @@ export const createMockApi = (
       return success(publication);
     },
     getThreads: ({ id }) => findAnalysis(id) ?? success({ threads }),
+    getPullRequestStatus: ({ id }) => findAnalysis(id) ?? success(fixturePullRequestStatus),
     replyToThread: (params, body) => {
       const missing = findAnalysis(params.id);
       if (missing !== null) return missing;

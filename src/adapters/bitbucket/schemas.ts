@@ -107,3 +107,34 @@ export const BitbucketThreadComment = z.object({
     .nullish(),
 });
 export type BitbucketThreadComment = z.infer<typeof BitbucketThreadComment>;
+
+/** Someone on a PR: a reviewer, or a participant by having commented. */
+const BitbucketPullRequestParticipant = z.object({
+  /** Missing for some deleted accounts. */
+  user: BitbucketAccount.nullish(),
+  role: z.string(),
+  approved: z.boolean(),
+  /** "approved", "changes_requested", or null. */
+  state: z.string().nullish(),
+});
+
+/** A PR's state and who's on it, for its status. */
+export const BitbucketPullRequestStatus = z.object({
+  /** OPEN, MERGED, DECLINED or SUPERSEDED. */
+  state: z.string(),
+  /** Missing on workspaces from before drafts. */
+  draft: z.boolean().optional(),
+  author: BitbucketAccount.nullish(),
+  participants: z.array(BitbucketPullRequestParticipant),
+});
+export type BitbucketPullRequestStatus = z.infer<typeof BitbucketPullRequestStatus>;
+
+/** One build status on a commit, as CI reports it. */
+export const BitbucketBuildStatus = z.object({
+  key: z.string().min(1),
+  name: z.string().nullish(),
+  /** SUCCESSFUL, FAILED, INPROGRESS or STOPPED. */
+  state: z.string(),
+  url: z.string().nullish(),
+});
+export type BitbucketBuildStatus = z.infer<typeof BitbucketBuildStatus>;

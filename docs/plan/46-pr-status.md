@@ -1,6 +1,6 @@
 # Stage 46: The PR's state, its reviewers and CI in the header
 
-**Status:** Not started
+**Status:** Done (branch `claude/badges-ci-reviewers-e45ec3`): `pnpm check` and `pnpm e2e` pass, checked live on GitHub and Bitbucket; see **Notes for later stages**
 **Depends on:** 44
 **Owns:** `src/domain/review/pr-status.ts`, the `PullRequestStatus` port and its fake and contract suite, `status.ts` in `src/adapters/github/` and `src/adapters/bitbucket/`, the status use case and route, `usePrStatus.ts` and the header's status items in `web/src/pages/review/`, their examples in `web/src/design-system/`
 
@@ -90,8 +90,19 @@ GitHub's conclusions map as `SUCCESS` passed, `NEUTRAL` and `SKIPPED` skipped, e
 
 ## Definition of done
 
-- [ ] The header shows the PR's state, its review status, its reviewers and CI, on GitHub and Bitbucket.
-- [ ] A host that can't answer leaves the page working and says the status is unavailable.
-- [ ] Checked live on delphi-code #2 and a Bitbucket PR, in light, dark and at 1024px.
-- [ ] ARCHITECTURE.md and ENGINEERING.md updated.
-- [ ] `pnpm check` and `pnpm e2e` pass.
+- [x] The header shows the PR's state, its review status, its reviewers and CI, on GitHub and Bitbucket.
+- [x] A host that can't answer leaves the page working and says the status is unavailable.
+- [x] Checked live on delphi-code #2 and a Bitbucket PR, in light, dark and at 1024px. Neither has reviewers or checks, so sindresorhus/ky #868 (closed, changes requested, a bot reviewer, three checks) and #867 (merged) were checked too.
+- [x] ARCHITECTURE.md and ENGINEERING.md updated.
+- [x] `pnpm check` and `pnpm e2e` pass.
+
+## Notes for later stages
+
+- **Names.** The port is `PullRequestStatusSource` and the data `PullRequestStatus`, as the domain's other PR types are named; the use case and route are `getPullRequestStatus`, `GET /api/analyses/:id/pull-request-status`, since `getStatus` is the server's own status.
+- **The components are in `web/src/review/pr/pr-status.tsx`,** with the review components, not in `web/src/pages/review/`; the page reads them through `usePullRequestStatus.ts`.
+- **Tokens:** `pr-open` and `pr-merged`, each with a background, in light and dark, with their pairs in `pnpm check:contrast`, and the CI and verdict colors on the page's background. Draft takes the muted tokens and Closed the changes-requested ones. The state badge's icon is lucide's pull request, draft, merge or closed icon.
+- **GitHub's `reviewDecision` is null** where a repository requires no review; the status is then derived with `reviewStatusOf`, as on Bitbucket. A reviewer asked again after reviewing keeps their last verdict, as GitHub's own list shows it.
+- **Bitbucket's build statuses** make the checks unreadable only when refused or missing; a network failure fails the whole read, so it's retried like any read.
+- **At most 100 checks** are read per commit; past that the server logs that later ones are missing.
+- **The design system's examples are closed popovers,** each opening on a click: several open popovers overlap. The section isn't snapshotted.
+- **Fixtures are synthetic.** The GitHub query was run against microsoft/TypeScript#60000 to check its fields, and its answers on sindresorhus/ky were read live. Bitbucket's PR and statuses answers were read live on super-unique-workspace/very-new-repo #1, which has no reviewers or builds, so a status of each state and a participant with a verdict still want a recording.

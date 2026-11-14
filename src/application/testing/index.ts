@@ -11,6 +11,10 @@ export {
   type LocalCheckoutContractSetup,
 } from "./contracts/local-checkout-contract.ts";
 export {
+  describePullRequestStatusContract,
+  type PullRequestStatusContractSetup,
+} from "./contracts/pull-request-status-contract.ts";
+export {
   describeReviewThreadsContract,
   type ReviewThreadsContractSetup,
 } from "./contracts/review-threads-contract.ts";
@@ -31,6 +35,7 @@ export {
   FakeLocalCheckout,
   FakeLocalCheckouts,
 } from "./fake-local-checkout.ts";
+export { FakePullRequestStatusSource } from "./fake-pull-request-status-source.ts";
 export {
   FakeReviewThreads,
   type ReviewThreadsMethod,

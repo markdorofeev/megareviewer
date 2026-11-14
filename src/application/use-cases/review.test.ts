@@ -61,6 +61,7 @@ const setup = (
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
       threads: {},
+      statuses: {},
       parser: new FakeCodeParser(),
       events: createAnalysisEvents(),
       clock,

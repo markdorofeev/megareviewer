@@ -1,11 +1,12 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Hunk } from "../../../src/domain/diff/index.ts";
-import { PointId } from "../../../src/domain/review/index.ts";
+import { type Check, PointId, type Reviewer } from "../../../src/domain/review/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
 import { VERDICT_STATUS } from "../lib/status.ts";
 import { DecisionChip, DecisionNote, FindingCard, RiskBand } from "../pages/review/PointCard.tsx";
 import {
+  CiSummary,
   CollapsedHunk,
   CommentCard,
   CommentComposer,
@@ -20,6 +21,9 @@ import {
   type LineComment,
   type LinePlace,
   PrHeader,
+  PullRequestStateBadge,
+  ReviewerStack,
+  ReviewStatusBadge,
   ReviewSubmitPanel,
   type ReviewThreadProps,
   ReviewThreadView,
@@ -92,6 +96,10 @@ export const DomainComponents = () => {
             actions={<Button size="sm">Publish</Button>}
           />
         </div>
+      </Group>
+
+      <Group title="The PR's standing: state, review status, CI and reviewers">
+        <PrStanding />
       </Group>
 
       <Group title="Diff viewer">
@@ -498,6 +506,57 @@ const PointStates = () => {
     </div>
   );
 };
+
+const HEAD = "9e8d7c6b5a49382716051f2e3d4c5b6a79881726";
+
+const checks = (states: readonly Check["state"][]): Check[] =>
+  states.map((state, index) => ({
+    name: `check ${index + 1}`,
+    state,
+    url: `https://ci.example.com/${index + 1}`,
+  }));
+
+const REVIEWERS: readonly Reviewer[] = [
+  { id: "ls", name: "Lena Sato", team: false, verdict: "changes-requested" },
+  { id: "jk", name: "J. K. Ortiz", team: false, verdict: "approved" },
+  { id: "sr", name: "Sam Rivera", team: false, verdict: "commented" },
+  { id: "ab", name: "Ada Byron", team: false, verdict: null },
+  { id: "pl", name: "Platform", team: true, verdict: null },
+];
+
+/** The header's standing items in each of their states; each opens its popover on a click. */
+const PrStanding = () => (
+  <div className="flex flex-col gap-3">
+    <div className="flex flex-wrap items-center gap-2">
+      <PullRequestStateBadge state="open" />
+      <PullRequestStateBadge state="draft" />
+      <PullRequestStateBadge state="merged" />
+      <PullRequestStateBadge state="closed" />
+      <ReviewStatusBadge status="approved" />
+      <ReviewStatusBadge status="changes-requested" />
+    </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <CiSummary checks={checks(Array(12).fill("passed"))} unreadable={null} head={HEAD} />
+      <CiSummary
+        checks={checks(["failed", "failed", "passed", "running", "skipped"])}
+        unreadable={null}
+        head={HEAD}
+      />
+      <CiSummary checks={checks(["running", "passed", "passed"])} unreadable={null} head={HEAD} />
+      <CiSummary checks={checks(["skipped"])} unreadable={null} head={HEAD} />
+      <CiSummary
+        checks={null}
+        unreadable="GitHub wouldn't show the checks. A fine-grained token needs read access to Checks and Commit statuses."
+        head={HEAD}
+      />
+    </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <ReviewerStack reviewers={REVIEWERS.slice(0, 1)} />
+      <ReviewerStack reviewers={REVIEWERS.slice(0, 3)} />
+      <ReviewerStack reviewers={REVIEWERS} />
+    </div>
+  </div>
+);
 
 const Group = ({ title, children }: { readonly title: string; readonly children: ReactNode }) => (
   <section className="flex flex-col gap-3">

@@ -3,10 +3,18 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Hono } from "hono";
-import { createBitbucketHost, createBitbucketReviewThreads } from "../adapters/bitbucket/index.ts";
+import {
+  createBitbucketHost,
+  createBitbucketReviewThreads,
+  createBitbucketStatusSource,
+} from "../adapters/bitbucket/index.ts";
 import { createRunClaude } from "../adapters/claude/index.ts";
 import { createGitCheckouts } from "../adapters/git/index.ts";
-import { createGitHubHost, createGitHubReviewThreads } from "../adapters/github/index.ts";
+import {
+  createGitHubHost,
+  createGitHubReviewThreads,
+  createGitHubStatusSource,
+} from "../adapters/github/index.ts";
 import { createHttpApp } from "../adapters/http/index.ts";
 import { createJiraTicketSource, createUnconfiguredTicketSource } from "../adapters/jira/index.ts";
 import { openSqliteAnalysisStore, type SqliteAnalysisStore } from "../adapters/sqlite/index.ts";
@@ -17,10 +25,15 @@ import type {
   GitHost,
   Logger,
   ModelAvailability,
+  PullRequestStatusSource,
   ReviewThreads,
   TicketSource,
 } from "../application/ports/index.ts";
-import { retryingGitHost, retryingReviewThreads } from "../application/retries/index.ts";
+import {
+  retryingGitHost,
+  retryingReviewThreads,
+  retryingStatusSource,
+} from "../application/retries/index.ts";
 import { type AppDeps, createUseCases, type UseCases } from "../application/use-cases/index.ts";
 import type { HostKind } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
@@ -92,6 +105,33 @@ export const createReviewThreads = (
     ...(bitbucket !== null && {
       bitbucket: retrying(
         createBitbucketReviewThreads({
+          username: bitbucket.username,
+          password: bitbucket.password,
+          logger,
+        }),
+      ),
+    }),
+  };
+};
+
+/** Where PRs stand on the configured hosts; reads retried as the hosts' are. */
+export const createStatusSources = (
+  config: Pick<Config, "github" | "bitbucket">,
+  options: { readonly version: string; readonly clock: Clock; readonly logger: Logger },
+): Partial<Record<HostKind, PullRequestStatusSource>> => {
+  const { github, bitbucket } = config;
+  const { clock, logger } = options;
+  const retrying = (source: PullRequestStatusSource) =>
+    retryingStatusSource(source, { sleep, logger });
+  return {
+    ...(github !== null && {
+      github: retrying(
+        createGitHubStatusSource({ token: github.token, version: options.version, clock, logger }),
+      ),
+    }),
+    ...(bitbucket !== null && {
+      bitbucket: retrying(
+        createBitbucketStatusSource({
           username: bitbucket.username,
           password: bitbucket.password,
           logger,
@@ -182,6 +222,7 @@ export const compose = async (
         {
           hosts: createHosts(config, { version: options.version, clock, logger }),
           threads: createReviewThreads(config, { version: options.version, clock, logger }),
+          statuses: createStatusSources(config, { version: options.version, clock, logger }),
           tickets: createTicketSource(config, logger),
           model: modelAccess.model,
           modelAvailability: modelAccess.availability,

@@ -109,6 +109,7 @@ const setup = (
       fileCache,
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
       threads: {},
+      statuses: {},
       parser,
       events,
       clock,

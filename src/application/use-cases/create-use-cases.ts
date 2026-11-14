@@ -1,5 +1,6 @@
 import { createAnalysisRunner } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
+import { createPullRequestStatusUseCases } from "./pull-request-status.ts";
 import { createReviewUseCases } from "./review.ts";
 import { createStatusUseCases } from "./status.ts";
 import { createThreadUseCases } from "./threads.ts";
@@ -10,6 +11,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
   const review = createReviewUseCases(deps);
   const status = createStatusUseCases(deps, options.version);
   const threads = createThreadUseCases(deps);
+  const pullRequestStatus = createPullRequestStatusUseCases(deps);
   return {
     startAnalysis: runner.startAnalysis,
     retryAnalysis: runner.retryAnalysis,
@@ -24,6 +26,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     listPullRequests: status.listPullRequests,
     getStatus: status.getStatus,
     getThreads: threads.getThreads,
+    getPullRequestStatus: pullRequestStatus.getPullRequestStatus,
     getAttachment: threads.getAttachment,
     replyToThread: threads.replyToThread,
     resolveThread: threads.resolveThread,

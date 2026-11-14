@@ -96,6 +96,7 @@ import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
 import { useLanding } from "./useLanding.ts";
 import { usePoints } from "./usePoints.ts";
+import { usePullRequestStatus } from "./usePullRequestStatus.ts";
 import { useThreads } from "./useThreads.ts";
 
 const NO_COMMENTS: readonly HunkComment[] = [];
@@ -524,6 +525,7 @@ const Review = ({
 
   // The host's conversation on the code, read live, beside the analysis.
   const threads = useThreads(analysisId, analysis.stages.prep === "done");
+  const prStatus = usePullRequestStatus(analysisId);
   const { post } = threads;
   const postCommentNow = useCallback(
     (id: PartId, comment: LineComment) => post({ hunkId: hunkIdOf(id), ...comment }),
@@ -1085,6 +1087,9 @@ const Review = ({
         }
         totals={totals}
         threads={threads.list === null ? null : threadTotals(threads.list.threads)}
+        status={prStatus.status}
+        statusError={prStatus.error}
+        onRetryStatus={prStatus.reload}
         now={Date.now()}
         reanalyzing={reanalyze.pending}
         reanalyzeError={reanalyze.error}
@@ -1302,6 +1307,8 @@ const Review = ({
             // The drafts are threads on the host now; read those instead of keeping both.
             setHunkComments(() => []);
             threads.reload();
+            // The reviewer's own verdict is one of the reviewers' now.
+            prStatus.reload();
             void refetch();
           }}
         />

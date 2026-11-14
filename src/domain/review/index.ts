@@ -83,6 +83,20 @@ export {
   PullRequestSummary,
   RepoRef,
 } from "./pull-request.ts";
+export {
+  Check,
+  CheckState,
+  type CheckSummary,
+  checkSummary,
+  orderChecks,
+  orderReviewers,
+  PullRequestState,
+  PullRequestStatus,
+  Reviewer,
+  ReviewerVerdict,
+  ReviewStatus,
+  reviewStatusOf,
+} from "./pull-request-status.ts";
 export { parsePullRequestUrl, pullRequestUrl } from "./pull-request-url.ts";
 export { RiskAssessment, RiskClass } from "./risk.ts";
 export {

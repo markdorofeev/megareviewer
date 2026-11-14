@@ -169,3 +169,84 @@ export const GitHubThreadResolution = z.object({});
 
 /** A review comment just posted. Nothing in it is read: the threads are read again. */
 export const GitHubReviewCommentPosted = z.object({});
+
+const GraphqlError = z.object({
+  type: z.string().optional(),
+  message: z.string(),
+  path: z.array(z.union([z.string(), z.number()])).optional(),
+});
+export type GraphqlError = z.infer<typeof GraphqlError>;
+
+/** An actor's login, and their name when it's a user. */
+const Actor = z.object({ login: z.string().min(1), name: z.string().nullish() });
+
+/** A field GitHub may refuse alone (a token without org read for teams) reads as empty. */
+const nodesOf = <T extends z.ZodType>(node: T) =>
+  z
+    .object({ nodes: z.array(node.nullable()) })
+    .nullable()
+    .transform((connection) => (connection?.nodes ?? []).filter((one) => one !== null));
+
+const RequestedReviewer = z.union([
+  z.object({ __typename: z.literal("Team"), slug: z.string().min(1), name: z.string() }),
+  z.object({ __typename: z.string(), login: z.string().min(1), name: z.string().nullish() }),
+]);
+
+const Review = z.object({ state: z.string(), author: Actor.nullable() });
+
+const GitHubCheckContext = z.union([
+  z.object({
+    __typename: z.literal("CheckRun"),
+    name: z.string().min(1),
+    status: z.string(),
+    conclusion: z.string().nullable(),
+    detailsUrl: z.string().nullable(),
+  }),
+  z.object({
+    __typename: z.literal("StatusContext"),
+    context: z.string().min(1),
+    state: z.string(),
+    targetUrl: z.string().nullable(),
+  }),
+]);
+export type GitHubCheckContext = z.infer<typeof GitHubCheckContext>;
+
+export const GitHubStatusPullRequest = z.object({
+  state: z.string(),
+  isDraft: z.boolean(),
+  reviewDecision: z.string().nullable(),
+  author: z.object({ login: z.string() }).nullable(),
+  reviewRequests: nodesOf(z.object({ requestedReviewer: RequestedReviewer.nullable() })),
+  latestReviews: nodesOf(Review),
+  latestOpinionatedReviews: nodesOf(Review),
+});
+export type GitHubStatusPullRequest = z.infer<typeof GitHubStatusPullRequest>;
+
+/**
+ * The status query's answer with GitHub's errors beside its data: a token that can read the PR
+ * but not its checks gets the PR with the checks null and an error for them.
+ */
+export const GitHubStatusAnswer = z.object({
+  data: z.object({
+    repository: z
+      .object({
+        pullRequest: GitHubStatusPullRequest.nullable(),
+        /** null when GitHub doesn't have the commit; without `statusCheckRollup` when refused. */
+        object: z
+          .object({
+            statusCheckRollup: z
+              .object({
+                contexts: z.object({
+                  totalCount: z.number().int().nonnegative(),
+                  nodes: z.array(GitHubCheckContext.nullable()),
+                }),
+              })
+              .nullish(),
+          })
+          .nullable(),
+      })
+      .nullable(),
+  }),
+  errors: z.array(GraphqlError),
+});
+export type GitHubStatusAnswer = z.infer<typeof GitHubStatusAnswer>;

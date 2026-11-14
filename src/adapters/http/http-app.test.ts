@@ -23,6 +23,7 @@ import {
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakePullRequestStatusSource,
   FakeReviewThreads,
   FakeTicketSource,
   FixedClock,
@@ -31,6 +32,7 @@ import {
   RecordingLogger,
   smallFeature,
   smallFeatureAnalysis,
+  smallFeatureStatus,
   smallFeatureThreadList,
 } from "../../application/testing/index.ts";
 import { createUseCases } from "../../application/use-cases/index.ts";
@@ -57,6 +59,8 @@ const setupApp = (
   const threads = new FakeReviewThreads({ host: "github", clock });
   threads.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);
   threads.setAttachment(ATTACHMENT, { contentType: "image/png", bytes: new Uint8Array([137, 80]) });
+  const statuses = new FakePullRequestStatusSource({ host: "github" });
+  statuses.setStatus(smallFeature.pullRequest.ref, smallFeatureStatus);
   const store = options.store ?? new InMemoryAnalysisStore();
   const events = options.events ?? createAnalysisEvents();
   const logger = new RecordingLogger();
@@ -70,6 +74,7 @@ const setupApp = (
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
       threads: { github: threads },
+      statuses: { github: statuses },
       parser: new FakeCodeParser(),
       events,
       clock,
@@ -682,6 +687,15 @@ describe("the request log", () => {
       { method: "GET", path: "/api/status", status: 401, durationMs: expect.any(Number) },
     ]);
     expect(JSON.stringify(logger.entries)).not.toContain(TOKEN);
+  });
+});
+
+describe("the pull request status route", () => {
+  it("reads where the PR stands from its host", async () => {
+    const { call } = await seeded();
+    const status = await call("getPullRequestStatus", { params: { id } });
+    expect(status.status).toBe(200);
+    expect(status.body).toEqual(smallFeatureStatus);
   });
 });
 

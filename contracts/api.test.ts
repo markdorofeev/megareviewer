@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   smallFeatureAnalysis,
   smallFeaturePublication,
+  smallFeatureStatus,
   smallFeatureThreadList,
 } from "../src/application/testing/index.ts";
 import { CommentKey, PointId } from "../src/domain/review/index.ts";
@@ -67,6 +68,7 @@ const responses: Record<RouteName, unknown> = {
   previewPublication: smallFeaturePublication,
   publish: receipt,
   getThreads: smallFeatureThreadList,
+  getPullRequestStatus: smallFeatureStatus,
   replyToThread: smallFeatureThreadList.threads[0]?.comments[1],
   resolveThread: { resolved: true },
   postComment: {},

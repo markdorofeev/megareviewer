@@ -33,6 +33,7 @@ export {
   MAX_CHECKOUT_FILE_BYTES,
 } from "./local-checkout.ts";
 export type { LogFields, Logger } from "./logger.ts";
+export type { PullRequestStatusSource } from "./pull-request-status-source.ts";
 export {
   type Attachment,
   MAX_ATTACHMENT_BYTES,

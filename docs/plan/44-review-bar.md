@@ -92,7 +92,7 @@ mark wants to merge feat/retry-backoff → main · updated 40m ago · 4 files +2
 
 ## Not in this stage
 
-- **Open and Changes requested badges, CI checks, reviewers.** Each needs a new read from both hosts and a contract change. They get their own stages if wanted.
+- **Open and Changes requested badges, CI checks, reviewers.** Each needs a new read from both hosts and a contract change. Stage 46 adds them.
 - **A current point that follows the scroll.**
 - **Skipping or filtering by state** (only open points).
 - **A key for stepping.**

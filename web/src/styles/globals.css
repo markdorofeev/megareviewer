@@ -178,6 +178,12 @@
   --ci-queued: #5B5B66;
   --ci-skipped: #71717A;
 
+  /* PR state */
+  --pr-open: #4F46E5;
+  --pr-open-bg: #EEF0FD;
+  --pr-merged: #6D28D9;
+  --pr-merged-bg: #F3EEFE;
+
   /* severity */
   --severity-blocker: #B42323;
   --severity-major: #C2410C;
@@ -272,6 +278,12 @@
   --ci-running-bg: #26283F;
   --ci-queued: #A1A1AA;
   --ci-skipped: #8D8D96;
+
+  /* PR state */
+  --pr-open: #A5B4FC;
+  --pr-open-bg: #26283F;
+  --pr-merged: #C4B5FD;
+  --pr-merged-bg: #2E2640;
 
   /* severity */
   --severity-blocker: #F87171;
@@ -407,6 +419,10 @@
   --color-ci-running-bg: var(--ci-running-bg);
   --color-ci-queued: var(--ci-queued);
   --color-ci-skipped: var(--ci-skipped);
+  --color-pr-open: var(--pr-open);
+  --color-pr-open-bg: var(--pr-open-bg);
+  --color-pr-merged: var(--pr-merged);
+  --color-pr-merged-bg: var(--pr-merged-bg);
   --color-severity-blocker: var(--severity-blocker);
   --color-severity-major: var(--severity-major);
   --color-severity-major-bg: var(--severity-major-bg);

@@ -9,12 +9,14 @@ import {
   FakeAnalysisModel,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakePullRequestStatusSource,
   FakeReviewThreads,
   FakeTicketSource,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   type PullRequestFixture,
   smallFeature,
+  smallFeatureStatus,
   smallFeatureThreadList,
 } from "../../application/testing/index.ts";
 import { parsePullRequestUrl, pullRequestUrl, Sha } from "../../domain/review/index.ts";
@@ -165,10 +167,16 @@ export const createFakeApp = async (options: {
   };
   // small-feature has a conversation on its code; the other fixtures have none.
   threads.github.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);
+  const statuses = {
+    github: new FakePullRequestStatusSource({ host: "github" }),
+    bitbucket: new FakePullRequestStatusSource({ host: "bitbucket" }),
+  };
+  statuses.github.setStatus(smallFeature.pullRequest.ref, smallFeatureStatus);
   const composition = await assemble(
     {
       hosts: { github, bitbucket },
       threads,
+      statuses,
       tickets: new FakeTicketSource({
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),

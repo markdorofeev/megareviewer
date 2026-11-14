@@ -467,6 +467,25 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
   expect(await publishAttempts(server)).toHaveLength(1);
 });
 
+test("the header says where the PR stands, and its checks open and close with Esc", async ({
+  page,
+}) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+  await expect(page.locator("[data-slot=pr-state]")).toHaveText("Open");
+  await expect(page.locator("[data-slot=review-status]")).toHaveText("✕Changes requested");
+  await expect(
+    page.getByRole("button", { name: /^3 reviewers: 1 requested changes, 1 approved/ }),
+  ).toBeVisible();
+
+  const ci = page.getByRole("button", { name: "CI: 3 of 3 checks passed, show checks" });
+  await ci.click();
+  const checks = page.getByRole("list", { name: "Checks" });
+  await expect(checks.getByRole("listitem")).toHaveCount(4);
+  await page.keyboard.press("Escape");
+  await expect(checks).toBeHidden();
+  await expect(ci).toBeFocused();
+});
+
 test("replies to a thread and resolves it", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
   const changes = page.getByRole("region", { name: "Changes" });

@@ -11,6 +11,7 @@ import {
   Publication,
   PublicationReceipt,
   PublicationVerdict,
+  PullRequestStatus,
   PullRequestSummary,
   StageName,
   StageStatus,
@@ -282,6 +283,17 @@ export const routes = {
     params: AnalysisParams,
     request: null,
     response: ThreadsResponse,
+  },
+  /**
+   * Where the PR stands on its host: its state and reviewers now, and the checks on the
+   * analysis's head commit. Live, like threads: not part of the analysis.
+   */
+  getPullRequestStatus: {
+    method: "GET",
+    path: "/api/analyses/:id/pull-request-status",
+    params: AnalysisParams,
+    request: null,
+    response: PullRequestStatus,
   },
   /** Posts a reply at once; never retried. */
   replyToThread: {

@@ -8,11 +8,13 @@ import {
   AnalysisId,
   PointId,
   type PublicationReceipt,
+  type PullRequestStatus,
 } from "../../../../src/domain/review/index.ts";
 import {
   fixtureAnalysisView,
   fixtureHunks,
   fixtureParts,
+  fixturePullRequestStatus,
   fixtureStatus,
   largeAnalysisView,
 } from "../../../dev/fixtures/index.ts";
@@ -35,6 +37,7 @@ const p = fixtureParts;
 /** The analysis with the retry and cache hunk whole, for tours that place hunks. */
 const otherId = AnalysisId.parse("a_00000000000000ff");
 const viewPath = `/api/analyses/${id}`;
+const statusPath = `/api/analyses/${id}/pull-request-status`;
 
 /** Never finishes, so cards stay plain text and Shiki never loads. */
 const pendingHighlighter: Highlighter = { highlight: () => new Promise(() => {}) };
@@ -407,6 +410,175 @@ describe("ReviewPage states", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("Database locked.");
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     await loaded();
+  });
+});
+
+describe("the PR's standing in the header", () => {
+  /** The page with the status the host answers with, read anew on every request. */
+  const withStatus = (status: () => PullRequestStatus | Response) =>
+    renderReview({
+      respond: (request) => {
+        if (request.method !== "GET" || request.url !== statusPath) return undefined;
+        const answer = status();
+        return answer instanceof Response ? answer : jsonResponse(200, answer);
+      },
+    });
+  const statusReads = (requests: readonly RecordedRequest[]) =>
+    requests.filter((request) => request.url === statusPath).length;
+  const standing = () => document.querySelector<HTMLElement>("[data-slot=pr-standing]");
+
+  it("shows the state and review status after the title, and CI and reviewers by the threads", async () => {
+    renderReview();
+    await loaded();
+    expect(await screen.findByText("Open")).toBeTruthy();
+    expect(document.querySelector("[data-slot=review-status]")?.textContent).toBe(
+      "✕Changes requested",
+    );
+    const ci = await screen.findByRole("button", {
+      name: "CI: 12 of 12 checks passed, show checks",
+    });
+    expect(ci.textContent).toBe("✓CI 12/12 passed");
+    expect(
+      screen.getByRole("button", {
+        name: "3 reviewers: 1 requested changes, 1 approved, 1 not reviewed yet, show reviewers",
+      }),
+    ).toBeTruthy();
+    expect(standing()?.textContent).toContain("4 threads · 3 unresolved");
+  });
+
+  it("always shows the state, Open included, and the review status only when it says something", async () => {
+    let status: PullRequestStatus = { ...fixturePullRequestStatus, reviewStatus: null };
+    withStatus(() => status);
+    await loaded();
+    expect(await screen.findByText("Open")).toBeTruthy();
+    expect(document.querySelector("[data-slot=review-status]")).toBeNull();
+
+    status = { ...status, state: "merged", reviewStatus: "approved" };
+    act(() => window.dispatchEvent(new Event("focus")));
+    expect(await screen.findByText("Merged")).toBeTruthy();
+    expect(document.querySelector("[data-slot=review-status]")?.textContent).toBe("✓Approved");
+  });
+
+  it("lists the checks in order, failed first, with links to their details", async () => {
+    withStatus(() => ({
+      ...fixturePullRequestStatus,
+      checks: [
+        { name: "lint", state: "passed", url: "https://ci.example.com/lint" },
+        { name: "unit", state: "failed", url: "https://ci.example.com/unit" },
+        { name: "deploy", state: "skipped", url: null },
+      ],
+    }));
+    await loaded();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "CI: 1 of 2 checks failed, show checks" }),
+    );
+    const list = await screen.findByRole("list", { name: "Checks" });
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "✕unitFailedDetails",
+      "✓lintPassedDetails",
+      "–deploySkipped",
+    ]);
+    const details = within(list).getByRole("link", { name: "Details of unit" });
+    expect(details.getAttribute("href")).toBe("https://ci.example.com/unit");
+    expect(details.getAttribute("rel")).toBe("noreferrer noopener");
+  });
+
+  it("shows nothing for CI on a commit without checks, and says when it can't read them", async () => {
+    let status: PullRequestStatus = { ...fixturePullRequestStatus, checks: [] };
+    withStatus(() => status);
+    await loaded();
+    await screen.findByRole("button", { name: /^3 reviewers/ });
+    expect(document.querySelector("[data-slot=ci-summary]")).toBeNull();
+
+    status = { ...status, checks: null, checksUnreadable: "Add read access to Checks." };
+    act(() => window.dispatchEvent(new Event("focus")));
+    await userEvent.click(await screen.findByRole("button", { name: "CI not readable" }));
+    expect(await screen.findByText("Add read access to Checks.")).toBeTruthy();
+  });
+
+  it("says the status is unavailable when it can't be read, and tries again", async () => {
+    let fail = true;
+    withStatus(() =>
+      fail ? failure(502, "host-error", "GitHub is down") : fixturePullRequestStatus,
+    );
+    await loaded();
+    await userEvent.click(await screen.findByRole("button", { name: "Status unavailable" }));
+    expect(await screen.findByText(/GitHub is down/)).toBeTruthy();
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("button", { name: /^CI: 12 of 12/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Status unavailable" })).toBeNull();
+  });
+
+  it("reads the status again every minute only while a check is running", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let status: PullRequestStatus = {
+        ...fixturePullRequestStatus,
+        checks: [{ name: "unit", state: "running", url: null }],
+      };
+      const { requests } = withStatus(() => status);
+      await loaded();
+      await screen.findByRole("button", { name: "CI: 1 of 1 check running, show checks" });
+      const before = statusReads(requests);
+      status = { ...status, checks: [{ name: "unit", state: "failed", url: null }] };
+      await act(() => vi.advanceTimersByTimeAsync(60_000));
+      await screen.findByRole("button", { name: "CI: 1 of 1 check failed, show checks" });
+      expect(statusReads(requests)).toBe(before + 1);
+      // The change is announced; the first read wasn't.
+      expect(
+        within(standing() ?? document.body)
+          .getAllByRole("status")
+          .map((one) => one.textContent),
+      ).toContain("CI: 1 of 1 check failed");
+
+      await act(() => vi.advanceTimersByTimeAsync(120_000));
+      expect(statusReads(requests)).toBe(before + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("names a reviewer past three as +N, and lists them all in order", async () => {
+    withStatus(() => ({
+      ...fixturePullRequestStatus,
+      reviewers: [
+        { id: "a", name: "Ada Byron", team: false, verdict: null },
+        { id: "b", name: "Bo Chen", team: false, verdict: "approved" },
+        { id: "c", name: "Cy Dee", team: false, verdict: "commented" },
+        { id: "d", name: "Platform", team: true, verdict: null },
+        { id: "e", name: "Eve Fox", team: false, verdict: "changes-requested" },
+      ],
+    }));
+    await loaded();
+    const button = await screen.findByRole("button", { name: /^5 reviewers/ });
+    // The verdicts' marks are icons, named in the button's label.
+    expect(button.textContent).toBe("EFBC+3");
+    await userEvent.click(button);
+    const list = await screen.findByRole("list", { name: "Reviewers" });
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((row) => row.textContent),
+    ).toEqual([
+      "EFEve FoxRequested changes",
+      "BCBo ChenApproved",
+      "CDCy DeeCommented",
+      "ABAda ByronNot reviewed yet",
+      "PLPlatform (team)Not reviewed yet",
+    ]);
+  });
+
+  it("reads the status again once the review is published", async () => {
+    const { requests } = renderReview();
+    await loaded();
+    await screen.findByRole("button", { name: /^CI: 12 of 12/ });
+    const before = statusReads(requests);
+    await userEvent.click(screen.getByRole("button", { name: /^Publish review/ }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Publish/ }));
+    await waitFor(() => expect(statusReads(requests)).toBe(before + 1));
   });
 });
 

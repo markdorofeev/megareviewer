@@ -71,6 +71,7 @@ const setup = () => {
     fileCache,
     checkouts: new FakeLocalCheckouts(),
     threads: {},
+    statuses: {},
     parser: new FakeCodeParser(),
     events: createAnalysisEvents(),
     clock: new FixedClock(),

@@ -32,6 +32,20 @@ export const graphqlPartialData = (error: unknown): unknown => {
   return parsed.success ? parsed.data.data : undefined;
 };
 
+const GraphqlAnswer = z.object({
+  name: z.literal("GraphqlResponseError"),
+  data: z.unknown(),
+  errors: z.array(z.unknown()).min(1),
+});
+
+/** GitHub's data and errors together, when it answered both, for a caller that reads both. */
+export const graphqlAnswerWithErrors = (error: unknown): unknown => {
+  const parsed = GraphqlAnswer.safeParse(error);
+  return parsed.success && parsed.data.data != null
+    ? { data: parsed.data.data, errors: parsed.data.errors }
+    : undefined;
+};
+
 export interface GitHubErrorResponse {
   readonly status: number;
   readonly headers: Readonly<Record<string, unknown>>;

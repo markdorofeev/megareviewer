@@ -87,6 +87,7 @@ export const createApiClient = (options: ApiClientOptions) => {
       send(routes.previewPublication, { id }, body),
     publish: (id: AnalysisId, body: PublishRequest) => send(routes.publish, { id }, body),
     getThreads: (id: AnalysisId) => send(routes.getThreads, { id }),
+    getPullRequestStatus: (id: AnalysisId) => send(routes.getPullRequestStatus, { id }),
     replyToThread: (id: AnalysisId, threadId: ThreadId, body: ReplyRequest) =>
       send(routes.replyToThread, { id, threadId }, body),
     resolveThread: (id: AnalysisId, threadId: ThreadId, body: ResolveRequest) =>
