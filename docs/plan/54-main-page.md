@@ -1,6 +1,6 @@
 # Stage 54: The main page: lists, connections in the header, review activity
 
-**Status:** In progress (branch `claude/stage-54-b42383`)
+**Status:** Done (branch `claude/stage-54-b42383`, no PR): `pnpm check` and `pnpm e2e` pass, checked live with GitHub and Bitbucket configured, with Bitbucket unconfigured and with a rejected GitHub token, on a copy of the database
 **Depends on:** 13, 23, 46, and 40's replies and Comment now, which are on main
 **Owns:** `web/src/pages/picker/`, `web/src/app/Header.tsx` and the Connections button beside it, `src/domain/review/activity.ts`, `parsePullRequestUrl`'s scheme rule, the `thread_posts` table and the activity read in `src/adapters/sqlite/`, the activity use case and route, the `picker` scope in `web/src/lib/keymap.ts`, the activity tokens in `web/src/styles/globals.css`, the page's examples in `web/src/design-system/`, its e2e spec
 
@@ -258,13 +258,13 @@ It's read when the page opens and with the lists' reads after that.
 
 ## Definition of done
 
-- [ ] The main page matches this doc in light and dark, at 1440, 1024, 640 and 375 px.
-- [ ] Every state in the tables above is on the design system page or in a test.
-- [ ] A reply and a comment posted now show in the calendar the same day.
-- [ ] Checked live with GitHub and Bitbucket configured, with one unconfigured, and with a rejected token.
-- [ ] The header's button works on the review page too.
-- [ ] ARCHITECTURE.md, DESIGN.md and ENGINEERING.md updated.
-- [ ] `pnpm check` and `pnpm e2e` pass.
+- [x] The main page matches this doc in light and dark, at 1440, 1024, 640 and 375 px.
+- [x] Every state in the tables above is on the design system page or in a test.
+- [x] A reply and a comment posted now show in the calendar the same day.
+- [x] Checked live with GitHub and Bitbucket configured, with one unconfigured, and with a rejected token.
+- [x] The header's button works on the review page too.
+- [x] ARCHITECTURE.md, DESIGN.md and ENGINEERING.md updated.
+- [x] `pnpm check` and `pnpm e2e` pass.
 
 ## Notes for later stages
 
