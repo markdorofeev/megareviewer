@@ -1,14 +1,14 @@
 // Measures bytes per token of the Claude Code transport's prompt on every eval case, for
-// BYTES_PER_TOKEN in src/adapters/claude/claude-code-analysis-model.ts:
+// BYTES_PER_TOKEN in src/adapters/model/claude/claude-code-analysis-model.ts:
 // node evals/calibrate-claude-code.ts
 // Each case is one short call on the signed-in Claude Code's plan, answering an empty risk task.
 
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { claudeCodeRequest } from "../src/adapters/claude/claude-code-request.ts";
-import { passMessage } from "../src/adapters/claude/prompts/passes.ts";
-import { renderInput } from "../src/adapters/claude/render-input.ts";
-import { createRunClaude } from "../src/adapters/claude/run-claude.ts";
+import { claudeCodeRequest } from "../src/adapters/model/claude/claude-code-request.ts";
+import { createRunClaude } from "../src/adapters/model/claude/run-claude.ts";
+import { passMessage } from "../src/adapters/model/shared/prompts/passes.ts";
+import { renderInput } from "../src/adapters/model/shared/render-input.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import type { AnalysisInput, AnalysisModel } from "../src/application/ports/index.ts";
 import { err } from "../src/domain/shared/index.ts";

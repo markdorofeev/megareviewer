@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { AnalysisInput, AnalysisInputFile } from "../../application/ports/index.ts";
-import { hunk, smallFeatureInput } from "../../application/testing/index.ts";
+import type { AnalysisInput, AnalysisInputFile } from "../../../application/ports/index.ts";
+import { hunk, smallFeatureInput } from "../../../application/testing/index.ts";
 import { escapeText, renderInput } from "./render-input.ts";
 
 const file = (overrides: Partial<AnalysisInputFile>): AnalysisInputFile => ({

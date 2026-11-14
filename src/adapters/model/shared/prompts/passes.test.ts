@@ -3,9 +3,9 @@ import {
   smallFeatureFiles,
   smallFeatureInput,
   smallFeatureSkeleton,
-} from "../../../application/testing/index.ts";
-import { type HunkPart, PartId } from "../../../domain/diff/index.ts";
-import { TourStepId } from "../../../domain/review/index.ts";
+} from "../../../../application/testing/index.ts";
+import { type HunkPart, PartId } from "../../../../domain/diff/index.ts";
+import { TourStepId } from "../../../../domain/review/index.ts";
 import { renderSkeleton } from "./passes.ts";
 
 describe("renderSkeleton", () => {

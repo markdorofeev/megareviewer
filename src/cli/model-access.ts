@@ -9,7 +9,7 @@ import {
   MIN_CLAUDE_CODE_VERSION,
   planName,
   type RunClaude,
-} from "../adapters/claude/index.ts";
+} from "../adapters/model/index.ts";
 import type { AnalysisModel, Logger, ModelAvailability } from "../application/ports/index.ts";
 import type { ModelBilling, ModelError } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";

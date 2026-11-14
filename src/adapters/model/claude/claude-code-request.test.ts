@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRisk } from "../../application/ports/index.ts";
+import type { ModelRisk } from "../../../application/ports/index.ts";
 import {
   smallFeatureAnalysis,
   smallFeatureInput,
   smallFeatureIntent,
-} from "../../application/testing/index.ts";
-import { ModelPass } from "../../domain/review/index.ts";
-import { fnv1a64 } from "../../domain/shared/index.ts";
+} from "../../../application/testing/index.ts";
+import { ModelPass } from "../../../domain/review/index.ts";
+import { fnv1a64 } from "../../../domain/shared/index.ts";
+import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { passMessage } from "../shared/prompts/passes.ts";
+import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
+import { renderInput } from "../shared/render-input.ts";
 import {
   claudeCodePassArgs,
   claudeCodeRequest,
   SYSTEM_PROMPT_FILE,
 } from "./claude-code-request.ts";
-import { PASS_ANSWER_FORMAT } from "./output-schema.ts";
-import { passMessage } from "./prompts/passes.ts";
-import { SYSTEM_PROMPT } from "./prompts/system.ts";
-import { renderInput } from "./render-input.ts";
 import { CLAUDE_CODE_FINGERPRINT, CLAUDE_CODE_PROMPT_VERSION } from "./version.ts";
 
 const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>

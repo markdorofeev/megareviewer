@@ -11,7 +11,7 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { createClaudeCodeAnalysisModel, createRunClaude } from "../src/adapters/claude/index.ts";
+import { createClaudeCodeAnalysisModel, createRunClaude } from "../src/adapters/model/index.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import type { AnalysisModel, PassOptions, PassOutput } from "../src/application/ports/index.ts";
 import { allFixtures, FakeAnalysisModel } from "../src/application/testing/index.ts";

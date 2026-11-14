@@ -4,9 +4,9 @@ import type {
   AnalysisModel,
   PassOptions,
   PassOutput,
-} from "../../application/ports/index.ts";
-import type { ModelError, ModelPass, ModelUsage } from "../../domain/review/index.ts";
-import { err, ok, type Result } from "../../domain/shared/index.ts";
+} from "../../../application/ports/index.ts";
+import type { ModelError, ModelPass, ModelUsage } from "../../../domain/review/index.ts";
+import { err, ok, type Result } from "../../../domain/shared/index.ts";
 import { invalidOutput } from "./errors.ts";
 import { PassAnswer } from "./output-schema.ts";
 import { type EarlierResults, renderSkeleton } from "./prompts/passes.ts";

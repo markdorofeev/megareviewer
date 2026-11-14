@@ -1,25 +1,14 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { ModelPass } from "../../domain/review/index.ts";
-import { PASS_ANSWER_FORMAT } from "./output-schema.ts";
-import { SYSTEM_PROMPT } from "./prompts/system.ts";
+import type { ModelPass } from "../../../domain/review/index.ts";
+import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
+import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 
 /** The cheapest model, so a review costs cents. ARCHITECTURE.md has the trade-off. */
 export const MODEL = "claude-haiku-5-5";
 export const MAX_TOKENS = 64_000;
 /** The largest PR, in input tokens, either transport sends. */
 export const MAX_INPUT_TOKENS = 400_000;
-
-export const EFFORTS = ["low", "medium", "high"] as const;
-export type Effort = (typeof EFFORTS)[number];
-
-/** ARCHITECTURE.md's pass table. */
-export const PASS_EFFORT: Readonly<Record<ModelPass, Effort>> = {
-  intent: "medium",
-  findings: "high",
-  risk: "low",
-  decisions: "high",
-  tour: "medium",
-};
 
 /**
  * The top-level effort is the same for every pass, because changing it invalidates the cached

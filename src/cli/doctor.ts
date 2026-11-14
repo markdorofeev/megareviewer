@@ -1,14 +1,14 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
+import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
 import {
   type ClaudeCodeStatus,
   claudeCodeStatus,
   createRunClaude,
   MIN_CLAUDE_CODE_VERSION,
   planName,
-} from "../adapters/claude/index.ts";
-import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
+} from "../adapters/model/index.ts";
 import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
 import type { GitHost, Logger, TicketSource } from "../application/ports/index.ts";
 import type { HostKind, RepoRef } from "../domain/review/index.ts";

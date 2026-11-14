@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { ModelPass } from "../../../domain/review/index.ts";
+import type { ModelPass } from "../../../../domain/review/index.ts";
 import type { ClaudeRun, RunClaude, RunClaudeOptions } from "../run-claude.ts";
 import synthetic from "./claude-code/errors.synthetic.json" with { type: "json" };
 

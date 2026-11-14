@@ -4,7 +4,7 @@ import {
   type RunClaude,
   renderInput,
   runStructuredCall,
-} from "../src/adapters/claude/index.ts";
+} from "../src/adapters/model/index.ts";
 import type { AnalysisInput } from "../src/application/ports/index.ts";
 import type { Analysis } from "../src/domain/review/index.ts";
 import { err, ok, type Result } from "../src/domain/shared/index.ts";

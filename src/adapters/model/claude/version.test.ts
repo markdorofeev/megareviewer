@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRisk } from "../../application/ports/index.ts";
+import type { ModelRisk } from "../../../application/ports/index.ts";
 import {
   smallFeatureAnalysis,
   smallFeatureInput,
   smallFeatureIntent,
-} from "../../application/testing/index.ts";
-import { ModelPass } from "../../domain/review/index.ts";
-import { fnv1a64 } from "../../domain/shared/index.ts";
-import { passMessage } from "./prompts/passes.ts";
-import { renderInput } from "./render-input.ts";
+} from "../../../application/testing/index.ts";
+import { ModelPass } from "../../../domain/review/index.ts";
+import { fnv1a64 } from "../../../domain/shared/index.ts";
+import { passMessage } from "../shared/prompts/passes.ts";
+import { renderInput } from "../shared/render-input.ts";
 import { passRequest } from "./request.ts";
 import { PROMPT_FINGERPRINT, PROMPT_VERSION, VERSION } from "./version.ts";
 

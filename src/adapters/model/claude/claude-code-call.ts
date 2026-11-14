@@ -1,5 +1,5 @@
-import type { ModelError } from "../../domain/review/index.ts";
-import { err, ok, type Result } from "../../domain/shared/index.ts";
+import type { ModelError } from "../../../domain/review/index.ts";
+import { err, ok, type Result } from "../../../domain/shared/index.ts";
 import { fromClaudeCodeRun, lockdownProblem, notLockedDown } from "./claude-code-errors.ts";
 import { type ClaudeCodeResult, parseClaudeCodeStream, parseInit } from "./claude-code-output.ts";
 import { type StructuredCall, structuredCallRequest } from "./claude-code-request.ts";

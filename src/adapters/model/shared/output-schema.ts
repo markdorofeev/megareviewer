@@ -4,8 +4,8 @@ import {
   FindingDraft,
   ModelRisk,
   TourDraft,
-} from "../../application/ports/index.ts";
-import { Intent } from "../../domain/review/index.ts";
+} from "../../../application/ports/index.ts";
+import { Intent } from "../../../domain/review/index.ts";
 
 /**
  * One schema for all five passes, tagged by pass. The API adds a system prompt for the output

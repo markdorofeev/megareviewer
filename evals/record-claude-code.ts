@@ -7,14 +7,14 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { claudeCodeRequest } from "../src/adapters/claude/claude-code-request.ts";
+import { claudeCodeRequest } from "../src/adapters/model/claude/claude-code-request.ts";
+import { createRunClaude } from "../src/adapters/model/claude/run-claude.ts";
 import {
   type EarlierResults,
   passMessage,
   renderSkeleton,
-} from "../src/adapters/claude/prompts/passes.ts";
-import { renderInput } from "../src/adapters/claude/render-input.ts";
-import { createRunClaude } from "../src/adapters/claude/run-claude.ts";
+} from "../src/adapters/model/shared/prompts/passes.ts";
+import { renderInput } from "../src/adapters/model/shared/render-input.ts";
 import {
   smallFeatureAnalysis,
   smallFeatureInput,
@@ -23,7 +23,7 @@ import {
 } from "../src/application/testing/index.ts";
 import type { ModelPass } from "../src/domain/review/index.ts";
 
-const OUT = new URL("../src/adapters/claude/fixtures/claude-code/", import.meta.url);
+const OUT = new URL("../src/adapters/model/claude/fixtures/claude-code/", import.meta.url);
 
 const KEPT: Readonly<Record<string, readonly string[]>> = {
   system: ["type", "subtype", "tools", "mcp_servers", "apiKeySource", "claude_code_version"],

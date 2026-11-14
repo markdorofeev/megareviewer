@@ -1,6 +1,10 @@
-import type { AnalysisInput, ModelRisk, TourSkeleton } from "../../../application/ports/index.ts";
-import type { Hunk, HunkId, HunkPart, PartId } from "../../../domain/diff/index.ts";
-import type { Decision, Intent, ModelPass } from "../../../domain/review/index.ts";
+import type {
+  AnalysisInput,
+  ModelRisk,
+  TourSkeleton,
+} from "../../../../application/ports/index.ts";
+import type { Hunk, HunkId, HunkPart, PartId } from "../../../../domain/diff/index.ts";
+import type { Decision, Intent, ModelPass } from "../../../../domain/review/index.ts";
 import { escapeText } from "../render-input.ts";
 
 /** What each pass asks for. Sent after the cached PR data, so changing one doesn't cost a cache. */

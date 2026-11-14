@@ -1,7 +1,7 @@
-import type { ModelError, ModelErrorKind } from "../../domain/review/index.ts";
+import type { ModelError, ModelErrorKind } from "../../../domain/review/index.ts";
+import { invalidOutput, maxTokens, refusal } from "../shared/errors.ts";
 import type { ClaudeCodeInit, ClaudeCodeStream } from "./claude-code-output.ts";
 import { CLAUDE_CODE_MAX_OUTPUT_TOKENS, STRUCTURED_OUTPUT_TOOL } from "./claude-code-request.ts";
-import { invalidOutput, maxTokens, refusal } from "./errors.ts";
 import type { ClaudeRun } from "./run-claude.ts";
 
 const modelError = (kind: ModelErrorKind, message: string): ModelError => ({ kind, message });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ModelBilling } from "../../domain/review/index.ts";
+import type { ModelBilling } from "../../../domain/review/index.ts";
 import type { RunClaude } from "./run-claude.ts";
 
 /** The version the fixtures were recorded on, and the oldest whose flags are known to lock a pass down. */

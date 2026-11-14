@@ -16,7 +16,7 @@ import {
   createClaudeCodeAnalysisModel,
   createRunClaude,
   EFFORTS,
-} from "../src/adapters/claude/index.ts";
+} from "../src/adapters/model/index.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import { PIPELINE_VERSION } from "../src/application/use-cases/index.ts";
 import type { Analysis } from "../src/domain/review/index.ts";

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import type { ClaudeCodeStatus, RunClaude } from "../adapters/claude/index.ts";
+import type { ClaudeCodeStatus, RunClaude } from "../adapters/model/index.ts";
 import { RecordingLogger, smallFeatureInput } from "../application/testing/index.ts";
 import {
   anthropicConfigured,

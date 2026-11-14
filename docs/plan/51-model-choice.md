@@ -1,6 +1,6 @@
 # Stage 51: A choice of model, among what's installed
 
-**Status:** Not started
+**Status:** In progress (branch `claude/stage-51-bfbe95`)
 **Depends on:** 42, 45
 **Owns:** `src/adapters/claude/` moved to `src/adapters/model/`, `src/cli/model-access.ts`, `compose.ts`, `doctor.ts`, the model's part of `src/application/use-cases/status.ts` and `analyses.ts`, the model routes in `src/adapters/http/`, `web/src/pages/review/ClaudeElement.tsx` and the strings that name the model, the model option of `evals/`
 

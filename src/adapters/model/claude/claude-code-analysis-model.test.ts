@@ -4,8 +4,9 @@ import {
   RecordingLogger,
   smallFeatureInput,
   smallFeatureIntent,
-} from "../../application/testing/index.ts";
-import type { ModelBilling, ModelErrorKind, ModelPass } from "../../domain/review/index.ts";
+} from "../../../application/testing/index.ts";
+import type { ModelBilling, ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
+import type { Effort } from "../shared/effort.ts";
 import { createClaudeCodeAnalysisModel, OVERHEAD_TOKENS } from "./claude-code-analysis-model.ts";
 import { NOT_INSTALLED, NOT_SIGNED_IN } from "./claude-code-errors.ts";
 import { SYSTEM_PROMPT_FILE } from "./claude-code-request.ts";
@@ -15,7 +16,6 @@ import {
   type SyntheticRun,
   syntheticLines,
 } from "./fixtures/fake-run-claude.ts";
-import type { Effort } from "./request.ts";
 import type { ClaudeRun } from "./run-claude.ts";
 import { CLAUDE_CODE_VERSION } from "./version.ts";
 

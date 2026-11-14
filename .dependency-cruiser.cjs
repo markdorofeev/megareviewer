@@ -39,6 +39,24 @@ module.exports = {
       to: { path: "^src/adapters/", pathNot: "^src/adapters/$1/" },
     },
     {
+      name: "model-providers-are-isolated",
+      comment: "A model provider imports only what every provider shares, never another provider.",
+      severity: "error",
+      from: { path: "^src/adapters/model/([^/]+)/" },
+      to: {
+        path: "^src/adapters/model/",
+        pathNot: ["^src/adapters/model/$1/", "^src/adapters/model/shared/"],
+      },
+    },
+    {
+      name: "shared-model-parts-know-no-provider",
+      comment:
+        "The prompts, rendering and output schema every provider uses depend on none of them.",
+      severity: "error",
+      from: { path: "^src/adapters/model/shared/" },
+      to: { path: "^src/adapters/model/", pathNot: "^src/adapters/model/shared/" },
+    },
+    {
       name: "adapters-are-isolated",
       comment: "Only the composition root knows about adapters, not the other way round.",
       severity: "error",

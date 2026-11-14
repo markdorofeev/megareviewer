@@ -1,7 +1,8 @@
-import type { ModelPass } from "../../domain/review/index.ts";
-import { PASS_ANSWER_FORMAT } from "./output-schema.ts";
-import { SYSTEM_PROMPT } from "./prompts/system.ts";
-import { type Effort, MODEL, PASS_EFFORT } from "./request.ts";
+import type { ModelPass } from "../../../domain/review/index.ts";
+import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
+import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
+import { MODEL } from "./request.ts";
 
 export const SYSTEM_PROMPT_FILE = "system.txt";
 

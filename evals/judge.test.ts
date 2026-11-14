@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ClaudeRun, RunClaude, RunClaudeOptions } from "../src/adapters/claude/index.ts";
+import type { ClaudeRun, RunClaude, RunClaudeOptions } from "../src/adapters/model/index.ts";
 import { smallFeatureAnalysis, smallFeatureInput } from "../src/application/testing/index.ts";
 import { HunkId } from "../src/domain/diff/index.ts";
 import { DecisionId } from "../src/domain/review/index.ts";

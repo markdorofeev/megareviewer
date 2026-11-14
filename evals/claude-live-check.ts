@@ -3,12 +3,12 @@
 // never runs it. Runs checkSize and the four passes on the small-feature and prompt-injection
 // fixtures, prints each pass's answer, usage and cost, and fails unless passes 2–4 read the PR
 // from the prompt cache. --record writes the small-feature responses to
-// src/adapters/claude/fixtures/small-feature.json, in the format the adapter's tests replay.
+// src/adapters/model/claude/fixtures/small-feature.json, in the format the adapter's tests replay.
 // It lives here because only tests, the dev server and evals may use the test fixtures.
 
 import { writeFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClaudeAnalysisModel } from "../src/adapters/claude/index.ts";
+import { createClaudeAnalysisModel } from "../src/adapters/model/index.ts";
 import type {
   AnalysisInput,
   AnalysisModel,
@@ -183,7 +183,10 @@ const main = async (): Promise<void> => {
     parts: [],
   });
   if (record) {
-    const out = new URL("../src/adapters/claude/fixtures/small-feature.json", import.meta.url);
+    const out = new URL(
+      "../src/adapters/model/claude/fixtures/small-feature.json",
+      import.meta.url,
+    );
     await writeFile(out, `${JSON.stringify(recording, null, 2)}\n`);
     print(`\nwrote ${out.pathname}`);
   }

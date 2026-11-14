@@ -1,5 +1,5 @@
-import type { AnalysisInput, AnalysisInputFile } from "../../application/ports/index.ts";
-import type { DiffLine, Hunk } from "../../domain/diff/index.ts";
+import type { AnalysisInput, AnalysisInputFile } from "../../../application/ports/index.ts";
+import type { DiffLine, Hunk } from "../../../domain/diff/index.ts";
 
 /** Every tag the rendering uses. PR content can't open or close any of them. */
 const TAGS = [

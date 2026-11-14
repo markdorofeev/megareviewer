@@ -1,7 +1,7 @@
 // Test support: answers the SDK's requests from fixture messages, streamed as the Messages API
 // streams them, and records each request for assertions.
 
-import { ModelPass } from "../../../domain/review/index.ts";
+import { ModelPass } from "../../../../domain/review/index.ts";
 
 /** A final message as the API returns it, loosely typed because it comes from a JSON file. */
 export interface FixtureMessage {

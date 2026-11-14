@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ClaudeCodeStatus } from "../src/adapters/claude/index.ts";
+import type { ClaudeCodeStatus } from "../src/adapters/model/index.ts";
 import { parseVia, preflight } from "./preflight.ts";
 
 const signedIn: ClaudeCodeStatus = {
