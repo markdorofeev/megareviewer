@@ -126,7 +126,7 @@ const report = (name: string, pass: string, usage: ModelUsage, value: unknown): 
   print(JSON.stringify(value, null, 2));
   print(
     `tokens: ${usage.inputTokens} in, ${usage.cacheReadTokens} cache read, ` +
-      `${usage.cacheWriteTokens} cache write, ${usage.outputTokens} out · $${usage.costUsd.toFixed(4)}`,
+      `${usage.cacheWriteTokens} cache write, ${usage.outputTokens} out · $${(usage.costUsd ?? 0).toFixed(4)}`,
   );
   if (pass !== "intent" && usage.cacheReadTokens === 0) {
     failures.push(`${name} ${pass}: no cache read`);
@@ -166,7 +166,7 @@ const check = async (
   report(name, "tour", tour.value.usage, tour.value.value);
 
   const total = [intent, risk, decisions, tour].reduce(
-    (sum, result) => sum + result.value.usage.costUsd,
+    (sum, result) => sum + (result.value.usage.costUsd ?? 0),
     0,
   );
   print(`\n${name}: $${total.toFixed(4)} in total`);

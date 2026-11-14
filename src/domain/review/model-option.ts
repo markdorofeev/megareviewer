@@ -1,8 +1,21 @@
 import { z } from "zod";
 
 /** What runs the model passes and decides who pays. */
-export const ModelProvider = z.enum(["claude-code", "anthropic-api"]);
+export const ModelProvider = z.enum(["claude-code", "anthropic-api", "codex"]);
 export type ModelProvider = z.infer<typeof ModelProvider>;
+
+const PLANS: Readonly<Record<ModelProvider, string | null>> = {
+  "claude-code": "Claude",
+  "anthropic-api": null,
+  codex: "ChatGPT",
+};
+
+/**
+ * The plan a provider spends when it runs on one, "ChatGPT" for Codex; stored analyses without an
+ * option ran on Claude's.
+ */
+export const planOf = (option: ModelRunOption | null): string =>
+  (option === null ? null : PLANS[option.provider]) ?? "Claude";
 
 /** "claude-code/claude-sonnet-5-5": a model on a provider. */
 export const ModelOptionId = z.string().regex(/^[a-z0-9-]+\/[A-Za-z0-9._:/-]+$/);

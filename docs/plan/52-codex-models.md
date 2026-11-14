@@ -1,6 +1,6 @@
 # Stage 52: OpenAI's models through Codex
 
-**Status:** Not started
+**Status:** In progress (branch `claude/stage-52-f35fb5`)
 **Depends on:** 51
 **Owns:** `src/adapters/model/codex/`, Codex's provider in `src/cli/model-access.ts` and `doctor.ts`, the OpenAI parts of `README.md` and `ARCHITECTURE.md`
 
@@ -107,6 +107,18 @@ In its own PR first, with a line in stage 02's change log:
 - [ ] ARCHITECTURE.md and README.md updated as in task 11.
 
 ## Measurements
+
+### Task 1: the sandbox, the network and what the stream shows
+
+Codex CLI 0.162.0 on macOS 15 (Seatbelt), signed in with ChatGPT, `gpt-6-luna` at low effort, the call under **The call**, 2026-11-14.
+
+- **The read-only sandbox blocks the network.** Under `codex sandbox -c sandbox_mode=read-only`: `curl` to a listener on 127.0.0.1 exits 7 and nothing arrives; `curl https://example.com` exits 6, name resolution refused; Python's `socket.create_connection(("1.1.1.1", 443))` raises `PermissionError: [Errno 1] Operation not permitted`. Unsandboxed, the same `curl` gets 200. Through `codex exec` with the shell tool turned back on, the model ran `curl -s -m 5 http://127.0.0.1:8765/…` and it exited 7 with nothing at the listener. Writes are refused too (`Operation not permitted`), and reads aren't: the sandbox could read `~/.codex/auth.json`.
+- **What the stream shows.** A shell command is `item.started` and `item.completed` of type `command_execution`, with the command, its output and exit code; an MCP call is `mcp_tool_call`, also when made from code mode; an agent tool is `collab_tool_call`. Codex's own non-fatal errors are items of type `error`, such as "Code Mode is unavailable…" before `turn.started`, or "Falling back from WebSockets to HTTPS transport" mid-turn; top-level `{"type":"error"}` events are its retries ("Reconnecting... 2/5").
+- **Code mode's `exec` runs unseen.** With every feature under **Measured** off, the model still has `exec`, which runs JavaScript in Codex's code-mode host, and a call to it puts no item in the stream: run 3 called it and the stream held only the `agent_message`, whose text was the script's error. The host is a bare isolate: no `require`, `process`, `Deno`, `fetch` or `import("node:fs")` ("unsupported import in exec"); what it can reach is the `tools` object, `apply_patch`, `clock__curr_time` and the three MCP resource tools. Of those, an MCP call shows as an item and `apply_patch` is refused by the sandbox ("patch rejected: writing is blocked by read-only sandbox"), with no item. `spawn_agent` fails under `--ephemeral` ("no rollout found for thread id"), with no item. A refused call shows only on stderr, as `ERROR codex_core::tools::router`.
+- **`--disable code_mode_host` makes code mode fail closed:** an `error` item at startup, and a call to `exec` answers "code-mode host is disabled". It costs nothing measurable: 5,327 input tokens against 5,296 with it on, for the same prompt.
+- **An API key in the environment.** `OPENAI_API_KEY=sk-bogus…` is ignored: the call ran on the ChatGPT sign-in. `CODEX_API_KEY=sk-bogus…` wins over it: every request failed with 401 "Incorrect API key provided", over five WebSocket and five HTTPS retries, about 60 seconds, then `turn.failed`. `codex login status` still says "Logged in using ChatGPT" with `OPENAI_API_KEY` set.
+
+So the bound holds with a different lockdown than the doc's. Every tool that can read anything outside the prompt shows as a stream item when it runs, and the network is closed to all of them. The one that doesn't show, code mode's `exec`, is turned off with `code_mode_host`, so it can't run either. The lockdown kills the process on any item but `reasoning`, `agent_message` and `error`.
 
 ## Open issues
 

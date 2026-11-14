@@ -225,8 +225,20 @@ describe("usage formatting", () => {
   });
 
   it("calls a plan's cost an estimate at API prices", () => {
-    expect(formatTotalCost(0.9349, false)).toBe("$0.93");
-    expect(formatTotalCost(0.9349, true)).toBe("≈ $0.93 at API prices, on your Claude plan");
+    expect(formatTotalCost([0.9, 0.0349], false)).toBe("$0.93");
+    expect(formatTotalCost([0.9349], true)).toBe("≈ $0.93 at API prices, on your Claude plan");
+    expect(formatTotalCost([0.9349], true, "ChatGPT")).toBe(
+      "≈ $0.93 at API prices, on your ChatGPT plan",
+    );
+  });
+
+  it("says how many calls have no known price instead of summing around them", () => {
+    expect(formatTotalCost([0.5, null, null], true, "ChatGPT")).toBe(
+      "≈ $0.50 at API prices, cost unknown for 2 calls, on your ChatGPT plan",
+    );
+    expect(formatTotalCost([0.5, null], false)).toBe("$0.50, cost unknown for 1 call");
+    expect(formatTotalCost([null, null], true, "ChatGPT")).toBe("on your ChatGPT plan");
+    expect(formatTotalCost([null], false)).toBe("cost unknown");
   });
 });
 

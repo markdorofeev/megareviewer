@@ -182,7 +182,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
       error,
       problems,
       cost: {
-        modelUsd: analysis?.usage.reduce((total, usage) => total + usage.costUsd, 0) ?? 0,
+        modelUsd: analysis?.usage.reduce((total, usage) => total + (usage.costUsd ?? 0), 0) ?? 0,
         judgeUsd: judge?.usd ?? 0,
         latencyS,
       },
@@ -227,7 +227,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
     error: null,
     problems,
     cost: {
-      modelUsd: analysis.usage.reduce((total, usage) => total + usage.costUsd, 0),
+      modelUsd: analysis.usage.reduce((total, usage) => total + (usage.costUsd ?? 0), 0),
       judgeUsd: costUsd,
       latencyS,
     },

@@ -1,5 +1,10 @@
 import { useId } from "react";
-import type { ModelPass, ModelRunOption, ModelUsage } from "../../../../src/domain/review/index.ts";
+import {
+  type ModelPass,
+  type ModelRunOption,
+  type ModelUsage,
+  planOf,
+} from "../../../../src/domain/review/index.ts";
 
 const PASS_NAMES: Readonly<Record<ModelPass, string>> = {
   intent: "Intent",
@@ -27,9 +32,29 @@ export const formatDuration = (ms: number | undefined): string =>
 export const runName = (option: ModelRunOption | null): string | null =>
   option === null ? null : `${option.modelName} through ${option.providerName}`;
 
-/** On a plan nothing is charged per review: the cost is what the tokens would be at API prices. */
-export const formatTotalCost = (usd: number, onPlan: boolean, family = "Claude"): string =>
-  onPlan ? `≈ ${formatCost(usd)} at API prices, on your ${family} plan` : formatCost(usd);
+/** A call's cost, or a dash for a model with no known price. */
+const formatCallCost = (usd: number | null): string => (usd === null ? "—" : formatCost(usd));
+
+/**
+ * On a plan nothing is charged per review: the cost is what the tokens would be at API prices.
+ * Calls with no known price aren't summed around: the line says how many there are.
+ */
+export const formatTotalCost = (
+  costs: readonly (number | null)[],
+  onPlan: boolean,
+  plan = "Claude",
+): string => {
+  const known = costs.filter((usd) => usd !== null);
+  const unknown = costs.length - known.length;
+  const where = onPlan ? `on your ${plan} plan` : null;
+  if (known.length === 0) return where ?? "cost unknown";
+  const total = formatCost(known.reduce((sum, usd) => sum + usd, 0));
+  const unknownNote =
+    unknown === 0 ? "" : `, cost unknown for ${unknown} ${unknown === 1 ? "call" : "calls"}`;
+  return where === null
+    ? `${total}${unknownNote}`
+    : `≈ ${total} at API prices${unknownNote}, ${where}`;
+};
 
 /** Uncached input, which includes tokens written to the cache. */
 const inputOf = (usage: ModelUsage): number => usage.inputTokens + usage.cacheWriteTokens;
@@ -62,9 +87,9 @@ export const UsageFooter = ({
         {formatTokens(sum((u) => u.cacheReadTokens))} cache read ·{" "}
         {formatTokens(sum((u) => u.outputTokens))} out ·{" "}
         {formatTotalCost(
-          sum((u) => u.costUsd),
+          usage.map((entry) => entry.costUsd),
           onPlan,
-          option?.family,
+          planOf(option),
         )}
       </button>
       <table
@@ -89,7 +114,7 @@ export const UsageFooter = ({
               <td>{formatTokens(inputOf(entry))}</td>
               <td>{formatTokens(entry.cacheReadTokens)}</td>
               <td>{formatTokens(entry.outputTokens)}</td>
-              <td>{formatCost(entry.costUsd)}</td>
+              <td>{formatCallCost(entry.costUsd)}</td>
               {timed && <td>{formatDuration(entry.durationMs)}</td>}
             </tr>
           ))}

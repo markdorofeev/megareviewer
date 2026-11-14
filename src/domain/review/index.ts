@@ -51,6 +51,7 @@ export {
   ModelRunOption,
   modelFamily,
   modelOptionId,
+  planOf,
   runOptionOf,
 } from "./model-option.ts";
 export {

@@ -69,8 +69,11 @@ export const ModelUsage = z
     cacheReadTokens: TokenCount,
     cacheWriteTokens: TokenCount,
     outputTokens: TokenCount,
-    /** Under "plan", what the tokens would cost at API prices: nothing is charged per call. */
-    costUsd: z.number().nonnegative(),
+    /**
+     * Under "plan", what the tokens would cost at API prices: nothing is charged per call. Null
+     * for a model with no known price, which Codex reports tokens for and no cost.
+     */
+    costUsd: z.number().nonnegative().nullable(),
     // Analyses stored before there was a plan transport were all billed to the API.
     billing: ModelBilling.default("api"),
     // Absent on analyses stored before passes were timed.
