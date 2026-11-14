@@ -1,17 +1,19 @@
 import { type ReactNode, useState } from "react";
 import {
+  type ModelOptions,
   mapModelStages,
   type Point,
   PointId,
   type PointKind,
   type PointState,
 } from "../../../src/domain/review/index.ts";
+import { fixtureModelOptions, lockedModelOptions } from "../../dev/fixtures/index.ts";
 import { ClaudeElement, type ClaudeRun } from "../pages/review/ClaudeElement.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
 import { narrowTo } from "../pages/review/stepper.ts";
 import { Button } from "../ui/button.tsx";
-import { DESIGN_RUN, POINTS, PULL_REQUEST } from "./fixtures.ts";
+import { DESIGN_RUN, POINTS, PULL_REQUEST, useDemoChoice } from "./fixtures.ts";
 
 /** The point card's points and a second finding, so a chip has more than one to walk. */
 const MORE_POINTS: readonly Point[] = [
@@ -47,7 +49,7 @@ const BarDemo = ({
   narrowedAt = null,
   dismissed = [],
   running = false,
-  unavailable = null,
+  models = fixtureModelOptions,
   hairline = null,
   stuck = false,
   published = false,
@@ -59,13 +61,14 @@ const BarDemo = ({
   readonly narrowedAt?: PointKind | null;
   readonly dismissed?: readonly string[];
   readonly running?: boolean;
-  /** Why Claude can't run, which disables its button. */
-  readonly unavailable?: string | null;
+  /** What the reviewer can choose: Claude Code signed in unless given. */
+  readonly models?: ModelOptions;
   readonly hairline?: HairlineState | null;
   readonly stuck?: boolean;
   readonly published?: boolean;
 }) => {
   const [current, setCurrent] = useState<PointId | null>(start);
+  const choice = useDemoChoice(models);
   const [narrowed, setNarrowed] = useState<PointKind | null>(narrowedAt);
   const stateOf = (id: PointId): PointState => (dismissed.includes(id) ? "dismissed" : "open");
   return (
@@ -89,8 +92,7 @@ const BarDemo = ({
           claude={
             <ClaudeElement
               analysis={run}
-              via="Claude Code, on your Pro plan"
-              unavailable={unavailable}
+              choice={choice}
               running={running}
               startedAt={running ? Date.now() - 42_000 : null}
               starting={false}
@@ -133,15 +135,15 @@ const BarDemo = ({
 export const ReviewBarStates = (): ReactNode => (
   <div className="flex flex-col gap-4">
     <BarDemo
-      label="Before Claude runs: hover or focus the button for what runs it"
+      label="Before Claude runs: hover or focus the button for the model and who pays; the arrow opens the choice"
       run={DESIGN_RUN}
       points={[]}
     />
     <BarDemo
-      label="Claude can't run: the button is disabled, and says why on hover or focus"
+      label="No model can run: the button is disabled, and says why on hover or focus; the arrow still lists every option"
       run={DESIGN_RUN}
       points={[]}
-      unavailable="Claude Code isn't signed in: run `claude` and sign in; or set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API."
+      models={lockedModelOptions}
     />
     <BarDemo
       label="Claude couldn't finish: Try again, in outline beside Publish"

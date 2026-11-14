@@ -3,9 +3,11 @@ import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
 import {
+  CLAUDE_MODELS,
   type ClaudeCodeStatus,
   claudeCodeStatus,
   createRunClaude,
+  DEFAULT_MODEL,
   MIN_CLAUDE_CODE_VERSION,
   planName,
 } from "../adapters/model/index.ts";
@@ -35,7 +37,7 @@ export interface DoctorDeps {
   readonly claudeCode: ClaudeCodeStatus;
   readonly anthropic: {
     readonly configured: boolean;
-    /** Fetches the model the passes use: free, and proves the credentials work. */
+    /** Fetches the default model: free, and proves the credentials work. */
     retrieveModel(): Promise<Result<void, string>>;
   };
   /** Creates the home directory if needed, then opens and closes the database. */
@@ -44,8 +46,11 @@ export interface DoctorDeps {
   readonly checkout: { readonly dir: string; readonly info: CheckoutInfo | null };
 }
 
-/** The model the Claude adapter uses. */
-const MODEL = "claude-haiku-5-5";
+/** "Haiku 5.5, Sonnet 5.5 and Opus 5.5": what a provider offers in Request AI review's menu. */
+const MODEL_NAMES = (() => {
+  const names = CLAUDE_MODELS.map((model) => model.name);
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+})();
 /** A key no Jira site has, so a working login answers "missing". */
 const PROBE_TICKET = "MEGAREVIEWER-0";
 
@@ -128,7 +133,7 @@ const checkJira = async (deps: DoctorDeps): Promise<Check> => {
       );
 };
 
-/** What Request AI review runs on first. Without it, reviews run without the model, or on the API. */
+/** What Request AI review runs on first, and the models it offers there. */
 const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
   const title = "Claude Code";
   switch (claudeCode.state) {
@@ -136,14 +141,14 @@ const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
       return check(
         "skip",
         title,
-        "not installed: Request AI review runs on the Anthropic API instead, if it's configured",
+        `not installed: ${MODEL_NAMES} on it are listed, disabled, in Request AI review's menu`,
         "Install Claude Code (https://code.claude.com) and sign in with `claude` to analyze on your Claude plan.",
       );
     case "signed-out":
       return check(
         "skip",
         title,
-        `${claudeCode.version}, not signed in: Request AI review runs on the Anthropic API instead, if it's configured`,
+        `${claudeCode.version}, not signed in: ${MODEL_NAMES} on it are listed, disabled, in Request AI review's menu`,
         "Run `claude` and sign in to analyze on your Claude plan.",
       );
     case "failed":
@@ -165,7 +170,7 @@ const checkClaudeCode = ({ claudeCode }: DoctorDeps): Check => {
       return check(
         "pass",
         title,
-        `${claudeCode.version}, signed in: Request AI review runs here, ${pays}`,
+        `${claudeCode.version}, signed in, ${pays}: Request AI review offers ${MODEL_NAMES} on it`,
       );
     }
   }
@@ -177,7 +182,7 @@ const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
     return check(
       "skip",
       title,
-      "not configured: the fallback for Request AI review when Claude Code can't run it",
+      `not configured: ${MODEL_NAMES} on it are listed, disabled, in Request AI review's menu`,
       "Set ANTHROPIC_API_KEY or run `ant auth login` to use it.",
     );
   }
@@ -186,7 +191,7 @@ const checkAnthropic = async (deps: DoctorDeps): Promise<Check> => {
     ? check(
         "pass",
         title,
-        `credentials work, ${MODEL} is available: the fallback for Request AI review when Claude Code can't run it`,
+        `credentials work, billed to your account: Request AI review offers ${MODEL_NAMES} on it`,
       )
     : check(
         "fail",
@@ -276,7 +281,7 @@ export const createDoctorDeps = async (options: {
       configured: await anthropicConfigured(client, logger),
       async retrieveModel() {
         try {
-          await client.models.retrieve(MODEL);
+          await client.models.retrieve(DEFAULT_MODEL);
           return ok(undefined);
         } catch (error) {
           return err(messageOf(error));

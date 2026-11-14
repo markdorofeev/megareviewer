@@ -8,7 +8,9 @@ import { MODEL } from "./request.ts";
 export const PROMPT_VERSION = 7;
 export const PROMPT_FINGERPRINT = "a7f2b8d8d07d743c";
 
-export const VERSION = `${MODEL}/p${PROMPT_VERSION}`;
+export const apiVersion = (model: string): string => `${model}/p${PROMPT_VERSION}`;
+
+export const VERSION = apiVersion(MODEL);
 
 /**
  * The Claude Code transport's own prompt version: its system prompt and arguments differ from

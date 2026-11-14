@@ -20,6 +20,7 @@ export const withoutModel = (analysis: Analysis): Analysis => ({
     risk.source === "model" ? { ...risk, source: "rule" as const } : risk,
   ),
   modelError: null,
+  modelOption: null,
 });
 
 const rateLimited = {

@@ -2,7 +2,11 @@ import type { ModelError } from "../../../domain/review/index.ts";
 import { err, ok, type Result } from "../../../domain/shared/index.ts";
 import { fromClaudeCodeRun, lockdownProblem, notLockedDown } from "./claude-code-errors.ts";
 import { type ClaudeCodeResult, parseClaudeCodeStream, parseInit } from "./claude-code-output.ts";
-import { type StructuredCall, structuredCallRequest } from "./claude-code-request.ts";
+import {
+  claudeCodeOutputLimit,
+  type StructuredCall,
+  structuredCallRequest,
+} from "./claude-code-request.ts";
 import type { RunClaude } from "./run-claude.ts";
 
 export interface StructuredAnswer {
@@ -42,7 +46,7 @@ export const runStructuredCall = async (
 
   if (lockdown !== null) return err(notLockedDown(lockdown));
   const stream = parseClaudeCodeStream(ran.lines);
-  const failure = fromClaudeCodeRun(ran, stream);
+  const failure = fromClaudeCodeRun(ran, stream, claudeCodeOutputLimit(call.model));
   if (failure !== null) return err(failure);
   // A run with an answer but no init event was never checked for tools.
   if (stream.init === null || stream.result === null) {

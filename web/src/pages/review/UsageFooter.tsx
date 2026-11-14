@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { ModelPass, ModelUsage } from "../../../../src/domain/review/index.ts";
+import type { ModelPass, ModelRunOption, ModelUsage } from "../../../../src/domain/review/index.ts";
 
 const PASS_NAMES: Readonly<Record<ModelPass, string>> = {
   intent: "Intent",
@@ -23,15 +23,26 @@ export const formatCost = (usd: number): string => `$${usd.toFixed(2)}`;
 export const formatDuration = (ms: number | undefined): string =>
   ms === undefined ? "—" : `${(ms / 1_000).toFixed(1)} s`;
 
+/** "Sonnet 5.5 through Claude Code"; null for a run stored before the choice, all Haiku 5.5. */
+export const runName = (option: ModelRunOption | null): string | null =>
+  option === null ? null : `${option.modelName} through ${option.providerName}`;
+
 /** On a plan nothing is charged per review: the cost is what the tokens would be at API prices. */
-export const formatTotalCost = (usd: number, onPlan: boolean): string =>
-  onPlan ? `≈ ${formatCost(usd)} at API prices, on your Claude plan` : formatCost(usd);
+export const formatTotalCost = (usd: number, onPlan: boolean, family = "Claude"): string =>
+  onPlan ? `≈ ${formatCost(usd)} at API prices, on your ${family} plan` : formatCost(usd);
 
 /** Uncached input, which includes tokens written to the cache. */
 const inputOf = (usage: ModelUsage): number => usage.inputTokens + usage.cacheWriteTokens;
 
-/** What the analysis cost, with a breakdown by pass on hover or focus. */
-export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }) => {
+/** What the analysis cost and on which model, with a breakdown by pass on hover or focus. */
+export const UsageFooter = ({
+  usage,
+  option = null,
+}: {
+  readonly usage: readonly ModelUsage[];
+  /** The option of the latest run. */
+  readonly option?: ModelRunOption | null;
+}) => {
   const id = useId();
   if (usage.length === 0) return null;
   const sum = (pick: (entry: ModelUsage) => number) =>
@@ -46,12 +57,14 @@ export const UsageFooter = ({ usage }: { readonly usage: readonly ModelUsage[] }
         className="peer tabular min-h-6 rounded-sm text-caption text-muted-foreground hover:text-foreground"
         aria-describedby={`${id}-breakdown`}
       >
+        {runName(option) === null ? "" : `${runName(option)} · `}
         Usage: {formatTokens(sum(inputOf))} tokens in ·{" "}
         {formatTokens(sum((u) => u.cacheReadTokens))} cache read ·{" "}
         {formatTokens(sum((u) => u.outputTokens))} out ·{" "}
         {formatTotalCost(
           sum((u) => u.costUsd),
           onPlan,
+          option?.family,
         )}
       </button>
       <table

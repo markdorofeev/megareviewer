@@ -1,19 +1,31 @@
-import { InfoIcon, LockIcon, SparklesIcon } from "lucide-react";
+import { ChevronDownIcon, InfoIcon, LockIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useEffect, useId, useState } from "react";
 import {
   type Analysis,
+  modelFamily,
   modelRunnable,
   type Point,
   type PointKind,
 } from "../../../../src/domain/review/index.ts";
 
-/** What Claude's element reads of an analysis: how far its run got, and how it ended. */
-export type ClaudeRun = Pick<Analysis, "status" | "stages" | "modelError">;
+/** What the model's element reads of an analysis: how far its run got, on what, and how it ended. */
+export type ClaudeRun = Pick<Analysis, "status" | "stages" | "modelError" | "modelOption">;
 
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../ui/dropdown-menu.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
+import { byProvider, type ModelChoice } from "./model-choice.ts";
 
 /** Seconds since `since`, ticking while it runs. */
 const useElapsed = (since: number | null): number => {
@@ -88,39 +100,121 @@ const Chip = ({
 };
 
 /**
- * Asks Claude for its passes. Filled before the run, the bar's strongest call to action; outline as
- * Try again after a failed run, so it doesn't outweigh Publish. Its tooltip says what runs it and
- * who pays, or why Claude can't run, when the button stays focusable but disabled.
+ * The options, grouped by provider. A group's label says what runs it and who pays, or why it
+ * can't run; a disabled option stays focusable and is described by that reason.
+ */
+const ModelMenu = ({
+  choice,
+  disabled,
+  filled,
+}: {
+  readonly choice: ModelChoice;
+  readonly disabled: boolean;
+  /** Filled as the button beside it, so the two read as one control. */
+  readonly filled: boolean;
+}) => {
+  const id = useId();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant={filled ? "default" : "outline"}
+            size="sm"
+            data-slot="model-menu"
+            disabled={disabled}
+            aria-label={
+              choice.chosen === null ? "Choose a model" : `Model: ${choice.chosen.modelName}`
+            }
+            className={cn(
+              "w-6 rounded-l-none px-0",
+              filled ? "border-l-primary-foreground/30" : "border-l-0",
+            )}
+          />
+        }
+      >
+        <ChevronDownIcon aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuRadioGroup
+          value={choice.chosen?.id ?? null}
+          onValueChange={(value: string) => choice.choose(value)}
+        >
+          {byProvider(choice.options).map(([first, options], group) => {
+            const noteId = `${id}-${group}`;
+            return (
+              <DropdownMenuGroup key={first.provider}>
+                {group > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuLabel className="flex flex-col gap-0.5">
+                  <span className="text-foreground">
+                    {first.available ? first.via : first.providerName}
+                  </span>
+                  {!first.available && (
+                    <span id={noteId} className="font-normal">
+                      {first.reason}
+                    </span>
+                  )}
+                </DropdownMenuLabel>
+                {options.map((option) => (
+                  <DropdownMenuRadioItem
+                    key={option.id}
+                    value={option.id}
+                    disabled={!option.available}
+                    aria-describedby={option.available ? undefined : noteId}
+                  >
+                    {option.modelName}
+                    {!option.measured && (
+                      <span className="rounded-full border px-1.5 text-caption text-muted-foreground">
+                        unmeasured
+                      </span>
+                    )}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuGroup>
+            );
+          })}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+/**
+ * Asks the chosen model for its passes, and beside it the arrow that opens the choice. Filled
+ * before the run, the bar's strongest call to action; outline as Try again after a failed run, so
+ * it doesn't outweigh Publish. Its tooltip names the model and who pays, or why nothing can run,
+ * when the button stays focusable but disabled.
  */
 const RequestReview = ({
-  via,
-  unavailable,
+  choice,
   starting,
   failed,
   onRun,
 }: {
-  readonly via: string | null;
-  readonly unavailable: string | null;
+  readonly choice: ModelChoice;
   readonly starting: boolean;
   readonly failed: boolean;
   readonly onRun: () => void;
 }) => {
   const descriptionId = useId();
-  const note = unavailable ?? (via === null ? null : `Runs on ${via}`);
+  const { chosen, locked } = choice;
+  const note =
+    locked ?? (chosen === null ? null : `Runs ${chosen.modelName} through ${chosen.via}`);
   const button = (
     <Button
       variant={failed ? "outline" : "default"}
       size="sm"
       data-slot="request-review"
-      disabled={starting || unavailable !== null}
+      disabled={starting || locked !== null || chosen === null}
       focusableWhenDisabled
       aria-describedby={note === null ? undefined : descriptionId}
       onClick={onRun}
+      className="rounded-r-none"
     />
   );
   const label = (
     <>
-      {unavailable === null ? (
+      {locked === null ? (
         <SparklesIcon aria-hidden="true" className={cn(failed && "text-primary")} />
       ) : (
         <LockIcon aria-hidden="true" />
@@ -129,11 +223,11 @@ const RequestReview = ({
     </>
   );
   return (
-    <>
+    <span className="flex shrink-0 items-center">
       <Tooltip disabled={note === null}>
         <TooltipTrigger render={button}>{label}</TooltipTrigger>
         <TooltipContent side="bottom" align="start">
-          {unavailable !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
+          {locked !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
           {note}
         </TooltipContent>
       </Tooltip>
@@ -143,7 +237,12 @@ const RequestReview = ({
           {note}
         </span>
       )}
-    </>
+      <ModelMenu
+        choice={choice}
+        disabled={starting || choice.options.length === 0}
+        filled={!failed && locked === null}
+      />
+    </span>
   );
 };
 
@@ -157,14 +256,13 @@ const missingNote = (analysis: ClaudeRun): string | null => {
 };
 
 /**
- * Claude's run and what it found, in the bar. Before it runs, the button; while it does, a line of
+ * The model's run and what it found, in the bar. Before it runs, the button; while it does, a line of
  * words and the time since; once it's done, a chip per kind of point with its count, which narrows
  * the stepper that follows them to its kind.
  */
 export const ClaudeElement = ({
   analysis,
-  via,
-  unavailable,
+  choice,
   running,
   startedAt,
   starting,
@@ -176,10 +274,8 @@ export const ClaudeElement = ({
   children,
 }: {
   readonly analysis: ClaudeRun;
-  /** What runs the passes and who pays, from the status; null when it isn't known yet. */
-  readonly via: string | null;
-  /** Why Claude can't run, from the status; null when it can or that isn't known yet. */
-  readonly unavailable: string | null;
+  /** The models the reviewer can choose, and the one Request AI review runs. */
+  readonly choice: ModelChoice;
   readonly running: boolean;
   /** When this page saw the run start, for the time since. */
   readonly startedAt: number | null;
@@ -195,6 +291,8 @@ export const ClaudeElement = ({
   readonly children?: ReactNode;
 }) => {
   const elapsed = useElapsed(running ? startedAt : null);
+  // The run's model once it has one; before, the one the reviewer would run.
+  const family = modelFamily(analysis.modelOption ?? choice.chosen);
   if (running) {
     return (
       <span
@@ -203,7 +301,7 @@ export const ClaudeElement = ({
         className="flex min-w-0 items-center gap-2 whitespace-nowrap text-muted-foreground"
       >
         <SparklesIcon aria-hidden="true" className="size-3.5" />
-        Claude is reading this PR
+        {family} is reading this PR
         <span className="tabular text-caption">{clock(elapsed)}</span>
       </span>
     );
@@ -264,27 +362,22 @@ export const ClaudeElement = ({
         data-land="fade"
         className="whitespace-nowrap text-muted-foreground"
       >
-        <span aria-hidden="true">✓ </span>Claude found nothing to raise
+        <span aria-hidden="true">✓ </span>
+        {family} found nothing to raise
       </span>
     ) : null;
   }
   const failed = analysis.modelError;
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <RequestReview
-        via={via}
-        unavailable={unavailable}
-        starting={starting}
-        failed={failed !== null}
-        onRun={onRun}
-      />
+      <RequestReview choice={choice} starting={starting} failed={failed !== null} onRun={onRun} />
       {(error ?? failed) !== null && (
         <span
           role="alert"
-          title={error ?? `Claude couldn't finish: ${failed?.message}`}
+          title={error ?? `${family} couldn't finish: ${failed?.message}`}
           className="min-w-0 truncate text-caption text-destructive"
         >
-          {error ?? `Claude couldn't finish: ${failed?.message}`}
+          {error ?? `${family} couldn't finish: ${failed?.message}`}
         </span>
       )}
     </span>

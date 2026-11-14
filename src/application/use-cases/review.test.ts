@@ -13,12 +13,13 @@ import { createAnalysisEvents } from "../events/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
-  FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakeTicketSource,
   FixedClock,
+  fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   RecordingLogger,
@@ -55,8 +56,7 @@ const setup = (
     {
       hosts: options.noHosts ? {} : options.onlyGithub ? { github } : { github, bitbucket },
       tickets,
-      model: new FakeAnalysisModel(),
-      modelAvailability: async () => ({ available: true, via: "the fake model" }),
+      models: new FakeModelCatalog(),
       store,
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
@@ -491,7 +491,7 @@ describe("getStatus", () => {
         bitbucket: { configured: true, user: null, error: "Bad token" },
       },
       jira: { configured: true },
-      model: { available: true, via: "the fake model", reason: null },
+      model: { options: [fakeModelOption()], defaultId: fakeModelOption().id },
     });
   });
 

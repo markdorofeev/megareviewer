@@ -8,16 +8,20 @@ import {
   hasModelRun,
   inProgress,
   MODEL_STAGES,
+  type ModelOption,
+  type ModelOptionId,
   mapModelStages,
+  modelFamily,
   modelRunnable,
   type PullRequest,
   type PullRequestRef,
   parsePullRequestUrl,
+  runOptionOf,
   type StageName,
   StageName as StageNames,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { GitHost } from "../ports/index.ts";
+import type { AnalysisModel, GitHost, ModelCatalog } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { pipelineVersion } from "./pipeline-version.ts";
@@ -49,6 +53,36 @@ const fetchPullRequest = async (
   return pullRequest.ok
     ? ok({ host: host.value, pullRequest: pullRequest.value })
     : err(fromHostError(pullRequest.error));
+};
+
+/**
+ * The option a run uses: the one asked for, else the catalog's default, with its passes. An
+ * unknown option is a bad request; one that can't run is unavailable, with why.
+ */
+const chooseModel = async (
+  catalog: ModelCatalog,
+  optionId: ModelOptionId | undefined,
+): Promise<Result<{ option: ModelOption; model: AnalysisModel }, UseCaseError>> => {
+  const { options, defaultId } = await catalog.options();
+  const id = optionId ?? defaultId;
+  const option = options.find((candidate) => candidate.id === id);
+  if (option === undefined) {
+    return err(
+      optionId === undefined
+        ? appError("model-unavailable", "No model is known to megareviewer")
+        : appError("bad-request", `No model option ${optionId}`),
+    );
+  }
+  const unavailable = (reason: string) =>
+    err(
+      appError(
+        "model-unavailable",
+        `${option.modelName} through ${option.providerName} can't run: ${reason}`,
+      ),
+    );
+  if (!option.available) return unavailable(option.reason ?? "it can't run");
+  const model = catalog.model(option.id);
+  return model === null ? unavailable("it can't run") : ok({ option, model });
 };
 
 const newAnalysis = (
@@ -93,6 +127,7 @@ const newAnalysis = (
   modelCalls: [],
   error: null,
   modelError: null,
+  modelOption: null,
   createdAt,
   updatedAt: deps.clock.now(),
 });
@@ -176,7 +211,10 @@ export const createAnalysisRunner = (deps: AppDeps) => {
      * Runs the model's passes on a complete analysis, adding to it. A run already going is
      * joined; one that's done or can't run is refused.
      */
-    async runModel(id: AnalysisId): Promise<Result<{ analysisId: AnalysisId }, UseCaseError>> {
+    async runModel(
+      id: AnalysisId,
+      optionId?: ModelOptionId,
+    ): Promise<Result<{ analysisId: AnalysisId }, UseCaseError>> {
       let analysis = await deps.store.getAnalysis(id);
       if (analysis === null) return err(appError("not-found", `No analysis ${id}`));
       const running = inFlight.get(id);
@@ -192,12 +230,15 @@ export const createAnalysisRunner = (deps: AppDeps) => {
         return err(appError("analysis-not-complete", "The analysis isn't complete yet"));
       }
       if (!modelRunnable(analysis)) {
-        return err(appError("bad-request", "Claude has already analyzed this pull request"));
+        return err(
+          appError(
+            "bad-request",
+            `${modelFamily(analysis.modelOption)} has already analyzed this pull request`,
+          ),
+        );
       }
-      const availability = await deps.modelAvailability();
-      if (!availability.available) {
-        return err(appError("model-unavailable", availability.reason));
-      }
+      const chosen = await chooseModel(deps.models, optionId);
+      if (!chosen.ok) return chosen;
       const host = hostFor(deps, analysis.key.ref.repo.host);
       if (!host.ok) return host;
       const checkout =
@@ -206,7 +247,14 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           : null;
       // No await from here on until the run is in the map, so two requests can't both start it.
       if (inFlight.has(id)) return ok({ analysisId: id });
-      const run = runModel(deps, host.value, analysis, pullRequest, checkout?.at ?? null)
+      const run = runModel(
+        deps,
+        host.value,
+        analysis,
+        pullRequest,
+        { model: chosen.value.model, option: runOptionOf(chosen.value.option) },
+        checkout?.at ?? null,
+      )
         .catch((error: unknown) => {
           deps.logger.error("Couldn't record the model run", { analysisId: id, error });
         })
@@ -229,7 +277,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
         return err(appError("analysis-not-complete", "The analysis isn't complete yet"));
       }
       if (!hasModelRun(analysis)) {
-        return err(appError("bad-request", "Claude hasn't analyzed this pull request"));
+        return err(appError("bad-request", "No model has analyzed this pull request"));
       }
       const host = hostFor(deps, analysis.key.ref.repo.host);
       if (!host.ok) return host;
@@ -274,7 +322,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           modelError: {
             stage,
             code: "interrupted",
-            message: "megareviewer stopped while Claude analyzed the pull request",
+            message: `megareviewer stopped while ${modelFamily(analysis.modelOption)} analyzed the pull request`,
           },
           updatedAt: deps.clock.now(),
         });

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { CLAUDE_MODELS } from "./models.ts";
 import { costUsd, HIGHEST_PRICE, PRICES } from "./pricing.ts";
-import { MODEL } from "./request.ts";
 
-const price = PRICES[MODEL];
-if (price === undefined) throw new Error(`no price for ${MODEL}`);
+const price = PRICES["claude-haiku-5-5"];
+if (price === undefined) throw new Error("no price for Haiku 5.5");
 
 const tokens = (prompt: { input: number; cacheRead: number; cacheWrite: number }) => ({
   inputTokens: prompt.input,
@@ -34,7 +34,23 @@ describe("costUsd", () => {
 });
 
 describe("prices", () => {
-  it("cover the model the passes run on", () => {
+  it("cover every listed model", () => {
+    for (const model of CLAUDE_MODELS) expect(PRICES[model.id]).toBe(model.price);
+    expect(PRICES["claude-sonnet-5-5"]).toEqual({
+      input: 2,
+      output: 10,
+      cacheRead: 0.1,
+      cacheWrite: 2.5,
+    });
+    expect(PRICES["claude-opus-5-5"]).toEqual({
+      input: 4,
+      output: 20,
+      cacheRead: 0.2,
+      cacheWrite: 5,
+    });
+  });
+
+  it("give Haiku 5.5 its long-prompt rates", () => {
     expect(price).toEqual({
       input: 0.1,
       output: 0.5,
@@ -57,6 +73,6 @@ describe("prices", () => {
   });
 
   it("fall back to the highest of each, long-prompt rates included", () => {
-    expect(HIGHEST_PRICE).toEqual({ input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 });
+    expect(HIGHEST_PRICE).toEqual({ input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 });
   });
 });

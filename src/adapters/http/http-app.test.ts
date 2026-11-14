@@ -23,10 +23,12 @@ import {
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakePullRequestStatusSource,
   FakeReviewThreads,
   FakeTicketSource,
   FixedClock,
+  fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   RecordingLogger,
@@ -68,8 +70,7 @@ const setupApp = (
     {
       hosts: options.onlyGithub ? { github } : { github, bitbucket },
       tickets: new FakeTicketSource({ tickets: allFixtures.flatMap((fixture) => fixture.tickets) }),
-      model: options.model ?? new FakeAnalysisModel(),
-      modelAvailability: async () => ({ available: true, via: "the fake model" }),
+      models: new FakeModelCatalog({ model: options.model ?? new FakeAnalysisModel() }),
       store,
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
@@ -293,7 +294,7 @@ describe("GET /api/status", () => {
       version: "1.2.3",
       hosts: { github: { configured: true, error: null }, bitbucket: { configured: false } },
       jira: { configured: true },
-      model: { available: true, via: "the fake model", reason: null },
+      model: { options: [fakeModelOption()], defaultId: fakeModelOption().id },
     });
   });
 });

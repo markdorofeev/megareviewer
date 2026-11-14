@@ -1,4 +1,5 @@
 import type { HostStatus, StatusResponse } from "../../../../contracts/index.ts";
+import { lockedReason } from "../review/model-choice.ts";
 
 export interface SetupItem {
   readonly name: string;
@@ -25,6 +26,19 @@ const host = (
   return { name, state: "error", text: status.error ?? "Couldn't read the signed-in user" };
 };
 
+/** The default model and who pays, or why none can run. */
+const modelItem = ({ options, defaultId }: StatusResponse["model"]): SetupItem => {
+  const chosen = options.find((option) => option.id === defaultId);
+  const locked = lockedReason(options);
+  return chosen?.available === true
+    ? {
+        name: "Model",
+        state: "ok",
+        text: `${chosen.modelName} through ${chosen.via}: Request AI review, on a review, adds intent, findings and the tour's titles`,
+      }
+    : { name: "Model", state: "optional", text: `Unavailable: ${locked ?? "no model can run"}` };
+};
+
 /** What's set up, and how to fix what isn't. */
 export const setupItems = (status: StatusResponse): readonly SetupItem[] => {
   const { github, bitbucket } = status.hosts;
@@ -38,16 +52,6 @@ export const setupItems = (status: StatusResponse): readonly SetupItem[] => {
           state: "optional",
           text: "Not configured: set JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN to read linked tickets",
         },
-    status.model.available
-      ? {
-          name: "Claude",
-          state: "ok",
-          text: `${status.model.via}: Request AI review, on a review, adds intent, decisions and the tour's titles`,
-        }
-      : {
-          name: "Claude",
-          state: "optional",
-          text: `Unavailable: ${status.model.reason}`,
-        },
+    modelItem(status.model),
   ];
 };

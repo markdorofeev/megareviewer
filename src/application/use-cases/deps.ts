@@ -1,7 +1,6 @@
 import type { HostKind } from "../../domain/review/index.ts";
 import type { AnalysisEvents } from "../events/index.ts";
 import type {
-  AnalysisModel,
   AnalysisStore,
   Clock,
   CodeParser,
@@ -9,7 +8,7 @@ import type {
   GitHost,
   LocalCheckouts,
   Logger,
-  ModelAvailability,
+  ModelCatalog,
   PullRequestStatusSource,
   ReviewThreads,
   TicketSource,
@@ -23,9 +22,8 @@ export interface AppDeps {
   /** Where PRs stand on the configured hosts: state, reviewers and CI. */
   readonly statuses: Partial<Record<HostKind, PullRequestStatusSource>>;
   readonly tickets: TicketSource;
-  readonly model: AnalysisModel;
-  /** Whether `model` can run its passes now. Asked by the status and before every model run. */
-  readonly modelAvailability: () => Promise<ModelAvailability>;
+  /** The models the reviewer can choose, asked by the status and before every model run. */
+  readonly models: ModelCatalog;
   readonly store: AnalysisStore;
   readonly fileCache: FileCache;
   readonly parser: CodeParser;

@@ -37,7 +37,35 @@ const responses: Record<RouteName, unknown> = {
       bitbucket: { configured: false, user: null, error: null },
     },
     jira: { configured: false },
-    model: { available: true, via: "Claude Code, on your Pro plan", reason: null },
+    model: {
+      options: [
+        {
+          id: "claude-code/claude-sonnet-5-5",
+          provider: "claude-code",
+          providerName: "Claude Code",
+          model: "claude-sonnet-5-5",
+          modelName: "Sonnet 5.5",
+          family: "Claude",
+          via: "Claude Code, on your Pro plan",
+          measured: true,
+          available: true,
+          reason: null,
+        },
+        {
+          id: "anthropic-api/claude-sonnet-5-5",
+          provider: "anthropic-api",
+          providerName: "Anthropic API",
+          model: "claude-sonnet-5-5",
+          modelName: "Sonnet 5.5",
+          family: "Claude",
+          via: "Anthropic API",
+          measured: true,
+          available: false,
+          reason: "No Anthropic API credentials: set ANTHROPIC_API_KEY or run `ant auth login`",
+        },
+      ],
+      defaultId: "claude-code/claude-sonnet-5-5",
+    },
   },
   listPullRequests: {
     items: [

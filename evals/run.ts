@@ -15,6 +15,7 @@ import {
   createClaudeAnalysisModel,
   createClaudeCodeAnalysisModel,
   createRunClaude,
+  DEFAULT_MODEL,
   EFFORTS,
 } from "../src/adapters/model/index.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
@@ -49,9 +50,9 @@ const { values } = parseArgs({
     "write-baseline": { type: "boolean", default: false },
     // Claude Code by default, so runs stay comparable with the baseline, which was measured on it.
     via: { type: "string", default: "claude-code" },
-    // Another model for the passes, to measure it; Claude Code only. The judge stays on Opus.
+    // An option's model for the passes, the default's when left out. The judge stays on Opus.
     model: { type: "string" },
-    // One effort for every pass in place of each pass's own; Claude Code only, as --model.
+    // One effort for every pass in place of each pass's own; Claude Code only.
     effort: { type: "string" },
     yes: { type: "boolean", default: false },
   },
@@ -81,8 +82,8 @@ if (via === null) {
   console.error("--via must be api or claude-code.");
   process.exit(1);
 }
-if ((values.model !== undefined || values.effort !== undefined) && via !== "claude-code") {
-  console.error("--model and --effort run the passes on Claude Code only; leave out --via api.");
+if (values.effort !== undefined && via !== "claude-code") {
+  console.error("--effort runs the passes on Claude Code only; leave out --via api.");
   process.exit(1);
 }
 const effort = values.effort === undefined ? undefined : EFFORTS.find((e) => e === values.effort);
@@ -92,7 +93,7 @@ if (values.effort !== undefined && effort === undefined) {
 }
 console.log(
   `${selected.length} case${selected.length === 1 ? "" : "s"}, the passes on ${via === "api" ? "the API" : "Claude Code"}` +
-    `${values.model === undefined ? "" : ` with ${values.model}`}` +
+    ` with ${values.model ?? `${DEFAULT_MODEL}, the default`}` +
     `${effort === undefined ? "" : ` at ${effort} effort`}, ` +
     `judged by ${JUDGE_MODEL} on Claude Code: about $${estimate.totalUsd.toFixed(2)} at API prices ` +
     `(${estimate.measured} at their baseline cost, ${estimate.assumed} at ` +
@@ -161,7 +162,11 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
           ...(values.model === undefined ? {} : { model: values.model }),
           ...(effort === undefined ? {} : { effort }),
         })
-      : createClaudeAnalysisModel({ client, logger });
+      : createClaudeAnalysisModel({
+          client,
+          logger,
+          ...(values.model === undefined ? {} : { model: values.model }),
+        });
   modelVersion(model.version);
   const since = (started: number) => (performance.now() - started) / 1000;
   const analysisStarted = performance.now();

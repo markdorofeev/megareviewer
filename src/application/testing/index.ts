@@ -35,6 +35,7 @@ export {
   FakeLocalCheckout,
   FakeLocalCheckouts,
 } from "./fake-local-checkout.ts";
+export { FakeModelCatalog, fakeModelOption } from "./fake-model-catalog.ts";
 export { FakePullRequestStatusSource } from "./fake-pull-request-status-source.ts";
 export {
   FakeReviewThreads,

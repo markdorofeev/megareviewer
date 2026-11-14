@@ -8,6 +8,7 @@ import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import { runStructuredCall } from "./claude-code-call.ts";
 import { claudeCodeSystemPrompt, passCall } from "./claude-code-request.ts";
+import { claudeModel } from "./models.ts";
 import { MAX_INPUT_TOKENS, MODEL } from "./request.ts";
 import { createRunClaude, type RunClaude } from "./run-claude.ts";
 import { claudeCodeVersion } from "./version.ts";
@@ -18,9 +19,9 @@ export interface ClaudeCodeAnalysisModelOptions {
   /** "plan" when Claude Code is signed in to a Claude plan, which its status says. */
   readonly billing: ModelBilling;
   readonly maxInputTokens?: number;
-  /** Default: MODEL. Another one only to measure it, as the evals' --model does. */
+  /** Default: MODEL. */
   readonly model?: string;
-  /** Default: each pass's own. One for every pass, only to measure it, as --effort does. */
+  /** Default: each pass's own. One for every pass, only to measure it, as the evals' --effort does. */
   readonly effort?: Effort;
   readonly logger: Logger;
 }
@@ -45,9 +46,10 @@ export const createClaudeCodeAnalysisModel = (
   options: ClaudeCodeAnalysisModelOptions,
 ): AnalysisModel => {
   const run = options.run ?? createRunClaude();
-  const maxInputTokens = options.maxInputTokens ?? MAX_INPUT_TOKENS;
   const { logger, billing } = options;
   const model = options.model ?? MODEL;
+  const maxInputTokens =
+    options.maxInputTokens ?? claudeModel(model)?.maxInputTokens ?? MAX_INPUT_TOKENS;
   const { effort } = options;
 
   return createPassModel({

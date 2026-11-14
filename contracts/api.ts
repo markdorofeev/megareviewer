@@ -5,6 +5,8 @@ import {
   HostKind,
   HostUser,
   HunkComment,
+  ModelOptionId,
+  ModelOptions,
   PointId,
   PointReview,
   PointState,
@@ -40,12 +42,10 @@ export const StatusResponse = z
     hosts: z.object({ github: HostStatus, bitbucket: HostStatus }).readonly(),
     jira: z.object({ configured: z.boolean() }).readonly(),
     /**
-     * Whether "Request AI review" can run: `via` says what runs it and who pays ("Claude Code,
-     * on your Pro plan"), `reason` why it can't.
+     * The models "Request AI review" can run on, enabled or not: each one's `via` says what runs
+     * it and who pays ("Claude Code, on your Pro plan"), `reason` why it can't.
      */
-    model: z
-      .object({ available: z.boolean(), via: z.string().nullable(), reason: z.string().nullable() })
-      .readonly(),
+    model: ModelOptions,
   })
   .readonly();
 export type StatusResponse = z.infer<typeof StatusResponse>;
@@ -61,6 +61,13 @@ export type PullRequestListResponse = z.infer<typeof PullRequestListResponse>;
 
 export const StartAnalysisRequest = z.object({ url: z.string().min(1) }).readonly();
 export type StartAnalysisRequest = z.infer<typeof StartAnalysisRequest>;
+
+/** The option to run the passes on; the server's default without one, or without a body. */
+export const RunModelRequest = z
+  .object({ optionId: ModelOptionId.optional() })
+  .readonly()
+  .optional();
+export type RunModelRequest = z.infer<typeof RunModelRequest>;
 
 export const AnalysisIdResponse = z.object({ analysisId: AnalysisId }).readonly();
 export type AnalysisIdResponse = z.infer<typeof AnalysisIdResponse>;
@@ -231,15 +238,15 @@ export const routes = {
     response: AnalysisIdResponse,
   },
   /**
-   * Runs the model's passes on a complete analysis, adding to it in place; its events follow the
-   * run. Answers model-unavailable when nothing can run them, and bad-request when they're
-   * running or done.
+   * Runs the model's passes on a complete analysis, on the chosen option or the default, adding
+   * to it in place; its events follow the run. Answers model-unavailable, with why, when the
+   * option can't run, and bad-request for an unknown option or passes that are running or done.
    */
   runModel: {
     method: "POST",
     path: "/api/analyses/:id/model",
     params: AnalysisParams,
-    request: null,
+    request: RunModelRequest,
     response: AnalysisIdResponse,
   },
   /**

@@ -20,6 +20,7 @@ export {
   ResolveRequest,
   ResolveResponse,
   type RouteName,
+  RunModelRequest,
   routePath,
   routes,
   StartAnalysisRequest,

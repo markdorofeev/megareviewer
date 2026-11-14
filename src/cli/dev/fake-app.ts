@@ -9,9 +9,11 @@ import {
   FakeAnalysisModel,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakePullRequestStatusSource,
   FakeReviewThreads,
   FakeTicketSource,
+  fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   type PullRequestFixture,
@@ -43,6 +45,44 @@ export const intentFailsOnce: PullRequestFixture = {
 };
 
 export const fakeFixtures: readonly PullRequestFixture[] = [...allFixtures, intentFailsOnce];
+
+const FAKE_MODELS = [
+  ["claude-haiku-5-5", "Haiku 5.5"],
+  ["claude-sonnet-5-5", "Sonnet 5.5"],
+  ["claude-opus-5-5", "Opus 5.5"],
+] as const;
+
+/**
+ * Claude's three models on Claude Code, which the fake model answers for, and on the Anthropic
+ * API, which has no credentials, as on a machine signed in to Claude Code only.
+ */
+const fakeModels = (model: AnalysisModel, available: boolean): FakeModelCatalog =>
+  new FakeModelCatalog({
+    model,
+    defaultModel: "claude-sonnet-5-5",
+    options: [
+      ...FAKE_MODELS.map(([id, modelName]) =>
+        fakeModelOption({
+          model: id,
+          modelName,
+          available,
+          reason: available ? null : "fake mode started with --no-ai",
+        }),
+      ),
+      ...FAKE_MODELS.map(([id, modelName]) =>
+        fakeModelOption({
+          provider: "anthropic-api",
+          providerName: "Anthropic API",
+          model: id,
+          modelName,
+          via: "Anthropic API",
+          available: false,
+          reason:
+            "No Anthropic API credentials: set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API",
+        }),
+      ),
+    ],
+  });
 
 /** The model fails its first intent pass for `url` as overloaded; the next run succeeds. */
 export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisModel => {
@@ -180,14 +220,12 @@ export const createFakeApp = async (options: {
       tickets: new FakeTicketSource({
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
-      model:
+      models: fakeModels(
         options.scenario === undefined
           ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
           : createReplayAnalysisModel(recording, { scenario: options.scenario }),
-      modelAvailability: async () =>
-        options.modelAvailable === false
-          ? { available: false, reason: "fake mode started with --no-ai" }
-          : { available: true, via: "the fake model" },
+        options.modelAvailable !== false,
+      ),
       store: new InMemoryAnalysisStore(),
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),

@@ -33,8 +33,8 @@ export interface Landing {
   readonly inView: ReadonlyMap<PointId, number>;
 }
 
-/** What the document's title says while the tab is hidden, once Claude's run has ended. */
-export const READY_TITLE = "✓ Claude is done";
+/** What the document's title says while the tab is hidden, once the model's run has ended. */
+export const readyTitle = (family: string): string => `✓ ${family} is done`;
 
 const NONE: ReadonlySet<PointId> = new Set();
 const NOWHERE: ReadonlyMap<PointId, number> = new Map();
@@ -45,7 +45,11 @@ const NOWHERE: ReadonlyMap<PointId, number> = new Map();
  * read the phase from `data-landing` on the page and their place in it from `--landing-i`; CSS
  * does the rest, timed by the motion tokens.
  */
-export const useLanding = (running: boolean, pointIds: readonly PointId[]): Landing => {
+export const useLanding = (
+  running: boolean,
+  pointIds: readonly PointId[],
+  family = "Claude",
+): Landing => {
   const [seen, setSeen] = useState<{ running: boolean; before: ReadonlySet<PointId> }>({
     running,
     before: NONE,
@@ -65,7 +69,7 @@ export const useLanding = (running: boolean, pointIds: readonly PointId[]): Land
   useEffect(() => {
     if (ended === 0 || !document.hidden) return;
     const title = document.title;
-    document.title = `${READY_TITLE} · ${title}`;
+    document.title = `${readyTitle(family)} · ${title}`;
     const back = () => {
       if (!document.hidden) document.title = title;
     };
@@ -74,7 +78,7 @@ export const useLanding = (running: boolean, pointIds: readonly PointId[]): Land
       document.removeEventListener("visibilitychange", back);
       document.title = title;
     };
-  }, [ended]);
+  }, [ended, family]);
 
   const restore = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {

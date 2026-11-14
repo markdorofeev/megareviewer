@@ -9,6 +9,7 @@ import {
   type ReplyRequest,
   type ResolveRequest,
   type RouteName,
+  type RunModelRequest,
   routePath,
   routes,
   type StartAnalysisRequest,
@@ -79,7 +80,7 @@ export const createApiClient = (options: ApiClientOptions) => {
     getFileContent: (id: AnalysisId, side: "base" | "head", path: string) =>
       send(routes.getFileContent, { id, side, path }),
     retryAnalysis: (id: AnalysisId) => send(routes.retryAnalysis, { id }),
-    runModel: (id: AnalysisId) => send(routes.runModel, { id }),
+    runModel: (id: AnalysisId, body: RunModelRequest = {}) => send(routes.runModel, { id }, body),
     removeModelRun: (id: AnalysisId) => send(routes.removeModelRun, { id }),
     putPointState: (id: AnalysisId, pointId: PointId, body: PutPointStateRequest) =>
       send(routes.putPointState, { id, pointId }, body),

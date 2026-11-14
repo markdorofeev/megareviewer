@@ -8,6 +8,7 @@ import {
   MismatchId,
   type ModelCall,
   type ModelError,
+  type ModelOption,
   modelRunnable,
   PointId,
   type StageName,
@@ -18,7 +19,7 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
-import type { AnalysisInput, CodeParser, ModelAvailability } from "../ports/index.ts";
+import type { AnalysisInput, CodeParser } from "../ports/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
@@ -27,8 +28,10 @@ import {
   FakeGitHost,
   FakeLocalCheckout,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakeTicketSource,
   FixedClock,
+  fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   type PullRequestFixture,
@@ -65,8 +68,8 @@ const setup = (
     fileCache?: InMemoryFileCache;
     /** Whether analyze() runs the model after the code's analysis, as the button does. */
     modelEnabled?: boolean;
-    /** What modelAvailability answers; available unless given. */
-    availability?: ModelAvailability;
+    /** The catalog's options; Sonnet 5.5 on Claude Code, available, unless given. */
+    modelOptions?: readonly ModelOption[];
     checkouts?: FakeLocalCheckouts;
     clock?: FixedClock;
   } = {},
@@ -78,6 +81,10 @@ const setup = (
     options.tickets ??
     new FakeTicketSource({ tickets: allFixtures.flatMap((fixture) => fixture.tickets) });
   const model = options.model ?? new FakeAnalysisModel();
+  const models = new FakeModelCatalog({
+    model,
+    ...(options.modelOptions === undefined ? {} : { options: options.modelOptions }),
+  });
   const store = new RecordingStore();
   const fileCache = options.fileCache ?? new InMemoryFileCache();
   const parser = options.parser ?? new FakeCodeParser();
@@ -103,9 +110,7 @@ const setup = (
     {
       hosts: options.onlyGithub ? { github } : { github, bitbucket },
       tickets,
-      model,
-      modelAvailability: async () =>
-        options.availability ?? { available: true, via: "the fake model" },
+      models,
       store,
       fileCache,
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
@@ -133,9 +138,9 @@ const setup = (
   };
 
   /** Runs the model on a complete analysis, as the button does, and resolves once it's done. */
-  const runModel = async (id: AnalysisId): Promise<Analysis> => {
+  const runModel = async (id: AnalysisId, optionId?: string): Promise<Analysis> => {
     const before = doneCount(id);
-    const ran = await useCases.runModel(id);
+    const ran = await useCases.runModel(id, optionId);
     if (!ran.ok) throw new Error(ran.error.message);
     await done(id, before + 1);
     return stored(id);
@@ -158,6 +163,7 @@ const setup = (
     bitbucket,
     tickets,
     model,
+    models,
     store,
     fileCache,
     logger,
@@ -1531,12 +1537,71 @@ describe("runModel", () => {
     );
 
     const unavailable = await codeOnly({
-      availability: { available: false, reason: "Claude Code isn't signed in" },
+      modelOptions: [
+        fakeModelOption({
+          available: false,
+          reason: "Claude Code isn't signed in: run `claude` and sign in",
+        }),
+      ],
     });
     expect(await unavailable.useCases.runModel(unavailable.analysis.id)).toEqual(
-      err({ code: "model-unavailable", message: "Claude Code isn't signed in" }),
+      err({
+        code: "model-unavailable",
+        message:
+          "Sonnet 5.5 through Claude Code can't run: Claude Code isn't signed in: run `claude` and sign in",
+      }),
     );
     expect(unavailable.model.calls).toEqual([]);
+  });
+
+  it("runs on the option asked for, and records it on the analysis", async () => {
+    const haiku = fakeModelOption({ model: "claude-haiku-5-5", modelName: "Haiku 5.5" });
+    const { analysis, runModel, models } = await codeOnly({
+      modelOptions: [haiku, fakeModelOption()],
+    });
+    const after = await runModel(analysis.id, haiku.id);
+    expect(after.modelOption).toEqual({
+      provider: "claude-code",
+      providerName: "Claude Code",
+      model: "claude-haiku-5-5",
+      modelName: "Haiku 5.5",
+      family: "Claude",
+    });
+    expect(models.asked).toBe(1);
+  });
+
+  it("runs on the default without a choice", async () => {
+    const { analysis, runModel } = await codeOnly();
+    expect((await runModel(analysis.id)).modelOption?.model).toBe("claude-sonnet-5-5");
+  });
+
+  it("refuses an option it doesn't know, and one that can't run, with why", async () => {
+    const api = fakeModelOption({
+      provider: "anthropic-api",
+      providerName: "Anthropic API",
+      available: false,
+      reason: "No Anthropic API credentials",
+    });
+    const { analysis, useCases, model } = await codeOnly({
+      modelOptions: [fakeModelOption(), api],
+    });
+    expect(await useCases.runModel(analysis.id, "claude-code/claude-nothing")).toEqual(
+      err({ code: "bad-request", message: "No model option claude-code/claude-nothing" }),
+    );
+    expect(await useCases.runModel(analysis.id, api.id)).toEqual(
+      err({
+        code: "model-unavailable",
+        message: "Sonnet 5.5 through Anthropic API can't run: No Anthropic API credentials",
+      }),
+    );
+    expect(model.calls).toEqual([]);
+  });
+
+  it("refuses to run when no model is known", async () => {
+    const { analysis, useCases } = await codeOnly({ modelOptions: [] });
+    expect(await useCases.runModel(analysis.id)).toEqual(
+      err({ code: "model-unavailable", message: "No model is known to megareviewer" }),
+    );
   });
 
   it("refuses an analysis that isn't complete", async () => {
@@ -1632,7 +1697,7 @@ describe("removeModelRun", () => {
     const { useCases, store, analyze } = setup({ modelEnabled: false });
     const codeOnly = await analyze();
     expect(await useCases.removeModelRun(codeOnly.id)).toEqual(
-      err({ code: "bad-request", message: "Claude hasn't analyzed this pull request" }),
+      err({ code: "bad-request", message: "No model has analyzed this pull request" }),
     );
     await store.saveAnalysis({ ...codeOnly, status: "failed" });
     expect(await useCases.removeModelRun(codeOnly.id)).toEqual(

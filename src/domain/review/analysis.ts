@@ -12,6 +12,7 @@ import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
 import { ModelError } from "./errors.ts";
 import { Intent, Ticket } from "./intent.ts";
+import { ModelRunOption } from "./model-option.ts";
 import { Finding } from "./point.ts";
 import { Sha, Timestamp } from "./primitives.ts";
 import { PullRequest, PullRequestRef } from "./pull-request.ts";
@@ -176,6 +177,8 @@ export const Analysis = z
      * there with or without the model.
      */
     modelError: AnalysisError.nullable().default(null),
+    /** The option the model run used. Absent on analyses stored before the choice, all Haiku 5.5. */
+    modelOption: ModelRunOption.nullable().default(null),
     createdAt: Timestamp,
     updatedAt: Timestamp,
   })

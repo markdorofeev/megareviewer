@@ -8,7 +8,9 @@ import type {
 import {
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakeTicketSource,
+  fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   type PullRequestFixture,
@@ -79,8 +81,10 @@ export const analyzeCase = async (
     {
       hosts: { [host]: new FakeGitHost({ host, fixtures: [fixture], clock: systemClock }) },
       tickets: new FakeTicketSource({ tickets: fixture.tickets }),
-      model: recorded.model,
-      modelAvailability: async () => ({ available: true, via: "the eval's model" }),
+      models: new FakeModelCatalog({
+        model: recorded.model,
+        options: [fakeModelOption({ via: "the eval's model" })],
+      }),
       store,
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),

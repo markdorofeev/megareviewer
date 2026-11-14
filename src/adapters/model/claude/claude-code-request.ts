@@ -2,6 +2,7 @@ import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
 import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
+import { claudeModel, effortFor } from "./models.ts";
 import { MODEL } from "./request.ts";
 
 export const SYSTEM_PROMPT_FILE = "system.txt";
@@ -11,6 +12,10 @@ export const STRUCTURED_OUTPUT_TOOL = "StructuredOutput";
 
 /** What Claude Code 2.1.303 reported as Haiku 5.5's output limit under -p, past the API path's. */
 export const CLAUDE_CODE_MAX_OUTPUT_TOKENS = 128_000;
+
+/** A model's output limit under -p, from the table, else the one measured. */
+export const claudeCodeOutputLimit = (model: string): number =>
+  claudeModel(model)?.maxOutputTokens.claudeCode ?? CLAUDE_CODE_MAX_OUTPUT_TOKENS;
 
 export interface ClaudeCodeRequest {
   readonly args: readonly string[];
@@ -80,20 +85,25 @@ export const passCall = (
   renderedInput: string,
   message: string,
   model: string = MODEL,
-  effort: Effort = PASS_EFFORT[pass],
+  effort?: Effort,
 ): StructuredCall => ({
   model,
-  effort,
+  effort: effort ?? effortFor(claudeModel(model), PASS_EFFORT[pass]),
   systemPrompt: claudeCodeSystemPrompt(renderedInput),
   schema: PASS_ANSWER_FORMAT.schema,
   message,
 });
 
-export const claudeCodePassArgs = (pass: ModelPass): string[] =>
-  claudeCodeArgs(MODEL, PASS_EFFORT[pass], PASS_ANSWER_FORMAT.schema);
+export const claudeCodePassArgs = (pass: ModelPass, model: string = MODEL): string[] =>
+  claudeCodeArgs(
+    model,
+    effortFor(claudeModel(model), PASS_EFFORT[pass]),
+    PASS_ANSWER_FORMAT.schema,
+  );
 
 export const claudeCodeRequest = (
   pass: ModelPass,
   renderedInput: string,
   message: string,
-): ClaudeCodeRequest => structuredCallRequest(passCall(pass, renderedInput, message));
+  model: string = MODEL,
+): ClaudeCodeRequest => structuredCallRequest(passCall(pass, renderedInput, message, model));

@@ -4,12 +4,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import packageJson from "../../package.json" with { type: "json" };
 import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
-import type { Logger, ModelAvailability } from "../application/ports/index.ts";
+import type { Logger } from "../application/ports/index.ts";
+import type { ModelOptions } from "../domain/review/index.ts";
 import { EXIT, parseCliArgs, USAGE } from "./args.ts";
 import { compose } from "./compose.ts";
 import { type Config, loadConfig } from "./config.ts";
 import { createDoctorDeps, formatCheck, repoName, runDoctor } from "./doctor.ts";
 import { createLogger } from "./logger.ts";
+import { modelSummary } from "./model-access.ts";
 import { openBrowser } from "./open-browser.ts";
 import { serve } from "./serve.ts";
 
@@ -37,7 +39,7 @@ const printProblems = (problems: readonly string[]): void => {
 
 const printSummary = (
   config: Config,
-  model: ModelAvailability,
+  model: ModelOptions,
   checkout: CheckoutInfo | null,
   url: string,
   ui: boolean,
@@ -49,9 +51,7 @@ const printSummary = (
       : `as ${config.bitbucket.username} (${config.bitbucket.credential})${config.bitbucket.workspace === null ? "" : `, workspace ${config.bitbucket.workspace}`}`;
   const jira =
     config.jira === null ? "not configured: ticket keys aren't fetched" : config.jira.baseUrl;
-  const claude = model.available
-    ? `${model.via}: Request AI review, on a review, adds intent, decisions and the tour's titles`
-    : `unavailable: ${model.reason}`;
+  const claude = modelSummary(model);
   const repos = checkout?.repos.map(repoName).join(", ") ?? "";
   const local =
     checkout === null
@@ -61,7 +61,7 @@ const printSummary = (
   GitHub     ${github}
   Bitbucket  ${bitbucket}
   Jira       ${jira}
-  Claude     ${claude}
+  Model      ${claude}
   Checkout   ${local}
 ${ui ? "" : "\nNo built UI found, so only the API is served.\n"}
 Open ${url}
@@ -147,10 +147,7 @@ const start = async (options: {
   }, logger);
 
   const url = `http://127.0.0.1:${server.port}/?token=${composition.sessionToken}`;
-  const [model, checkout] = await Promise.all([
-    composition.modelAvailability(),
-    inspectCheckout(dir),
-  ]);
+  const [model, checkout] = await Promise.all([composition.modelOptions(), inspectCheckout(dir)]);
   printSummary(config, model, checkout, url, assets.staticDir !== null);
   if (options.open) openBrowser(url, logger);
   return null;

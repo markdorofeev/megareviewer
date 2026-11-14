@@ -1,8 +1,13 @@
 import { useState } from "react";
-import type { ModelCall, ModelPass } from "../../../../src/domain/review/index.ts";
+import {
+  type ModelCall,
+  type ModelPass,
+  type ModelRunOption,
+  modelFamily,
+} from "../../../../src/domain/review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Dialog } from "./Dialog.tsx";
-import { formatDuration } from "./UsageFooter.tsx";
+import { formatDuration, runName } from "./UsageFooter.tsx";
 
 const PASS_NAMES: Readonly<Record<ModelPass, string>> = {
   intent: "Intent",
@@ -31,8 +36,15 @@ export const chronological = (calls: readonly ModelCall[]): ModelCall[] =>
     (a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt) || a.attempt - b.attempt,
   );
 
-/** Every call of Claude's runs on this analysis: when it ran, how long, and what came of it. */
-export const ModelCalls = ({ calls }: { readonly calls: readonly ModelCall[] }) => {
+/** Every call of the model's runs on this analysis: when it ran, how long, and what came of it. */
+export const ModelCalls = ({
+  calls,
+  option,
+}: {
+  readonly calls: readonly ModelCall[];
+  /** The option of the latest run. */
+  readonly option: ModelRunOption | null;
+}) => {
   const [open, setOpen] = useState(false);
   const ordered = chronological(calls);
   const first = ordered[0];
@@ -46,8 +58,13 @@ export const ModelCalls = ({ calls }: { readonly calls: readonly ModelCall[] }) 
         Run details…
       </Button>
       {open && (
-        <Dialog title="Claude's calls" onClose={() => setOpen(false)} className="sm:max-w-3xl">
+        <Dialog
+          title={`${modelFamily(option)}'s calls`}
+          onClose={() => setOpen(false)}
+          className="sm:max-w-3xl"
+        >
           <p className="text-ui text-muted-foreground">
+            {runName(option) === null ? "" : `On ${runName(option)}. `}
             {formatDuration(end - start)} from the first call to the end of the last. A call whose
             answer has problems runs once more, told what they are.
           </p>

@@ -59,6 +59,25 @@ for (const combination of COMBINATIONS) {
   });
 }
 
+for (const combination of COMBINATIONS) {
+  test(`opens the choice of model, a disabled option focusable with why, ${combination.name}`, async ({
+    page,
+  }) => {
+    await open(page, combination);
+    await page.getByRole("button", { name: "Model: Sonnet 5.5" }).first().click();
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitemradio")).toHaveCount(6);
+    // The last option is the API's Opus, which can't run without credentials.
+    await page.keyboard.press("End");
+    const focused = menu.locator(":focus");
+    await expect(focused).toHaveAttribute("aria-disabled", "true");
+    await expect(focused).toHaveAccessibleDescription(/^No Anthropic API credentials/);
+    expect(await pageProblems(page)).toEqual([]);
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+  });
+}
+
 test("works from the keyboard", async ({ page }) => {
   await open(page, { theme: "light", palette: "default" });
   const screens = page.locator("#screens");

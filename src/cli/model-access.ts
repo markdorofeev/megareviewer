@@ -1,38 +1,43 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig as loadAnthropicConfig } from "@anthropic-ai/sdk/core/credentials";
 import {
+  CLAUDE_MODELS,
   type ClaudeCodeStatus,
   claudeCodeStatus,
   compareVersions,
   createClaudeAnalysisModel,
   createClaudeCodeAnalysisModel,
+  DEFAULT_MODEL,
   MIN_CLAUDE_CODE_VERSION,
   planName,
   type RunClaude,
 } from "../adapters/model/index.ts";
-import type { AnalysisModel, Logger, ModelAvailability } from "../application/ports/index.ts";
-import type { ModelBilling, ModelError } from "../domain/review/index.ts";
-import { err, ok, type Result } from "../domain/shared/index.ts";
+import type { AnalysisModel, Logger, ModelCatalog } from "../application/ports/index.ts";
+import {
+  type ModelBilling,
+  type ModelOption,
+  type ModelOptionId,
+  type ModelOptions,
+  type ModelProvider,
+  modelOptionId,
+} from "../domain/review/index.ts";
 
 export const NO_ANTHROPIC_CREDENTIALS =
   "set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API";
 
-export type ModelTransport =
-  | {
-      readonly kind: "claude-code";
-      readonly version: string;
-      readonly plan: string | null;
-      readonly billing: ModelBilling;
-    }
-  | { readonly kind: "api" };
+/** How long a provider has to say whether it can run, so a hung command can't hold the page. */
+export const PROBE_TIMEOUT_MS = 5_000;
 
 /** What runs the passes, and who pays for it. */
-export const describeTransport = (transport: ModelTransport): string =>
-  transport.kind === "api"
-    ? "Anthropic API, billed to your account"
-    : transport.billing === "plan"
-      ? `Claude Code, on ${planName(transport.plan)}`
-      : "Claude Code, billed to your Anthropic Console account";
+export const describeClaudeCode = (claudeCode: {
+  readonly plan: string | null;
+  readonly billing: ModelBilling;
+}): string =>
+  claudeCode.billing === "plan"
+    ? `Claude Code, on ${planName(claudeCode.plan)}`
+    : "Claude Code, billed to your Anthropic Console account";
+
+export const API_VIA = "Anthropic API, billed to your account";
 
 /** Why Claude Code can't run the passes, or null when it can. */
 export const claudeCodeProblem = (status: ClaudeCodeStatus): string | null => {
@@ -50,20 +55,6 @@ export const claudeCodeProblem = (status: ClaudeCodeStatus): string | null => {
   }
 };
 
-/** Claude Code first when it's installed and signed in, else the API when the SDK finds credentials. */
-export const selectTransport = (
-  claudeCode: ClaudeCodeStatus,
-  apiConfigured: boolean,
-): Result<ModelTransport, string> => {
-  const problem = claudeCodeProblem(claudeCode);
-  if (claudeCode.state === "signed-in" && problem === null) {
-    const { version, plan, billing } = claudeCode;
-    return ok({ kind: "claude-code", version, plan, billing });
-  }
-  if (apiConfigured) return ok({ kind: "api" });
-  return err(`${problem}; or ${NO_ANTHROPIC_CREDENTIALS}.`);
-};
-
 /**
  * Whether the SDK will find credentials: an API key or auth token from the environment, or an
  * `ant auth login` profile. Without them its first request throws, which would be a bug report
@@ -79,103 +70,179 @@ export const anthropicConfigured = async (client: Anthropic, logger: Logger): Pr
   }
 };
 
-export interface ModelAccess {
-  /** Runs each pass on the transport `availability` picked, picking it first if it hasn't. */
-  readonly model: AnalysisModel;
-  /**
-   * Whether the passes can run, picking the transport the first time one is available and keeping
-   * it. While none is, it checks again each time, so signing in needs no restart.
-   */
-  availability(): Promise<ModelAvailability>;
+/** Whether a provider can run the passes: what runs them and who pays, or why it can't. */
+export type ProviderStatus =
+  | { readonly available: true; readonly via: string; readonly billing: ModelBilling }
+  | { readonly available: false; readonly reason: string };
+
+interface Provider {
+  readonly id: ModelProvider;
+  readonly name: string;
+  probe(): Promise<ProviderStatus>;
+  model(model: string, status: ProviderStatus & { available: true }): AnalysisModel;
 }
 
-/** The model passes on whichever of Claude Code or the API can run them, picked when first asked. */
-export const createModelAccess = (options: {
+/** A provider's answer, or that it didn't give one in time. Never rejects. */
+const probeWithin = async (provider: Provider, timeoutMs: number): Promise<ProviderStatus> => {
+  let timer: NodeJS.Timeout | undefined;
+  const timedOut = new Promise<ProviderStatus>((resolve) => {
+    timer = setTimeout(
+      () =>
+        resolve({
+          available: false,
+          reason: `${provider.name} didn't say whether it can run within ${timeoutMs / 1000} seconds`,
+        }),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([
+      provider.probe().catch(
+        (error: unknown): ProviderStatus => ({
+          available: false,
+          reason: `${provider.name} couldn't be checked: ${String(error)}`,
+        }),
+      ),
+      timedOut,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+/** Every listed model on every provider, in the providers' order, cheapest model first. */
+export const catalogOptions = (
+  providers: readonly { readonly id: ModelProvider; readonly name: string }[],
+  statuses: readonly ProviderStatus[],
+): ModelOptions => {
+  const options = providers.flatMap((provider, index): ModelOption[] => {
+    const status = statuses[index] ?? { available: false, reason: "not checked" };
+    return CLAUDE_MODELS.map((model) => ({
+      id: modelOptionId(provider.id, model.id),
+      provider: provider.id,
+      providerName: provider.name,
+      model: model.id,
+      modelName: model.name,
+      family: "Claude",
+      via: status.available ? status.via : provider.name,
+      measured: true,
+      available: status.available,
+      reason: status.available ? null : status.reason,
+    }));
+  });
+  const firstAvailable = providers.find((_, index) => statuses[index]?.available === true);
+  const provider = firstAvailable ?? providers[0];
+  return {
+    options,
+    defaultId: provider === undefined ? null : modelOptionId(provider.id, DEFAULT_MODEL),
+  };
+};
+
+export interface ModelCatalogOptions {
   readonly runClaude: RunClaude;
   readonly client?: Anthropic;
   readonly logger: Logger;
+  readonly timeoutMs?: number;
   /** For tests: Claude Code's status and the API's credentials, in place of asking them. */
-  readonly probe?: () => Promise<{ claudeCode: ClaudeCodeStatus; apiConfigured: boolean }>;
-}): ModelAccess => {
+  readonly probe?: {
+    readonly claudeCode: () => Promise<ClaudeCodeStatus>;
+    readonly apiConfigured: () => Promise<boolean>;
+  };
+}
+
+/**
+ * Claude's models on Claude Code, then on the Anthropic API. Both are asked at once; one that can
+ * run is kept for the process, and one that can't is asked again on the next request.
+ */
+export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog => {
   const { runClaude, logger } = options;
   const client = options.client ?? new Anthropic();
-  const api = createClaudeAnalysisModel({ client, logger });
-  const probe =
-    options.probe ??
-    (async () => {
-      const claudeCode = await claudeCodeStatus(runClaude);
-      // The API is only asked about when Claude Code can't run the passes.
-      const apiConfigured =
-        claudeCodeProblem(claudeCode) !== null && (await anthropicConfigured(client, logger));
-      return { claudeCode, apiConfigured };
-    });
-
-  interface Chosen {
-    readonly transport: ModelTransport;
-    readonly model: AnalysisModel;
-  }
-  let chosen: Chosen | null = null;
-  // Shared by callers that ask at once, so Claude Code's status is read once.
-  let picking: Promise<Result<Chosen, string>> | null = null;
-
-  const choose = async (): Promise<Result<Chosen, string>> => {
-    const { claudeCode, apiConfigured } = await probe();
-    const selected = selectTransport(claudeCode, apiConfigured);
-    if (!selected.ok) return selected;
-    const transport = selected.value;
-    const picked: Chosen = {
-      transport,
-      model:
-        transport.kind === "api"
-          ? api
-          : createClaudeCodeAnalysisModel({ run: runClaude, billing: transport.billing, logger }),
-    };
-    chosen = picked;
-    logger.info("Picked how the model passes run", { via: describeTransport(transport) });
-    return ok(picked);
+  const timeoutMs = options.timeoutMs ?? PROBE_TIMEOUT_MS;
+  const probe = options.probe ?? {
+    claudeCode: () => claudeCodeStatus(runClaude),
+    apiConfigured: () => anthropicConfigured(client, logger),
   };
 
-  const pick = (): Promise<Result<Chosen, string>> => {
-    if (chosen !== null) return Promise.resolve(ok(chosen));
+  const providers: readonly Provider[] = [
+    {
+      id: "claude-code",
+      name: "Claude Code",
+      async probe() {
+        const status = await probe.claudeCode();
+        const problem = claudeCodeProblem(status);
+        if (status.state !== "signed-in" || problem !== null) {
+          return { available: false, reason: problem ?? "Claude Code can't run" };
+        }
+        return { available: true, via: describeClaudeCode(status), billing: status.billing };
+      },
+      model: (model, status) =>
+        createClaudeCodeAnalysisModel({ run: runClaude, billing: status.billing, model, logger }),
+    },
+    {
+      id: "anthropic-api",
+      name: "Anthropic API",
+      async probe() {
+        return (await probe.apiConfigured())
+          ? { available: true, via: API_VIA, billing: "api" }
+          : {
+              available: false,
+              reason: `No Anthropic API credentials: ${NO_ANTHROPIC_CREDENTIALS}`,
+            };
+      },
+      model: (model) => createClaudeAnalysisModel({ client, logger, model }),
+    },
+  ];
+
+  const kept = new Map<ModelProvider, ProviderStatus & { available: true }>();
+  // Shared by requests that ask at once, so each command runs once.
+  const asking = new Map<ModelProvider, Promise<ProviderStatus>>();
+  const models = new Map<ModelOptionId, AnalysisModel>();
+
+  const statusOf = (provider: Provider): Promise<ProviderStatus> => {
+    const known = kept.get(provider.id);
+    if (known !== undefined) return Promise.resolve(known);
     const running =
-      picking ??
-      choose().finally(() => {
-        picking = null;
+      asking.get(provider.id) ??
+      probeWithin(provider, timeoutMs).then((status) => {
+        asking.delete(provider.id);
+        if (status.available) {
+          kept.set(provider.id, status);
+          logger.info("A model provider can run the passes", { via: status.via });
+        }
+        return status;
       });
-    picking = running;
+    asking.set(provider.id, running);
     return running;
   };
 
-  const onModel = async <T>(
-    run: (model: AnalysisModel) => Promise<Result<T, ModelError>>,
-  ): Promise<Result<T, ModelError>> => {
-    const picked = await pick();
-    return picked.ok
-      ? run(picked.value.model)
-      : err({ kind: "unauthorized", message: `Claude can't run: ${picked.error}` });
-  };
-
   return {
-    model: {
-      get version() {
-        return chosen?.model.version ?? "not picked yet";
-      },
-      checkSize: (input) => onModel((model) => model.checkSize(input)),
-      intent: (input, passOptions) => onModel((model) => model.intent(input, passOptions)),
-      findings: (input, intent, passOptions) =>
-        onModel((model) => model.findings(input, intent, passOptions)),
-      risk: (input, intent, passOptions) =>
-        onModel((model) => model.risk(input, intent, passOptions)),
-      decisions: (input, intent, passOptions) =>
-        onModel((model) => model.decisions(input, intent, passOptions)),
-      tour: (input, intent, risk, decisions, skeleton, passOptions) =>
-        onModel((model) => model.tour(input, intent, risk, decisions, skeleton, passOptions)),
+    async options() {
+      return catalogOptions(providers, await Promise.all(providers.map(statusOf)));
     },
-    async availability() {
-      const picked = await pick();
-      return picked.ok
-        ? { available: true, via: describeTransport(picked.value.transport) }
-        : { available: false, reason: picked.error };
+
+    model(optionId) {
+      const cached = models.get(optionId);
+      if (cached !== undefined) return cached;
+      const [providerId, ...rest] = optionId.split("/");
+      const modelId = rest.join("/");
+      const provider = providers.find((candidate) => candidate.id === providerId);
+      const status = provider === undefined ? undefined : kept.get(provider.id);
+      if (provider === undefined || status === undefined) return null;
+      if (!CLAUDE_MODELS.some((model) => model.id === modelId)) return null;
+      const model = provider.model(modelId, status);
+      models.set(optionId, model);
+      return model;
     },
   };
+};
+
+/** The default option and who pays, or each provider's reason when none can run. */
+export const modelSummary = ({ options, defaultId }: ModelOptions): string => {
+  const chosen = options.find((option) => option.id === defaultId);
+  if (chosen?.available === true) {
+    const others = options.filter((option) => option.available).length - 1;
+    return `${chosen.modelName} through ${chosen.via}${others > 0 ? `, or ${others} more in Request AI review's menu` : ""}`;
+  }
+  const reasons = [...new Set(options.flatMap((option) => option.reason ?? []))];
+  return `unavailable: ${reasons.join("; or ") || "no model is known"}`;
 };

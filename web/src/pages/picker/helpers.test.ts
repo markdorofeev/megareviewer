@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixtureStatus } from "../../../dev/fixtures/index.ts";
+import { fixtureStatus, lockedModelOptions } from "../../../dev/fixtures/index.ts";
 import { relativeTime } from "./relative-time.ts";
 import { setupItems } from "./setup.ts";
 
@@ -14,9 +14,9 @@ describe("setupItems", () => {
       },
       { name: "Jira", state: "ok", text: "Configured" },
       {
-        name: "Claude",
+        name: "Model",
         state: "ok",
-        text: "Claude Code, on your Pro plan: Request AI review, on a review, adds intent, decisions and the tour's titles",
+        text: "Sonnet 5.5 through Claude Code, on your Pro plan: Request AI review, on a review, adds intent, findings and the tour's titles",
       },
     ]);
   });
@@ -27,21 +27,17 @@ describe("setupItems", () => {
       ...fixtureStatus,
       hosts: { github: off, bitbucket: off },
       jira: { configured: false },
-      model: {
-        available: false,
-        via: null,
-        reason: "Claude Code isn't installed; or set ANTHROPIC_API_KEY to use the Anthropic API.",
-      },
+      model: lockedModelOptions,
     });
     expect(items.map((item) => [item.name, item.state])).toEqual([
       ["GitHub", "missing"],
       ["Bitbucket", "missing"],
       ["Jira", "optional"],
-      ["Claude", "optional"],
+      ["Model", "optional"],
     ]);
     expect(items[0]?.text).toBe("Not configured: set GITHUB_TOKEN or run gh auth login");
     expect(items[3]?.text).toBe(
-      "Unavailable: Claude Code isn't installed; or set ANTHROPIC_API_KEY to use the Anthropic API.",
+      "Unavailable: Claude Code isn't signed in: run `claude` and sign in; or No Anthropic API credentials: set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API",
     );
   });
 

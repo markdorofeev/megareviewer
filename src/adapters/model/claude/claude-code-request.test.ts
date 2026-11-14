@@ -16,6 +16,7 @@ import {
   claudeCodeRequest,
   SYSTEM_PROMPT_FILE,
 } from "./claude-code-request.ts";
+import { CLAUDE_MODELS } from "./models.ts";
 import { CLAUDE_CODE_FINGERPRINT, CLAUDE_CODE_PROMPT_VERSION } from "./version.ts";
 
 const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass, reason }) =>
@@ -23,12 +24,16 @@ const risk: ModelRisk[] = smallFeatureAnalysis.risk.flatMap(({ hunkId, riskClass
 );
 const earlier = { intent: smallFeatureIntent, risk, decisions: smallFeatureAnalysis.decisions };
 
-const requests = () =>
+/** The fingerprint was taken on Haiku 5.5, the model the prompts were tuned on. */
+const HAIKU = "claude-haiku-5-5";
+
+const requests = (model: string = HAIKU) =>
   ModelPass.options.map((pass) =>
     claudeCodeRequest(
       pass,
       renderInput(smallFeatureInput),
       passMessage(pass, earlier, ["problem"]),
+      model,
     ),
   );
 
@@ -40,11 +45,26 @@ describe("Claude Code request", () => {
     ["risk", "low"],
     ["decisions", "high"],
     ["tour", "medium"],
-  ] as const)("runs the %s pass on Haiku at %s effort", (pass, effort) => {
-    const args = claudeCodePassArgs(pass);
-    expect(flag(args, "--model")).toBe("claude-haiku-5-5");
+  ] as const)("runs the %s pass at %s effort", (pass, effort) => {
+    const args = claudeCodePassArgs(pass, HAIKU);
+    expect(flag(args, "--model")).toBe(HAIKU);
     expect(flag(args, "--effort")).toBe(effort);
   });
+
+  it("runs on the default model, Sonnet 5.5, when none is given", () => {
+    expect(flag(claudeCodePassArgs("intent"), "--model")).toBe("claude-sonnet-5-5");
+  });
+
+  it.each(CLAUDE_MODELS.map((model) => model.id))(
+    "names %s and sends every pass the same system prompt on it",
+    (model) => {
+      const all = requests(model);
+      expect(all.map((request) => flag(request.args, "--model"))).toEqual(
+        Array(all.length).fill(model),
+      );
+      expect(new Set(all.map((request) => request.files[SYSTEM_PROMPT_FILE])).size).toBe(1);
+    },
+  );
 
   it("locks the session down: no tools, servers, commands, settings or saved session", () => {
     const args = claudeCodePassArgs("intent");

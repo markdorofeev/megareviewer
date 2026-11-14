@@ -30,11 +30,17 @@ describe("ModelCalls", () => {
   });
 
   it("says why a pass ran again, and why one failed", () => {
-    render(<ModelCalls calls={[...calls, failed]} />);
+    render(
+      <ModelCalls calls={[...calls, failed]} option={fixtureAnalysisView.analysis.modelOption} />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Run details…" }));
     const dialog = screen.getByRole("dialog", { name: "Claude's calls" });
 
-    expect(within(dialog).getByText(/^141\.2 s from the first call/)).toBeTruthy();
+    expect(
+      within(dialog).getByText(
+        /^On Sonnet 5\.5 through Claude Code\. 141\.2 s from the first call/,
+      ),
+    ).toBeTruthy();
     const findings = within(dialog).getAllByRole("row")[2];
     expect(findings?.textContent).toContain("⚠ 2 problems");
     expect(findings?.textContent).toContain(
@@ -45,7 +51,7 @@ describe("ModelCalls", () => {
   });
 
   it("shows nothing before Claude has run", () => {
-    const { container } = render(<ModelCalls calls={[]} />);
+    const { container } = render(<ModelCalls calls={[]} option={null} />);
     expect(container.textContent).toBe("");
   });
 

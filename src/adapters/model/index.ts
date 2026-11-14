@@ -16,6 +16,12 @@ export {
   MIN_CLAUDE_CODE_VERSION,
   planName,
 } from "./claude/claude-code-status.ts";
+export {
+  CLAUDE_MODELS,
+  type ClaudeModel,
+  claudeModel,
+  DEFAULT_MODEL,
+} from "./claude/models.ts";
 export { MAX_INPUT_TOKENS } from "./claude/request.ts";
 export {
   type ClaudeRun,

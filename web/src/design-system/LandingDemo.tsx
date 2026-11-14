@@ -1,12 +1,13 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { mapModelStages, type Point, PointId } from "../../../src/domain/review/index.ts";
+import { fixtureModelOptions } from "../../dev/fixtures/index.ts";
 import { ClaudeElement } from "../pages/review/ClaudeElement.tsx";
 import { DecisionChip, FindingCard, PointFold, RiskNote } from "../pages/review/PointCard.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { tokenMs, useLanding } from "../pages/review/useLanding.ts";
 import { FileTree, HunkCard, type LinePlace, PINNED, type PointLine } from "../review/index.ts";
 import { Button } from "../ui/button.tsx";
-import { DESIGN_RUN, POINTS, RETRY_FILE, TREE_FILES } from "./fixtures.ts";
+import { DESIGN_RUN, POINTS, RETRY_FILE, TREE_FILES, useDemoChoice } from "./fixtures.ts";
 
 /** The point card's points again, under ids of their own: the cards' anchors are ids on the page. */
 const LANDED: readonly Point[] = POINTS.map((point) => ({
@@ -22,6 +23,7 @@ const RANK: Readonly<Record<Point["kind"], number>> = { finding: 0, risk: 1, dec
  */
 export const LandingDemo = () => {
   const [run, setRun] = useState<"running" | "after">("after");
+  const choice = useDemoChoice(fixtureModelOptions);
   const points = run === "after" ? LANDED : [];
   const ids = useMemo(() => points.map((point) => point.id), [points]);
   const landing = useLanding(run === "running", ids);
@@ -147,8 +149,7 @@ export const LandingDemo = () => {
         <span>Retry requests that fail on the network.</span>
         <ClaudeElement
           analysis={run === "running" ? DESIGN_RUN : ran}
-          via="Claude Code, on your Pro plan"
-          unavailable={null}
+          choice={choice}
           running={landing.running}
           startedAt={null}
           starting={false}

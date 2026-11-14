@@ -7,14 +7,16 @@ import {
   type FilesFetched,
   joinParts,
   MODEL_STAGES,
+  type ModelRunOption,
   mapModelStages,
+  modelFamily,
   type PullRequest,
   raiseByRules,
   type StageName,
   type StageStatus,
 } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
-import type { GitHost } from "../ports/index.ts";
+import type { AnalysisModel, GitHost } from "../ports/index.ts";
 import { type Collected, collect, type OnFilesFetched } from "./collect.ts";
 import type { AppDeps } from "./deps.ts";
 import type { UseCaseError } from "./errors.ts";
@@ -208,20 +210,22 @@ export const runModel = async (
   host: GitHost,
   analysis: Analysis,
   pullRequest: PullRequest,
+  run: { readonly model: AnalysisModel; readonly option: ModelRunOption },
   checkout: CheckoutAt | null = null,
 ): Promise<void> => {
   const tracker = createTracker(deps, analysis);
   try {
     await tracker.save((current) => ({
       modelError: null,
+      modelOption: run.option,
       stages: mapModelStages(current.stages, () => "pending"),
     }));
-    await modelStages(deps, host, pullRequest, checkout, tracker);
+    await modelStages(deps, run.model, host, pullRequest, checkout, tracker);
   } catch (error) {
     deps.logger.error("The model run crashed", { analysisId: analysis.id, error });
     await tracker.failModel(tracker.lastStage, {
       code: "internal",
-      message: "megareviewer hit an internal error while Claude analyzed the pull request",
+      message: `megareviewer hit an internal error while ${modelFamily(run.option)} analyzed the pull request`,
     });
   }
 };
@@ -230,13 +234,12 @@ const noProgress: OnFilesFetched = async () => {};
 
 const modelStages = async (
   deps: AppDeps,
+  model: AnalysisModel,
   host: GitHost,
   pullRequest: PullRequest,
   checkout: CheckoutAt | null,
   tracker: Tracker,
 ): Promise<void> => {
-  const { model } = deps;
-
   const collected = await collect(deps, host, pullRequest, noProgress);
   if (!collected.ok) return tracker.failModel("intent", collected.error);
   const { prepared, proofRisk, ruleRisk, skeleton, joined } = await prepare(

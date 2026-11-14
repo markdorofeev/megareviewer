@@ -104,11 +104,6 @@ export interface TourSkeleton {
   readonly parts: readonly HunkPart[];
 }
 
-/** Whether the model passes can run now: what runs them and who pays, or why they can't. */
-export type ModelAvailability =
-  | { readonly available: true; readonly via: string }
-  | { readonly available: false; readonly reason: string };
-
 export interface AnalysisModel {
   /** Changes whenever prompts, schemas or the model change. Part of the cache key. */
   readonly version: string;

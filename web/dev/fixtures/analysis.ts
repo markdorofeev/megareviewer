@@ -810,6 +810,13 @@ const analysis: Analysis = {
   modelCalls,
   error: null,
   modelError: null,
+  modelOption: {
+    provider: "claude-code",
+    providerName: "Claude Code",
+    model: "claude-sonnet-5-5",
+    modelName: "Sonnet 5.5",
+    family: "Claude",
+  },
   createdAt: "2026-10-21T09:42:10Z",
   updatedAt: "2026-10-21T09:43:02Z",
 };

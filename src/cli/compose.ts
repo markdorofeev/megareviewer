@@ -24,7 +24,6 @@ import type {
   Clock,
   GitHost,
   Logger,
-  ModelAvailability,
   PullRequestStatusSource,
   ReviewThreads,
   TicketSource,
@@ -35,10 +34,10 @@ import {
   retryingStatusSource,
 } from "../application/retries/index.ts";
 import { type AppDeps, createUseCases, type UseCases } from "../application/use-cases/index.ts";
-import type { HostKind } from "../domain/review/index.ts";
+import type { HostKind, ModelOptions } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
 import type { Config } from "./config.ts";
-import { createModelAccess } from "./model-access.ts";
+import { createModelCatalog } from "./model-access.ts";
 
 export interface ComposeOptions {
   /** Holds the tree-sitter runtime, the grammars and their queries. */
@@ -54,8 +53,8 @@ export interface ComposeOptions {
 export interface Composition {
   readonly useCases: UseCases;
   readonly sessionToken: string;
-  /** Whether "Request AI review" can run, and on what. */
-  modelAvailability(): Promise<ModelAvailability>;
+  /** The models "Request AI review" can run on, and the default. */
+  modelOptions(): Promise<ModelOptions>;
   /** The HTTP app for a server listening on `port`, which its Host check needs. */
   app(port: number): Hono;
   /** Closes the database. Safe to call more than once. */
@@ -168,7 +167,7 @@ export const assemble = async (
   return {
     useCases,
     sessionToken,
-    modelAvailability: deps.modelAvailability,
+    modelOptions: () => deps.models.options(),
     app: (port) =>
       createHttpApp({
         useCases,
@@ -197,7 +196,7 @@ export const compose = async (
   const clock = systemClock;
   // Aborted on close, which kills the passes still running.
   const running = new AbortController();
-  const modelAccess = createModelAccess({
+  const models = createModelCatalog({
     runClaude: createRunClaude({ signal: running.signal }),
     logger,
   });
@@ -224,8 +223,7 @@ export const compose = async (
           threads: createReviewThreads(config, { version: options.version, clock, logger }),
           statuses: createStatusSources(config, { version: options.version, clock, logger }),
           tickets: createTicketSource(config, logger),
-          model: modelAccess.model,
-          modelAvailability: modelAccess.availability,
+          models,
           store,
           fileCache: store,
           checkouts: createGitCheckouts({ dir: options.checkoutDir }),

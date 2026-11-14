@@ -8,12 +8,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { StatusResponse, TOKEN_HEADER } from "../../contracts/index.ts";
 import {
   allFixtures,
-  FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakeTicketSource,
   FixedClock,
+  fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   RecordingLogger,
@@ -51,8 +52,7 @@ const fakeComposition = () => {
     {
       hosts: { github: new FakeGitHost({ host: "github", fixtures: allFixtures, clock }) },
       tickets: new FakeTicketSource(),
-      model: new FakeAnalysisModel(),
-      modelAvailability: async () => ({ available: true, via: "the fake model" }),
+      models: new FakeModelCatalog(),
       store: new InMemoryAnalysisStore(),
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
@@ -107,8 +107,7 @@ describe("assemble and serve", () => {
       {
         hosts: {},
         tickets: new FakeTicketSource(),
-        model: new FakeAnalysisModel(),
-        modelAvailability: async () => ({ available: true, via: "the fake model" }),
+        models: new FakeModelCatalog(),
         store,
         fileCache: new InMemoryFileCache(),
         checkouts: new FakeLocalCheckouts(),
@@ -128,8 +127,7 @@ describe("assemble and serve", () => {
       {
         hosts: {},
         tickets: new FakeTicketSource(),
-        model: new FakeAnalysisModel(),
-        modelAvailability: async () => ({ available: true, via: "the fake model" }),
+        models: new FakeModelCatalog(),
         store: new InMemoryAnalysisStore(),
         fileCache: new InMemoryFileCache(),
         checkouts: new FakeLocalCheckouts(),
@@ -142,9 +140,9 @@ describe("assemble and serve", () => {
       { staticDir: null, version: "1", sessionToken: "fixed", close: async () => {} },
     );
     expect(composition.sessionToken).toBe("fixed");
-    expect(await composition.modelAvailability()).toEqual({
-      available: true,
-      via: "the fake model",
+    expect(await composition.modelOptions()).toEqual({
+      options: [fakeModelOption()],
+      defaultId: fakeModelOption().id,
     });
   });
 });

@@ -15,15 +15,21 @@ import { createAnthropicFetch, type FixtureAnswer } from "./fixtures/anthropic-f
 import errors from "./fixtures/errors.synthetic.json" with { type: "json" };
 import smallFeature from "./fixtures/small-feature.synthetic.json" with { type: "json" };
 import { costUsd, HIGHEST_PRICE, PRICES } from "./pricing.ts";
-import { VERSION } from "./version.ts";
+import { PROMPT_VERSION } from "./version.ts";
 
 type Answers = Parameters<typeof createAnthropicFetch>[0];
 
-const modelWith = (answers: Answers, options: { maxInputTokens?: number } = {}) => {
+/** The fixtures were recorded on Haiku 5.5. */
+const modelWith = (answers: Answers, options: { maxInputTokens?: number; model?: string } = {}) => {
   const { fetch, requests } = createAnthropicFetch(answers);
   const logger = new RecordingLogger();
   const client = new Anthropic({ apiKey: "test-key", fetch, maxRetries: 0 });
-  const model = createClaudeAnalysisModel({ client, logger, ...options });
+  const model = createClaudeAnalysisModel({
+    client,
+    logger,
+    model: "claude-haiku-5-5",
+    ...options,
+  });
   return { model, requests, logger };
 };
 
@@ -55,8 +61,10 @@ describeAnalysisModelContract("claude", () => modelWith(recorded()).model);
 
 describe("ClaudeAnalysisModel", () => {
   it("names the model and the prompt version", () => {
-    expect(modelWith({}).model.version).toBe(VERSION);
-    expect(VERSION).toMatch(/^claude-haiku-5-5\/p\d+$/);
+    expect(modelWith({}).model.version).toBe(`claude-haiku-5-5/p${PROMPT_VERSION}`);
+    expect(modelWith({}, { model: "claude-opus-5-5" }).model.version).toBe(
+      `claude-opus-5-5/p${PROMPT_VERSION}`,
+    );
   });
 
   describe("requests", () => {

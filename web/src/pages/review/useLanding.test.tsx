@@ -1,7 +1,7 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PointId } from "../../../../src/domain/review/index.ts";
-import { type Landing, READY_TITLE, useLanding } from "./useLanding.ts";
+import { type Landing, readyTitle, useLanding } from "./useLanding.ts";
 
 const f1 = PointId.parse("f1");
 const f2 = PointId.parse("f2");
@@ -125,7 +125,7 @@ describe("useLanding", () => {
     document.title = "megareviewer";
     const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
     play({ ids: [f1] });
-    expect(document.title).toBe(`${READY_TITLE} · megareviewer`);
+    expect(document.title).toBe(`${readyTitle("Claude")} · megareviewer`);
     hidden.mockReturnValue(false);
     act(() => {
       document.dispatchEvent(new Event("visibilitychange"));

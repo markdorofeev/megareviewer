@@ -37,7 +37,8 @@ const modelWith = (
     billing: options.billing ?? "plan",
     logger,
     ...(options.maxInputTokens === undefined ? {} : { maxInputTokens: options.maxInputTokens }),
-    ...(options.model === undefined ? {} : { model: options.model }),
+    // The fixtures were recorded on Haiku 5.5.
+    model: options.model ?? "claude-haiku-5-5",
     ...(options.effort === undefined ? {} : { effort: options.effort }),
   });
   return { model, calls: fake.calls, logger };
@@ -66,8 +67,8 @@ const expectFailure = async (
 
 describe("ClaudeCodeAnalysisModel", () => {
   it("has a version of its own, so the API's analyses aren't served for it", () => {
-    expect(modelWith().model.version).toBe(CLAUDE_CODE_VERSION);
-    expect(CLAUDE_CODE_VERSION).toMatch(/^claude-code\/claude-haiku-5-5\/p\d+$/);
+    expect(modelWith().model.version).toMatch(/^claude-code\/claude-haiku-5-5\/p\d+$/);
+    expect(CLAUDE_CODE_VERSION).toMatch(/^claude-code\/claude-sonnet-5-5\/p\d+$/);
   });
 
   it("runs another model when asked, with a version that names it", async () => {

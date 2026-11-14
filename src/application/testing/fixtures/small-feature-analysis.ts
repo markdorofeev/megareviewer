@@ -415,6 +415,13 @@ export const smallFeatureAnalysis: Analysis = {
   ],
   error: null,
   modelError: null,
+  modelOption: {
+    provider: "anthropic-api",
+    providerName: "Anthropic API",
+    model: "claude-haiku-5-5",
+    modelName: "Haiku 5.5",
+    family: "Claude",
+  },
   createdAt: "2026-10-21T09:00:00Z",
   updatedAt: "2026-10-21T09:01:10Z",
 };

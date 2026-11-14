@@ -48,7 +48,11 @@ const NETWORK =
  * Why a pass failed, or null when it has an answer. Nothing is retried here: the pipeline
  * retries a pass once on an invalid answer, as for the API.
  */
-export const fromClaudeCodeRun = (run: ClaudeRun, stream: ClaudeCodeStream): ModelError | null => {
+export const fromClaudeCodeRun = (
+  run: ClaudeRun,
+  stream: ClaudeCodeStream,
+  outputLimit: number = CLAUDE_CODE_MAX_OUTPUT_TOKENS,
+): ModelError | null => {
   if (!run.started) return modelError("unauthorized", NOT_INSTALLED);
   if (run.killed === "timeout") {
     return modelError("unexpected", "Claude Code didn't finish the pass in 10 minutes.");
@@ -81,7 +85,7 @@ export const fromClaudeCodeRun = (run: ClaudeRun, stream: ClaudeCodeStream): Mod
     return modelError("too-large", "The pull request is too long for the model's context window.");
   }
   if (code === "max_output_tokens" || result?.stopReason === "max_tokens") {
-    return maxTokens(CLAUDE_CODE_MAX_OUTPUT_TOKENS);
+    return maxTokens(outputLimit);
   }
   if (result?.stopReason === "refusal" && result.structuredOutput === undefined) {
     return refusal(null);

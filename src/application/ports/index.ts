@@ -4,7 +4,6 @@ export {
   type AnalysisModel,
   DecisionDraft,
   FindingDraft,
-  type ModelAvailability,
   ModelRisk,
   type PassOptions,
   type PassOutput,
@@ -33,6 +32,7 @@ export {
   MAX_CHECKOUT_FILE_BYTES,
 } from "./local-checkout.ts";
 export type { LogFields, Logger } from "./logger.ts";
+export type { ModelCatalog } from "./model-catalog.ts";
 export type { PullRequestStatusSource } from "./pull-request-status-source.ts";
 export {
   type Attachment,

@@ -110,7 +110,9 @@ export const pageProblems = (page: Page): Promise<string[]> =>
     for (const element of document.querySelectorAll(FOCUSABLE)) {
       if (
         element.closest('[aria-hidden="true"]') !== null &&
-        element.getAttribute("tabindex") !== "-1"
+        element.getAttribute("tabindex") !== "-1" &&
+        // An open popup's guards, which send focus that reaches them back into it.
+        !element.hasAttribute("data-base-ui-focus-guard")
       ) {
         problems.push(`focusable inside aria-hidden: ${describe(element)}`);
       }

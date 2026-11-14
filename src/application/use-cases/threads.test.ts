@@ -3,10 +3,10 @@ import type { ReviewThread } from "../../domain/review/index.ts";
 import { createAnalysisEvents } from "../events/index.ts";
 import {
   allFixtures,
-  FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakeReviewThreads,
   FakeTicketSource,
   FixedClock,
@@ -35,8 +35,7 @@ const setup = async (options: { threads?: readonly ReviewThread[]; noThreads?: b
       threads: options.noThreads ? {} : { github: threads },
       statuses: {},
       tickets: new FakeTicketSource(),
-      model: new FakeAnalysisModel(),
-      modelAvailability: async () => ({ available: true, via: "the fake model" }),
+      models: new FakeModelCatalog(),
       store,
       fileCache,
       checkouts: new FakeLocalCheckouts(),

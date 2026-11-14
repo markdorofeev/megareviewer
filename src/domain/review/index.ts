@@ -44,6 +44,16 @@ export {
 } from "./intent.ts";
 export { type JoinedParts, joinParts } from "./join-parts.ts";
 export {
+  ModelOption,
+  ModelOptionId,
+  ModelOptions,
+  ModelProvider,
+  ModelRunOption,
+  modelFamily,
+  modelOptionId,
+  runOptionOf,
+} from "./model-option.ts";
+export {
   Finding,
   FindingId,
   type FindingProblem,

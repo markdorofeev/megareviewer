@@ -3,10 +3,10 @@ import type { HostError, PullRequest, RepoRef } from "../../domain/review/index.
 import { createAnalysisEvents } from "../events/index.ts";
 import type { FileAt } from "../ports/index.ts";
 import {
-  FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakeTicketSource,
   FixedClock,
   InMemoryAnalysisStore,
@@ -65,8 +65,7 @@ const setup = () => {
   const deps: AppDeps = {
     hosts: { github: host },
     tickets: new FakeTicketSource({ configured: false }),
-    model: new FakeAnalysisModel(),
-    modelAvailability: async () => ({ available: true, via: "the fake model" }),
+    models: new FakeModelCatalog(),
     store: new InMemoryAnalysisStore(),
     fileCache,
     checkouts: new FakeLocalCheckouts(),

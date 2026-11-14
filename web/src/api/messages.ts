@@ -19,7 +19,7 @@ const MESSAGES: Readonly<Record<ApiErrorCode, (message: string) => string>> = {
   "analysis-not-complete": () => "The analysis isn't complete yet.",
   "host-error": (message) => `The git host returned an error: ${sentence(message)}`,
   "model-error": (message) => `The model call failed: ${sentence(message)}`,
-  "model-unavailable": (message) => `Claude can't run: ${sentence(message)}`,
+  "model-unavailable": (message) => sentence(message),
   internal: (message) => sentence(message) || "Something went wrong.",
   unreachable: (message) => sentence(message),
 };

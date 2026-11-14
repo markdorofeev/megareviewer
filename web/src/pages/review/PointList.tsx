@@ -19,6 +19,7 @@ export const PointList = ({
   stateOf,
   onGo,
   onClose,
+  family = "Claude",
 }: {
   readonly points: readonly Point[];
   /** The kind a chip narrowed the stepper to, or null for every point. */
@@ -26,12 +27,14 @@ export const PointList = ({
   readonly stateOf: (id: PointId) => PointState;
   readonly onGo: (id: PointId) => void;
   readonly onClose: () => void;
+  /** Who made the points: "Claude". */
+  readonly family?: string;
 }) => {
   const shown = kind === null ? points : points.filter((point) => point.kind === kind);
   const [one, many] = kind === null ? ["point", "points"] : KIND_WORDS[kind];
   return (
     <Dialog
-      title={`${shown.length} ${shown.length === 1 ? one : many} from Claude`}
+      title={`${shown.length} ${shown.length === 1 ? one : many} from ${family}`}
       onClose={onClose}
       className="sm:max-w-2xl"
     >

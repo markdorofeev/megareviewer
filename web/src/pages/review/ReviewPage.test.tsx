@@ -17,6 +17,8 @@ import {
   fixturePullRequestStatus,
   fixtureStatus,
   largeAnalysisView,
+  lockedModelOptions,
+  NO_API_CREDENTIALS,
 } from "../../../dev/fixtures/index.ts";
 import { mockFetch } from "../../../dev/mock-fetch.ts";
 import { createMockApi } from "../../../dev/mock-routes.ts";
@@ -102,6 +104,7 @@ const codeOnly: AnalysisView = {
       tour: "skipped",
     },
     modelError: null,
+    modelOption: null,
   },
 };
 
@@ -311,15 +314,19 @@ describe("ReviewPage states", () => {
     });
     await loaded();
     const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
-    // What runs it, once the status has loaded.
-    await waitFor(() => expect(description(button)).toBe("Runs on Claude Code, on your Pro plan"));
+    // The model and who pays, once the status has loaded.
+    await waitFor(() =>
+      expect(description(button)).toBe("Runs Sonnet 5.5 through Claude Code, on your Pro plan"),
+    );
     expect(button.getAttribute("data-slot")).toBe("request-review");
     expect(button.className).not.toContain("border-border");
     const loads = () => requests.filter((request) => request.url === viewPath).length;
     const before = loads();
 
     await userEvent.click(button);
-    expect(requests.some((request) => request.url === `${viewPath}/model`)).toBe(true);
+    expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
+      optionId: "claude-code/claude-sonnet-5-5",
+    });
     // Following the analysis again loads it again, without leaving the page.
     await waitFor(() => expect(loads()).toBe(before + 1));
     expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
@@ -329,27 +336,84 @@ describe("ReviewPage states", () => {
     expect(screen.queryByRole("button", { name: "Request AI review" })).toBeNull();
   });
 
-  it("disables the button when Claude can't run, and says why", async () => {
-    const reason = "Claude Code isn't signed in: run `claude` and sign in";
+  it("disables the button when no model can run, and says why for each provider", async () => {
     const { requests } = renderReview({
       view: codeOnly,
       respond: (request) =>
         request.url === "/api/status"
-          ? jsonResponse(200, {
-              ...fixtureStatus,
-              model: { available: false, via: null, reason },
-            })
+          ? jsonResponse(200, { ...fixtureStatus, model: lockedModelOptions })
           : undefined,
     });
     await loaded();
     const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
     await waitFor(() => expect(button.getAttribute("aria-disabled")).toBe("true"));
-    expect(description(button)).toBe(reason);
+    expect(description(button)).toBe(
+      "Claude Code isn't signed in: run `claude` and sign in; or No Anthropic API credentials: set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API",
+    );
     // Still focusable, so the keyboard reaches the reason too.
     expect(button.hasAttribute("disabled")).toBe(false);
 
     await userEvent.click(button);
     expect(requests.some((request) => request.url === `${viewPath}/model`)).toBe(false);
+  });
+
+  it("lists every model by provider, a disabled one with why, and keeps the choice", async () => {
+    const first = renderReview({
+      view: codeOnly,
+      respond: (request) =>
+        request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
+    });
+    await loaded();
+    const arrow = await within(reviewBar()).findByRole("button", { name: "Model: Sonnet 5.5" });
+    await userEvent.click(arrow);
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText("Claude Code, on your Pro plan")).toBeTruthy();
+    expect(within(menu).getByText(NO_API_CREDENTIALS)).toBeTruthy();
+    const items = within(menu).getAllByRole("menuitemradio");
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Haiku 5.5",
+      "Sonnet 5.5",
+      "Opus 5.5",
+      "Haiku 5.5",
+      "Sonnet 5.5",
+      "Opus 5.5",
+    ]);
+    const apiOpus = items[5];
+    if (apiOpus === undefined) throw new Error("no API option");
+    expect(apiOpus.getAttribute("aria-disabled")).toBe("true");
+    expect(description(apiOpus)).toBe(NO_API_CREDENTIALS);
+
+    await userEvent.click(
+      within(menu).getAllByRole("menuitemradio", { name: "Opus 5.5" })[0] as HTMLElement,
+    );
+    const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
+    await waitFor(() =>
+      expect(description(button)).toBe("Runs Opus 5.5 through Claude Code, on your Pro plan"),
+    );
+    await userEvent.click(button);
+    expect(first.requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
+      optionId: "claude-code/claude-opus-5-5",
+    });
+    first.unmount();
+
+    // Kept per browser, so a reload runs it again.
+    renderReview({ view: codeOnly });
+    await loaded();
+    expect(
+      await within(reviewBar()).findByRole("button", { name: "Model: Opus 5.5" }),
+    ).toBeTruthy();
+  });
+
+  it("falls back to the default when the stored choice can no longer run", async () => {
+    window.localStorage.setItem(
+      "megareviewer:model-option",
+      JSON.stringify("anthropic-api/claude-opus-5-5"),
+    );
+    renderReview({ view: codeOnly });
+    await loaded();
+    expect(
+      await within(reviewBar()).findByRole("button", { name: "Model: Sonnet 5.5" }),
+    ).toBeTruthy();
   });
 
   it("offers Try again in outline when Claude found nothing before failing", async () => {
@@ -371,7 +435,11 @@ describe("ReviewPage states", () => {
       view: { ...fixture, analysis: analysisFailed(analysis, "risk", "Overloaded") },
       respond: (request) =>
         request.url === `${viewPath}/model`
-          ? failure(503, "model-unavailable", "Claude Code isn't signed in")
+          ? failure(
+              503,
+              "model-unavailable",
+              "Sonnet 5.5 through Claude Code can't run: Claude Code isn't signed in",
+            )
           : undefined,
     });
     await loaded();
@@ -384,7 +452,11 @@ describe("ReviewPage states", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(requests.some((request) => request.url === `${viewPath}/model`)).toBe(true);
-    expect(await screen.findByText("Claude can't run: Claude Code isn't signed in.")).toBeTruthy();
+    expect(
+      await screen.findByText(
+        "Sonnet 5.5 through Claude Code can't run: Claude Code isn't signed in.",
+      ),
+    ).toBeTruthy();
   });
 
   it("says when the analysis doesn't exist, with a way back to the picker", async () => {
@@ -647,12 +719,11 @@ describe("header", () => {
   it("shows the usage totals with a breakdown by pass", async () => {
     renderReview();
     await loaded();
-    expect(screen.getByText(/^Usage:/).textContent).toBe(
-      "Usage: 93k tokens in · 115k cache read · 8k out · $0.77",
+    const usage = screen.getByRole("button", { name: /Usage:/ });
+    expect(usage.textContent).toBe(
+      "Sonnet 5.5 through Claude Code · Usage: 93k tokens in · 115k cache read · 8k out · $0.77",
     );
-    const breakdown = document.getElementById(
-      screen.getByText(/^Usage:/).getAttribute("aria-describedby") ?? "",
-    );
+    const breakdown = document.getElementById(usage.getAttribute("aria-describedby") ?? "");
     if (breakdown === null) throw new Error("no breakdown");
     expect(within(breakdown).getAllByRole("row")).toHaveLength(5);
     expect(within(breakdown).getByRole("row", { name: /Intent/ }).textContent).toBe(

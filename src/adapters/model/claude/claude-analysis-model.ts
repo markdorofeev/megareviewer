@@ -8,13 +8,15 @@ import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import { fromSdkError } from "./errors.ts";
 import { costUsd, HIGHEST_PRICE, PRICES, type TokenCounts } from "./pricing.ts";
-import { countTokensRequest, MAX_INPUT_TOKENS, MAX_TOKENS, passRequest } from "./request.ts";
-import { VERSION } from "./version.ts";
+import { apiLimits, countTokensRequest, MODEL, passRequest } from "./request.ts";
+import { apiVersion } from "./version.ts";
 
 export interface ClaudeAnalysisModelOptions {
   /** Default: new Anthropic(), which resolves ANTHROPIC_API_KEY or an `ant auth login` profile. */
   readonly client?: Anthropic;
   readonly maxInputTokens?: number;
+  /** Default: MODEL. */
+  readonly model?: string;
   readonly logger: Logger;
 }
 
@@ -33,7 +35,9 @@ const answerText = (message: Message): string =>
 /** The five passes on the Anthropic API, with the PR data shared through the prompt cache. */
 export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): AnalysisModel => {
   const client = options.client ?? new Anthropic();
-  const maxInputTokens = options.maxInputTokens ?? MAX_INPUT_TOKENS;
+  const model = options.model ?? MODEL;
+  const limits = apiLimits(model);
+  const maxInputTokens = options.maxInputTokens ?? limits.maxInputTokens;
   const { logger } = options;
 
   const usageOf = (pass: ModelPass, message: Message): ModelUsage => {
@@ -46,13 +50,14 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
   };
 
   return createPassModel({
-    version: VERSION,
+    version: apiVersion(model),
 
     async checkSize(input) {
       const request = passRequest(
         "intent",
         renderInput(input),
         passMessage("intent", null, undefined),
+        model,
       );
       let inputTokens: number;
       try {
@@ -73,6 +78,7 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
         pass,
         renderInput(input),
         passMessage(pass, earlier, passOptions?.feedback),
+        model,
       );
       logger.debug("Model pass started", {
         pass,
@@ -102,7 +108,7 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
       if (message.stop_reason === "refusal") {
         return err(refusal(message.stop_details?.category ?? null));
       }
-      if (message.stop_reason === "max_tokens") return err(maxTokens(MAX_TOKENS));
+      if (message.stop_reason === "max_tokens") return err(maxTokens(limits.maxTokens));
 
       let answer: unknown;
       try {

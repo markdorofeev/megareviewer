@@ -12,6 +12,7 @@ import {
   HunkComment,
   hasModelRun,
   inProgress,
+  modelFamily,
   type Point,
   PointId,
   type PointKind,
@@ -69,6 +70,7 @@ import {
   tourSteps,
   trailingProofs,
 } from "./model.ts";
+import { useModelChoice } from "./model-choice.ts";
 import { Overview } from "./Overview.tsx";
 import { fileOverview, type OverviewNode } from "./overview.ts";
 import {
@@ -292,7 +294,7 @@ const Review = ({
   readonly restart: () => void;
 }) => {
   const { client } = useApi();
-  const modelStatus = useStatus().status?.model ?? null;
+  const modelChoice = useModelChoice(useStatus().status?.model ?? null);
   const { analysis: live, publication } = view;
   const analysisId = live.id;
   const complete = live.status === "complete";
@@ -317,7 +319,8 @@ const Review = ({
     [analysis, decisionsOn],
   );
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
-  const landing = useLanding(modelRunning, pointIds);
+  const family = modelFamily(live.modelOption ?? modelChoice.chosen);
+  const landing = useLanding(modelRunning, pointIds, family);
   const places = useMemo(() => pointPlaces(points, order, index), [points, order, index]);
   // Where each point goes on its part, by its kind: a finding's card and a risk's note under the
   // last of its lines the part shows, findings first, and a decision's chip at the end of it. A
@@ -1124,10 +1127,7 @@ const Review = ({
         claude={
           <ClaudeElement
             analysis={live}
-            via={modelStatus?.via ?? null}
-            unavailable={
-              modelStatus?.available === false ? (modelStatus.reason ?? "Claude can't run") : null
-            }
+            choice={modelChoice}
             running={landing.running}
             startedAt={modelStartedAt}
             starting={runModel.pending}
@@ -1136,7 +1136,11 @@ const Review = ({
             narrowed={narrowed}
             onNarrow={narrow}
             onRun={async () => {
-              const result = await runModel.run(analysisId);
+              const optionId = modelChoice.chosen?.id;
+              const result = await runModel.run(
+                analysisId,
+                optionId === undefined ? {} : { optionId },
+              );
               if (!result.ok) return;
               setModelStartedAt(Date.now());
               follow();
@@ -1309,12 +1313,12 @@ const Review = ({
       )}
 
       <footer className="flex items-center justify-end gap-3">
-        <ModelCalls calls={live.modelCalls} />
+        <ModelCalls calls={live.modelCalls} option={live.modelOption} />
         {complete && !modelRunning && hasModelRun(live) && (
           // A new run of the code's stages under the same ID: the page starts afresh to follow it.
-          <RemoveModelRun analysisId={analysisId} onRemoved={restart} />
+          <RemoveModelRun analysisId={analysisId} family={family} onRemoved={restart} />
         )}
-        <UsageFooter usage={live.usage} />
+        <UsageFooter usage={live.usage} option={live.modelOption} />
       </footer>
 
       {publishing && (
@@ -1337,6 +1341,7 @@ const Review = ({
       {showPoints && (
         <PointList
           points={points}
+          family={family}
           kind={narrowed}
           stateOf={pointStates.stateOf}
           onGo={(id) => {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createAnalysisEvents } from "../events/index.ts";
 import {
-  FakeAnalysisModel,
   FakeCodeParser,
   FakeLocalCheckouts,
+  FakeModelCatalog,
   FakePullRequestStatusSource,
   FakeTicketSource,
   FixedClock,
@@ -26,8 +26,7 @@ const setup = async (options: { configured?: boolean } = {}) => {
       threads: {},
       statuses: options.configured === false ? {} : { github: statuses },
       tickets: new FakeTicketSource(),
-      model: new FakeAnalysisModel(),
-      modelAvailability: async () => ({ available: true, via: "the fake model" }),
+      models: new FakeModelCatalog(),
       store,
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),

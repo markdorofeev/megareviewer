@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StatusResponse } from "../../../contracts/index.ts";
-import { fixtureStatus } from "../../dev/fixtures/index.ts";
+import { fixtureStatus, lockedModelOptions } from "../../dev/fixtures/index.ts";
 import { statusIndicator } from "./Header.tsx";
 
 const withHosts = (hosts: Partial<StatusResponse["hosts"]>): StatusResponse => ({
@@ -21,8 +21,9 @@ describe("statusIndicator", () => {
 
   it("needs setup without a host, and is ready without Claude", () => {
     expect(statusIndicator(withHosts({ github: off }), null).label).toBe("Setup needed");
-    const unavailable = { available: false, via: null, reason: "Claude Code isn't installed" };
-    expect(statusIndicator({ ...fixtureStatus, model: unavailable }, null).label).toBe("Ready");
+    expect(statusIndicator({ ...fixtureStatus, model: lockedModelOptions }, null).label).toBe(
+      "Ready",
+    );
   });
 
   it("names a host whose user lookup failed, with its reason", () => {

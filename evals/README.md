@@ -8,7 +8,7 @@ Measure the model passes on a labeled golden set, so a prompt change is judged b
 node evals/run.ts --baseline evals/baseline.json
 ```
 
-That prints the estimated cost at API prices and stops. Add `--yes` to run, `--case <name>` (repeatable) for a subset, `--model <id>` to run the passes on another model through Claude Code (the estimate is still the baseline's model), `--effort low|medium|high` to run every pass at that effort instead of its own, and `--write-baseline` to replace `evals/baseline.json` with this run's scores.
+That prints the estimated cost at API prices and stops. Add `--yes` to run, `--case <name>` (repeatable) for a subset, `--model <id>` to run the passes on another option's model, Sonnet 5.5, the product's default, without it (the estimate is still the baseline's model), `--effort low|medium|high` to run every pass at that effort instead of its own, and `--write-baseline` to replace `evals/baseline.json` with this run's scores.
 
 | Part | Runs on | Needs |
 |---|---|---|

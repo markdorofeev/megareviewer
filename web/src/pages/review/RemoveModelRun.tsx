@@ -8,9 +8,12 @@ import { Dialog } from "./Dialog.tsx";
 /** Takes Claude's run off the analysis, after asking, so the passes can be tried again. */
 export const RemoveModelRun = ({
   analysisId,
+  family,
   onRemoved,
 }: {
   readonly analysisId: AnalysisId;
+  /** Who made the run's points: "Claude". */
+  readonly family: string;
   readonly onRemoved: () => void;
 }) => {
   const { client } = useApi();
@@ -31,9 +34,9 @@ export const RemoveModelRun = ({
           }}
         >
           <p className="text-ui">
-            Claude's intent, findings, risks, decisions and tour titles go, with what you did with
-            them, and the code's analysis runs again. Your comments stay. Request AI review runs
-            Claude again.
+            {family}'s intent, findings, risks, decisions and tour titles go, with what you did with
+            them, and the code's analysis runs again. Your comments stay. Request AI review runs a
+            model again, the same or another.
           </p>
           {remove.error !== null && (
             <p className={DANGER} role="alert">

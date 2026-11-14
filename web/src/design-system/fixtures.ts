@@ -1,6 +1,13 @@
+import { useState } from "react";
 import { type FileChange, HunkId, parseUnifiedDiff } from "../../../src/domain/diff/index.ts";
-import { type Point, PointId, type ReviewThread } from "../../../src/domain/review/index.ts";
+import {
+  type ModelOptions,
+  type Point,
+  PointId,
+  type ReviewThread,
+} from "../../../src/domain/review/index.ts";
 import type { ClaudeRun } from "../pages/review/ClaudeElement.tsx";
+import { lockedReason, type ModelChoice } from "../pages/review/model-choice.ts";
 import type { FileEntry, PendingComment, PrSummary } from "../review/index.ts";
 
 // Made-up data for the preview: an example repository, PR and people, none of them real.
@@ -314,6 +321,7 @@ export const POINTS: readonly Point[] = [
 
 /** As much of an analysis as Claude's element reads: how far its run got, and how it ended. */
 export const DESIGN_RUN: ClaudeRun = {
+  modelOption: null,
   status: "complete",
   stages: {
     collect: "done",
@@ -325,4 +333,15 @@ export const DESIGN_RUN: ClaudeRun = {
     tour: "skipped",
   },
   modelError: null,
+};
+
+/** The reviewer's choice among `status`'s options, kept while the demo is on the page. */
+export const useDemoChoice = (status: ModelOptions): ModelChoice => {
+  const [chosenId, setChosenId] = useState(status.defaultId);
+  return {
+    options: status.options,
+    chosen: status.options.find((option) => option.id === chosenId) ?? null,
+    locked: lockedReason(status.options),
+    choose: setChosenId,
+  };
 };

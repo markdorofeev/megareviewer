@@ -50,9 +50,11 @@ type Handler<R extends JsonRoute> = (
 
 type Handlers = { readonly [N in RouteName]: Handler<(typeof routes)[N]> };
 
+/** The body as JSON; undefined when there is none, which a route may take as "the default". */
 const readJson = async (c: Context): Promise<Result<unknown, null>> => {
   try {
-    return ok(await c.req.json());
+    const text = await c.req.text();
+    return ok(text.trim() === "" ? undefined : JSON.parse(text));
   } catch {
     return { ok: false, error: null };
   }
@@ -94,7 +96,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     getAnalysis: ({ params }) => useCases.getAnalysisView(params.id),
     getFileContent: ({ params }) => useCases.getFileContent(params.id, params.side, params.path),
     retryAnalysis: ({ params }) => useCases.retryAnalysis(params.id),
-    runModel: ({ params }) => useCases.runModel(params.id),
+    runModel: ({ params, body }) => useCases.runModel(params.id, body?.optionId),
     removeModelRun: ({ params }) => useCases.removeModelRun(params.id),
     putPointState: ({ params, body }) =>
       useCases.recordPointState(params.id, params.pointId, body.state),
