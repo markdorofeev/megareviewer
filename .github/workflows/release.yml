@@ -19,8 +19,10 @@ jobs:
     environment: npm
     permissions:
       contents: read
-      # For npm trusted publishing and the provenance attestation.
+      # For npm trusted publishing and both provenance attestations.
       id-token: write
+      attestations: write
+      artifact-metadata: write
     env:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
     steps:
@@ -45,3 +47,35 @@ jobs:
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # The same package for install.sh's GitHub source, for those who can't install from npm.
+      # One name for every version, so releases/latest/download/megareviewer.tgz is the latest.
+      - run: npm pack && mv "megareviewer-${GITHUB_REF_NAME#v}.tgz" megareviewer.tgz
+
+      - uses: actions/attest@v4
+        with:
+          subject-path: megareviewer.tgz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: megareviewer.tgz
+          retention-days: 1
+
+  # Apart from publish, so the job that can write to the repository runs no installed code.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: package
+
+      - run: |
+          gh release create "$GITHUB_REF_NAME" megareviewer.tgz \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --title "megareviewer ${GITHUB_REF_NAME#v}" \
+            --notes "Also on npm. To install from this release instead: \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | MEGAREVIEWER_SOURCE=github MEGAREVIEWER_VERSION=${GITHUB_REF_NAME#v} sh\`"
+        env:
+          GH_TOKEN: ${{ github.token }}

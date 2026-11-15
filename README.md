@@ -20,6 +20,24 @@ npx megareviewer doctor
 
 `doctor` checks every credential below and exits 1 if something required is missing.
 
+## Install
+
+To have `megareviewer` as a command instead of `npx megareviewer`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/markdorofeev/megareviewer/main/install.sh | sh
+```
+
+The script checks your Node and installs the npm package globally, or into `~/.local` when npm's global folder needs root. `MEGAREVIEWER_VERSION=0.2.9` before `sh` pins a version.
+
+**Without npm.** Where npm is blocked or holds new versions back, install the same package from its GitHub release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/markdorofeev/megareviewer/main/install.sh | MEGAREVIEWER_SOURCE=github sh
+```
+
+It goes into `~/.local/share/megareviewer`, linked as `~/.local/bin/megareviewer`, and running it again updates it. With the GitHub CLI signed in, the script checks that the file was built from this repository by its release workflow, and installs nothing if not. Releases from 0.2.10 on have the package.
+
 ## Credentials
 
 Set them as environment variables. You need at least one git host.
