@@ -23,7 +23,7 @@ import {
 import { mockFetch } from "../../../dev/mock-fetch.ts";
 import { createMockApi } from "../../../dev/mock-routes.ts";
 import { analysisFailed, analysisInProgress } from "../../../dev/progress.ts";
-import { DisplayMenu } from "../../app/Header.tsx";
+import { DisplaySettings } from "../../app/Header.tsx";
 import { PageDisplayProvider } from "../../lib/page-display.tsx";
 import { type Highlighter, HighlighterContext } from "../../review/index.ts";
 import { testApi } from "../../testing/api.tsx";
@@ -77,7 +77,7 @@ const renderReview = (
     <api.wrapper>
       <HighlighterContext.Provider value={pendingHighlighter}>
         <PageDisplayProvider>
-          <DisplayMenu />
+          <DisplaySettings />
           {children}
         </PageDisplayProvider>
       </HighlighterContext.Provider>
@@ -1181,7 +1181,7 @@ describe("points", () => {
     expect(within(mainArea()).queryByRole("textbox", { name: /^Comment on/ })).toBeNull();
   });
 
-  it("leave decisions out until the Display menu turns them on, and remember the choice", async () => {
+  it("leave decisions out until the display settings turn them on, and remember the choice", async () => {
     window.localStorage.removeItem("megareviewer:decisions");
     renderReview();
     await loaded();
@@ -1189,17 +1189,14 @@ describe("points", () => {
     expect(within(reviewBar()).queryByRole("button", { name: /decision/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Decision: / })).toBeNull();
 
-    await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    const decisions = await screen.findByRole("menuitemcheckbox", { name: "Decisions" });
+    const decisions = screen.getByRole("switch", { name: "Decisions" });
     expect(decisions.getAttribute("aria-checked")).toBe("false");
     await userEvent.click(decisions);
     expect(await within(reviewBar()).findByRole("button", { name: "4 decisions" })).toBeTruthy();
     expect(decisionChip(PLAIN_TEXT)).toBeTruthy();
     expect(window.localStorage.getItem("megareviewer:decisions")).toBe("true");
 
-    await userEvent.click(
-      await screen.findByRole("menuitemcheckbox", { name: "Decisions", checked: true }),
-    );
+    await userEvent.click(screen.getByRole("switch", { name: "Decisions", checked: true }));
     await waitFor(() => expect(screen.queryByRole("button", { name: /^Decision: / })).toBeNull());
     expect(within(reviewBar()).queryByRole("button", { name: "4 decisions" })).toBeNull();
     expect(window.localStorage.getItem("megareviewer:decisions")).toBe("false");
@@ -1371,9 +1368,11 @@ describe("points", () => {
   });
 });
 
+/** A layout's button in the display settings, which the header's account popover holds. */
+const layoutButton = (name: string) =>
+  within(screen.getByRole("group", { name: "Layout" })).getByRole("button", { name });
 const openOverview = async () => {
-  await userEvent.click(screen.getByRole("button", { name: "Display" }));
-  await userEvent.click(await screen.findByRole("menuitemradio", { name: "Overview" }));
+  await userEvent.click(layoutButton("Overview"));
   return overviewBox();
 };
 /** The diagram's file nodes by row, as their labels. */
@@ -1503,23 +1502,17 @@ describe("overview", () => {
 });
 
 describe("layouts", () => {
-  it("are chosen in the Display menu, which shows the one in use", async () => {
+  it("are chosen in the display settings, which show the one in use", async () => {
     renderReview();
     await loaded();
-    expect(screen.queryByRole("group", { name: "Layout" })).toBeNull();
-    const display = screen.getByRole("button", { name: "Display" });
-    await userEvent.click(display);
-    const map = await screen.findByRole("menuitemradio", { name: "Map" });
-    expect(map.getAttribute("aria-checked")).toBe("true");
-    await userEvent.click(screen.getByRole("menuitemradio", { name: "Overview" }));
+    expect(within(reviewBar()).queryByRole("group", { name: "Layout" })).toBeNull();
+    expect(layoutButton("Map").getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(layoutButton("Overview"));
     expect(overviewBox()).toBeTruthy();
-    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-    // The overview takes the focus to the file in view; closing doesn't hand it back to the menu.
-    expect(document.activeElement).not.toBe(display);
-    await userEvent.click(display);
-    expect(
-      (await screen.findByRole("menuitemradio", { name: "Overview" })).getAttribute("aria-checked"),
-    ).toBe("true");
+    expect(layoutButton("Overview").getAttribute("aria-pressed")).toBe("true");
+    // Pressing the layout in use again keeps it.
+    await userEvent.click(layoutButton("Overview"));
+    expect(layoutButton("Overview").getAttribute("aria-pressed")).toBe("true");
   });
 
   it("switch with v, keeping the file the reviewer is on", async () => {

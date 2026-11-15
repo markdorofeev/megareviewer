@@ -1,6 +1,7 @@
 import {
   CheckIcon,
   CircleDashedIcon,
+  CircleUserIcon,
   GitPullRequestIcon,
   LoaderCircleIcon,
   type LucideIcon,
@@ -8,11 +9,14 @@ import {
   TicketIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { type Ref, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, type Ref, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../lib/utils.ts";
+import { initialsOf } from "../review/index.ts";
 import { Button } from "../ui/button.tsx";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../ui/popover.tsx";
 import {
+  type Account,
+  accountsOf,
   type ButtonTone,
   type Connection,
   type ConnectionKind,
@@ -23,13 +27,11 @@ import {
 import { useConnections } from "./connections-context.tsx";
 
 // Spelled out because Tailwind only generates the classes it finds whole in the source.
-const BUTTON_TONE: Readonly<Record<ButtonTone, string>> = {
+const ISSUE_TONE: Readonly<Record<ButtonTone, string>> = {
   checking: "text-muted-foreground",
   ok: "",
-  warning:
-    "border-review-pending bg-review-pending-bg text-review-pending hover:bg-review-pending-bg hover:text-review-pending aria-expanded:bg-review-pending-bg aria-expanded:text-review-pending",
-  danger:
-    "border-destructive bg-review-changes-bg text-destructive hover:bg-review-changes-bg hover:text-destructive aria-expanded:bg-review-changes-bg aria-expanded:text-destructive",
+  warning: "text-review-pending",
+  danger: "text-destructive",
 };
 
 const ICONS: Readonly<Record<ConnectionKind, LucideIcon>> = {
@@ -89,13 +91,59 @@ const Spinner = ({ className }: { readonly className?: string }) => (
   />
 );
 
-const ButtonGlyph = ({ tone }: { readonly tone: ButtonTone }) =>
-  tone === "checking" ? (
-    <Spinner />
-  ) : tone === "ok" ? (
-    <CheckIcon aria-hidden="true" className="text-ci-success" />
-  ) : (
-    <TriangleAlertIcon aria-hidden="true" />
+/**
+ * The header's button: who the reviewer is, which is whose name a review posts under, and what's
+ * wrong with the connections only when something is. Before anyone is known, the connections'
+ * state alone.
+ */
+const AccountTrigger = ({
+  account,
+  label,
+  tone,
+}: {
+  readonly account: Account | undefined;
+  readonly label: string;
+  readonly tone: ButtonTone;
+}) => (
+  <>
+    {account === undefined ? (
+      <CircleUserIcon aria-hidden="true" />
+    ) : (
+      <span
+        aria-hidden="true"
+        className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-caption font-medium text-muted-foreground"
+      >
+        {initialsOf(account.name)}
+      </span>
+    )}
+    {account !== undefined && <span className="hidden sm:inline">{account.name}</span>}
+    {tone === "checking" && account === undefined && (
+      <>
+        <Spinner />
+        {label}
+      </>
+    )}
+    {(tone === "warning" || tone === "danger") && (
+      <span className={cn("flex items-center gap-1", ISSUE_TONE[tone])}>
+        <TriangleAlertIcon aria-hidden="true" />
+        {label}
+      </span>
+    )}
+    {tone === "ok" && account === undefined && label}
+  </>
+);
+
+/** Who the reviewer is on each host that knows them, at the top of the popover. */
+const SignedIn = ({ accounts }: { readonly accounts: readonly Account[] }) =>
+  accounts.length === 0 ? null : (
+    <div className="flex flex-col gap-0.5 px-1 text-caption text-muted-foreground">
+      {accounts.map((account) => (
+        <p key={account.host}>
+          Signed in as <span className="font-medium text-foreground">{account.name}</span> on{" "}
+          {account.host}
+        </p>
+      ))}
+    </div>
   );
 
 const Row = ({ row }: { readonly row: Connection }) => {
@@ -183,9 +231,15 @@ export const ConnectionsPanel = ({
   </div>
 );
 
-/** The button and its popover, from what the connections are. */
+/**
+ * The header's one button and its popover: who the reviewer is, the connections, then whatever
+ * the header puts under them, such as the display settings.
+ */
 export const ConnectionsPopover = ({
   connections,
+  accounts,
+  children,
+  finalFocus,
   version,
   checking,
   open,
@@ -194,6 +248,10 @@ export const ConnectionsPopover = ({
   focusCheckAgain = false,
 }: {
   readonly connections: Connections;
+  readonly accounts: readonly Account[];
+  readonly children?: ReactNode;
+  /** Whether closing hands the focus back to the button: not when a picked view took it. */
+  readonly finalFocus?: () => boolean;
   readonly version: string | null;
   readonly checking: boolean;
   readonly open?: boolean;
@@ -211,6 +269,7 @@ export const ConnectionsPopover = ({
     [focusCheckAgain],
   );
   const { label, tone, name } = connections.button;
+  const [account] = accounts;
   return (
     <Popover
       {...(open === undefined ? {} : { open })}
@@ -221,22 +280,27 @@ export const ConnectionsPopover = ({
       <PopoverTrigger
         render={
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className={BUTTON_TONE[tone]}
+            className="gap-2 px-1.5"
             data-tone={tone}
-            aria-label={name}
+            aria-label={
+              account === undefined
+                ? name
+                : `${name} Signed in as ${account.name} on ${account.host}.`
+            }
           />
         }
       >
-        <ButtonGlyph tone={tone} />
-        {label}
+        <AccountTrigger account={account} label={label} tone={tone} />
       </PopoverTrigger>
       <PopoverContent
         align="end"
         className="w-[min(340px,calc(100vw-24px))] p-2"
         initialFocus={false}
+        {...(finalFocus === undefined ? {} : { finalFocus })}
       >
+        <SignedIn accounts={accounts} />
         <ConnectionsPanel
           connections={connections}
           version={version}
@@ -246,13 +310,24 @@ export const ConnectionsPopover = ({
           }}
           checkAgainRef={checkAgainRef}
         />
+        {children}
       </PopoverContent>
     </Popover>
   );
 };
 
-/** The header's Connections button, on every page, and the popover behind it. */
-export const ConnectionsButton = ({ now = Date.now }: { readonly now?: () => number }) => {
+/**
+ * The header's one button, on every page: who the reviewer is and the connections, with
+ * `children` under them in the popover. `children` is given a way to close the popover when a
+ * choice in it moves the focus elsewhere, as picking a layout does.
+ */
+export const ConnectionsButton = ({
+  now = Date.now,
+  children,
+}: {
+  readonly now?: () => number;
+  readonly children?: (closeOnPick: () => void) => ReactNode;
+}) => {
   const context = useConnections();
   const { status, error, checking, checkedAtMs, listed, open, setOpen, focusCheckAgain } = context;
   const connections = connectionsOf({
@@ -264,6 +339,12 @@ export const ConnectionsButton = ({ now = Date.now }: { readonly now?: () => num
     nowMs: now(),
   });
   const { label, tone } = connections.button;
+  // A layout the page switches to takes the focus itself, so closing on it doesn't move it back.
+  const picked = useRef(false);
+  const closeOnPick = useCallback(() => {
+    picked.current = true;
+    setOpen(false);
+  }, [setOpen]);
 
   // Announced only once the first read is in, so opening the page says nothing.
   const [announced, setAnnounced] = useState("");
@@ -281,13 +362,21 @@ export const ConnectionsButton = ({ now = Date.now }: { readonly now?: () => num
     <>
       <ConnectionsPopover
         connections={connections}
+        accounts={accountsOf(status)}
+        finalFocus={() => {
+          const wasPicked = picked.current;
+          picked.current = false;
+          return !wasPicked;
+        }}
         version={status?.version ?? null}
         checking={checking}
         open={open}
         onOpenChange={(next) => setOpen(next)}
         onCheckAgain={context.checkAgain}
         focusCheckAgain={focusCheckAgain}
-      />
+      >
+        {children?.(closeOnPick)}
+      </ConnectionsPopover>
       <span className="sr-only" aria-live="polite">
         {announced}
       </span>

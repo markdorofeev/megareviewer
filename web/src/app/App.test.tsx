@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fixtureAnalysisView } from "../../dev/fixtures/index.ts";
 import { mockFetch } from "../../dev/mock-fetch.ts";
@@ -62,15 +63,34 @@ describe("App", () => {
   it("shows the picker and the server's status", async () => {
     renderApp("/");
     expect(screen.getByRole("heading", { name: "Pull requests" })).toBeTruthy();
-    expect(await screen.findByText("3 of 6 connected")).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: /Signed in as Lee Park on GitHub\.$/ }),
+    ).toBeTruthy();
   });
 
-  it("shows the review page for an analysis, with Connections in its header", async () => {
+  it("shows the review page for an analysis, with the account and connections in its header", async () => {
     renderApp(`/review/${fixtureAnalysisView.analysis.id}`);
     expect(
       await screen.findByRole("heading", { name: "Add order receipts endpoint" }),
     ).toBeTruthy();
-    expect(await screen.findByText("3 of 6 connected")).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: /Signed in as Lee Park on GitHub\.$/ }),
+    ).toBeTruthy();
+  });
+
+  it("closes the account popover when a layout is picked, and leaves the focus where it went", async () => {
+    renderApp(`/review/${fixtureAnalysisView.analysis.id}`);
+    await screen.findByRole("heading", { name: "Add order receipts endpoint" });
+    const account = await screen.findByRole("button", {
+      name: /Signed in as Lee Park on GitHub\.$/,
+    });
+    await userEvent.click(account);
+    const popover = await screen.findByRole("dialog");
+    const layout = await within(popover).findByRole("group", { name: "Layout" });
+    await userEvent.click(within(layout).getByRole("button", { name: "Overview" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Check again" })).toBeNull());
+    // The overview took the focus to the file in view; closing doesn't hand it back.
+    expect(document.activeElement).not.toBe(account);
   });
 
   it("shows not-found with a link home for unknown paths", () => {
