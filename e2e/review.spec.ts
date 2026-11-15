@@ -4,12 +4,22 @@ import { expect, PR, publishAttempts, TOKEN, test } from "./fake-server.ts";
 
 const SMALL_FEATURE_TITLE = "Add receipt download endpoint";
 
-// Decisions are off until the Display menu turns them on; these tests read them.
+// Decisions are off until the display settings turn them on; these tests read them.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => window.localStorage.setItem("megareviewer:decisions", "true"));
 });
 
 /** Opens the picker the way the CLI's link does. */
+/** Picks a layout in the display settings, under the header's account button. */
+const pickLayout = async (page: Page, name: "Map" | "Overview") => {
+  await page.getByRole("button", { name: /^Connections:/ }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("group", { name: "Layout" })
+    .getByRole("button", { name })
+    .click();
+};
+
 const openPicker = async (page: Page) => {
   await page.goto(`/?token=${TOKEN}`);
   await expect(page.getByRole("textbox", { name: "Pull request link" })).toBeVisible();
@@ -530,8 +540,7 @@ test.describe("without the model", () => {
     await expect(page.locator("[data-slot=review-thread]").first()).toBeVisible();
 
     // A click on the route's directory in the overview opens its first file in the map.
-    await page.getByRole("button", { name: "Display" }).click();
-    await page.getByRole("menuitemradio", { name: "Overview" }).click();
+    await pickLayout(page, "Overview");
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
     await overview.getByRole("button", { name: /^src\/routes\/, / }).click();
     await expect(page.locator("[data-slot=review-page]")).toHaveAttribute("data-layout", "map");
@@ -570,8 +579,7 @@ for (const width of [720, 1024, 1440]) {
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeInViewport();
-    await page.getByRole("button", { name: "Display" }).click();
-    await page.getByRole("menuitemradio", { name: "Overview" }).click();
+    await pickLayout(page, "Overview");
     await expect(page.locator("[data-slot=overview-scroll]")).toBeVisible();
     expect(await overflows()).toBe(false);
   });

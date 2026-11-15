@@ -75,7 +75,7 @@ test("never scrolls sideways", async ({ page }) => {
 test("opens Connections from the keyboard, and Esc gives the focus back", async ({ page }) => {
   await openPicker(page);
   const button = page.getByRole("button", { name: /^Connections:/ });
-  await expect(button).toHaveText(/connected$/);
+  await expect(button).toHaveAttribute("data-tone", "ok");
   await button.focus();
   await page.keyboard.press("Enter");
   const checkAgain = page.getByRole("button", { name: "Check again" });

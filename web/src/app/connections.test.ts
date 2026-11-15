@@ -6,7 +6,7 @@ import {
   lockedModelOptions,
   opencodeModelOptions,
 } from "../../dev/fixtures/index.ts";
-import { type ConnectionsInput, connectionsOf } from "./connections.ts";
+import { accountsOf, type ConnectionsInput, connectionsOf } from "./connections.ts";
 
 const CODEX_MISSING = "Codex isn't installed: install the Codex CLI, then run `codex login`";
 
@@ -212,5 +212,22 @@ describe("connectionsOf", () => {
     expect(down.button).toMatchObject({ label: "Disconnected", tone: "danger" });
     expect(down.rows).toEqual([]);
     expect(down.disconnected).toBe("Can't reach it.");
+  });
+});
+
+describe("accountsOf", () => {
+  it("names who the reviewer is on each host that knows them, GitHub first", () => {
+    expect(accountsOf(withHosts({ bitbucket: signedIn }))).toEqual([
+      { host: "GitHub", name: "Lee Park" },
+      { host: "Bitbucket", name: "Sam Rivera" },
+    ]);
+  });
+
+  it("leaves out a host that's off or failing, and knows no one before the first read", () => {
+    expect(accountsOf(withHosts({ github: failingHost, bitbucket: off }))).toEqual([]);
+    expect(accountsOf(withHosts({ github: off, bitbucket: signedIn }))).toEqual([
+      { host: "Bitbucket", name: "Sam Rivera" },
+    ]);
+    expect(accountsOf(null)).toEqual([]);
   });
 });

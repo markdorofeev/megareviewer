@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { PullRequestListResponse, StatusResponse } from "../../../contracts/index.ts";
 import type { PullRequestSummary, ReviewActivity } from "../../../src/domain/review/index.ts";
 import { ConnectionsPopover } from "../app/ConnectionsButton.tsx";
-import { type ConnectionsInput, connectionsOf } from "../app/connections.ts";
+import { accountsOf, type ConnectionsInput, connectionsOf } from "../app/connections.ts";
 import { PullRequestList } from "../pages/picker/PullRequestList.tsx";
 import { PullRequestLists } from "../pages/picker/PullRequestLists.tsx";
 import { ReviewActivityCard } from "../pages/picker/ReviewActivity.tsx";
@@ -214,12 +214,13 @@ const lists = (props: Partial<Parameters<typeof PullRequestLists>[0]>) => (
 /** The main page's parts in each of their states. */
 export const MainPage = () => (
   <div className="flex flex-col gap-8 rounded-xl bg-surface-subtle p-4">
-    <Group title="Connections">
+    <Group title="Account and connections">
       <div className="flex flex-wrap gap-x-6 gap-y-3">
         {BUTTONS.map(({ title, input }) => (
           <Example key={title} title={title}>
             <ConnectionsPopover
               connections={connection(input)}
+              accounts={accountsOf(input.status === undefined ? STATUS : input.status)}
               version="0.2.9"
               checking={input.checking === true}
               onCheckAgain={noop}

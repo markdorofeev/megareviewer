@@ -201,6 +201,21 @@ const PENDING_NAMES: readonly [ConnectionKind, string][] = [
   ["jira", "Jira"],
 ];
 
+/** Who the reviewer is on a host: the name a review they publish there posts under. */
+export interface Account {
+  readonly host: string;
+  readonly name: string;
+}
+
+/** The hosts that know who the reviewer is, GitHub first. */
+export const accountsOf = (status: StatusResponse | null): readonly Account[] =>
+  status === null
+    ? []
+    : (["github", "bitbucket"] as const).flatMap((kind) => {
+        const { user } = status.hosts[kind];
+        return user === null ? [] : [{ host: HOST_NAMES[kind], name: user.name }];
+      });
+
 /** The Connections button and its popover, from the status. */
 export const connectionsOf = (input: ConnectionsInput): Connections => {
   const { status, error, checking, checkedAtMs, listed, nowMs } = input;
