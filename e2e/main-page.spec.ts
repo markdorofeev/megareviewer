@@ -22,7 +22,7 @@ test("opens a review from a row", async ({ page }) => {
 test("opens a review from a link without its scheme", async ({ page }) => {
   await openPicker(page);
   await field(page).fill(PR.smallFeature.replace("https://", ""));
-  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await page.getByRole("button", { name: "Review", exact: true }).click();
   await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
 });
 
@@ -32,7 +32,7 @@ test("shows a reply in the calendar the same day", async ({ page }) => {
   await expect(today).toHaveAccessibleName(/0 comments \(today\)$/);
 
   await field(page).fill(PR.smallFeature);
-  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await page.getByRole("button", { name: "Review", exact: true }).click();
   const thread = page.getByRole("article", { name: "Thread on line 4", exact: true });
   await thread.getByRole("button", { name: "Reply…" }).click();
   await thread.getByRole("textbox", { name: "Reply to the thread on line 4" }).fill("Capped.");

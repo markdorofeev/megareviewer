@@ -77,7 +77,7 @@ const renderPicker = (
 };
 
 const field = () => screen.getByRole<HTMLInputElement>("textbox", { name: "Pull request link" });
-const analyze = () => screen.getByRole("button", { name: /^Analyz/ });
+const review = () => screen.getByRole("button", { name: /^(Review|Opening…)$/ });
 const toReview = () => screen.getByRole("region", { name: "To review" });
 const yours = () => screen.getByRole("region", { name: "Your pull requests" });
 const off = { configured: false, user: null, error: null };
@@ -245,10 +245,10 @@ describe("PickerPage's lists", () => {
 describe("PickerPage's field", () => {
   it("validates on submit, and clears on the next keystroke", async () => {
     renderPicker();
-    await userEvent.click(analyze());
+    await userEvent.click(review());
     expect(screen.getByText("Paste a pull request link first.")).toBeTruthy();
     expect(field().getAttribute("aria-invalid")).toBe("true");
-    expect(analyze().hasAttribute("disabled")).toBe(false);
+    expect(review().hasAttribute("disabled")).toBe(false);
 
     await userEvent.type(field(), "https://gitlab.com/a/b/-/merge_requests/1{Enter}");
     expect(screen.getByText(/^That isn't a pull request link\./)).toBeTruthy();
@@ -270,7 +270,7 @@ describe("PickerPage's field", () => {
     await userEvent.type(field(), "https://github.com/acme/api/pull/902{Enter}");
     expect(await screen.findByText("Fetching acme/api #902 from GitHub…")).toBeTruthy();
     expect(field().readOnly).toBe(true);
-    expect(analyze().textContent).toBe("Analyzing…");
+    expect(review().textContent).toBe("Opening…");
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(field().readOnly).toBe(false);
     expect(document.activeElement).toBe(field());

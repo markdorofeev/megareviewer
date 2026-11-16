@@ -99,10 +99,10 @@ export const UrlForm = ({
             {starting ? (
               <>
                 <LoaderCircleIcon aria-hidden="true" className={SPIN} />
-                Analyzing…
+                Opening…
               </>
             ) : (
-              "Analyze"
+              "Review"
             )}
           </Button>
         </div>
