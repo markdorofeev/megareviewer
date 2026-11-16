@@ -86,17 +86,21 @@ export const useReviewActivity = () => {
 /** Refetches arrive in bursts, one per stage event; this coalesces them. */
 export const REFETCH_DEBOUNCE_MS = 100;
 
-/** An analysis view that follows the analysis's events until it is complete or failed. */
-export const useAnalysisView = (id: AnalysisId) => {
+/**
+ * An analysis view that follows the analysis's events until it is complete or failed. A `seed` the
+ * page already has, complete, is shown as it is: nothing is read until a run is followed.
+ */
+export const useAnalysisView = (id: AnalysisId, seed: AnalysisView | null = null) => {
   const { client, subscribe } = useApi();
   const [state, setState] = useState<{
     readonly view: AnalysisView | null;
     readonly error: ApiError | null;
     readonly loading: boolean;
-  }>({ view: null, error: null, loading: true });
+  }>({ view: seed, error: null, loading: seed === null });
   // Only the newest request may update the state, so responses can't land out of order.
   const latest = useRef(0);
-  const lastView = useRef<AnalysisView | null>(null);
+  const lastView = useRef<AnalysisView | null>(seed);
+  const seeded = useRef(seed !== null && !inProgress(seed.analysis) ? seed.analysis.id : null);
   // Following again, after a model run starts on an analysis whose stream had ended.
   const [round, setRound] = useState(0);
   const followed = useRef<AnalysisId | null>(null);
@@ -116,6 +120,10 @@ export const useAnalysisView = (id: AnalysisId) => {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new round follows again.
   useEffect(() => {
+    if (round === 0 && seeded.current === id) {
+      followed.current = id;
+      return;
+    }
     // Only another analysis starts from nothing; following the same one again keeps the view.
     if (followed.current !== id) {
       followed.current = id;

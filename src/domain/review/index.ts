@@ -18,10 +18,12 @@ export {
   AnalysisKey,
   AnalysisStatus,
   analysisId,
+  BeforeModel,
   CheckoutStatus,
   FilesFetched,
   hasModelRun,
   inProgress,
+  keepBeforeModel,
   MODEL_STAGES,
   ModelBilling,
   ModelCall,
@@ -33,6 +35,7 @@ export {
   PipelineVersion,
   StageName,
   StageStatus,
+  withoutModelRun,
 } from "./analysis.ts";
 export { attachmentHost } from "./attachments.ts";
 export {

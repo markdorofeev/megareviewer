@@ -111,20 +111,35 @@ const parseHunkComments = (stored: unknown): readonly HunkComment[] | undefined 
 
 export const ReviewPage = ({ analysisId }: { readonly analysisId: AnalysisId }) => {
   // A retry, or a re-analysis of an unchanged PR, runs again under the same ID. A new run starts
-  // the page afresh, so it follows the new run's events.
-  const [run, setRun] = useState(0);
-  const restart = useCallback(() => setRun((count) => count + 1), []);
-  return <ReviewLoader key={`${analysisId}/${run}`} analysisId={analysisId} restart={restart} />;
+  // the page afresh, so it follows the new run's events; one whose view is in hand starts from it.
+  const [run, setRun] = useState<{ readonly count: number; readonly seed: AnalysisView | null }>({
+    count: 0,
+    seed: null,
+  });
+  const restart = useCallback(
+    (seed: AnalysisView | null = null) => setRun(({ count }) => ({ count: count + 1, seed })),
+    [],
+  );
+  return (
+    <ReviewLoader
+      key={`${analysisId}/${run.count}`}
+      analysisId={analysisId}
+      seed={run.seed}
+      restart={restart}
+    />
+  );
 };
 
 const ReviewLoader = ({
   analysisId,
+  seed,
   restart,
 }: {
   readonly analysisId: AnalysisId;
-  readonly restart: () => void;
+  readonly seed: AnalysisView | null;
+  readonly restart: (seed?: AnalysisView | null) => void;
 }) => {
-  const { view, error, refetch, follow } = useAnalysisView(analysisId);
+  const { view, error, refetch, follow } = useAnalysisView(analysisId, seed);
   if (view === null) {
     if (error?.code === "not-found") {
       return (
@@ -294,7 +309,7 @@ const Review = ({
   readonly view: AnalysisView;
   readonly refetch: () => Promise<void>;
   readonly follow: () => void;
-  readonly restart: () => void;
+  readonly restart: (seed?: AnalysisView | null) => void;
 }) => {
   const { client } = useApi();
   const modelChoice = useModelChoice(useStatus().status?.model ?? null);
@@ -1402,7 +1417,12 @@ const Review = ({
         <ModelCalls calls={live.modelCalls} option={live.modelOption} />
         {complete && !modelRunning && hasModelRun(live) && (
           // A new run of the code's stages under the same ID: the page starts afresh to follow it.
-          <RemoveModelRun analysisId={analysisId} family={family} onRemoved={restart} />
+          <RemoveModelRun
+            analysisId={analysisId}
+            family={family}
+            // The page starts afresh, so nothing of the run is left in it, from what came back.
+            onRemoved={(removed) => restart({ ...view, ...removed })}
+          />
         )}
         <UsageFooter usage={live.usage} option={live.modelOption} />
       </footer>

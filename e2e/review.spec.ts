@@ -89,6 +89,32 @@ test("analyzes a PR from its URL, and asks Claude on it", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Details", exact: true })).toBeVisible();
 });
 
+test("removes Claude's review in place, forgetting its points' states, and asks again", async ({
+  page,
+}) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+  const config = decision(page, "Changes config/app.yaml");
+  await config.chip.click();
+  await act(page, config.hide, "dismissed");
+  const views: string[] = [];
+  page.on("request", (request) => {
+    if (/^\/api\/analyses\/a_[0-9a-f]+(\/events)?$/.test(new URL(request.url()).pathname)) {
+      views.push(request.url());
+    }
+  });
+
+  await page.getByRole("button", { name: "Remove AI review…" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Request AI review" })).toBeVisible();
+  await expect(config.chip).toHaveCount(0);
+  await expect(page.locator("[data-slot=file-card]").first()).toBeVisible();
+  // The page starts from what the removal answered, without loading the analysis again.
+  expect(views).toEqual([]);
+
+  await analyzeWithClaude(page);
+  await expect(config.chip).not.toHaveAttribute("data-state", "dismissed");
+});
+
 test("analyzes a PR picked from the list", async ({ page }) => {
   await openPicker(page);
   await page.getByRole("link", { name: /Fix crash when refunding store-credit orders/ }).click();

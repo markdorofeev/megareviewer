@@ -1574,26 +1574,130 @@ describe("runModel", () => {
 });
 
 describe("removeModelRun", () => {
-  const withModelRun = async () => {
-    const ready = setup({ modelEnabled: false });
+  /** A file cache that can stop answering, so a removal that reads it has to go to the host. */
+  class ForgettingFileCache extends InMemoryFileCache {
+    forgotten = false;
+    override async get(...args: Parameters<InMemoryFileCache["get"]>) {
+      return this.forgotten ? null : super.get(...args);
+    }
+  }
+
+  /** A parser that can break, so a removal that parses fails. */
+  class BreakingParser extends FakeCodeParser {
+    broken = false;
+    override async syntaxNodes(...args: Parameters<FakeCodeParser["syntaxNodes"]>) {
+      if (this.broken) throw new Error("parsed during the removal");
+      return super.syntaxNodes(...args);
+    }
+    override async symbols(...args: Parameters<FakeCodeParser["symbols"]>) {
+      if (this.broken) throw new Error("parsed during the removal");
+      return super.symbols(...args);
+    }
+  }
+
+  const withModelRun = async (model?: FakeAnalysisModel) => {
+    const fileCache = new ForgettingFileCache();
+    const parser = new BreakingParser();
+    const ready = setup({
+      modelEnabled: false,
+      fileCache,
+      parser,
+      ...(model === undefined ? {} : { model }),
+    });
     const codeOnly = await ready.analyze();
     const ran = await ready.runModel(codeOnly.id);
     const remove = async () => {
-      const before = ready.doneCount(codeOnly.id);
       const removed = await ready.useCases.removeModelRun(codeOnly.id);
       if (!removed.ok) throw new Error(removed.error.message);
-      await ready.done(codeOnly.id, before + 1);
-      return ready.stored(codeOnly.id);
+      return removed.value;
     };
-    return { ...ready, codeOnly, ran, remove };
+    /** Every outside read fails from here on: the host, the file cache, Jira and the parser. */
+    const cutOff = () => {
+      ready.github.failAlways(hostError("network"));
+      fileCache.forgotten = true;
+      ready.tickets.failNext({ kind: "network", message: "Jira is down" });
+      parser.broken = true;
+    };
+    return { ...ready, codeOnly, ran, remove, cutOff };
   };
 
-  it("puts the analysis back as the code made it, under the same ID", async () => {
-    const { codeOnly, ran, remove } = await withModelRun();
+  it("puts back exactly what the code made, under the same ID, reading nothing outside", async () => {
+    const model = new FakeAnalysisModel();
+    model.script(
+      "risk",
+      ok(smallFeatureHunks.map((hunkId) => ({ ...logic(hunkId), riskClass: "contract" as const }))),
+    );
+    const { codeOnly, ran, remove, cutOff, stored, preps } = await withModelRun(model);
     expect(ran.intent).not.toBeNull();
+    expect(ran.risk).not.toEqual(codeOnly.risk);
+    expect(ran.beforeModel).toEqual({ risk: codeOnly.risk, warnings: codeOnly.warnings });
+    const prepsBefore = preps();
+
+    cutOff();
+    const removed = await remove();
+    expect({ ...removed.analysis, updatedAt: codeOnly.updatedAt }).toEqual(codeOnly);
+    expect(await stored(codeOnly.id)).toEqual(removed.analysis);
+    expect(removed.pointReviews).toEqual([]);
+    expect(preps()).toBe(prepsBefore);
+  });
+
+  it("puts back the code's warnings without the model's", async () => {
+    const full = await (async () => {
+      const { analyze, model } = setup();
+      await analyze();
+      return firstInput(model, "checkSize");
+    })();
+    // Just too large, so the run drops a file's contents and says so.
+    const model = new FakeAnalysisModel({
+      maxInputTokens: Math.ceil(JSON.stringify(full).length / 4) - 1,
+    });
+    const { codeOnly, ran, remove } = await withModelRun(model);
+    expect(ran.warnings.length).toBeGreaterThan(codeOnly.warnings.length);
 
     const removed = await remove();
-    expect({ ...removed, updatedAt: codeOnly.updatedAt }).toEqual(codeOnly);
+    expect({ ...removed.analysis, updatedAt: codeOnly.updatedAt }).toEqual(codeOnly);
+  });
+
+  it("puts back what the code made before the first run when a failed run was tried again", async () => {
+    const model = new FakeAnalysisModel();
+    model.script("findings", err(modelError("rate-limited")));
+    const { codeOnly, ran, remove, runModel } = await withModelRun(model);
+    expect(ran.modelError).not.toBeNull();
+    expect(ran.risk).not.toEqual(codeOnly.risk);
+    const again = await runModel(codeOnly.id);
+    expect(again.modelError).toBeNull();
+
+    const removed = await remove();
+    expect({ ...removed.analysis, updatedAt: codeOnly.updatedAt }).toEqual(codeOnly);
+  });
+
+  it("runs the code's stages again on an analysis stored before what the code made was kept", async () => {
+    const { codeOnly, ran, store, remove, preps } = await withModelRun();
+    await store.saveAnalysis({ ...ran, beforeModel: null });
+    const prepsBefore = preps();
+
+    const removed = await remove();
+    expect({ ...removed.analysis, updatedAt: codeOnly.updatedAt }).toEqual(codeOnly);
+    // Without saving or announcing anything until it's done.
+    expect(preps()).toBe(prepsBefore);
+  });
+
+  it("leaves the analysis with its run, and its points' states, when running the code again fails", async () => {
+    const { codeOnly, ran, store, useCases, cutOff, stored } = await withModelRun();
+    const legacy = { ...ran, beforeModel: null };
+    await store.saveAnalysis(legacy);
+    const dismissed = {
+      pointId: PointId.parse("f1"),
+      state: "dismissed" as const,
+      updatedAt: "2026-10-21T09:05:00Z",
+    };
+    await store.savePointReview(codeOnly.id, dismissed);
+
+    cutOff();
+    const removed = await useCases.removeModelRun(codeOnly.id);
+    expect(removed.ok).toBe(false);
+    expect(await stored(codeOnly.id)).toEqual(legacy);
+    expect(await store.getPointReviews(codeOnly.id)).toEqual([dismissed]);
   });
 
   it("forgets the states of Claude's points, so a new run starts from none", async () => {
@@ -1621,6 +1725,36 @@ describe("removeModelRun", () => {
 
     await remove();
     expect(await store.getPublications(codeOnly.id)).toEqual([{ number: 1, id: null, receipt }]);
+  });
+
+  it("refuses a second removal, leaving the analysis as the first did", async () => {
+    const { codeOnly, useCases, remove, stored } = await withModelRun();
+    const removed = await remove();
+
+    expect(await useCases.removeModelRun(codeOnly.id)).toEqual(
+      err({ code: "bad-request", message: "No model has analyzed this pull request" }),
+    );
+    expect(await stored(codeOnly.id)).toEqual(removed.analysis);
+  });
+
+  it("refuses a removal while another is going, and starts a run asked for meanwhile after it", async () => {
+    const { codeOnly, ran, store, useCases, done, doneCount, stored } = await withModelRun();
+    // Running the code again keeps the first removal going across several turns.
+    await store.saveAnalysis({ ...ran, beforeModel: null });
+    const before = doneCount(codeOnly.id);
+
+    const first = useCases.removeModelRun(codeOnly.id);
+    const second = useCases.removeModelRun(codeOnly.id);
+    const run = useCases.runModel(codeOnly.id);
+    expect(await second).toEqual(
+      err({ code: "analysis-not-complete", message: "The analysis isn't complete yet" }),
+    );
+    expect((await first).ok).toBe(true);
+    expect((await run).ok).toBe(true);
+    await done(codeOnly.id, before + 1);
+    const again = await stored(codeOnly.id);
+    expect(again.stages.decisions).toBe("done");
+    expect(again.beforeModel).toEqual({ risk: codeOnly.risk, warnings: codeOnly.warnings });
   });
 
   it("refuses an analysis Claude hasn't run on, or one that isn't complete", async () => {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { RemovedModelRun } from "../../../../contracts/index.ts";
 import type { AnalysisId } from "../../../../src/domain/review/index.ts";
 import { errorMessage, useApi, useMutation } from "../../api/index.ts";
 import { DANGER } from "../../review/shell/banners.ts";
@@ -14,7 +15,8 @@ export const RemoveModelRun = ({
   readonly analysisId: AnalysisId;
   /** Who made the run's points: "Claude". */
   readonly family: string;
-  readonly onRemoved: () => void;
+  /** With the analysis as it is without the run. */
+  readonly onRemoved: (removed: RemovedModelRun) => void;
 }) => {
   const { client } = useApi();
   const remove = useMutation(client.removeModelRun);
@@ -34,8 +36,8 @@ export const RemoveModelRun = ({
           }}
         >
           <p className="text-ui">
-            {family}'s intent, findings, risks, decisions and tour titles go, with what you did with
-            them, and the code's analysis runs again. Your comments stay. Request AI review runs a
+            {family}'s intent, findings, risks and decisions go, with what you did with them, and
+            the code's analysis is back as it was. Your comments stay. Request AI review runs a
             model again, the same or another.
           </p>
           {remove.error !== null && (
@@ -54,7 +56,7 @@ export const RemoveModelRun = ({
                 const removed = await remove.run(analysisId);
                 if (!removed.ok) return;
                 setAsking(false);
-                onRemoved();
+                onRemoved(removed.value);
               }}
             >
               {remove.pending ? "Removing…" : "Remove"}

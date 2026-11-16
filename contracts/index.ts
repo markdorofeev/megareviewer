@@ -16,6 +16,7 @@ export {
   PublishRequest,
   PullRequestListResponse,
   PutPointStateRequest,
+  RemovedModelRun,
   ReplyRequest,
   ResolveRequest,
   ResolveResponse,

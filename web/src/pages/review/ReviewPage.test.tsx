@@ -336,6 +336,25 @@ describe("ReviewPage states", () => {
     expect(screen.queryByRole("button", { name: "Request AI review" })).toBeNull();
   });
 
+  it("takes Claude's run off from what the removal answers, without loading the page again", async () => {
+    const { requests } = renderReview();
+    await loaded();
+    const loads = () => requests.filter((request) => request.url === viewPath).length;
+    const before = loads();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Remove AI review…" }));
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }),
+    );
+    expect(
+      await within(reviewBar()).findByRole("button", { name: "Request AI review" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove AI review…" })).toBeNull();
+    expect(screen.queryByRole("status", { name: "Loading the analysis" })).toBeNull();
+    expect(loads()).toBe(before);
+    expect(requests.filter((request) => request.method === "DELETE")).toHaveLength(1);
+  });
+
   it("disables the button when no model can run, and says why for each provider", async () => {
     const { requests } = renderReview({
       view: codeOnly,

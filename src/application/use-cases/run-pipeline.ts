@@ -2,10 +2,12 @@ import type { HunkId } from "../../domain/diff/index.ts";
 import {
   type Analysis,
   type AnalysisError,
+  type BeforeModel,
   classifyByRules,
   codeTour,
   type FilesFetched,
   joinParts,
+  keepBeforeModel,
   MODEL_STAGES,
   type ModelRunOption,
   mapModelStages,
@@ -15,6 +17,7 @@ import {
   type StageName,
   type StageStatus,
 } from "../../domain/review/index.ts";
+import { ok, type Result } from "../../domain/shared/index.ts";
 import type { AnalysisModel, GitHost } from "../ports/index.ts";
 import { type Collected, collect, type OnFilesFetched } from "./collect.ts";
 import type { AppDeps } from "./deps.ts";
@@ -143,6 +146,43 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
   return { prepared, proofRisk, ruleRisk, skeleton, joined };
 };
 
+/** The fields prep fills in, but its warnings. */
+const preparedFields = ({
+  prepared,
+  proofRisk,
+  ruleRisk,
+  joined,
+}: Awaited<ReturnType<typeof prepare>>) => ({
+  proofs: prepared.proofs,
+  ...joined,
+  fileLinks: prepared.fileLinks,
+  generated: [...prepared.generated].sort(),
+  risk: [...proofRisk, ...ruleRisk],
+});
+
+/**
+ * What the code's stages make of the PR, without saving or announcing anything: for taking a model
+ * run off an analysis stored before what the code made was kept.
+ */
+export const codeFields = async (
+  deps: AppDeps,
+  host: GitHost,
+  pullRequest: PullRequest,
+  checkout: CheckoutAt | null,
+): Promise<Result<Partial<Analysis> & BeforeModel, UseCaseError>> => {
+  const collected = await collect(deps, host, pullRequest);
+  if (!collected.ok) return collected;
+  const { files, tickets, missingTicketKeys, warnings } = collected.value;
+  const prepared = await prepare(deps, collected.value, checkout);
+  return ok({
+    files,
+    tickets,
+    missingTicketKeys,
+    ...preparedFields(prepared),
+    warnings: [...warnings, ...prepared.prepared.warnings],
+  });
+};
+
 /**
  * Runs the code's stages on a saved, running analysis until it's complete or failed, leaving the
  * model's stages not run. Never throws: a bug fails the analysis with code "internal".
@@ -185,14 +225,10 @@ const codeStages = async (
   }));
 
   await tracker.setStage("prep", "running");
-  const { prepared, proofRisk, ruleRisk, joined } = await prepare(deps, collected.value, checkout);
+  const prepared = await prepare(deps, collected.value, checkout);
   await tracker.setStage("prep", "done", (analysis) => ({
-    proofs: prepared.proofs,
-    ...joined,
-    fileLinks: prepared.fileLinks,
-    generated: [...prepared.generated].sort(),
-    risk: [...proofRisk, ...ruleRisk],
-    ...adding(prepared)(analysis),
+    ...preparedFields(prepared),
+    ...adding(prepared.prepared)(analysis),
   }));
   for (const stage of MODEL_STAGES) await tracker.setStage(stage, "skipped");
   await tracker.finish(null);
@@ -215,6 +251,7 @@ export const runModel = async (
   const tracker = createTracker(deps, analysis);
   try {
     await tracker.save((current) => ({
+      beforeModel: keepBeforeModel(current),
       modelError: null,
       modelOption: run.option,
       stages: mapModelStages(current.stages, () => "pending"),

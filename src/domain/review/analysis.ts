@@ -143,6 +143,15 @@ export type FilesFetched = z.infer<typeof FilesFetched>;
 export const CheckoutStatus = z.enum(["read", "none", "missing-commit"]);
 export type CheckoutStatus = z.infer<typeof CheckoutStatus>;
 
+/** The fields of an analysis a model run changes, as the code made them. */
+export const BeforeModel = z
+  .object({
+    risk: z.array(RiskAssessment).readonly(),
+    warnings: z.array(z.string()).readonly(),
+  })
+  .readonly();
+export type BeforeModel = z.infer<typeof BeforeModel>;
+
 export const Analysis = z
   .object({
     id: AnalysisId,
@@ -188,6 +197,11 @@ export const Analysis = z
     modelError: AnalysisError.nullable().default(null),
     /** The option the model run used. Absent on analyses stored before the choice, all Haiku 5.5. */
     modelOption: ModelRunOption.nullable().default(null),
+    /**
+     * What the code made of the fields a model run changes, kept when the first run starts so that
+     * removing the run puts them back. Null without a run, and where a run started before it was kept.
+     */
+    beforeModel: BeforeModel.nullable().default(null),
     createdAt: Timestamp,
     updatedAt: Timestamp,
   })
@@ -236,6 +250,35 @@ export const hasModelRun = (analysis: Pick<Analysis, "stages" | "usage" | "model
   MODEL_STAGES.some((stage) => analysis.stages[stage] !== "skipped") ||
   analysis.usage.length > 0 ||
   analysis.modelError !== null;
+
+/**
+ * The analysis as if no model had run on it: the model's results gone, its stages not run, and the
+ * fields it changed back to what the code made of them.
+ */
+export const withoutModelRun = (
+  analysis: Analysis,
+  code: BeforeModel,
+  updatedAt: Timestamp,
+): Analysis => ({
+  ...analysis,
+  stages: mapModelStages(analysis.stages, () => "skipped"),
+  intent: null,
+  findings: [],
+  risk: code.risk,
+  decisions: [],
+  warnings: code.warnings,
+  usage: [],
+  modelCalls: [],
+  modelError: null,
+  modelOption: null,
+  beforeModel: null,
+  updatedAt,
+});
+
+/** What to keep when a model run starts: the code's fields, unless a run has changed them. */
+export const keepBeforeModel = (analysis: Analysis): BeforeModel | null =>
+  analysis.beforeModel ??
+  (hasModelRun(analysis) ? null : { risk: analysis.risk, warnings: analysis.warnings });
 
 /** Deterministic, so the same PR at the same head SHA and pipeline version maps to one analysis. */
 export const analysisId = (key: AnalysisKey): AnalysisId => {

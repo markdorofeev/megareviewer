@@ -87,6 +87,12 @@ export const AnalysisView = z
   .readonly();
 export type AnalysisView = z.infer<typeof AnalysisView>;
 
+/** An analysis without its model run: what the code made, and no states of points left. */
+export const RemovedModelRun = z
+  .object({ analysis: Analysis, pointReviews: z.array(PointReview).readonly() })
+  .readonly();
+export type RemovedModelRun = z.infer<typeof RemovedModelRun>;
+
 export const PutPointStateRequest = z.object({ state: PointState }).readonly();
 export type PutPointStateRequest = z.infer<typeof PutPointStateRequest>;
 
@@ -265,15 +271,15 @@ export const routes = {
     response: AnalysisIdResponse,
   },
   /**
-   * Takes the model's run off a complete analysis: the code's stages run again in place, so its
-   * events follow, and the model's points and their states go. For trying the passes again.
+   * Takes the model's run off a complete analysis, for trying the passes again: the model's points
+   * and their states go, and what the code made is back. Answers with the analysis as it now is.
    */
   removeModelRun: {
     method: "DELETE",
     path: "/api/analyses/:id/model",
     params: AnalysisParams,
     request: null,
-    response: AnalysisIdResponse,
+    response: RemovedModelRun,
   },
   /** Raises, dismisses or reopens one of the model's points. */
   putPointState: {

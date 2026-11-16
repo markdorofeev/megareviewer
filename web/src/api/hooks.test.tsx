@@ -124,6 +124,21 @@ describe("useAnalysisView", () => {
     expect(subscribers(id)).toBe(0);
   });
 
+  it("shows a complete view it's given at once, reading nothing until a run is followed", async () => {
+    const { wrapper, subscribers, viewRequests } = countingMock();
+    const { result } = renderHook(() => useAnalysisView(id, fixtureAnalysisView), { wrapper });
+    expect(result.current.view).toEqual(fixtureAnalysisView);
+    expect(result.current.loading).toBe(false);
+    await flush();
+    expect(viewRequests()).toBe(0);
+    expect(subscribers(id)).toBe(0);
+
+    act(() => result.current.follow());
+    await flush();
+    expect(viewRequests()).toBe(1);
+    expect(subscribers(id)).toBe(1);
+  });
+
   it("doesn't refetch on done when the view already shows the end", async () => {
     const { wrapper, emit, viewRequests } = countingMock();
     const { result } = renderHook(() => useAnalysisView(id), { wrapper });

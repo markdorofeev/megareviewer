@@ -6,6 +6,7 @@ import {
   type ErrorCode,
   type ErrorResponse,
   type FileContentResponse,
+  type RemovedModelRun,
   type RouteName,
   routes,
   TOKEN_HEADER,
@@ -315,11 +316,9 @@ export const createMockApi = (
       }
       fixture = { ...withoutModel(fixtureView.analysis), usage: [], modelCalls: [] };
       modelStagesDone = null;
-      // The code's stages run again; a publication stays, as on the server.
-      const published = publication;
-      simulate(null);
-      publication = published;
-      const response: AnalysisIdResponse = { analysisId: fixture.id };
+      // The states of Claude's points go; a publication stays, as on the server.
+      pointReviews.clear();
+      const response: RemovedModelRun = { analysis: analysis(), pointReviews: [] };
       return success(response);
     },
     runModel: ({ id }) => {

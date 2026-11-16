@@ -3,6 +3,7 @@ import {
   type AnalysisId,
   type AnalysisKey,
   analysisId,
+  type BeforeModel,
   type CheckoutStatus,
   type HostKind,
   hasModelRun,
@@ -13,19 +14,21 @@ import {
   mapModelStages,
   modelFamily,
   modelRunnable,
+  type PointReview,
   type PullRequest,
   type PullRequestRef,
   parsePullRequestUrl,
   runOptionOf,
   type StageName,
   StageName as StageNames,
+  withoutModelRun,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { AnalysisModel, GitHost, ModelCatalog } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { pipelineVersion } from "./pipeline-version.ts";
-import { runModel, runPipeline } from "./run-pipeline.ts";
+import { codeFields, runModel, runPipeline } from "./run-pipeline.ts";
 import { type CheckoutAt, lookUpCheckout } from "./unchanged-callers.ts";
 
 /** More than enough to find every analysis that was running when megareviewer stopped. */
@@ -127,9 +130,28 @@ const newAnalysis = (
   error: null,
   modelError: null,
   modelOption: null,
+  beforeModel: null,
   createdAt,
   updatedAt: deps.clock.now(),
 });
+
+/** What the code makes of an analysis's PR when nothing kept it, as the stages compute it. */
+const recomputeCode = async (
+  deps: AppDeps,
+  analysis: Analysis,
+  pullRequest: PullRequest,
+): Promise<Result<{ beforeModel: BeforeModel; fields: Partial<Analysis> }, UseCaseError>> => {
+  const host = hostFor(deps, analysis.key.ref.repo.host);
+  if (!host.ok) return host;
+  const checkout =
+    analysis.checkout === "read"
+      ? await lookUpCheckout(deps.checkouts, pullRequest.ref.repo, analysis.key.headSha)
+      : null;
+  const fields = await codeFields(deps, host.value, pullRequest, checkout?.at ?? null);
+  if (!fields.ok) return fields;
+  const { risk, warnings } = fields.value;
+  return ok({ beforeModel: { risk, warnings }, fields: fields.value });
+};
 
 /** Starts, joins and recovers analysis runs. Runs continue in the background. */
 export const createAnalysisRunner = (deps: AppDeps) => {
@@ -169,10 +191,8 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     analysis: Analysis,
     pullRequest: PullRequest,
     checkout: CheckoutAt | null,
-    before: () => Promise<void> = async () => {},
   ): void => {
     const run = (async () => {
-      await before();
       await deps.store.saveAnalysis(analysis);
       await runPipeline(deps, host, analysis, pullRequest, checkout);
     })()
@@ -263,12 +283,13 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     },
 
     /**
-     * Takes Claude's run off a complete analysis, so the passes can be tried again: the code's
-     * stages run again in place, under the same ID, and the states of Claude's points go.
+     * Takes Claude's run off a complete analysis, so the passes can be tried again: what the code
+     * made is put back, under the same ID, and the states of Claude's points go. An analysis stored
+     * before what the code made was kept runs the code's stages again to get it.
      */
     async removeModelRun(
       id: AnalysisId,
-    ): Promise<Result<{ analysisId: AnalysisId }, UseCaseError>> {
+    ): Promise<Result<{ analysis: Analysis; pointReviews: readonly PointReview[] }, UseCaseError>> {
       const analysis = await deps.store.getAnalysis(id);
       if (analysis === null) return err(appError("not-found", `No analysis ${id}`));
       const { pullRequest } = analysis;
@@ -278,27 +299,31 @@ export const createAnalysisRunner = (deps: AppDeps) => {
       if (!hasModelRun(analysis)) {
         return err(appError("bad-request", "No model has analyzed this pull request"));
       }
-      const host = hostFor(deps, analysis.key.ref.repo.host);
-      if (!host.ok) return host;
-      const checkout =
-        analysis.checkout === "read"
-          ? await lookUpCheckout(deps.checkouts, pullRequest.ref.repo, analysis.key.headSha)
-          : null;
-      // No await from here on until the run is in the map, so a model run can't start meanwhile.
+      // No await from here on until the removal is in the map, so a model run can't start meanwhile.
       if (inFlight.has(id)) {
         return err(appError("analysis-not-complete", "The analysis isn't complete yet"));
       }
-      const fresh = newAnalysis(
-        deps,
-        analysis.key,
-        pullRequest,
-        analysis.checkout,
-        analysis.createdAt,
-      );
-      runCode(host.value, fresh, pullRequest, checkout?.at ?? null, () =>
-        deps.store.clearPointReviews(id),
-      );
-      return ok({ analysisId: id });
+      const { promise: removal, resolve: removed } = Promise.withResolvers<void>();
+      inFlight.set(id, removal);
+      try {
+        const code =
+          analysis.beforeModel === null
+            ? await recomputeCode(deps, analysis, pullRequest)
+            : ok({ beforeModel: analysis.beforeModel, fields: {} });
+        if (!code.ok) return code;
+        const restored = withoutModelRun(
+          { ...analysis, ...code.value.fields },
+          code.value.beforeModel,
+          deps.clock.now(),
+        );
+        // States first: if saving the analysis fails, it keeps its run, without the states.
+        await deps.store.clearPointReviews(id);
+        await deps.store.saveAnalysis(restored);
+        return ok({ analysis: restored, pointReviews: await deps.store.getPointReviews(id) });
+      } finally {
+        inFlight.delete(id);
+        removed();
+      }
     },
 
     /**
