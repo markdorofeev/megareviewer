@@ -505,6 +505,71 @@ test("replies to a thread and resolves it", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("walks the threads from the bar, before Claude runs and beside its points", async ({
+  page,
+}) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+  const bar = page.locator("[data-slot=review-bar]");
+  const position = bar.getByRole("button", { name: /, show all$/ });
+  await expect(position).toHaveText("5 unresolved");
+
+  // The keyboard steps as the mouse does.
+  await bar.getByRole("button", { name: "Next thread" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(position).toHaveAccessibleName("Thread 1 of 5, show all");
+  await expect(bar.getByRole("status")).toHaveText(
+    /^Thread 1 of 5, src\/routes\/orders\.ts line 39: Sam Ortiz: Say the charset/,
+  );
+  const thread = page.locator("[data-slot=review-thread]:focus");
+  await expect(thread).toHaveAttribute("id", /^thread-/);
+  await expect(thread).toBeInViewport();
+  // Under the bar, and under its file's sticky header.
+  const barBottom = await bar.evaluate((one) => one.getBoundingClientRect().bottom);
+  const header = await thread.evaluate(
+    (one) =>
+      one
+        .closest("[data-slot=file-card]")
+        ?.querySelector("[data-slot=file-card-header]")
+        ?.getBoundingClientRect().bottom ?? Number.NaN,
+  );
+  const top = await thread.evaluate((one) => one.getBoundingClientRect().top);
+  expect(top).toBeGreaterThanOrEqual(Math.max(barBottom, header));
+
+  // Round all five, top to bottom of the page, and back to the first.
+  const tops: number[] = [];
+  for (let n = 2; n <= 6; n += 1) {
+    await bar.getByRole("button", { name: "Next thread" }).click();
+    const at = page.locator("[data-slot=review-thread]:focus");
+    await expect(at).toBeInViewport();
+    tops.push(await at.evaluate((one) => one.getBoundingClientRect().top + window.scrollY));
+  }
+  await expect(position).toHaveText("1 of 5");
+  expect(tops.slice(0, 4)).toEqual([...tops.slice(0, 4)].sort((a, b) => a - b));
+
+  // A resolved thread is folded; going to it from the list opens it.
+  await position.click();
+  const list = page.getByRole("dialog", { name: "6 threads, 5 unresolved" });
+  await list.getByRole("button", { name: /Why ten times the rate limit\?/ }).click();
+  const resolved = page.locator("[data-slot=review-thread]:focus");
+  await expect(resolved).toHaveAttribute("aria-label", /, resolved$/);
+  await expect(resolved.getByRole("button", { name: "Hide" })).toBeVisible();
+  await expect(resolved).toBeInViewport();
+
+  // With Claude's points, the threads are a chip beside theirs. The stepper stays on the threads
+  // the reviewer was going round; the chip takes it to the points and back.
+  await analyzeWithClaude(page);
+  const chip = bar.getByRole("button", { name: "5 unresolved threads" });
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  await chip.click();
+  await expect(bar.getByRole("button", { name: /^\d+ points?, show all$/ })).toBeVisible();
+  await chip.click();
+  // Narrowing from a thread outside the steps goes to the first step.
+  await expect(position).toHaveAccessibleName("Thread 1 of 5, show all");
+  await bar.getByRole("button", { name: "Next thread" }).click();
+  await expect(position).toHaveAccessibleName("Thread 2 of 5, show all");
+  await expect(page.locator("[data-slot=review-thread]:focus")).toBeInViewport();
+});
+
 test("posts a comment now, and it comes back as a thread", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
   const changes = page.getByRole("region", { name: "Changes" });

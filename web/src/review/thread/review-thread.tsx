@@ -6,7 +6,7 @@ import {
   type ReviewThread,
   type ThreadComment,
 } from "../../../../src/domain/review/index.ts";
-import { cn } from "../../lib/utils.ts";
+import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { KeyHintLine } from "../shell/key-hint.tsx";
@@ -43,8 +43,19 @@ export interface ReviewThreadProps {
     readonly status: "posting" | "failed";
     readonly error?: string;
   };
+  /**
+   * The thread the reviewer went to: it opens if it was folded and has a ring, as a point's card
+   * does, until another is gone to.
+   */
+  readonly current?: boolean;
+  /** Its element's ID, for going to it. */
+  readonly anchorId?: string;
+  /** The lines it's under, kept in view above it when it's gone to. */
+  readonly linesAbove?: number;
   readonly className?: string;
 }
+
+const RING = "shadow-[inset_0_0_0_2px_var(--ring)]";
 
 const Initials = ({ name }: { readonly name: string }) => (
   <span
@@ -94,9 +105,18 @@ export const ReviewThreadView = ({
   replying = false,
   mediaUrl,
   initialReply,
+  current = false,
+  anchorId,
+  linesAbove = 0,
   className,
 }: ReviewThreadProps) => {
-  const [open, setOpen] = useState(!thread.resolved);
+  const [open, setOpen] = useState(!thread.resolved || current);
+  // Gone to while folded, it opens; Hide still folds it after.
+  const [wasCurrent, setWasCurrent] = useState(current);
+  if (current !== wasCurrent) {
+    setWasCurrent(current);
+    if (current) setOpen(true);
+  }
   const [composing, setComposing] = useState(initialReply !== undefined);
   const [focusAsked, setFocusAsked] = useState(0);
   const [reply, setReply] = useState(initialReply?.text ?? "");
@@ -109,7 +129,7 @@ export const ReviewThreadView = ({
   const field = useRef<HTMLTextAreaElement>(null);
   const fieldId = useId();
   const state = thread.resolved ? "resolved" : thread.outdated ? "outdated" : "open";
-  const current = !thread.outdated && thread.line !== null && thread.side === "new";
+  const onHead = !thread.outdated && thread.line !== null && thread.side === "new";
   const canReply = onReply !== undefined && thread.can.reply;
   const canResolve = onResolve !== undefined && thread.can.resolve;
   // The field stays while there's something in it to lose: text, a post on its way, or a failure.
@@ -173,7 +193,7 @@ export const ReviewThreadView = ({
   const suggestionView = (lines: readonly string[]) => (
     <SuggestionDiff
       title="Suggested change"
-      removed={current ? covered : null}
+      removed={onHead ? covered : null}
       added={lines}
       language={language}
     />
@@ -253,10 +273,18 @@ export const ReviewThreadView = ({
       as="article"
       state={state}
       data-slot="review-thread"
+      id={anchorId}
+      data-current={current || undefined}
       aria-label={`Thread on ${threadPlace(thread)}${thread.resolved ? ", resolved" : ""}`}
-      // Not a tab stop, but the focus comes back to it when the reply field goes.
+      // Not a tab stop, but the focus comes back to it when the reply field goes, or it's gone to.
       tabIndex={-1}
-      className={cn("flex flex-col gap-3 -outline-offset-2", !open && "py-1.5", className)}
+      style={cssVars({ "--lines-above": Math.min(linesAbove, 5) })}
+      className={cn(
+        "flex scroll-mt-[calc(6rem+var(--lines-above)*var(--text-code--line-height))] flex-col gap-3 -outline-offset-2",
+        !open && "py-1.5",
+        current && RING,
+        className,
+      )}
     >
       {!open ? (
         <div className="flex min-h-7 flex-wrap items-center gap-2">

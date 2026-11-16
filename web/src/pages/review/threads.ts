@@ -3,6 +3,9 @@ import type { ReviewThread } from "../../../../src/domain/review/index.ts";
 import { commentPlace, type LinePlace } from "../../review/index.ts";
 import type { FileGroup, PartIndex } from "./model.ts";
 
+/** A thread's element on the page, which going to it scrolls to. */
+export const threadAnchor = (id: string): string => `thread-${id}`;
+
 /** A line's key among a part's threads. */
 export const placeKey = (place: Pick<LinePlace, "side" | "line">): string =>
   `${place.side}:${place.line}`;

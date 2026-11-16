@@ -4,20 +4,23 @@ import {
   mapModelStages,
   type Point,
   PointId,
-  type PointKind,
   type PointState,
+  type ReviewThread,
+  type ThreadId,
 } from "../../../src/domain/review/index.ts";
 import {
   fixtureModelOptions,
   lockedModelOptions,
   opencodeModelOptions,
 } from "../../dev/fixtures/index.ts";
-import { ClaudeElement, type ClaudeRun } from "../pages/review/ClaudeElement.tsx";
+import { ClaudeElement, type ClaudeRun, type Narrowing } from "../pages/review/ClaudeElement.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
 import { narrowTo } from "../pages/review/stepper.ts";
+import { ThreadStepper, threadChip } from "../pages/review/ThreadStepper.tsx";
+import { type ThreadScope, threadScopeOf, threadSteps } from "../pages/review/thread-steps.ts";
 import { Button } from "../ui/button.tsx";
-import { DESIGN_RUN, POINTS, PULL_REQUEST, useDemoChoice } from "./fixtures.ts";
+import { DESIGN_RUN, POINTS, PULL_REQUEST, THREADS, useDemoChoice } from "./fixtures.ts";
 
 /** The point card's points and a second finding, so a chip has more than one to walk. */
 const MORE_POINTS: readonly Point[] = [
@@ -35,6 +38,21 @@ const MORE_POINTS: readonly Point[] = [
     mismatch: null,
   },
 ];
+
+/** The PR's threads in the page's order: two open, one resolved, across two files. */
+const PR_THREADS: readonly ReviewThread[] = [
+  { ...THREADS.open, id: "PRRT_open" },
+  { ...THREADS.resolved, id: "PRRT_resolved", line: 24, originalLine: 24 },
+  { ...THREADS.grouped, id: "PRRT_grouped", path: "src/http/client.ts", line: 8, originalLine: 8 },
+];
+const ALL_RESOLVED: readonly ReviewThread[] = PR_THREADS.map((one) => ({
+  ...one,
+  resolved: true,
+}));
+
+const RESOLVED_HERE: readonly ReviewThread[] = PR_THREADS.filter(
+  (one) => one.id !== "PRRT_resolved",
+).map((one) => (one.id === "PRRT_grouped" ? { ...one, resolved: true } : one));
 
 const RAN: ClaudeRun = {
   ...DESIGN_RUN,
@@ -57,12 +75,16 @@ const BarDemo = ({
   hairline = null,
   stuck = false,
   published = false,
+  threads = [],
+  startThread = null,
+  resolvedHere = [],
+  scope = null,
 }: {
   readonly label: string;
   readonly run?: ClaudeRun;
   readonly points?: readonly Point[];
   readonly start?: PointId | null;
-  readonly narrowedAt?: PointKind | null;
+  readonly narrowedAt?: Narrowing | null;
   readonly dismissed?: readonly string[];
   readonly running?: boolean;
   /** What the reviewer can choose: Claude Code signed in unless given. */
@@ -70,10 +92,20 @@ const BarDemo = ({
   readonly hairline?: HairlineState | null;
   readonly stuck?: boolean;
   readonly published?: boolean;
+  /** The PR's threads, in the page's order. */
+  readonly threads?: readonly ReviewThread[];
+  readonly startThread?: ThreadId | null;
+  /** Threads resolved on the page, which stay steps. */
+  readonly resolvedHere?: readonly ThreadId[];
+  readonly scope?: ThreadScope | null;
 }) => {
   const [current, setCurrent] = useState<PointId | null>(start);
+  const [thread, setThread] = useState<ThreadId | null>(startThread);
   const choice = useDemoChoice(models);
-  const [narrowed, setNarrowed] = useState<PointKind | null>(narrowedAt);
+  const [narrowed, setNarrowed] = useState<Narrowing | null>(narrowedAt);
+  const here = new Set(resolvedHere);
+  const threadScope = threadScopeOf(scope, threads, here);
+  const walkingThreads = narrowed === "thread" || points.length === 0;
   const stateOf = (id: PointId): PointState => (dismissed.includes(id) ? "dismissed" : "open");
   return (
     <div className="flex flex-col gap-1">
@@ -102,22 +134,41 @@ const BarDemo = ({
               starting={false}
               error={null}
               points={points}
+              threads={threadChip(threads, threadScope, here)}
               narrowed={narrowed}
               onNarrow={(kind) => {
                 setNarrowed(kind);
+                if (kind === "thread") {
+                  const [first] = threadSteps(threads, threadScope, here);
+                  if (thread === null && first !== undefined) setThread(first.id);
+                  return;
+                }
                 const to = narrowTo(points, kind, current);
                 if (to !== null) setCurrent(to);
               }}
               onRun={() => {}}
             >
-              <PointStepper
-                points={points}
-                current={current}
-                stateOf={stateOf}
-                kind={narrowed}
-                onGo={setCurrent}
-                onOpenList={() => {}}
-              />
+              {!walkingThreads ? (
+                <PointStepper
+                  points={points}
+                  current={current}
+                  stateOf={stateOf}
+                  kind={narrowed}
+                  onGo={setCurrent}
+                  onOpenList={() => {}}
+                />
+              ) : (
+                threads.length > 0 && (
+                  <ThreadStepper
+                    ordered={threads}
+                    scope={threadScope}
+                    resolvedHere={here}
+                    current={thread}
+                    onGo={setThread}
+                    onOpenList={() => {}}
+                  />
+                )
+              )}
             </ClaudeElement>
           }
           tools={null}
@@ -198,6 +249,48 @@ export const ReviewBarStates = (): ReactNode => (
       points={POINTS.slice(0, 1)}
     />
     <BarDemo label="Nothing to raise" points={[]} />
+    <BarDemo
+      label="Threads before Claude runs: the stepper goes round the unresolved ones, in the page's order"
+      run={DESIGN_RUN}
+      points={[]}
+      threads={PR_THREADS}
+    />
+    <BarDemo
+      label="On a thread: who started it and their first line, which goes back to it"
+      run={DESIGN_RUN}
+      points={[]}
+      threads={PR_THREADS}
+      startThread="PRRT_grouped"
+    />
+    <BarDemo
+      label="While Claude reads, the threads are still a step away"
+      run={DESIGN_RUN}
+      points={[]}
+      running
+      hairline="running"
+      threads={PR_THREADS}
+      startThread="PRRT_open"
+    />
+    <BarDemo
+      label="Beside Claude's points: the threads' chip narrows the stepper to them"
+      threads={PR_THREADS}
+      narrowedAt="thread"
+      startThread="PRRT_open"
+    />
+    <BarDemo
+      label="A thread resolved here stays a step, so the position doesn't jump"
+      run={DESIGN_RUN}
+      points={[]}
+      threads={RESOLVED_HERE}
+      resolvedHere={["PRRT_grouped"]}
+      startThread="PRRT_grouped"
+    />
+    <BarDemo
+      label="Every thread resolved: the stepper goes round all of them"
+      run={DESIGN_RUN}
+      points={[]}
+      threads={ALL_RESOLVED}
+    />
     <BarDemo label="Stuck to the top: the title first" stuck start={PointId.parse("f1")} />
     <BarDemo label="Published" published start={PointId.parse("f1")} />
   </div>

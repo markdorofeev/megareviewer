@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { Point, PointId, PointKind, PointState } from "../../../../src/domain/review/index.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
@@ -31,11 +32,14 @@ export const PointList = ({
   readonly family?: string;
 }) => {
   const shown = kind === null ? points : points.filter((point) => point.kind === kind);
+  const went = useRef(false);
   const [one, many] = kind === null ? ["point", "points"] : KIND_WORDS[kind];
   return (
     <Dialog
       title={`${shown.length} ${shown.length === 1 ? one : many} from ${family}`}
       onClose={onClose}
+      // A row moves the focus to what it goes to; closing mustn't take it back to the stepper.
+      returnFocus={() => !went.current}
       className="sm:max-w-2xl"
     >
       {/* The dialog is a grid: without min-w-0 the list grows to its longest title. */}
@@ -51,7 +55,10 @@ export const PointList = ({
                 data-slot="point-row"
                 data-kind={point.kind}
                 className="flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-accent"
-                onClick={() => onGo(point.id)}
+                onClick={() => {
+                  went.current = true;
+                  onGo(point.id);
+                }}
               >
                 <Icon aria-hidden="true" className="size-3.5 shrink-0" />
                 <span className="sr-only">{label}: </span>

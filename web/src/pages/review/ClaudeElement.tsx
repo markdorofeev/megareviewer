@@ -1,4 +1,4 @@
-import { ChevronDownIcon, InfoIcon, LockIcon, SparklesIcon } from "lucide-react";
+import { ChevronDownIcon, InfoIcon, LockIcon, MessageSquareIcon, SparklesIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from "react";
 import {
   type Analysis,
@@ -50,27 +50,36 @@ const KIND_WORDS: Readonly<Record<PointKind, [string, string]>> = {
   decision: ["decision", "decisions"],
 };
 
+/** What the stepper walks when a chip narrows it: a kind of Claude's points, or the PR's threads. */
+export type Narrowing = PointKind | "thread";
+
 /**
- * A kind's count, a toggle that narrows the stepper to that kind. Landing, it rises in at its place
- * among the chips, its count rolling up from zero (globals.css); the number is in the text for
- * screen readers, and drawn for the eye. Below 1280px the word gives way to the glyph and count,
- * leaving the stepper room for its title.
+ * A count, a toggle that narrows the stepper: to a kind of point, or to the threads. Landing, it
+ * rises in at its place among the chips, its count rolling up from zero (globals.css); the number
+ * is in the text for screen readers, and drawn for the eye. Below 1280px the word gives way to the
+ * glyph and count, leaving the stepper room for its title.
  */
 const Chip = ({
   kind,
   count,
+  words,
   at,
   pressed,
   onPressed,
+  label,
 }: {
-  readonly kind: PointKind;
+  readonly kind: Narrowing;
   readonly count: number;
+  /** The word after the count, one and many: "finding", "findings". */
+  readonly words: readonly [string, string];
   readonly at: number;
   readonly pressed: boolean;
   readonly onPressed: (pressed: boolean) => void;
+  /** Its name, when the count and word don't say what it counts. */
+  readonly label?: string;
 }) => {
-  const [one, many] = KIND_WORDS[kind];
-  const Icon = POINT_ICON[kind];
+  const [one, many] = words;
+  const Icon = kind === "thread" ? MessageSquareIcon : POINT_ICON[kind];
   return (
     <button
       type="button"
@@ -78,12 +87,15 @@ const Chip = ({
       data-kind={kind}
       data-land="rise"
       aria-pressed={pressed}
+      aria-label={label}
       style={cssVars({ "--landing-i": at })}
       onClick={() => onPressed(!pressed)}
       className={cn(
         // A pressed chip is told by a border in its text's color, as well as by its fill.
         "flex min-h-6 shrink-0 items-center gap-1.5 rounded-full border px-2 text-caption font-medium aria-pressed:border-current aria-pressed:ring-1 aria-pressed:ring-current",
-        POINT_STATUS[kind].className,
+        kind === "thread"
+          ? "border-border bg-background text-foreground"
+          : POINT_STATUS[kind].className,
       )}
     >
       <Icon aria-hidden="true" className="size-3.5" />
@@ -337,7 +349,8 @@ const missingNote = (analysis: ClaudeRun): string | null => {
 /**
  * The model's run and what it found, in the bar. Before it runs, the button; while it does, a line of
  * words and the time since; once it's done, a chip per kind of point with its count, which narrows
- * the stepper that follows them to its kind.
+ * the stepper that follows them to its kind, and one for the PR's threads. The stepper follows
+ * whatever state the run is in, since the threads are there before Claude runs and while it does.
  */
 export const ClaudeElement = ({
   analysis,
@@ -347,6 +360,7 @@ export const ClaudeElement = ({
   starting,
   error,
   points,
+  threads = null,
   narrowed,
   onNarrow,
   onRun,
@@ -362,27 +376,47 @@ export const ClaudeElement = ({
   /** Why the last request to start it was refused. */
   readonly error: string | null;
   readonly points: readonly Point[];
-  /** The kind whose chip is pressed, or null. */
-  readonly narrowed: PointKind | null;
-  readonly onNarrow: (kind: PointKind | null) => void;
+  /** The threads the stepper can walk, for their chip beside the points'; null without any. */
+  readonly threads?: {
+    readonly count: number;
+    readonly words: readonly [string, string];
+    readonly label: string;
+  } | null;
+  /** The chip that's pressed, or null. */
+  readonly narrowed: Narrowing | null;
+  readonly onNarrow: (kind: Narrowing | null) => void;
   readonly onRun: () => void;
-  /** After the chips: the stepper through the points. */
+  /** After the chips: the stepper through the points or the threads. */
   readonly children?: ReactNode;
 }) => {
   const elapsed = useElapsed(running ? startedAt : null);
   // The run's model once it has one; before, the one the reviewer would run.
   const family = modelFamily(analysis.modelOption ?? choice.chosen);
+  // Without Claude's points, the stepper walks the threads, after whatever the slot shows.
+  // Without Claude's points, the stepper walks the threads, after whatever the slot shows. The
+  // wrapper is always there, so the threads arriving don't mount the slot's button again.
+  const hasStepper = children !== undefined && children !== null && children !== false;
+  const withStepper = (slot: ReactNode) => (
+    <span className="flex min-w-0 items-center gap-2">
+      {slot}
+      {hasStepper && (
+        <span className={cn("flex min-w-0 items-center", slot !== null && "border-l pl-1.5")}>
+          {children}
+        </span>
+      )}
+    </span>
+  );
   if (running) {
-    return (
+    return withStepper(
       <span
         data-slot="claude-running"
         role="status"
-        className="flex min-w-0 items-center gap-2 whitespace-nowrap text-muted-foreground"
+        className="flex shrink-0 items-center gap-2 whitespace-nowrap text-muted-foreground"
       >
         <SparklesIcon aria-hidden="true" className="size-3.5" />
         {family} is reading this PR
         <span className="tabular text-caption">{clock(elapsed)}</span>
-      </span>
+      </span>,
     );
   }
 
@@ -391,9 +425,10 @@ export const ClaudeElement = ({
     .filter(([, count]) => count > 0);
   const note = missingNote(analysis);
   // What follows the chips lands after the last of them.
+  const chips = counts.length + (threads === null ? 0 : 1);
   const after = (at: number) => ({
     "data-land": "rise",
-    style: cssVars({ "--landing-i": counts.length + at }),
+    style: cssVars({ "--landing-i": chips + at }),
   });
   if (points.length > 0) {
     return (
@@ -403,11 +438,23 @@ export const ClaudeElement = ({
             key={kind}
             kind={kind}
             count={count}
+            words={KIND_WORDS[kind]}
             at={at}
             pressed={narrowed === kind}
             onPressed={(pressed) => onNarrow(pressed ? kind : null)}
           />
         ))}
+        {threads !== null && (
+          <Chip
+            kind="thread"
+            count={threads.count}
+            words={threads.words}
+            label={threads.label}
+            at={counts.length}
+            pressed={narrowed === "thread"}
+            onPressed={(pressed) => onNarrow(pressed ? "thread" : null)}
+          />
+        )}
         <span {...after(0)} className="ml-1 flex min-w-0 items-center border-l pl-1.5">
           {children}
         </span>
@@ -435,19 +482,21 @@ export const ClaudeElement = ({
 
   if (!modelRunnable(analysis)) {
     // Claude ran and found nothing to raise.
-    return analysis.stages.findings === "done" ? (
-      <span
-        data-slot="claude-receipt"
-        data-land="fade"
-        className="whitespace-nowrap text-muted-foreground"
-      >
-        <span aria-hidden="true">✓ </span>
-        {family} found nothing to raise
-      </span>
-    ) : null;
+    return withStepper(
+      analysis.stages.findings === "done" ? (
+        <span
+          data-slot="claude-receipt"
+          data-land="fade"
+          className="shrink-0 whitespace-nowrap text-muted-foreground"
+        >
+          <span aria-hidden="true">✓ </span>
+          {family} found nothing to raise
+        </span>
+      ) : null,
+    );
   }
   const failed = analysis.modelError;
-  return (
+  return withStepper(
     <span className="flex min-w-0 items-center gap-2">
       <RequestReview choice={choice} starting={starting} failed={failed !== null} onRun={onRun} />
       {(error ?? failed) !== null && (
@@ -459,6 +508,6 @@ export const ClaudeElement = ({
           {error ?? `${family} couldn't finish: ${failed?.message}`}
         </span>
       )}
-    </span>
+    </span>,
   );
 };
