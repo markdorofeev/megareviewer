@@ -838,12 +838,57 @@ describe("intent", () => {
     expect(within(intent).queryByRole("heading", { name: "Asked" })).toBeNull();
   });
 
+  const brief = () => {
+    const found = document.querySelector<HTMLElement>("[data-slot=intent-brief]");
+    if (found === null) throw new Error("no brief");
+    return found;
+  };
+  const lines = () => [...brief().querySelectorAll("p")].map((line) => line.textContent);
+
+  it("reads in three lines: what the change does, how it runs through the system, what to watch", async () => {
+    renderReview();
+    await loaded();
+    const { inferred } = analysis.intent ?? {};
+    expect(lines()).toEqual([
+      `From the code: ${inferred?.summary}`,
+      "Through: GET /orders/:id/receipt calls renderReceipt, which fetches tax lines from the tax service and keeps the result in an in-memory cache.",
+      "Watch: Any signed-in user can download any order's receipt · Rendered receipts stay in memory for the life of the process",
+    ]);
+    // Code names are set as code, from the model's backticks, never as HTML.
+    expect([...brief().querySelectorAll("code")].map((code) => code.textContent)).toEqual([
+      "GET /orders/:id/receipt",
+      "renderReceipt",
+    ]);
+  });
+
+  it("takes the code's lines where Claude left them empty", async () => {
+    if (analysis.intent === null) throw new Error("the fixture has no intent");
+    renderReview({
+      view: withIntent({ inferred: { ...analysis.intent.inferred, shape: "", watch: [] } }),
+    });
+    await loaded();
+    expect(lines().slice(1)).toEqual([
+      "Through: routes (GET /orders/:id/receipt) → services · 1 more directory",
+      "Watch: Changes renderReceipt, used in 1 place the PR doesn't change.",
+    ]);
+  });
+
+  it("before Claude, is the description, the directories in call order and what the change reaches", async () => {
+    renderReview({ view: { ...fixture, analysis: { ...analysis, intent: null } } });
+    await loaded();
+    expect(lines()).toEqual([
+      firstSentence(analysis.pullRequest?.description ?? ""),
+      "Through: routes (GET /orders/:id/receipt) → services · 1 more directory",
+      "Watch: Changes renderReceipt, used in 1 place the PR doesn't change.",
+    ]);
+  });
+
   it("leaves the details' toggle out when there's nothing behind it", async () => {
     renderReview({
       view: withIntent({
         stated: null,
         mismatches: [],
-        inferred: { summary: "Renames a variable.", behaviorChanges: [] },
+        inferred: { summary: "Renames a variable.", shape: "", behaviorChanges: [], watch: [] },
       }),
     });
     await loaded();

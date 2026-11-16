@@ -5,8 +5,8 @@
  * OPENCODE_FINGERPRINT to the value the request test prints. The version is part of the analysis
  * cache key.
  */
-export const OPENCODE_PROMPT_VERSION = 1;
-export const OPENCODE_FINGERPRINT = "3fefc6d49869f3de";
+export const OPENCODE_PROMPT_VERSION = 2;
+export const OPENCODE_FINGERPRINT = "f3a4fa5ca9d292f2";
 
 /** Names the model on its provider; an effort for every pass, in place of each pass's own, too. */
 export const opencodeVersion = (providerID: string, model: string, effort?: string): string =>

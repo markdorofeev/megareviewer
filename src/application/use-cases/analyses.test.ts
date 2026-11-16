@@ -237,7 +237,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("18");
+    expect(analysis.key.pipelineVersion).toBe("19");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
@@ -713,7 +713,7 @@ describe("the analysis pipeline", () => {
     it("drops unknown hunks from mismatches after a retry", async () => {
       const intent = {
         stated: null,
-        inferred: { summary: "Adds receipts.", behaviorChanges: [] },
+        inferred: { summary: "Adds receipts.", shape: "", behaviorChanges: [], watch: [] },
         mismatches: [
           { kind: "unrequested" as const, description: "Rate limit", hunkIds: [h1, unknownHunk] },
         ],
@@ -881,7 +881,7 @@ describe("the analysis pipeline", () => {
         "intent",
         ok({
           stated: null,
-          inferred: { summary: "Adds receipts.", behaviorChanges: [] },
+          inferred: { summary: "Adds receipts.", shape: "", behaviorChanges: [], watch: [] },
           mismatches: [
             { kind: "unrequested", description: "Caches receipts.", hunkIds: [hunk.id] },
           ],
@@ -1246,7 +1246,7 @@ describe("without the model", () => {
       risk: "skipped",
       decisions: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("18");
+    expect(analysis.key.pipelineVersion).toBe("19");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
@@ -1332,7 +1332,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
-      expect(analysis.key.pipelineVersion).toBe("18+checkout");
+      expect(analysis.key.pipelineVersion).toBe("19+checkout");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1408,7 +1408,7 @@ describe("with a local checkout", () => {
       });
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
-      expect(analysis.key.pipelineVersion).toBe("18");
+      expect(analysis.key.pipelineVersion).toBe("19");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },

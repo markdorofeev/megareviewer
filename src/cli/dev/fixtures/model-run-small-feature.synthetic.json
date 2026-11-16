@@ -20,11 +20,16 @@
           ]
         },
         "inferred": {
-          "summary": "Changes 3 file(s).",
+          "summary": "Signed-in users can fetch a plain-text receipt for their order, cached in memory for an hour.",
+          "shape": "`GET /orders/:id/receipt` in `ordersRouter` calls `findOrder`, then `renderReceipt`, which reads or fills an in-process `Map` cache and returns text.",
           "behaviorChanges": [
             "Changes config/app.yaml",
             "Changes src/routes/orders.ts",
             "Changes src/services/receipts.ts"
+          ],
+          "watch": [
+            "Raises the API rate limit tenfold for the whole app",
+            "Config `cache.ttlSeconds.receipts` and `receipts` settings are added but never read"
           ]
         },
         "mismatches": []

@@ -49,6 +49,7 @@ import {
 } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
+import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks } from "./calls.tsx";
 import { Dialog } from "./Dialog.tsx";
@@ -417,6 +418,12 @@ const Review = ({
   const overview = useMemo(
     () => fileOverview(analysis, steps, new Set(expandedGroups)),
     [analysis, steps, expandedGroups],
+  );
+
+  // The brief's line of directories, from the overview with none opened.
+  const through = useMemo(
+    () => (analysis.stages.prep === "done" ? throughOf(fileOverview(analysis, steps)) : null),
+    [analysis, steps],
   );
 
   const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);
@@ -1155,6 +1162,7 @@ const Review = ({
         intent={
           <IntentLine
             analysis={live}
+            through={through}
             running={landing.running}
             onDetails={() => {
               detailsReturnFocus.current = true;

@@ -9,6 +9,9 @@ const objects = (schema: unknown): Record<string, unknown>[] => {
   return [Object.fromEntries(Object.entries(schema)), ...Object.values(schema).flatMap(objects)];
 };
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 describe("the answer format", () => {
   const { schema } = PASS_ANSWER_FORMAT;
   const json = JSON.stringify(schema);
@@ -26,6 +29,13 @@ describe("the answer format", () => {
   it("keeps the enums, so the model can't answer outside them", () => {
     expect(json).toContain('"enum":["logic","contract"]');
     expect(json).toContain('"enum":["unrequested","missing","contradicts"]');
+  });
+
+  it("asks the intent for its whole brief: the summary, the shape and what to watch", () => {
+    const [intent] = objects(schema).filter(
+      (node) => isObject(node.properties) && "behaviorChanges" in node.properties,
+    );
+    expect(intent?.required).toEqual(["summary", "shape", "behaviorChanges", "watch"]);
   });
 
   it("closes every object and drops keywords structured outputs don't support", () => {

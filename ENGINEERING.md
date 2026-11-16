@@ -25,7 +25,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Part | The lines of a hunk that change one definition, identified by a part ID. A hunk that isn't split is one part. The tour and hints are per part |
 | Risk class | *mechanical*, *logic* or *contract*. Contract is internal: the page shows only the model's, as a risk |
 | Mechanical proof | Deterministic evidence that a hunk is mechanical: generated, whitespace, rename, move or formatting |
-| Intent | Stated intent (description, tickets), inferred intent (code), and the mismatches between them |
+| Intent | Stated intent (description, tickets), inferred intent (code: what it does, its shape across the system, what to watch), and the mismatches between them |
 | Decision | A choice the code makes, resting on one or more hunks |
 | Finding | Something that looks wrong, on the lines of a hunk that show it |
 | Point | What the model asks the reviewer to look at: a finding, a risk it raised, or a decision, with the hunk and lines it rests on |

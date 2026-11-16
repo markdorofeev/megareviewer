@@ -1,7 +1,9 @@
 import { InfoIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { hunkIdOf } from "../../../../src/domain/diff/index.ts";
 import type { Analysis } from "../../../../src/domain/review/index.ts";
 import { Button } from "../../ui/button.tsx";
+import { codeSpans, type Reach, reachOf, type Through } from "./brief.ts";
 
 const HEADING = /^#{1,6}\s+/;
 
@@ -40,26 +42,98 @@ export const firstSentence = (text: string): string => {
   return SENTENCE_END.exec(line)?.[1] ?? line;
 };
 
+const LEAD = "font-medium text-muted-foreground";
+
+/** Model text, with its code spans set in code and the rest's Markdown markers dropped. */
+const ModelText = ({ text }: { readonly text: string }) => (
+  <span data-slot="model-text" className="whitespace-pre-line">
+    {codeSpans(text).map((piece, at) =>
+      piece.code ? (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the pieces of one text never reorder.
+        <code key={at} className="font-mono text-code-compact">
+          {piece.text}
+        </code>
+      ) : (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the pieces of one text never reorder.
+        <span key={at}>{plainIntent(piece.text)}</span>
+      ),
+    )}
+  </span>
+);
+
+/** The overview's rows in words: directories callers first, with where users reach them. */
+const ThroughText = ({ through }: { readonly through: Through }) => (
+  <span data-slot="through">
+    {through.rows.map((row, at) => (
+      // biome-ignore lint/suspicious/noArrayIndexKey: rows never reorder.
+      <span key={at}>
+        {at > 0 && " → "}
+        {row.map((stop, index) => (
+          <span key={stop.label}>
+            {index > 0 && ", "}
+            <code className="font-mono text-code-compact">{stop.label}</code>
+            {stop.entries.length > 0 && (
+              <span className="text-muted-foreground"> ({stop.entries.join(", ")})</span>
+            )}
+          </span>
+        ))}
+      </span>
+    ))}
+    {through.more > 0 && (
+      <span className="text-muted-foreground">
+        {" "}
+        · {through.more} more {through.more === 1 ? "directory" : "directories"}
+      </span>
+    )}
+  </span>
+);
+
+const ReachText = ({ reach }: { readonly reach: Reach }) => {
+  const shown = reach.symbols.slice(0, 3);
+  const rest = reach.symbols.length - shown.length;
+  const names = shown.map((symbol, at) => (
+    <span key={symbol}>
+      {at > 0 && (at === shown.length - 1 && rest === 0 ? " and " : ", ")}
+      <code className="font-mono text-code-compact">{symbol}</code>
+    </span>
+  ));
+  return (
+    <span data-slot="reach">
+      Changes {names}
+      {rest > 0 && ` and ${rest} more`}, used in {reach.uses}{" "}
+      {reach.uses === 1 ? "place" : "places"} the PR doesn't change.
+    </span>
+  );
+};
+
+const Line = ({ lead, children }: { readonly lead: string; readonly children: ReactNode }) => (
+  <p className="min-w-0">
+    <span className={LEAD}>{lead}</span> {children}
+  </p>
+);
+
 /**
- * The intent in one line under the title: the model's summary of what the code does, or without
- * the model, the description's first sentence. While Claude runs the description stays; when the
- * intent arrives it fades out and Claude's sentence fades in where it was, the description's
- * room kept until the run ends so the header doesn't change height. The Details button ends the
- * line, so it reads as more of it. A mismatch between what was asked and what the code does is
- * one of Claude's points, on the code it rests on, rather than a chip here.
+ * The intent's brief under the title, what to know before reading the code, in up to three
+ * lines: what the change does, how it runs through the system, and what to keep in mind. Claude's
+ * once it has run; before, the description's first sentence, the overview's directories in call
+ * order, and the definitions the change reaches past itself. A line Claude left empty is the
+ * code's. While Claude runs the code's brief stays; when the intent arrives it fades out and
+ * Claude's fades in where it was, the room kept until the run ends so the header doesn't change
+ * height. The Details button ends the first line, so it reads as more of it. A mismatch between
+ * what was asked and what the code does is one of Claude's points, on the code it rests on.
  */
 export const IntentLine = ({
   analysis,
+  through,
   running,
   onDetails,
-  children,
 }: {
   readonly analysis: Analysis;
+  /** The overview's rows in words, once the code's analysis has them. */
+  readonly through: Through | null;
   /** Claude's run, as the page shows it. */
   readonly running: boolean;
   readonly onDetails: () => void;
-  /** After the Details button: what asks Claude for the intent, or says how that went. */
-  readonly children?: ReactNode;
 }) => {
   const { intent, pullRequest } = analysis;
   const mismatches = intent?.mismatches ?? [];
@@ -73,15 +147,50 @@ export const IntentLine = ({
   }
   if (swapping && !running) setSwapping(false);
 
-  const stated =
-    pullRequest === null ? null : description === "" ? (
-      <span className="text-muted-foreground">The pull request has no description.</span>
-    ) : (
-      <span>{description}</span>
-    );
-  const inferred =
-    intent === null ? null : (
-      <span data-arriving={swapping || undefined}>
+  const details = (intent !== null || pullRequest !== null) && (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label="Details"
+      title="Details"
+      onClick={onDetails}
+      className="ml-1 rounded-full align-middle text-muted-foreground"
+    >
+      <InfoIcon aria-hidden="true" />
+    </Button>
+  );
+  const pathOfHunk = new Map(
+    analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, file.path] as const)),
+  );
+  const reach = reachOf(analysis.unchangedCallers, (id) => pathOfHunk.get(hunkIdOf(id)));
+  const throughLine = through !== null && (
+    <Line lead={through.linked ? "Through:" : "In:"}>
+      <ThroughText through={through} />
+    </Line>
+  );
+  const reachLine = reach !== null && (
+    <Line lead="Watch:">
+      <ReachText reach={reach} />
+    </Line>
+  );
+
+  const stated = pullRequest !== null && (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <p className="min-w-0">
+        {description === "" ? (
+          <span className="text-muted-foreground">The pull request has no description.</span>
+        ) : (
+          <span>{description}</span>
+        )}
+        {!swapping && details}
+      </p>
+      {throughLine}
+      {reachLine}
+    </div>
+  );
+  const inferred = intent !== null && (
+    <div data-arriving={swapping || undefined} className="flex min-w-0 flex-col gap-0.5">
+      <p className="min-w-0">
         <span
           className={mismatches.length === 0 ? "font-medium text-review-approved" : "font-medium"}
         >
@@ -89,41 +198,48 @@ export const IntentLine = ({
             ? "From the code:"
             : "✓ Does what was asked:"}
         </span>{" "}
-        <span data-slot="model-text" className="whitespace-pre-line">
-          {plainIntent(intent.inferred.summary)}
-        </span>
-      </span>
-    );
+        <ModelText text={intent.inferred.summary} />
+        {details}
+      </p>
+      {intent.inferred.shape === "" ? (
+        throughLine
+      ) : (
+        <Line lead="Through:">
+          <ModelText text={intent.inferred.shape} />
+        </Line>
+      )}
+      {intent.inferred.watch.length === 0 ? (
+        reachLine
+      ) : (
+        <Line lead="Watch:">
+          {intent.inferred.watch.map((item, at) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: the list never reorders.
+            <span key={at}>
+              {at > 0 && " · "}
+              <ModelText text={item} />
+            </span>
+          ))}
+        </Line>
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-body">
-      {inferred !== null ? (
+    <div data-slot="intent-brief" className="flex min-w-0 flex-col gap-1 text-body">
+      {inferred !== false ? (
         swapping ? (
-          <p data-slot="intent-swap" className="min-w-0">
-            <span data-leaving aria-hidden="true">
+          <div data-slot="intent-swap" className="min-w-0">
+            <div data-leaving aria-hidden="true">
               {stated}
-            </span>
+            </div>
             {inferred}
-          </p>
+          </div>
         ) : (
-          <p className="min-w-0">{inferred}</p>
+          inferred
         )
       ) : (
-        stated !== null && <p className="min-w-0">{stated}</p>
+        stated
       )}
-      {(intent !== null || pullRequest !== null) && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Details"
-          title="Details"
-          onClick={onDetails}
-          className="rounded-full text-muted-foreground"
-        >
-          <InfoIcon aria-hidden="true" />
-        </Button>
-      )}
-      {children}
     </div>
   );
 };

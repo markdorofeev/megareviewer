@@ -5,6 +5,7 @@ import {
   CommentKey,
   DecisionId,
   HttpUrl,
+  Intent,
   PublicationReceipt,
   Sha,
   Timestamp,
@@ -63,5 +64,21 @@ describe("PublicationReceipt", () => {
     expect(
       accepts(PublicationReceipt, { ...receipt, postedCommentIds: { "decision:x": "3" } }),
     ).toBe(false);
+  });
+});
+
+describe("Intent", () => {
+  it("reads an intent stored before the brief, with no shape and nothing to watch", () => {
+    const stored = {
+      stated: null,
+      inferred: { summary: "Adds receipts.", behaviorChanges: ["GET /receipt"] },
+      mismatches: [],
+    };
+    expect(Intent.parse(stored).inferred).toEqual({
+      summary: "Adds receipts.",
+      shape: "",
+      behaviorChanges: ["GET /receipt"],
+      watch: [],
+    });
   });
 });
