@@ -1,6 +1,8 @@
 import { ChevronRightIcon, LoaderCircleIcon, type LucideIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useId, useRef, useState } from "react";
 import type { HostKind, PullRequestSummary } from "../../../../src/domain/review/index.ts";
+import { isPlainClick } from "../../app/Link.tsx";
+import { pullRequestPath } from "../../app/router.ts";
 import { cn } from "../../lib/utils.ts";
 import { initialsOf, KeyHint } from "../../review/index.ts";
 import { Badge } from "../../ui/badge.tsx";
@@ -61,17 +63,20 @@ const Row = ({
   const author = item.role === "author" ? "you" : item.author.name;
   return (
     <li>
-      <button
-        type="button"
+      {/* A link, so a new tab or window opens the PR there while this page stays. */}
+      <a
+        href={pullRequestPath(item.ref)}
         data-pr-row=""
         tabIndex={tabbable ? 0 : -1}
         aria-label={rowName(item, nowMs)}
         aria-busy={starting}
-        onClick={() => {
+        onClick={(event) => {
+          if (!isPlainClick(event)) return;
+          event.preventDefault();
           if (!starting) onOpen();
         }}
         onFocus={onFocus}
-        className="group flex min-h-[58px] w-full flex-col items-stretch gap-x-3 gap-y-1 px-4 py-2 text-left hover:bg-accent focus-visible:bg-accent focus-visible:-outline-offset-2 aria-busy:bg-diff-hunk-bg max-sm:items-start sm:flex-row sm:items-center"
+        className="group flex min-h-[58px] w-full flex-col items-stretch gap-x-3 gap-y-1 px-4 py-2 text-left text-foreground hover:bg-accent hover:no-underline focus-visible:bg-accent focus-visible:-outline-offset-2 aria-busy:bg-diff-hunk-bg max-sm:items-start sm:flex-row sm:items-center"
       >
         <span className="flex min-w-0 flex-1 flex-col gap-1 self-stretch">
           <span className="truncate font-medium">{item.title}</span>
@@ -127,7 +132,7 @@ const Row = ({
             />
           </span>
         )}
-      </button>
+      </a>
     </li>
   );
 };

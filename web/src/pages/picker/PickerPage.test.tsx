@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PullRequestListResponse, StatusResponse } from "../../../../contracts/index.ts";
@@ -17,6 +17,7 @@ import { fakeFetch, jsonResponse, type RecordedRequest } from "../../testing/fet
 import { TooltipProvider } from "../../ui/tooltip.tsx";
 import { PickerPage } from "./PickerPage.tsx";
 import { avatarColors } from "./PullRequestList.tsx";
+import { NOT_A_LINK } from "./UrlForm.tsx";
 
 const NOW = Date.parse("2026-10-21T10:00:00Z");
 const reviewPath = `/review/${fixtureAnalysisView.analysis.id}`;
@@ -96,13 +97,13 @@ afterEach(() => {
 describe("PickerPage's lists", () => {
   it("lists PRs to review and the reviewer's own, with each row's name", async () => {
     renderPicker();
-    const row = await within(toReview()).findByRole("button", {
+    const row = await within(toReview()).findByRole("link", {
       name: "Add order receipts endpoint. acme/shop #128 by Sam Rivera, updated 19 min ago, GitHub",
     });
     expect(row.querySelector("time")?.getAttribute("title")).toMatch(/2026/);
-    expect(within(toReview()).getAllByRole("button")).toHaveLength(3);
+    expect(within(toReview()).getAllByRole("link")).toHaveLength(3);
     expect(within(toReview()).getByText("3 pull requests")).toBeTruthy();
-    expect(within(yours()).getAllByRole("button")[0]?.getAttribute("aria-label")).toMatch(
+    expect(within(yours()).getAllByRole("link")[0]?.getAttribute("aria-label")).toMatch(
       / by you, /,
     );
   });
@@ -129,7 +130,7 @@ describe("PickerPage's lists", () => {
     const message = "Connect GitHub or Bitbucket to list pull requests.";
     expect(await within(toReview()).findByText(message)).toBeTruthy();
     expect(within(yours()).getByText(message)).toBeTruthy();
-    expect(within(yours()).queryByRole("button")).toBeNull();
+    expect(within(yours()).queryByRole("link")).toBeNull();
     await userEvent.click(within(toReview()).getByRole("button", { name: "Open Connections" }));
     expect(await screen.findByText("Connections", { selector: "h2" })).toBeTruthy();
   });
@@ -148,9 +149,7 @@ describe("PickerPage's lists", () => {
     );
     expect(within(toReview()).getByText("GitHub only")).toBeTruthy();
     expect(within(yours()).getByText("GitHub only")).toBeTruthy();
-    expect(within(toReview()).getAllByRole("button", { name: /GitHub$/ }).length).toBeGreaterThan(
-      0,
-    );
+    expect(within(toReview()).getAllByRole("link", { name: /GitHub$/ }).length).toBeGreaterThan(0);
   });
 
   it("hides a host failing in Connections, with Fix… opening it on Check again", async () => {
@@ -204,18 +203,18 @@ describe("PickerPage's lists", () => {
 
     fail = false;
     await userEvent.click(within(toReview()).getByRole("button", { name: "Retry" }));
-    await within(toReview()).findByRole("button", { name: /Add order receipts/ });
+    await within(toReview()).findByRole("link", { name: /Add order receipts/ });
     fail = true;
     await userEvent.click(screen.getByRole("button", { name: /^Connections:/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Check again" }));
     expect((await within(toReview()).findByRole("alert")).textContent).toMatch(/^Couldn't list/);
-    expect(within(toReview()).getByRole("button", { name: /Add order receipts/ })).toBeTruthy();
+    expect(within(toReview()).getByRole("link", { name: /Add order receipts/ })).toBeTruthy();
     expect(requests.filter((request) => request.url === "/api/pull-requests")).toHaveLength(3);
   });
 
   it("moves through one list with the arrows, Home and End, never into the other", async () => {
     renderPicker();
-    const rows = await within(toReview()).findAllByRole("button");
+    const rows = await within(toReview()).findAllByRole("link");
     expect(rows.map((row) => row.tabIndex)).toEqual([0, -1, -1]);
     rows[0]?.focus();
     await userEvent.keyboard("{ArrowDown}");
@@ -230,7 +229,7 @@ describe("PickerPage's lists", () => {
   it("reads the lists again when the tab comes back after 2 minutes, not before", async () => {
     let now = NOW;
     const { requests } = renderPicker({}, () => now);
-    await within(toReview()).findByRole("button", { name: /Add order receipts/ });
+    await within(toReview()).findByRole("link", { name: /Add order receipts/ });
     const reads = () => requests.filter((request) => request.url === "/api/pull-requests").length;
     const visible = () => act(() => document.dispatchEvent(new Event("visibilitychange")));
     now += 60_000;
@@ -262,6 +261,31 @@ describe("PickerPage's field", () => {
     renderPicker();
     await userEvent.type(field(), "github.com/acme/shop/pull/128{Enter}");
     await vi.waitFor(() => expect(window.location.pathname).toBe(reviewPath));
+  });
+
+  it("opens a link in a new tab on ⌘↵, ⌘-click or a middle click, and stays", async () => {
+    const opened = vi.spyOn(window, "open").mockImplementation(() => null);
+    const { requests } = renderPicker();
+    await userEvent.type(field(), "github.com/Acme/Shop/pull/128");
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    fireEvent.click(review(), { metaKey: true });
+    fireEvent(review(), new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }));
+    expect(opened.mock.calls).toEqual(
+      Array.from({ length: 3 }, () => ["/pr/github/acme/shop/128", "_blank", "noopener"]),
+    );
+    opened.mockRestore();
+    expect(window.location.pathname).toBe("/");
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+  });
+
+  it("says what's wrong with a link before opening a new tab", async () => {
+    const opened = vi.spyOn(window, "open").mockImplementation(() => null);
+    renderPicker();
+    await userEvent.type(field(), "https://gitlab.com/acme/api/-/merge_requests/9");
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    expect(await screen.findByText(NOT_A_LINK)).toBeTruthy();
+    expect(opened).not.toHaveBeenCalled();
+    opened.mockRestore();
   });
 
   it("shows the start, and cancels it back to an editable field", async () => {
@@ -314,7 +338,7 @@ describe("PickerPage's rows", () => {
   it("starts from a row, and Esc puts it back", async () => {
     const start = held();
     renderPicker({ "POST /api/analyses": start.respond });
-    const row = await within(toReview()).findByRole("button", { name: /Add order receipts/ });
+    const row = await within(toReview()).findByRole("link", { name: /Add order receipts/ });
     await userEvent.click(row);
     expect(row.getAttribute("aria-busy")).toBe("true");
     expect(within(row).getByText("Opening review…")).toBeTruthy();
@@ -329,7 +353,7 @@ describe("PickerPage's rows", () => {
   it("lets another row replace the one starting", async () => {
     const start = held();
     renderPicker({ "POST /api/analyses": start.respond });
-    const [first, second] = await within(toReview()).findAllByRole("button");
+    const [first, second] = await within(toReview()).findAllByRole("link");
     if (first === undefined || second === undefined) throw new Error("two rows");
     await userEvent.click(first);
     await userEvent.click(second);
@@ -337,15 +361,26 @@ describe("PickerPage's rows", () => {
     expect(second.getAttribute("aria-busy")).toBe("true");
   });
 
+  it("links each row to its PR, and leaves a click with a modifier to the browser", async () => {
+    const { requests } = renderPicker();
+    const row = await within(toReview()).findByRole("link", { name: /Add order receipts/ });
+    expect(row.getAttribute("href")).toBe("/pr/github/acme/shop/128");
+    // Not prevented: the browser opens the link in a new tab.
+    expect(fireEvent.click(row, { metaKey: true })).toBe(true);
+    expect(fireEvent.click(row, { button: 1 })).toBe(true);
+    expect(row.getAttribute("aria-busy")).toBe("false");
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+  });
+
   it("opens the review when it starts", async () => {
     renderPicker();
-    await userEvent.click(await within(toReview()).findByRole("button", { name: /Add order/ }));
+    await userEvent.click(await within(toReview()).findByRole("link", { name: /Add order/ }));
     await vi.waitFor(() => expect(window.location.pathname).toBe(reviewPath));
   });
 
   it("shows a row's failure above its list, with Try again", async () => {
     renderPicker();
-    await userEvent.click(await within(toReview()).findByRole("button", { name: /Round invoice/ }));
+    await userEvent.click(await within(toReview()).findByRole("link", { name: /Round invoice/ }));
     const alert = await within(toReview()).findByRole("alert");
     expect(alert.textContent).toMatch(
       /^Couldn't open acme-team\/billing #57: Bitbucket isn't configured\./,

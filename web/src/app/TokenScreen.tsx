@@ -10,7 +10,8 @@ export const TokenScreen = ({ reason }: { readonly reason: "missing" | "ended" }
         <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">
           http://127.0.0.1:4823/?token=…
         </code>
-        . Copy it from your terminal and open it.
+        . Copy it from your terminal and open it once; other tabs in this browser then work without
+        it.
       </p>
     ) : (
       <p className="text-body">

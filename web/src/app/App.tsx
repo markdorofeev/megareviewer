@@ -8,14 +8,14 @@ import {
 } from "../api/index.ts";
 import { PageDisplayProvider } from "../lib/page-display.tsx";
 import { cn } from "../lib/utils.ts";
-import { PickerPage } from "../pages/picker/index.ts";
+import { OpenPullRequestPage, PickerPage } from "../pages/picker/index.ts";
 import { ReviewPage } from "../pages/review/index.ts";
 import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
 import { ConnectionsProvider } from "./connections-context.tsx";
 import { Header } from "./Header.tsx";
 import { NotFoundPage } from "./NotFoundPage.tsx";
-import { matchRoute, usePathname } from "./router.ts";
+import { matchRoute, pullRequestPath, usePathname } from "./router.ts";
 import { TokenScreen } from "./TokenScreen.tsx";
 import type { SessionToken } from "./token.ts";
 
@@ -27,15 +27,16 @@ export interface AppProps {
 
 export const App = ({ token, fetch, openEventStream }: AppProps) => {
   const [ended, setEnded] = useState(false);
-  const value = token.value;
+  const [value, setValue] = useState(token.value);
   const api = useMemo((): Api | null => {
     if (value === null) return null;
     const client = createApiClient({
       fetch,
       token: value,
       onUnauthorized: () => {
-        token.clear();
-        setEnded(true);
+        const replacement = token.reject(value);
+        if (replacement === null) setEnded(true);
+        else setValue(replacement);
       },
     });
     return {
@@ -48,7 +49,8 @@ export const App = ({ token, fetch, openEventStream }: AppProps) => {
   if (api === null) return <TokenScreen reason="missing" />;
   return (
     <ApiContext.Provider value={api}>
-      <Shell />
+      {/* A new token starts every page over, so nothing keeps what the old one failed to read. */}
+      <Shell key={value} />
     </ApiContext.Provider>
   );
 };
@@ -70,6 +72,8 @@ const Shell = () => {
               <PickerPage />
             ) : route.page === "review" ? (
               <ReviewPage analysisId={route.analysisId} />
+            ) : route.page === "open" ? (
+              <OpenPullRequestPage key={pullRequestPath(route.ref)} pullRequest={route.ref} />
             ) : (
               <NotFoundPage />
             )}

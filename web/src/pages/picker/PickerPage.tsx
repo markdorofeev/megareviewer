@@ -5,20 +5,14 @@ import {
   type PullRequestRef,
   type PullRequestSummary,
 } from "../../../../src/domain/review/index.ts";
-import {
-  type ApiError,
-  errorMessage,
-  useApi,
-  usePullRequests,
-  useReviewActivity,
-} from "../../api/index.ts";
+import { type ApiError, useApi, usePullRequests, useReviewActivity } from "../../api/index.ts";
 import { useConnections } from "../../app/connections-context.tsx";
-import { navigate, reviewPath } from "../../app/router.ts";
+import { navigate, pullRequestPath, reviewPath } from "../../app/router.ts";
 import { isTextEntry } from "../../lib/keymap.ts";
-import { Button } from "../../ui/button.tsx";
 import { HOST_NAMES, prLabel } from "./PullRequestList.tsx";
-import { LINK_BUTTON, PullRequestLists, type RowFailure } from "./PullRequestLists.tsx";
+import { PullRequestLists, type RowFailure } from "./PullRequestLists.tsx";
 import { ReviewActivityCard } from "./ReviewActivity.tsx";
+import { StartFailure } from "./StartFailure.tsx";
 import { type FormStart, UrlForm } from "./UrlForm.tsx";
 
 /** The lists are read again when the tab comes back after this long. */
@@ -137,22 +131,9 @@ export const PickerPage = ({ now = Date.now }: { readonly now?: () => number }) 
     return () => document.removeEventListener("keydown", onKey);
   }, [startingRow, cancel]);
 
-  const openConnections = () => setOpen(true);
-  const failure = (failed: Start & { readonly state: "failed" }): ReactNode => {
-    const prefix = `Couldn't open ${prLabel(failed.ref)}: `;
-    if (failed.error.code === "host-not-configured") {
-      return (
-        <>
-          {prefix}
-          {HOST_NAMES[failed.ref.repo.host]} isn't configured.{" "}
-          <Button variant="link" className={LINK_BUTTON} onClick={openConnections}>
-            Open Connections
-          </Button>
-        </>
-      );
-    }
-    return `${prefix}${errorMessage(failed.error)}`;
-  };
+  const failure = (failed: Start & { readonly state: "failed" }): ReactNode => (
+    <StartFailure pullRequest={failed.ref} error={failed.error} />
+  );
 
   const formStart: FormStart | null =
     start?.from !== "form"
@@ -187,6 +168,7 @@ export const PickerPage = ({ now = Date.now }: { readonly now?: () => number }) 
         inputRef={urlField}
         start={formStart}
         onSubmit={(url, ref) => void open(url, ref, "form", null)}
+        onSubmitInNewTab={(ref) => window.open(pullRequestPath(ref), "_blank", "noopener")}
         onEdit={() => {
           if (start?.from === "form" && start.state === "failed") setStart(null);
         }}
@@ -200,7 +182,7 @@ export const PickerPage = ({ now = Date.now }: { readonly now?: () => number }) 
         nowMs={nowMs}
         onOpen={(item) => void open(item.url, item.ref, "row", item.role)}
         onRetry={readAgain}
-        onOpenConnections={openConnections}
+        onOpenConnections={() => setOpen(true)}
         onFix={() => setOpen(true, { focusCheckAgain: true })}
       />
       <ReviewActivityCard

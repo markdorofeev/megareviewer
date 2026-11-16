@@ -232,12 +232,13 @@ export const MainPage = () => (
     <Group title="Link field">
       <div className="grid gap-4 lg:grid-cols-2">
         <Example title="Empty">
-          <UrlForm start={null} onSubmit={noop} onEdit={noop} />
+          <UrlForm start={null} onSubmit={noop} onSubmitInNewTab={noop} onEdit={noop} />
         </Example>
         <Example title="Submitted empty">
           <UrlForm
             start={null}
             onSubmit={noop}
+            onSubmitInNewTab={noop}
             onEdit={noop}
             initial={{ url: "", invalid: EMPTY_LINK }}
           />
@@ -246,6 +247,7 @@ export const MainPage = () => (
           <UrlForm
             start={null}
             onSubmit={noop}
+            onSubmitInNewTab={noop}
             onEdit={noop}
             initial={{ url: "https://gitlab.com/acme/api/-/merge_requests/9", invalid: NOT_A_LINK }}
           />
@@ -258,6 +260,7 @@ export const MainPage = () => (
               onCancel: noop,
             }}
             onSubmit={noop}
+            onSubmitInNewTab={noop}
             onEdit={noop}
             initial={{ url: "https://github.com/acme/api/pull/902", invalid: null }}
           />
@@ -270,6 +273,7 @@ export const MainPage = () => (
               onRetry: noop,
             }}
             onSubmit={noop}
+            onSubmitInNewTab={noop}
             onEdit={noop}
             initial={{ url: "https://github.com/acme/api/pull/902", invalid: null }}
           />

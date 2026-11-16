@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TOKEN_HEADER } from "../../../contracts/index.ts";
 import { fixtureAnalysisView } from "../../dev/fixtures/index.ts";
 import { mockFetch } from "../../dev/mock-fetch.ts";
 import { createMockApi, MOCK_TOKEN } from "../../dev/mock-routes.ts";
@@ -8,22 +9,30 @@ import { App } from "./App.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import type { SessionToken } from "./token.ts";
 
-const tokenOf = (initial: string | null) => {
+/** A token whose storage holds `stored` once the first is rejected: another tab's, or none. */
+const tokenOf = (initial: string | null, stored: string | null = null) => {
   let value = initial;
-  const token: SessionToken = {
+  const rejected: string[] = [];
+  const token: SessionToken & { readonly rejected: readonly string[] } = {
     get value() {
       return value;
     },
-    clear() {
-      value = null;
+    rejected,
+    reject(old) {
+      rejected.push(old);
+      value = stored !== old ? stored : null;
+      return value;
     },
   };
   return token;
 };
 
-const renderApp = (path: string, options: { fetch?: typeof fetch; token?: string | null } = {}) => {
+const renderApp = (
+  path: string,
+  options: { fetch?: typeof fetch; token?: string | null; stored?: string } = {},
+) => {
   window.history.replaceState(null, "", path);
-  const token = tokenOf(options.token === undefined ? MOCK_TOKEN : options.token);
+  const token = tokenOf(options.token === undefined ? MOCK_TOKEN : options.token, options.stored);
   const noStream = () => ({ readyState: 0, addEventListener: () => {}, close: () => {} });
   render(
     <App
@@ -57,6 +66,22 @@ describe("App", () => {
     const token = renderApp("/", { fetch });
     expect(await screen.findByText(/session has ended/)).toBeTruthy();
     expect(token.value).toBeNull();
+  });
+
+  it("goes on with the token a restarted server gave another tab", async () => {
+    const api = mockFetch(createMockApi());
+    const fetch: typeof globalThis.fetch = (input, init) =>
+      new Headers(init?.headers).get(TOKEN_HEADER) === "stale"
+        ? Promise.resolve(
+            jsonResponse(401, {
+              error: { code: "unauthorized", message: "Missing or wrong session token" },
+            }),
+          )
+        : api(input, init);
+    const token = renderApp("/", { fetch, token: "stale", stored: MOCK_TOKEN });
+    expect(await screen.findByText("3 of 6 connected")).toBeTruthy();
+    expect(token.rejected).toContain("stale");
+    expect(screen.queryByText(/session has ended/)).toBeNull();
   });
 
   it("shows the picker and the server's status", async () => {

@@ -3,10 +3,13 @@ const URL_PARAM = "token";
 const STORAGE_KEY = "megareviewer.token";
 
 export interface SessionToken {
-  /** null when the page wasn't opened from the CLI's link. */
+  /** null when this browser hasn't opened the CLI's link since megareviewer started. */
   readonly value: string | null;
-  /** Forgets a token the server rejected. */
-  clear(): void;
+  /**
+   * Forgets a token the server rejected, and answers the one to use instead: a newer token
+   * another tab stored after megareviewer restarted on the same port, or null.
+   */
+  reject(rejected: string): string | null;
 }
 
 /** The parts of `window` this needs. */
@@ -16,18 +19,18 @@ interface TokenWindow {
     readonly state: unknown;
     replaceState(data: unknown, unused: string, url: string): void;
   };
-  readonly sessionStorage: Storage;
+  readonly localStorage: Storage;
 }
 
 /**
- * Takes the token from the URL, keeps it in sessionStorage for reloads in this tab, and removes
- * it from the address bar so it doesn't end up in history or screenshots. Storage can be
- * unavailable (or throw on access), in which case the token lives only in memory.
+ * Takes the token from the URL, keeps it in localStorage, so every tab of this origin has it, and
+ * removes it from the address bar so it doesn't end up in history or screenshots. Storage can be
+ * unavailable (or throw on access), in which case the token lives only in this tab's memory.
  */
 export const bootstrapSessionToken = (win: TokenWindow): SessionToken => {
   const storage = (() => {
     try {
-      return win.sessionStorage;
+      return win.localStorage;
     } catch {
       return null;
     }
@@ -58,9 +61,11 @@ export const bootstrapSessionToken = (win: TokenWindow): SessionToken => {
     get value() {
       return value;
     },
-    clear() {
-      value = null;
-      attempt((s) => s.removeItem(STORAGE_KEY));
+    reject(rejected) {
+      const stored = attempt((s) => s.getItem(STORAGE_KEY));
+      if (stored === rejected) attempt((s) => s.removeItem(STORAGE_KEY));
+      value = stored !== null && stored !== rejected ? stored : null;
+      return value;
     },
   };
 };

@@ -91,7 +91,7 @@ test("analyzes a PR from its URL, and asks Claude on it", async ({ page }) => {
 
 test("analyzes a PR picked from the list", async ({ page }) => {
   await openPicker(page);
-  await page.getByRole("button", { name: /Fix crash when refunding store-credit orders/ }).click();
+  await page.getByRole("link", { name: /Fix crash when refunding store-credit orders/ }).click();
   await expect(
     page.getByRole("heading", { name: "Fix crash when refunding store-credit orders", level: 1 }),
   ).toBeVisible();

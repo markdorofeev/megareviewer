@@ -27,6 +27,7 @@ export type ShortcutId =
   | "focusLink"
   | "moveRow"
   | "openRow"
+  | "openInNewTab"
   | "cancelOpening";
 
 /** One key press: `key` as KeyboardEvent.key has it, and the modifiers that must be held. */
@@ -128,6 +129,12 @@ export const KEYMAP: readonly Shortcut[] = [
     scope: "picker",
   },
   { id: "openRow", chords: [{ key: "Enter" }], action: "Open the pull request", scope: "picker" },
+  {
+    id: "openInNewTab",
+    chords: [{ key: "Enter", mod: true }],
+    action: "Open the pull request or the link in a new tab",
+    scope: "picker",
+  },
   {
     id: "cancelOpening",
     chords: [{ key: "Escape" }],

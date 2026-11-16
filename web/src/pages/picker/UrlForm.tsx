@@ -1,6 +1,14 @@
 import { LinkIcon, LoaderCircleIcon, TriangleAlertIcon } from "lucide-react";
-import { type FormEvent, type ReactNode, type Ref, useId, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+  type SyntheticEvent,
+  useId,
+  useState,
+} from "react";
 import { type PullRequestRef, parsePullRequestUrl } from "../../../../src/domain/review/index.ts";
+import { isMac, matchesChord, shortcut } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
 import { KeyHint } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
@@ -16,17 +24,21 @@ export type FormStart =
   | { readonly state: "failed"; readonly message: ReactNode; readonly onRetry: () => void };
 
 const LINK_BUTTON = "h-6 min-w-6 px-1 text-caption";
+const ENTER_IN_NEW_TAB = shortcut("openInNewTab").chords[0] ?? { key: "Enter", mod: true };
 
 export const UrlForm = ({
   inputRef,
   start,
   onSubmit,
+  onSubmitInNewTab,
   onEdit,
   initial,
 }: {
   readonly inputRef?: Ref<HTMLInputElement>;
   readonly start: FormStart | null;
   readonly onSubmit: (url: string, ref: PullRequestRef) => void;
+  /** ⌘↵ in the field, or a click on Review that would open a link in a new tab. */
+  readonly onSubmitInNewTab: (ref: PullRequestRef) => void;
   /** The link changed, so a failure about the old one goes. */
   readonly onEdit: () => void;
   /** A link and its problem to start from, for the design system's examples. */
@@ -37,21 +49,32 @@ export const UrlForm = ({
   const id = useId();
   const starting = start?.state === "starting";
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    if (starting) return;
+  /** The link's PR, or null after saying what's wrong with it. */
+  const validated = (): PullRequestRef | null => {
     const trimmed = url.trim();
     if (trimmed === "") {
       setInvalid(EMPTY_LINK);
-      return;
+      return null;
     }
     const ref = parsePullRequestUrl(trimmed);
-    if (!ref.ok) {
-      setInvalid(NOT_A_LINK);
-      return;
-    }
-    onSubmit(trimmed, ref.value);
+    if (!ref.ok) setInvalid(NOT_A_LINK);
+    return ref.ok ? ref.value : null;
   };
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (starting) return;
+    const ref = validated();
+    if (ref !== null) onSubmit(url.trim(), ref);
+  };
+
+  // A new tab leaves this page as it is, so it can open while a start here runs.
+  const submitInNewTab = (event: SyntheticEvent) => {
+    event.preventDefault();
+    const ref = validated();
+    if (ref !== null) onSubmitInNewTab(ref);
+  };
+  const mac = isMac();
 
   return (
     <search>
@@ -82,6 +105,9 @@ export const UrlForm = ({
               placeholder="Paste a GitHub or Bitbucket pull request link"
               value={url}
               readOnly={starting}
+              onKeyDown={(event) => {
+                if (matchesChord(event, ENTER_IN_NEW_TAB, mac)) submitInNewTab(event);
+              }}
               onChange={(event) => {
                 setUrl(event.target.value);
                 setInvalid(null);
@@ -95,7 +121,18 @@ export const UrlForm = ({
               className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2"
             />
           </div>
-          <Button type="submit" size="lg" className="sm:w-28" aria-busy={starting}>
+          <Button
+            type="submit"
+            size="lg"
+            className="sm:w-28"
+            aria-busy={starting}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey) submitInNewTab(event);
+            }}
+            onAuxClick={(event) => {
+              if (event.button === 1) submitInNewTab(event);
+            }}
+          >
             {starting ? (
               <>
                 <LoaderCircleIcon aria-hidden="true" className={SPIN} />

@@ -30,7 +30,7 @@ const fakeWindow = (href: string, storage: () => Storage) => {
       state: null,
       replaceState: (_: unknown, __: string, url: string) => void replaced.push(url),
     },
-    get sessionStorage() {
+    get localStorage() {
       return storage();
     },
   };
@@ -73,7 +73,7 @@ describe("bootstrapSessionToken", () => {
     const { win } = fakeWindow("http://127.0.0.1:4823/?token=abc", throwingStorage);
     const token = bootstrapSessionToken(win);
     expect(token.value).toBe("abc");
-    token.clear();
+    expect(token.reject("abc")).toBeNull();
     expect(token.value).toBeNull();
   });
 
@@ -84,12 +84,32 @@ describe("bootstrapSessionToken", () => {
     expect(bootstrapSessionToken(win).value).toBe("abc");
   });
 
-  it("forgets a cleared token, also in storage", () => {
+  it("forgets a rejected token, also in storage", () => {
     const storage = memoryStorage();
     const { win } = fakeWindow("http://127.0.0.1:4823/?token=abc", () => storage);
     const token = bootstrapSessionToken(win);
-    token.clear();
+    expect(token.reject("abc")).toBeNull();
     expect(token.value).toBeNull();
     expect(storage.getItem("megareviewer.token")).toBeNull();
+  });
+
+  it("gives a new tab of the same browser the token the first tab was opened with", () => {
+    const storage = memoryStorage();
+    bootstrapSessionToken(fakeWindow("http://127.0.0.1:4823/?token=abc", () => storage).win);
+    const { win, replaced } = fakeWindow(
+      "http://127.0.0.1:4823/pr/github/acme/api/902",
+      () => storage,
+    );
+    expect(bootstrapSessionToken(win).value).toBe("abc");
+    expect(replaced).toEqual([]);
+  });
+
+  it("moves a stale tab to the token of the restarted server, and keeps that one stored", () => {
+    const storage = memoryStorage({ "megareviewer.token": "old" });
+    const stale = bootstrapSessionToken(fakeWindow("http://127.0.0.1:4823/", () => storage).win);
+    bootstrapSessionToken(fakeWindow("http://127.0.0.1:4823/?token=new", () => storage).win);
+    expect(stale.reject("old")).toBe("new");
+    expect(stale.value).toBe("new");
+    expect(storage.getItem("megareviewer.token")).toBe("new");
   });
 });

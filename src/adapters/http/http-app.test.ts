@@ -667,8 +667,39 @@ describe("the session token", () => {
 
   it("isn't needed for the UI's files", async () => {
     const { app } = setupApp({ staticDir });
-    const response = await app.request("/review/a_1", { headers: { host: HOST } });
-    expect(response.status).toBe(200);
+    for (const path of ["/review/a_1", "/pr/github/acme/shop/128"]) {
+      const response = await app.request(path, { headers: { host: HOST } });
+      expect(response.status).toBe(200);
+      expectSecurityHeaders(response);
+    }
+  });
+
+  it("can't be sent or read from another origin: nothing answers CORS", async () => {
+    const { app } = await seeded();
+    // A page elsewhere can only send the token header after a preflight the server must allow.
+    const preflight = await app.request("/api/status", {
+      method: "OPTIONS",
+      headers: {
+        host: HOST,
+        origin: "https://evil.example",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": TOKEN_HEADER,
+      },
+    });
+    // A simple request goes without a preflight, so it can't carry the token, and its answer
+    // can't be read.
+    const simple = await app.request("/api/analyses", {
+      method: "POST",
+      headers: { host: HOST, origin: "https://evil.example", "content-type": "text/plain" },
+      body: JSON.stringify({ url: "https://github.com/acme/shop/pull/1" }),
+    });
+    expect(simple.status).toBe(401);
+    for (const response of [preflight, simple]) {
+      expect(response.status).not.toBe(204);
+      expect(
+        [...response.headers.keys()].filter((name) => name.startsWith("access-control-")),
+      ).toEqual([]);
+    }
   });
 });
 

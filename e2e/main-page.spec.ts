@@ -26,6 +26,74 @@ test("opens a review from a link without its scheme", async ({ page }) => {
   await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
 });
 
+test("opens three PRs in three new tabs, with no trip to the terminal", async ({
+  page,
+  context,
+}) => {
+  await openPicker(page);
+  const rows = toReview(page).getByRole("link");
+  await expect(rows.first()).toHaveAccessibleName(
+    /^Add receipt download endpoint\. acme\/shop #101 by /,
+  );
+  const names = [
+    "Add receipt download endpoint",
+    "Update admin dashboard copy",
+    "Tidy up utilities",
+  ];
+  const tabs: { tab: Page; name: string }[] = [];
+  for (const [index, name] of names.entries()) {
+    const opened = context.waitForEvent("page");
+    const row = toReview(page).getByRole("link", { name: new RegExp(`^${name}\\. `) });
+    // A middle click for one of them: any click a browser opens in a new tab.
+    await row.click(index === 1 ? { button: "middle" } : { modifiers: ["ControlOrMeta"] });
+    tabs.push({ tab: await opened, name });
+  }
+  for (const { tab, name } of tabs) {
+    await expect(tab).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+    await expect(tab.getByRole("heading", { level: 1, name })).toBeVisible();
+  }
+  // The main page stays, and started nothing itself.
+  await expect(page).toHaveURL(/\/$/);
+  await expect(toReview(page).locator("[data-pr-row][aria-busy=true]")).toHaveCount(0);
+});
+
+test("opens a pasted link in a new tab on ⌘↵, keeping the field", async ({ page, context }) => {
+  await openPicker(page);
+  await field(page).fill(PR.refactorMove);
+  const opened = context.waitForEvent("page");
+  await field(page).press("ControlOrMeta+Enter");
+  const tab = await opened;
+  await expect(tab).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(field(page)).toHaveValue(PR.refactorMove);
+});
+
+test("opens a review's address in a new window, but not in another browser", async ({
+  page,
+  context,
+  browser,
+}) => {
+  await openPicker(page);
+  await toReview(page).locator("[data-pr-row]").first().click();
+  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  const address = page.url();
+  expect(address).not.toContain(TOKEN);
+
+  const second = await context.newPage();
+  await second.goto(address);
+  await expect(
+    second.getByRole("heading", { level: 1, name: "Add receipt download endpoint" }),
+  ).toBeVisible();
+
+  const other = await browser.newContext();
+  const stranger = await other.newPage();
+  await stranger.goto(address);
+  await expect(
+    stranger.getByRole("heading", { name: "Open megareviewer from your terminal" }),
+  ).toBeVisible();
+  await other.close();
+});
+
 test("shows a reply in the calendar the same day", async ({ page }) => {
   await openPicker(page);
   const today = page.getByRole("gridcell", { name: /\(today\)$/ });
