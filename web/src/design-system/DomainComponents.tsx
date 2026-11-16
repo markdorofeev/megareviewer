@@ -42,6 +42,7 @@ import {
   BINARY_FILE,
   DELETED_FILE,
   generatedFile,
+  JAVA_FILE,
   PENDING_COMMENTS,
   POINTS,
   PULL_REQUEST,
@@ -107,6 +108,10 @@ export const DomainComponents = () => {
 
       <Group title="Diff viewer">
         <RetryDiff />
+      </Group>
+
+      <Group title="Syntax colors on a Java service, hunk by hunk">
+        <JavaHunks />
       </Group>
 
       <Group title="Diff viewer: a 5,000-line file, virtualized">
@@ -451,6 +456,17 @@ const DraftDemo = () => {
     </div>
   );
 };
+
+/** Java's hunks as the review page's file card shows them, each highlighted from where it starts. */
+const JavaHunks = () => (
+  <div className="flex max-w-4xl flex-col gap-2">
+    {JAVA_FILE.hunks.map((hunk) => (
+      <Card key={hunk.id}>
+        <HunkCard hunk={hunk} file={JAVA_FILE} risk={null} />
+      </Card>
+    ))}
+  </div>
+);
 
 /** A thread on made-up data: replies and resolving answer after a moment, as a host would. */
 const ThreadDemo = ({

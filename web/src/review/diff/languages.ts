@@ -6,6 +6,28 @@ import type { DisplayLine } from "./lines.ts";
 
 type LanguageModule = Promise<{ readonly default: readonly LanguageRegistration[] }>;
 
+// Java's grammar gives an UPPER_CASE name no scope of its own, so `MAX_ITEMS` and `HttpStatus.OK`
+// read as variables. TypeScript's grammar, IntelliJ and GitHub all color them as constants. The
+// match is the name's shape, as theirs is, so an all-caps type such as `UUID` is one too.
+const JAVA_CONSTANTS: LanguageRegistration = {
+  name: "java-constants",
+  scopeName: "source.java.constants",
+  injectTo: ["source.java"],
+  injectionSelector: "L:source.java -comment -string -meta.import -meta.package",
+  repository: {},
+  patterns: [
+    { match: "(?<![\\w$])[A-Z][A-Z0-9_]*[A-Z0-9](?![\\w$])", name: "variable.other.constant.java" },
+    // After a dot the grammar's own rule starts at the dot, before the name.
+    {
+      match: "(\\.)\\s*([A-Z][A-Z0-9_]*[A-Z0-9])(?![\\w$]|\\s*\\()",
+      captures: {
+        1: { name: "punctuation.separator.period.java" },
+        2: { name: "variable.other.constant.java" },
+      },
+    },
+  ],
+};
+
 // Each grammar is its own chunk, loaded the first time a file needs it.
 export const GRAMMARS: Readonly<Record<string, () => LanguageModule>> = {
   c: () => import("shiki/langs/c.mjs"),
@@ -18,7 +40,9 @@ export const GRAMMARS: Readonly<Record<string, () => LanguageModule>> = {
   graphql: () => import("shiki/langs/graphql.mjs"),
   html: () => import("shiki/langs/html.mjs"),
   ini: () => import("shiki/langs/ini.mjs"),
-  java: () => import("shiki/langs/java.mjs"),
+  java: async () => ({
+    default: [...(await import("shiki/langs/java.mjs")).default, JAVA_CONSTANTS],
+  }),
   javascript: () => import("shiki/langs/javascript.mjs"),
   json: () => import("shiki/langs/json.mjs"),
   jsonc: () => import("shiki/langs/jsonc.mjs"),
@@ -130,3 +154,59 @@ const sideText = (lines: readonly DisplayLine[], other: "add" | "del"): string =
     .filter(({ line }) => line.kind !== other)
     .map(({ text }) => text)
     .join("\n");
+
+// Openers as deep as the piece's first line, so each closing brace in it closes what it would in
+// the file, and the lines after it are read in the class or method body they're in.
+const javaClassBody = (depth: number) => "class _ {\n".repeat(depth);
+const javaMethodBody = (depth: number) => `class _ {\nvoid _() {\n${"{\n".repeat(depth - 2)}`;
+
+/** A member of a class: what a method body can't start with. */
+const JAVA_MEMBER =
+  /^(?:@\w|(?:public|protected|private|abstract|static|native|transient|volatile)\b)/;
+
+/** A statement: what a class body can't start with. */
+const JAVA_STATEMENT =
+  /^(?:[}\])]|default\s*(?:->|:)|(?:if|else|for|while|do|switch|case|return|throw|try|catch|finally|yield|break|continue|var|this|super|assert|new)\b|[\w$.]+(?:\[[^\]]*\])?\s*(?:[-+*/%&|^]?=(?!=)|\+\+|--|\())/;
+
+/** Lines inside a block comment, or the comment's last. */
+const COMMENT_CONTINUES = /^\*/;
+
+/**
+ * Code to tokenize before a piece of a file, so the piece starts in the grammar state its first
+ * line is in, or "" to start at the top. A hunk's side starts wherever git cut it, usually inside
+ * a class, and Java's grammar reads a method declaration only in a class body and a statement only
+ * in a method's: elsewhere a declaration is a call and `throws` is plain. Indentation says how deep
+ * the first line is, and its words which of the two it's in when they disagree. A whole file
+ * starts at indent 0, so it's read from the top as before.
+ */
+export const grammarContext = (code: string, language: string): string => {
+  if (language !== "java") return "";
+  const lines = code.split("\n").filter((line) => line.trim() !== "");
+  const first = lines[0];
+  if (first === undefined) return "";
+  const inComment = COMMENT_CONTINUES.test(first.trim());
+  const firstCode = lines.find((line) => !/^(?:\*|\/\*|\/\/)/.test(line.trim()));
+  const comment = inComment ? "/*\n" : "";
+  if (firstCode === undefined) return comment;
+  const depth = indentDepth(firstCode, lines);
+  const text = firstCode.trim();
+  const context =
+    depth === 0
+      ? ""
+      : JAVA_MEMBER.test(text) || (depth === 1 && !JAVA_STATEMENT.test(text))
+        ? javaClassBody(depth)
+        : javaMethodBody(Math.max(depth, 2));
+  return context + comment;
+};
+
+/** How many levels a line is indented: by tabs, else by 2 or 4 spaces, whichever the code uses. */
+const indentDepth = (line: string, lines: readonly string[]): number => {
+  const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
+  const tabs = indent.split("\t").length - 1;
+  if (tabs > 0) return tabs + Math.floor((indent.length - tabs) / 4);
+  const twoSpaces = lines.some((other) => {
+    const width = /^ */.exec(other)?.[0].length ?? 0;
+    return width % 4 === 2 && !COMMENT_CONTINUES.test(other.trim());
+  });
+  return Math.floor(indent.length / (twoSpaces ? 2 : 4));
+};

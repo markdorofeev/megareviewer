@@ -1,7 +1,7 @@
 import { createContext, type RefObject, useContext, useEffect, useState } from "react";
-import type { HighlighterCore, ThemedToken } from "shiki/core";
+import type { GrammarState, HighlighterCore, ThemedToken } from "shiki/core";
 import type { FileChange, Hunk } from "../../../../src/domain/diff/index.ts";
-import { GRAMMARS, hunkSides, languageOf } from "./languages.ts";
+import { GRAMMARS, grammarContext, hunkSides, languageOf } from "./languages.ts";
 import { displayLines } from "./lines.ts";
 
 // Syntax colors come from the five --syntax-* tokens, never from a theme's hex values, so they
@@ -78,22 +78,18 @@ export interface Highlighter {
 
 const shiki = (name: string) => `var(--shiki-${name})`;
 
-// The CSS-variables theme's scopes fit TypeScript's grammar, not Java's. Java names every class
-// used as a type storage.type, as it does int and void, so types were keywords; every receiver
-// (`orders` in `orders.get(id)`) variable.other.object, and a field after `this.` a property, both
-// in the number color; each segment of a package or import path a storage.modifier; an
-// annotation a storage.type; and every operator a keyword. A line of Java was then mostly purple
-// and amber. These selectors are more specific than the theme's, so they win, and only for Java.
+// Java's scopes, on top of the theme's, which fit TypeScript's grammar. A type is plain wherever
+// it's used, as in IntelliJ and on GitHub, since the grammar names one only in some places; a
+// call's scope covers its arguments, so only the name is colored; an annotation takes the
+// constant color, as on GitHub; receivers, fields, import paths and operators are plain.
 const JAVA_SCOPES: readonly { readonly scope: readonly string[]; readonly color: string }[] = [
   {
     scope: [
-      "storage.type.java",
-      "storage.type.generic.java",
-      "storage.type.object.array.java",
       "storage.type.annotation.java",
       "punctuation.definition.annotation.java",
+      "variable.language.java",
     ],
-    color: shiki("token-function"),
+    color: shiki("token-constant"),
   },
   {
     scope: [
@@ -105,7 +101,12 @@ const JAVA_SCOPES: readonly { readonly scope: readonly string[]; readonly color:
   },
   {
     scope: [
+      "storage.type.java",
+      "storage.type.generic.java",
+      "storage.type.object.array.java",
       "storage.type.generic.wildcard.java",
+      "entity.other.inherited-class.java",
+      "meta.function-call.java",
       "storage.modifier.package.java",
       "storage.modifier.import.java",
       "variable.other.object.java",
@@ -128,6 +129,15 @@ const MAX_TOKENIZED_LINE = 1000;
 export const createShikiHighlighter = (): Highlighter => {
   let core: Promise<HighlighterCore> | null = null;
   const languages = new Map<string, Promise<boolean>>();
+  const states = new Map<string, GrammarState>();
+  const stateAfter = (highlighter: HighlighterCore, context: string, language: string) => {
+    const key = `${language}\0${context}`;
+    const state =
+      states.get(key) ??
+      highlighter.getLastGrammarState(context, { lang: language, theme: "hunk" });
+    states.set(key, state);
+    return state;
+  };
   const loadCore = async (): Promise<HighlighterCore> => {
     const [{ createHighlighterCore, createCssVariablesTheme }, { createJavaScriptRegexEngine }] =
       await Promise.all([import("shiki/core"), import("shiki/engine/javascript")]);
@@ -168,11 +178,13 @@ export const createShikiHighlighter = (): Highlighter => {
       const highlighter = await core;
       if (!(await loadLanguage(highlighter, language))) return null;
       // The whole side at once, so a string or comment over several lines colors right.
+      const context = grammarContext(code, language);
       return highlighter
         .codeToTokensBase(code, {
           lang: language,
           theme: "hunk",
           tokenizeMaxLineLength: MAX_TOKENIZED_LINE,
+          ...(context === "" ? {} : { grammarState: stateAfter(highlighter, context, language) }),
         })
         .map((line) => syntaxTokens(line));
     },
