@@ -266,7 +266,11 @@ export const fromDatabase = (
     `SELECT content FROM file_contents
      WHERE host = ? AND owner = ? AND repo = ? AND sha = ? AND path = ?`,
   );
+  // On Node 22.13 a statement doesn't keep its database alive: once the caller drops `db`, a
+  // collection finalizes the statement ("statement has been finalized"), which failed CI's
+  // oldest-node job now and then. Naming `db` here keeps it as long as `cached` is.
   const cached: CachedFile = (sha, path) => {
+    void db;
     const file = select.get(host, owner, repo, sha, path);
     if (file === undefined) return undefined;
     return typeof file.content === "string" ? file.content : null;

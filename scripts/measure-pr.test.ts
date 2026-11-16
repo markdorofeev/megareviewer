@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import { MIGRATIONS, migrate } from "../src/adapters/sqlite/migrations.ts";
 import {
@@ -87,6 +89,17 @@ describe("measure-pr", () => {
     expect(measured.missing.length).toBeGreaterThan(0);
     expect(measured.missing).not.toContain(first);
     expect(report(measured)).toContain("Not cached, so not parsed: ");
+  });
+
+  // On Node 22.13 a collection between fromDatabase and a read finalized the statement, since
+  // nothing held the database: the oldest-node job failed now and then.
+  it("keeps the database open for as long as it reads from it", () => {
+    const [first] = Object.keys(headFiles);
+    const { cached } = fromDatabase(cachedDatabase(first === undefined ? [] : [first]), "a_1");
+    setFlagsFromString("--expose-gc");
+    const gc: unknown = runInNewContext("gc");
+    if (typeof gc === "function") gc();
+    expect(cached(pullRequest.headSha, first ?? "")).toEqual(expect.any(String));
   });
 
   it("says when the analysis isn't in the database", () => {
