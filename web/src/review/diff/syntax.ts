@@ -76,6 +76,47 @@ export interface Highlighter {
   highlight(code: string, language: string): Promise<readonly (readonly SyntaxToken[])[] | null>;
 }
 
+const shiki = (name: string) => `var(--shiki-${name})`;
+
+// The CSS-variables theme's scopes fit TypeScript's grammar, not Java's. Java names every class
+// used as a type storage.type, as it does int and void, so types were keywords; every receiver
+// (`orders` in `orders.get(id)`) variable.other.object, and a field after `this.` a property, both
+// in the number color; each segment of a package or import path a storage.modifier; an
+// annotation a storage.type; and every operator a keyword. A line of Java was then mostly purple
+// and amber. These selectors are more specific than the theme's, so they win, and only for Java.
+const JAVA_SCOPES: readonly { readonly scope: readonly string[]; readonly color: string }[] = [
+  {
+    scope: [
+      "storage.type.java",
+      "storage.type.generic.java",
+      "storage.type.object.array.java",
+      "storage.type.annotation.java",
+      "punctuation.definition.annotation.java",
+    ],
+    color: shiki("token-function"),
+  },
+  {
+    scope: [
+      "storage.type.primitive.java",
+      "storage.type.primitive.array.java",
+      "keyword.operator.instanceof.java",
+    ],
+    color: shiki("token-keyword"),
+  },
+  {
+    scope: [
+      "storage.type.generic.wildcard.java",
+      "storage.modifier.package.java",
+      "storage.modifier.import.java",
+      "variable.other.object.java",
+      "variable.other.object.property.java",
+      "source.java keyword.operator",
+      "keyword.control.ternary.java",
+    ],
+    color: shiki("foreground"),
+  },
+];
+
 /** Lines past this length aren't tokenized: they're one plain token. */
 const MAX_TOKENIZED_LINE = 1000;
 
@@ -90,8 +131,20 @@ export const createShikiHighlighter = (): Highlighter => {
   const loadCore = async (): Promise<HighlighterCore> => {
     const [{ createHighlighterCore, createCssVariablesTheme }, { createJavaScriptRegexEngine }] =
       await Promise.all([import("shiki/core"), import("shiki/engine/javascript")]);
+    const theme = createCssVariablesTheme({ name: "hunk", variablePrefix: "--shiki-" });
     return createHighlighterCore({
-      themes: [createCssVariablesTheme({ name: "hunk", variablePrefix: "--shiki-" })],
+      themes: [
+        {
+          ...theme,
+          tokenColors: [
+            ...(theme.tokenColors ?? []),
+            ...JAVA_SCOPES.map(({ scope, color }) => ({
+              scope: [...scope],
+              settings: { foreground: color },
+            })),
+          ],
+        },
+      ],
       langs: [],
       engine: createJavaScriptRegexEngine(),
     });

@@ -97,6 +97,47 @@ describe("createShikiHighlighter", () => {
     expect(tokens[2]).toEqual([{ text: "  SELECT id, name", type: "string" }]);
     expect(tokens[4]?.[0]).toEqual({ text: "run", type: "function" });
   });
+
+  // Java's grammar names types storage.type and receivers variable.other.object, which the
+  // CSS-variables theme colored as keywords and numbers: a line of Java was mostly purple and amber.
+  it("colors Java types as types and leaves names, operators and import paths plain", async () => {
+    const tokens = await createShikiHighlighter().highlight(
+      [
+        "import java.util.List;",
+        "@Override",
+        "private final Map<String, Order> orders = new HashMap<>();",
+        "var order = orders.get(id);",
+        "this.count++;",
+        "String[] names = List.<? extends Order>of();",
+      ].join("\n"),
+      "java",
+    );
+    const typeOf = (line: number, text: string) =>
+      tokens?.[line]?.find((token) => token.text.trim() === text)?.type;
+    expect(typeOf(0, "import")).toBe("keyword");
+    expect(tokens?.[0]?.some((token) => token.text.includes("java") && token.type !== null)).toBe(
+      false,
+    );
+    expect(
+      tokens?.[1]?.some((token) => token.text.includes("Override") && token.type === "function"),
+    ).toBe(true);
+    const field = tokens?.[2] ?? [];
+    expect(field).toContainEqual({ text: "private", type: "keyword" });
+    expect(field).toContainEqual({ text: "new", type: "keyword" });
+    for (const type of ["Map", "String", "Order", "HashMap"]) {
+      expect(field.some((token) => token.text === type && token.type === "function")).toBe(true);
+    }
+    expect(field.some((token) => token.text.includes("=") && token.type !== null)).toBe(false);
+    expect(typeOf(3, "var")).toBe("keyword");
+    expect(tokens?.[3]?.some((token) => token.text.includes("orders") && token.type !== null)).toBe(
+      false,
+    );
+    expect(typeOf(3, "get")).toBe("function");
+    expect(tokens?.[4]?.some((token) => token.text.includes("count") && token.type !== null)).toBe(
+      false,
+    );
+    expect(typeOf(5, "String")).toBe("function");
+  });
 });
 
 describe("useHunkTokens", () => {
