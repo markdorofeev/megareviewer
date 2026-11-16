@@ -29,8 +29,9 @@ const useStuck = () => {
 
 /**
  * The row under the header that stays at the top of the window while the code scrolls: Claude's
- * run and the stepper through its points, Show files at 1024px or less, and Publish. Its height is
- * `--review-bar-h`, which what sticks or scrolls under it reads. Stuck, it names the PR first.
+ * run and the stepper through its points, Show files at 1024px or less, the latest review
+ * published, and Publish. Its height is `--review-bar-h`, which what sticks or scrolls under it
+ * reads. Stuck, it names the PR first.
  */
 export const ReviewBar = ({
   title,
@@ -47,8 +48,9 @@ export const ReviewBar = ({
   readonly claude: ReactNode;
   /** Show files, at 1024px or less. */
   readonly tools: ReactNode;
-  /** The Publish button, while the review can be published. */
+  /** The Publish button, while a review can be published: before and after one is. */
   readonly publish: ReactNode;
+  /** The latest review published from the analysis. */
   readonly publication: PublicationReceipt | null;
   /**
    * Claude is reading the PR: a segment runs along the bar's bottom edge. Once it's done, it
@@ -87,7 +89,8 @@ export const ReviewBar = ({
         {claude}
       </div>
       <div className="flex shrink-0 items-center gap-2">{tools}</div>
-      {publication !== null ? (
+      {publication !== null && (
+        // The latest review; Publish beside it sends another, approving after a comment, say.
         <p
           role="status"
           className="flex shrink-0 items-center gap-1 font-medium text-review-approved"
@@ -106,9 +109,8 @@ export const ReviewBar = ({
             </a>
           )}
         </p>
-      ) : (
-        publish
       )}
+      {publish}
     </div>
   );
 };

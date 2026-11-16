@@ -20,12 +20,10 @@ export interface HunkDeps {
   readonly openComment: { readonly partId: PartId; readonly place: LinePlace } | null;
   readonly onOpenComment: (id: PartId, place: LinePlace | null) => void;
   readonly onCancelComment?: (id: PartId, place: LinePlace) => void;
-  /** Without it, comments are read-only: the review is published. */
+  /** Without it, comments are read-only: the analysis isn't complete. */
   readonly onComment?: (id: PartId, comment: LineComment) => void;
   /** Posts a comment on its own, now; without it, comments only go with the review. */
   readonly onCommentNow?: (id: PartId, comment: LineComment) => Promise<string | null>;
-  /** The review is published: new comments post now, on their own. */
-  readonly published: boolean;
   readonly onFocusHunk: (id: PartId) => void;
   /** Claude's point cards and links that go under a part's header. */
   readonly pointsOn: (id: PartId) => ReactNode;
@@ -87,7 +85,6 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       {...(deps.onCancelComment === undefined ? {} : { onCancelComment: deps.onCancelComment })}
       onComment={deps.onComment}
       {...(deps.onCommentNow === undefined ? {} : { onCommentNow: deps.onCommentNow })}
-      published={deps.published}
       afterHeader={deps.pointsOn(id)}
       {...(deps.pointLinesOf(id) === undefined ? {} : { pointLines: deps.pointLinesOf(id) })}
       threadsAt={(place) => deps.threadsAt(id, place)}

@@ -67,6 +67,7 @@ const receipt: PublicationReceipt = {
   publishedAt: "2026-10-21T10:10:00Z",
   postedCommentIds: {},
 };
+const first = { number: 1, id: null, receipt };
 
 describeAnalysisStoreContract("sqlite-memory", (clock) =>
   openStore(":memory:", new RecordingLogger(), clock),
@@ -201,14 +202,14 @@ describe("openSqliteAnalysisStore", () => {
     const store = openStore(path, logger);
     await store.saveAnalysis(analysis);
     await store.savePointReview(analysis.id, raised);
-    await store.recordPostedComment(analysis.id, summaryKey, "101");
-    await store.recordPublication(analysis.id, receipt);
+    await store.recordPostedComment(analysis.id, 1, summaryKey, "101");
+    await store.recordPublication(analysis.id, first);
     withRawDatabase(path, (db) => {
       db.prepare("INSERT INTO point_reviews VALUES (?, 'x1', 'raised', ?)").run(
         analysis.id,
         raised.updatedAt,
       );
-      db.prepare("INSERT INTO published_comments VALUES (?, 'hunk:h1', '102', ?)").run(
+      db.prepare("INSERT INTO published_comments VALUES (?, 1, 'hunk:h1', '102', ?)").run(
         analysis.id,
         raised.updatedAt,
       );
@@ -216,10 +217,10 @@ describe("openSqliteAnalysisStore", () => {
     });
 
     expect(await store.getPointReviews(analysis.id)).toEqual([raised]);
-    expect(Object.fromEntries(await store.getPostedComments(analysis.id))).toEqual({
+    expect(Object.fromEntries(await store.getPostedComments(analysis.id, 1))).toEqual({
       summary: "101",
     });
-    expect(await store.getPublication(analysis.id)).toBeNull();
+    expect(await store.getPublications(analysis.id)).toEqual([]);
     expect(warnings(logger).map((entry) => entry.message)).toEqual([
       "Ignoring a stored point review that no longer parses",
       "Ignoring a stored posted comment that no longer parses",
@@ -231,13 +232,13 @@ describe("openSqliteAnalysisStore", () => {
     const store = openStore(":memory:");
     await store.saveAnalysis({ ...analysis, status: "running" });
     await store.savePointReview(analysis.id, raised);
-    await store.recordPostedComment(analysis.id, summaryKey, "101");
-    await store.recordPublication(analysis.id, receipt);
+    await store.recordPostedComment(analysis.id, 1, summaryKey, "101");
+    await store.recordPublication(analysis.id, first);
     await store.saveAnalysis(analysis);
 
     expect(await store.getPointReviews(analysis.id)).toEqual([raised]);
-    expect([...(await store.getPostedComments(analysis.id))]).toEqual([["summary", "101"]]);
-    expect(await store.getPublication(analysis.id)).toEqual(receipt);
+    expect([...(await store.getPostedComments(analysis.id, 1))]).toEqual([["summary", "101"]]);
+    expect(await store.getPublications(analysis.id)).toEqual([first]);
   });
 
   it("deletes an analysis's point reviews, comments and publication with it", async () => {
@@ -245,8 +246,8 @@ describe("openSqliteAnalysisStore", () => {
     const store = openStore(path);
     await store.saveAnalysis(analysis);
     await store.savePointReview(analysis.id, raised);
-    await store.recordPostedComment(analysis.id, summaryKey, "101");
-    await store.recordPublication(analysis.id, receipt);
+    await store.recordPostedComment(analysis.id, 1, summaryKey, "101");
+    await store.recordPublication(analysis.id, first);
 
     withRawDatabase(path, (db) => {
       db.prepare("DELETE FROM analyses WHERE id = ?").run(analysis.id);

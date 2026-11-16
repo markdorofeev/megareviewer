@@ -1,10 +1,12 @@
 import { useEffect, useId, useState } from "react";
-import type {
-  AnalysisId,
-  HunkComment,
-  Publication,
-  PublicationReceipt,
-  PublicationVerdict,
+import {
+  type AnalysisId,
+  type HunkComment,
+  isEmptyPublication,
+  type Publication,
+  PublicationId,
+  type PublicationReceipt,
+  type PublicationVerdict,
 } from "../../../../src/domain/review/index.ts";
 import { type ApiError, errorMessage, useApi, useMutation } from "../../api/index.ts";
 import { cn } from "../../lib/utils.ts";
@@ -23,19 +25,29 @@ const VERDICTS: readonly { readonly value: PublicationVerdict; readonly label: s
 /** Text as it will be posted: its own line breaks, never HTML. */
 const POSTED = "whitespace-pre-wrap wrap-anywhere";
 
-/** "Publish 2 comments", or "Publish the review" when there are none, as with only a verdict. */
-const publishLabel = (count: number): string =>
-  count === 0 ? "Publish the review" : `Publish ${count} ${count === 1 ? "comment" : "comments"}`;
+/**
+ * What the button posts, the verdict last: "Publish 2 comments", "Publish and approve", "Publish 2
+ * comments and request changes", or "Publish the summary" when that's all a comment says. It never
+ * reads "Approve" alone, which would be the name of the verdict's own button too.
+ */
+export const publishLabel = (verdict: PublicationVerdict, count: number): string => {
+  const what = count === 0 ? "" : ` ${count} ${count === 1 ? "comment" : "comments"}`;
+  if (verdict === "comment") return what === "" ? "Publish the summary" : `Publish${what}`;
+  return `Publish${what} and ${verdict === "approve" ? "approve" : "request changes"}`;
+};
 
 /**
  * The comments as they will be posted, the verdict the reviewer picks, an optional summary, and a
  * button that says what it posts. Nothing is posted that isn't shown here: the summary goes as
- * written. An author can only comment, as hosts don't let them approve their own PR.
+ * written. An author can only comment, as hosts don't let them approve their own PR, and the
+ * dialog says so where the choice is. Each time it opens it's a review of its own, so once one is
+ * published the next is another, with its own verdict.
  */
 export const PublishDialog = ({
   analysisId,
   hunkComments,
   isAuthor,
+  published,
   onClose,
   onPublished,
 }: {
@@ -43,6 +55,8 @@ export const PublishDialog = ({
   readonly hunkComments: readonly HunkComment[];
   /** The reviewer wrote the PR, so the review can only comment. */
   readonly isAuthor: boolean;
+  /** A review was published from this analysis already, so this one is another. */
+  readonly published: boolean;
   readonly onClose: () => void;
   readonly onPublished: (receipt: PublicationReceipt) => void;
 }) => {
@@ -54,6 +68,8 @@ export const PublishDialog = ({
   const [previewError, setPreviewError] = useState<ApiError | null>(null);
   const [confirmStale, setConfirmStale] = useState(false);
   const [allowStale, setAllowStale] = useState(false);
+  // The same on every retry, so a review whose answer was lost isn't posted twice.
+  const [publicationId] = useState(() => PublicationId.parse(crypto.randomUUID()));
   const publish = useMutation(client.publish);
 
   // The comments, and what the summary gets after the reviewer's text, don't depend on it.
@@ -69,14 +85,20 @@ export const PublishDialog = ({
     };
   }, [analysisId, client, hunkComments]);
 
+  const chosen = isAuthor ? "comment" : verdict;
+  const label = publishLabel(chosen, preview?.comments.length ?? hunkComments.length);
+  // A comment with nothing in it: GitHub refuses it, and Bitbucket would post nothing.
+  const nothing = preview !== null && isEmptyPublication({ ...preview, verdict: chosen, summary });
+
   const send = async (stale: boolean) => {
     setAllowStale(stale);
     setConfirmStale(false);
     const result = await publish.run(analysisId, {
+      publicationId,
       summary,
       allowStale: stale,
       hunkComments,
-      verdict,
+      verdict: chosen,
     });
     if (result.ok) {
       onPublished(result.value);
@@ -86,11 +108,16 @@ export const PublishDialog = ({
     }
   };
 
-  const label = publishLabel(preview?.comments.length ?? hunkComments.length);
   return (
     // A column whose comments scroll on their own, so however many and long they are, the verdict,
     // the summary and Publish stay in view; on a window too short even for those, it all scrolls.
-    <Dialog title={label} onClose={onClose} className="flex flex-col sm:max-w-2xl">
+    <Dialog title="Publish review" onClose={onClose} className="flex flex-col sm:max-w-2xl">
+      {published && (
+        <p className="shrink-0 text-muted-foreground">
+          Your earlier review is on the pull request. This one posts as another, with its own
+          verdict.
+        </p>
+      )}
       {previewError !== null ? (
         <p className={DANGER} role="alert">
           Couldn't read what will be posted. {errorMessage(previewError)}
@@ -128,12 +155,26 @@ export const PublishDialog = ({
       )}
 
       <div className="flex shrink-0 flex-col gap-4">
-        {!isAuthor && (
+        <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-caption text-muted-foreground">Verdict</span>
-            <Segmented legend="Verdict" options={VERDICTS} value={verdict} onChange={setVerdict} />
+            <Segmented
+              legend="Verdict"
+              options={VERDICTS.map((option) => ({
+                ...option,
+                disabled: isAuthor && option.value !== "comment",
+              }))}
+              value={chosen}
+              onChange={setVerdict}
+            />
           </div>
-        )}
+          {isAuthor && (
+            <p className="text-caption text-muted-foreground">
+              You opened this pull request, and its author can't approve it or request changes, so
+              your review comments.
+            </p>
+          )}
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${id}-summary`} className="sr-only">
@@ -169,12 +210,18 @@ export const PublishDialog = ({
                 </p>
               </div>
             )}
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {nothing && (
+                <p id={`${id}-nothing`} className="mr-auto text-caption text-muted-foreground">
+                  Nothing to post yet: write a summary, or approve or request changes.
+                </p>
+              )}
               <Button variant="outline" onClick={onClose}>
                 Cancel
               </Button>
               <Button
-                disabled={publish.pending || preview === null}
+                disabled={publish.pending || preview === null || nothing}
+                aria-describedby={nothing ? `${id}-nothing` : undefined}
                 onClick={() => void send(allowStale)}
               >
                 {publish.pending ? "Publishing…" : publish.error !== null ? "Retry" : label}

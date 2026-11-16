@@ -79,6 +79,36 @@ export const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX thread_posts_posted_at ON thread_posts (posted_at);
   `,
+  // An analysis can publish several reviews, each numbered from 1, so the comments a review posted
+  // are kept per number; the ID the page chose for a review lets a repeated request get its receipt.
+  `
+  CREATE TABLE published_comments_numbered (
+    analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+    publication_number INTEGER NOT NULL CHECK (publication_number > 0),
+    comment_key TEXT NOT NULL,
+    host_comment_id TEXT NOT NULL,
+    posted_at TEXT NOT NULL,
+    PRIMARY KEY (analysis_id, publication_number, comment_key)
+  );
+  INSERT INTO published_comments_numbered
+    SELECT analysis_id, 1, comment_key, host_comment_id, posted_at FROM published_comments;
+  DROP TABLE published_comments;
+  ALTER TABLE published_comments_numbered RENAME TO published_comments;
+
+  CREATE TABLE publications_numbered (
+    analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+    number INTEGER NOT NULL CHECK (number > 0),
+    publication_id TEXT,            -- NULL for reviews published before pages chose one
+    url TEXT,
+    published_at TEXT NOT NULL,
+    receipt TEXT NOT NULL,          -- PublicationReceipt as JSON
+    PRIMARY KEY (analysis_id, number)
+  );
+  INSERT INTO publications_numbered
+    SELECT analysis_id, 1, NULL, url, published_at, receipt FROM publications;
+  DROP TABLE publications;
+  ALTER TABLE publications_numbered RENAME TO publications;
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

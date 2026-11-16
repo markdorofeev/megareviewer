@@ -77,6 +77,47 @@ describe("migrate", () => {
     expect(tableNames(db)).not.toContain("decision_reviews");
   });
 
+  it("numbers an analysis's one publication and its posted comments 1", () => {
+    const db = databaseAt(4);
+    db.exec(`INSERT INTO analyses VALUES
+      ('a_0123456789abcdef', 'github', 'acme', 'shop', 1, 'sha', 'v1', 'complete', '{}', 't', 't'),
+      ('a_fedcba9876543210', 'github', 'acme', 'shop', 2, 'sha', 'v1', 'complete', '{}', 't', 't')`);
+    db.exec(`INSERT INTO published_comments VALUES
+      ('a_0123456789abcdef', 'summary', '101', 't1'),
+      ('a_fedcba9876543210', 'summary', '201', 't2')`);
+    db.exec(`INSERT INTO publications VALUES ('a_0123456789abcdef', 'https://x/1', 't3', '{}')`);
+
+    migrate(db, MIGRATIONS);
+
+    expect(db.prepare("SELECT * FROM published_comments ORDER BY analysis_id").all()).toEqual([
+      {
+        analysis_id: "a_0123456789abcdef",
+        publication_number: 1,
+        comment_key: "summary",
+        host_comment_id: "101",
+        posted_at: "t1",
+      },
+      // Posted by a publish that failed part-way: a retry continues publication 1.
+      {
+        analysis_id: "a_fedcba9876543210",
+        publication_number: 1,
+        comment_key: "summary",
+        host_comment_id: "201",
+        posted_at: "t2",
+      },
+    ]);
+    expect(db.prepare("SELECT * FROM publications").all()).toEqual([
+      {
+        analysis_id: "a_0123456789abcdef",
+        number: 1,
+        publication_id: null,
+        url: "https://x/1",
+        published_at: "t3",
+        receipt: "{}",
+      },
+    ]);
+  });
+
   it("rolls back a failed migration and stays at the last good version", () => {
     const db = databaseAt(MIGRATIONS.length);
     const broken = [

@@ -97,8 +97,10 @@ export {
   CommentKey,
   commentFits,
   HunkComment,
+  isEmptyPublication,
   Publication,
   PublicationComment,
+  PublicationId,
   PublicationReceipt,
   PublicationVerdict,
 } from "./publication.ts";

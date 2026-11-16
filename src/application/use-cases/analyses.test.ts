@@ -1617,10 +1617,10 @@ describe("removeModelRun", () => {
       publishedAt: "2026-10-21T09:10:00Z",
       postedCommentIds: {},
     };
-    await store.recordPublication(codeOnly.id, receipt);
+    await store.recordPublication(codeOnly.id, { number: 1, id: null, receipt });
 
     await remove();
-    expect(await store.getPublication(codeOnly.id)).toEqual(receipt);
+    expect(await store.getPublications(codeOnly.id)).toEqual([{ number: 1, id: null, receipt }]);
   });
 
   it("refuses an analysis Claude hasn't run on, or one that isn't complete", async () => {

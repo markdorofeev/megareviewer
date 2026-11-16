@@ -6,7 +6,10 @@ import {
   CommentKey,
   type HostError,
   type HostUser,
+  type HunkComment,
   PointId,
+  PublicationId,
+  type PublicationVerdict,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { createAnalysisEvents } from "../events/index.ts";
@@ -33,6 +36,8 @@ const { id } = smallFeatureAnalysis;
 const { ref } = smallFeature.pullRequest;
 const missingId = AnalysisId.parse("a_0000000000000000");
 const network: HostError = { kind: "network", message: "socket hang up", retryAfterSeconds: null };
+const firstId = PublicationId.parse("00000000-0000-4000-8000-000000000001");
+const secondId = PublicationId.parse("00000000-0000-4000-8000-000000000002");
 
 const setup = (
   options: {
@@ -229,6 +234,19 @@ describe("publishing", () => {
     verdict: "request_changes" as const,
   };
   const raisedKey = CommentKey.parse(`hunk:${commented.id}:new:${commentedLine}`);
+  /** The first review the page publishes, retried under the same ID. */
+  const first = (
+    summary: string,
+    review: { hunkComments?: readonly HunkComment[]; verdict?: PublicationVerdict | null },
+    allowStale = false,
+  ) => ({
+    publicationId: firstId,
+    summary,
+    allowStale,
+    hunkComments: review.hunkComments ?? [],
+    verdict: review.verdict ?? null,
+  });
+  const approval = { verdict: "approve" as const };
 
   it("previews exactly what it publishes", async () => {
     const { useCases, github, store, seeded } = setup();
@@ -244,12 +262,14 @@ describe("publishing", () => {
         }),
       ),
     );
-    const receipt = await useCases.publishReview(id, "Drop the rate limit.", false, raised);
+    const receipt = await useCases.publishReview(id, first("Drop the rate limit.", raised));
     expect(receipt.ok).toBe(true);
     expect(github.publishAttempts).toHaveLength(1);
     expect(github.publishAttempts[0]?.publication).toEqual(preview.ok && preview.value);
     expect(github.publishAttempts[0]?.headSha).toBe(smallFeatureAnalysis.key.headSha);
-    expect(await store.getPublication(id)).toEqual(receipt.ok && receipt.value);
+    expect(await store.getPublications(id)).toEqual([
+      { number: 1, id: firstId, receipt: receipt.ok && receipt.value },
+    ]);
   });
 
   it("publishes comments on hunk lines and the reviewer's own verdict, and retries without repeats", async () => {
@@ -275,8 +295,8 @@ describe("publishing", () => {
     ]);
 
     github.failPublishAtPost(2, network);
-    expect((await useCases.publishReview(id, "", false, review)).ok).toBe(false);
-    expect((await useCases.publishReview(id, "", false, review)).ok).toBe(true);
+    expect((await useCases.publishReview(id, first("", review))).ok).toBe(false);
+    expect((await useCases.publishReview(id, first("", review))).ok).toBe(true);
     expect(github.publishAttempts.map((attempt) => attempt.postedKeys)).toEqual([
       ["summary"],
       [`hunk:${hunk.id}:new:${line}`],
@@ -295,7 +315,7 @@ describe("publishing", () => {
     const preview = await useCases.previewPublication(id, "", review);
     expect(preview.ok).toBe(false);
     expect(!preview.ok && preview.error.code).toBe("bad-request");
-    expect((await useCases.publishReview(id, "", false, review)).ok).toBe(false);
+    expect((await useCases.publishReview(id, first("", review))).ok).toBe(false);
   });
 
   it("only comments when the reviewer wrote the PR", async () => {
@@ -305,30 +325,103 @@ describe("publishing", () => {
     expect(preview.ok && preview.value.verdict).toBe("comment");
   });
 
-  it("publishes once, however often it's asked", async () => {
+  it("publishes a review once, however often it's asked", async () => {
     const { useCases, github, seeded } = setup();
     await seeded;
-    const [first, second] = await Promise.all([
-      useCases.publishReview(id, "", false, raised),
-      useCases.publishReview(id, "", false, raised),
+    const [one, two] = await Promise.all([
+      useCases.publishReview(id, first("", raised)),
+      useCases.publishReview(id, first("", raised)),
     ]);
-    const third = await useCases.publishReview(id, "", false, raised);
-    expect(second).toEqual(first);
-    expect(third).toEqual(first);
+    const three = await useCases.publishReview(id, first("", raised));
+    expect(two).toEqual(one);
+    expect(three).toEqual(one);
     expect(github.publishAttempts).toHaveLength(1);
+  });
+
+  it("publishes another review, with its own verdict, after the first", async () => {
+    const { useCases, github, store, seeded } = setup();
+    await seeded;
+    expect((await useCases.publishReview(id, first("", raised))).ok).toBe(true);
+    // The same line again, and the summary: the first review's records don't skip them.
+    const again = await useCases.publishReview(id, {
+      ...first("Fixed, thanks.", { ...raised, verdict: "approve" }),
+      publicationId: secondId,
+    });
+    expect(again.ok).toBe(true);
+    expect(
+      github.publishAttempts.map((attempt) => [attempt.publication.verdict, attempt.postedKeys]),
+    ).toEqual([
+      ["request_changes", ["summary", raisedKey]],
+      ["approve", ["summary", raisedKey]],
+    ]);
+    expect((await store.getPublications(id)).map((stored) => [stored.number, stored.id])).toEqual([
+      [1, firstId],
+      [2, secondId],
+    ]);
+    const view = await useCases.getAnalysisView(id);
+    expect(view.ok && view.value.publication).toEqual(again.ok && again.value);
+  });
+
+  it("publishes two reviews sent at once one after the other", async () => {
+    const { useCases, github, store, seeded } = setup();
+    await seeded;
+    const [one, two] = await Promise.all([
+      useCases.publishReview(id, first("", raised)),
+      useCases.publishReview(id, { ...first("", approval), publicationId: secondId }),
+    ]);
+    expect(one.ok && two.ok).toBe(true);
+    expect(github.publishAttempts.map((attempt) => attempt.publication.verdict)).toEqual([
+      "request_changes",
+      "approve",
+    ]);
+    expect((await store.getPublications(id)).map((stored) => stored.number)).toEqual([1, 2]);
+  });
+
+  it("continues a review that failed part-way under another ID, as the same review", async () => {
+    const { useCases, github, store, seeded } = setup();
+    await seeded;
+    expect((await useCases.publishReview(id, first("", raised))).ok).toBe(true);
+    github.failPublishAtPost(2, network);
+    const second = { ...first("", raised), publicationId: secondId };
+    expect((await useCases.publishReview(id, second)).ok).toBe(false);
+    // The page lost the ID, say, after a reload: the review it starts is still the second.
+    const third = PublicationId.parse("00000000-0000-4000-8000-000000000003");
+    expect((await useCases.publishReview(id, { ...second, publicationId: third })).ok).toBe(true);
+    expect(github.publishAttempts.map((attempt) => attempt.postedKeys)).toEqual([
+      ["summary", raisedKey],
+      ["summary"],
+      [raisedKey],
+    ]);
+    expect((await store.getPublications(id)).map((stored) => [stored.number, stored.id])).toEqual([
+      [1, firstId],
+      [2, third],
+    ]);
+  });
+
+  it("refuses a review that says nothing", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    expect(await useCases.publishReview(id, first("  ", {}))).toEqual(
+      err({
+        code: "bad-request",
+        message: "Nothing to publish: no comment, no summary and no verdict",
+      }),
+    );
+    expect(github.publishAttempts).toEqual([]);
+    expect((await useCases.publishReview(id, first("", approval))).ok).toBe(true);
   });
 
   it("posts only the rest when retried after a partial failure", async () => {
     const { useCases, github, store, seeded } = setup();
     await seeded;
     github.failPublishAtPost(2, network);
-    expect(await useCases.publishReview(id, "", false, raised)).toEqual(
+    expect(await useCases.publishReview(id, first("", raised))).toEqual(
       err({ code: "host-error", message: "socket hang up" }),
     );
-    expect([...(await store.getPostedComments(id)).keys()]).toEqual(["summary"]);
-    expect(await store.getPublication(id)).toBeNull();
+    expect([...(await store.getPostedComments(id, 1)).keys()]).toEqual(["summary"]);
+    expect(await store.getPublications(id)).toEqual([]);
 
-    const receipt = await useCases.publishReview(id, "", false, raised);
+    const receipt = await useCases.publishReview(id, first("", raised));
     expect(github.publishAttempts.map((attempt) => attempt.postedKeys)).toEqual([
       ["summary"],
       [raisedKey],
@@ -347,14 +440,14 @@ describe("publishing", () => {
     const { useCases, github, seeded } = setup();
     await seeded;
     github.setHeadSha(ref, "2".repeat(40));
-    expect(await useCases.publishReview(id, "", false)).toEqual(
+    expect(await useCases.publishReview(id, first("", approval))).toEqual(
       err({
         code: "stale-analysis",
         message: "The pull request has new commits since this analysis",
       }),
     );
     expect(github.publishAttempts).toEqual([]);
-    expect((await useCases.publishReview(id, "", true)).ok).toBe(true);
+    expect((await useCases.publishReview(id, first("", approval, true))).ok).toBe(true);
     expect(github.publishAttempts[0]?.headSha).toBe(smallFeatureAnalysis.key.headSha);
   });
 
@@ -366,18 +459,18 @@ describe("publishing", () => {
       message: "The analysis isn't complete",
     });
     expect(await incomplete.useCases.previewPublication(id, "")).toEqual(notComplete);
-    expect(await incomplete.useCases.publishReview(id, "", false)).toEqual(notComplete);
+    expect(await incomplete.useCases.publishReview(id, first("", approval))).toEqual(notComplete);
 
     const hostless = setup({ noHosts: true });
     await hostless.seeded;
-    expect(await hostless.useCases.publishReview(id, "", false)).toEqual(
+    expect(await hostless.useCases.publishReview(id, first("", approval))).toEqual(
       err({ code: "host-not-configured", message: "GitHub isn't configured" }),
     );
 
     const { useCases, github, seeded } = setup();
     await seeded;
     github.failNext("getPullRequest", network);
-    expect(await useCases.publishReview(id, "", false)).toEqual(
+    expect(await useCases.publishReview(id, first("", approval))).toEqual(
       err({ code: "host-error", message: "socket hang up" }),
     );
   });

@@ -38,7 +38,7 @@ import {
   smallFeatureThreadList,
 } from "../../application/testing/index.ts";
 import { createUseCases } from "../../application/use-cases/index.ts";
-import { type Analysis, AnalysisId } from "../../domain/review/index.ts";
+import { type Analysis, AnalysisId, PublicationId } from "../../domain/review/index.ts";
 import { createHttpApp } from "./index.ts";
 
 const TOKEN = "session-token-0123456789abcdef";
@@ -515,15 +515,34 @@ describe("POST /api/analyses/:id/publication/preview", () => {
 });
 
 describe("POST /api/analyses/:id/publication", () => {
-  const publish = { summary: "Ship it", allowStale: false };
+  const publish = {
+    publicationId: PublicationId.parse("00000000-0000-4000-8000-000000000001"),
+    summary: "Ship it",
+    allowStale: false,
+  };
 
-  it("publishes once and returns the receipt", async () => {
+  it("publishes a review once and returns the receipt, and another under another ID", async () => {
     const { call, github } = await seeded();
     const first = await call("publish", { params: { id }, body: publish });
-    const second = await call("publish", { params: { id }, body: publish });
+    const repeated = await call("publish", { params: { id }, body: publish });
     expect(first.body?.url).toMatch(/^https:\/\//);
-    expect(second.body).toEqual(first.body);
+    expect(repeated.body).toEqual(first.body);
     expect(github.publishAttempts).toHaveLength(1);
+
+    const approval = await call("publish", {
+      params: { id },
+      body: {
+        ...publish,
+        publicationId: PublicationId.parse("00000000-0000-4000-8000-000000000002"),
+        summary: "",
+        verdict: "approve",
+      },
+    });
+    expect(approval.error).toBeNull();
+    expect(github.publishAttempts.map((attempt) => attempt.publication.verdict)).toEqual([
+      "comment",
+      "approve",
+    ]);
   });
 
   it("refuses a stale analysis unless allowed", async () => {

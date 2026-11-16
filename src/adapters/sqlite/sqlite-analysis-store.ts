@@ -7,6 +7,7 @@ import type {
   FileAt,
   FileCache,
   Logger,
+  StoredPublication,
   ThreadPostKind,
 } from "../../application/ports/index.ts";
 import {
@@ -15,6 +16,7 @@ import {
   type AnalysisKey,
   CommentKey,
   PointReview,
+  PublicationId,
   PublicationReceipt,
   PublishedReview,
   PullRequestRef,
@@ -43,7 +45,11 @@ const PointReviewRow = z.object({
   updated_at: z.string(),
 });
 const PostedCommentRow = z.object({ comment_key: z.string(), host_comment_id: z.string() });
-const ReceiptRow = z.object({ receipt: z.string() });
+const PublicationRow = z.object({
+  number: z.number().int().positive(),
+  publication_id: z.string().nullable(),
+  receipt: z.string(),
+});
 const FileRow = z.object({ content: z.string().nullable() });
 const ReviewRow = z.object({
   at: z.string(),
@@ -134,12 +140,14 @@ export const openSqliteAnalysisStore = (
   );
   const deletePointReviews = db.prepare("DELETE FROM point_reviews WHERE analysis_id = ?");
   const selectPostedComments = db.prepare(
-    "SELECT comment_key, host_comment_id FROM published_comments WHERE analysis_id = ?",
+    `SELECT comment_key, host_comment_id FROM published_comments
+     WHERE analysis_id = ? AND publication_number = ?`,
   );
   const upsertPostedComment = db.prepare(
-    `INSERT INTO published_comments (analysis_id, comment_key, host_comment_id, posted_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT (analysis_id, comment_key) DO UPDATE SET
+    `INSERT INTO published_comments
+       (analysis_id, publication_number, comment_key, host_comment_id, posted_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (analysis_id, publication_number, comment_key) DO UPDATE SET
        host_comment_id = excluded.host_comment_id, posted_at = excluded.posted_at`,
   );
   const selectFile = db.prepare(
@@ -158,12 +166,16 @@ export const openSqliteAnalysisStore = (
   if (Number(pruned.changes) > 0) {
     logger.debug("Dropped old cached files", { count: Number(pruned.changes) });
   }
-  const selectPublication = db.prepare("SELECT receipt FROM publications WHERE analysis_id = ?");
+  const selectPublications = db.prepare(
+    `SELECT number, publication_id, receipt FROM publications
+     WHERE analysis_id = ? ORDER BY number`,
+  );
   const upsertPublication = db.prepare(
-    `INSERT INTO publications (analysis_id, url, published_at, receipt)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT (analysis_id) DO UPDATE SET
-       url = excluded.url, published_at = excluded.published_at, receipt = excluded.receipt`,
+    `INSERT INTO publications (analysis_id, number, publication_id, url, published_at, receipt)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (analysis_id, number) DO UPDATE SET
+       publication_id = excluded.publication_id, url = excluded.url,
+       published_at = excluded.published_at, receipt = excluded.receipt`,
   );
   const insertThreadPost = db.prepare(
     "INSERT INTO thread_posts (analysis_id, kind, posted_at) VALUES (?, ?, ?)",
@@ -265,9 +277,9 @@ export const openSqliteAnalysisStore = (
       deletePointReviews.run(id);
     },
 
-    async getPostedComments(id: AnalysisId) {
+    async getPostedComments(id: AnalysisId, number: number) {
       const posted = new Map<CommentKey, string>();
-      for (const raw of selectPostedComments.all(id)) {
+      for (const raw of selectPostedComments.all(id, number)) {
         const row = PostedCommentRow.parse(raw);
         const key = CommentKey.safeParse(row.comment_key);
         if (key.success && row.host_comment_id !== "") {
@@ -282,24 +294,43 @@ export const openSqliteAnalysisStore = (
       return posted;
     },
 
-    async recordPostedComment(id: AnalysisId, key: CommentKey, hostCommentId: string) {
-      upsertPostedComment.run(id, key, hostCommentId, clock.now());
+    async recordPostedComment(
+      id: AnalysisId,
+      number: number,
+      key: CommentKey,
+      hostCommentId: string,
+    ) {
+      upsertPostedComment.run(id, number, key, hostCommentId, clock.now());
     },
 
-    async getPublication(id: AnalysisId) {
-      const row = selectPublication.get(id);
-      if (row === undefined) return null;
-      const receipt = PublicationReceipt.safeParse(parseJson(ReceiptRow.parse(row).receipt));
-      if (receipt.success) return receipt.data;
-      logger.warn("Ignoring a stored publication that no longer parses", {
-        analysisId: id,
-        problem: z.prettifyError(receipt.error),
+    async getPublications(id: AnalysisId) {
+      return selectPublications.all(id).flatMap((raw): StoredPublication[] => {
+        const row = PublicationRow.parse(raw);
+        const stored = z
+          .object({ id: PublicationId.nullable(), receipt: PublicationReceipt })
+          .safeParse({ id: row.publication_id, receipt: parseJson(row.receipt) });
+        if (stored.success) return [{ number: row.number, ...stored.data }];
+        logger.warn("Ignoring a stored publication that no longer parses", {
+          analysisId: id,
+          number: row.number,
+          problem: z.prettifyError(stored.error),
+        });
+        return [];
       });
-      return null;
     },
 
-    async recordPublication(id: AnalysisId, receipt: PublicationReceipt) {
-      upsertPublication.run(id, receipt.url, receipt.publishedAt, JSON.stringify(receipt));
+    async recordPublication(
+      id: AnalysisId,
+      { number, id: publicationId, receipt }: StoredPublication,
+    ) {
+      upsertPublication.run(
+        id,
+        number,
+        publicationId,
+        receipt.url,
+        receipt.publishedAt,
+        JSON.stringify(receipt),
+      );
     },
 
     async recordThreadPost(id: AnalysisId, kind: ThreadPostKind) {

@@ -6,9 +6,10 @@ import {
   CommentKey,
   PointId,
   type PointReview,
+  PublicationId,
   type PublicationReceipt,
 } from "../../../domain/review/index.ts";
-import type { AnalysisStore } from "../../ports/index.ts";
+import type { AnalysisStore, StoredPublication } from "../../ports/index.ts";
 import { FixedClock } from "../fixed-clock.ts";
 import { smallFeatureAnalysis } from "../fixtures/index.ts";
 
@@ -35,6 +36,11 @@ const receipt: PublicationReceipt = {
   publishedAt: "2026-10-21T10:10:00Z",
   postedCommentIds: { [summaryKey]: "1", [d3Key]: "2" },
 };
+const first: StoredPublication = {
+  number: 1,
+  id: PublicationId.parse("00000000-0000-4000-8000-000000000001"),
+  receipt,
+};
 
 export const describeAnalysisStoreContract = (
   name: string,
@@ -55,8 +61,8 @@ export const describeAnalysisStoreContract = (
       expect(await store.listRecent(10)).toEqual([]);
       expect(await store.listAnalyzedPullRequests(10)).toEqual([]);
       expect(await store.getPointReviews(a.id)).toEqual([]);
-      expect([...(await store.getPostedComments(a.id))]).toEqual([]);
-      expect(await store.getPublication(a.id)).toBeNull();
+      expect([...(await store.getPostedComments(a.id, 1))]).toEqual([]);
+      expect(await store.getPublications(a.id)).toEqual([]);
       expect(await store.getReviewActivity("2026-01-01T00:00:00Z")).toEqual({
         reviews: [],
         comments: [],
@@ -66,10 +72,10 @@ export const describeAnalysisStoreContract = (
     it("reads a review, its comments but the summary, a reply and a comment posted now as activity", async () => {
       await store.saveAnalysis(a);
       await store.saveAnalysis(b);
-      await store.recordPostedComment(a.id, summaryKey, "1");
+      await store.recordPostedComment(a.id, 1, summaryKey, "1");
       clock.advance(1000);
-      await store.recordPostedComment(a.id, d3Key, "2");
-      await store.recordPublication(a.id, receipt);
+      await store.recordPostedComment(a.id, 1, d3Key, "2");
+      await store.recordPublication(a.id, first);
       clock.advance(1000);
       await store.recordThreadPost(b.id, "reply");
       clock.advance(1000);
@@ -88,8 +94,8 @@ export const describeAnalysisStoreContract = (
 
     it("reads nothing before since", async () => {
       await store.saveAnalysis(a);
-      await store.recordPostedComment(a.id, d3Key, "2");
-      await store.recordPublication(a.id, receipt);
+      await store.recordPostedComment(a.id, 1, d3Key, "2");
+      await store.recordPublication(a.id, first);
       await store.recordThreadPost(a.id, "reply");
 
       expect(await store.getReviewActivity("2026-10-21T10:10:00.001Z")).toEqual({
@@ -101,10 +107,10 @@ export const describeAnalysisStoreContract = (
 
     it("counts a retried publish's comments once", async () => {
       await store.saveAnalysis(a);
-      await store.recordPostedComment(a.id, d3Key, "2");
+      await store.recordPostedComment(a.id, 1, d3Key, "2");
       clock.advance(60_000);
-      await store.recordPostedComment(a.id, d3Key, "2");
-      await store.recordPublication(a.id, receipt);
+      await store.recordPostedComment(a.id, 1, d3Key, "2");
+      await store.recordPublication(a.id, first);
 
       expect((await store.getReviewActivity("2026-10-21T00:00:00Z")).comments).toHaveLength(1);
     });
@@ -191,33 +197,62 @@ export const describeAnalysisStoreContract = (
       ]);
     });
 
-    it("records posted comments", async () => {
+    it("records posted comments, apart for each publication", async () => {
       await store.saveAnalysis(a);
-      await store.recordPostedComment(a.id, summaryKey, "101");
-      await store.recordPostedComment(a.id, d3Key, "102");
+      await store.recordPostedComment(a.id, 1, summaryKey, "101");
+      await store.recordPostedComment(a.id, 1, d3Key, "102");
+      await store.recordPostedComment(a.id, 2, summaryKey, "201");
 
-      expect(Object.fromEntries(await store.getPostedComments(a.id))).toEqual({
+      expect(Object.fromEntries(await store.getPostedComments(a.id, 1))).toEqual({
         summary: "101",
         "decision:d3": "102",
       });
+      expect(Object.fromEntries(await store.getPostedComments(a.id, 2))).toEqual({
+        summary: "201",
+      });
     });
 
-    it("records a publication", async () => {
+    it("records publications, by number", async () => {
       await store.saveAnalysis(a);
-      await store.recordPublication(a.id, receipt);
-      expect(await store.getPublication(a.id)).toEqual(receipt);
+      const second: StoredPublication = {
+        number: 2,
+        id: null,
+        receipt: { ...receipt, publishedAt: "2026-10-21T11:00:00Z" },
+      };
+      await store.recordPublication(a.id, second);
+      await store.recordPublication(a.id, first);
+      expect(await store.getPublications(a.id)).toEqual([first, second]);
+    });
+
+    it("counts each of a PR's reviews and their comments as activity", async () => {
+      await store.saveAnalysis(a);
+      await store.recordPostedComment(a.id, 1, d3Key, "102");
+      await store.recordPublication(a.id, first);
+      await store.recordPostedComment(a.id, 2, d3Key, "202");
+      await store.recordPublication(a.id, {
+        number: 2,
+        id: null,
+        receipt: { ...receipt, publishedAt: "2026-10-21T11:00:00Z" },
+      });
+
+      const activity = await store.getReviewActivity("2026-10-21T00:00:00Z");
+      expect(activity.reviews.map((one) => one.at)).toEqual([
+        receipt.publishedAt,
+        "2026-10-21T11:00:00Z",
+      ]);
+      expect(activity.comments).toHaveLength(2);
     });
 
     it("keeps each analysis's data apart", async () => {
       await store.saveAnalysis(a);
       await store.saveAnalysis(b);
       await store.savePointReview(a.id, review("d1", "raised"));
-      await store.recordPostedComment(a.id, summaryKey, "101");
-      await store.recordPublication(a.id, receipt);
+      await store.recordPostedComment(a.id, 1, summaryKey, "101");
+      await store.recordPublication(a.id, first);
 
       expect(await store.getPointReviews(b.id)).toEqual([]);
-      expect([...(await store.getPostedComments(b.id))]).toEqual([]);
-      expect(await store.getPublication(b.id)).toBeNull();
+      expect([...(await store.getPostedComments(b.id, 1))]).toEqual([]);
+      expect(await store.getPublications(b.id)).toEqual([]);
     });
 
     it("keeps its own copies of what it stores and returns", async () => {

@@ -5,12 +5,11 @@ import type {
   CommentKey,
   PointId,
   PointReview,
-  PublicationReceipt,
   PullRequestRef,
   ReviewActivity,
   Timestamp,
 } from "../../domain/review/index.ts";
-import type { AnalysisStore, Clock, ThreadPostKind } from "../ports/index.ts";
+import type { AnalysisStore, Clock, StoredPublication, ThreadPostKind } from "../ports/index.ts";
 import { FixedClock } from "./fixed-clock.ts";
 
 const sameKey = (a: AnalysisKey, b: AnalysisKey): boolean =>
@@ -25,11 +24,12 @@ const sameKey = (a: AnalysisKey, b: AnalysisKey): boolean =>
 export class InMemoryAnalysisStore implements AnalysisStore {
   private readonly analyses = new Map<AnalysisId, Analysis>();
   private readonly pointReviews = new Map<AnalysisId, Map<PointId, PointReview>>();
+  /** By analysis, then publication number. */
   private readonly postedComments = new Map<
     AnalysisId,
-    Map<CommentKey, { readonly id: string; readonly at: Timestamp }>
+    Map<number, Map<CommentKey, { readonly id: string; readonly at: Timestamp }>>
   >();
-  private readonly publications = new Map<AnalysisId, PublicationReceipt>();
+  private readonly publications = new Map<AnalysisId, StoredPublication[]>();
   private readonly threadPosts: {
     readonly id: AnalysisId;
     readonly kind: ThreadPostKind;
@@ -88,24 +88,42 @@ export class InMemoryAnalysisStore implements AnalysisStore {
     this.pointReviews.delete(id);
   }
 
-  async getPostedComments(id: AnalysisId): Promise<ReadonlyMap<CommentKey, string>> {
+  async getPublications(id: AnalysisId): Promise<StoredPublication[]> {
+    return structuredClone(this.publications.get(id) ?? []);
+  }
+
+  async getPostedComments(
+    id: AnalysisId,
+    number: number,
+  ): Promise<ReadonlyMap<CommentKey, string>> {
     return new Map(
-      [...(this.postedComments.get(id) ?? [])].map(([key, posted]) => [key, posted.id] as const),
+      [...(this.postedComments.get(id)?.get(number) ?? [])].map(
+        ([key, posted]) => [key, posted.id] as const,
+      ),
     );
   }
 
-  async recordPostedComment(id: AnalysisId, key: CommentKey, hostCommentId: string): Promise<void> {
-    const posted = this.postedComments.get(id) ?? new Map();
+  async recordPostedComment(
+    id: AnalysisId,
+    number: number,
+    key: CommentKey,
+    hostCommentId: string,
+  ): Promise<void> {
+    const byNumber = this.postedComments.get(id) ?? new Map();
+    const posted = byNumber.get(number) ?? new Map();
     posted.set(key, { id: hostCommentId, at: this.clock.now() });
-    this.postedComments.set(id, posted);
+    byNumber.set(number, posted);
+    this.postedComments.set(id, byNumber);
   }
 
-  async getPublication(id: AnalysisId): Promise<PublicationReceipt | null> {
-    return structuredClone(this.publications.get(id) ?? null);
-  }
-
-  async recordPublication(id: AnalysisId, receipt: PublicationReceipt): Promise<void> {
-    this.publications.set(id, structuredClone(receipt));
+  async recordPublication(id: AnalysisId, publication: StoredPublication): Promise<void> {
+    const others = (this.publications.get(id) ?? []).filter(
+      (stored) => stored.number !== publication.number,
+    );
+    this.publications.set(
+      id,
+      [...others, structuredClone(publication)].sort((a, b) => a.number - b.number),
+    );
   }
 
   async recordThreadPost(id: AnalysisId, kind: ThreadPostKind): Promise<void> {
@@ -114,15 +132,19 @@ export class InMemoryAnalysisStore implements AnalysisStore {
 
   async getReviewActivity(since: Timestamp): Promise<ReviewActivity> {
     const after = (at: Timestamp) => Date.parse(at) >= Date.parse(since);
-    const reviews = [...this.publications].flatMap(([id, receipt]) => {
+    const reviews = [...this.publications].flatMap(([id, publications]) => {
       const analysis = this.analyses.get(id);
-      return analysis === undefined || !after(receipt.publishedAt)
-        ? []
-        : [{ at: receipt.publishedAt, pullRequest: structuredClone(analysis.key.ref) }];
+      return publications.flatMap(({ receipt }) =>
+        analysis === undefined || !after(receipt.publishedAt)
+          ? []
+          : [{ at: receipt.publishedAt, pullRequest: structuredClone(analysis.key.ref) }],
+      );
     });
     const comments = [
-      ...[...this.postedComments.values()].flatMap((posted) =>
-        [...posted].flatMap(([key, { at }]) => (key === "summary" ? [] : [at])),
+      ...[...this.postedComments.values()].flatMap((byNumber) =>
+        [...byNumber.values()].flatMap((posted) =>
+          [...posted].flatMap(([key, { at }]) => (key === "summary" ? [] : [at])),
+        ),
       ),
       ...this.threadPosts.map((post) => post.at),
     ].filter(after);

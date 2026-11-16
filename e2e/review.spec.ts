@@ -340,7 +340,7 @@ test.describe("the bar, with many of Claude's points", () => {
     expect(header).toBeLessThanOrEqual(cardTop);
 
     await bar.getByRole("button", { name: /^Publish review…/ }).click();
-    await expect(page.getByRole("dialog", { name: "Publish the review" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Publish review" })).toBeVisible();
   });
 });
 
@@ -378,7 +378,10 @@ test("raised and dismissed points persist across a reload", async ({ page }) => 
   await expect(changes.getByText(/Changes src\/routes\/orders\.ts/).first()).toBeVisible();
 });
 
-test("publishes exactly what the preview shows, once", async ({ page, server }) => {
+test("publishes exactly what the preview shows, once, then approves in another review", async ({
+  page,
+  server,
+}) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
   const routes = decision(page, "Changes src/routes/orders.ts");
   await routes.chip.click();
@@ -389,10 +392,10 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
   await changes.getByRole("button", { name: "Add to review", exact: true }).click();
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish 1 comment" });
+  const dialog = page.getByRole("dialog", { name: "Publish review" });
   await expect(dialog.getByText(/^src\/routes\/orders\.ts:/)).toBeVisible();
-  await dialog.getByRole("button", { name: "Request changes" }).click();
-  await dialog.getByRole("button", { name: "Publish 1 comment" }).click();
+  await dialog.getByRole("button", { name: "Request changes", exact: true }).click();
+  await dialog.getByRole("button", { name: "Publish 1 comment and request changes" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("status").filter({ hasText: "Published" })).toBeVisible();
 
@@ -405,12 +408,11 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
   ]);
   expect(attempt?.postedKeys).toEqual(["summary", ...(attempt?.postedKeys.slice(1) ?? [])]);
 
-  // Line comments stay open once it's published: they post now, as threads of their own.
+  // Line comments stay open once it's published: one can post now, as a thread of its own.
   const number = changes.getByRole("button", { name: /^Comment on line \d+$/ }).first();
   const line = await number.textContent();
   await number.click();
   await changes.getByRole("textbox", { name: `Comment on line ${line}` }).fill("One more.");
-  await expect(changes.getByRole("button", { name: "Add to review", exact: true })).toHaveCount(0);
   await changes.getByRole("button", { name: "Comment now" }).click();
   await expect(
     changes
@@ -418,13 +420,16 @@ test("publishes exactly what the preview shows, once", async ({ page, server }) 
       .getByText("One more."),
   ).toBeVisible();
 
-  // Publishing again returns the receipt and posts nothing.
-  const analysisId = page.url().split("/").at(-1);
-  const again = await server.request.post(`/api/analyses/${analysisId}/publication`, {
-    data: { summary: "", allowStale: false },
-  });
-  expect(again.ok()).toBe(true);
-  expect(await publishAttempts(server)).toHaveLength(1);
+  // Once the author fixed it, the reviewer approves, in a review of its own.
+  await page.getByRole("button", { name: /^Publish review…/ }).click();
+  await expect(dialog.getByText(/^Your earlier review is on the pull request\./)).toBeVisible();
+  await dialog.getByRole("button", { name: "Approve", exact: true }).click();
+  await dialog.getByRole("button", { name: "Publish and approve" }).click();
+  await expect(dialog).toBeHidden();
+  const approval = (await publishAttempts(server)).at(-1);
+  expect(approval?.publication.verdict).toBe("approve");
+  expect(approval?.postedKeys).toEqual(["summary"]);
+  expect(await publishAttempts(server)).toHaveLength(2);
 });
 
 test("a publish that fails part-way posts only the rest on retry", async ({ page, server }) => {
@@ -441,7 +446,7 @@ test("a publish that fails part-way posts only the rest on retry", async ({ page
   expect(armed.ok()).toBe(true);
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish 2 comments" });
+  const dialog = page.getByRole("dialog", { name: "Publish review" });
   await dialog.getByRole("button", { name: "Publish 2 comments" }).click();
   await expect(dialog.getByRole("alert")).toContainText("Retrying is safe");
   await dialog.getByRole("button", { name: "Retry" }).click();
@@ -485,8 +490,9 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
   await analyzeWithClaude(page);
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish the review" });
-  await dialog.getByRole("button", { name: "Publish the review" }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish review" });
+  await dialog.getByRole("button", { name: "Approve", exact: true }).click();
+  await dialog.getByRole("button", { name: "Publish and approve" }).click();
   await expect(dialog.getByRole("alert")).toContainText("Publish anyway?");
   expect(await publishAttempts(server)).toEqual([]);
 
@@ -643,7 +649,7 @@ test.describe("without the model", () => {
     await changes.getByRole("button", { name: "Add to review", exact: true }).click();
 
     await page.getByRole("button", { name: /^Publish review…/ }).click();
-    const dialog = page.getByRole("dialog", { name: "Publish 1 comment" });
+    const dialog = page.getByRole("dialog", { name: "Publish review" });
     await dialog.getByLabel("Summary").fill("One question.");
     await dialog.getByRole("button", { name: "Publish 1 comment" }).click();
     await expect(dialog).toBeHidden();
@@ -718,8 +724,9 @@ for (const [size, viewport] of [
     }
     // The comments scroll inside it, and nothing scrolls sideways.
     const scroller = await comments.evaluate((list) => {
-      for (let box: HTMLElement | null = list; box !== null; box = box.parentElement) {
-        if (box.scrollHeight > box.clientHeight) return box.dataset.slot ?? box.tagName;
+      for (let box: Element | null = list; box !== null; box = box.parentElement) {
+        if (box.scrollHeight > box.clientHeight)
+          return box.getAttribute("data-slot") ?? box.tagName;
       }
       return null;
     });

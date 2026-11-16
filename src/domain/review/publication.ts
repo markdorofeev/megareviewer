@@ -78,6 +78,19 @@ export const Publication = z
   .readonly();
 export type Publication = z.infer<typeof Publication>;
 
+/**
+ * Names one publication, chosen by the page when the reviewer opens the dialog: a request that
+ * repeats it, after its answer was lost, gets its receipt back instead of posting it twice.
+ */
+export const PublicationId = z.uuid().brand<"PublicationId">();
+export type PublicationId = z.infer<typeof PublicationId>;
+
+/** A comment with no summary and no line comment says nothing: GitHub refuses it, Bitbucket would post nothing. */
+export const isEmptyPublication = (publication: Publication): boolean =>
+  publication.verdict === "comment" &&
+  publication.summary.trim() === "" &&
+  publication.comments.length === 0;
+
 export const PublicationReceipt = z
   .object({
     /** Link to the review on the host, when the host has one. */

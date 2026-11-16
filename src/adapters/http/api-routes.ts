@@ -104,7 +104,12 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     previewPublication: ({ params, body }) =>
       useCases.previewPublication(params.id, body.summary, reviewInput(body)),
     publish: ({ params, body }) =>
-      useCases.publishReview(params.id, body.summary, body.allowStale, reviewInput(body)),
+      useCases.publishReview(params.id, {
+        publicationId: body.publicationId,
+        summary: body.summary,
+        allowStale: body.allowStale,
+        ...reviewInput(body),
+      }),
     getThreads: ({ params }) => useCases.getThreads(params.id),
     getPullRequestStatus: ({ params }) => useCases.getPullRequestStatus(params.id),
     replyToThread: ({ params, body }) =>

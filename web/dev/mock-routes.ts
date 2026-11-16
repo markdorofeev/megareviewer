@@ -17,6 +17,7 @@ import {
   buildPublication,
   composeBody,
   hasModelRun,
+  isEmptyPublication,
   MODEL_STAGES,
   type PointId,
   type PointReview,
@@ -170,6 +171,8 @@ export const createMockApi = (
   let failed = false;
   let timer: ReturnType<typeof setInterval> | null = null;
   const pointReviews = new Map<PointId, PointReview>();
+  /** The reviews published, by the ID the page chose; the view shows the latest. */
+  const publications = new Map<string, PublicationReceipt>();
   let publication: PublicationReceipt | null = null;
   let threads: ReviewThread[] = structuredClone([...fixtureThreads.threads]);
   let replies = 0;
@@ -227,6 +230,7 @@ export const createMockApi = (
     failAt = failing;
     failed = false;
     pointReviews.clear();
+    publications.clear();
     publication = null;
     timer = setInterval(advance, stageMs);
   };
@@ -377,21 +381,28 @@ export const createMockApi = (
       if (!request.success) {
         return failure("bad-request", issuesOf("body", request.error.issues).join("; "));
       }
-      if (publication === null) {
-        const published = buildPublication({
-          analysis: fixture,
-          summary: request.data.summary,
-          isAuthor: fixtureView.isAuthor,
-          hunkComments: request.data.hunkComments ?? [],
-          verdict: request.data.verdict ?? null,
-        });
-        const keys = ["summary", ...published.comments.map((comment) => comment.key)];
-        publication = {
-          url: `${fixture.pullRequest?.url ?? "https://github.com"}#pullrequestreview-1`,
-          publishedAt: now(),
-          postedCommentIds: Object.fromEntries(keys.map((key, index) => [key, `${1000 + index}`])),
-        };
+      const repeated = publications.get(request.data.publicationId);
+      if (repeated !== undefined) return success(repeated);
+      const published = buildPublication({
+        analysis: fixture,
+        summary: request.data.summary,
+        isAuthor: fixtureView.isAuthor,
+        hunkComments: request.data.hunkComments ?? [],
+        verdict: request.data.verdict ?? null,
+      });
+      if (isEmptyPublication(published)) {
+        return failure("bad-request", "Nothing to publish: no comment, no summary and no verdict");
       }
+      const keys = ["summary", ...published.comments.map((comment) => comment.key)];
+      const number = publications.size + 1;
+      publication = {
+        url: `${fixture.pullRequest?.url ?? "https://github.com"}#pullrequestreview-${number}`,
+        publishedAt: now(),
+        postedCommentIds: Object.fromEntries(
+          keys.map((key, index) => [key, `${number * 1000 + index}`]),
+        ),
+      };
+      publications.set(request.data.publicationId, publication);
       return success(publication);
     },
     getThreads: ({ id }) => findAnalysis(id) ?? success({ threads }),

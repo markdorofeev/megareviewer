@@ -55,6 +55,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const FIRST = "00000000-0000-4000-8000-000000000001";
+
 describe("mock API", () => {
   it("rejects requests without the token, like the server", () => {
     const response = api.handle(request("GET", "/api/status", undefined, "wrong"));
@@ -155,12 +157,16 @@ describe("mock API", () => {
     const put = api.handle(request("PUT", `/api/analyses/${id}/points/d1`, { state: "raised" }));
     expect(errorCode(put)).toBe("analysis-not-complete");
     const publish = api.handle(
-      request("POST", `/api/analyses/${id}/publication`, { summary: "", allowStale: false }),
+      request("POST", `/api/analyses/${id}/publication`, {
+        publicationId: FIRST,
+        summary: "",
+        allowStale: false,
+      }),
     );
     expect(errorCode(publish)).toBe("analysis-not-complete");
   });
 
-  it("previews and publishes what buildPublication makes, once", () => {
+  it("previews and publishes what buildPublication makes, once for each ID", () => {
     const comment = {
       hunkId: fixtureHunks.receiptRoute,
       side: "new",
@@ -181,10 +187,11 @@ describe("mock API", () => {
       `hunk:${fixtureHunks.receiptRoute}:new:14`,
     ]);
 
-    const publish = () =>
+    const publish = (publicationId = FIRST) =>
       PublicationReceipt.parse(
         api.handle(
           request("POST", `/api/analyses/${id}/publication`, {
+            publicationId,
             summary: "Hi",
             allowStale: false,
             hunkComments: [comment],
@@ -198,8 +205,10 @@ describe("mock API", () => {
       `hunk:${fixtureHunks.receiptRoute}:new:14`,
     ]);
     expect(publish()).toEqual(receipt);
+    const second = publish("00000000-0000-4000-8000-000000000002");
+    expect(second.url).not.toBe(receipt.url);
     const view = AnalysisView.parse(api.handle(request("GET", `/api/analyses/${id}`)).body);
-    expect(view.publication).toEqual(receipt);
+    expect(view.publication).toEqual(second);
   });
 
   it("can't retry an analysis that didn't fail", () => {

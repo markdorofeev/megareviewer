@@ -1129,10 +1129,9 @@ const Review = ({
     openComment,
     onOpenComment: openCommentOn,
     onCancelComment: cancelComment,
-    // Line comments stay open once the review is published: they post now, on their own.
+    // Line comments stay open once a review is published: they go with the next, or post now.
     onComment: complete ? writeComment : undefined,
     ...(complete ? { onCommentNow: postCommentNow } : {}),
-    published: publication !== null,
     onFocusHunk: focusHunk,
     marksOf,
     pointsOn,
@@ -1413,6 +1412,7 @@ const Review = ({
           analysisId={analysisId}
           hunkComments={hunkComments}
           isAuthor={view.isAuthor}
+          published={publication !== null}
           onClose={() => setPublishing(false)}
           onPublished={() => {
             setPublishing(false);

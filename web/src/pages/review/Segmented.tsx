@@ -11,7 +11,11 @@ export const Segmented = <T extends string>({
   onChange,
 }: {
   readonly legend: string;
-  readonly options: readonly { readonly value: T; readonly label: string }[];
+  readonly options: readonly {
+    readonly value: T;
+    readonly label: string;
+    readonly disabled?: boolean;
+  }[];
   readonly value: T;
   readonly onChange: (value: T) => void;
 }) => (
@@ -23,6 +27,7 @@ export const Segmented = <T extends string>({
         variant="outline"
         size="sm"
         pressed={value === option.value}
+        disabled={option.disabled === true}
         onPressedChange={(pressed) => {
           if (pressed) onChange(option.value);
         }}

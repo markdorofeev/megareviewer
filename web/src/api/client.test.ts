@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { TOKEN_HEADER } from "../../../contracts/index.ts";
-import { PointId } from "../../../src/domain/review/index.ts";
+import { PointId, PublicationId } from "../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureStatus } from "../../dev/fixtures/index.ts";
 import { mockFetch } from "../../dev/mock-fetch.ts";
 import { createMockApi, MOCK_TOKEN } from "../../dev/mock-routes.ts";
@@ -52,7 +52,16 @@ describe("createApiClient", () => {
     expect((await mock.listPullRequests()).ok).toBe(true);
     expect((await mock.getAnalysis(id)).ok).toBe(true);
     expect((await mock.previewPublication(id, { summary: "" })).ok).toBe(true);
-    expect((await mock.publish(id, { summary: "", allowStale: false })).ok).toBe(true);
+    expect(
+      (
+        await mock.publish(id, {
+          publicationId: PublicationId.parse("00000000-0000-4000-8000-000000000001"),
+          summary: "",
+          allowStale: false,
+          verdict: "approve",
+        })
+      ).ok,
+    ).toBe(true);
     expect(await mock.retryAnalysis(id)).toMatchObject({
       ok: false,
       error: { code: "bad-request" },

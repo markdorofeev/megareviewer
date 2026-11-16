@@ -115,7 +115,11 @@ const requests: Partial<Record<RouteName, unknown>> = {
   startAnalysis: { url: "https://github.com/acme/shop/pull/101" },
   putPointState: { state: "dismissed" },
   previewPublication: { summary: "Looks good." },
-  publish: { summary: "Looks good.", allowStale: false },
+  publish: {
+    publicationId: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    summary: "Looks good.",
+    allowStale: false,
+  },
   replyToThread: { body: "Capped it." },
   resolveThread: { resolved: false },
   postComment: {

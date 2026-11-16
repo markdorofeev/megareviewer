@@ -11,6 +11,7 @@ import {
   PointReview,
   PointState,
   Publication,
+  PublicationId,
   PublicationReceipt,
   PublicationVerdict,
   PullRequestStatus,
@@ -102,6 +103,8 @@ export type PublicationPreviewRequest = z.infer<typeof PublicationPreviewRequest
 
 export const PublishRequest = z
   .object({
+    /** Chosen when the reviewer opens the dialog; a retry sends the same, a new review a new one. */
+    publicationId: PublicationId,
     summary: z.string(),
     /** Publish even though the PR has new commits since the analysis. */
     allowStale: z.boolean(),

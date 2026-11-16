@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { smallFeatureAnalysis } from "../../application/testing/index.ts";
 import { HunkId, hunkHasLine } from "../diff/index.ts";
-import { buildPublication, HunkComment } from "./index.ts";
+import { buildPublication, CommentKey, HunkComment, isEmptyPublication } from "./index.ts";
 
 describe("buildPublication", () => {
   it("posts the summary as written, and nothing about the decisions", () => {
@@ -111,5 +111,27 @@ describe("comments on hunks", () => {
     expect(hunkHasLine(target, "new", added)).toBe(true);
     expect(hunkHasLine(target, "old", deleted)).toBe(true);
     expect(hunkHasLine(target, "new", 9_999)).toBe(false);
+  });
+});
+
+describe("isEmptyPublication", () => {
+  const nothing = { verdict: "comment", summary: " ", comments: [] } as const;
+
+  it("is a comment with no summary and no line comment", () => {
+    expect(isEmptyPublication(nothing)).toBe(true);
+  });
+
+  it("isn't a verdict, a summary or a line comment alone", () => {
+    expect(isEmptyPublication({ ...nothing, verdict: "approve" })).toBe(false);
+    expect(isEmptyPublication({ ...nothing, verdict: "request_changes" })).toBe(false);
+    expect(isEmptyPublication({ ...nothing, summary: "Thanks." })).toBe(false);
+    const comment = {
+      key: CommentKey.parse("hunk:h_0123456789abcdef:new:3"),
+      path: "src/a.ts",
+      line: 3,
+      side: "new",
+      body: "Why?",
+    } as const;
+    expect(isEmptyPublication({ ...nothing, comments: [comment] })).toBe(false);
   });
 });

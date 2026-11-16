@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import type { AnalysisView } from "../../../../contracts/index.ts";
 import type { PartId } from "../../../../src/domain/diff/index.ts";
 import {
@@ -664,7 +665,8 @@ describe("the PR's standing in the header", () => {
     const before = statusReads(requests);
     await userEvent.click(screen.getByRole("button", { name: /^Publish review/ }));
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("button", { name: /^Publish/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish and approve" }));
     await waitFor(() => expect(statusReads(requests)).toBe(before + 1));
   });
 });
@@ -1369,7 +1371,7 @@ describe("points", () => {
     expect(count("decision")).toBe("1 decision");
   });
 
-  it("can't be acted on once the review is published", async () => {
+  it("can't be acted on once a review is published, which can be followed by another", async () => {
     const receipt: PublicationReceipt = {
       url: "https://github.com/acme/shop/pull/128#pullrequestreview-9",
       publishedAt: "2026-10-22T10:00:00Z",
@@ -1386,12 +1388,12 @@ describe("points", () => {
     });
     await loaded();
     expect(screen.getByRole("link", { name: "Published" }).getAttribute("href")).toBe(receipt.url);
-    expect(screen.queryByRole("button", { name: /^Publish review…/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /^Publish review…/ })).toBeTruthy();
     expect(pointCard(FINDING).dataset.state).toBe("raised");
     expect(addToReview(FINDING).hasAttribute("disabled")).toBe(true);
   });
 
-  it("keeps line comments open after publishing: they post now", async () => {
+  it("keeps line comments open after publishing: for the next review, or now", async () => {
     const published: PublicationReceipt = {
       url: "https://github.com/acme/shop/pull/128#pullrequestreview-9",
       publishedAt: "2026-10-22T10:00:00Z",
@@ -1408,7 +1410,7 @@ describe("points", () => {
       box.getByRole("textbox", { name: `Comment on line ${line}` }),
       "Also this.",
     );
-    expect(box.queryByRole("button", { name: "Add to review" })).toBeNull();
+    expect(box.getByRole("button", { name: "Add to review" })).toBeTruthy();
     await userEvent.click(box.getByRole("button", { name: "Comment now" }));
     await vi.waitFor(() =>
       expect(
@@ -1894,7 +1896,7 @@ describe("comments on hunks", () => {
     expect(field.value).toBe("Why this?");
 
     await userEvent.click(screen.getByRole("button", { name: /^Publish review…/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Publish 1 comment" });
+    const dialog = await screen.findByRole("dialog", { name: "Publish review" });
     expect(await within(dialog).findByText("Why this?")).toBeTruthy();
     expect(within(dialog).queryByRole("radio")).toBeNull();
     await userEvent.click(within(dialog).getByRole("button", { name: "Publish 1 comment" }));
@@ -1924,9 +1926,9 @@ describe("comments on hunks", () => {
 });
 
 describe("publishing", () => {
-  const openDialog = async (name = "Publish the review") => {
+  const openDialog = async () => {
     await userEvent.click(screen.getByRole("button", { name: /^Publish review…/ }));
-    const dialog = await screen.findByRole("dialog", { name });
+    const dialog = await screen.findByRole("dialog", { name: "Publish review" });
     await waitFor(() => expect(within(dialog).queryByText("Reading the comments…")).toBeNull());
     return dialog;
   };
@@ -1935,7 +1937,7 @@ describe("publishing", () => {
     renderReview();
     await loaded();
     await userEvent.click(addToReview(FINDING));
-    const dialog = await openDialog("Publish 1 comment");
+    const dialog = await openDialog();
     const comments = within(dialog).getAllByRole("listitem");
     expect(comments).toHaveLength(1);
     expect(comments[0]?.textContent).toContain(
@@ -1956,29 +1958,98 @@ describe("publishing", () => {
     await loaded();
     const dialog = await openDialog();
     await userEvent.click(within(dialog).getByRole("button", { name: "Request changes" }));
-    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Publish and request changes" }),
+    );
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
     expect(
       requests.find((request) => request.url === `${viewPath}/publication`)?.body,
     ).toMatchObject({ verdict: "request_changes" });
   });
 
+  /** Picks Approve and publishes: with nothing to say, an approval is the review. */
+  const approve = async (dialog: HTMLElement) => {
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish and approve" }));
+  };
+
   it("publishes, closes and shows the link to the review", async () => {
     const { requests } = renderReview();
     await loaded();
-    const dialog = await openDialog();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
+    await approve(await openDialog());
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
     // The drafts posted with it are threads on the host now.
     expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");
     expect(requests.find((request) => request.url === `${viewPath}/publication`)?.body).toEqual({
+      publicationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       summary: "",
       allowStale: false,
       hunkComments: [],
-      verdict: "comment",
+      verdict: "approve",
     });
     expect(addToReview(RETRIES).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("publishes another review after one, under a new ID", async () => {
+    const { requests } = renderReview();
+    await loaded();
+    const first = await openDialog();
+    await userEvent.type(within(first).getByLabelText("Summary"), "One question first.");
+    await userEvent.click(within(first).getByRole("button", { name: "Publish the summary" }));
+    expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
+
+    const second = await openDialog();
+    expect(within(second).getByText(/^Your earlier review is on the pull request\./)).toBeTruthy();
+    await approve(second);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const [one, two] = requests
+      .filter((request) => request.url === `${viewPath}/publication`)
+      .map((request) =>
+        z.object({ publicationId: z.string(), verdict: z.string() }).parse(request.body),
+      );
+    expect([one?.verdict, two?.verdict]).toEqual(["comment", "approve"]);
+    expect(two?.publicationId).not.toBe(one?.publicationId);
+  });
+
+  it("can't publish a comment with nothing in it, and says what would", async () => {
+    renderReview();
+    await loaded();
+    const dialog = await openDialog();
+    const publish = within(dialog).getByRole("button", { name: "Publish the summary" });
+    expect(publish.hasAttribute("disabled")).toBe(true);
+    expect(publish.getAttribute("aria-describedby")).not.toBeNull();
+    expect(
+      within(dialog).getByText(
+        "Nothing to post yet: write a summary, or approve or request changes.",
+      ),
+    ).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    expect(
+      within(dialog).getByRole("button", { name: "Publish and approve" }).hasAttribute("disabled"),
+    ).toBe(false);
+    expect(within(dialog).queryByText(/^Nothing to post yet/)).toBeNull();
+  });
+
+  it("on the reviewer's own PR, shows the verdict and why it can only comment", async () => {
+    const { requests } = renderReview({ view: { ...fixture, isAuthor: true } });
+    await loaded();
+    const dialog = await openDialog();
+    const verdicts = within(within(dialog).getByRole("group", { name: "Verdict" }));
+    expect(verdicts.getByRole("button", { name: "Comment" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    for (const name of ["Approve", "Request changes"]) {
+      expect(verdicts.getByRole("button", { name }).hasAttribute("disabled")).toBe(true);
+    }
+    expect(within(dialog).getByText(/^You opened this pull request/)).toBeTruthy();
+    await userEvent.type(within(dialog).getByLabelText("Summary"), "Notes for reviewers.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the summary" }));
+    await waitFor(() =>
+      expect(
+        requests.find((request) => request.url === `${viewPath}/publication`)?.body,
+      ).toMatchObject({ verdict: "comment", summary: "Notes for reviewers." }),
+    );
   });
 
   it("asks before publishing on a PR that changed since the analysis", async () => {
@@ -1994,17 +2065,24 @@ describe("publishing", () => {
     });
     await loaded();
     const dialog = await openDialog();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
+    await approve(dialog);
     expect(
       await within(dialog).findByText("This PR changed since the analysis. Publish anyway?"),
     ).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Publish anyway" }));
     expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
     const publishes = requests.filter((request) => request.url === `${viewPath}/publication`);
+    const publicationId = expect.stringMatching(/^[0-9a-f-]{36}$/);
+    const review = { publicationId, summary: "", hunkComments: [], verdict: "approve" };
     expect(publishes.map((request) => request.body)).toEqual([
-      { summary: "", allowStale: false, hunkComments: [], verdict: "comment" },
-      { summary: "", allowStale: true, hunkComments: [], verdict: "comment" },
+      { ...review, allowStale: false },
+      { ...review, allowStale: true },
     ]);
+    // Both are the one review: the same ID, so the server posts it once.
+    const [first, second] = publishes.map((request) =>
+      z.object({ publicationId: z.string() }).parse(request.body),
+    );
+    expect(second?.publicationId).toBe(first?.publicationId);
   });
 
   it("shows why publishing failed and retries", async () => {
@@ -2018,7 +2096,7 @@ describe("publishing", () => {
     });
     await loaded();
     const dialog = await openDialog();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Publish the review" }));
+    await approve(dialog);
     const alert = await within(dialog).findByRole("alert");
     expect(alert.textContent).toContain("The git host returned an error: GitHub returned 502.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Retry" }));

@@ -4,10 +4,12 @@ import {
   buildPublication,
   commentFits,
   type HunkComment,
+  isEmptyPublication,
   type PointId,
   type PointReview,
   type PointState,
   type Publication,
+  type PublicationId,
   type PublicationReceipt,
   type PublicationVerdict,
   pointsOf,
@@ -26,6 +28,7 @@ const STALE_CHECK_TTL_MS = 60_000;
 export interface AnalysisView {
   readonly analysis: Analysis;
   readonly pointReviews: readonly PointReview[];
+  /** The latest review published from it. */
   readonly publication: PublicationReceipt | null;
   /** The current user opened the PR, so the review can only comment, not approve. */
   readonly isAuthor: boolean;
@@ -54,11 +57,25 @@ export interface ReviewInput {
 
 const NO_REVIEW_INPUT: ReviewInput = { hunkComments: [], verdict: null };
 
+/** One review to publish, with the ID the page chose for it, the same on every retry. */
+export interface PublishInput extends ReviewInput {
+  readonly publicationId: PublicationId;
+  readonly summary: string;
+  /** Publish even though the PR has new commits since the analysis. */
+  readonly allowStale: boolean;
+}
+
 /** Reading the analysis, recording point states, and publishing the review. */
 export const createReviewUseCases = (deps: AppDeps) => {
   const staleChecks = new Map<AnalysisId, { checkedAt: number; stale: boolean }>();
-  /** One publish per analysis at a time, so a double click can't post twice. */
-  const publishing = new Map<AnalysisId, Promise<Result<PublicationReceipt, UseCaseError>>>();
+  /** The publish running on each analysis: one at a time, so the numbers can't collide. */
+  const publishing = new Map<
+    AnalysisId,
+    {
+      readonly publicationId: PublicationId;
+      readonly attempt: Promise<Result<PublicationReceipt, UseCaseError>>;
+    }
+  >();
 
   const getAnalysis = async (id: AnalysisId): Promise<Result<Analysis, UseCaseError>> => {
     const analysis = await deps.store.getAnalysis(id);
@@ -117,34 +134,41 @@ export const createReviewUseCases = (deps: AppDeps) => {
 
   const publish = async (
     analysis: Analysis,
-    summary: string,
-    allowStale: boolean,
-    review: ReviewInput,
+    input: PublishInput,
   ): Promise<Result<PublicationReceipt, UseCaseError>> => {
     const { id, key } = analysis;
-    // One publication per analysis.
-    const existing = await deps.store.getPublication(id);
-    if (existing !== null) return ok(existing);
+    // An analysis publishes as many reviews as the reviewer sends, one for each ID; a request
+    // repeating one that's published, after its answer was lost, gets its receipt.
+    const publications = await deps.store.getPublications(id);
+    const repeated = publications.find((stored) => stored.id === input.publicationId);
+    if (repeated !== undefined) return ok(repeated.receipt);
+    // The one after the last that finished, which a failed attempt may have started.
+    const number = (publications.at(-1)?.number ?? 0) + 1;
 
     const host = hostFor(deps, key.ref.repo.host);
     if (!host.ok) return host;
     const current = await host.value.getPullRequest(key.ref);
     if (!current.ok) return err(fromHostError(current.error));
-    if (current.value.headSha !== key.headSha && !allowStale) {
+    if (current.value.headSha !== key.headSha && !input.allowStale) {
       return err(
         appError("stale-analysis", "The pull request has new commits since this analysis"),
       );
     }
 
-    const built = await publicationFor(analysis, summary, review);
+    const built = await publicationFor(analysis, input.summary, input);
     if (!built.ok) return built;
     const publication = built.value;
-    const alreadyPosted = await deps.store.getPostedComments(id);
+    if (isEmptyPublication(publication)) {
+      return err(
+        appError("bad-request", "Nothing to publish: no comment, no summary and no verdict"),
+      );
+    }
+    const alreadyPosted = await deps.store.getPostedComments(id, number);
     const published = await host.value.publish(key.ref, publication, {
       headSha: key.headSha,
       alreadyPosted: new Set(alreadyPosted.keys()),
       onPosted: (commentKey, hostCommentId) =>
-        deps.store.recordPostedComment(id, commentKey, hostCommentId),
+        deps.store.recordPostedComment(id, number, commentKey, hostCommentId),
     });
     // Posted comments are already recorded, so a retry continues where this stopped.
     if (!published.ok) return err(appError("host-error", published.error.message));
@@ -156,7 +180,7 @@ export const createReviewUseCases = (deps: AppDeps) => {
         ...published.value.postedCommentIds,
       },
     };
-    await deps.store.recordPublication(id, receipt);
+    await deps.store.recordPublication(id, { number, id: input.publicationId, receipt });
     return ok(receipt);
   };
 
@@ -202,12 +226,13 @@ export const createReviewUseCases = (deps: AppDeps) => {
       const analysis = await getAnalysis(id);
       if (!analysis.ok) return analysis;
       const host = deps.hosts[analysis.value.key.ref.repo.host];
-      const [pointReviews, publication, isAuthor, stale] = await Promise.all([
+      const [pointReviews, publications, isAuthor, stale] = await Promise.all([
         deps.store.getPointReviews(id),
-        deps.store.getPublication(id),
+        deps.store.getPublications(id),
         isAuthorOf(host, analysis.value),
         isStale(analysis.value),
       ]);
+      const publication = publications.at(-1)?.receipt ?? null;
       return ok({ analysis: analysis.value, pointReviews, publication, isAuthor, stale });
     },
 
@@ -238,18 +263,21 @@ export const createReviewUseCases = (deps: AppDeps) => {
 
     async publishReview(
       id: AnalysisId,
-      summary: string,
-      allowStale: boolean,
-      review: ReviewInput = NO_REVIEW_INPUT,
+      input: PublishInput,
     ): Promise<Result<PublicationReceipt, UseCaseError>> {
       const analysis = await getComplete(id);
       if (!analysis.ok) return analysis;
+      // A second click joins the first; another review waits for it, then takes the next number.
       const running = publishing.get(id);
-      if (running !== undefined) return running;
-      const attempt = publish(analysis.value, summary, allowStale, review).finally(() =>
-        publishing.delete(id),
-      );
-      publishing.set(id, attempt);
+      if (running?.publicationId === input.publicationId) return running.attempt;
+      const attempt: Promise<Result<PublicationReceipt, UseCaseError>> = (
+        running?.attempt ?? Promise.resolve()
+      )
+        .then(() => publish(analysis.value, input))
+        .finally(() => {
+          if (publishing.get(id)?.attempt === attempt) publishing.delete(id);
+        });
+      publishing.set(id, { publicationId: input.publicationId, attempt });
       return attempt;
     },
   };
