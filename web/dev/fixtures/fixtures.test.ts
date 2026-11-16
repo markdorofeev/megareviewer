@@ -8,10 +8,13 @@ import {
   validateTour,
 } from "../../../src/domain/review/index.ts";
 import {
+  deepAppAnalysisView,
   fixtureAnalysisView,
   fixturePullRequests,
   fixtureStatus,
+  javaServiceAnalysisView,
   largeAnalysisView,
+  monorepoAnalysisView,
 } from "./index.ts";
 
 describe("mock fixtures", () => {
@@ -141,5 +144,18 @@ describe("the large fixture analysis", () => {
       const line = from?.lines.find((one) => one.newLine === hint.line);
       expect(line?.text).toContain(`${hint.symbol}(input)`);
     }
+  });
+});
+
+describe.each([
+  ["Java service", javaServiceAnalysisView],
+  ["monorepo", monorepoAnalysisView],
+  ["deep app", deepAppAnalysisView],
+])("the %s fixture", (_, view) => {
+  it("matches the HTTP API contract, with a tour and risk covering every hunk", () => {
+    const hunkIds = new Set(view.analysis.files.flatMap((file) => file.hunks.map((h) => h.id)));
+    expect(AnalysisView.parse(view)).toEqual(view);
+    expect(validateRiskCoverage(view.analysis.risk, hunkIds)).toEqual([]);
+    expect(view.analysis.tour && validateTour(view.analysis.tour, hunkIds)).toEqual([]);
   });
 });

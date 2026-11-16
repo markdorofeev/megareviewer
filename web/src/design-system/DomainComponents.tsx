@@ -2,6 +2,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Hunk } from "../../../src/domain/diff/index.ts";
 import { type Check, PointId, type Reviewer } from "../../../src/domain/review/index.ts";
+import { DEEP_APP_PATHS, JAVA_SERVICE_PATHS, MONOREPO_PATHS } from "../../dev/fixtures/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
 import { VERDICT_STATUS } from "../lib/status.ts";
 import { DecisionChip, DecisionNote, FindingCard, RiskNote } from "../pages/review/PointCard.tsx";
@@ -15,6 +16,7 @@ import {
   DiffSkeleton,
   DiffViewer,
   EmptyState,
+  type FileEntry,
   FileTree,
   HunkCard,
   KeyHint,
@@ -137,6 +139,15 @@ export const DomainComponents = () => {
           <div className="h-80 rounded-lg border p-2">
             <TreeSkeleton />
           </div>
+        </div>
+      </Group>
+
+      <Group title="File tree, many folders">
+        {/* The rail's width, with Claude's points, threads and long names on the deepest rows. */}
+        <div className="flex flex-wrap gap-4">
+          <ManyFoldersDemo name="Java service" paths={JAVA_SERVICE_PATHS} />
+          <ManyFoldersDemo name="Monorepo" paths={MONOREPO_PATHS} />
+          <ManyFoldersDemo name="Deep web app" paths={DEEP_APP_PATHS} />
         </div>
       </Group>
 
@@ -361,6 +372,36 @@ const TreeDemo = ({ mode }: { readonly mode: "tree" | "flat" }) => {
         order="size"
         className="flex-1"
       />
+    </div>
+  );
+};
+
+/** Every third file has Claude's points and threads, and a few are new or renamed. */
+const manyFolders = (paths: readonly string[]): FileEntry[] =>
+  paths.map((path, at) => ({
+    path,
+    status: at % 9 === 4 ? "added" : at % 11 === 7 ? "renamed" : "modified",
+    additions: (at * 37) % 240,
+    deletions: (at * 13) % 60,
+    ...(at % 3 === 1 ? { points: { finding: 1, risk: 2, decision: 1 }, threads: 2 } : {}),
+  }));
+
+const ManyFoldersDemo = ({
+  name,
+  paths,
+}: {
+  readonly name: string;
+  readonly paths: readonly string[];
+}) => {
+  const files = useMemo(() => manyFolders(paths), [paths]);
+  const [active, setActive] = useState<string | null>(paths[Math.floor(paths.length / 2)] ?? null);
+  return (
+    <div
+      data-slot="many-folders"
+      className="flex h-[28rem] w-[17rem] flex-col rounded-lg border p-1"
+    >
+      <p className="px-2 pt-1 pb-1 text-caption font-medium text-muted-foreground">{name}</p>
+      <FileTree files={files} activePath={active} onSelect={setActive} className="flex-1" />
     </div>
   );
 };

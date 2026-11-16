@@ -29,12 +29,15 @@ import {
 } from "../../src/domain/review/index.ts";
 import {
   activeReviewerActivity,
+  deepAppAnalysisView,
   fixtureAnalysisView,
   fixturePullRequestStatus,
   fixturePullRequests,
   fixtureStatus,
   fixtureThreads,
+  javaServiceAnalysisView,
   largeAnalysisView,
+  monorepoAnalysisView,
 } from "./fixtures/index.ts";
 import { analysisFailed, analysisInProgress } from "./progress.ts";
 import { afterModelRun, type Scenario, withoutModel } from "./scenarios.ts";
@@ -50,6 +53,14 @@ export const MOCK_FAILING_PR_NUMBER = 500;
 
 /** Starting an analysis for a PR with this number analyzes a PR with 240 hunks. */
 export const MOCK_LARGE_PR_NUMBER = 900;
+
+/** PRs whose files sit in many directories: a Java service, a monorepo and a deep web app. */
+const SYNTHETIC_VIEWS: ReadonlyMap<number, AnalysisView> = new Map([
+  [MOCK_LARGE_PR_NUMBER, largeAnalysisView],
+  [901, javaServiceAnalysisView],
+  [902, monorepoAnalysisView],
+  [903, deepAppAnalysisView],
+]);
 
 const FAILING_STAGE: StageName = "prep";
 const FAILURE_MESSAGE = "megareviewer hit an internal error during the analysis";
@@ -270,8 +281,7 @@ export const createMockApi = (
         return failure("host-not-configured", `${name} isn't configured`);
       }
       if (timer === null) {
-        fixtureView =
-          ref.value.number === MOCK_LARGE_PR_NUMBER ? largeAnalysisView : fixtureAnalysisView;
+        fixtureView = SYNTHETIC_VIEWS.get(ref.value.number) ?? fixtureAnalysisView;
         fixture = asked(fixtureView.analysis);
       }
       simulate(ref.value.number === MOCK_FAILING_PR_NUMBER ? FAILING_STAGE : null);

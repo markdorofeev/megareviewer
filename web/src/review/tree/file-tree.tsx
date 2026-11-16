@@ -293,34 +293,45 @@ export const FileRow = ({
       title={entry.path}
       onClick={() => onSelect(entry.path)}
       className={cn(
-        "flex min-h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left hover:bg-surface-row",
+        "flex min-h-6 w-full flex-wrap items-center gap-x-1.5 rounded-md pr-2 text-left hover:bg-surface-row",
         active && "bg-surface-row font-medium shadow-[inset_3px_0_0_var(--primary)]",
       )}
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
     >
-      <FileIcon path={entry.path} status={entry.status} />
-      <span className="min-w-0 flex-1 truncate">
-        <span data-slot="file-name" className={mark?.name}>
-          {label === entry.path ? label : nameOf(entry.path)}
+      {/* The name keeps room for a few letters; what follows wraps under it as one group rather
+          than pushing the row past the rail. */}
+      <span className="flex min-w-[min(7rem,100%)] flex-1 basis-0 items-center gap-1.5">
+        <FileIcon path={entry.path} status={entry.status} />
+        {/* Positioned, so the hidden status word is clipped with the name instead of sitting
+            past the rail's edge after the whole name. */}
+        <span className="relative min-w-0 flex-1 truncate">
+          <span data-slot="file-name" className={mark?.name}>
+            {label === entry.path ? label : nameOf(entry.path)}
+          </span>
+          {mark !== null && <span className="sr-only">, {mark.label}</span>}
+          {directory !== undefined && (
+            <span className="ml-1.5 font-mono text-code-compact text-muted-foreground">
+              {directory}/
+            </span>
+          )}
         </span>
-        {mark !== null && <span className="sr-only">, {mark.label}</span>}
-        {directory !== undefined && (
-          <span className="ml-1.5 font-mono text-code-compact text-muted-foreground">
-            {directory}/
+      </span>
+      <span
+        data-slot="file-row-counts"
+        className="ml-auto flex flex-wrap items-center justify-end gap-x-1.5 whitespace-nowrap"
+      >
+        {entry.status !== undefined && <FileStatusChip status={entry.status} />}
+        {entry.points !== undefined && (
+          <PointCounts points={entry.points} {...(landing === undefined ? {} : { landing })} />
+        )}
+        {entry.threads !== undefined && entry.threads > 0 && <ThreadCount count={entry.threads} />}
+        {entry.additions !== undefined && entry.deletions !== undefined && (
+          <span className="tabular font-mono text-code-compact">
+            <span className="text-diff-add-fg">+{entry.additions}</span>{" "}
+            <span className="text-diff-del-fg">−{entry.deletions}</span>
           </span>
         )}
       </span>
-      {entry.status !== undefined && <FileStatusChip status={entry.status} />}
-      {entry.points !== undefined && (
-        <PointCounts points={entry.points} {...(landing === undefined ? {} : { landing })} />
-      )}
-      {entry.threads !== undefined && entry.threads > 0 && <ThreadCount count={entry.threads} />}
-      {entry.additions !== undefined && entry.deletions !== undefined && (
-        <span className="tabular font-mono text-code-compact">
-          <span className="text-diff-add-fg">+{entry.additions}</span>{" "}
-          <span className="text-diff-del-fg">−{entry.deletions}</span>
-        </span>
-      )}
     </button>
   );
 };

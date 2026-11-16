@@ -161,6 +161,35 @@ test("works from the keyboard", async ({ page }) => {
   await expect(active).toHaveAttribute("title", "src/http/retry.ts");
 });
 
+// The rail is 17rem beside the code above 1024px; under that the tree takes the page's width. A
+// row wider than the rail scrolled the tree sideways: Claude's points, threads and a chip after a
+// deep row's indent, or a new file's hidden status word after its whole name.
+for (const width of [1440, 1920, 2560]) {
+  test(`keeps every tree row inside the rail's width, at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await open(page, { theme: "light", palette: "default" });
+    const trees = page.locator("[data-slot=many-folders]");
+    await expect(trees).toHaveCount(3);
+    const overflow = await trees.evaluateAll((boxes) =>
+      boxes.map((box) => {
+        const viewport = box.querySelector<HTMLElement>("[data-slot=scroll-area-viewport]");
+        if (viewport === null) throw new Error("no tree viewport");
+        const right = viewport.getBoundingClientRect().right;
+        const rows = [...viewport.querySelectorAll<HTMLElement>("li > button")];
+        return {
+          sideways: viewport.scrollWidth - viewport.clientWidth,
+          rows: rows.filter((row) => row.getBoundingClientRect().right > right + 0.5).length,
+          names: rows.filter((row) => {
+            const name = row.querySelector("[data-slot=file-name]")?.parentElement;
+            return name !== null && name !== undefined && name.getBoundingClientRect().width < 24;
+          }).length,
+        };
+      }),
+    );
+    expect(overflow).toEqual(Array(3).fill({ sideways: 0, rows: 0, names: 0 }));
+  });
+}
+
 test("stops motion when the reader asks for less", async ({ page }) => {
   const durations = () =>
     page.evaluate(() => {
