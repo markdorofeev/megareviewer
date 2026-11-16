@@ -50,7 +50,18 @@ Everything else is logic, and so are:
 
 reason: one sentence saying what could break outside this pull request, and for whom ("Existing clients that omit region now get a 400", not "Changes the schema" or "Defines the response shape"). When you can't name what could break outside the PR, the hunk is logic. When you can, and are unsure how likely it is, choose contract.
 
-lines: for a contract hunk, the lines in it where the risk is decided, the ones the reason is about (the route that accepts the token, not the imports above it): hunkId (the same hunk), side ("new" for "+" and unchanged lines, "old" for "-" lines), and startLine to line, equal for one line. Use only line numbers the hunk shows. null for a logic hunk.`,
+lines: for a contract hunk, the lines in it where the risk is decided, the ones the reason is about (the route that accepts the token, not the imports above it): hunkId (the same hunk), side ("new" for "+" and unchanged lines, "old" for "-" lines), and startLine to line, equal for one line. Use only line numbers the hunk shows. null for a logic hunk.
+
+checkedBy: for a contract hunk, a test in the data whose assertions check the very behavior the reason names, so that they would fail if it broke; otherwise null. Ask: if what the reason says could break did break, would this test fail? If it would still pass, it's null. So:
+- A test of a neighboring behavior of the same code doesn't count: another route, the default case, the path that still works.
+- When the reason is about an order or a choice between two things (which credential wins, which value takes precedence), the test must set up both and assert which one is used.
+- When the harm is something no assertion compares (a leak into logs, load on a service, a secret in a process listing), it's null.
+- A test that only calls the code, sets it up, fakes or patches it doesn't count.
+Judge a test only by what its assertions compare, never by its name, its comments, or what the description or a comment says is tested. When unsure, null: naming a test tells the reviewer the risk is checked, and a wrong one is worse than none.
+- hunkId: the test's hunk, in a test file.
+- test: the test's name exactly as its code writes it: the function's name, or the string a test case is given.
+- startLine to line: the "+" or unchanged lines of that hunk holding its assertions about this behavior, at most 40.
+- checks: what those assertions check, and nothing more, in one sentence of at most 15 words ("a PUT from another origin gets 403 and saves nothing"), so the reviewer sees what they leave unchecked.`,
 
   decisions: `Task: decisions.
 

@@ -442,7 +442,7 @@ const Card = ({ children }: { readonly children: ReactNode }) => (
 
 /**
  * Claude's points one by one: a finding's card, then folded into the review and dismissed; a
- * risk's note and a dismissed one; a decision's chip and its footnote; and the marks a finding's
+ * risk's note, a dismissed one and one a test checks; a decision's chip and its footnote; and the marks a finding's
  * and a risk's lines take on their numbers, on unchanged, deleted and added lines.
  */
 const PointStates = () => {
@@ -497,6 +497,22 @@ const PointStates = () => {
         }}
         {...actions}
         state="dismissed"
+      />
+      <RiskNote
+        point={{
+          ...risk,
+          id: PointId.parse("r:h_00000000000000fe"),
+          title: "Callers that relied on three attempts now wait up to 31 s before an error.",
+          ...(risk.lines !== null && {
+            checkedBy: {
+              test: "gives up after the fifth attempt",
+              checks: "A call that always fails is tried five times, then throws.",
+              lines: risk.lines,
+              path: "src/http/retry.test.ts",
+            },
+          }),
+        }}
+        {...actions}
       />
       <p className="font-mono text-code">
         await sleep(delay);

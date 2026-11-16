@@ -77,6 +77,30 @@ export const labels: CaseLabels = {
       { hunkId: "h_66f414f852d4bd40", side: "new", lines: [44, 48] },
     ],
   },
+  // Read from the tests' assertions, not their names. Precedence is checked only where a test
+  // sets up both credentials and asserts which one is sent.
+  checkedBy: {
+    // test_a_verified_token_is_saved_and_can_be_forgotten, test_saving_a_token_checks_the_request
+    h_f0f06a5f0031f84f: [{ hunkId: "h_75bfbf4af6d004e2", side: "new", lines: [219, 251] }],
+    // test_saved_tokens_come_after_the_environment_and_before_other_credentials saves, reads back
+    // and forgets a token through the fake keychain.
+    h_cb05a3ceba6f0ebc: [{ hunkId: "h_d9dd90eff846ec3d", side: "new", lines: [520, 531] }],
+    // test_saved_bitbucket_tokens_sign_in_with_the_email_and_clone_as_api_tokens
+    h_458525b7a4806fe2: [{ hunkId: "h_d9dd90eff846ec3d", side: "new", lines: [532, 537] }],
+    // No test stores Bitbucket credentials in git beside a saved token.
+    h_24393343afea5f06: [],
+    // test_saved_tokens_come_after_the_environment_and_before_other_credentials
+    h_41ad920c36c36c34: [{ hunkId: "h_d9dd90eff846ec3d", side: "new", lines: [520, 531] }],
+    // The fake keychain parses the security -i command a save writes, but no test reaches the
+    // real commands or a value that needs quoting.
+    h_66f414f852d4bd40: "either",
+    // test_account_connections_name_the_account_or_the_problem, for the response shape.
+    h_054a8a2424d85147: [{ hunkId: "h_75bfbf4af6d004e2", side: "new", lines: [198, 217] }],
+    // test_a_verified_token_is_saved_and_can_be_forgotten: a rejected token isn't saved.
+    h_79397fb1b9683b02: [{ hunkId: "h_75bfbf4af6d004e2", side: "new", lines: [219, 231] }],
+    // test_account_names_come_from_each_service, for the child's account request.
+    h_fdf72584a4c22928: [{ hunkId: "h_743d2e18313690ee", side: "new", lines: [356, 359] }],
+  },
   findings: [
     {
       description:

@@ -134,6 +134,7 @@ export class FakeAnalysisModel implements AnalysisModel {
           riskClass: "logic" as const,
           reason: "Ordinary code change",
           lines: null,
+          checkedBy: null,
         })),
       ),
     );

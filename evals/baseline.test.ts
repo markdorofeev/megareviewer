@@ -8,6 +8,8 @@ const score = (overrides: Partial<CaseScore> = {}): CaseScore => ({
   riskAccuracy: { hit: 4, total: 5 },
   riskNoise: { hit: 1, total: 3 },
   riskPlaced: { hit: 2, total: 2 },
+  coverageWrong: { hit: 0, total: 1 },
+  coverageRecall: { hit: 1, total: 1 },
   findingRecall: { hit: 1, total: 1 },
   findingNoise: { hit: 0, total: 2 },
   findingPlaced: { hit: 1, total: 1 },

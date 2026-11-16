@@ -1,5 +1,11 @@
 import type { CallSite, PartId } from "../../../../src/domain/diff/index.ts";
-import { type CallPeekHandle, CallTrigger, type LineMark } from "../../review/index.ts";
+import type { Point } from "../../../../src/domain/review/index.ts";
+import {
+  type CallPayload,
+  type CallPeekHandle,
+  CallTrigger,
+  type LineMark,
+} from "../../review/index.ts";
 import type { PartIndex } from "./model.ts";
 
 /** Each part's calls, by new-side line, as marks that open the card of the code they run. */
@@ -40,4 +46,26 @@ export const callMarks = (
     byPart.set(site.partId, lines);
   }
   return byPart;
+};
+
+/**
+ * What a risk's checking test opens: the part of its hunk that shows its lines, or the hunk's
+ * parts when none does, named by the test. Null when the page doesn't know the hunk.
+ */
+export const checkingTestPayload = (point: Point, index: PartIndex): CallPayload | null => {
+  const checked = point.checkedBy;
+  if (checked === undefined) return null;
+  const { hunkId, startLine } = checked.lines;
+  const parts = index.items(index.partsOf(hunkId));
+  const showing = parts.filter(({ hunk }) =>
+    hunk.lines.some((line) => line.kind !== "del" && line.newLine === startLine),
+  );
+  const targets = (showing.length > 0 ? showing : parts).map(({ id, hunk, file }) => ({
+    id,
+    hunk,
+    file,
+  }));
+  return targets.length === 0
+    ? null
+    : { symbol: checked.test, targets, label: `Test ${checked.test}` };
 };

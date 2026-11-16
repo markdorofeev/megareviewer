@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fileChange, hunk, smallFeatureAnalysis } from "../../application/testing/index.ts";
-import { HunkId } from "../diff/index.ts";
+import { type FileChange, HunkId } from "../diff/index.ts";
 import {
   type Finding,
   FindingId,
@@ -253,6 +253,66 @@ describe("pointsOf", () => {
       })[0]?.lines;
     expect(riskOn(4, 4)).toEqual({ hunkId: routeHunk.id, side: "new", startLine: 4, line: 4 });
     expect(riskOn(4, 9)).toEqual({ hunkId: routeHunk.id, side: "new", startLine: 2, line: 4 });
+  });
+});
+
+describe("a risk's checking test", () => {
+  const routes = fileChange({ path: "src/routes.ts", status: "modified", language: "typescript" }, [
+    hunk("src/routes.ts", "@@ -1,1 +1,2 @@", [
+      " const router = Router();",
+      '+router.put("/token", save);',
+    ]),
+  ]);
+  const tests = fileChange(
+    { path: "src/routes.test.ts", status: "added", language: "typescript" },
+    [
+      hunk("src/routes.test.ts", "@@ -0,0 +1,2 @@", [
+        '+it("refuses another origin", () => {',
+        "+  expect(status).toBe(403);",
+      ]),
+    ],
+  );
+  const [routeHunk] = routes.hunks;
+  const [testHunk] = tests.hunks;
+  if (routeHunk === undefined || testHunk === undefined) throw new Error("built with hunks");
+  const checkedBy = {
+    test: "refuses another origin",
+    checks: "A PUT from another origin gets 403.",
+    lines: { hunkId: testHunk.id, side: "new" as const, startLine: 2, line: 2 },
+  };
+  const riskOf = (files: readonly FileChange[]) =>
+    pointsOf({
+      files,
+      intent: null,
+      findings: [finding()],
+      decisions: [],
+      risk: [
+        {
+          hunkId: routeHunk.id,
+          riskClass: "contract",
+          reason: "Another site could overwrite a saved token.",
+          source: "model",
+          lines: null,
+          checkedBy,
+        },
+      ],
+    });
+
+  it("is on its risk with the test's file, and the risk keeps its place after the findings", () => {
+    const points = riskOf([routes, tests, ...smallFeatureAnalysis.files]);
+    expect(points.map((point) => point.kind)).toEqual(["finding", "risk"]);
+    expect(points[1]).toMatchObject({
+      title: "Another site could overwrite a saved token.",
+      lines: { hunkId: routeHunk.id, side: "new", startLine: 2, line: 2 },
+      checkedBy: { ...checkedBy, path: "src/routes.test.ts" },
+    });
+    expect(points[0]?.checkedBy).toBeUndefined();
+  });
+
+  it("goes when its test isn't in the files, and the risk stays", () => {
+    const [risk] = riskOf([routes]);
+    expect(risk?.kind).toBe("risk");
+    expect(risk?.checkedBy).toBeUndefined();
   });
 });
 

@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import type { CodeParser } from "../src/application/ports/index.ts";
 import { FakeAnalysisModel } from "../src/application/testing/index.ts";
-import { HunkId, hunkHasLine } from "../src/domain/diff/index.ts";
+import { HunkId, hunkHasLine, isTestFile } from "../src/domain/diff/index.ts";
 import {
   type Analysis,
   extractTicketKeys,
@@ -119,6 +119,25 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
             expect(lines[0]).toBeLessThanOrEqual(lines[1]);
             for (const line of lines)
               expect(hunkHasLine(hunk, side, line), `${hunkId} ${line}`).toBe(true);
+          }
+        }
+      });
+
+      it("name checking tests for classified hunks, on lines of a test's hunk", () => {
+        const hunks = new Map(
+          analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
+        );
+        for (const [hunkId, places] of Object.entries(labels.checkedBy ?? {})) {
+          expect(labels.risk[hunkId], hunkId).toBeDefined();
+          if (places === "either") continue;
+          for (const { hunkId: testHunk, side, lines } of places) {
+            const hunk = hunks.get(HunkId.parse(testHunk));
+            if (hunk === undefined) throw new Error(`${testHunk} isn't a hunk of the case`);
+            expect(isTestFile(hunk.path), hunk.path).toBe(true);
+            expect(side).toBe("new");
+            expect(lines[0]).toBeLessThanOrEqual(lines[1]);
+            for (const line of lines)
+              expect(hunkHasLine(hunk, side, line), `${testHunk} ${line}`).toBe(true);
           }
         }
       });

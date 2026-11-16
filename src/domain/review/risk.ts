@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { HunkId } from "../diff/index.ts";
+import { CheckingTest } from "./checking-test.ts";
 import { PointLines } from "./point-lines.ts";
 
 export const RiskClass = z.enum(["mechanical", "logic", "contract"]);
@@ -17,6 +18,11 @@ export const RiskAssessment = z
     source: z.enum(["proof", "rule", "model", "fallback"]),
     /** Where the model says a contract hunk's risk is decided, in that hunk; null for its first. */
     lines: PointLines.nullable().default(null),
+    /**
+     * The test the model says checks a contract hunk's risk, as the server checked it. Absent on
+     * the other sources and on analyses stored before the risk pass named one.
+     */
+    checkedBy: CheckingTest.optional(),
   })
   .readonly();
 export type RiskAssessment = z.infer<typeof RiskAssessment>;

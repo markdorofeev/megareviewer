@@ -38,6 +38,17 @@ describe("the answer format", () => {
     expect(intent?.required).toEqual(["summary", "shape", "behaviorChanges", "watch"]);
   });
 
+  it("asks each risk for its checking test, or null, by its test's name, lines and what it checks", () => {
+    const [risk] = objects(schema).filter(
+      (node) => isObject(node.properties) && "riskClass" in node.properties,
+    );
+    expect(risk?.required).toContain("checkedBy");
+    const [test] = objects(schema).filter(
+      (node) => isObject(node.properties) && "checks" in node.properties,
+    );
+    expect(test?.required).toEqual(["hunkId", "test", "startLine", "line", "checks"]);
+  });
+
   it("closes every object and drops keywords structured outputs don't support", () => {
     for (const node of objects(schema).filter((candidate) => candidate.type === "object")) {
       expect(node.additionalProperties).toBe(false);

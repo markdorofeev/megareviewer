@@ -27,6 +27,8 @@ Each case runs through stage 10's real pipeline with the real Claude adapter and
 | `riskAccuracy` | Hunks labeled logic or contract shown as labeled: a risk is contract, anything else logic | ≥ 85% |
 | `riskNoise` | Risks on hunks labeled logic, out of risks on hunks labeled logic or contract | ≤ 20% |
 | `riskPlaced` | Risks on hunks with a `riskAt` that land on lines it names: the model's own lines, or the first changed line its band falls back to | ≥ 90% |
+| `coverageWrong` | Checking tests named on risks that aren't where the labels' `checkedBy` puts a test that checks the risk, out of all named. A wrong one tells the reviewer to relax | 0% |
+| `coverageRecall` | Risks whose label names a checking test, named there | ≥ 50% |
 | `findingRecall` | Must-have findings the judge finds among the produced ones | ≥ 90% |
 | `findingNoise` | Produced findings the judge rates speculative or a nit | ≤ 20% |
 | `findingPlaced` | Labeled findings found whose produced one rests on a hunk and lines the label names | ≥ 90% |
@@ -46,7 +48,7 @@ A case whose analysis fails or times out, or whose judge fails, is reported as a
 
 1. Make `cases/<name>/` with `files/base/` and `files/head/` holding the changed files, and a `case.ts` with the PR's metadata (copy one). Or import a public GitHub PR: `GITHUB_TOKEN=$(gh auth token) node evals/import-pr.ts <url> <name>`.
 2. For a synthetic case, write its diff: `node evals/make-diff.ts <name>`.
-3. List its hunks with `node evals/print-hunks.ts <name>` (free: it uses the fake model) and write `labels.ts`: a risk class for every hunk without a mechanical proof (`"either"` when it could fairly go both ways), by the risk prompt's rule that contract means a mistake would break or expose something outside the PR; for every contract hunk, `riskAt`, the lines its risk is about; the findings (what looks wrong, the hunks and lines that show it, and the index of the mismatch it shows), the decisions (why the code makes a choice, each a question starting with "Why"), which of both a reviewer must see, and the expected mismatches (`[]` means none).
+3. List its hunks with `node evals/print-hunks.ts <name>` (free: it uses the fake model) and write `labels.ts`: a risk class for every hunk without a mechanical proof (`"either"` when it could fairly go both ways), by the risk prompt's rule that contract means a mistake would break or expose something outside the PR; for every contract hunk, `riskAt`, the lines its risk is about, and, when the PR has tests, `checkedBy`: the lines of the tests whose assertions would fail if what the risk is about broke, `[]` when none would, judged by the assertions and never by a test's name; the findings (what looks wrong, the hunks and lines that show it, and the index of the mismatch it shows), the decisions (why the code makes a choice, each a question starting with "Why"), which of both a reviewer must see, and the expected mismatches (`[]` means none).
 4. Register it in [cases/index.ts](cases/index.ts). `pnpm test` checks the diff, that every hunk is labeled and every contract hunk has a `riskAt` on lines it shows, the labels' hunk IDs and the tickets.
 
 Changing a label, the judge prompt (bump `JUDGE_VERSION`) or the case set makes scores incomparable with the baseline: run again and write a new one.

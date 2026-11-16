@@ -121,6 +121,8 @@ describe("scoreCase", () => {
       riskAccuracy: { hit: 6, total: 6 },
       riskNoise: { hit: 0, total: 4 },
       riskPlaced: { hit: 4, total: 4 },
+      coverageWrong: { hit: 0, total: 0 },
+      coverageRecall: { hit: 0, total: 0 },
       findingRecall: { hit: 3, total: 3 },
       findingNoise: { hit: 0, total: 4 },
       findingPlaced: { hit: 4, total: 4 },

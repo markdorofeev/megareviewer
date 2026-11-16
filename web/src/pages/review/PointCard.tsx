@@ -1,4 +1,4 @@
-import { EyeOffIcon, PencilIcon, XIcon } from "lucide-react";
+import { EyeOffIcon, FlaskConicalIcon, PencilIcon, XIcon } from "lucide-react";
 import { memo, type ReactNode, useId } from "react";
 import {
   type IntentMismatchKind,
@@ -10,6 +10,7 @@ import {
 } from "../../../../src/domain/review/index.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
+import { type CallPayload, type CallPeekHandle, CallTrigger } from "../../review/index.ts";
 import { CHIP, lineRef, RefChip, SuggestionDiff, ThreadBody } from "../../review/thread/index.ts";
 import { Button } from "../../ui/button.tsx";
 
@@ -304,9 +305,57 @@ export const FindingCard = memo(function FindingCard({
   );
 });
 
+/** What a checking test's name opens: its code, in the card a call opens. */
+export interface TestPeek {
+  readonly handle: CallPeekHandle;
+  readonly payload: CallPayload;
+}
+
+const fileName = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
+
+/**
+ * The test that checks a risk, by its name and what it asserts: what was found, never a promise
+ * that the risk is safe. Resting on or focusing the name opens the test's code where the reviewer
+ * is, as a call opens the code it runs.
+ */
+const CheckedBy = ({
+  checkedBy,
+  peek,
+  id,
+}: {
+  readonly checkedBy: NonNullable<Point["checkedBy"]>;
+  readonly peek: TestPeek | null;
+  readonly id: string;
+}) => {
+  const name = <span className="font-mono text-code-compact">{checkedBy.test}</span>;
+  return (
+    <p data-slot="checked-by" className="flex items-start gap-1.5 pb-0.5 text-muted-foreground">
+      <FlaskConicalIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+      <span className="min-w-0">
+        <span className="font-medium text-foreground">Checked by</span>{" "}
+        {peek === null ? (
+          name
+        ) : (
+          <CallTrigger
+            handle={peek.handle}
+            payload={peek.payload}
+            id={id}
+            render={<button type="button" className="text-left text-foreground" />}
+          >
+            {name}
+          </CallTrigger>
+        )}{" "}
+        in {fileName(checkedBy.path)}, which asserts: {checkedBy.checks}
+      </span>
+    </p>
+  );
+};
+
 /**
  * A risk: code worth reading closely, as a note under the last of its lines, with what could
- * break outside the PR. Comment opens the comment box on it; Dismiss folds it.
+ * break outside the PR and the test that checks it, if one does. Comment opens the comment box on
+ * it; Dismiss folds it. A checked risk is a step like any other: a test reading doesn't replace
+ * the reviewer's.
  */
 export const RiskNote = memo(function RiskNote({
   point,
@@ -317,10 +366,13 @@ export const RiskNote = memo(function RiskNote({
   onRaise,
   onState,
   linesAbove = 0,
+  test = null,
 }: PointActions & {
   readonly point: Point;
   /** The lines of code above the note that it's about, which going to it keeps in view. */
   readonly linesAbove?: number;
+  /** Where the checking test's name opens its code; null shows the name alone. */
+  readonly test?: TestPeek | null;
 }) {
   const id = useId();
   if (state === "dismissed") {
@@ -397,6 +449,9 @@ export const RiskNote = memo(function RiskNote({
       <h3 id={`${id}-title`} className="pb-0.5 font-normal">
         {point.title}
       </h3>
+      {point.checkedBy !== undefined && (
+        <CheckedBy checkedBy={point.checkedBy} peek={test} id={`${pointAnchor(point.id)}-test`} />
+      )}
     </article>
   );
 });

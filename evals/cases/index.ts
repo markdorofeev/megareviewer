@@ -28,6 +28,8 @@ import * as pythonIndentation from "./python-indentation-logic/case.ts";
 import { labels as pythonIndentationLabels } from "./python-indentation-logic/labels.ts";
 import { labels as refactorMoveLabels } from "./refactor-move/labels.ts";
 import { labels as smallFeatureLabels } from "./small-feature/labels.ts";
+import * as testNamedCoverage from "./test-named-coverage/case.ts";
+import { labels as testNamedCoverageLabels } from "./test-named-coverage/labels.ts";
 import * as unrequestedBehavior from "./unrequested-behavior/case.ts";
 import { labels as unrequestedBehaviorLabels } from "./unrequested-behavior/labels.ts";
 
@@ -126,6 +128,14 @@ export const evalCases: readonly EvalCase[] = [
     tests: "Contract: a new environment variable and a timeout on an external call",
     fixture: envVarConfig.fixture,
     labels: envVarConfigLabels,
+  },
+  {
+    name: "test-named-coverage",
+    source: "synthetic",
+    tests:
+      "No checking test from a test's name or a comment: the one named for the check never runs it",
+    fixture: testNamedCoverage.fixture,
+    labels: testNamedCoverageLabels,
   },
   {
     name: "large-retry-after",

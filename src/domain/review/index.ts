@@ -35,6 +35,12 @@ export {
   StageStatus,
 } from "./analysis.ts";
 export { attachmentHost } from "./attachments.ts";
+export {
+  CheckingTest,
+  type CheckingTestProblem,
+  checkingTestProblem,
+  MAX_CHECKING_LINES,
+} from "./checking-test.ts";
 export { type CodeTourInput, codeTour, looksGenerated } from "./code-tour.ts";
 export { Decision, DecisionCategory, DecisionId } from "./decision.ts";
 export { type Entry, entryLabel, entryOf } from "./entry-points.ts";

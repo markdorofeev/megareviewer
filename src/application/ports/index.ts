@@ -4,6 +4,7 @@ export {
   type AnalysisModel,
   DecisionDraft,
   FindingDraft,
+  ModelCheckingTest,
   ModelRisk,
   type PassOptions,
   type PassOutput,

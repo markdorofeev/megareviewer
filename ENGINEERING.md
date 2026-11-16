@@ -30,6 +30,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Finding | Something that looks wrong, on the lines of a hunk that show it |
 | Point | What the model asks the reviewer to look at: a finding, a risk it raised, or a decision, with the hunk and lines it rests on |
 | Point state | What the reviewer did with a point: *open* (nothing, which means fine), *raised* or *dismissed* |
+| Checking test | A test in the PR whose assertions check the very behavior a risk names, by its name, lines and what it asserts. The model names it, the server checks it, and it's a mark on the risk, never a reason to show it less |
 | Verdict | What the published review says: approve, request changes or comment. The reviewer picks it |
 | Tour | Hunks ordered into steps, grouped by concept |
 | Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed |

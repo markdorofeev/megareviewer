@@ -26,6 +26,7 @@ import { err } from "../../domain/shared/index.ts";
 import { allowedHosts, assemble, type Composition, systemClock } from "../compose.ts";
 import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
 import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./model-recording.ts";
+import { receiptsTested, withCheckingTests } from "./receipts-tested.ts";
 
 /** The recorded run the scenarios play, read once at startup. */
 const recording = ModelRecording.parse(recordingJson);
@@ -44,7 +45,11 @@ export const intentFailsOnce: PullRequestFixture = {
   },
 };
 
-export const fakeFixtures: readonly PullRequestFixture[] = [...allFixtures, intentFailsOnce];
+export const fakeFixtures: readonly PullRequestFixture[] = [
+  ...allFixtures,
+  intentFailsOnce,
+  receiptsTested,
+];
 
 const FAKE_MODELS = [
   ["claude-haiku-5-5", "Haiku 5.5"],
@@ -219,9 +224,12 @@ export const createFakeApp = async (options: {
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
       models: fakeModels(
-        options.scenario === undefined
-          ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
-          : createReplayAnalysisModel(recording, { scenario: options.scenario }),
+        withCheckingTests(
+          options.scenario === undefined
+            ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+            : createReplayAnalysisModel(recording, { scenario: options.scenario }),
+          receiptsTested.pullRequest.url,
+        ),
         options.modelAvailable !== false,
       ),
       store: new InMemoryAnalysisStore(clock),

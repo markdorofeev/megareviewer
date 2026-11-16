@@ -70,6 +70,18 @@ export interface PassOptions {
 // Output schemas of the passes whose shape isn't a domain type as is. Model output is untrusted
 // input: the adapter parses it with these before returning it.
 
+/** A test the model says checks a risk: head-side lines of a test hunk, so no side. */
+export const ModelCheckingTest = z
+  .object({
+    hunkId: HunkId,
+    test: z.string(),
+    startLine: z.number().int().positive(),
+    line: z.number().int().positive(),
+    checks: z.string(),
+  })
+  .readonly();
+export type ModelCheckingTest = z.infer<typeof ModelCheckingTest>;
+
 export const ModelRisk = z
   .object({
     hunkId: HunkId,
@@ -77,6 +89,8 @@ export const ModelRisk = z
     reason: z.string(),
     /** For a contract hunk, the lines where the risk is decided; null for logic. */
     lines: PointLines.nullable().default(null),
+    /** For a contract hunk, the test whose assertions check what the reason says; else null. */
+    checkedBy: ModelCheckingTest.nullable().default(null),
   })
   .readonly();
 export type ModelRisk = z.infer<typeof ModelRisk>;

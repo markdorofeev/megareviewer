@@ -11,6 +11,10 @@ export const labels: CaseLabels = {
       { hunkId: "h_5d61f179c40933a9", side: "new", lines: [17, 19] },
     ],
   },
+  // Both tests check which requests the query token authenticates; none checks where it leaks.
+  checkedBy: {
+    h_5d61f179c40933a9: [{ hunkId: "h_c0a62759085678d3", side: "new", lines: [6, 18] }],
+  },
   findings: [
     {
       description:

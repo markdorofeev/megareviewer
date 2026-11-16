@@ -29,6 +29,13 @@ export interface CaseScore {
    * lines, or the first changed line its band falls back to.
    */
   readonly riskPlaced: Ratio;
+  /**
+   * hit: checking tests named on risk points that aren't where the labels' `checkedBy` says a
+   * test checks the risk, or named where none does; total: all named on scored risks.
+   */
+  readonly coverageWrong: Ratio;
+  /** Risk points whose label names a checking test, and whose risk names one of those. */
+  readonly coverageRecall: Ratio;
   /** Must-have findings the judge matched to a produced one. */
   readonly findingRecall: Ratio;
   /** hit: produced findings the judge rated speculative or a nit; total: all produced. */
@@ -123,8 +130,9 @@ export const scoreCase = (
   verdict: JudgeVerdict,
 ): CaseScore => {
   const own = new Map(analysis.risk.map((risk) => [risk.hunkId, risk.lines]));
+  const points = pointsOf(analysis);
   const risks = new Map<string, PointLines>(
-    pointsOf(analysis).flatMap((point) => {
+    points.flatMap((point) => {
       if (point.kind !== "risk" || point.lines === null) return [];
       const lines = point.lines;
       // A risk without lines of its own spans its hunk's changes, which would overlap any place;
@@ -144,6 +152,23 @@ export const scoreCase = (
     const lines = risks.get(hunkId);
     return lines === undefined ? [] : [overlaps(places, lines)];
   });
+
+  // A checking test is scored where the page shows it: on a risk point.
+  const coverage = points.flatMap((point) => {
+    const hunkId = point.hunkIds[0];
+    if (point.kind !== "risk" || hunkId === undefined) return [];
+    const places = labels.checkedBy?.[hunkId] ?? [];
+    if (places === "either") return [];
+    const named = point.checkedBy;
+    return [
+      {
+        tested: places.length > 0,
+        named: named !== undefined,
+        right: named !== undefined && overlaps(places, named.lines),
+      },
+    ];
+  });
+  const named = coverage.filter((one) => one.named);
 
   const findingCount = analysis.findings.length;
   const decisionCount = analysis.decisions.length;
@@ -189,6 +214,11 @@ export const scoreCase = (
       shownOnLabeled.length,
     ),
     riskPlaced: ratio(placedRisks.filter(Boolean).length, placedRisks.length),
+    coverageWrong: ratio(named.filter((one) => !one.right).length, named.length),
+    coverageRecall: ratio(
+      coverage.filter((one) => one.tested && one.right).length,
+      coverage.filter((one) => one.tested).length,
+    ),
     findingRecall,
     findingNoise: noise(verdict.findingRatings, "valid", findingCount),
     findingPlaced: ratio(placed.filter(Boolean).length, placed.length),
@@ -219,6 +249,8 @@ export interface Summary {
   readonly riskAccuracy: Ratio;
   readonly riskNoise: Ratio;
   readonly riskPlaced: Ratio;
+  readonly coverageWrong: Ratio;
+  readonly coverageRecall: Ratio;
   readonly findingRecall: Ratio;
   readonly findingNoise: Ratio;
   readonly findingPlaced: Ratio;
@@ -260,6 +292,8 @@ export const summarize = (
     riskAccuracy: sum(scores.map((s) => s.riskAccuracy)),
     riskNoise: sum(scores.map((s) => s.riskNoise)),
     riskPlaced: sum(scores.map((s) => s.riskPlaced)),
+    coverageWrong: sum(scores.map((s) => s.coverageWrong)),
+    coverageRecall: sum(scores.map((s) => s.coverageRecall)),
     findingRecall: sum(scores.map((s) => s.findingRecall)),
     findingNoise: sum(scores.map((s) => s.findingNoise)),
     findingPlaced: sum(scores.map((s) => s.findingPlaced)),
@@ -286,6 +320,8 @@ export const TARGET_METRICS = [
   "riskAccuracy",
   "riskNoise",
   "riskPlaced",
+  "coverageWrong",
+  "coverageRecall",
   "findingRecall",
   "findingNoise",
   "findingPlaced",
@@ -308,6 +344,10 @@ export const TARGETS: Readonly<
   riskAccuracy: { min: 0.85 },
   riskNoise: { max: 0.2 },
   riskPlaced: { min: 0.9 },
+  // A wrong checking test tells the reviewer to relax on a risk, so none is the target; a missed
+  // one only leaves the risk unmarked.
+  coverageWrong: { max: 0 },
+  coverageRecall: { min: 0.5 },
   findingRecall: { min: 0.9 },
   findingNoise: { max: 0.2 },
   findingPlaced: { min: 0.9 },

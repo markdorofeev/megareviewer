@@ -6,6 +6,10 @@ export const labels: CaseLabels = {
     h_1fd5161b01e4eb07: "logic", // test
   },
   riskAt: {},
+  // "returns 0 for an order paid with store credit"
+  checkedBy: {
+    h_916b942fb92913f9: [{ hunkId: "h_1fd5161b01e4eb07", side: "new", lines: [11, 14] }],
+  },
   findings: [],
   decisions: [
     {

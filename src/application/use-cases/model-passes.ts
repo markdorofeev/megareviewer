@@ -1,6 +1,8 @@
 import type { Hunk, HunkId, PartId } from "../../domain/diff/index.ts";
 import {
+  type CheckingTest,
   type CoverageProblem,
+  checkingTestProblem,
   type Decision,
   DecisionId,
   type Finding,
@@ -24,7 +26,7 @@ import type {
   AnalysisModel,
   Clock,
   Logger,
-  ModelRisk,
+  ModelCheckingTest,
   PassOptions,
   PassOutput,
 } from "../ports/index.ts";
@@ -223,7 +225,17 @@ export const runFindings = async (
   };
 };
 
-/** The model's assessments, one per required hunk, with fallbacks for the ones it missed. */
+const checkingTest = (claim: ModelCheckingTest): CheckingTest => ({
+  test: claim.test,
+  checks: claim.checks,
+  lines: { hunkId: claim.hunkId, side: "new", startLine: claim.startLine, line: claim.line },
+});
+
+/**
+ * The model's assessments, one per required hunk, with fallbacks for the ones it missed. A
+ * checking test is kept only on a contract hunk and only as the server can check it; one it
+ * can't is dropped without a retry, which leaves the risk unmarked, the safe side.
+ */
 export const runRisk = async (
   model: AnalysisModel,
   input: AnalysisInput,
@@ -241,14 +253,37 @@ export const runRisk = async (
 
   // Keep the first assessment per required hunk; drop the rest. Lines only a contract hunk
   // shows are kept; others fall back to its first changed lines, which isn't worth a retry.
-  const kept = new Map<HunkId, ModelRisk>();
+  const headContent = new Map(input.files.map((file) => [file.path, file.headContent]));
+  const kept = new Map<HunkId, RiskAssessment>();
   for (const risk of outcome.value.value) {
     if (!required.has(risk.hunkId) || kept.has(risk.hunkId)) continue;
-    const fits =
-      risk.riskClass === "contract" &&
-      risk.lines !== null &&
-      pointLinesFit([risk.hunkId], risk.lines, hunks);
-    kept.set(risk.hunkId, { ...risk, lines: fits ? risk.lines : null });
+    const contract = risk.riskClass === "contract";
+    const fits = contract && risk.lines !== null && pointLinesFit([risk.hunkId], risk.lines, hunks);
+    const claim = contract && risk.checkedBy !== null ? checkingTest(risk.checkedBy) : null;
+    const testPath = claim === null ? undefined : hunks.get(claim.lines.hunkId)?.path;
+    const problem =
+      claim === null
+        ? null
+        : checkingTestProblem(
+            claim,
+            hunks,
+            required,
+            testPath === undefined ? null : (headContent.get(testPath) ?? null),
+          );
+    if (problem !== null) {
+      deps.logger.warn("Dropped a checking test the server couldn't verify", {
+        hunkId: risk.hunkId,
+        testHunkId: claim?.lines.hunkId,
+        problem,
+      });
+    }
+    const { checkedBy: _, ...assessment } = risk;
+    kept.set(risk.hunkId, {
+      ...assessment,
+      source: "model",
+      lines: fits ? risk.lines : null,
+      ...(claim === null || problem !== null ? {} : { checkedBy: claim }),
+    });
   }
   const missing = [...required].filter((hunkId) => !kept.has(hunkId));
   // Unclassified hunks show as ordinary logic: visible, never collapsed.
@@ -266,7 +301,7 @@ export const runRisk = async (
         : ["Ignored risk classifications for unknown or repeated hunks"];
   return {
     outcome: ok([
-      ...[...kept.values()].map((risk) => ({ ...risk, source: "model" as const })),
+      ...kept.values(),
       ...fallbacks.map((risk) => ({ ...risk, source: "fallback" as const })),
     ]),
     usage,

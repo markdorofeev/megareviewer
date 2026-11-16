@@ -74,6 +74,31 @@ export const labels: CaseLabels = {
       { hunkId: "h_dd4ac0e00d4c0f89", side: "new", lines: [151, 173] },
     ],
   },
+  // Ky's own tests: the timeout tests in test/main.ts, and the Retry-After and rate-limit header
+  // tests at the top of test/retry.ts.
+  checkedBy: {
+    h_193ead7430db59ff: [{ hunkId: "h_dcdac188b08b35ea", side: "new", lines: [782, 1154] }],
+    h_8f79287251c0d953: [
+      { hunkId: "h_86315211aaa19d46", side: "new", lines: [15, 87] },
+      { hunkId: "h_2be7f8b0d1fd2f45", side: "new", lines: [224, 529] },
+      { hunkId: "h_94cf7c9b9ad88471", side: "new", lines: [553, 560] },
+      { hunkId: "h_3653a8c7bda36c85", side: "new", lines: [564, 668] },
+      { hunkId: "h_abbcdf53f30602f0", side: "new", lines: [748, 778] },
+      { hunkId: "h_d024dccb40f54b54", side: "new", lines: [890, 896] },
+      { hunkId: "h_a53fb32766ab6125", side: "new", lines: [907, 960] },
+    ],
+    h_dd4ac0e00d4c0f89: [
+      { hunkId: "h_86315211aaa19d46", side: "new", lines: [15, 87] },
+      { hunkId: "h_2be7f8b0d1fd2f45", side: "new", lines: [224, 529] },
+      { hunkId: "h_94cf7c9b9ad88471", side: "new", lines: [553, 560] },
+      { hunkId: "h_3653a8c7bda36c85", side: "new", lines: [564, 668] },
+      { hunkId: "h_abbcdf53f30602f0", side: "new", lines: [748, 778] },
+      { hunkId: "h_d024dccb40f54b54", side: "new", lines: [890, 896] },
+      { hunkId: "h_a53fb32766ab6125", side: "new", lines: [907, 960] },
+    ],
+    // "totalTimeout bounds hanging HTTPError body reads when timeout is disabled"
+    h_c3ce4ac3781b08ad: [{ hunkId: "h_75676ec6dd1879a2", side: "new", lines: [2210, 2238] }],
+  },
   findings: [],
   decisions: [
     {

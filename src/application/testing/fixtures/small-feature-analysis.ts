@@ -164,7 +164,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "19",
+  pipelineVersion: "20",
 };
 
 export const smallFeatureIntent: Intent = {

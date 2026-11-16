@@ -51,7 +51,7 @@ import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
 import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
-import { callMarks } from "./calls.tsx";
+import { callMarks, checkingTestPayload } from "./calls.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { IntentLine } from "./IntentLine.tsx";
@@ -446,6 +446,17 @@ const Review = ({
     [analysis.callSites, index, callPeek],
   );
   const marksOf = useCallback((id: PartId) => calls.get(id), [calls]);
+  // A checking test's name opens its code in the same card.
+  const testPeeks = useMemo(
+    () =>
+      new Map(
+        points.flatMap((point) => {
+          const payload = checkingTestPayload(point, index);
+          return payload === null ? [] : [[point.id, { handle: callPeek, payload }] as const];
+        }),
+      ),
+    [points, index, callPeek],
+  );
   const [focusedHunkId, setFocusedHunkId] = useState<PartId | null>(null);
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
@@ -947,6 +958,7 @@ const Review = ({
       point={point}
       {...actionsOf(point)}
       linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
+      test={testPeeks.get(point.id) ?? null}
     />
   );
   const decisionNote = (point: Point) => (

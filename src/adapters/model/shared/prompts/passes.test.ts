@@ -19,6 +19,17 @@ describe("the intent task", () => {
   });
 });
 
+describe("the risk task", () => {
+  it("asks for a checking test only when its assertions would fail if the risk's behavior broke", () => {
+    expect(PASS_INSTRUCTIONS.risk).toMatch(/^checkedBy: for a contract hunk/m);
+    expect(PASS_INSTRUCTIONS.risk).toContain("would this test fail?");
+    expect(PASS_INSTRUCTIONS.risk).toContain(
+      "never by its name, its comments, or what the description or a comment says is tested",
+    );
+    expect(PASS_INSTRUCTIONS.risk).toContain("When unsure, null");
+  });
+});
+
 describe("passMessage", () => {
   it("gives findings the intent's summary and mismatches by ID, not its brief", () => {
     const message = passMessage("findings", smallFeatureIntent, undefined);

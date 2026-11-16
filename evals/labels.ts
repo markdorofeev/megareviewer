@@ -31,6 +31,12 @@ export interface CaseLabels {
    * placed when its lines overlap any of them.
    */
   readonly riskAt: Readonly<Record<string, readonly LinePlace[]>>;
+  /**
+   * By hunk ID, the tests in the PR whose assertions check what the hunk's risk is about: a
+   * checking test the model names for its risk is right when its lines overlap one. No entry, or
+   * [], means no test in the PR checks it, so naming any is wrong; "either" isn't scored.
+   */
+  readonly checkedBy?: Readonly<Record<string, readonly LinePlace[] | "either">>;
   /** What looks wrong: a defect, or something the reviewer would ask the author to change. */
   readonly findings: readonly ExpectedFinding[];
   /** Why the code makes a choice a reader would wonder about, as a question starting with "Why". */

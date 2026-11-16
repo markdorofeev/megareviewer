@@ -77,6 +77,11 @@ export const Point = z
     suggestion: z.array(z.string()).readonly().nullable(),
     /** The intent mismatch a finding shows. */
     mismatch: z.object({ kind: IntentMismatchKind, description: z.string() }).readonly().nullable(),
+    /** The test that checks a risk's behavior, in the file `path` names; only on a risk. */
+    checkedBy: z
+      .object({ test: z.string(), checks: z.string(), lines: PointLines, path: z.string() })
+      .readonly()
+      .optional(),
   })
   .readonly();
 export type Point = z.infer<typeof Point>;
@@ -186,6 +191,8 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     // On the lines the model says decide it, when its hunk shows them; else the hunk's changes.
     const own = risk.lines;
     const fits = own !== null && pointLinesFit([risk.hunkId], own, hunks);
+    const checked = risk.checkedBy;
+    const test = checked === undefined ? undefined : hunks.get(checked.lines.hunkId);
     return [
       {
         id: PointId.parse(`r:${risk.hunkId}`),
@@ -195,6 +202,9 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         ...landed,
         ...(fits ? { lines: own } : {}),
         ...NONE,
+        ...(checked === undefined || test === undefined
+          ? {}
+          : { checkedBy: { ...checked, path: test.path } }),
       },
     ];
   });

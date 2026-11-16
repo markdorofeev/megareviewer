@@ -217,6 +217,7 @@ const logic = (hunkId: HunkId) => ({
   riskClass: "logic" as const,
   reason: "Logic",
   lines: null,
+  checkedBy: null,
 });
 
 const modelError = (kind: ModelError["kind"], message = `${kind} happened`): ModelError => ({
@@ -237,7 +238,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
-    expect(analysis.key.pipelineVersion).toBe("19");
+    expect(analysis.key.pipelineVersion).toBe("20");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
@@ -778,7 +779,12 @@ describe("the analysis pipeline", () => {
       // The model's fallback for h2 and h3 is logic; the config rule raises all three.
       expect(analysis.risk).toEqual([
         configRule(h1),
-        ...smallFeatureHunks.slice(3).map((id) => ({ ...logic(id), source: "model" })),
+        // A risk without a checking test has none, rather than null.
+        ...smallFeatureHunks.slice(3).map((id) => ({
+          ...logic(id),
+          checkedBy: undefined,
+          source: "model",
+        })),
         configRule(h2),
         configRule(h3),
       ]);
@@ -1246,7 +1252,7 @@ describe("without the model", () => {
       risk: "skipped",
       decisions: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("19");
+    expect(analysis.key.pipelineVersion).toBe("20");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
@@ -1332,7 +1338,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
-      expect(analysis.key.pipelineVersion).toBe("19+checkout");
+      expect(analysis.key.pipelineVersion).toBe("20+checkout");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1408,7 +1414,7 @@ describe("with a local checkout", () => {
       });
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
-      expect(analysis.key.pipelineVersion).toBe("19");
+      expect(analysis.key.pipelineVersion).toBe("20");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },

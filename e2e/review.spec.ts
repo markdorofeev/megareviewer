@@ -140,6 +140,34 @@ test("a call shows the code it runs while the pointer is on it or on its card", 
   await expect(page.locator("[data-slot=hunk-card]:focus")).toContainText("renderReceipt");
 });
 
+test("a risk a test checks names the test, which opens its code; one none checks says nothing", async ({
+  page,
+}) => {
+  await openReview(page, PR.receiptsTested, `${SMALL_FEATURE_TITLE}, with tests`);
+  const checked = page.locator("[data-slot=point][data-kind=risk]", {
+    hasText: "another user's receipt",
+  });
+  await expect(checked.locator("[data-slot=checked-by]")).toHaveText(
+    "Checked by answers 404 for another user's order in orders.test.ts, which asserts: Another user's order gets 404 and no receipt text.",
+  );
+  const unchecked = page.locator("[data-slot=point][data-kind=risk]", {
+    hasText: "ten times as many requests",
+  });
+  await expect(unchecked).toBeVisible();
+  await expect(unchecked.locator("[data-slot=checked-by]")).toHaveCount(0);
+  // Both are risks in the bar: a checked risk is a step like any other.
+  await expect(page.locator("[data-slot=point-chip][data-kind=risk]")).toContainText("2");
+  const name = checked.getByRole("button", { name: "answers 404 for another user's order" });
+  // From the keyboard: Tab onto the name, as a mouse rests on it.
+  await name.focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(name).toBeFocused();
+  const card = page.getByLabel("Test answers 404 for another user's order");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("expect(res.status).toBe(404);");
+});
+
 test("a call's card keeps its header in view when its code scrolls sideways", async ({ page }) => {
   // Narrow enough that the code is wider than the card.
   await page.setViewportSize({ width: 560, height: 800 });

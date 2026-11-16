@@ -24,6 +24,9 @@ export const Baseline = z.object({
     riskAccuracy: RatioSchema,
     riskNoise: RatioSchema,
     riskPlaced: RatioSchema,
+    // Absent from baselines measured before the risk pass named checking tests.
+    coverageWrong: RatioSchema.optional(),
+    coverageRecall: RatioSchema.optional(),
     findingRecall: RatioSchema,
     findingNoise: RatioSchema,
     findingPlaced: RatioSchema,
@@ -47,6 +50,8 @@ export const Baseline = z.object({
       riskAccuracy: RatioSchema,
       riskNoise: RatioSchema,
       riskPlaced: RatioSchema,
+      coverageWrong: RatioSchema.optional(),
+      coverageRecall: RatioSchema.optional(),
       findingRecall: RatioSchema,
       findingNoise: RatioSchema,
       findingPlaced: RatioSchema,
@@ -71,6 +76,8 @@ export const COMPARED = [
   "riskAccuracy",
   "riskNoise",
   "riskPlaced",
+  "coverageWrong",
+  "coverageRecall",
   "findingRecall",
   "findingNoise",
   "findingPlaced",
@@ -87,6 +94,7 @@ export type ComparedMetric = (typeof COMPARED)[number];
 
 const LOWER_IS_BETTER: ReadonlySet<ComparedMetric> = new Set([
   "riskNoise",
+  "coverageWrong",
   "findingNoise",
   "decisionNoise",
   "mismatchFalsePositives",
@@ -95,7 +103,7 @@ const LOWER_IS_BETTER: ReadonlySet<ComparedMetric> = new Set([
 
 export const metricValue = (summary: Baseline["summary"] | Summary, metric: ComparedMetric) => {
   const value = summary[metric];
-  return typeof value === "number" ? value : rate(value);
+  return value === undefined ? null : typeof value === "number" ? value : rate(value);
 };
 
 export interface Comparison {
@@ -140,7 +148,9 @@ export const regressedCases = (
           ? [{ name, metric }]
           : [];
       }
-      const was = rate(before[metric]);
+      const earlier = before[metric];
+      if (earlier === undefined) return [];
+      const was = rate(earlier);
       const is = rate(score[metric]);
       if (was === null || is === null) return [];
       return (LOWER_IS_BETTER.has(metric) ? is > was : is < was) ? [{ name, metric }] : [];
