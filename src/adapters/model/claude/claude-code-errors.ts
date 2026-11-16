@@ -2,6 +2,7 @@ import type { ModelError, ModelErrorKind } from "../../../domain/review/index.ts
 import { invalidOutput, maxTokens, refusal } from "../shared/errors.ts";
 import type { ClaudeCodeInit, ClaudeCodeStream } from "./claude-code-output.ts";
 import { CLAUDE_CODE_MAX_OUTPUT_TOKENS, STRUCTURED_OUTPUT_TOOL } from "./claude-code-request.ts";
+import { managedMcpConfigPath } from "./managed-mcp.ts";
 import type { ClaudeRun } from "./run-claude.ts";
 
 const modelError = (kind: ModelErrorKind, message: string): ModelError => ({ kind, message });
@@ -98,6 +99,14 @@ export const fromClaudeCodeRun = (
     return invalidOutput("Claude Code ran out of turns without giving an answer");
   }
 
+  if (/strict-mcp-config when an enterprise MCP config is present/i.test(run.stderr)) {
+    return modelError(
+      "unexpected",
+      "Claude Code won't run without MCP servers here: your organization's managed-mcp.json is " +
+        `present, and megareviewer couldn't read it at ${managedMcpConfigPath()} to turn its ` +
+        "servers off for the pass.",
+    );
+  }
   const detail = lastLine(run.stderr) || lastLine(text) || `exit code ${run.code ?? "none"}`;
   return modelError("unexpected", `Claude Code failed: ${detail}`);
 };

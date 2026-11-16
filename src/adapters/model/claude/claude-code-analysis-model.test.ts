@@ -27,6 +27,7 @@ const modelWith = (
     maxInputTokens?: number;
     model?: string;
     effort?: Effort;
+    managedMcpServers?: readonly string[] | null;
   } = {},
 ) => {
   const fake = createFakeRunClaude(answer);
@@ -39,6 +40,8 @@ const modelWith = (
     // The fixtures were recorded on Haiku 5.5.
     model: options.model ?? "claude-haiku-5-5",
     ...(options.effort === undefined ? {} : { effort: options.effort }),
+    // Not the machine's own managed-mcp.json.
+    managedMcpServers: options.managedMcpServers ?? null,
   });
   return { model, calls: fake.calls, logger };
 };
@@ -203,12 +206,47 @@ describe("ClaudeCodeAnalysisModel", () => {
       await expectFailure({ killed: "timeout", code: null }, "unexpected", /10 minutes/);
     });
 
+    it("explains an enterprise MCP config it couldn't read", async () => {
+      await expectFailure(
+        {
+          code: 1,
+          stderr: "You cannot use --strict-mcp-config when an enterprise MCP config is present",
+        },
+        "unexpected",
+        /managed-mcp\.json is present/,
+      );
+    });
+
     it("gives stderr's last line for anything else", async () => {
       await expectFailure(
         { code: 2, stderr: "warming up\nerror: unknown option '--effort'" },
         "unexpected",
         "Claude Code failed: error: unknown option '--effort'",
       );
+    });
+  });
+
+  describe("MCP servers", () => {
+    it("asks for none with --strict-mcp-config without a managed config", async () => {
+      const { model, calls } = modelWith();
+      await model.intent(smallFeatureInput);
+      expect(calls[0]?.args).toContain("--strict-mcp-config");
+      expect(calls[0]?.args).not.toContain("--settings");
+    });
+
+    it("denies the managed config's servers instead, since Claude Code refuses the flag with one", async () => {
+      const { model, calls } = modelWith(recorded, { managedMcpServers: ["github", "internal"] });
+      const result = await model.intent(smallFeatureInput);
+      if (!result.ok) throw new Error(result.error.message);
+      const args = calls[0]?.args ?? [];
+      expect(args).not.toContain("--strict-mcp-config");
+      expect(JSON.parse(args[args.indexOf("--settings") + 1] ?? "")).toEqual({
+        deniedMcpServers: [
+          { serverName: "github" },
+          { serverName: "internal" },
+          { serverUrl: "*" },
+        ],
+      });
     });
   });
 

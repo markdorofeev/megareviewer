@@ -8,6 +8,7 @@ import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import { runStructuredCall } from "./claude-code-call.ts";
 import { claudeCodeSystemPrompt, passCall } from "./claude-code-request.ts";
+import { readManagedMcpServers } from "./managed-mcp.ts";
 import { claudeModel } from "./models.ts";
 import { MAX_INPUT_TOKENS, MODEL } from "./request.ts";
 import { createRunClaude, type RunClaude } from "./run-claude.ts";
@@ -24,6 +25,8 @@ export interface ClaudeCodeAnalysisModelOptions {
   /** Default: each pass's own. One for every pass, only to measure it, as the evals' --effort does. */
   readonly effort?: Effort;
   readonly logger: Logger;
+  /** Default: read from the organization's `managed-mcp.json`, when there is one. */
+  readonly managedMcpServers?: readonly string[] | null;
 }
 
 /**
@@ -51,6 +54,12 @@ export const createClaudeCodeAnalysisModel = (
   const maxInputTokens =
     options.maxInputTokens ?? claudeModel(model)?.maxInputTokens ?? MAX_INPUT_TOKENS;
   const { effort } = options;
+  // Read once per model, which is made per run, so a config deployed later needs no restart.
+  const managedMcpServers =
+    options.managedMcpServers === undefined ? readManagedMcpServers() : options.managedMcpServers;
+  if (managedMcpServers !== null) {
+    logger.debug("Denying the organization's managed MCP servers", { managedMcpServers });
+  }
 
   return createPassModel({
     version: claudeCodeVersion(model, effort),
@@ -81,6 +90,7 @@ export const createClaudeCodeAnalysisModel = (
 
       const called = await runStructuredCall(run, {
         ...call,
+        managedMcpServers,
         onPlan: billing === "plan",
         ...(passOptions?.onAnswering === undefined ? {} : { onAnswering: passOptions.onAnswering }),
       });
