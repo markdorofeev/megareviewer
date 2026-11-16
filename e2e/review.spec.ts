@@ -669,3 +669,80 @@ for (const width of [720, 1024, 1440]) {
     expect(await overflows()).toBe(false);
   });
 }
+
+/** Six long comments, with code, a long unbroken token and suggestions, on receipts.ts's lines. */
+const longComments = () => {
+  const code = Array.from(
+    { length: 12 },
+    (_, n) => `const receipt${n} = await renderReceipt(order, { currency: "EUR", taxes: true });`,
+  );
+  const prose =
+    "This cache keeps rendered receipts for an hour, but a refund in the meantime leaves the " +
+    "customer a receipt that still shows the full amount. ";
+  return [1, 2, 3, 4, 5, 6].map((line) => ({
+    hunkId: "h_a2e0236601ffc778",
+    side: "new",
+    line,
+    body: `${prose.repeat(3)}See https://example.com/${"receipts/".repeat(20)}\n\n\`\`\`ts\n${code.join("\n")}\n\`\`\``,
+    ...(line % 2 === 0 ? { suggestion: ["const RECEIPT_TTL_MS = 5 * 60 * 1000;"] } : {}),
+  }));
+};
+
+for (const [size, viewport] of [
+  ["1440×900", { width: 1440, height: 900 }],
+  ["a short window", { width: 1280, height: 700 }],
+  ["phone width", { width: 390, height: 844 }],
+  ["200% zoom", { width: 720, height: 450 }],
+] as const) {
+  test(`the publish dialog fits ${size}, its comments scrolling inside it`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+    const analysisId = page.url().split("/").at(-1) ?? "";
+    await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [
+      `megareviewer:hunk-comments:${analysisId}`,
+      JSON.stringify(longComments()),
+    ] as const);
+    await page.reload();
+    await page.getByRole("button", { name: /^Publish review…/ }).click();
+
+    const dialog = page.getByRole("dialog");
+    const comments = dialog.getByRole("list", { name: "Comments" });
+    await expect(comments.getByRole("listitem")).toHaveCount(6);
+    // All but the comments is in view at once, without scrolling the dialog.
+    for (const control of [
+      dialog.getByRole("group", { name: "Verdict" }),
+      dialog.getByRole("textbox", { name: "Summary" }),
+      dialog.getByRole("button", { name: /^Publish|^Approve|^Request changes/ }).last(),
+    ]) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+    }
+    // The comments scroll inside it, and nothing scrolls sideways.
+    const scroller = await comments.evaluate((list) => {
+      for (let box: HTMLElement | null = list; box !== null; box = box.parentElement) {
+        if (box.scrollHeight > box.clientHeight) return box.dataset.slot ?? box.tagName;
+      }
+      return null;
+    });
+    expect(scroller, "what scrolls").toBe("publish-comments");
+    expect(
+      await dialog.evaluate((box) => box.scrollWidth <= box.clientWidth),
+      "nothing is wider than the dialog",
+    ).toBe(true);
+    const box = await dialog.boundingBox();
+    expect(box !== null && box.y >= 0 && box.y + box.height <= viewport.height).toBe(true);
+
+    // The focus stays inside, and reaches the comments, so the keyboard can scroll them.
+    let reachedComments = false;
+    for (let n = 0; n < 12; n += 1) {
+      await page.keyboard.press("Tab");
+      // Wrapping round from the last stop passes through a guard that hands the focus on.
+      await expect
+        .poll(() => dialog.evaluate((box) => box.contains(document.activeElement)))
+        .toBe(true);
+      reachedComments ||= await comments.evaluate(
+        (list) => document.activeElement?.contains(list) === true,
+      );
+    }
+    expect(reachedComments, "the comments take the focus").toBe(true);
+  });
+}

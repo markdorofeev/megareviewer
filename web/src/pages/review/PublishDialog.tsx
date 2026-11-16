@@ -21,7 +21,7 @@ const VERDICTS: readonly { readonly value: PublicationVerdict; readonly label: s
 ];
 
 /** Text as it will be posted: its own line breaks, never HTML. */
-const POSTED = "whitespace-pre-wrap break-words";
+const POSTED = "whitespace-pre-wrap wrap-anywhere";
 
 /** "Publish 2 comments", or "Publish the review" when there are none, as with only a verdict. */
 const publishLabel = (count: number): string =>
@@ -88,7 +88,9 @@ export const PublishDialog = ({
 
   const label = publishLabel(preview?.comments.length ?? hunkComments.length);
   return (
-    <Dialog title={label} onClose={onClose} className="sm:max-w-2xl">
+    // A column whose comments scroll on their own, so however many and long they are, the verdict,
+    // the summary and Publish stay in view; on a window too short even for those, it all scrolls.
+    <Dialog title={label} onClose={onClose} className="flex flex-col sm:max-w-2xl">
       {previewError !== null ? (
         <p className={DANGER} role="alert">
           Couldn't read what will be posted. {errorMessage(previewError)}
@@ -97,77 +99,90 @@ export const PublishDialog = ({
         <p className="text-muted-foreground">Reading the comments…</p>
       ) : (
         preview.comments.length > 0 && (
-          <ul aria-label="Comments" className="flex flex-col gap-1.5">
-            {preview.comments.map((comment) => (
-              <li key={comment.key} className="border-l-2 border-l-review-pending py-0.5 pl-2.5">
-                <code className="font-mono text-code-compact text-muted-foreground">
-                  {comment.path}:
-                  {comment.startLine === undefined
-                    ? comment.line
-                    : `${comment.startLine}–${comment.line}`}
-                  {comment.side === "old" ? " (old side)" : ""}
-                </code>
-                <p className={POSTED}>{comment.body}</p>
-              </li>
-            ))}
-          </ul>
+          <section
+            data-slot="publish-comments"
+            aria-label="Comments to post"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: it scrolls, so the keyboard needs to reach it.
+            tabIndex={0}
+            className="-mx-4 min-h-12 overflow-y-auto overscroll-contain border-y px-4 py-3 -outline-offset-2"
+          >
+            <ul aria-label="Comments" className="flex flex-col gap-1.5">
+              {preview.comments.map((comment) => (
+                <li
+                  key={comment.key}
+                  className="min-w-0 border-l-2 border-l-review-pending py-0.5 pl-2.5"
+                >
+                  <code className="font-mono text-code-compact text-muted-foreground">
+                    {comment.path}:
+                    {comment.startLine === undefined
+                      ? comment.line
+                      : `${comment.startLine}–${comment.line}`}
+                    {comment.side === "old" ? " (old side)" : ""}
+                  </code>
+                  <p className={POSTED}>{comment.body}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
         )
       )}
 
-      {!isAuthor && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-caption text-muted-foreground">Verdict</span>
-          <Segmented legend="Verdict" options={VERDICTS} value={verdict} onChange={setVerdict} />
-        </div>
-      )}
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={`${id}-summary`} className="sr-only">
-          Summary
-        </label>
-        <Textarea
-          id={`${id}-summary`}
-          rows={2}
-          data-autofocus
-          placeholder="Summary (optional)"
-          value={summary}
-          onChange={(event) => setSummary(event.target.value)}
-        />
-      </div>
-
-      {confirmStale ? (
-        <div className={cn(WARNING, "flex flex-col gap-2")} role="alert">
-          <p>This PR changed since the analysis. Publish anyway?</p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setConfirmStale(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => void send(true)}>Publish anyway</Button>
+      <div className="flex shrink-0 flex-col gap-4">
+        {!isAuthor && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-caption text-muted-foreground">Verdict</span>
+            <Segmented legend="Verdict" options={VERDICTS} value={verdict} onChange={setVerdict} />
           </div>
+        )}
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={`${id}-summary`} className="sr-only">
+            Summary
+          </label>
+          <Textarea
+            id={`${id}-summary`}
+            rows={2}
+            data-autofocus
+            placeholder="Summary (optional)"
+            value={summary}
+            onChange={(event) => setSummary(event.target.value)}
+          />
         </div>
-      ) : (
-        <>
-          {publish.error !== null && (
-            <div className={DANGER} role="alert">
-              <p>Couldn't publish. {errorMessage(publish.error)}</p>
-              <p className="text-muted-foreground">
-                Retrying is safe: comments that were already posted aren't posted again.
-              </p>
+
+        {confirmStale ? (
+          <div className={cn(WARNING, "flex flex-col gap-2")} role="alert">
+            <p>This PR changed since the analysis. Publish anyway?</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirmStale(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void send(true)}>Publish anyway</Button>
             </div>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              disabled={publish.pending || preview === null}
-              onClick={() => void send(allowStale)}
-            >
-              {publish.pending ? "Publishing…" : publish.error !== null ? "Retry" : label}
-            </Button>
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            {publish.error !== null && (
+              <div className={DANGER} role="alert">
+                <p>Couldn't publish. {errorMessage(publish.error)}</p>
+                <p className="text-muted-foreground">
+                  Retrying is safe: comments that were already posted aren't posted again.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                disabled={publish.pending || preview === null}
+                onClick={() => void send(allowStale)}
+              >
+                {publish.pending ? "Publishing…" : publish.error !== null ? "Retry" : label}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
     </Dialog>
   );
 };

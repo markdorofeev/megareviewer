@@ -36,11 +36,12 @@ export const Dialog = ({
     >
       <DialogContent
         ref={popup}
-        className={cn("max-h-[90vh] overflow-y-auto sm:max-w-lg", className)}
+        // dvh: on a phone, vh is the height without the browser's bars, taller than what shows.
+        className={cn("max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg", className)}
         initialFocus={() => popup.current?.querySelector<HTMLElement>("[data-autofocus]") ?? true}
         finalFocus={() => returnFocus()}
       >
-        <DialogHeader className="pr-8">
+        <DialogHeader className="shrink-0 pr-8">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {children}
