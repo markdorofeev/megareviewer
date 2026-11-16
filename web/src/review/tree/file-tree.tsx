@@ -11,7 +11,7 @@ import { EmptyState } from "../shell/empty-state.tsx";
 import { KeyHint } from "../shell/key-hint.tsx";
 import { FileIcon } from "./file-icon.tsx";
 import { type FileEntry, type FileOrder, filterFiles, sortFiles } from "./files.ts";
-import { fileTree, nameOf, type TreeEntry, treeOrder } from "./paths.ts";
+import { fileTree, nameOf, type TreeEntry, treeOrder, treeRoot } from "./paths.ts";
 
 export interface FileTreeProps {
   readonly files: readonly FileEntry[];
@@ -25,6 +25,26 @@ export interface FileTreeProps {
   readonly navigate?: boolean;
   readonly className?: string;
 }
+
+/** A level's indent, and a heading's height: headings stick one under another, by depth. */
+const INDENT = 12;
+const HEADING = 24;
+
+/**
+ * A directory path that keeps its last directory in sight: the rest is cut first, so
+ * `src/main/java/com/acme/orders/` reads `src/main/java/c… orders/` in a narrow rail.
+ */
+const DirectoryLabel = ({ label }: { readonly label: string }) => {
+  const cut = label.slice(0, -1).lastIndexOf("/") + 1;
+  return cut === 0 ? (
+    <span className="min-w-0 flex-1 truncate">{label}</span>
+  ) : (
+    <span className="flex min-w-0 flex-1">
+      <span className="min-w-[1.5em] shrink-[999] truncate">{label.slice(0, cut)}</span>
+      <span className="min-w-0 truncate">{label.slice(cut)}</span>
+    </span>
+  );
+};
 
 /** The changed files, filtered with `/`, each with its status and its counts. */
 export const FileTree = ({
@@ -44,7 +64,9 @@ export const FileTree = ({
     const row = nav.current?.querySelector<HTMLElement>("[aria-current]");
     if (box === null || box === undefined || row === null || row === undefined) return;
     const top = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
-    if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 40) {
+    // Its directories' headings stick over the top of the box.
+    const covered = Number(row.dataset.depth ?? 0) * HEADING;
+    if (top < box.scrollTop + covered || top > box.scrollTop + box.clientHeight - 40) {
       box.scrollTop = Math.max(0, top - box.clientHeight / 3);
     }
   }, [activePath]);
@@ -65,7 +87,10 @@ export const FileTree = ({
 
   const shown = useMemo(() => filterFiles(files, query), [files, query]);
   const byPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
-  const tree = useMemo(() => fileTree(shown.map((file) => file.path)), [shown]);
+  const { root, entries: tree } = useMemo(
+    () => treeRoot(fileTree(shown.map((file) => file.path))),
+    [shown],
+  );
 
   const shownOrder = useMemo(
     () => (mode === "tree" ? treeOrder(tree) : sortFiles(shown, order).map((file) => file.path)),
@@ -90,12 +115,13 @@ export const FileTree = ({
     setClosed(next);
   };
 
-  const fileRow = (entry: FileEntry, label: string, depth: number) => (
+  const fileRow = (entry: FileEntry, label: string, depth: number, directory?: string) => (
     <li key={entry.path}>
       <FileRow
         entry={entry}
         label={label}
         depth={depth}
+        {...(directory === undefined ? {} : { directory })}
         active={entry.path === activePath}
         onSelect={onSelect}
         {...(marked.has(entry.path)
@@ -109,12 +135,12 @@ export const FileTree = ({
     list.map((entry) => {
       if (entry.kind === "file") {
         const file = byPath.get(entry.path);
-        return file === undefined ? null : fileRow(file, entry.name, depth);
+        return file === undefined ? null : fileRow(file, entry.name, depth, entry.directory);
       }
       // A filter opens every directory, so a match is never hidden.
       const open = query.trim() !== "" || !closed.has(entry.path);
       const Folder = open ? FolderOpenIcon : FolderIcon;
-      const indent = depth * 12 + 4;
+      const indent = depth * INDENT + 4;
       return (
         <li key={entry.path}>
           <button
@@ -122,8 +148,15 @@ export const FileTree = ({
             title={`${entry.path}/`}
             aria-expanded={open}
             onClick={() => toggle(entry.path)}
-            className="flex min-h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left font-medium hover:bg-accent"
-            style={{ paddingLeft: `${indent}px` }}
+            // Sticks under its parent's heading while its files scroll by, so where the reviewer
+            // is reads at the top of the rail however far down the tree they are. A deeper one
+            // goes under its parents as the end of its directory pushes it out.
+            className="sticky flex h-6 w-full items-center gap-1.5 rounded-md bg-background pr-2 text-left font-medium hover:bg-accent"
+            style={{
+              paddingLeft: `${indent}px`,
+              top: `${depth * HEADING}px`,
+              zIndex: Math.max(1, 30 - depth),
+            }}
           >
             <ChevronDownIcon
               aria-hidden="true"
@@ -133,7 +166,7 @@ export const FileTree = ({
               )}
             />
             <Folder aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+            <DirectoryLabel label={entry.label} />
           </button>
           {open && (
             <div className="relative">
@@ -174,8 +207,22 @@ export const FileTree = ({
         />
         <KeyHint id="filterTree" className="absolute top-1/2 right-3 -translate-y-1/2" />
       </div>
-      <p className="px-2 text-caption text-muted-foreground" aria-live="polite">
-        {query.trim() === "" ? `${files.length} files` : `${shown.length} of ${files.length} files`}
+      <p
+        className="flex gap-1 px-2 text-caption text-muted-foreground"
+        aria-live="polite"
+        {...(root === null || mode !== "tree" ? {} : { title: root })}
+      >
+        <span className="shrink-0">
+          {query.trim() === ""
+            ? `${files.length} files`
+            : `${shown.length} of ${files.length} files`}
+          {root !== null && mode === "tree" && " in"}
+        </span>{" "}
+        {root !== null && mode === "tree" && (
+          <span className="flex min-w-0 flex-1 font-mono text-code-compact">
+            <DirectoryLabel label={root} />
+          </span>
+        )}
       </p>
       {shown.length === 0 ? (
         <EmptyState
@@ -262,8 +309,8 @@ export const PointCounts = ({
 );
 
 /**
- * A file's row: its type's icon, its name (its directory muted when the row isn't under it), its
- * status when it isn't modified, and its counts. A click selects it.
+ * A file's row: its type's icon, its name (after its directory, muted, when the row stands for a
+ * directory of one file), its status when it isn't modified, and its counts. A click selects it.
  */
 export const FileRow = ({
   entry,
@@ -280,7 +327,10 @@ export const FileRow = ({
   readonly label: string;
   readonly depth?: number;
   readonly active?: boolean;
-  /** Shown muted after the name, for a row outside its directory's heading. */
+  /**
+   * The directories between the heading it's under and the file, with a trailing slash, muted
+   * before the name and cut from their start when the rail is too narrow for both.
+   */
   readonly directory?: string;
   readonly onSelect: (path: string) => void;
 }) => {
@@ -290,30 +340,42 @@ export const FileRow = ({
     <button
       type="button"
       aria-current={active ? "location" : undefined}
+      data-depth={depth}
       title={entry.path}
       onClick={() => onSelect(entry.path)}
       className={cn(
         "flex min-h-6 w-full flex-wrap items-center gap-x-1.5 rounded-md pr-2 text-left hover:bg-surface-row",
         active && "bg-surface-row font-medium shadow-[inset_3px_0_0_var(--primary)]",
       )}
-      style={{ paddingLeft: `${depth * 12 + 4}px` }}
+      style={{ paddingLeft: `${depth * INDENT + 4}px` }}
     >
-      {/* The name keeps room for a few letters; what follows wraps under it as one group rather
-          than pushing the row past the rail. */}
-      <span className="flex min-w-[min(7rem,100%)] flex-1 basis-0 items-center gap-1.5">
+      {/* The name keeps room for a few letters, or all of a directory and name that stand for
+          a heading; what follows wraps under it as one group rather than pushing the row past
+          the rail. */}
+      <span
+        className={cn(
+          "flex items-center gap-1.5",
+          directory === undefined
+            ? "min-w-[min(7rem,100%)] flex-1 basis-0"
+            : "max-w-full flex-[1_0_auto]",
+        )}
+      >
         <FileIcon path={entry.path} status={entry.status} />
-        {/* Positioned, so the hidden status word is clipped with the name instead of sitting
-            past the rail's edge after the whole name. */}
-        <span className="relative min-w-0 flex-1 truncate">
-          <span data-slot="file-name" className={mark?.name}>
-            {label === entry.path ? label : nameOf(entry.path)}
-          </span>
-          {mark !== null && <span className="sr-only">, {mark.label}</span>}
+        <span className="flex min-w-0 flex-1">
           {directory !== undefined && (
-            <span className="ml-1.5 font-mono text-code-compact text-muted-foreground">
-              {directory}/
+            // Right to left, so the ellipsis cuts the start and the end next to the name shows.
+            <span className="min-w-[1.5em] shrink-[999] truncate text-muted-foreground [direction:rtl]">
+              <bdi dir="ltr">{directory}</bdi>
             </span>
           )}
+          {/* Positioned, so the hidden status word is clipped with the name instead of sitting
+              past the rail's edge after the whole name. */}
+          <span className="relative min-w-0 truncate">
+            <span data-slot="file-name" className={mark?.name}>
+              {label === entry.path ? label : nameOf(entry.path)}
+            </span>
+            {mark !== null && <span className="sr-only">, {mark.label}</span>}
+          </span>
         </span>
       </span>
       <span

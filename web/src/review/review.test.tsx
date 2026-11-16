@@ -90,7 +90,7 @@ describe("FileTree", () => {
     expect(screen.getByText("1 of 4 files")).toBeTruthy();
     expect(screen.queryByTitle("src/http/retry.ts")).toBeNull();
     fireEvent.keyDown(filter, { key: "Escape" });
-    expect(screen.getByText("4 files")).toBeTruthy();
+    expect(screen.getByText("4 files in")).toBeTruthy();
   });
 
   it("says a file's status in words, and nothing of contract", () => {
