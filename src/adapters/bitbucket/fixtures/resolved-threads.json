@@ -1,0 +1,766 @@
+[
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/trigger-pipeline/pullrequests/56/comments?pagelen=100&fields=%2Bvalues.resolution.user%2C%2Bvalues.resolution.created_on",
+      "accept": "application/json"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": {
+        "values": [
+          {
+            "id": 498821043,
+            "content": {
+              "raw": "Comment 0."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T06:52:06.365234+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 188,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498821522,
+            "content": {
+              "raw": "Comment 1."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T06:53:20.424240+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 9,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            },
+            "resolution": {
+              "user": {
+                "uuid": "{5d6d69c0-bfad-4ee1-9e60-6af86e640907}",
+                "display_name": "user-5d6d69c0",
+                "account_id": "account-5d6d69c0"
+              },
+              "created_on": "2024-05-07T09:47:32.730737+00:00"
+            }
+          },
+          {
+            "id": 498822059,
+            "content": {
+              "raw": "Comment 2."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T06:55:09.521329+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 166,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            },
+            "resolution": {
+              "user": {
+                "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+                "display_name": "user-90e168bb",
+                "account_id": "account-90e168bb"
+              },
+              "created_on": "2024-05-07T21:24:59.998145+00:00"
+            }
+          },
+          {
+            "id": 498823189,
+            "content": {
+              "raw": "Comment 3."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T06:57:30.878272+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 5,
+              "path": "CHANGELOG.md",
+              "start_from": null,
+              "start_to": null
+            },
+            "resolution": {
+              "user": {
+                "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+                "display_name": "user-7a306388",
+                "account_id": "account-7a306388"
+              },
+              "created_on": "2024-05-07T07:00:20.294670+00:00"
+            }
+          },
+          {
+            "id": 498823865,
+            "content": {
+              "raw": "Comment 4."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T06:59:13.299103+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 193,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            },
+            "resolution": {
+              "user": {
+                "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+                "display_name": "user-90e168bb",
+                "account_id": "account-90e168bb"
+              },
+              "created_on": "2024-05-07T21:25:13.887836+00:00"
+            }
+          },
+          {
+            "id": 498824094,
+            "content": {
+              "raw": "Comment 5."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T06:59:50.244519+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498823865
+            },
+            "inline": {
+              "from": null,
+              "to": 193,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498825404,
+            "content": {
+              "raw": "Comment 6."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T07:04:05.560887+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498822059
+            },
+            "inline": {
+              "from": null,
+              "to": 166,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498825813,
+            "content": {
+              "raw": "Comment 7."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T07:05:30.282990+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498824094
+            },
+            "inline": {
+              "from": null,
+              "to": 193,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498841729,
+            "content": {
+              "raw": "Comment 8."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T07:51:02.217371+00:00",
+            "deleted": false
+          },
+          {
+            "id": 498873433,
+            "content": {
+              "raw": "Comment 9."
+            },
+            "user": {
+              "uuid": "{5d6d69c0-bfad-4ee1-9e60-6af86e640907}",
+              "display_name": "user-5d6d69c0",
+              "account_id": "account-5d6d69c0"
+            },
+            "created_on": "2024-05-07T09:22:51.881690+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 42,
+              "path": "README.md",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498880468,
+            "content": {
+              "raw": "Comment 10."
+            },
+            "user": {
+              "uuid": "{5d6d69c0-bfad-4ee1-9e60-6af86e640907}",
+              "display_name": "user-5d6d69c0",
+              "account_id": "account-5d6d69c0"
+            },
+            "created_on": "2024-05-07T09:44:13.980431+00:00",
+            "deleted": false
+          },
+          {
+            "id": 499055812,
+            "content": {
+              "raw": "Comment 11."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T20:04:18.094568+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498825404
+            },
+            "inline": {
+              "from": null,
+              "to": 166,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 499061779,
+            "content": {
+              "raw": "Comment 12."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T20:40:17.511759+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498841729
+            }
+          },
+          {
+            "id": 499067544,
+            "content": {
+              "raw": "Comment 13."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T21:14:37.275348+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 499061779
+            }
+          },
+          {
+            "id": 499068624,
+            "content": {
+              "raw": "Comment 14."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T21:21:48.709434+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498841729
+            }
+          },
+          {
+            "id": 499096350,
+            "content": {
+              "raw": "Comment 15."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-08T01:10:56.276137+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 499068624
+            }
+          },
+          {
+            "id": 499106653,
+            "content": {
+              "raw": "Comment 16."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-08T01:54:05.384908+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498880468
+            }
+          },
+          {
+            "id": 499230346,
+            "content": {
+              "raw": "Comment 17."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-08T10:32:17.867530+00:00",
+            "deleted": false
+          },
+          {
+            "id": 499481317,
+            "content": {
+              "raw": "Comment 18."
+            },
+            "user": {
+              "uuid": "{5d6d69c0-bfad-4ee1-9e60-6af86e640907}",
+              "display_name": "user-5d6d69c0",
+              "account_id": "account-5d6d69c0"
+            },
+            "created_on": "2024-05-09T06:46:10.478543+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 499230346
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/trigger-pipeline/pullrequests/56/comments?pagelen=100",
+      "accept": "application/json"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": {
+        "values": [
+          {
+            "id": 498821043,
+            "content": {
+              "raw": "Comment 0."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T06:52:06.365234+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 188,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498821522,
+            "content": {
+              "raw": "Comment 1."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T06:53:20.424240+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 9,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            },
+            "resolution": {}
+          },
+          {
+            "id": 498822059,
+            "content": {
+              "raw": "Comment 2."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T06:55:09.521329+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 166,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            },
+            "resolution": {}
+          },
+          {
+            "id": 498823189,
+            "content": {
+              "raw": "Comment 3."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T06:57:30.878272+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 5,
+              "path": "CHANGELOG.md",
+              "start_from": null,
+              "start_to": null
+            },
+            "resolution": {}
+          },
+          {
+            "id": 498823865,
+            "content": {
+              "raw": "Comment 4."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T06:59:13.299103+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 193,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            },
+            "resolution": {}
+          },
+          {
+            "id": 498824094,
+            "content": {
+              "raw": "Comment 5."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T06:59:50.244519+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498823865
+            },
+            "inline": {
+              "from": null,
+              "to": 193,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498825404,
+            "content": {
+              "raw": "Comment 6."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T07:04:05.560887+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498822059
+            },
+            "inline": {
+              "from": null,
+              "to": 166,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498825813,
+            "content": {
+              "raw": "Comment 7."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T07:05:30.282990+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498824094
+            },
+            "inline": {
+              "from": null,
+              "to": 193,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498841729,
+            "content": {
+              "raw": "Comment 8."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-07T07:51:02.217371+00:00",
+            "deleted": false
+          },
+          {
+            "id": 498873433,
+            "content": {
+              "raw": "Comment 9."
+            },
+            "user": {
+              "uuid": "{5d6d69c0-bfad-4ee1-9e60-6af86e640907}",
+              "display_name": "user-5d6d69c0",
+              "account_id": "account-5d6d69c0"
+            },
+            "created_on": "2024-05-07T09:22:51.881690+00:00",
+            "deleted": false,
+            "inline": {
+              "from": null,
+              "to": 42,
+              "path": "README.md",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 498880468,
+            "content": {
+              "raw": "Comment 10."
+            },
+            "user": {
+              "uuid": "{5d6d69c0-bfad-4ee1-9e60-6af86e640907}",
+              "display_name": "user-5d6d69c0",
+              "account_id": "account-5d6d69c0"
+            },
+            "created_on": "2024-05-07T09:44:13.980431+00:00",
+            "deleted": false
+          },
+          {
+            "id": 499055812,
+            "content": {
+              "raw": "Comment 11."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T20:04:18.094568+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498825404
+            },
+            "inline": {
+              "from": null,
+              "to": 166,
+              "path": "pipe/main.py",
+              "start_from": null,
+              "start_to": null
+            }
+          },
+          {
+            "id": 499061779,
+            "content": {
+              "raw": "Comment 12."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T20:40:17.511759+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498841729
+            }
+          },
+          {
+            "id": 499067544,
+            "content": {
+              "raw": "Comment 13."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T21:14:37.275348+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 499061779
+            }
+          },
+          {
+            "id": 499068624,
+            "content": {
+              "raw": "Comment 14."
+            },
+            "user": {
+              "uuid": "{90e168bb-841a-4065-bc03-99f1fa86f85c}",
+              "display_name": "user-90e168bb",
+              "account_id": "account-90e168bb"
+            },
+            "created_on": "2024-05-07T21:21:48.709434+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498841729
+            }
+          },
+          {
+            "id": 499096350,
+            "content": {
+              "raw": "Comment 15."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-08T01:10:56.276137+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 499068624
+            }
+          },
+          {
+            "id": 499106653,
+            "content": {
+              "raw": "Comment 16."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-08T01:54:05.384908+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 498880468
+            }
+          },
+          {
+            "id": 499230346,
+            "content": {
+              "raw": "Comment 17."
+            },
+            "user": {
+              "uuid": "{7a306388-779b-42b4-a247-58e7ee941e84}",
+              "display_name": "user-7a306388",
+              "account_id": "account-7a306388"
+            },
+            "created_on": "2024-05-08T10:32:17.867530+00:00",
+            "deleted": false
+          },
+          {
+            "id": 499481317,
+            "content": {
+              "raw": "Comment 18."
+            },
+            "user": {
+              "uuid": "{5d6d69c0-bfad-4ee1-9e60-6af86e640907}",
+              "display_name": "user-5d6d69c0",
+              "account_id": "account-5d6d69c0"
+            },
+            "created_on": "2024-05-09T06:46:10.478543+00:00",
+            "deleted": false,
+            "parent": {
+              "id": 499230346
+            }
+          }
+        ]
+      }
+    }
+  }
+]

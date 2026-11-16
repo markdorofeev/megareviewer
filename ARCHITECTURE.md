@@ -39,7 +39,7 @@ The pipeline and UI never talk to a host directly. Each host is a connector behi
 | List PRs to review | Search API (`review-requested:@me`, `author:@me`) | PRs to review: per repo, the 50 most recently updated of the configured workspace. Own PRs: one workspace-wide call |
 | Which PRs opened before are still open | One GraphQL query, a `repository.pullRequest(number)` alias per PR | `.../pullrequests/{id}`, one request per PR, 5 at a time |
 | Publish review | One PR review with inline comments and a verdict | Approve or request changes, plus one call per inline comment |
-| Review threads | GraphQL `pullRequest.reviewThreads`, 100 a page, with each thread's comments | `.../pullrequests/{id}/comments`: an inline comment without a parent starts a thread, `parent.id` chains replies, deleted ones are left out |
+| Review threads | GraphQL `pullRequest.reviewThreads`, 100 a page, with each thread's comments | `.../pullrequests/{id}/comments`: an inline comment without a parent starts a thread, `parent.id` chains replies, deleted ones are left out; `fields` asks for who resolved each thread, which the list otherwise leaves out, so a resolution reads `{}` |
 | Reply | GraphQL `addPullRequestReviewThreadReply` on the thread's ID | `POST .../comments` with `parent: {id}` |
 | Comment now | `POST .../pulls/{n}/comments` with `commit_id` the analysis's head, `line`, `side` and, for a range, `start_line` | `POST .../comments` with `inline` on the last line, the range named in the body |
 | Resolve, reopen | GraphQL `resolveReviewThread`, `unresolveReviewThread` | `POST .../comments/{id}/resolve`, `DELETE` the same |

@@ -15,6 +15,8 @@ export interface BitbucketThreadsOptions {
   readonly requestTimeoutMs?: number;
 }
 
+const RESOLUTION_FIELDS = "+values.resolution.user,+values.resolution.created_on";
+
 const segment = encodeURIComponent;
 const repoUrl = (fullName: string): string =>
   `${API}/repositories/${fullName.split("/").map(segment).join("/")}`;
@@ -104,7 +106,8 @@ export const toThreads = (comments: readonly BitbucketThreadComment[]): ReviewTh
       startLine: start != null && line != null && start < line ? start : null,
       originalLine: line ?? null,
       resolved: root.resolution != null,
-      resolvedBy: root.resolution == null ? null : toHostUser(root.resolution.user),
+      // A resolution without a user doesn't say who, which isn't a former user.
+      resolvedBy: root.resolution?.user == null ? null : toHostUser(root.resolution.user),
       outdated: inline.outdated === true || line == null,
       // Bitbucket lets anyone who can read a PR comment on it; it refuses what it doesn't allow.
       can: { reply: true, resolve: true },
@@ -138,7 +141,8 @@ export const createBitbucketReviewThreads = (options: BitbucketThreadsOptions): 
       const comments = await client.pages(
         "the pull request's comments",
         BitbucketThreadComment,
-        `${pullRequestUrl(ref)}/comments?${new URLSearchParams({ pagelen: "100" })}`,
+        // The list leaves a resolution empty, `{}`, unless asked for who resolved it and when.
+        `${pullRequestUrl(ref)}/comments?${new URLSearchParams({ pagelen: "100", fields: RESOLUTION_FIELDS })}`,
       );
       return comments.ok ? ok({ threads: toThreads(comments.value) }) : comments;
     },

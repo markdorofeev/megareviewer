@@ -1,7 +1,7 @@
 // Written from Bitbucket Cloud's REST docs against atlassian/bitbucket-upload-file#26, as
 // recording would post real comments. Bodies keep only the fields the adapter
-// reads. Open issue: the `resolution` field, the /resolve endpoint and `inline.outdated` need
-// confirming against a recorded response.
+// reads. The `resolution` field is confirmed by resolved-threads.json; the /resolve endpoint and
+// `inline.outdated` still need confirming against a recorded response.
 
 /** One request and its answer, in the shape `createFixtureFetch` reads. */
 interface Exchange {
@@ -23,11 +23,16 @@ const comment = (fields: Record<string, unknown>) => ({
   ...fields,
 });
 
-export const COMMENTS_PAGE_2 = `${PR}/comments?pagelen=100&page=2`;
+const FIELDS = "fields=%2Bvalues.resolution.user%2C%2Bvalues.resolution.created_on";
+export const COMMENTS_PAGE_2 = `${PR}/comments?pagelen=100&${FIELDS}&page=2`;
 
 export const bitbucketThreadExchanges: Exchange[] = [
   {
-    request: { method: "GET", url: `${PR}/comments?pagelen=100`, accept: "application/json" },
+    request: {
+      method: "GET",
+      url: `${PR}/comments?pagelen=100&${FIELDS}`,
+      accept: "application/json",
+    },
     response: {
       status: 200,
       headers: JSON_HEADERS,

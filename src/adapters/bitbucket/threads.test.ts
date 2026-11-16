@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   createFixtureFetch,
   describeReviewThreadsContract,
+  type RecordedExchange,
   RecordingLogger,
 } from "../../application/testing/index.ts";
 import type { PullRequestRef } from "../../domain/review/index.ts";
+import resolvedThreadExchanges from "./fixtures/resolved-threads.json" with { type: "json" };
 import {
   BITBUCKET_ATTACHMENT,
   bitbucketAttachmentExchanges,
   bitbucketThreadExchanges,
 } from "./fixtures/threads.synthetic.ts";
 import { createBitbucketReviewThreads } from "./index.ts";
+import { BitbucketThreadComment } from "./schemas.ts";
 import { toThreads, withMentions } from "./threads.ts";
 
 const pr: PullRequestRef = {
@@ -150,5 +154,40 @@ describe("withMentions", () => {
       "@Lee Park is this needed?",
       "@Ana Silva yes",
     ]);
+  });
+});
+
+describe("who resolved a Bitbucket thread", () => {
+  const triggerPipeline: PullRequestRef = {
+    repo: { host: "bitbucket", owner: "atlassian", repo: "trigger-pipeline" },
+    number: 56,
+  };
+  const [asked, unasked] = resolvedThreadExchanges as RecordedExchange[];
+
+  it("names the person who resolved it, which the comments list gives only when asked", async () => {
+    const result = await threadsWith(createFixtureFetch(resolvedThreadExchanges)).getThreads(
+      triggerPipeline,
+    );
+    if (!result.ok) throw new Error(result.error.message);
+    const thread = result.value.threads.find((one) => one.id === "498821522");
+    expect(thread?.comments[0]?.author.name).toBe("user-7a306388");
+    expect(thread?.resolvedBy).toEqual({
+      id: "{5d6d69c0-bfad-4ee1-9e60-6af86e640907}",
+      name: "user-5d6d69c0",
+    });
+    expect(asked?.request.url).toContain("fields=");
+  });
+
+  it("says nothing about who when the resolution doesn't name them", () => {
+    const body = unasked?.response.body as { values: unknown[] };
+    const threads = toThreads(z.array(BitbucketThreadComment).parse(body.values));
+    const resolved = threads.filter((thread) => thread.resolved);
+    expect(resolved.map((thread) => thread.id)).toEqual([
+      "498821522",
+      "498822059",
+      "498823189",
+      "498823865",
+    ]);
+    expect(resolved.map((thread) => thread.resolvedBy)).toEqual([null, null, null, null]);
   });
 });
