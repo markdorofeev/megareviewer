@@ -11,6 +11,7 @@ import {
   bitbucketThreadExchanges,
 } from "./fixtures/threads.synthetic.ts";
 import { createBitbucketReviewThreads } from "./index.ts";
+import { toThreads, withMentions } from "./threads.ts";
 
 const pr: PullRequestRef = {
   repo: { host: "bitbucket", owner: "atlassian", repo: "bitbucket-upload-file" },
@@ -110,5 +111,44 @@ describe("Bitbucket review threads", () => {
     }));
     const result = await threadsWith(createFixtureFetch(rejecting)).getThreads(pr);
     expect(!result.ok && result.error.kind).toBe("unauthorized");
+  });
+});
+
+describe("withMentions", () => {
+  const names = new Map([
+    ["557058:0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f", "Ana Silva"],
+    ["5b0edaebb485a923ce5a46dd", "Lee *the* [Park]"],
+  ]);
+
+  it("names the people a mention writes as an account ID, when the comments show who", () => {
+    expect(
+      withMentions(
+        "Hi @{557058:0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f}, ask @{5b0edaebb485a923ce5a46dd} or @{6132486f44c8ed0068a6ba6a}",
+        names,
+      ),
+    ).toBe("Hi @Ana Silva, ask @Lee \\*the\\* \\[Park\\] or @{6132486f44c8ed0068a6ba6a}");
+  });
+
+  it("reads the account IDs from the comments' authors when building threads", () => {
+    const threads = toThreads([
+      {
+        id: 1,
+        content: { raw: "@{5b0edaebb485a923ce5a46dd} is this needed?" },
+        user: { uuid: "{a}", display_name: "Ana Silva", account_id: "557058:a" },
+        created_on: "2026-01-02T09:00:00.000000+00:00",
+        inline: { path: "app.py", from: null, to: 3 },
+      },
+      {
+        id: 2,
+        content: { raw: "@{557058:a} yes" },
+        user: { uuid: "{l}", display_name: "Lee Park", account_id: "5b0edaebb485a923ce5a46dd" },
+        created_on: "2026-01-02T09:05:00.000000+00:00",
+        parent: { id: 1 },
+      },
+    ]);
+    expect(threads[0]?.comments.map((comment) => comment.body)).toEqual([
+      "@Lee Park is this needed?",
+      "@Ana Silva yes",
+    ]);
   });
 });

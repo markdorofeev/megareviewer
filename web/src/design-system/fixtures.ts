@@ -261,6 +261,36 @@ export const THREADS = {
       },
     ],
   }),
+  markdown: thread({
+    comments: [
+      {
+        id: "c_markdown1",
+        author: sam,
+        body: [
+          "### Retries",
+          "",
+          "This **retries a 4xx** too, which _never_ succeeds on a second try:  ",
+          "a `400` stays a `400`. ~~Backoff~~ The cap is fine.",
+          "",
+          "> Retry only network errors and 5xx.",
+          "",
+          "1. Check `error.status` first",
+          "2. Keep the cap at 8 s",
+          "   - [x] total delay",
+          "   - [ ] per attempt",
+          "",
+          "| Status | Retried |",
+          "| :--- | :---: |",
+          "| 503 | yes |",
+          "| 404 | no |",
+          "",
+          "See [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#name-status-codes).",
+        ].join("\n"),
+        createdAt: "2026-10-21T08:30:00Z",
+        originalCommit: null,
+      },
+    ],
+  }),
   suggestion: thread({
     comments: [
       {

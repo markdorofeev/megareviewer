@@ -14,6 +14,8 @@ const ShortHash = z.string().regex(/^[0-9a-f]{7,40}$/);
 export const BitbucketAccount = z.object({
   uuid: z.string().min(1),
   display_name: z.string(),
+  /** What a mention in a comment names, as `@{account_id}`. */
+  account_id: z.string().optional(),
 });
 export type BitbucketAccount = z.infer<typeof BitbucketAccount>;
 

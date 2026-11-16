@@ -2,6 +2,7 @@ import { CheckIcon } from "lucide-react";
 import { Fragment, useEffect, useId, useRef, useState } from "react";
 import {
   parseBody,
+  previewOf,
   type ReviewThread,
   type ThreadComment,
 } from "../../../../src/domain/review/index.ts";
@@ -265,7 +266,7 @@ export const ReviewThreadView = ({
           </span>
           {first !== undefined && (
             <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
-              {first.author.name}: {first.body.split("\n")[0]}
+              {first.author.name}: {previewOf(first.body)}
             </span>
           )}
           <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-expanded={false}>

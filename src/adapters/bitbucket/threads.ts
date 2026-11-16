@@ -21,10 +21,36 @@ const repoUrl = (fullName: string): string =>
 const pullRequestUrl = (ref: PullRequestRef): string =>
   `${repoUrl(`${ref.repo.owner}/${ref.repo.repo}`)}/pullrequests/${ref.number}`;
 
-const toComment = (comment: BitbucketThreadComment): ThreadComment => ({
+/** The names of the accounts a PR's comments show, by the account ID a mention writes. */
+const namesOf = (comments: readonly BitbucketThreadComment[]): ReadonlyMap<string, string> =>
+  new Map(
+    comments.flatMap((comment) =>
+      [comment.user, comment.resolution?.user].flatMap((account) =>
+        account?.account_id === undefined
+          ? []
+          : [[account.account_id, account.display_name] as const],
+      ),
+    ),
+  );
+
+/**
+ * A body with its mentions, which Bitbucket writes as `@{account_id}`, named when the PR's
+ * comments show who they are; the others stay as written. A name's Markdown characters are
+ * escaped, so a name can't change how the body reads.
+ */
+export const withMentions = (body: string, names: ReadonlyMap<string, string>): string =>
+  body.replace(/@\{([^{}\s]+)\}/g, (mention, id: string) => {
+    const name = names.get(id);
+    return name === undefined ? mention : `@${name.replace(/[!-/:-@[-`{-~]/g, "\\$&")}`;
+  });
+
+const toComment = (
+  comment: BitbucketThreadComment,
+  names: ReadonlyMap<string, string> = new Map(),
+): ThreadComment => ({
   id: String(comment.id),
   author: toHostUser(comment.user),
-  body: comment.content.raw ?? "",
+  body: withMentions(comment.content.raw ?? "", names),
   createdAt: comment.created_on,
   // Bitbucket doesn't say which commit a comment was written on.
   originalCommit: null,
@@ -40,6 +66,7 @@ const byTime = (a: ThreadComment, b: ThreadComment) =>
  */
 export const toThreads = (comments: readonly BitbucketThreadComment[]): ReviewThread[] => {
   const byId = new Map(comments.map((comment) => [comment.id, comment]));
+  const names = namesOf(comments);
   const rootOf = (comment: BitbucketThreadComment): BitbucketThreadComment => {
     let current = comment;
     const seen = new Set<number>();
@@ -63,7 +90,7 @@ export const toThreads = (comments: readonly BitbucketThreadComment[]): ReviewTh
     const inline = root?.inline;
     const shown = chain
       .filter((comment) => comment.deleted !== true)
-      .map(toComment)
+      .map((comment) => toComment(comment, names))
       .sort(byTime);
     if (root === undefined || inline === undefined || shown.length === 0) continue;
     const onNew = inline.to != null;

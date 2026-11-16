@@ -169,14 +169,14 @@ describe("ReviewThreadView", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 
-  it("renders HTML and links in a body as text", () => {
+  it("renders HTML as text, and a link only to http(s)", () => {
     show({
       thread: thread({
         comments: [
           {
             id: "x",
             author: sam,
-            body: '<script>alert(1)</script> [click](javascript:alert(1)) <img src=x onerror="alert(1)">',
+            body: '<script>alert(1)</script> [click](javascript:alert(1)) <img src=x onerror="alert(1)"> [docs](https://docs.test/a)',
             createdAt: "2026-10-21T09:00:00Z",
             originalCommit: null,
           },
@@ -184,9 +184,41 @@ describe("ReviewThreadView", () => {
       }),
     });
     const article = screen.getByRole("article");
-    expect(article.querySelector("script, a, img")).toBeNull();
+    expect(article.querySelector("script, img")).toBeNull();
     expect(article.textContent).toContain("<script>alert(1)</script>");
-    expect(article.textContent).toContain("[click](javascript:alert(1))");
+    expect(article.textContent).toContain(" click ");
+    const links = article.querySelectorAll("a");
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe("https://docs.test/a");
+    expect(links[0]?.getAttribute("rel")).toContain("noreferrer");
+    expect(links[0]?.textContent).toBe("docs");
+  });
+
+  it("renders a Bitbucket comment's Markdown as elements", () => {
+    show({
+      thread: thread({
+        comments: [
+          {
+            id: "x",
+            author: sam,
+            body: "### Bugs\n\nAWS\\_KEY is **required**, _sadly_:  \n> quoted\n\n* one\n* two",
+            createdAt: "2026-10-21T09:00:00Z",
+            originalCommit: null,
+          },
+        ],
+      }),
+    });
+    const article = screen.getByRole("article");
+    expect(article.querySelector("[data-slot=thread-heading]")?.textContent).toBe("Bugs");
+    expect(article.querySelector("strong")?.textContent).toBe("required");
+    expect(article.querySelector("em")?.textContent).toBe("sadly");
+    expect(article.querySelector("blockquote")?.textContent).toBe("quoted");
+    expect([...article.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
+      "one",
+      "two",
+    ]);
+    expect(article.textContent).toContain("AWS_KEY");
+    expect(article.textContent).not.toContain("\\");
   });
 
   const withBody = (body: string) =>

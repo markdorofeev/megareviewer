@@ -190,6 +190,10 @@ export const DomainComponents = () => {
         <ThreadDemo label="Outdated" thread={THREADS.outdated} />
         <ThreadDemo label="With a suggestion" thread={THREADS.suggestion} />
         <ThreadDemo
+          label="With Markdown: a heading, emphasis, a quote, lists, a table and a link"
+          thread={THREADS.markdown}
+        />
+        <ThreadDemo
           label="A reply that's posting"
           thread={THREADS.open}
           initialReply={{ text: "Capped it at 1,000 entries.", status: "posting" }}

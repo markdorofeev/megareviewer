@@ -140,12 +140,15 @@ export {
 export {
   type BodyBlock,
   composeBody,
+  type ListItem,
   type ParsedBody,
   parseBlocks,
   parseBody,
   parseSpans,
+  previewOf,
   type Span,
   suggestionOf,
+  type TableAlign,
 } from "./thread-body.ts";
 export { extractTicketKeys } from "./ticket-keys.ts";
 export { Tour, TourStep, TourStepId } from "./tour.ts";
