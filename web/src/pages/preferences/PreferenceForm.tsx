@@ -18,6 +18,20 @@ export interface RuleFields {
   readonly scope: PreferenceScope;
 }
 
+/** A ref for what opened the form in its place, which takes the focus back once the form closes. */
+export const useFocusBack = <T extends HTMLElement>(open: boolean) => {
+  const opener = useRef<T>(null);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open) wasOpen.current = true;
+    else if (wasOpen.current) {
+      wasOpen.current = false;
+      opener.current?.focus();
+    }
+  }, [open]);
+  return opener;
+};
+
 export const EMPTY_RULE = "Write the rule first.";
 export const tooLong = (over: number): string =>
   `A preference is one sentence of at most ${MAX_PREFERENCE_TEXT} characters: this is ${over} too many.`;

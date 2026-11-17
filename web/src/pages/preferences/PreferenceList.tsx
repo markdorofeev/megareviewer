@@ -12,7 +12,7 @@ import {
 } from "../../ui/dropdown-menu.tsx";
 import { Switch } from "../../ui/switch.tsx";
 import { Dialog } from "../review/Dialog.tsx";
-import { PreferenceForm, type RuleFields } from "./PreferenceForm.tsx";
+import { PreferenceForm, type RuleFields, useFocusBack } from "./PreferenceForm.tsx";
 import { KindChip, type ScopeOption, SOURCE } from "./rule.tsx";
 
 /** What a row can do; each answers why it failed, or null. */
@@ -80,6 +80,7 @@ const Row = ({
 }) => {
   const [mode, setMode] = useState<"shown" | "editing" | "deleting">("shown");
   const [failure, setFailure] = useState<string | null>(null);
+  const more = useFocusBack<HTMLButtonElement>(mode === "editing");
   const { id, kind, text, source, enabled } = preference;
 
   if (mode === "editing") {
@@ -128,7 +129,9 @@ const Row = ({
         />
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-xs" aria-label={`More for: ${text}`} />}
+            render={
+              <Button ref={more} variant="ghost" size="icon-xs" aria-label={`More for: ${text}`} />
+            }
           >
             <EllipsisIcon aria-hidden="true" />
           </DropdownMenuTrigger>

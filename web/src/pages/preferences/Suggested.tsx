@@ -6,7 +6,7 @@ import {
   type ProposalId,
 } from "../../../../src/domain/review/index.ts";
 import { Button } from "../../ui/button.tsx";
-import { PreferenceForm, type RuleFields, tooLong } from "./PreferenceForm.tsx";
+import { PreferenceForm, type RuleFields, tooLong, useFocusBack } from "./PreferenceForm.tsx";
 import { KindChip, type ScopeOption, scopeKey } from "./rule.tsx";
 
 /** What the reviewer decides on a proposal; each answers why it failed, or null. */
@@ -35,6 +35,7 @@ const Proposal = ({
   const [editing, setEditing] = useState<{ readonly note: string | null } | null>(null);
   const [pending, setPending] = useState<"accept" | "reject" | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const edit = useFocusBack<HTMLButtonElement>(editing !== null);
   const where = scopes.find((option) => option.key === scopeKey(scope))?.label ?? "Everywhere";
 
   const decide = async (decision: "accept" | "reject") => {
@@ -104,6 +105,7 @@ const Proposal = ({
           {pending === "reject" ? "Rejecting…" : "Reject"}
         </Button>
         <Button
+          ref={edit}
           variant="outline"
           size="sm"
           aria-label={`Edit: ${text}`}

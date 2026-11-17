@@ -215,6 +215,10 @@ describe("PreferencesPage", () => {
       text: "Names of locals",
       scope: { kind: "global" },
     });
+    // The form went, so the focus is back on the menu it was opened from.
+    expect(document.activeElement).toBe(
+      within(section).getByRole("button", { name: "More for: Names of locals" }),
+    );
   });
 
   it("asks before deleting a preference", async () => {
@@ -273,7 +277,14 @@ describe("PreferencesPage's suggestions", () => {
   it("opens a proposal in the form first, and accepts it as edited", async () => {
     const { sent } = renderPage();
     const section = await everywhere();
-    await userEvent.click(within(suggested()).getByRole("button", { name: /^Edit: Cached data/ }));
+    const edit = () => within(suggested()).getByRole("button", { name: /^Edit: Cached data/ });
+    // Cancel leaves the proposal waiting, with the focus back on Edit.
+    await userEvent.click(edit());
+    await userEvent.click(within(suggested()).getByRole("button", { name: "Cancel" }));
+    expect(document.activeElement).toBe(edit());
+    expect(sent("PUT", "/api/preferences/proposals/prop_0000000000000002")).toHaveLength(0);
+
+    await userEvent.click(edit());
     const form = within(suggested()).getByRole("form", { name: /^Edit the suggestion/ });
     const field = within(form).getByRole("textbox");
     await userEvent.clear(field);
