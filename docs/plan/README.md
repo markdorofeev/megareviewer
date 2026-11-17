@@ -208,6 +208,20 @@ The main page is a URL field, a setup strip and two lists. This slice rebuilds i
 
 The activity types, the store's methods and the route go in their own PR first.
 
+## Twelfth slice: what the reviewer values
+
+An AI review says the same things to every reviewer. This slice collects what a reviewer values, on their machine, and uses it in Request AI review: rules they write, rules proposed from what they dismiss, raise and comment, the repository's guideline files, and their past comments on the host. Nothing learned is used until the reviewer accepts it.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 55 | [Preferences: the domain, the store, the API and the run's guidance](55-preferences-core.md) | 43, 45, 51, 54 | `src/domain/review/preference.ts`, the `PreferenceStore`, `PreferenceSuggester` and `ReviewHistory` ports, the preference tables, use cases and routes, a run's guidance |
+| 56 | [The model reads the reviewer's guidance, and suggests preferences](56-guidance-in-the-passes.md) | 55 | `src/adapters/model/`, the catalog's `suggester` |
+| 57 | [The reviewer's past comments, from GitHub and Bitbucket](57-review-history.md) | 55 | `ReviewHistory` in `src/adapters/github/` and `src/adapters/bitbucket/` |
+| 58 | [The preferences page, and guidance on the review page](58-preferences-page.md) | 55 | `web/src/pages/preferences/`, guidance on a point in `web/src/pages/review/`, `e2e/preferences.spec.ts` |
+| 59 | [Evals for guidance](59-preference-evals.md) | 55, 56 | `evals/` |
+
+Stage 55 is the bottleneck on purpose, as stage 02 was: it fixes the types, ports, routes and fakes, so 56, 57 and 58 run side by side, with 59's cases and scoring beside them. Only stage 55 writes DESIGN.md, ARCHITECTURE.md and ENGINEERING.md; the others record what they decide in their own doc's notes, and it's folded in when the slice is merged. The evals run last, once 56's prompts are in.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
