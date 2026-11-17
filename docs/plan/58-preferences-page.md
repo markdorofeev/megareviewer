@@ -1,6 +1,6 @@
 # Stage 58: The preferences page, and guidance on the review page
 
-**Status:** Not started
+**Status:** In progress (branch worktree-agent-ac4271c8efd9bbe22)
 **Depends on:** 55
 **Owns:** `web/src/pages/preferences/`, the route and the header's link in `web/src/app/`, the client's preference calls in `web/src/api/`, the guidance on a point in `web/src/pages/review/` (`PointCard.tsx`, the usage line and Run details, the stepper's counts), their examples in `web/src/design-system/`, a variant PR in `src/cli/dev/`, `e2e/preferences.spec.ts`
 
