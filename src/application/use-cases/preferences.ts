@@ -24,10 +24,11 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { PreferenceSuggester, ProposalDraft } from "../ports/index.ts";
-import { chooseOption, hostName } from "./analyses.ts";
+import { chooseOption } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { readGuidelines } from "./guidance.ts";
+import { hostName } from "./hosts.ts";
 import { mapLimit } from "./text.ts";
 
 /** The analyses whose repositories the page lists, the most recently updated. */

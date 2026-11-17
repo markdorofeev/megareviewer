@@ -12,9 +12,9 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { InputGuidance } from "../ports/index.ts";
-import { hostFor } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { fromHostError, type UseCaseError } from "./errors.ts";
+import { hostFor } from "./hosts.ts";
 
 /** As Collect does, a file over 1 MB isn't kept. */
 const MAX_CACHED_BYTES = 1024 * 1024;

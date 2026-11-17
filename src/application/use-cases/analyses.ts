@@ -5,7 +5,6 @@ import {
   analysisId,
   type BeforeModel,
   type CheckoutStatus,
-  type HostKind,
   hasModelRun,
   inProgress,
   MODEL_STAGES,
@@ -27,6 +26,7 @@ import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { GitHost, ModelCatalog } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
+import { hostFor } from "./hosts.ts";
 import { pipelineVersion } from "./pipeline-version.ts";
 import { codeFields, runModel, runPipeline } from "./run-pipeline.ts";
 import { type CheckoutAt, lookUpCheckout } from "./unchanged-callers.ts";
@@ -35,19 +35,6 @@ import { type CheckoutAt, lookUpCheckout } from "./unchanged-callers.ts";
 const RECOVERY_SCAN_LIMIT = 200;
 
 const STAGES: readonly StageName[] = StageNames.options;
-
-export const hostFor = (
-  deps: Pick<AppDeps, "hosts">,
-  host: HostKind,
-): Result<GitHost, UseCaseError> => {
-  const gitHost = deps.hosts[host];
-  return gitHost === undefined
-    ? err(appError("host-not-configured", `${hostName(host)} isn't configured`))
-    : ok(gitHost);
-};
-
-export const hostName = (host: HostKind): string =>
-  ({ github: "GitHub", bitbucket: "Bitbucket Cloud" })[host];
 
 const fetchPullRequest = async (
   deps: AppDeps,
