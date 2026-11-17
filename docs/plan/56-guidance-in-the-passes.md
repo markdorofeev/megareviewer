@@ -1,6 +1,6 @@
 # Stage 56: The model reads the reviewer's guidance, and suggests preferences
 
-**Status:** Not started
+**Status:** In progress (branch worktree-agent-ad7e0d567ef52011e)
 **Depends on:** 55
 **Owns:** `src/adapters/model/` (the shared prompts, input rendering and output schema, and each transport), the catalog's `suggester` in `src/cli/model-access.ts`, the model fixtures and recordings
 
