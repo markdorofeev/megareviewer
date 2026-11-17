@@ -1,6 +1,6 @@
 # Stage 57: The reviewer's past comments, from GitHub and Bitbucket
 
-**Status:** Not started
+**Status:** In progress (branch worktree-agent-ad7986be5b497c82d)
 **Depends on:** 55
 **Owns:** `ReviewHistory` in `src/adapters/github/` and `src/adapters/bitbucket/`, their fixtures, the port's wiring in `src/cli/compose.ts` and the retry wrapper
 
