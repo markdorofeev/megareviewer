@@ -72,6 +72,12 @@ describe("suggestionError", () => {
         message: "Codex didn't finish the pass in 10 minutes.",
       }),
     ).toEqual({ kind: "unexpected", message: "Codex didn't finish the suggestion in 10 minutes." });
+    expect(
+      suggestionError({
+        kind: "unexpected",
+        message: "The pass was stopped because megareviewer is closing.",
+      }).message,
+    ).toBe("The suggestion was stopped because megareviewer is closing.");
   });
 
   it("leaves an error that's about the reviewer's setup as it is", () => {

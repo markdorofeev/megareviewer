@@ -38,6 +38,6 @@ export const suggestionError = (error: ModelError): ModelError => {
     case "refusal":
       return modelError("refusal", "The model declined to suggest preferences.");
     default:
-      return modelError(error.kind, error.message.replaceAll("the pass", "the suggestion"));
+      return modelError(error.kind, error.message.replace(/\b([Tt])he pass\b/g, "$1he suggestion"));
   }
 };
