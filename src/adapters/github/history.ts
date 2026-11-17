@@ -90,13 +90,13 @@ export const createGitHubReviewHistory = (options: GitHubClientOptions): ReviewH
       const [user, found] = await Promise.all([currentLogin(), reviewed(repo, pullRequests)]);
       if (!user.ok) return user;
       if (!found.ok) return found;
+      const repoKey = `${repo.owner}/${repo.repo}`;
       if (found.value.incomplete_results) {
         logger.warn("GitHub's search returned only some of the pull requests you reviewed", {
-          repo: `${repo.owner}/${repo.repo}`,
+          repo: repoKey,
         });
       }
 
-      const repoKey = `${repo.owner}/${repo.repo}`;
       const got = kept?.repo === repoKey ? kept.comments : new Map<string, PastComment[]>();
       kept = { repo: repoKey, comments: got };
 

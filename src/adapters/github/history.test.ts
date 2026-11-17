@@ -165,6 +165,31 @@ describe("GitHub review history", () => {
     expect(urls.length - third).toBe(4);
   });
 
+  it("warns when GitHub's search was cut short", async () => {
+    const logger = new RecordingLogger();
+    const result = await historyWith(
+      createFixtureFetch([
+        userExchange,
+        {
+          request: { method: "GET", url: searchUrl(UNREVIEWED_REPO, 30) },
+          response: {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+            body: { total_count: 0, incomplete_results: true, items: [] },
+          },
+        },
+      ]),
+      logger,
+    ).getReviewerComments(UNREVIEWED_REPO, { pullRequests: 30 });
+
+    expect(result).toEqual({ ok: true, value: { comments: [], pullRequests: 0 } });
+    expect(logger.entries).toContainEqual({
+      level: "warn",
+      message: "GitHub's search returned only some of the pull requests you reviewed",
+      fields: { repo: "octo-org/docs" },
+    });
+  });
+
   it("fails with GitHub's reason for a repository the token can't search", async () => {
     const result = await historyWith(createFixtureFetch(hiddenRepoExchanges)).getReviewerComments(
       HIDDEN_REPO,
