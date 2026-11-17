@@ -39,6 +39,7 @@ import { err } from "../../domain/shared/index.ts";
 import { allowedHosts, assemble, type Composition, systemClock } from "../compose.ts";
 import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
 import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./model-recording.ts";
+import { receiptsGuided, withGuidance } from "./receipts-guided.ts";
 import { receiptsTested, withCheckingTests } from "./receipts-tested.ts";
 
 /** The recorded run the scenarios play, read once at startup. */
@@ -62,6 +63,7 @@ export const fakeFixtures: readonly PullRequestFixture[] = [
   ...allFixtures,
   intentFailsOnce,
   receiptsTested,
+  receiptsGuided,
 ];
 
 const FAKE_MODELS = [
@@ -290,11 +292,14 @@ export const createFakeApp = async (options: {
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
       models: fakeModels(
-        withCheckingTests(
-          options.scenario === undefined
-            ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
-            : createReplayAnalysisModel(recording, { scenario: options.scenario }),
-          receiptsTested.pullRequest.url,
+        withGuidance(
+          withCheckingTests(
+            options.scenario === undefined
+              ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+              : createReplayAnalysisModel(recording, { scenario: options.scenario }),
+            receiptsTested.pullRequest.url,
+          ),
+          receiptsGuided.pullRequest.url,
         ),
         options.modelAvailable !== false,
       ),

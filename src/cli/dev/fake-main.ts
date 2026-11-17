@@ -7,6 +7,7 @@ import { createLogger } from "../logger.ts";
 import { serve } from "../serve.ts";
 import { createFakeApp } from "./fake-app.ts";
 import { isScenario, SCENARIOS } from "./model-recording.ts";
+import { seedGuidedPreferences } from "./receipts-guided.ts";
 
 // Fake mode, for UI development and end-to-end tests: no credentials, no network, nothing on disk.
 // Never bundled.
@@ -37,6 +38,8 @@ const fake = await createFakeApp({
   ...(scenario === undefined ? {} : { scenario }),
   ...(values.token !== undefined && { sessionToken: values.token }),
 });
+// The guided PR's AI review is shaped by the reviewer's preferences for its repository.
+await seedGuidedPreferences(fake.preferences, new Date().toISOString());
 const server = await serve(fake.app, Number(values.port));
 
 console.log(`megareviewer fake mode, serving fixtures${scenario === undefined ? "" : `, playing the ${scenario} scenario`}

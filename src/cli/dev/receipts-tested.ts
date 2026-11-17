@@ -67,12 +67,12 @@ export const receiptsTested: PullRequestFixture = {
   headFiles: { ...smallFeature.headFiles, [TEST_PATH]: TEST_FILE },
 };
 
-const hunkWith = (input: AnalysisInput, path: string, text: string): Hunk | undefined =>
+export const hunkWith = (input: AnalysisInput, path: string, text: string): Hunk | undefined =>
   input.files
     .find((file) => file.path === path)
     ?.hunks.find((hunk) => hunk.lines.some((line) => line.text.includes(text)));
 
-const lineOf = (hunk: Hunk, text: string): number =>
+export const lineOf = (hunk: Hunk, text: string): number =>
   hunk.lines.find((line) => line.kind !== "del" && line.text.includes(text))?.newLine ?? 1;
 
 /** The risks the fake model raises on receipts-tested: the route a test checks, the limit none does. */
