@@ -154,6 +154,7 @@ interface CaseResult {
     | "warnings"
     | "usage"
     | "modelCalls"
+    | "guidance"
   > | null;
   /** Null when the analysis never started. */
   readonly timing: CaseTiming | null;
@@ -220,6 +221,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
     parser,
     logger,
     timeoutMs: CASE_TIMEOUT_MS,
+    guidance: evalCase.guidance,
   });
   if (!result.ok) return failed(result.error, null);
   const { analysis, input } = result.value;

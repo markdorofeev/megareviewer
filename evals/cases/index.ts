@@ -5,6 +5,7 @@ import {
   refactorMove,
   smallFeature,
 } from "../../src/application/testing/index.ts";
+import type { CaseGuidance } from "../guidance.ts";
 import type { CaseLabels } from "../labels.ts";
 import * as authMiddleware from "./auth-middleware/case.ts";
 import { labels as authMiddlewareLabels } from "./auth-middleware/labels.ts";
@@ -40,6 +41,8 @@ export interface EvalCase {
   /** What the case is there to test. */
   readonly tests: string;
   readonly fixture: PullRequestFixture;
+  /** What a run of it reads beside the PR; without it, nothing. */
+  readonly guidance?: CaseGuidance;
   readonly labels: CaseLabels;
 }
 

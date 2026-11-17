@@ -25,6 +25,7 @@ const result = await analyzeCase(found.fixture, {
   parser,
   logger: quietLogger((line) => console.error(line)),
   timeoutMs: 60_000,
+  guidance: found.guidance,
 });
 if (!result.ok || result.value.analysis.status !== "complete") {
   console.error(result.ok ? result.value.analysis.error : result.error);

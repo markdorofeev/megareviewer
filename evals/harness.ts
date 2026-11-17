@@ -19,6 +19,7 @@ import {
 import { createUseCases } from "../src/application/use-cases/index.ts";
 import { type Analysis, inProgress, modelRunnable } from "../src/domain/review/index.ts";
 import { err, ok, type Result } from "../src/domain/shared/index.ts";
+import { type CaseGuidance, giveGuidance } from "./guidance.ts";
 
 export const systemClock = { now: () => new Date().toISOString() };
 
@@ -35,6 +36,8 @@ export interface AnalyzeOptions {
   readonly logger: Logger;
   /** The whole analysis, from start to complete or failed. */
   readonly timeoutMs: number;
+  /** The reviewer's preferences and the repository's guideline files, for a case that has them. */
+  readonly guidance?: CaseGuidance | undefined;
 }
 
 export interface CaseRun {
@@ -77,10 +80,10 @@ const recordingInput = (model: AnalysisModel) => {
 
 /**
  * Runs the analysis pipeline on one case, as the CLI would: the case's PR on a fake host, its
- * tickets in a fake Jira, the given model and parser, an in-memory store. Once the code's
- * analysis completes, runs the model on it, as "Request AI review" does. Resolves with the
- * analysis and the model's input once both end; an error only when it didn't start or ran out
- * of time.
+ * tickets in a fake Jira, the given model and parser, an in-memory store, and the case's guidance
+ * where a run reads it. Once the code's analysis completes, runs the model on it, as "Request AI
+ * review" does. Resolves with the analysis and the model's input once both end; an error only
+ * when it didn't start or ran out of time.
  */
 export const analyzeCase = async (
   fixture: PullRequestFixture,
@@ -89,10 +92,15 @@ export const analyzeCase = async (
   const { host } = fixture.pullRequest.ref.repo;
   const recorded = recordingInput(options.model);
   const store = new InMemoryAnalysisStore();
+  const preferences = new InMemoryPreferenceStore();
+  const gitHost = new FakeGitHost({ host, fixtures: [fixture], clock: systemClock });
+  if (options.guidance !== undefined) {
+    await giveGuidance(options.guidance, fixture, { host: gitHost, preferences });
+  }
   const events = createAnalysisEvents();
   const useCases = createUseCases(
     {
-      hosts: { [host]: new FakeGitHost({ host, fixtures: [fixture], clock: systemClock }) },
+      hosts: { [host]: gitHost },
       tickets: new FakeTicketSource({ tickets: fixture.tickets }),
       models: new FakeModelCatalog({
         model: recorded.model,
@@ -100,7 +108,7 @@ export const analyzeCase = async (
       }),
       store,
       fileCache: new InMemoryFileCache(),
-      preferences: new InMemoryPreferenceStore(),
+      preferences,
       history: {},
       checkouts: new FakeLocalCheckouts(),
       threads: {},

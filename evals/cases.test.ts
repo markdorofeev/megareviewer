@@ -79,6 +79,7 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
           parser,
           logger: quietLogger(),
           timeoutMs: 30_000,
+          guidance: evalCase.guidance,
         });
         if (!result.ok) throw new Error(result.error);
         analysis = result.value.analysis;

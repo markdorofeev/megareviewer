@@ -3,6 +3,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import type { AnalysisInput, CodeParser } from "../src/application/ports/index.ts";
 import { FakeAnalysisModel, smallFeature } from "../src/application/testing/index.ts";
+import { ok } from "../src/domain/shared/index.ts";
+import type { CaseGuidance } from "./guidance.ts";
 import { analyzeCase, quietLogger } from "./harness.ts";
 
 let parser: CodeParser;
@@ -50,5 +52,75 @@ describe("analyzeCase", () => {
     if (!result.ok) throw new Error(result.error);
     expect(result.value.analysis.status).toBe("failed");
     expect(result.value.input).toBeNull();
+  });
+
+  const guidance: CaseGuidance = {
+    preferences: [
+      { kind: "look-for", text: "Unbounded caches", scope: "global" },
+      { kind: "dont-flag", text: "Naming of test helpers", scope: "repo" },
+    ],
+    guidelines: [{ path: "REVIEW.md", content: "Receipts are plain text.\n" }],
+  };
+
+  it("gives a run the case's guidance, numbered in the case's order", async () => {
+    const result = await analyzeCase(smallFeature, {
+      model: new FakeAnalysisModel(),
+      parser,
+      logger: quietLogger(),
+      timeoutMs: 30_000,
+      guidance,
+    });
+    if (!result.ok) throw new Error(result.error);
+    expect(result.value.input?.guidance).toEqual({
+      preferences: [
+        { ref: "p1", kind: "look-for", text: "Unbounded caches", scope: "global" },
+        { ref: "p2", kind: "dont-flag", text: "Naming of test helpers", scope: "repo" },
+      ],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Receipts are plain text.\n" }],
+    });
+    expect(result.value.analysis.guidance?.preferences.map((p) => [p.ref, p.scope.kind])).toEqual([
+      ["p1", "global"],
+      ["p2", "repo"],
+    ]);
+    expect(result.value.analysis.warnings).toEqual([]);
+  });
+
+  it("keeps a mark that names the case's guidance, as a real run would", async () => {
+    const run = (model: FakeAnalysisModel) =>
+      analyzeCase(smallFeature, {
+        model,
+        parser,
+        logger: quietLogger(),
+        timeoutMs: 30_000,
+        guidance,
+      });
+    const unmarked = await run(new FakeAnalysisModel());
+    if (!unmarked.ok) throw new Error(unmarked.error);
+    const model = new FakeAnalysisModel();
+    model.script(
+      "findings",
+      ok(
+        unmarked.value.analysis.findings.map(({ id: _, ...finding }) => ({
+          ...finding,
+          guidance: { ref: "p1", effect: "raised" as const },
+        })),
+      ),
+    );
+    const marked = await run(model);
+    if (!marked.ok) throw new Error(marked.error);
+    expect(marked.value.analysis.findings.map((finding) => finding.guidance)).toEqual([
+      { ref: "p1", effect: "raised" },
+    ]);
+  });
+
+  it("gives a run no guidance without any", async () => {
+    const result = await analyzeCase(smallFeature, {
+      model: new FakeAnalysisModel(),
+      parser,
+      logger: quietLogger(),
+      timeoutMs: 30_000,
+    });
+    if (!result.ok) throw new Error(result.error);
+    expect(result.value.input?.guidance).toEqual({ preferences: [], guidelines: [] });
   });
 });

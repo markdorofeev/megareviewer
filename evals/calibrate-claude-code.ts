@@ -57,6 +57,7 @@ for (const evalCase of evalCases) {
     parser,
     logger: quietLogger(),
     timeoutMs: 60_000,
+    guidance: evalCase.guidance,
   });
   if (input === null) {
     console.log(`${evalCase.name}: no input captured`);
