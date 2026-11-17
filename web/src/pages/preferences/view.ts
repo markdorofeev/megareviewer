@@ -10,6 +10,7 @@ import {
   sameRepo,
   sameScope,
 } from "../../../../src/domain/review/index.ts";
+import { type ApiError, errorMessage } from "../../api/index.ts";
 
 // What each answer of the API changes in the view the page shows, so nothing is read again.
 
@@ -96,6 +97,10 @@ export const sentence = (text: string): string => {
   const trimmed = text.trim();
   return trimmed === "" || /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 };
+
+/** Why a request failed, in the server's own words where they're written for the reviewer. */
+export const failureReason = (error: ApiError): string =>
+  error.code === "bad-request" ? sentence(error.message) : errorMessage(error);
 
 export const plural = (count: number, one: string, many = `${one}s`): string =>
   `${count} ${count === 1 ? one : many}`;

@@ -28,18 +28,14 @@ import { type ProposalActions, Suggested } from "./Suggested.tsx";
 import {
   plural,
   preferencesIn,
+  failureReason as reason,
   repositoriesOf,
-  sentence,
   withGuidelineSwitch,
   withoutPreference,
   withoutProposal,
   withPreference,
   withProposals,
 } from "./view.ts";
-
-/** Why a request failed, in the server's own words where they're written for the reviewer. */
-const reason = (error: ApiError): string =>
-  error.code === "bad-request" ? sentence(error.message) : errorMessage(error);
 
 export const NOTHING_RECORDED =
   "Nothing new to suggest from: megareviewer records the points you dismiss and raise and the comments you post.";

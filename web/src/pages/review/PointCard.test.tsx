@@ -1,12 +1,15 @@
 import { act, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { HunkId } from "../../../../src/domain/diff/index.ts";
-import { type Point, PointId } from "../../../../src/domain/review/index.ts";
+import { type Point, PointId, PreferenceId } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView } from "../../../dev/fixtures/index.ts";
 import { CallPeek, createCallPeekHandle } from "../../review/index.ts";
+import { scopeOptions } from "../preferences/rule.tsx";
 import { checkingTestPayload } from "./calls.tsx";
 import { partIndex } from "./model.ts";
-import { RiskNote } from "./PointCard.tsx";
+import { FindingCard, RiskNote } from "./PointCard.tsx";
 
 const analysis = fixtureAnalysisView.analysis;
 const index = partIndex(analysis);
@@ -38,6 +41,7 @@ const checked: Point = {
   },
 };
 
+const repo = analysis.key.ref.repo;
 const actions = {
   state: "open" as const,
   saving: false,
@@ -45,7 +49,268 @@ const actions = {
   current: false,
   onRaise: vi.fn(),
   onState: vi.fn(),
+  leftOut: false,
+  onShow: vi.fn(),
+  ruleScopes: scopeOptions([repo]).reverse(),
+  onRule: vi.fn(async () => null),
 };
+
+const finding: Point = {
+  ...risk,
+  id: PointId.parse("f1"),
+  kind: "finding",
+  title: "`r` says nothing of what it holds",
+  explanation: "Name it for the rendered receipt.",
+  severity: "minor",
+};
+const findingProps = { inReview: false, removed: null, language: null };
+const fromPreference = {
+  effect: "raised" as const,
+  label: "Lookups that aren't scoped to the signed-in user",
+  preferenceId: PreferenceId.parse("pref_00000000000000a1"),
+};
+const leftOutByPreference = {
+  effect: "left-out" as const,
+  label: "Naming",
+  preferenceId: PreferenceId.parse("pref_00000000000000a2"),
+};
+
+const guidanceLine = (container: HTMLElement) =>
+  container.querySelector<HTMLElement>("[data-slot=point-guidance]");
+
+describe("a point's guidance", () => {
+  it("says which preference raised it, as a link to the preferences", () => {
+    const { container } = render(
+      <FindingCard
+        point={{ ...finding, guidance: fromPreference }}
+        {...actions}
+        {...findingProps}
+      />,
+    );
+    const line = guidanceLine(container);
+    expect(line?.textContent).toBe(
+      "From your preference: Lookups that aren't scoped to the signed-in user",
+    );
+    expect(line?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    const link = within(line as HTMLElement).getByRole("link");
+    expect(link.textContent).toBe(fromPreference.label);
+    expect(link.getAttribute("href")).toBe("/preferences");
+  });
+
+  it("names the guideline file a risk comes from", () => {
+    const { container } = render(
+      <RiskNote
+        point={{ ...risk, guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null } }}
+        {...actions}
+      />,
+    );
+    expect(guidanceLine(container)?.textContent).toBe("From REVIEW.md");
+    expect(screen.getByRole("link", { name: "REVIEW.md" }).getAttribute("href")).toBe(
+      "/preferences",
+    );
+  });
+
+  it("says nothing on a point no guidance shaped", () => {
+    const { container } = render(<FindingCard point={finding} {...actions} {...findingProps} />);
+    expect(guidanceLine(container)).toBeNull();
+  });
+
+  it("renders a preference's text as text", () => {
+    const label = '<img src=x onerror="alert(1)"> **bold**';
+    const { container } = render(
+      <FindingCard
+        point={{ ...finding, guidance: { ...fromPreference, label } }}
+        {...actions}
+        {...findingProps}
+      />,
+    );
+    expect(guidanceLine(container)?.textContent).toContain(label);
+    expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+describe("a point a preference left out", () => {
+  const leftOut = { ...finding, guidance: leftOutByPreference };
+
+  it("is folded to one line that names the preference, with Show", async () => {
+    const onShow = vi.fn();
+    const { container } = render(
+      <FindingCard point={leftOut} {...actions} {...findingProps} leftOut onShow={onShow} />,
+    );
+    const line = screen.getByRole("article", { name: finding.title });
+    expect(line.dataset.leftOut).toBe("true");
+    expect(line.textContent).toBe(
+      "Finding: `r` says nothing of what it holdsLeft out by your preference: NamingShow",
+    );
+    expect(container.querySelector("h3")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Dismiss/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: `Show: ${finding.title}` }));
+    expect(onShow).toHaveBeenCalledWith(finding.id);
+  });
+
+  it("shown, is its card with the same line on it, and takes the focus", async () => {
+    const Shown = () => {
+      const [folded, setFolded] = useState(true);
+      return (
+        <FindingCard
+          point={leftOut}
+          {...actions}
+          {...findingProps}
+          leftOut={folded}
+          onShow={() => setFolded(false)}
+        />
+      );
+    };
+    const { container } = render(<Shown />);
+    await userEvent.click(screen.getByRole("button", { name: /^Show: / }));
+    const card = screen.getByRole("article", { name: finding.title });
+    expect(document.activeElement).toBe(card);
+    expect(card.dataset.leftOut).toBeUndefined();
+    expect(guidanceLine(container)?.textContent).toBe("Left out by your preference: Naming");
+    expect(within(card).getByRole("button", { name: `Dismiss: ${finding.title}` })).toBeTruthy();
+  });
+
+  it("folds a risk a guideline file says to leave out", () => {
+    render(
+      <RiskNote
+        point={{
+          ...risk,
+          guidance: { effect: "left-out", label: "REVIEW.md", preferenceId: null },
+        }}
+        {...actions}
+        leftOut
+      />,
+    );
+    expect(screen.getByRole("article").textContent).toContain("Left out by REVIEW.md");
+  });
+
+  it("is its dismissed line once dismissed, not the left-out one", () => {
+    render(
+      <FindingCard point={leftOut} {...actions} {...findingProps} leftOut state="dismissed" />,
+    );
+    expect(screen.getByRole("article").textContent).toContain("Dismissed");
+    expect(screen.queryByRole("button", { name: /^Show/ })).toBeNull();
+  });
+});
+
+describe("Don't flag things like this", () => {
+  const openRule = async (title: string) => {
+    await userEvent.click(screen.getByRole("button", { name: `More ways to dismiss: ${title}` }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Don't flag things like this…" }),
+    );
+    return screen.getByRole("form", { name: `Don't flag things like: ${title}` });
+  };
+
+  it("opens a rule drafted from the point: Don't flag, its title, this repository", async () => {
+    const onRule = vi.fn(async () => null);
+    const onState = vi.fn();
+    render(
+      <FindingCard
+        point={finding}
+        {...actions}
+        {...findingProps}
+        onRule={onRule}
+        onState={onState}
+      />,
+    );
+    const form = await openRule(finding.title);
+    expect(form.querySelector("[data-slot=preference-kind]")?.textContent).toBe("Don't flag");
+    expect(within(form).queryByRole("button", { name: "Look for" })).toBeNull();
+    const field = within(form).getByRole<HTMLTextAreaElement>("textbox");
+    expect(field.value).toBe(finding.title);
+    expect(document.activeElement).toBe(field);
+    expect(within(form).getByRole("combobox", { name: "Applies to" }).textContent).toContain(
+      "acme/shop",
+    );
+    await userEvent.clear(field);
+    await userEvent.type(field, "Short names of locals");
+    await userEvent.click(within(form).getByRole("button", { name: "Save and dismiss" }));
+    expect(onRule).toHaveBeenCalledWith(finding, {
+      kind: "dont-flag",
+      text: "Short names of locals",
+      scope: { kind: "repo", repo },
+    });
+    // The page dismisses the point once the rule is saved; the card only asks.
+    expect(onState).not.toHaveBeenCalled();
+    expect(screen.queryByRole("form")).toBeNull();
+  });
+
+  it("saves for everywhere when the reviewer chooses it", async () => {
+    const onRule = vi.fn(async () => null);
+    render(<RiskNote point={risk} {...actions} onRule={onRule} />);
+    const form = await openRule(risk.title);
+    await userEvent.click(within(form).getByRole("combobox", { name: "Applies to" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Everywhere" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save and dismiss" }));
+    expect(onRule).toHaveBeenCalledWith(risk, {
+      kind: "dont-flag",
+      text: risk.title,
+      scope: { kind: "global" },
+    });
+  });
+
+  it("does neither on Cancel, and gives the card the focus back", async () => {
+    const onRule = vi.fn(async () => null);
+    const onState = vi.fn();
+    render(
+      <FindingCard
+        point={finding}
+        {...actions}
+        {...findingProps}
+        onRule={onRule}
+        onState={onState}
+      />,
+    );
+    const form = await openRule(finding.title);
+    await userEvent.click(within(form).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("form")).toBeNull();
+    expect(onRule).not.toHaveBeenCalled();
+    expect(onState).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole("article"));
+    expect(screen.getByRole("button", { name: `Dismiss: ${finding.title}` })).toBeTruthy();
+  });
+
+  it("says why the rule wasn't saved, and keeps the form", async () => {
+    const onRule = vi.fn(async () => "50 preferences are already enabled for acme/shop.");
+    render(<FindingCard point={finding} {...actions} {...findingProps} onRule={onRule} />);
+    const form = await openRule(finding.title);
+    await userEvent.click(within(form).getByRole("button", { name: "Save and dismiss" }));
+    expect(await within(form).findByText(/50 preferences are already enabled/)).toBeTruthy();
+    expect(screen.getByRole("form")).toBeTruthy();
+  });
+
+  it("says on the dismissed line that the rule was saved, with a link to it", async () => {
+    const Saved = () => {
+      const [state, setState] = useState<"open" | "dismissed">("open");
+      return (
+        <FindingCard
+          point={finding}
+          {...actions}
+          {...findingProps}
+          state={state}
+          onRule={async () => {
+            setState("dismissed");
+            return null;
+          }}
+        />
+      );
+    };
+    render(<Saved />);
+    const form = await openRule(finding.title);
+    await userEvent.click(within(form).getByRole("button", { name: "Save and dismiss" }));
+    const line = await screen.findByText(/Dismissed, and saved to your/);
+    expect(within(line).getByRole("link", { name: "preferences" }).getAttribute("href")).toBe(
+      "/preferences",
+    );
+  });
+
+  it("can't be opened on a point that can't be acted on", () => {
+    render(<FindingCard point={finding} {...actions} {...findingProps} readOnly />);
+    const menu = screen.getByRole("button", { name: /^More ways to dismiss/ });
+    expect(menu.hasAttribute("disabled")).toBe(true);
+  });
+});
 
 describe("RiskNote", () => {
   it("names the test that checks it, where, and what it asserts, with a word and not a color", () => {

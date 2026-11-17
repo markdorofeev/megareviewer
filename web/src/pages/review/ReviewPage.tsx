@@ -49,6 +49,9 @@ import {
 } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
+import type { RuleFields } from "../preferences/PreferenceForm.tsx";
+import { scopeOptions } from "../preferences/rule.tsx";
+import { failureReason } from "../preferences/view.ts";
 import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks, checkingTestPayload } from "./calls.tsx";
@@ -337,6 +340,31 @@ const Review = ({
     [analysis, decisionsOn],
   );
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
+  const pointStates = usePoints(analysisId, view.pointReviews);
+  // A point a preference says not to flag is folded where its card would be until the reviewer
+  // shows it or has acted on it: it's no step, counts in no chip and marks no line.
+  const [shownLeftOut, setShownLeftOut] = useState<ReadonlySet<PointId>>(new Set());
+  const { stateOf } = pointStates;
+  const folded = useMemo(
+    () =>
+      new Set(
+        points
+          .filter(
+            (point) =>
+              point.guidance?.effect === "left-out" &&
+              stateOf(point.id) === "open" &&
+              !shownLeftOut.has(point.id),
+          )
+          .map((point) => point.id),
+      ),
+    [points, stateOf, shownLeftOut],
+  );
+  /** The points the stepper walks and the chips count. */
+  const walked = useMemo(() => points.filter((point) => !folded.has(point.id)), [points, folded]);
+  const showLeftOut = useCallback(
+    (id: PointId) => setShownLeftOut((previous) => new Set(previous).add(id)),
+    [],
+  );
   const family = modelFamily(live.modelOption ?? modelChoice.chosen);
   const landing = useLanding(modelRunning, pointIds, family);
   const places = useMemo(() => pointPlaces(points, order, index), [points, order, index]);
@@ -411,12 +439,14 @@ const Review = ({
     for (const [partId, placed] of places.cards) {
       const path = index.parts.get(partId)?.file.path;
       if (path === undefined) continue;
+      const counted = placed.filter((point) => !folded.has(point.id));
+      if (counted.length === 0) continue;
       const counts = byPath.get(path) ?? {};
-      for (const point of placed) counts[point.kind] = (counts[point.kind] ?? 0) + 1;
+      for (const point of counted) counts[point.kind] = (counts[point.kind] ?? 0) + 1;
       byPath.set(path, counts);
     }
     return byPath;
-  }, [places, index]);
+  }, [places, index, folded]);
   const treeFiles = useMemo(
     () =>
       files.map(({ file }) => ({
@@ -487,7 +517,7 @@ const Review = ({
   const [resolvedHere, setResolvedHere] = useState<ReadonlySet<ThreadId>>(new Set());
   const [showThreads, setShowThreads] = useState(false);
   // The stepper walks the threads when their chip is pressed, or when Claude has no points.
-  const walkingThreads = narrowed === "thread" || points.length === 0;
+  const walkingThreads = narrowed === "thread" || walked.length === 0;
   // One thing on the page is the current one: the point or the thread the stepper is on.
   const activePoint = walkingThreads ? null : currentPoint;
   const [showPoints, setShowPoints] = useState(false);
@@ -573,7 +603,6 @@ const Review = ({
     [setHunkComments],
   );
 
-  const pointStates = usePoints(analysisId, view.pointReviews);
   const { setState: setPointState } = pointStates;
   const cancelComment = useCallback(
     (partId: PartId, place: LinePlace) => {
@@ -690,6 +719,8 @@ const Review = ({
     if (point?.kind === "decision") {
       setOpenDecisions((previous) => new Set([...previous, id]));
     }
+    // Going to a point a preference left out shows it.
+    if (folded.has(id)) showLeftOut(id);
     if (narrowed === "thread") setNarrowed(null);
     setHighlight(new Set((point?.hunkIds ?? []).flatMap(index.partsOf)));
     if (layout === "overview") {
@@ -724,7 +755,7 @@ const Review = ({
       }
       return;
     }
-    const to = narrowTo(points, kind, currentPoint);
+    const to = narrowTo(walked, kind, currentPoint);
     if (to !== null) goToPoint(to);
   };
   /**
@@ -933,6 +964,16 @@ const Review = ({
       ? ""
       : (points.find((point) => point.id === pointStates.failure?.pointId)?.title ?? "");
 
+  /**
+   * "Don't flag things like this": the rule is saved as a preference the reviewer learned from the
+   * point, which is then dismissed. A rule that isn't saved leaves the point as it was.
+   */
+  const saveRule = async (point: Point, rule: RuleFields): Promise<string | null> => {
+    const saved = await client.addPreference({ ...rule, source: "learned" });
+    if (!saved.ok) return failureReason(saved.error);
+    void pointStates.setState(point.id, "dismissed");
+    return null;
+  };
   const actionsOf = (point: Point): PointActions => ({
     state: pointStates.stateOf(point.id),
     saving: pointStates.isSaving(point.id),
@@ -940,6 +981,10 @@ const Review = ({
     current: activePoint === point.id,
     onRaise: stable.raisePoint,
     onState: stable.setPointState,
+    leftOut: folded.has(point.id),
+    onShow: showLeftOut,
+    ruleScopes,
+    onRule: stable.saveRule,
   });
   /** A finding's card, with the lines its suggestion replaces and whether its draft is written. */
   const findingCard = (point: Point, partId: PartId | null) => {
@@ -995,8 +1040,8 @@ const Review = ({
     for (const [partId, placed] of places.cards) {
       const lines = new Map<string, PointLine>();
       for (const point of placed) {
-        // A decision is a footnote, and marks no line.
-        if (point.lines === null || point.kind === "decision") continue;
+        // A decision is a footnote, and marks no line; nor does a point folded as left out.
+        if (point.lines === null || point.kind === "decision" || folded.has(point.id)) continue;
         const { side, startLine, line: last } = point.lines;
         const at = landingAt(point.id);
         for (let line = startLine; line <= last; line += 1) {
@@ -1014,7 +1059,7 @@ const Review = ({
       if (lines.size > 0) byPart.set(partId, lines);
     }
     return byPart;
-  }, [places, landingAt]);
+  }, [places, landingAt, folded]);
   const pointLinesOf = useCallback((id: PartId) => pointLines.get(id), [pointLines]);
   /** A fold of point cards: fresh while it's landing if any of them is new to the page. */
   const fold = (
@@ -1097,22 +1142,28 @@ const Review = ({
     (id: PartId): ReadonlySet<string> | undefined => {
       const lines = cardPlaces.underLine.get(id);
       if (lines === undefined) return undefined;
-      const flagged = [...lines].filter(([, here]) => here.some((p) => p.kind === "finding"));
+      const flagged = [...lines].filter(([, here]) =>
+        here.some((p) => p.kind === "finding" && !folded.has(p.id)),
+      );
       return new Set(flagged.map(([key]) => key));
     },
-    [cardPlaces],
+    [cardPlaces, folded],
   );
   // Map cards render again only when their signature changes, so their handlers call the latest.
-  const latest = useRef({ goToPoint, raisePoint });
-  latest.current = { goToPoint, raisePoint };
+  const latest = useRef({ goToPoint, raisePoint, saveRule });
+  latest.current = { goToPoint, raisePoint, saveRule };
   const stable = useMemo(
     () => ({
       goToPoint: (id: PointId) => latest.current.goToPoint(id),
       raisePoint: (point: Point, add: boolean) => latest.current.raisePoint(point, add),
+      saveRule: (point: Point, rule: RuleFields) => latest.current.saveRule(point, rule),
       setPointState: pointStates.setState,
     }),
     [pointStates.setState],
   );
+  // A rule saved from a point is for its repository unless the reviewer chooses everywhere.
+  const repo = analysis.key.ref.repo;
+  const ruleScopes = useMemo(() => scopeOptions([repo]).reverse(), [repo]);
   const signatureOf = (id: PartId): string => {
     const parts: unknown[] = [
       epochOf(analysis),
@@ -1127,7 +1178,7 @@ const Review = ({
     const mentions = places.mentions.get(id) ?? NO_POINTS;
     for (const point of cards) {
       parts.push(point.id, pointStates.stateOf(point.id), pointStates.isSaving(point.id));
-      parts.push(activePoint === point.id);
+      parts.push(activePoint === point.id, folded.has(point.id));
       if (point.kind === "decision") parts.push(openDecisions.has(point.id));
     }
     for (const point of mentions) parts.push(point.id);
@@ -1219,7 +1270,8 @@ const Review = ({
             startedAt={modelStartedAt}
             starting={runModel.pending}
             error={runModel.error === null ? null : errorMessage(runModel.error)}
-            points={points}
+            points={walked}
+            leftOut={folded.size}
             threads={threadChip(orderedThreads, threadScope, resolvedHere)}
             narrowed={narrowed}
             onNarrow={narrow}
@@ -1236,7 +1288,7 @@ const Review = ({
           >
             {!walkingThreads ? (
               <PointStepper
-                points={points}
+                points={walked}
                 current={currentPoint}
                 stateOf={pointStates.stateOf}
                 kind={narrowed}
@@ -1459,7 +1511,7 @@ const Review = ({
       )}
       {showPoints && (
         <PointList
-          points={points}
+          points={walked}
           family={family}
           kind={narrowed === "thread" ? null : narrowed}
           stateOf={pointStates.stateOf}

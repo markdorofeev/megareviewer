@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type {
   AnalysisId,
   PointId,
@@ -23,8 +23,13 @@ export const usePoints = (analysisId: AnalysisId, saved: readonly PointReview[])
   const [failure, setFailure] = useState<StateFailure | null>(null);
   const sequence = useRef(new Map<PointId, number>());
 
-  const stateOf = (id: PointId): PointState =>
-    changed.get(id) ?? saved.find((review) => review.pointId === id)?.state ?? "open";
+  /** Every point that isn't open, as the page shows it now. */
+  const states = useMemo((): ReadonlyMap<PointId, PointState> => {
+    const all = new Map(saved.map((review) => [review.pointId, review.state]));
+    for (const [id, state] of changed) all.set(id, state);
+    return all;
+  }, [saved, changed]);
+  const stateOf = useCallback((id: PointId): PointState => states.get(id) ?? "open", [states]);
 
   const setState = useCallback(
     async (id: PointId, state: PointState) => {

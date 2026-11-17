@@ -44,6 +44,7 @@ import {
   generatedFile,
   JAVA_FILE,
   PENDING_COMMENTS,
+  POINT_GUIDANCE,
   POINTS,
   PULL_REQUEST,
   RENAMED_FILE,
@@ -513,6 +514,7 @@ const PointStates = () => {
     current: false,
     onRaise: () => {},
     onState: () => {},
+    ...POINT_GUIDANCE,
   } as const;
   const [hunk] = RETRY_FILE.hunks;
   const removed =

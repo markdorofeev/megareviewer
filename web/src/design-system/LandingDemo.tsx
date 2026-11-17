@@ -7,7 +7,14 @@ import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { tokenMs, useLanding } from "../pages/review/useLanding.ts";
 import { FileTree, HunkCard, type LinePlace, PINNED, type PointLine } from "../review/index.ts";
 import { Button } from "../ui/button.tsx";
-import { DESIGN_RUN, POINTS, RETRY_FILE, TREE_FILES, useDemoChoice } from "./fixtures.ts";
+import {
+  DESIGN_RUN,
+  POINT_GUIDANCE,
+  POINTS,
+  RETRY_FILE,
+  TREE_FILES,
+  useDemoChoice,
+} from "./fixtures.ts";
 
 /** The point card's points again, under ids of their own: the cards' anchors are ids on the page. */
 const LANDED: readonly Point[] = POINTS.map((point) => ({
@@ -58,6 +65,7 @@ export const LandingDemo = () => {
     current: false,
     onRaise: () => {},
     onState: () => {},
+    ...POINT_GUIDANCE,
   } as const;
   const card = (point: Point) =>
     point.kind === "risk" ? (

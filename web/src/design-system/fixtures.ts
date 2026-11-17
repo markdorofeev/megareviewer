@@ -6,8 +6,10 @@ import {
   PointId,
   type ReviewThread,
 } from "../../../src/domain/review/index.ts";
+import { scopeOptions } from "../pages/preferences/rule.tsx";
 import type { ClaudeRun } from "../pages/review/ClaudeElement.tsx";
 import { lockedReason, type ModelChoice } from "../pages/review/model-choice.ts";
+import type { PointActions } from "../pages/review/PointCard.tsx";
 import type { FileEntry, PendingComment, PrSummary } from "../review/index.ts";
 
 // Made-up data for the preview: an example repository, PR and people, none of them real.
@@ -457,6 +459,16 @@ export const POINTS: readonly Point[] = [
     mismatch: null,
   },
 ];
+
+export const DEMO_REPO = { host: "github", owner: "acme", repo: "scheduler" } as const;
+
+/** What a point's card takes for guidance, where an example folds nothing and saves no rule. */
+export const POINT_GUIDANCE: Pick<PointActions, "leftOut" | "onShow" | "ruleScopes" | "onRule"> = {
+  leftOut: false,
+  onShow: () => {},
+  ruleScopes: scopeOptions([DEMO_REPO]).reverse(),
+  onRule: async () => null,
+};
 
 /** As much of an analysis as Claude's element reads: how far its run got, and how it ended. */
 export const DESIGN_RUN: ClaudeRun = {

@@ -360,6 +360,7 @@ export const ClaudeElement = ({
   starting,
   error,
   points,
+  leftOut = 0,
   threads = null,
   narrowed,
   onNarrow,
@@ -375,7 +376,10 @@ export const ClaudeElement = ({
   readonly starting: boolean;
   /** Why the last request to start it was refused. */
   readonly error: string | null;
+  /** The points the stepper walks: all but those folded as left out by a preference. */
   readonly points: readonly Point[];
+  /** How many points are folded as left out, said when there's nothing else to say. */
+  readonly leftOut?: number;
   /** The threads the stepper can walk, for their chip beside the points'; null without any. */
   readonly threads?: {
     readonly count: number;
@@ -491,6 +495,7 @@ export const ClaudeElement = ({
         >
           <span aria-hidden="true">✓ </span>
           {family} found nothing to raise
+          {leftOut > 0 && `, and left out ${leftOut} by your preferences`}
         </span>
       ) : null,
     );

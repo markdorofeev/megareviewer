@@ -1,5 +1,14 @@
-import { EyeOffIcon, FlaskConicalIcon, PencilIcon, XIcon } from "lucide-react";
-import { memo, type ReactNode, useId } from "react";
+import {
+  ChevronDownIcon,
+  EyeOffIcon,
+  FileTextIcon,
+  FlagOffIcon,
+  FlaskConicalIcon,
+  PencilIcon,
+  SlidersHorizontalIcon,
+  XIcon,
+} from "lucide-react";
+import { memo, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import {
   type IntentMismatchKind,
   type Point,
@@ -8,11 +17,21 @@ import {
   parseBody,
   type Severity,
 } from "../../../../src/domain/review/index.ts";
+import { Link } from "../../app/Link.tsx";
+import { PREFERENCES_PATH } from "../../app/router.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { type CallPayload, type CallPeekHandle, CallTrigger } from "../../review/index.ts";
 import { CHIP, lineRef, RefChip, SuggestionDiff, ThreadBody } from "../../review/thread/index.ts";
 import { Button } from "../../ui/button.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../ui/dropdown-menu.tsx";
+import { PreferenceForm, type RuleFields } from "../preferences/PreferenceForm.tsx";
+import type { ScopeOption } from "../preferences/rule.tsx";
 
 export const pointAnchor = (id: PointId): string => `point-${id}`;
 
@@ -43,6 +62,19 @@ export interface PointActions {
    */
   readonly onRaise: (point: Point, add: boolean) => void;
   readonly onState: (id: PointId, state: PointState) => void;
+  /**
+   * A point a preference says not to flag, folded to one line until the reviewer shows it or has
+   * acted on it.
+   */
+  readonly leftOut: boolean;
+  readonly onShow: (id: PointId) => void;
+  /** Where a rule saved from the point can apply: its repository, then everywhere. */
+  readonly ruleScopes: readonly ScopeOption[];
+  /**
+   * Saves "Don't flag things like this" as a preference and dismisses the point; answers why it
+   * failed, or null.
+   */
+  readonly onRule: (point: Point, rule: RuleFields) => Promise<string | null>;
 }
 
 const Kind = ({ kind }: { readonly kind: Point["kind"] }) => {
@@ -55,7 +87,10 @@ const Kind = ({ kind }: { readonly kind: Point["kind"] }) => {
   );
 };
 
-/** A point folded to one line, dismissed or already in the review, with a way back. */
+/**
+ * A point folded to one line with a way back: dismissed, already in the review, or left out by a
+ * preference.
+ */
 const Folded = ({
   point,
   state,
@@ -63,13 +98,15 @@ const Folded = ({
   note,
   action,
   className,
+  leftOut = false,
 }: {
   readonly point: Point;
   readonly state: PointState;
   readonly current: boolean;
-  readonly note: string;
+  readonly note: ReactNode;
   readonly action: ReactNode;
   readonly className?: string;
+  readonly leftOut?: boolean;
 }) => {
   const Icon = POINT_ICON[point.kind];
   return (
@@ -78,24 +115,236 @@ const Folded = ({
       data-slot="point"
       data-kind={point.kind}
       data-state={state}
+      data-left-out={leftOut || undefined}
       data-current={current || undefined}
       aria-label={point.title}
       className={cn(
-        "flex scroll-mt-24 flex-wrap items-center gap-2 text-muted-foreground",
+        "flex scroll-mt-24 flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground",
         className,
         current && RING,
       )}
     >
       <Icon aria-hidden="true" className="size-3.5 shrink-0" />
       <span className="sr-only">{POINT_STATUS[point.kind].label}: </span>
-      <span className={cn("min-w-0 flex-1 truncate", state === "dismissed" && "line-through")}>
+      <span
+        className={cn("min-w-0 flex-1 basis-40 truncate", state === "dismissed" && "line-through")}
+      >
         {point.title}
       </span>
-      <span className="text-caption">{note}</span>
+      <span className="max-w-full min-w-0 truncate text-caption">{note}</span>
       {action}
     </article>
   );
 };
+
+/** What a guidance mark says before the preference's text or the guideline file's path. */
+const guidanceWords = ({ effect, preferenceId }: NonNullable<Point["guidance"]>): string => {
+  const mine = preferenceId === null ? "" : " your preference:";
+  return effect === "raised" ? `From${mine}` : `Left out by${mine}`;
+};
+
+/**
+ * The preference or guideline file that shaped a point, as the run had it: its text or its path,
+ * a link to the preferences. Model output and the reviewer's own words, so text.
+ */
+const GuidanceLine = ({
+  guidance,
+  className,
+}: {
+  readonly guidance: NonNullable<Point["guidance"]>;
+  readonly className?: string;
+}) => {
+  const Icon = guidance.preferenceId === null ? FileTextIcon : SlidersHorizontalIcon;
+  return (
+    <p
+      data-slot="point-guidance"
+      data-effect={guidance.effect}
+      className={cn("flex items-start gap-1.5 text-caption text-muted-foreground", className)}
+    >
+      <Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+      <span className="min-w-0">
+        {guidanceWords(guidance)}{" "}
+        <Link
+          to={PREFERENCES_PATH}
+          className={cn(
+            "underline",
+            guidance.preferenceId === null && "font-mono text-code-compact",
+          )}
+        >
+          {guidance.label}
+        </Link>
+      </span>
+    </p>
+  );
+};
+
+/** A point a preference left out, folded where its card would be, with Show. */
+const LeftOut = ({
+  point,
+  guidance,
+  state,
+  current,
+  onShow,
+}: {
+  readonly point: Point;
+  readonly guidance: NonNullable<Point["guidance"]>;
+  readonly state: PointState;
+  readonly current: boolean;
+  readonly onShow: () => void;
+}) => (
+  <Folded
+    point={point}
+    state={state}
+    current={current}
+    leftOut
+    note={`${guidanceWords(guidance)} ${guidance.label}`}
+    className={FOLDED}
+    action={
+      <Button variant="ghost" size="xs" aria-label={`Show: ${point.title}`} onClick={onShow}>
+        Show
+      </Button>
+    }
+  />
+);
+
+/**
+ * The card takes the focus once the reviewer shows a left-out point: the Show button that had it
+ * went with the folded line.
+ */
+const useShown = (leftOut: boolean, onShow: (id: PointId) => void, id: PointId) => {
+  const card = useRef<HTMLElement>(null);
+  const asked = useRef(false);
+  useEffect(() => {
+    if (leftOut || !asked.current) return;
+    asked.current = false;
+    card.current?.focus();
+  }, [leftOut]);
+  const show = () => {
+    asked.current = true;
+    onShow(id);
+  };
+  return { card, show };
+};
+
+/**
+ * Dismiss, and beside it the menu with the other way to: "Don't flag things like this…", which
+ * opens the rule's form on the card.
+ */
+const Dismiss = ({
+  point,
+  size,
+  disabled,
+  onDismiss,
+  onRule,
+}: {
+  readonly point: Point;
+  readonly size: "xs" | "sm";
+  readonly disabled: boolean;
+  readonly onDismiss: () => void;
+  readonly onRule: () => void;
+}) => (
+  <span className="flex items-center">
+    <Button
+      variant="ghost"
+      size={size}
+      disabled={disabled}
+      aria-label={`Dismiss: ${point.title}`}
+      className="rounded-r-none"
+      onClick={onDismiss}
+    >
+      {size === "sm" && <XIcon aria-hidden="true" />}
+      Dismiss
+    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size={size}
+            data-slot="dismiss-menu"
+            disabled={disabled}
+            aria-label={`More ways to dismiss: ${point.title}`}
+            className="w-6 rounded-l-none px-0"
+          />
+        }
+      >
+        <ChevronDownIcon aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuItem onClick={onRule}>
+          <FlagOffIcon aria-hidden="true" />
+          Don't flag things like this…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </span>
+);
+
+/**
+ * A rule drafted from a point, for the reviewer to word: Don't flag, the point's title, and this
+ * repository unless they choose everywhere. No model call.
+ */
+const RuleForm = ({
+  point,
+  scopes,
+  onSave,
+  onCancel,
+}: {
+  readonly point: Point;
+  readonly scopes: readonly ScopeOption[];
+  readonly onSave: (rule: RuleFields) => Promise<string | null>;
+  readonly onCancel: () => void;
+}) => {
+  const [first] = scopes;
+  if (first === undefined) return null;
+  return (
+    <div data-slot="point-rule" className="flex flex-col gap-2 rounded-md border bg-card p-3">
+      <p className="text-caption text-muted-foreground">
+        Word it as a rule. It's saved to your preferences, and AI reviews leave out what it
+        describes, folded to a line you can open.
+      </p>
+      <PreferenceForm
+        legend={`Don't flag things like: ${point.title}`}
+        initial={{ kind: "dont-flag", text: point.title, scope: first.scope }}
+        scopes={scopes}
+        kindFixed
+        submit="Save and dismiss"
+        submitting="Saving…"
+        focus
+        onCancel={onCancel}
+        onSubmit={onSave}
+      />
+    </div>
+  );
+};
+
+/** The rule's form on a card: whether it's open, and whether a rule was saved from the point. */
+const useRule = (point: Point, onRule: PointActions["onRule"]) => {
+  const [writing, setWriting] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const save = async (fields: RuleFields): Promise<string | null> => {
+    const failed = await onRule(point, fields);
+    if (failed === null) {
+      setSaved(true);
+      setWriting(false);
+    }
+    return failed;
+  };
+  return { writing, setWriting, saved, save };
+};
+
+/** What a dismissed point's line says, with the rule when one was saved from it. */
+const dismissedNote = (ruleSaved: boolean): ReactNode =>
+  ruleSaved ? (
+    <>
+      Dismissed, and saved to your{" "}
+      <Link to={PREFERENCES_PATH} className="underline">
+        preferences
+      </Link>
+    </>
+  ) : (
+    "Dismissed"
+  );
 
 // Spelled out because Tailwind only generates the classes it finds whole in the source.
 const SEVERITY: Readonly<Record<Severity, { readonly glyph: string; readonly className: string }>> =
@@ -159,6 +408,10 @@ export const FindingCard = memo(function FindingCard({
   current,
   onRaise,
   onState,
+  leftOut,
+  onShow,
+  ruleScopes,
+  onRule,
   inReview,
   removed,
   language,
@@ -174,13 +427,15 @@ export const FindingCard = memo(function FindingCard({
   readonly language: string | null;
 }) {
   const id = useId();
+  const { card, show } = useShown(leftOut, onShow, point.id);
+  const rule = useRule(point, onRule);
   if (state === "dismissed") {
     return (
       <Folded
         point={point}
         state={state}
         current={current}
-        note="Dismissed"
+        note={dismissedNote(rule.saved)}
         className={FOLDED}
         action={
           <Button
@@ -207,9 +462,21 @@ export const FindingCard = memo(function FindingCard({
       />
     );
   }
+  if (leftOut && point.guidance !== undefined) {
+    return (
+      <LeftOut
+        point={point}
+        guidance={point.guidance}
+        state={state}
+        current={current}
+        onShow={show}
+      />
+    );
+  }
   const disabled = readOnly || saving;
   return (
     <article
+      ref={card}
       id={pointAnchor(point.id)}
       data-slot="point"
       data-kind="finding"
@@ -259,6 +526,7 @@ export const FindingCard = memo(function FindingCard({
           {point.mismatch.description}
         </p>
       )}
+      {point.guidance !== undefined && <GuidanceLine guidance={point.guidance} />}
       {point.suggestion !== null && (
         <SuggestionDiff
           title="Suggested change"
@@ -267,40 +535,49 @@ export const FindingCard = memo(function FindingCard({
           language={language}
         />
       )}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          aria-label={`Dismiss: ${point.title}`}
-          onClick={() => onState(point.id, "dismissed")}
-        >
-          <XIcon aria-hidden="true" />
-          Dismiss
-        </Button>
-        {point.lines !== null && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={disabled}
-              aria-label={`Edit: ${point.title}`}
-              onClick={() => onRaise(point, false)}
-            >
-              <PencilIcon aria-hidden="true" />
-              Edit
-            </Button>
-            <Button
-              size="sm"
-              disabled={disabled}
-              aria-label={`Add to review: ${point.title}`}
-              onClick={() => onRaise(point, true)}
-            >
-              Add to review
-            </Button>
-          </>
-        )}
-      </div>
+      {rule.writing ? (
+        <RuleForm
+          point={point}
+          scopes={ruleScopes}
+          onSave={rule.save}
+          onCancel={() => {
+            rule.setWriting(false);
+            card.current?.focus();
+          }}
+        />
+      ) : (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Dismiss
+            point={point}
+            size="sm"
+            disabled={disabled}
+            onDismiss={() => onState(point.id, "dismissed")}
+            onRule={() => rule.setWriting(true)}
+          />
+          {point.lines !== null && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={disabled}
+                aria-label={`Edit: ${point.title}`}
+                onClick={() => onRaise(point, false)}
+              >
+                <PencilIcon aria-hidden="true" />
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                disabled={disabled}
+                aria-label={`Add to review: ${point.title}`}
+                onClick={() => onRaise(point, true)}
+              >
+                Add to review
+              </Button>
+            </>
+          )}
+        </div>
+      )}
     </article>
   );
 });
@@ -365,6 +642,10 @@ export const RiskNote = memo(function RiskNote({
   current,
   onRaise,
   onState,
+  leftOut,
+  onShow,
+  ruleScopes,
+  onRule,
   linesAbove = 0,
   test = null,
 }: PointActions & {
@@ -375,13 +656,15 @@ export const RiskNote = memo(function RiskNote({
   readonly test?: TestPeek | null;
 }) {
   const id = useId();
+  const { card, show } = useShown(leftOut, onShow, point.id);
+  const rule = useRule(point, onRule);
   if (state === "dismissed") {
     return (
       <Folded
         point={point}
         state={state}
         current={current}
-        note="Dismissed"
+        note={dismissedNote(rule.saved)}
         className={FOLDED}
         action={
           <Button
@@ -396,9 +679,21 @@ export const RiskNote = memo(function RiskNote({
       />
     );
   }
+  if (leftOut && point.guidance !== undefined) {
+    return (
+      <LeftOut
+        point={point}
+        guidance={point.guidance}
+        state={state}
+        current={current}
+        onShow={show}
+      />
+    );
+  }
   const disabled = readOnly || saving;
   return (
     <article
+      ref={card}
       id={pointAnchor(point.id)}
       data-slot="point"
       data-kind="risk"
@@ -435,15 +730,13 @@ export const RiskNote = memo(function RiskNote({
           >
             Comment
           </Button>
-          <Button
-            variant="ghost"
+          <Dismiss
+            point={point}
             size="xs"
             disabled={disabled}
-            aria-label={`Dismiss: ${point.title}`}
-            onClick={() => onState(point.id, "dismissed")}
-          >
-            Dismiss
-          </Button>
+            onDismiss={() => onState(point.id, "dismissed")}
+            onRule={() => rule.setWriting(true)}
+          />
         </span>
       </header>
       <h3 id={`${id}-title`} className="pb-0.5 font-normal">
@@ -451,6 +744,22 @@ export const RiskNote = memo(function RiskNote({
       </h3>
       {point.checkedBy !== undefined && (
         <CheckedBy checkedBy={point.checkedBy} peek={test} id={`${pointAnchor(point.id)}-test`} />
+      )}
+      {point.guidance !== undefined && (
+        <GuidanceLine guidance={point.guidance} className="pb-0.5" />
+      )}
+      {rule.writing && (
+        <div className="py-1.5 pr-2">
+          <RuleForm
+            point={point}
+            scopes={ruleScopes}
+            onSave={rule.save}
+            onCancel={() => {
+              rule.setWriting(false);
+              card.current?.focus();
+            }}
+          />
+        </div>
       )}
     </article>
   );
