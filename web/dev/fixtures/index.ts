@@ -1,5 +1,6 @@
 export { activeReviewerActivity, newReviewerActivity } from "./activity.ts";
 export { fixtureAnalysisView, fixtureHunks, fixtureParts } from "./analysis.ts";
+export { fixtureGuidance, guidedAnalysisView } from "./guidance.ts";
 export { largeAnalysisView } from "./large.ts";
 export {
   DEEP_APP_PATHS,

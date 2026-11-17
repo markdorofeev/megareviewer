@@ -48,6 +48,7 @@ import {
   fixtureStatus,
   fixtureSuggestions,
   fixtureThreads,
+  guidedAnalysisView,
   javaServiceAnalysisView,
   largeAnalysisView,
   monorepoAnalysisView,
@@ -67,12 +68,19 @@ export const MOCK_FAILING_PR_NUMBER = 500;
 /** Starting an analysis for a PR with this number analyzes a PR with 240 hunks. */
 export const MOCK_LARGE_PR_NUMBER = 900;
 
-/** PRs whose files sit in many directories: a Java service, a monorepo and a deep web app. */
+/** Starting an analysis for a PR with this number analyzes one whose run read preferences. */
+export const MOCK_GUIDED_PR_NUMBER = 904;
+
+/**
+ * PRs whose files sit in many directories: a Java service, a monorepo and a deep web app. Then the
+ * fixture PR after a run that read the reviewer's preferences and a guideline file.
+ */
 const SYNTHETIC_VIEWS: ReadonlyMap<number, AnalysisView> = new Map([
   [MOCK_LARGE_PR_NUMBER, largeAnalysisView],
   [901, javaServiceAnalysisView],
   [902, monorepoAnalysisView],
   [903, deepAppAnalysisView],
+  [MOCK_GUIDED_PR_NUMBER, guidedAnalysisView],
 ]);
 
 const FAILING_STAGE: StageName = "prep";
