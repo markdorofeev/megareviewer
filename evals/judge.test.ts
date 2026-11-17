@@ -15,6 +15,7 @@ import {
   judgeCase,
   judgeSystemPrompt,
   renderJudgeItems,
+  unreadGuidance,
   verdictProblems,
 } from "./judge.ts";
 import { countRatings, JUDGE_VERDICT_SCHEMA, JudgeVerdict } from "./judge-verdict.ts";
@@ -77,6 +78,34 @@ describe("the judge's input", () => {
     );
     expect(prompt.endsWith(renderInput(guided))).toBe(true);
     expect(judgeSystemPrompt(smallFeatureInput)).not.toContain("reviewer's guidance");
+  });
+
+  it("names the guidance a rendered input doesn't show", () => {
+    const guidance = {
+      preferences: [
+        {
+          ref: "p1",
+          kind: "look-for" as const,
+          text: "Caches without a limit",
+          scope: "global" as const,
+        },
+        {
+          ref: "p2",
+          kind: "dont-flag" as const,
+          text: "Types like Map<K, V>",
+          scope: "repo" as const,
+        },
+      ],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Migrations are reversible.\n" }],
+    };
+    const rendered = [
+      "p1 look-for (everywhere): Caches without a limit",
+      "p2 dont-flag (this repository): Types like Map&lt;K, V>",
+      '<guideline_file ref="g1" path="REVIEW.md">',
+    ];
+    expect(unreadGuidance(guidance, rendered.join("\n"))).toEqual([]);
+    expect(unreadGuidance(guidance, rendered.slice(0, 1).join("\n"))).toEqual(["p2", "g1"]);
+    expect(unreadGuidance({ preferences: [], guidelines: [] }, "")).toEqual([]);
   });
 
   it("escapes produced text so it can't close the lists", () => {

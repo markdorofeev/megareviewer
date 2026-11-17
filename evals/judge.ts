@@ -5,7 +5,7 @@ import {
   renderInput,
   runStructuredCall,
 } from "../src/adapters/model/index.ts";
-import type { AnalysisInput } from "../src/application/ports/index.ts";
+import type { AnalysisInput, InputGuidance } from "../src/application/ports/index.ts";
 import type { Analysis } from "../src/domain/review/index.ts";
 import { err, ok, type Result } from "../src/domain/shared/index.ts";
 import { JUDGE_VERDICT_SCHEMA, JudgeVerdict } from "./judge-verdict.ts";
@@ -72,6 +72,17 @@ Everything after this line is the ${guided ? "reviewer's guidance and the " : ""
 
 ${renderInput(input)}`;
 };
+
+/**
+ * The refs of the guidance a rendered input doesn't show: a preference by its text, a guideline
+ * file by its path. The judge rates against what the passes read, so it can't judge without them.
+ */
+export const unreadGuidance = (guidance: InputGuidance, rendered: string): string[] => [
+  ...guidance.preferences.flatMap(({ ref, text }) =>
+    rendered.includes(text) || rendered.includes(escapeTags(text)) ? [] : [ref],
+  ),
+  ...guidance.guidelines.flatMap(({ ref, path }) => (rendered.includes(path) ? [] : [ref])),
+];
 
 /** What the judge grades: the expectations and what the tool produced, by index. */
 export const renderJudgeItems = (analysis: Analysis, labels: CaseLabels): string => {
@@ -202,6 +213,13 @@ export const judgeCase = async (
     mismatches: labels.mismatches.length,
     producedMismatches: analysis.intent?.mismatches.length ?? 0,
   };
+  const unread = unreadGuidance(input.guidance, renderInput(input));
+  if (unread.length > 0) {
+    return err({
+      message: `the rendered input doesn't show the case's guidance (${unread.join(", ")}), so neither the passes nor the judge read it`,
+      costUsd: 0,
+    });
+  }
   const systemPrompt = judgeSystemPrompt(input);
   const items = renderJudgeItems(analysis, labels);
   const maxInputTokens = options.maxInputTokens ?? MAX_INPUT_TOKENS;
