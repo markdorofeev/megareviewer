@@ -50,6 +50,11 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Suggestion | The lines a comment proposes in place of the ones it's on |
 | Connection | A service megareviewer reads from, GitHub, Bitbucket, Claude or Jira, and whether it works |
 | Review activity | The reviews and comments the reviewer posted from megareviewer on this machine, by day |
+| Preference | A rule of the reviewer's for an AI review, one sentence: *look for* or *don't flag*, for every repository or for one, written, learned or imported, with a switch |
+| Preference proposal | A preference megareviewer proposes from review signals or past comments, with the evidence it rests on. Not used until the reviewer accepts it |
+| Review signal | Something the reviewer did that says what they value: a point dismissed or raised, or a line comment posted, with its text as it was |
+| Guideline file | A file at a repository's root that says how its code is written or reviewed, such as `REVIEW.md`. A model run reads the ones the reviewer switched on, at the PR's base commit |
+| Guidance | What one model run was given beside the code: the enabled preferences and the guideline files, numbered, and kept on the analysis so a point can say which one shaped it |
 
 ### Bounded contexts
 
