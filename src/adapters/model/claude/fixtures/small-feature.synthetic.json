@@ -52,7 +52,7 @@
         },
         {
           "type": "text",
-          "text": "{\"answer\":{\"pass\":\"findings\",\"findings\":[{\"title\":\"Serves a stale receipt for an hour after its order changes\",\"explanation\":\"The cache is keyed by order.id alone, so a refunded or edited order keeps returning the receipt rendered before the change until the entry expires.\",\"lines\":{\"hunkId\":\"h_a2e0236601ffc778\",\"side\":\"new\",\"startLine\":9,\"line\":11}},{\"title\":\"Never evicts a receipt, so memory grows with every order viewed\",\"explanation\":\"Expired entries are only replaced when the same order is read again; nothing deletes them, so the Map holds every receipt rendered since the process started.\",\"lines\":{\"hunkId\":\"h_a2e0236601ffc778\",\"side\":\"new\",\"startLine\":4,\"line\":4}}]}}",
+          "text": "{\"answer\":{\"pass\":\"findings\",\"findings\":[{\"title\":\"Serves a stale receipt for an hour after its order changes\",\"explanation\":\"The cache is keyed by order.id alone, so a refunded or edited order keeps returning the receipt rendered before the change until the entry expires.\",\"lines\":{\"hunkId\":\"h_a2e0236601ffc778\",\"side\":\"new\",\"startLine\":9,\"line\":11},\"guidance\":{\"ref\":\"p1\",\"effect\":\"raised\"}},{\"title\":\"Never evicts a receipt, so memory grows with every order viewed\",\"explanation\":\"Expired entries are only replaced when the same order is read again; nothing deletes them, so the Map holds every receipt rendered since the process started.\",\"lines\":{\"hunkId\":\"h_a2e0236601ffc778\",\"side\":\"new\",\"startLine\":4,\"line\":4},\"guidance\":null}]}}",
           "citations": null
         }
       ],
@@ -88,7 +88,7 @@
         },
         {
           "type": "text",
-          "text": "{\"answer\":{\"pass\":\"risk\",\"assessments\":[{\"hunkId\":\"h_fbaf18305007c20a\",\"riskClass\":\"contract\",\"reason\":\"Changes the rate limit.\"},{\"hunkId\":\"h_2e2332fa455a2146\",\"riskClass\":\"contract\",\"reason\":\"Adds a config setting.\"},{\"hunkId\":\"h_3822ea0f7192c70e\",\"riskClass\":\"contract\",\"reason\":\"Adds a config section.\"},{\"hunkId\":\"h_88747b653fc82f6d\",\"riskClass\":\"logic\",\"reason\":\"Imports the new service.\"},{\"hunkId\":\"h_5c94b39812b2e8f8\",\"riskClass\":\"contract\",\"reason\":\"Adds a public endpoint.\"},{\"hunkId\":\"h_a2e0236601ffc778\",\"riskClass\":\"logic\",\"reason\":\"Renders and caches receipts.\"}]}}",
+          "text": "{\"answer\":{\"pass\":\"risk\",\"assessments\":[{\"hunkId\":\"h_fbaf18305007c20a\",\"riskClass\":\"contract\",\"reason\":\"Changes the rate limit.\",\"guidance\":{\"ref\":\"p2\",\"effect\":\"left-out\"}},{\"hunkId\":\"h_2e2332fa455a2146\",\"riskClass\":\"contract\",\"reason\":\"Adds a config setting.\"},{\"hunkId\":\"h_3822ea0f7192c70e\",\"riskClass\":\"contract\",\"reason\":\"Adds a config section.\"},{\"hunkId\":\"h_88747b653fc82f6d\",\"riskClass\":\"logic\",\"reason\":\"Imports the new service.\"},{\"hunkId\":\"h_5c94b39812b2e8f8\",\"riskClass\":\"contract\",\"reason\":\"Adds a public endpoint.\"},{\"hunkId\":\"h_a2e0236601ffc778\",\"riskClass\":\"logic\",\"reason\":\"Renders and caches receipts.\"}]}}",
           "citations": null
         }
       ],

@@ -7,6 +7,7 @@ import {
   smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
+import { GUIDANCE_BLOCK, guidedInput } from "../shared/fixtures/guidance.ts";
 import { createClaudeAnalysisModel } from "./claude-analysis-model.ts";
 import { createAnthropicFetch, type FixtureAnswer } from "./fixtures/anthropic-fetch.ts";
 import errors from "./fixtures/errors.synthetic.json" with { type: "json" };
@@ -60,6 +61,31 @@ describe("ClaudeAnalysisModel", () => {
     });
     expect(result.ok).toBe(true);
     expect(answering).toBe(1);
+  });
+
+  it("returns the guidance a finding and a risk name, and null for the others", async () => {
+    const { model } = modelWith(recorded());
+    const findings = await model.findings(guidedInput, smallFeatureIntent);
+    const risks = await model.risk(guidedInput);
+    if (!findings.ok || !risks.ok) throw new Error("expected both passes to answer");
+    expect(findings.value.value.map((finding) => finding.guidance)).toEqual([
+      { ref: "p1", effect: "raised" },
+      null,
+    ]);
+    expect(risks.value.value.map((risk) => risk.guidance)).toEqual([
+      { ref: "p2", effect: "left-out" },
+      ...Array(5).fill(null),
+    ]);
+  });
+
+  it("sends the reviewer's guidance before the PR, in the cached block every pass shares", async () => {
+    const { model, requests } = modelWith(recorded());
+    await model.intent(guidedInput);
+    await model.risk(guidedInput);
+    const blocks = requests.map((request) => request.body.messages[0]?.content[0]?.text ?? "");
+    expect(blocks[0]).toMatch(GUIDANCE_BLOCK);
+    expect(blocks[0]?.startsWith("<reviewer_guidance>")).toBe(true);
+    expect(blocks[1]).toBe(blocks[0]);
   });
 
   it("names the model and the prompt version", () => {

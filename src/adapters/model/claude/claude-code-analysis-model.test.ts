@@ -3,9 +3,11 @@ import {
   describeAnalysisModelContract,
   RecordingLogger,
   smallFeatureInput,
+  smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelBilling, ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import type { Effort } from "../shared/effort.ts";
+import { GUIDANCE_BLOCK, guidedInput } from "../shared/fixtures/guidance.ts";
 import { createClaudeCodeAnalysisModel, OVERHEAD_TOKENS } from "./claude-code-analysis-model.ts";
 import { NOT_INSTALLED, NOT_SIGNED_IN } from "./claude-code-errors.ts";
 import { SYSTEM_PROMPT_FILE } from "./claude-code-request.ts";
@@ -126,6 +128,32 @@ describe("ClaudeCodeAnalysisModel", () => {
     expect(prompts[0]).toContain("<pull_request_data>");
     expect(calls[1]?.options.stdin).toMatch(/^Task: risk\./m);
     expect(calls[1]?.options.stdin).not.toContain("<earlier_results>");
+  });
+
+  it("puts the reviewer's guidance in that file, before the PR, the same for every pass", async () => {
+    const { model, calls } = modelWith();
+    await model.intent(guidedInput);
+    await model.findings(guidedInput, smallFeatureIntent);
+    const prompts = calls.map((call) => call.options.files?.[SYSTEM_PROMPT_FILE] ?? "");
+    expect(prompts[0]).toMatch(GUIDANCE_BLOCK);
+    expect(prompts[0]).toContain("</reviewer_guidance>\n<pull_request_data>\n<pull_request>");
+    expect(prompts[1]).toBe(prompts[0]);
+  });
+
+  it("returns the guidance a finding names, and null for one that names none", async () => {
+    const result = await modelWith().model.findings(guidedInput, smallFeatureIntent);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.value.map((finding) => finding.guidance)).toEqual([
+      { ref: "p1", effect: "raised" },
+      null,
+    ]);
+  });
+
+  it("reads a risk recorded before there was guidance as having none", async () => {
+    const result = await modelWith().model.risk(smallFeatureInput);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.value.length).toBeGreaterThan(0);
+    expect(result.value.value.every((risk) => risk.guidance === null)).toBe(true);
   });
 
   it("reports what the pass used, at API prices, billed to the plan", async () => {

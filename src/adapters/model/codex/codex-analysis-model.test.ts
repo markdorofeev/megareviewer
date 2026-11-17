@@ -5,6 +5,7 @@ import {
   smallFeatureInput,
 } from "../../../application/testing/index.ts";
 import type { ModelBilling, ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
+import { GUIDANCE_BLOCK, guidedInput } from "../shared/fixtures/guidance.ts";
 import { createCodexAnalysisModel, OVERHEAD_TOKENS } from "./codex-analysis-model.ts";
 import { NOT_INSTALLED, NOT_SIGNED_IN } from "./codex-errors.ts";
 import { INSTRUCTIONS_FILE, SCHEMA_FILE } from "./codex-request.ts";
@@ -83,6 +84,24 @@ describe("CodexAnalysisModel", () => {
       "model_reasoning_effort=low",
       "model_reasoning_effort=high",
     ]);
+  });
+
+  it("puts the reviewer's guidance in the instructions, before the PR, and asks for its mark", async () => {
+    const { model, calls } = modelWith();
+    await model.intent(guidedInput);
+    await model.risk(guidedInput);
+    const instructions = calls.map((call) => call.options.files?.[INSTRUCTIONS_FILE] ?? "");
+    expect(instructions[0]).toMatch(GUIDANCE_BLOCK);
+    expect(instructions[0]).toContain("</reviewer_guidance>\n<pull_request_data>\n<pull_request>");
+    expect(instructions[1]).toBe(instructions[0]);
+    expect(calls[0]?.options.files?.[SCHEMA_FILE]).toContain('"enum":["raised","left-out"]');
+  });
+
+  it("reads a finding recorded before there was guidance as having none", async () => {
+    const result = await modelWith().model.findings(smallFeatureInput, null);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.value.length).toBeGreaterThan(0);
+    expect(result.value.value.every((finding) => finding.guidance === null)).toBe(true);
   });
 
   it("reports what the pass used, at API prices, billed to the plan", async () => {

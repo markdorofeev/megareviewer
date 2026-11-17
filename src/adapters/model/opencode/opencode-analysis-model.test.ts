@@ -6,6 +6,7 @@ import {
   smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelErrorKind } from "../../../domain/review/index.ts";
+import { guidedInput } from "../shared/fixtures/guidance.ts";
 import {
   createFakeOpencodeClient,
   recorded,
@@ -105,6 +106,68 @@ describe("OpencodeAnalysisModel", () => {
     expect(JSON.stringify(prompts[1]?.body)).toContain('\\"const\\":\\"findings\\"');
     expect(JSON.stringify(prompts[1]?.body)).not.toContain('\\"const\\":\\"intent\\"');
     expect(JSON.stringify(prompts[2]?.body)).not.toContain("<earlier_results>");
+  });
+
+  it("puts the reviewer's guidance in the PR's entry, before the PR, and asks for its mark", async () => {
+    const { model, calls } = modelWith();
+    await model.findings(guidedInput, smallFeatureIntent);
+    await model.risk(guidedInput);
+    const entries = calls
+      .filter((call) => call.path.endsWith(`/entries/${PR_ENTRY}-00`))
+      .map((call) => JSON.stringify(call.body));
+    expect(entries[0]).toContain(
+      "<reviewer_guidance>\\n<preferences>\\np1 look-for (everywhere): ",
+    );
+    expect(entries[0]?.indexOf("<reviewer_guidance>")).toBeLessThan(
+      entries[0]?.indexOf("<pull_request_data>") ?? 0,
+    );
+    expect(entries[1]).toBe(entries[0]);
+    for (const prompt of calls.filter((call) => call.path.endsWith("/prompt"))) {
+      expect(JSON.stringify(prompt.body)).toContain('\\"enum\\":[\\"raised\\",\\"left-out\\"]');
+    }
+  });
+
+  it("returns the guidance a finding names in its answer's text", async () => {
+    const marked = sessionWith("findings", (messages) =>
+      messages.map((message) =>
+        message.type === "assistant"
+          ? {
+              ...message,
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    answer: {
+                      pass: "findings",
+                      findings: [
+                        {
+                          title: "Serves another tenant's receipt",
+                          explanation: "`findOrder` has no tenant filter.",
+                          lines: {
+                            hunkId: smallFeatureInput.files[0]?.hunks[0]?.id,
+                            side: "new",
+                            startLine: 1,
+                            line: 1,
+                          },
+                          severity: "blocking",
+                          suggestion: null,
+                          mismatch: null,
+                          guidance: { ref: "p1", effect: "raised" },
+                        },
+                      ],
+                    },
+                  }),
+                },
+              ],
+            }
+          : message,
+      ),
+    );
+    const result = await modelWith(() => marked).model.findings(guidedInput, smallFeatureIntent);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.value.map((finding) => finding.guidance)).toEqual([
+      { ref: "p1", effect: "raised" },
+    ]);
   });
 
   it("deletes each pass's session, answered or not", async () => {
