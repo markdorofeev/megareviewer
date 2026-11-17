@@ -27,6 +27,12 @@ describe("matchRoute", () => {
     });
   });
 
+  it("matches the preferences page", () => {
+    expect(matchRoute("/preferences")).toEqual({ page: "preferences" });
+    expect(matchRoute("/preferences/")).toEqual({ page: "preferences" });
+    expect(matchRoute("/preferences/naming")).toEqual({ page: "not-found" });
+  });
+
   it("answers not-found for anything else", () => {
     for (const path of ["/nope", "/review", "/review/not-an-id", "/review/%E0%A4%A", "/dev/a/b"]) {
       expect(matchRoute(path)).toEqual({ page: "not-found" });

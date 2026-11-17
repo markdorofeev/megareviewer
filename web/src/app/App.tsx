@@ -9,6 +9,7 @@ import {
 import { PageDisplayProvider } from "../lib/page-display.tsx";
 import { cn } from "../lib/utils.ts";
 import { OpenPullRequestPage, PickerPage } from "../pages/picker/index.ts";
+import { PreferencesPage } from "../pages/preferences/index.ts";
 import { ReviewPage } from "../pages/review/index.ts";
 import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
@@ -65,11 +66,14 @@ const Shell = () => {
           <main
             className={cn(
               "px-4 py-5 sm:px-6",
-              route.page === "picker" && "min-h-[calc(100dvh-3rem)] bg-surface-subtle",
+              (route.page === "picker" || route.page === "preferences") &&
+                "min-h-[calc(100dvh-3rem)] bg-surface-subtle",
             )}
           >
             {route.page === "picker" ? (
               <PickerPage />
+            ) : route.page === "preferences" ? (
+              <PreferencesPage />
             ) : route.page === "review" ? (
               <ReviewPage analysisId={route.analysisId} />
             ) : route.page === "open" ? (

@@ -12,9 +12,12 @@ export type Route =
   | { readonly page: "review"; readonly analysisId: AnalysisId }
   /** A PR before its analysis exists, so a link to it can open in a new tab. */
   | { readonly page: "open"; readonly ref: PullRequestRef }
+  | { readonly page: "preferences" }
   | { readonly page: "not-found" };
 
 const NOT_FOUND: Route = { page: "not-found" };
+
+export const PREFERENCES_PATH = "/preferences";
 
 const decoded = (part: string | undefined): string | null => {
   if (part === undefined) return null;
@@ -30,6 +33,9 @@ const segment = (pathname: string, prefix: string): string | null =>
 
 export const matchRoute = (pathname: string): Route => {
   if (pathname === "/") return { page: "picker" };
+  if (pathname === PREFERENCES_PATH || pathname === `${PREFERENCES_PATH}/`) {
+    return { page: "preferences" };
+  }
   const review = segment(pathname, "review");
   if (review !== null) {
     const analysisId = AnalysisId.safeParse(review);

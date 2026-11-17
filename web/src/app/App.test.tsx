@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TOKEN_HEADER } from "../../../contracts/index.ts";
 import { fixtureAnalysisView } from "../../dev/fixtures/index.ts";
@@ -96,6 +97,19 @@ describe("App", () => {
       await screen.findByRole("heading", { name: "Add order receipts endpoint" }),
     ).toBeTruthy();
     expect(await screen.findByText("3 of 6 connected")).toBeTruthy();
+  });
+
+  it("links to the preferences from every page's header, and shows them", async () => {
+    renderApp(`/review/${fixtureAnalysisView.analysis.id}`);
+    const link = screen.getByRole("link", { name: "Preferences" });
+    expect(link.getAttribute("href")).toBe("/preferences");
+    expect(link.getAttribute("aria-current")).toBeNull();
+    await userEvent.click(link);
+    expect(await screen.findByRole("heading", { level: 1, name: "Preferences" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/preferences");
+    expect(link.getAttribute("aria-current")).toBe("page");
+    expect(await screen.findByRole("region", { name: "Everywhere" })).toBeTruthy();
+    expect(screen.getByText("3 of 6 connected")).toBeTruthy();
   });
 
   it("shows not-found with a link home for unknown paths", () => {

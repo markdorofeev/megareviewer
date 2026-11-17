@@ -1,7 +1,9 @@
+import { SlidersHorizontalIcon } from "lucide-react";
 import { useRef } from "react";
 import { usePageDisplayChoice } from "../lib/page-display.tsx";
 import { type ThemePreference, useTheme } from "../lib/theme.ts";
-import { Button } from "../ui/button.tsx";
+import { cn } from "../lib/utils.ts";
+import { Button, buttonVariants } from "../ui/button.tsx";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -15,6 +17,7 @@ import {
 } from "../ui/dropdown-menu.tsx";
 import { ConnectionsButton } from "./ConnectionsButton.tsx";
 import { Link } from "./Link.tsx";
+import { matchRoute, PREFERENCES_PATH, usePathname } from "./router.ts";
 
 const THEMES: readonly { readonly value: ThemePreference; readonly label: string }[] = [
   { value: "light", label: "Light" },
@@ -30,7 +33,7 @@ export const DisplayMenu = () => {
   const pickedView = useRef(false);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="max-sm:px-1.5" />}>
         Display
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -102,14 +105,33 @@ export const DisplayMenu = () => {
   );
 };
 
-export const Header = () => (
-  <header className="flex h-12 items-center justify-between gap-4 border-b bg-background px-4 sm:px-6">
-    <Link to="/" className="text-heading font-semibold text-foreground hover:no-underline">
-      megareviewer
-    </Link>
-    <div className="flex items-center gap-2">
-      <ConnectionsButton />
-      <DisplayMenu />
-    </div>
-  </header>
+/** To the preferences page, on every page; on a phone, its icon alone. */
+export const PreferencesLink = ({ current }: { readonly current: boolean }) => (
+  <Link
+    to={PREFERENCES_PATH}
+    aria-current={current ? "page" : undefined}
+    className={cn(
+      buttonVariants({ variant: "ghost", size: "sm" }),
+      "min-w-7 text-foreground hover:no-underline aria-[current=page]:bg-muted max-sm:px-0",
+    )}
+  >
+    <SlidersHorizontalIcon aria-hidden="true" className="sm:hidden" />
+    <span className="max-sm:sr-only">Preferences</span>
+  </Link>
 );
+
+export const Header = () => {
+  const route = matchRoute(usePathname());
+  return (
+    <header className="flex h-12 items-center justify-between gap-4 border-b bg-background px-4 max-sm:gap-2 sm:px-6">
+      <Link to="/" className="text-heading font-semibold text-foreground hover:no-underline">
+        megareviewer
+      </Link>
+      <div className="flex items-center gap-2 max-sm:gap-1">
+        <ConnectionsButton />
+        <PreferencesLink current={route.page === "preferences"} />
+        <DisplayMenu />
+      </div>
+    </header>
+  );
+};
