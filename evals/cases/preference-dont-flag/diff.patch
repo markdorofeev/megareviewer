@@ -1,0 +1,66 @@
+diff --git a/src/audit/repository.ts b/src/audit/repository.ts
+index 343adfb..6d54e20 100644
+--- a/src/audit/repository.ts
++++ b/src/audit/repository.ts
+@@ -8,11 +8,27 @@ export interface AuditEvent {
+   at: string;
+ }
+ 
++export interface AuditPage {
++  events: AuditEvent[];
++  /** Every event of the account, on this page or not. */
++  total: number;
++}
++
+ const COLUMNS = "id, actor, action, target, at";
+ 
+-/** An account's most recent audit events, newest first. */
+-export const listAuditEvents = (db: Db, accountId: string): Promise<AuditEvent[]> =>
+-  db.query<AuditEvent>(
+-    `SELECT ${COLUMNS} FROM audit_events WHERE account_id = $1 ORDER BY at DESC LIMIT 200`,
++/** One page of an account's audit events, newest first. */
++export const listAuditEvents = async (
++  db: Db,
++  accountId: string,
++  page: { limit: number; offset: number },
++): Promise<AuditPage> => {
++  const events = await db.query<AuditEvent>(
++    `SELECT ${COLUMNS} FROM audit_events WHERE account_id = $1 ORDER BY at DESC LIMIT $2 OFFSET $3`,
++    [accountId, page.limit, page.offset],
++  );
++  const [count] = await db.query<{ total: number }>(
++    "SELECT count(*)::int AS total FROM audit_events WHERE account_id = $1",
+     [accountId],
+   );
++  return { events, total: count?.total ?? 0 };
++};
+diff --git a/src/audit/routes.ts b/src/audit/routes.ts
+index f885870..823bd65 100644
+--- a/src/audit/routes.ts
++++ b/src/audit/routes.ts
+@@ -1,9 +1,23 @@
+ import type { Router } from "../http.ts";
+ import { listAuditEvents } from "./repository.ts";
+ 
++const PAGE_SIZE = 50;
++
++/** The page asked for, counting from 1. Anything else is the first page. */
++const parsePage = (value: string | undefined): number => {
++  const page = Number(value);
++  return Number.isInteger(page) && page >= 1 ? page : 1;
++};
++
+ export const registerAuditRoutes = (router: Router): void => {
+   router.get("/audit-log", async (req, res) => {
+-    const events = await listAuditEvents(req.db, req.accountId);
+-    res.json({ events });
++    const page = parsePage(req.query.page);
++    const offset = page * PAGE_SIZE;
++    console.log("audit-log", { page, offset });
++    const { events, total } = await listAuditEvents(req.db, req.accountId, {
++      limit: PAGE_SIZE,
++      offset,
++    });
++    res.json({ events, page, pages: Math.ceil(total / PAGE_SIZE) });
+   });
+ };

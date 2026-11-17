@@ -1,0 +1,105 @@
+diff --git a/src/tickets/repository.test.ts b/src/tickets/repository.test.ts
+index 805f50e..57f6db5 100644
+--- a/src/tickets/repository.test.ts
++++ b/src/tickets/repository.test.ts
+@@ -5,7 +5,7 @@ import { listTickets } from "./repository.ts";
+ describe("listTickets", () => {
+   it("lists a tenant's tickets in a status", async () => {
+     const db = fakeDb();
+-    await listTickets(db, "tenant_1", "open");
++    await listTickets(db, "tenant_1", { status: "open" });
+     expect(db.queries).toEqual([
+       {
+         text: expect.stringContaining("WHERE tenant_id = $1 AND status = $2"),
+@@ -13,4 +13,21 @@ describe("listTickets", () => {
+       },
+     ]);
+   });
++
++  it("narrows a status to one assignee", async () => {
++    const db = fakeDb();
++    await listTickets(db, "tenant_1", { status: "pending", assigneeId: "user_7" });
++    expect(db.queries).toEqual([
++      {
++        text: expect.stringContaining("WHERE tenant_id = $1 AND status = $2 AND assignee_id = $3"),
++        params: ["tenant_1", "pending", "user_7"],
++      },
++    ]);
++  });
++
++  it("lists every status without a status filter", async () => {
++    const db = fakeDb();
++    await listTickets(db, "tenant_1");
++    expect(db.queries[0]?.text).not.toContain("status =");
++  });
+ });
+diff --git a/src/tickets/repository.ts b/src/tickets/repository.ts
+index 5daaa9f..38676a5 100644
+--- a/src/tickets/repository.ts
++++ b/src/tickets/repository.ts
+@@ -10,15 +10,36 @@ export interface Ticket {
+   updatedAt: string;
+ }
+ 
++export interface TicketFilter {
++  status?: TicketStatus;
++  assigneeId?: string;
++}
++
+ const COLUMNS = `id, subject, status, assignee_id AS "assigneeId", updated_at AS "updatedAt"`;
+ const PAGE_SIZE = 50;
+ 
+-/** A tenant's tickets in one status, most recently updated first. */
+-export const listTickets = (db: Db, tenantId: string, status: TicketStatus): Promise<Ticket[]> =>
+-  db.query<Ticket>(
+-    `SELECT ${COLUMNS} FROM tickets WHERE tenant_id = $1 AND status = $2 ORDER BY updated_at DESC LIMIT ${PAGE_SIZE}`,
+-    [tenantId, status],
++/** A tenant's tickets that match the filter, most recently updated first. */
++export const listTickets = (
++  db: Db,
++  tenantId: string,
++  filter: TicketFilter = {},
++): Promise<Ticket[]> => {
++  const conditions: string[] = [];
++  const params: string[] = [];
++  if (filter.status !== undefined) {
++    params.push(tenantId, filter.status);
++    conditions.push("tenant_id = $1 AND status = $2");
++  }
++  if (filter.assigneeId !== undefined) {
++    params.push(filter.assigneeId);
++    conditions.push(`assignee_id = $${params.length}`);
++  }
++  const where = conditions.length === 0 ? "" : `WHERE ${conditions.join(" AND ")}`;
++  return db.query<Ticket>(
++    `SELECT ${COLUMNS} FROM tickets ${where} ORDER BY updated_at DESC LIMIT ${PAGE_SIZE}`,
++    params,
+   );
++};
+ 
+ export const findTicket = (db: Db, tenantId: string, id: string): Promise<Ticket | null> =>
+   db.queryOne<Ticket>(`SELECT ${COLUMNS} FROM tickets WHERE tenant_id = $1 AND id = $2`, [
+diff --git a/src/tickets/routes.ts b/src/tickets/routes.ts
+index a61bca4..1dd4b85 100644
+--- a/src/tickets/routes.ts
++++ b/src/tickets/routes.ts
+@@ -3,12 +3,16 @@ import { findTicket, listTickets, type TicketStatus } from "./repository.ts";
+ 
+ const STATUSES: readonly TicketStatus[] = ["open", "pending", "solved"];
+ 
+-const parseStatus = (value: string | undefined): TicketStatus =>
+-  STATUSES.find((status) => status === value) ?? "open";
++/** The status asked for. None, or one we don't know, lists every status. */
++const parseStatus = (value: string | undefined): TicketStatus | undefined =>
++  STATUSES.find((status) => status === value);
+ 
+ export const registerTicketRoutes = (router: Router): void => {
+   router.get("/tickets", async (req, res) => {
+-    const tickets = await listTickets(req.db, req.tenantId, parseStatus(req.query.status));
++    const tickets = await listTickets(req.db, req.tenantId, {
++      status: parseStatus(req.query.status),
++      assigneeId: req.query.assignee,
++    });
+     res.json({ tickets });
+   });
+ 

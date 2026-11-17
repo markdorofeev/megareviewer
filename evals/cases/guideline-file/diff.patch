@@ -1,0 +1,70 @@
+diff --git a/migrations/0019_add_subscription_paused_at.sql b/migrations/0019_add_subscription_paused_at.sql
+new file mode 100644
+index 0000000..48cc4fe
+--- /dev/null
++++ b/migrations/0019_add_subscription_paused_at.sql
+@@ -0,0 +1,4 @@
++-- up
++ALTER TABLE subscriptions ADD COLUMN paused_at timestamptz;
++
++CREATE INDEX subscriptions_paused_at_idx ON subscriptions (paused_at) WHERE paused_at IS NOT NULL;
+diff --git a/src/subscriptions/repository.ts b/src/subscriptions/repository.ts
+index 77e56a2..8643383 100644
+--- a/src/subscriptions/repository.ts
++++ b/src/subscriptions/repository.ts
+@@ -5,9 +5,11 @@ export interface Subscription {
+   plan: string;
+   status: "active" | "cancelled";
+   renewsAt: string;
++  /** When it was paused; null while it isn't. */
++  pausedAt: string | null;
+ }
+ 
+-const COLUMNS = `id, plan, status, renews_at AS "renewsAt"`;
++const COLUMNS = `id, plan, status, renews_at AS "renewsAt", paused_at AS "pausedAt"`;
+ 
+ export const findSubscription = (
+   db: Db,
+@@ -18,3 +20,16 @@ export const findSubscription = (
+     `SELECT ${COLUMNS} FROM subscriptions WHERE account_id = $1 AND id = $2`,
+     [accountId, id],
+   );
++
++/** Pauses an account's active subscription. One already paused keeps the time it was paused at. */
++export const pauseSubscription = (
++  db: Db,
++  accountId: string,
++  id: string,
++): Promise<Subscription | null> =>
++  db.queryOne<Subscription>(
++    `UPDATE subscriptions SET paused_at = COALESCE(paused_at, now())
++     WHERE account_id = $1 AND id = $2 AND status = 'active'
++     RETURNING ${COLUMNS}`,
++    [accountId, id],
++  );
+diff --git a/src/subscriptions/routes.ts b/src/subscriptions/routes.ts
+index 861a3ae..5f77bbc 100644
+--- a/src/subscriptions/routes.ts
++++ b/src/subscriptions/routes.ts
+@@ -1,6 +1,6 @@
+ import { sendError } from "../errors.ts";
+ import type { Router } from "../http.ts";
+-import { findSubscription } from "./repository.ts";
++import { findSubscription, pauseSubscription } from "./repository.ts";
+ 
+ export const registerSubscriptionRoutes = (router: Router): void => {
+   router.get("/subscriptions/:id", async (req, res) => {
+@@ -11,4 +11,13 @@ export const registerSubscriptionRoutes = (router: Router): void => {
+     }
+     res.json({ subscription });
+   });
++
++  router.post("/subscriptions/:id/pause", async (req, res) => {
++    const subscription = await pauseSubscription(req.db, req.accountId, req.params.id);
++    if (subscription === null) {
++      sendError(res, 404, "subscription_not_found");
++      return;
++    }
++    res.json({ subscription });
++  });
+ };

@@ -7,6 +7,7 @@ import { FakeAnalysisModel } from "../src/application/testing/index.ts";
 import { HunkId, hunkHasLine, isTestFile } from "../src/domain/diff/index.ts";
 import {
   type Analysis,
+  checkGuidanceMark,
   extractTicketKeys,
   PullRequest,
   Ticket,
@@ -42,6 +43,18 @@ it("has the cases stage 16 asks for", () => {
   expect(evalCases.filter((c) => c.labels.injection?.reported === true)).toHaveLength(1);
   const kinds = new Set(evalCases.flatMap((c) => c.labels.mismatches.map((m) => m.kind)));
   expect([...kinds].sort()).toEqual(["contradicts", "missing", "unrequested"]);
+});
+
+it("has a case for each kind of guidance, each labeled with what its guidance should do", () => {
+  const guided = evalCases.filter((c) => c.guidance !== undefined);
+  const kinds = guided.flatMap(({ guidance }) => [
+    ...(guidance?.preferences.map((preference) => preference.kind) ?? []),
+    ...(guidance?.guidelines.map(() => "guideline") ?? []),
+  ]);
+  expect([...new Set(kinds)].sort()).toEqual(["dont-flag", "guideline", "look-for"]);
+  for (const { name, labels } of guided) expect(labels.guidance ?? [], name).not.toEqual([]);
+  const effects = guided.flatMap((c) => c.labels.guidance?.map((label) => label.effect) ?? []);
+  expect([...new Set(effects)].sort()).toEqual(["left-out", "raised"]);
 });
 
 describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
@@ -158,6 +171,40 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
             for (const line of lines)
               expect(hunkHasLine(hunk, side, line), `${hunkId} ${line}`).toBe(true);
           }
+        }
+      });
+
+      it("give a run the case's guidance, numbered in the order the case lists it", () => {
+        const given = evalCase.guidance ?? { preferences: [], guidelines: [] };
+        expect(
+          analysis.guidance?.preferences.map(({ ref, kind, text, scope }) => ({
+            ref,
+            kind,
+            text,
+            scope: scope.kind,
+          })),
+        ).toEqual(given.preferences.map((preference, i) => ({ ref: `p${i + 1}`, ...preference })));
+        expect(analysis.guidance?.guidelines.map(({ ref, path }) => ({ ref, path }))).toEqual(
+          given.guidelines.map(({ path }, i) => ({ ref: `g${i + 1}`, path })),
+        );
+      });
+
+      it("expect of guidance marks the run would keep, on labeled points", () => {
+        for (const label of labels.guidance ?? []) {
+          const mark = { ref: label.ref, effect: label.effect };
+          expect(checkGuidanceMark(mark, analysis.guidance), label.ref).toEqual(mark);
+          const { findings = [], risks = [] } = label;
+          expect(findings.length + risks.length, label.ref).toBeGreaterThan(0);
+          for (const index of [...findings, ...(label.alsoOn?.findings ?? [])]) {
+            expect(labels.findings[index], `${label.ref} finding ${index}`).toBeDefined();
+          }
+          for (const hunkId of [...risks, ...(label.alsoOn?.risks ?? [])]) {
+            expect(labels.risk[hunkId], `${label.ref} ${hunkId}`).toBeDefined();
+          }
+          if (label.effect !== "left-out") continue;
+          // What the reviewer asked not to be told can't also be what they must see.
+          for (const index of findings) expect(labels.findings[index]?.mustHave).toBe(false);
+          for (const hunkId of risks) expect(labels.risk[hunkId]).not.toBe("contract");
         }
       });
 

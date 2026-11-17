@@ -20,10 +20,16 @@ import * as envVarConfig from "./env-var-config/case.ts";
 import { labels as envVarConfigLabels } from "./env-var-config/labels.ts";
 import * as featureLessThanTicket from "./feature-less-than-ticket/case.ts";
 import { labels as featureLessThanTicketLabels } from "./feature-less-than-ticket/labels.ts";
+import * as guidelineFile from "./guideline-file/case.ts";
+import { labels as guidelineFileLabels } from "./guideline-file/labels.ts";
 import * as largeRetryAfter from "./large-retry-after/case.ts";
 import { labels as largeRetryAfterLabels } from "./large-retry-after/labels.ts";
 import * as migration from "./migration-non-null-column/case.ts";
 import { labels as migrationLabels } from "./migration-non-null-column/labels.ts";
+import * as preferenceDontFlag from "./preference-dont-flag/case.ts";
+import { labels as preferenceDontFlagLabels } from "./preference-dont-flag/labels.ts";
+import * as preferenceLookFor from "./preference-look-for/case.ts";
+import { labels as preferenceLookForLabels } from "./preference-look-for/labels.ts";
 import { labels as promptInjectionLabels } from "./prompt-injection/labels.ts";
 import * as pythonIndentation from "./python-indentation-logic/case.ts";
 import { labels as pythonIndentationLabels } from "./python-indentation-logic/labels.ts";
@@ -139,6 +145,33 @@ export const evalCases: readonly EvalCase[] = [
       "No checking test from a test's name or a comment: the one named for the check never runs it",
     fixture: testNamedCoverage.fixture,
     labels: testNamedCoverageLabels,
+  },
+  {
+    name: "preference-look-for",
+    source: "synthetic",
+    tests:
+      "A Look for preference: a ticket query that loses its tenant filter when no status is given, found and marked with the preference",
+    fixture: preferenceLookFor.fixture,
+    guidance: preferenceLookFor.guidance,
+    labels: preferenceLookForLabels,
+  },
+  {
+    name: "preference-dont-flag",
+    source: "synthetic",
+    tests:
+      "A Don't flag preference: a leftover console.log left out, and the paging bug beside it still raised, unmarked",
+    fixture: preferenceDontFlag.fixture,
+    guidance: preferenceDontFlag.guidance,
+    labels: preferenceDontFlagLabels,
+  },
+  {
+    name: "guideline-file",
+    source: "synthetic",
+    tests:
+      "A guideline file: REVIEW.md asks for reversible migrations, and the PR's has no down section",
+    fixture: guidelineFile.fixture,
+    guidance: guidelineFile.guidance,
+    labels: guidelineFileLabels,
   },
   {
     name: "large-retry-after",
