@@ -9,6 +9,12 @@ export {
   MONOREPO_PATHS,
   monorepoAnalysisView,
 } from "./many-folders.ts";
+export {
+  emptyPreferencesView,
+  fixtureImport,
+  fixturePreferencesView,
+  fixtureSuggestions,
+} from "./preferences.ts";
 export { fixturePullRequestStatus } from "./pull-request-status.ts";
 export { fixturePullRequests } from "./pull-requests.ts";
 export {

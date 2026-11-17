@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type {
   AnalysisView,
+  PreferencesView,
   PullRequestListResponse,
   StatusResponse,
 } from "../../../contracts/index.ts";
@@ -81,6 +82,15 @@ export const useReviewActivity = () => {
     useCallback(() => client.getReviewActivity(), [client]),
   );
   return { activity: data, ...rest };
+};
+
+/** The reviewer's preferences, the proposals waiting for them and each repository's files. */
+export const usePreferences = () => {
+  const { client } = useApi();
+  const { data, ...rest } = useQuery<PreferencesView>(
+    useCallback(() => client.getPreferences(), [client]),
+  );
+  return { preferences: data, ...rest };
 };
 
 /** Refetches arrive in bursts, one per stage event; this coalesces them. */

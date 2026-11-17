@@ -6,6 +6,7 @@ import {
   type ErrorCode,
   type ErrorResponse,
   type FileContentResponse,
+  type PreferencesView,
   type RemovedModelRun,
   type RouteName,
   routes,
@@ -16,25 +17,36 @@ import type { FileChange } from "../../src/domain/diff/index.ts";
 import {
   type Analysis,
   buildPublication,
+  canEnable,
   composeBody,
   hasModelRun,
   isEmptyPublication,
+  MAX_ENABLED_PREFERENCES,
+  MAX_PREFERENCE_TEXT,
   MODEL_STAGES,
   type PointId,
   type PointReview,
+  type Preference,
+  type PreferenceProposal,
   type PublicationReceipt,
   parsePullRequestUrl,
   pointsOf,
+  preferenceId,
   type ReviewThread,
   StageName,
+  sameRepo,
+  sameRule,
 } from "../../src/domain/review/index.ts";
 import {
   activeReviewerActivity,
   deepAppAnalysisView,
   fixtureAnalysisView,
+  fixtureImport,
+  fixturePreferencesView,
   fixturePullRequestStatus,
   fixturePullRequests,
   fixtureStatus,
+  fixtureSuggestions,
   fixtureThreads,
   javaServiceAnalysisView,
   largeAnalysisView,
@@ -165,6 +177,8 @@ export const createMockApi = (
     readonly now?: () => string;
     /** Plays Claude's run as this scenario, starting from the code's review alone. */
     readonly scenario?: Scenario;
+    /** The preferences it starts with; the fixture's without. */
+    readonly preferences?: PreferencesView;
   } = {},
 ): MockApi => {
   const stageMs = options.stageMs ?? MOCK_STAGE_MS;
@@ -188,6 +202,8 @@ export const createMockApi = (
   let publication: PublicationReceipt | null = null;
   let threads: ReviewThread[] = structuredClone([...fixtureThreads.threads]);
   let replies = 0;
+  let preferences = options.preferences ?? fixturePreferencesView;
+  const rejected: PreferenceProposal[] = [];
   const listeners = new Set<(event: MockEvent) => void>();
 
   const analysis = () => {
@@ -261,8 +277,38 @@ export const createMockApi = (
 
   const unauthorized = failure("unauthorized", "Missing or wrong session token");
 
-  // The mock keeps no preferences: `pnpm dev:fake` serves them from the real use cases.
-  const noPreferences = () => failure("bad-request", "The mock API keeps no preferences");
+  const invalid = (issues: readonly { path: readonly PropertyKey[]; message: string }[]) =>
+    failure("bad-request", issuesOf("body", issues).join("; "));
+
+  /** Saves a preference in place of the one with its ID, or after the others. */
+  const savePreference = (saved: Preference): MockResponse => {
+    if (saved.enabled && !canEnable(preferences.preferences, saved.scope, saved.id)) {
+      const where =
+        saved.scope.kind === "global"
+          ? "every repository"
+          : `${saved.scope.repo.owner}/${saved.scope.repo.repo}`;
+      return failure(
+        "bad-request",
+        `${MAX_ENABLED_PREFERENCES} preferences are already enabled for ${where}: switch one off or delete it first`,
+      );
+    }
+    const known = preferences.preferences.some((one) => one.id === saved.id);
+    preferences = {
+      ...preferences,
+      preferences: known
+        ? preferences.preferences.map((one) => (one.id === saved.id ? saved : one))
+        : [...preferences.preferences, saved],
+    };
+    return success(saved);
+  };
+
+  /** The drafts nothing says yet, as pending proposals. */
+  const propose = (drafts: readonly PreferenceProposal[]): PreferenceProposal[] => {
+    const said = [...preferences.preferences, ...preferences.proposals, ...rejected];
+    const added = drafts.filter((draft) => !said.some((other) => sameRule(other, draft)));
+    preferences = { ...preferences, proposals: [...preferences.proposals, ...added] };
+    return added;
+  };
 
   const handlers: Record<
     RouteName,
@@ -367,6 +413,13 @@ export const createMockApi = (
       }
       const saved: PointReview = { pointId, ...request.data, updatedAt: now() };
       pointReviews.set(pointId, saved);
+      // What the reviewer does with a point is what suggestions are made from.
+      if (saved.state !== "open") {
+        preferences = {
+          ...preferences,
+          signalsSinceSuggestion: preferences.signalsSinceSuggestion + 1,
+        };
+      }
       return success(saved);
     },
     previewPublication: ({ id }, body) => {
@@ -495,15 +548,128 @@ export const createMockApi = (
       ];
       return success({});
     },
-    getPreferences: () =>
-      success({ preferences: [], proposals: [], repositories: [], signalsSinceSuggestion: 0 }),
-    addPreference: noPreferences,
-    suggestPreferences: noPreferences,
-    importPreferences: noPreferences,
-    setGuidelineSwitch: noPreferences,
-    decideProposal: noPreferences,
-    updatePreference: noPreferences,
-    deletePreference: noPreferences,
+    getPreferences: () => success(preferences),
+    addPreference: (_, body) => {
+      const request = routes.addPreference.request.safeParse(body);
+      if (!request.success) return invalid(request.error.issues);
+      const { kind, text, scope, source } = request.data;
+      const fields = { kind, text, scope, createdAt: now() };
+      return savePreference({
+        id: preferenceId(fields, new Set<string>(preferences.preferences.map((one) => one.id))),
+        ...fields,
+        source: source ?? "written",
+        enabled: true,
+        updatedAt: fields.createdAt,
+      });
+    },
+    updatePreference: (params, body) => {
+      const request = routes.updatePreference.request.safeParse(body);
+      if (!request.success) return invalid(request.error.issues);
+      const preference = preferences.preferences.find((one) => one.id === params.preferenceId);
+      if (preference === undefined) {
+        return failure("not-found", `No preference ${params.preferenceId}`);
+      }
+      const { kind, text, scope, enabled } = request.data;
+      return savePreference({
+        ...preference,
+        kind: kind ?? preference.kind,
+        text: text ?? preference.text,
+        scope: scope ?? preference.scope,
+        enabled: enabled ?? preference.enabled,
+        updatedAt: now(),
+      });
+    },
+    deletePreference: (params) => {
+      if (!preferences.preferences.some((one) => one.id === params.preferenceId)) {
+        return failure("not-found", `No preference ${params.preferenceId}`);
+      }
+      preferences = {
+        ...preferences,
+        preferences: preferences.preferences.filter((one) => one.id !== params.preferenceId),
+      };
+      return success({});
+    },
+    suggestPreferences: () => {
+      const signals = preferences.signalsSinceSuggestion;
+      if (signals === 0) {
+        return failure(
+          "bad-request",
+          "Nothing to suggest from yet: megareviewer records the points you dismiss and raise and the comments you post",
+        );
+      }
+      const proposals = propose(fixtureSuggestions);
+      preferences = { ...preferences, signalsSinceSuggestion: 0 };
+      return success({ proposals, signals });
+    },
+    importPreferences: (_, body) => {
+      const request = routes.importPreferences.request.safeParse(body);
+      if (!request.success) return invalid(request.error.issues);
+      const { repo } = request.data;
+      if (repo.host !== "github") {
+        return failure("bad-request", "megareviewer can't read past reviews from Bitbucket");
+      }
+      const proposals = propose([{ ...fixtureImport, scope: { kind: "repo", repo } }]);
+      return success({ proposals, comments: 92, pullRequests: 30 });
+    },
+    setGuidelineSwitch: (_, body) => {
+      const request = routes.setGuidelineSwitch.request.safeParse(body);
+      if (!request.success) return invalid(request.error.issues);
+      const { repo, path, enabled } = request.data;
+      preferences = {
+        ...preferences,
+        repositories: preferences.repositories.map((one) =>
+          sameRepo(one.repo, repo) && one.guidelineFiles !== null
+            ? {
+                ...one,
+                guidelineFiles: one.guidelineFiles.map((file) =>
+                  file.path === path ? { ...file, enabled } : file,
+                ),
+              }
+            : one,
+        ),
+      };
+      return success({});
+    },
+    decideProposal: (params, body) => {
+      const request = routes.decideProposal.request.safeParse(body);
+      if (!request.success) return invalid(request.error.issues);
+      const proposal = preferences.proposals.find((one) => one.id === params.proposalId);
+      if (proposal === undefined) return failure("not-found", `No proposal ${params.proposalId}`);
+      const { decision, kind, text, scope } = request.data;
+      const decided = () => {
+        preferences = {
+          ...preferences,
+          proposals: preferences.proposals.filter((one) => one !== proposal),
+        };
+      };
+      if (decision === "reject") {
+        rejected.push(proposal);
+        decided();
+        return success({ preference: null });
+      }
+      const fields = {
+        kind: kind ?? proposal.kind,
+        text: text ?? proposal.text,
+        scope: scope ?? proposal.scope,
+        createdAt: now(),
+      };
+      if (fields.text.length > MAX_PREFERENCE_TEXT) {
+        return failure(
+          "bad-request",
+          `A preference is one sentence of at most ${MAX_PREFERENCE_TEXT} characters`,
+        );
+      }
+      const saved = savePreference({
+        id: preferenceId(fields, new Set<string>(preferences.preferences.map((one) => one.id))),
+        ...fields,
+        source: proposal.source,
+        enabled: true,
+        updatedAt: fields.createdAt,
+      });
+      if (saved.status !== 200) return saved;
+      decided();
+      return success({ preference: saved.body });
+    },
   };
 
   return {

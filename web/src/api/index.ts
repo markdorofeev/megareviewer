@@ -8,6 +8,7 @@ export {
   useAnalysisView,
   useApi,
   useMutation,
+  usePreferences,
   usePullRequests,
   useReviewActivity,
   useStatus,
