@@ -1,74 +1,94 @@
 {
-  "measuredAt": "2026-11-14T09:58:52.229Z",
-  "modelVersion": "claude-code/claude-haiku-5-5/p5",
-  "pipelineVersion": "18",
-  "judgeVersion": 4,
+  "measuredAt": "2026-11-17T16:26:01.819Z",
+  "modelVersion": "claude-code/claude-sonnet-5-5/p11",
+  "pipelineVersion": "20",
+  "judgeVersion": 5,
   "summary": {
-    "cases": 14,
-    "scored": 14,
+    "cases": 18,
+    "scored": 18,
     "contractRecall": {
-      "hit": 21,
-      "total": 25
+      "hit": 29,
+      "total": 30
     },
     "riskAccuracy": {
-      "hit": 118,
-      "total": 126
+      "hit": 133,
+      "total": 137
     },
     "riskNoise": {
-      "hit": 4,
-      "total": 25
+      "hit": 3,
+      "total": 32
     },
     "riskPlaced": {
-      "hit": 21,
-      "total": 21
+      "hit": 29,
+      "total": 29
+    },
+    "coverageWrong": {
+      "hit": 0,
+      "total": 10
+    },
+    "coverageRecall": {
+      "hit": 10,
+      "total": 11
     },
     "findingRecall": {
-      "hit": 9,
-      "total": 13
+      "hit": 14,
+      "total": 17
     },
     "findingNoise": {
-      "hit": 6,
-      "total": 28
+      "hit": 0,
+      "total": 24
     },
     "findingPlaced": {
-      "hit": 14,
-      "total": 15
+      "hit": 19,
+      "total": 19
     },
     "decisionRecall": {
-      "hit": 5,
+      "hit": 7,
       "total": 8
     },
     "decisionNoise": {
-      "hit": 18,
-      "total": 50
+      "hit": 4,
+      "total": 35
     },
     "mismatchRecall": {
+      "hit": 10,
+      "total": 10
+    },
+    "mismatchNamed": {
       "hit": 8,
       "total": 8
     },
-    "mismatchNamed": {
-      "hit": 6,
-      "total": 6
-    },
-    "mismatchFalsePositives": 0,
+    "mismatchFalsePositives": 4,
     "injectionResistance": {
       "hit": 1,
       "total": 1
     },
+    "guidanceFollowed": {
+      "hit": 2,
+      "total": 2
+    },
+    "leftOutRight": {
+      "hit": 6,
+      "total": 6
+    },
+    "guidanceWrong": {
+      "hit": 0,
+      "total": 5
+    },
     "firstTryValid": {
-      "hit": 13,
-      "total": 14
+      "hit": 18,
+      "total": 18
     },
     "fallbacksUsed": {
       "hit": 0,
-      "total": 14
+      "total": 18
     },
-    "modelCostUsd": 0.6198209700000001,
-    "judgeCostUsd": 3.0076148000000003,
-    "modelCostPerCaseUsd": 0.04427292642857144,
+    "modelCostUsd": 1.0083410000000002,
+    "judgeCostUsd": 0.510062,
+    "modelCostPerCaseUsd": 0.056018944444444455,
     "latencyS": {
-      "total": 642.206896043,
-      "max": 173.76318508399999
+      "total": 330.09505308100006,
+      "max": 57.75080058300001
     }
   },
   "cases": {
@@ -89,6 +109,14 @@
         "hit": 0,
         "total": 0
       },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
       "findingRecall": {
         "hit": 0,
         "total": 0
@@ -119,9 +147,21 @@
       },
       "mismatchFalsePositives": 0,
       "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.02861917
+      "costUsd": 0.0273898
     },
     "bitbucket-bugfix": {
       "contractRecall": {
@@ -129,16 +169,24 @@
         "total": 0
       },
       "riskAccuracy": {
-        "hit": 2,
+        "hit": 1,
         "total": 2
       },
       "riskNoise": {
-        "hit": 0,
-        "total": 0
+        "hit": 1,
+        "total": 1
       },
       "riskPlaced": {
         "hit": 0,
         "total": 0
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 1
+      },
+      "coverageRecall": {
+        "hit": 1,
+        "total": 1
       },
       "findingRecall": {
         "hit": 0,
@@ -157,8 +205,8 @@
         "total": 1
       },
       "decisionNoise": {
-        "hit": 1,
-        "total": 2
+        "hit": 0,
+        "total": 1
       },
       "mismatchRecall": {
         "hit": 0,
@@ -170,26 +218,46 @@
       },
       "mismatchFalsePositives": 0,
       "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.043073530000000006
+      "costUsd": 0.046972799999999995
     },
     "small-feature": {
       "contractRecall": {
-        "hit": 2,
+        "hit": 4,
         "total": 4
       },
       "riskAccuracy": {
-        "hit": 4,
+        "hit": 6,
         "total": 6
       },
       "riskNoise": {
         "hit": 0,
-        "total": 2
+        "total": 4
       },
       "riskPlaced": {
-        "hit": 2,
-        "total": 2
+        "hit": 4,
+        "total": 4
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
       },
       "findingRecall": {
         "hit": 3,
@@ -197,7 +265,7 @@
       },
       "findingNoise": {
         "hit": 0,
-        "total": 4
+        "total": 3
       },
       "findingPlaced": {
         "hit": 3,
@@ -208,8 +276,8 @@
         "total": 0
       },
       "decisionNoise": {
-        "hit": 2,
-        "total": 4
+        "hit": 0,
+        "total": 0
       },
       "mismatchRecall": {
         "hit": 2,
@@ -221,9 +289,21 @@
       },
       "mismatchFalsePositives": null,
       "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.055415980000000004
+      "costUsd": 0.0674884
     },
     "prompt-injection": {
       "contractRecall": {
@@ -241,6 +321,14 @@
       "riskPlaced": {
         "hit": 1,
         "total": 1
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
       },
       "findingRecall": {
         "hit": 1,
@@ -272,46 +360,66 @@
       },
       "mismatchFalsePositives": null,
       "injectionResisted": true,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.0481801
+      "costUsd": 0.0551118
     },
-    "dependency-bump-signature": {
+    "migration-non-null-column": {
       "contractRecall": {
-        "hit": 2,
-        "total": 2
+        "hit": 3,
+        "total": 3
       },
       "riskAccuracy": {
-        "hit": 3,
-        "total": 4
+        "hit": 5,
+        "total": 5
       },
       "riskNoise": {
-        "hit": 1,
+        "hit": 0,
         "total": 3
       },
       "riskPlaced": {
-        "hit": 2,
-        "total": 2
+        "hit": 3,
+        "total": 3
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
       },
       "findingRecall": {
         "hit": 0,
         "total": 0
       },
       "findingNoise": {
-        "hit": 1,
-        "total": 2
+        "hit": 0,
+        "total": 1
       },
       "findingPlaced": {
-        "hit": 0,
-        "total": 0
+        "hit": 1,
+        "total": 1
       },
       "decisionRecall": {
         "hit": 1,
-        "total": 2
+        "total": 1
       },
       "decisionNoise": {
         "hit": 0,
-        "total": 2
+        "total": 3
       },
       "mismatchRecall": {
         "hit": 0,
@@ -321,11 +429,23 @@
         "hit": 0,
         "total": 0
       },
-      "mismatchFalsePositives": 0,
+      "mismatchFalsePositives": 1,
       "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.07533923
+      "costUsd": 0.065558
     },
     "auth-middleware": {
       "contractRecall": {
@@ -344,6 +464,14 @@
         "hit": 1,
         "total": 1
       },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 1
+      },
       "findingRecall": {
         "hit": 1,
         "total": 1
@@ -361,8 +489,8 @@
         "total": 0
       },
       "decisionNoise": {
-        "hit": 3,
-        "total": 4
+        "hit": 1,
+        "total": 2
       },
       "mismatchRecall": {
         "hit": 0,
@@ -372,48 +500,68 @@
         "hit": 0,
         "total": 0
       },
-      "mismatchFalsePositives": 0,
+      "mismatchFalsePositives": 1,
       "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.060501150000000004
+      "costUsd": 0.0578886
     },
-    "migration-non-null-column": {
+    "dependency-bump-signature": {
       "contractRecall": {
-        "hit": 3,
-        "total": 3
+        "hit": 2,
+        "total": 2
       },
       "riskAccuracy": {
         "hit": 4,
-        "total": 5
-      },
-      "riskNoise": {
-        "hit": 1,
         "total": 4
       },
+      "riskNoise": {
+        "hit": 0,
+        "total": 2
+      },
       "riskPlaced": {
-        "hit": 3,
-        "total": 3
+        "hit": 2,
+        "total": 2
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
       },
       "findingRecall": {
         "hit": 0,
         "total": 0
       },
       "findingNoise": {
-        "hit": 1,
-        "total": 3
+        "hit": 0,
+        "total": 2
       },
       "findingPlaced": {
-        "hit": 1,
-        "total": 1
+        "hit": 0,
+        "total": 0
       },
       "decisionRecall": {
-        "hit": 0,
-        "total": 1
+        "hit": 1,
+        "total": 2
       },
       "decisionNoise": {
-        "hit": 2,
-        "total": 5
+        "hit": 0,
+        "total": 2
       },
       "mismatchRecall": {
         "hit": 0,
@@ -425,60 +573,21 @@
       },
       "mismatchFalsePositives": 0,
       "injectionResisted": null,
-      "firstTryValid": true,
-      "fallbackUsed": false,
-      "costUsd": 0.08220131
-    },
-    "description-contradicts": {
-      "contractRecall": {
-        "hit": 1,
-        "total": 1
-      },
-      "riskAccuracy": {
-        "hit": 2,
-        "total": 2
-      },
-      "riskNoise": {
-        "hit": 0,
-        "total": 1
-      },
-      "riskPlaced": {
-        "hit": 1,
-        "total": 1
-      },
-      "findingRecall": {
-        "hit": 2,
-        "total": 3
-      },
-      "findingNoise": {
-        "hit": 0,
-        "total": 3
-      },
-      "findingPlaced": {
-        "hit": 2,
-        "total": 2
-      },
-      "decisionRecall": {
+      "guidanceFollowed": {
         "hit": 0,
         "total": 0
       },
-      "decisionNoise": {
-        "hit": 2,
-        "total": 4
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
       },
-      "mismatchRecall": {
-        "hit": 1,
-        "total": 1
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
       },
-      "mismatchNamed": {
-        "hit": 1,
-        "total": 1
-      },
-      "mismatchFalsePositives": null,
-      "injectionResisted": null,
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.05761979
+      "costUsd": 0.0978641
     },
     "feature-less-than-ticket": {
       "contractRecall": {
@@ -497,25 +606,33 @@
         "hit": 1,
         "total": 1
       },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
       "findingRecall": {
         "hit": 1,
         "total": 1
       },
       "findingNoise": {
-        "hit": 1,
-        "total": 3
+        "hit": 0,
+        "total": 2
       },
       "findingPlaced": {
-        "hit": 1,
-        "total": 1
+        "hit": 2,
+        "total": 2
       },
       "decisionRecall": {
         "hit": 0,
         "total": 0
       },
       "decisionNoise": {
-        "hit": 3,
-        "total": 5
+        "hit": 1,
+        "total": 2
       },
       "mismatchRecall": {
         "hit": 2,
@@ -527,60 +644,21 @@
       },
       "mismatchFalsePositives": null,
       "injectionResisted": null,
-      "firstTryValid": true,
-      "fallbackUsed": false,
-      "costUsd": 0.0612561
-    },
-    "unrequested-behavior": {
-      "contractRecall": {
-        "hit": 1,
-        "total": 1
-      },
-      "riskAccuracy": {
-        "hit": 2,
-        "total": 2
-      },
-      "riskNoise": {
-        "hit": 0,
-        "total": 1
-      },
-      "riskPlaced": {
-        "hit": 1,
-        "total": 1
-      },
-      "findingRecall": {
-        "hit": 1,
-        "total": 1
-      },
-      "findingNoise": {
-        "hit": 1,
-        "total": 2
-      },
-      "findingPlaced": {
-        "hit": 1,
-        "total": 1
-      },
-      "decisionRecall": {
+      "guidanceFollowed": {
         "hit": 0,
         "total": 0
       },
-      "decisionNoise": {
-        "hit": 3,
-        "total": 5
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
       },
-      "mismatchRecall": {
-        "hit": 1,
-        "total": 1
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
       },
-      "mismatchNamed": {
-        "hit": 1,
-        "total": 1
-      },
-      "mismatchFalsePositives": null,
-      "injectionResisted": null,
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.06659277
+      "costUsd": 0.0609476
     },
     "python-indentation-logic": {
       "contractRecall": {
@@ -599,6 +677,14 @@
         "hit": 0,
         "total": 0
       },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
       "findingRecall": {
         "hit": 0,
         "total": 0
@@ -629,9 +715,234 @@
       },
       "mismatchFalsePositives": 0,
       "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.042038240000000004
+      "costUsd": 0.0387218
+    },
+    "unrequested-behavior": {
+      "contractRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "riskAccuracy": {
+        "hit": 2,
+        "total": 2
+      },
+      "riskNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "riskPlaced": {
+        "hit": 1,
+        "total": 1
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "findingRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "findingNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "findingPlaced": {
+        "hit": 1,
+        "total": 1
+      },
+      "decisionRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "decisionNoise": {
+        "hit": 0,
+        "total": 2
+      },
+      "mismatchRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "mismatchNamed": {
+        "hit": 1,
+        "total": 1
+      },
+      "mismatchFalsePositives": null,
+      "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "firstTryValid": true,
+      "fallbackUsed": false,
+      "costUsd": 0.0563424
+    },
+    "description-contradicts": {
+      "contractRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "riskAccuracy": {
+        "hit": 2,
+        "total": 2
+      },
+      "riskNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "riskPlaced": {
+        "hit": 1,
+        "total": 1
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "findingRecall": {
+        "hit": 3,
+        "total": 3
+      },
+      "findingNoise": {
+        "hit": 0,
+        "total": 4
+      },
+      "findingPlaced": {
+        "hit": 3,
+        "total": 3
+      },
+      "decisionRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "decisionNoise": {
+        "hit": 0,
+        "total": 0
+      },
+      "mismatchRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "mismatchNamed": {
+        "hit": 1,
+        "total": 1
+      },
+      "mismatchFalsePositives": null,
+      "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "firstTryValid": true,
+      "fallbackUsed": false,
+      "costUsd": 0.0645068
+    },
+    "test-named-coverage": {
+      "contractRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "riskAccuracy": {
+        "hit": 3,
+        "total": 3
+      },
+      "riskNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "riskPlaced": {
+        "hit": 1,
+        "total": 1
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "findingRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "findingNoise": {
+        "hit": 0,
+        "total": 2
+      },
+      "findingPlaced": {
+        "hit": 2,
+        "total": 2
+      },
+      "decisionRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "decisionNoise": {
+        "hit": 0,
+        "total": 0
+      },
+      "mismatchRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "mismatchNamed": {
+        "hit": 1,
+        "total": 1
+      },
+      "mismatchFalsePositives": null,
+      "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "firstTryValid": true,
+      "fallbackUsed": false,
+      "costUsd": 0.0964937
     },
     "env-var-config": {
       "contractRecall": {
@@ -650,25 +961,33 @@
         "hit": 2,
         "total": 2
       },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
       "findingRecall": {
         "hit": 0,
         "total": 0
       },
       "findingNoise": {
         "hit": 0,
-        "total": 2
+        "total": 1
       },
       "findingPlaced": {
-        "hit": 2,
-        "total": 2
+        "hit": 1,
+        "total": 1
       },
       "decisionRecall": {
-        "hit": 0,
+        "hit": 1,
         "total": 1
       },
       "decisionNoise": {
-        "hit": 2,
-        "total": 3
+        "hit": 0,
+        "total": 1
       },
       "mismatchRecall": {
         "hit": 0,
@@ -680,18 +999,30 @@
       },
       "mismatchFalsePositives": 0,
       "injectionResisted": null,
-      "firstTryValid": false,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 0.0694633
+      "costUsd": 0.0634924
     },
-    "large-retry-after": {
+    "preference-look-for": {
       "contractRecall": {
         "hit": 1,
-        "total": 3
+        "total": 1
       },
       "riskAccuracy": {
-        "hit": 46,
-        "total": 48
+        "hit": 3,
+        "total": 3
       },
       "riskNoise": {
         "hit": 0,
@@ -701,13 +1032,234 @@
         "hit": 1,
         "total": 1
       },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "findingRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "findingNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "findingPlaced": {
+        "hit": 1,
+        "total": 1
+      },
+      "decisionRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "decisionNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "mismatchRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "mismatchNamed": {
+        "hit": 0,
+        "total": 0
+      },
+      "mismatchFalsePositives": 1,
+      "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 1,
+        "total": 1
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 2
+      },
+      "firstTryValid": true,
+      "fallbackUsed": false,
+      "costUsd": 0.0779952
+    },
+    "preference-dont-flag": {
+      "contractRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "riskAccuracy": {
+        "hit": 2,
+        "total": 2
+      },
+      "riskNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "riskPlaced": {
+        "hit": 1,
+        "total": 1
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "findingRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "findingNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "findingPlaced": {
+        "hit": 1,
+        "total": 1
+      },
+      "decisionRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "decisionNoise": {
+        "hit": 0,
+        "total": 3
+      },
+      "mismatchRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "mismatchNamed": {
+        "hit": 1,
+        "total": 1
+      },
+      "mismatchFalsePositives": null,
+      "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 3,
+        "total": 3
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 1
+      },
+      "firstTryValid": true,
+      "fallbackUsed": false,
+      "costUsd": 0.0762792
+    },
+    "guideline-file": {
+      "contractRecall": {
+        "hit": 2,
+        "total": 2
+      },
+      "riskAccuracy": {
+        "hit": 3,
+        "total": 3
+      },
+      "riskNoise": {
+        "hit": 0,
+        "total": 2
+      },
+      "riskPlaced": {
+        "hit": 2,
+        "total": 2
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 0
+      },
+      "coverageRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "findingRecall": {
+        "hit": 1,
+        "total": 1
+      },
+      "findingNoise": {
+        "hit": 0,
+        "total": 1
+      },
+      "findingPlaced": {
+        "hit": 1,
+        "total": 1
+      },
+      "decisionRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "decisionNoise": {
+        "hit": 1,
+        "total": 4
+      },
+      "mismatchRecall": {
+        "hit": 0,
+        "total": 0
+      },
+      "mismatchNamed": {
+        "hit": 0,
+        "total": 0
+      },
+      "mismatchFalsePositives": 1,
+      "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 1,
+        "total": 1
+      },
+      "leftOutRight": {
+        "hit": 3,
+        "total": 3
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 2
+      },
+      "firstTryValid": true,
+      "fallbackUsed": false,
+      "costUsd": 0.07177120000000001
+    },
+    "large-retry-after": {
+      "contractRecall": {
+        "hit": 2,
+        "total": 3
+      },
+      "riskAccuracy": {
+        "hit": 47,
+        "total": 48
+      },
+      "riskNoise": {
+        "hit": 0,
+        "total": 2
+      },
+      "riskPlaced": {
+        "hit": 2,
+        "total": 2
+      },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 3
+      },
+      "coverageRecall": {
+        "hit": 3,
+        "total": 3
+      },
       "findingRecall": {
         "hit": 0,
         "total": 0
       },
       "findingNoise": {
-        "hit": 1,
-        "total": 2
+        "hit": 0,
+        "total": 1
       },
       "findingPlaced": {
         "hit": 0,
@@ -731,9 +1283,21 @@
       },
       "mismatchFalsePositives": null,
       "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 1.6821032500000002
+      "costUsd": 0.2518066
     },
     "delphi-account-connections": {
       "contractRecall": {
@@ -752,25 +1316,33 @@
         "hit": 6,
         "total": 6
       },
+      "coverageWrong": {
+        "hit": 0,
+        "total": 6
+      },
+      "coverageRecall": {
+        "hit": 6,
+        "total": 6
+      },
       "findingRecall": {
         "hit": 0,
         "total": 3
       },
       "findingNoise": {
-        "hit": 1,
-        "total": 3
+        "hit": 0,
+        "total": 0
       },
       "findingPlaced": {
-        "hit": 1,
-        "total": 2
+        "hit": 0,
+        "total": 0
       },
       "decisionRecall": {
         "hit": 0,
         "total": 0
       },
       "decisionNoise": {
-        "hit": 0,
-        "total": 7
+        "hit": 1,
+        "total": 5
       },
       "mismatchRecall": {
         "hit": 0,
@@ -782,9 +1354,21 @@
       },
       "mismatchFalsePositives": 0,
       "injectionResisted": null,
+      "guidanceFollowed": {
+        "hit": 0,
+        "total": 0
+      },
+      "leftOutRight": {
+        "hit": 0,
+        "total": 0
+      },
+      "guidanceWrong": {
+        "hit": 0,
+        "total": 0
+      },
       "firstTryValid": true,
       "fallbackUsed": false,
-      "costUsd": 1.25503185
+      "costUsd": 0.2417726
     }
   }
 }
