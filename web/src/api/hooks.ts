@@ -118,7 +118,6 @@ export const useAnalysisView = (id: AnalysisId, seed: AnalysisView | null = null
     );
   }, [client, id]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new round follows again.
   useEffect(() => {
     if (round === 0 && seeded.current === id) {
       followed.current = id;
