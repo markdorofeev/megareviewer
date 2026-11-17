@@ -33,8 +33,9 @@ const open = async (page: Page, { theme, palette }: Pick<Combination, "theme" | 
 
 for (const combination of COMBINATIONS) {
   test(`meets the accessibility checks, ${combination.name}`, async ({ page }) => {
-    // The focus walk presses Tab through every stop on the page, several hundred of them.
-    test.setTimeout(180_000);
+    // The focus walk presses Tab through every stop on the page, about 500 of them: CI, running
+    // the four at once, has taken 2.5 to over 3 minutes.
+    test.setTimeout(360_000);
     await open(page, combination);
     const html = page.locator("html");
     await expect(html).toHaveClass(combination.theme === "dark" ? "dark" : "");
