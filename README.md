@@ -4,6 +4,8 @@ Turns a GitHub or Bitbucket Cloud pull request into a guided review. Changes are
 
 On any review, the Request AI review button adds what the PR was asked to do next to what the code actually does, plain-language titles for the tour's steps, and its points on the code: what looks wrong, as a draft comment under its line you can add to your review as it is; contract changes that deserve a hard look, as a note under their lines; and why the code makes its choices, as footnotes you can hide. Saying nothing means it's fine. You pick the verdict when you publish.
 
+An AI review follows your preferences, kept on your machine: rules you write on the Preferences page, “Look for” or “Don't flag”, for every repository or for one, and a repository's guideline files such as `REVIEW.md` that you switch on. megareviewer also proposes rules from the points you dismiss and raise, and on request from your own past review comments on the host; none is used until you accept it. A point says which preference shaped it, and one a “Don't flag” rule covers is folded to a line, not hidden.
+
 ## Run
 
 Needs Node 22.13 or later.
@@ -76,7 +78,7 @@ Set them as environment variables. You need at least one git host.
 
 ## Privacy
 
-Until you press Request AI review, your code goes nowhere but your machine and your git host. Then the PR's code also goes to the model's maker for the analysis: to Anthropic through your Claude Code, under your own Claude plan and its privacy settings, or through the Anthropic API under your API account's; or, with Codex, to OpenAI under your own ChatGPT plan or OpenAI account and its settings; or, with opencode, to whichever provider the chosen model is on, under your account there, or nowhere off your machine for a local model. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses and what you did with each point are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
+Until you press Request AI review, your code goes nowhere but your machine and your git host. Then the PR's code also goes to the model's maker for the analysis: to Anthropic through your Claude Code, under your own Claude plan and its privacy settings, or through the Anthropic API under your API account's; or, with Codex, to OpenAI under your own ChatGPT plan or OpenAI account and its settings; or, with opencode, to whichever provider the chosen model is on, under your account there, or nowhere off your machine for a local model. Your preferences and the guideline files you switched on go with it. Suggesting preferences sends the same maker what it reads instead of code: the points you dismissed and raised and the comments you posted, or your past comments on one repository. Nothing is sent to us, and there is no telemetry. Credentials stay in the local server process and never reach the browser. Analyses, your preferences and what you did with each point are stored in `~/.megareviewer` (`MEGAREVIEWER_HOME` to move it).
 
 ## Contributing
 
