@@ -87,6 +87,8 @@ export const PR = {
   intentFailsOnce: "https://github.com/acme/shop/pull/104",
   /** small-feature with a test, which checks one of its two risks. */
   receiptsTested: "https://github.com/acme/shop/pull/105",
+  /** small-feature in a repository with guideline files and two of the reviewer's preferences. */
+  receiptsGuided: "https://github.com/acme/storefront/pull/7",
 } as const;
 
 /** What the fake hosts received, as GET /__fake/publications reports it. */
