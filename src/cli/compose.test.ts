@@ -21,7 +21,13 @@ import {
   RecordingLogger,
   smallFeatureAnalysis,
 } from "../application/testing/index.ts";
-import { assemble, type Composition, compose, newSessionToken } from "./compose.ts";
+import {
+  assemble,
+  type Composition,
+  compose,
+  createReviewHistories,
+  newSessionToken,
+} from "./compose.ts";
 import type { Config } from "./config.ts";
 import { serve } from "./serve.ts";
 
@@ -203,8 +209,25 @@ describe("compose", () => {
     expect((await second.useCases.getPreferences()).preferences).toEqual([added.ok && added.value]);
   });
 
-  it("can't read past reviews from a host yet, which importing says", async () => {
-    const composition = await composed(await configIn());
+  it("reads past reviews from the configured hosts, and from no other", async () => {
+    const config = await configIn();
+    const histories = (hosts: Pick<Config, "github" | "bitbucket">) =>
+      createReviewHistories(hosts, {
+        version: "1.2.3",
+        clock: new FixedClock(),
+        logger: new RecordingLogger(),
+      });
+
+    expect(Object.values(histories(config)).map((history) => history.host)).toEqual([
+      "github",
+      "bitbucket",
+    ]);
+    expect(Object.keys(histories({ ...config, github: null }))).toEqual(["bitbucket"]);
+    expect(histories({ github: null, bitbucket: null })).toEqual({});
+  });
+
+  it("can't read past reviews from a host that isn't configured, which importing says", async () => {
+    const composition = await composed({ ...(await configIn()), github: null });
     const repo = { host: "github", owner: "acme", repo: "shop" } as const;
 
     expect(await composition.useCases.importPreferences(repo)).toEqual({

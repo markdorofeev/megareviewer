@@ -5,12 +5,14 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Hono } from "hono";
 import {
   createBitbucketHost,
+  createBitbucketReviewHistory,
   createBitbucketReviewThreads,
   createBitbucketStatusSource,
 } from "../adapters/bitbucket/index.ts";
 import { createGitCheckouts } from "../adapters/git/index.ts";
 import {
   createGitHubHost,
+  createGitHubReviewHistory,
   createGitHubReviewThreads,
   createGitHubStatusSource,
 } from "../adapters/github/index.ts";
@@ -25,11 +27,13 @@ import type {
   GitHost,
   Logger,
   PullRequestStatusSource,
+  ReviewHistory,
   ReviewThreads,
   TicketSource,
 } from "../application/ports/index.ts";
 import {
   retryingGitHost,
+  retryingReviewHistory,
   retryingReviewThreads,
   retryingStatusSource,
 } from "../application/retries/index.ts";
@@ -140,6 +144,32 @@ export const createStatusSources = (
   };
 };
 
+/** The reviewer's past comments on the configured hosts; reads retried as the hosts' are. */
+export const createReviewHistories = (
+  config: Pick<Config, "github" | "bitbucket">,
+  options: { readonly version: string; readonly clock: Clock; readonly logger: Logger },
+): Partial<Record<HostKind, ReviewHistory>> => {
+  const { github, bitbucket } = config;
+  const { clock, logger } = options;
+  const retrying = (history: ReviewHistory) => retryingReviewHistory(history, { sleep, logger });
+  return {
+    ...(github !== null && {
+      github: retrying(
+        createGitHubReviewHistory({ token: github.token, version: options.version, clock, logger }),
+      ),
+    }),
+    ...(bitbucket !== null && {
+      bitbucket: retrying(
+        createBitbucketReviewHistory({
+          username: bitbucket.username,
+          password: bitbucket.password,
+          logger,
+        }),
+      ),
+    }),
+  };
+};
+
 export const createTicketSource = (config: Pick<Config, "jira">, logger: Logger): TicketSource =>
   config.jira === null
     ? createUnconfiguredTicketSource()
@@ -228,8 +258,7 @@ export const compose = async (
           models,
           store,
           preferences: store,
-          // Reading past reviews from the hosts comes with their adapters.
-          history: {},
+          history: createReviewHistories(config, { version: options.version, clock, logger }),
           fileCache: store,
           checkouts: createGitCheckouts({ dir: options.checkoutDir }),
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),
