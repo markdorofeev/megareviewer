@@ -1,6 +1,6 @@
 # Stage 59: Evals for guidance
 
-**Status:** Not started
+**Status:** In progress (branch worktree-agent-ae417ba8d16eb0a78)
 **Depends on:** 55 for the cases and scoring, 56 to run them
 **Owns:** `evals/`
 
