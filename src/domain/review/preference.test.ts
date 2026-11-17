@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { HunkId } from "../diff/index.ts";
 import {
   AnalysisId,
   CommentKey,
@@ -342,10 +343,9 @@ describe("signal keys", () => {
   });
 
   it("key a comment posted now by when it was posted, so two on a line are two signals", () => {
-    const first = postedSignalKey(id, "2026-11-01T10:00:00.000Z", comment);
-    expect(first).toBe(
-      "now:a_0123456789abcdef:2026-11-01T10:00:00.000Z:hunk:h_0123456789abcdef:new:14",
-    );
-    expect(postedSignalKey(id, "2026-11-01T10:00:01.000Z", comment)).not.toBe(first);
+    const on = { hunkId: HunkId.parse("h_0123456789abcdef"), side: "new", line: 14 } as const;
+    const first = postedSignalKey(id, "2026-11-01T10:00:00.000Z", on);
+    expect(first).toBe("now:a_0123456789abcdef:2026-11-01T10:00:00.000Z:h_0123456789abcdef:new:14");
+    expect(postedSignalKey(id, "2026-11-01T10:00:01.000Z", on)).not.toBe(first);
   });
 });

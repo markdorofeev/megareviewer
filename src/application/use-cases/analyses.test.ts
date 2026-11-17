@@ -11,6 +11,9 @@ import {
   type ModelOption,
   modelRunnable,
   PointId,
+  type Preference,
+  PreferenceId,
+  pointsOf,
   type StageName,
   type StageStatus,
   validateRiskCoverage,
@@ -72,10 +75,16 @@ const setup = (
     modelOptions?: readonly ModelOption[];
     checkouts?: FakeLocalCheckouts;
     clock?: FixedClock;
+    /** The PRs GitHub has; every fixture unless given. */
+    fixtures?: readonly PullRequestFixture[];
   } = {},
 ) => {
   const clock = options.clock ?? new FixedClock("2026-10-21T09:00:00Z");
-  const github = new FakeGitHost({ host: "github", fixtures: allFixtures, clock });
+  const github = new FakeGitHost({
+    host: "github",
+    fixtures: options.fixtures ?? allFixtures,
+    clock,
+  });
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: allFixtures, clock });
   const tickets =
     options.tickets ??
@@ -86,6 +95,7 @@ const setup = (
     ...(options.modelOptions === undefined ? {} : { options: options.modelOptions }),
   });
   const store = new RecordingStore();
+  const preferences = new InMemoryPreferenceStore();
   const fileCache = options.fileCache ?? new InMemoryFileCache();
   const parser = options.parser ?? new FakeCodeParser();
   const logger = new RecordingLogger();
@@ -113,7 +123,7 @@ const setup = (
       models,
       store,
       fileCache,
-      preferences: new InMemoryPreferenceStore(),
+      preferences,
       history: {},
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
       threads: {},
@@ -167,6 +177,7 @@ const setup = (
     model,
     models,
     store,
+    preferences,
     fileCache,
     logger,
     emitted,
@@ -1577,6 +1588,293 @@ describe("runModel", () => {
       message: "megareviewer stopped while Claude analyzed the pull request",
     });
     expect(recovered !== undefined && recovered !== null && modelRunnable(recovered)).toBe(true);
+  });
+});
+
+describe("a model run's guidance", () => {
+  const { repo } = smallFeature.pullRequest.ref;
+  const { baseSha } = smallFeature.pullRequest;
+  let made = 0;
+  const preference = (overrides: Partial<Preference>): Preference => {
+    made += 1;
+    return {
+      id: PreferenceId.parse(`pref_${made.toString(16).padStart(16, "0")}`),
+      kind: "look-for",
+      text: "Tenant isolation",
+      scope: { kind: "global" },
+      source: "written",
+      enabled: true,
+      createdAt: `2026-10-0${made % 9}T10:00:00.000Z`,
+      updatedAt: "2026-10-20T10:00:00.000Z",
+      ...overrides,
+    };
+  };
+  const tenant = preference({ createdAt: "2026-10-01T10:00:00.000Z" });
+  const naming = preference({
+    kind: "dont-flag",
+    text: "Naming of test helpers",
+    scope: { kind: "repo", repo },
+    createdAt: "2026-10-02T10:00:00.000Z",
+  });
+  const elsewhere = preference({
+    text: "Migrations",
+    scope: { kind: "repo", repo: { ...repo, repo: "api" } },
+  });
+  const off = preference({ text: "Retries", enabled: false });
+  /** small-feature, in a repository with guideline files at its base commit. */
+  const withGuidelines = (files: Readonly<Record<string, string>>): PullRequestFixture => ({
+    ...smallFeature,
+    baseFiles: { ...smallFeature.baseFiles, ...files },
+  });
+  const guidelines = withGuidelines({
+    "REVIEW.md": "Migrations must be reversible.\n",
+    "AGENTS.md": "Use pnpm.\n",
+    "CLAUDE.md": "x".repeat(40_000),
+  });
+  const added = smallFeatureFiles
+    .flatMap((file) => file.hunks)
+    .flatMap((hunk) => {
+      const line = hunk.lines.find((one) => one.kind === "add")?.newLine;
+      return line == null ? [] : [{ hunkId: hunk.id, side: "new" as const, startLine: line, line }];
+    });
+  const findingOn = (
+    at: number,
+    guidance: { ref: string; effect: "raised" | "left-out" } | null,
+  ) => {
+    const lines = added[at];
+    if (lines === undefined) throw new Error("small-feature adds lines in every hunk");
+    return {
+      title: `Finding ${at}`,
+      explanation: "",
+      lines,
+      severity: "major" as const,
+      suggestion: null,
+      mismatch: null,
+      guidance,
+    };
+  };
+
+  it("gives the passes the enabled preferences for the repository and REVIEW.md at the base commit, and keeps what it gave", async () => {
+    const { analyze, model, preferences, github } = setup({ fixtures: [guidelines] });
+    for (const one of [naming, elsewhere, off, tenant]) await preferences.savePreference(one);
+
+    const analysis = await analyze();
+
+    const guidance = {
+      preferences: [
+        { ref: "p1", kind: "look-for", text: "Tenant isolation", scope: "global" },
+        { ref: "p2", kind: "dont-flag", text: "Naming of test helpers", scope: "repo" },
+      ],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Migrations must be reversible.\n" }],
+    };
+    for (const pass of ["checkSize", "intent", "findings", "risk", "decisions"] as const) {
+      expect(model.callsTo(pass).map((call) => call.input.guidance)).toEqual([guidance]);
+    }
+    expect(analysis.guidance).toEqual({
+      preferences: [
+        {
+          ref: "p1",
+          id: tenant.id,
+          kind: "look-for",
+          text: "Tenant isolation",
+          scope: tenant.scope,
+        },
+        { ref: "p2", id: naming.id, kind: "dont-flag", text: naming.text, scope: naming.scope },
+      ],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 31 }],
+    });
+    expect(analysis.warnings).toEqual([]);
+    // Only the files switched on are asked for.
+    expect(
+      github.getFilesCalls.filter((call) => call.some((file) => file.path === "REVIEW.md")),
+    ).toEqual([[{ sha: baseSha, path: "REVIEW.md" }]]);
+  });
+
+  it("runs without guidance when the reviewer has none and the repository no REVIEW.md", async () => {
+    const { analyze, model } = setup();
+
+    const analysis = await analyze();
+
+    expect(firstInput(model, "intent").guidance).toEqual({ preferences: [], guidelines: [] });
+    expect(analysis.guidance).toEqual({ preferences: [], guidelines: [] });
+    expect(analysis.warnings).toEqual([]);
+  });
+
+  it("has none before the model runs", async () => {
+    const analysis = await setup({ modelEnabled: false }).analyze();
+    expect(analysis.guidance).toBeNull();
+  });
+
+  it("reads the guideline files the reviewer switched on, and not REVIEW.md once it's off", async () => {
+    const { analyze, model, preferences } = setup({ fixtures: [guidelines] });
+    await preferences.setGuidelineSwitch(repo, "REVIEW.md", false);
+    await preferences.setGuidelineSwitch(repo, "AGENTS.md", true);
+    await preferences.setGuidelineSwitch(repo, "CONTRIBUTING.md", true);
+
+    const analysis = await analyze();
+
+    expect(firstInput(model, "intent").guidance.guidelines).toEqual([
+      { ref: "g1", path: "AGENTS.md", content: "Use pnpm.\n" },
+    ]);
+    expect(analysis.guidance?.guidelines).toEqual([{ ref: "g1", path: "AGENTS.md", bytes: 10 }]);
+  });
+
+  it("doesn't send a guideline file over 32 KB, and says so, once however often the run is tried", async () => {
+    const model = new FakeAnalysisModel();
+    model.script("intent", err(modelError("overloaded")));
+    const { analyze, runModel, preferences } = setup({ fixtures: [guidelines], model });
+    await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+    const failed = await analyze();
+    const analysis = await runModel(failed.id);
+
+    const warning =
+      "CLAUDE.md is 40 KB, over the 32 KB a guideline file can be, so the AI review ran without it";
+    expect(failed.warnings).toEqual([warning]);
+    expect(analysis.warnings).toEqual([warning]);
+    expect(analysis.guidance?.guidelines).toEqual([{ ref: "g1", path: "REVIEW.md", bytes: 31 }]);
+    expect(model.callsTo("findings")[0]?.input.guidance.guidelines.map((one) => one.path)).toEqual([
+      "REVIEW.md",
+    ]);
+  });
+
+  it("goes on without the guideline files when they can't be read, with a warning", async () => {
+    const { useCases, done, stored, github, model, preferences } = setup({
+      fixtures: [guidelines],
+      modelEnabled: false,
+    });
+    await preferences.savePreference(tenant);
+    const started = await useCases.startAnalysis(smallFeature.pullRequest.url);
+    if (!started.ok) throw new Error(started.error.message);
+    const id = started.value.analysisId;
+    await done(id);
+    github.failNext("getFiles", hostError("network"));
+
+    await useCases.runModel(id);
+    await done(id, 2);
+    const analysis = await stored(id);
+
+    expect(analysis.warnings).toEqual([
+      "Couldn't read the repository's guideline files, so the AI review ran without them: network from host",
+    ]);
+    expect(analysis.modelError).toBeNull();
+    expect(firstInput(model, "intent").guidance).toEqual({
+      preferences: [{ ref: "p1", kind: "look-for", text: "Tenant isolation", scope: "global" }],
+      guidelines: [],
+    });
+    expect(analysis.guidance?.guidelines).toEqual([]);
+  });
+
+  it("keeps the marks that check out and drops the others, never their points", async () => {
+    const model = new FakeAnalysisModel();
+    model.script(
+      "findings",
+      ok([
+        findingOn(0, { ref: "p1", effect: "raised" }),
+        findingOn(1, { ref: "p2", effect: "left-out" }),
+        findingOn(2, { ref: "g1", effect: "left-out" }),
+        findingOn(3, { ref: "p1", effect: "left-out" }),
+        findingOn(4, { ref: "p7", effect: "raised" }),
+        findingOn(5, null),
+      ]),
+    );
+    model.script(
+      "risk",
+      ok(
+        smallFeatureHunks.map((hunkId, index) => ({
+          ...logic(hunkId),
+          riskClass: index < 4 ? ("contract" as const) : ("logic" as const),
+          guidance:
+            [
+              { ref: "g1", effect: "raised" as const },
+              { ref: "p2", effect: "left-out" as const },
+              { ref: "p2", effect: "raised" as const },
+              null,
+              { ref: "p1", effect: "raised" as const },
+              null,
+            ][index] ?? null,
+        })),
+      ),
+    );
+    const { analyze, preferences, logger } = setup({ fixtures: [guidelines], model });
+    await preferences.savePreference(tenant);
+    await preferences.savePreference(naming);
+
+    const analysis = await analyze();
+
+    expect(analysis.findings.map((finding) => finding.guidance)).toEqual([
+      { ref: "p1", effect: "raised" },
+      { ref: "p2", effect: "left-out" },
+      { ref: "g1", effect: "left-out" },
+      null,
+      null,
+      null,
+    ]);
+    expect(model.callsTo("findings")).toHaveLength(1);
+    const modelRisk = analysis.risk.filter((risk) => risk.source === "model");
+    expect(modelRisk.map((risk) => [risk.riskClass, risk.guidance])).toEqual([
+      ["contract", { ref: "g1", effect: "raised" }],
+      ["contract", { ref: "p2", effect: "left-out" }],
+      ["contract", null],
+      ["contract", null],
+      // A mark on a logic hunk says nothing the page shows.
+      ["logic", null],
+      ["logic", null],
+    ]);
+    // The risk pass and the findings pass run side by side, so their entries come in either order.
+    const dropped = logger.entries
+      .filter((entry) => entry.message === "Dropped a guidance mark that doesn't check out")
+      .map((entry) => entry.fields);
+    expect(dropped).toHaveLength(3);
+    expect(dropped).toEqual(
+      expect.arrayContaining([
+        { finding: 4, ref: "p1", effect: "left-out" },
+        { finding: 5, ref: "p7", effect: "raised" },
+        { hunkId: smallFeatureHunks[2], ref: "p2", effect: "raised" },
+      ]),
+    );
+    const marked = pointsOf(analysis).flatMap((point) =>
+      point.guidance === undefined ? [] : [[point.id, point.guidance.effect, point.guidance.label]],
+    );
+    expect(marked).toEqual([
+      ["f1", "raised", "Tenant isolation"],
+      ["f2", "left-out", "Naming of test helpers"],
+      ["f3", "left-out", "REVIEW.md"],
+      [`r:${smallFeatureHunks[0]}`, "raised", "REVIEW.md"],
+      [`r:${smallFeatureHunks[1]}`, "left-out", "Naming of test helpers"],
+    ]);
+  });
+
+  it("keeps a point's mark as the run read the preference, after the preference is deleted", async () => {
+    const model = new FakeAnalysisModel();
+    model.script("findings", ok([findingOn(0, { ref: "p1", effect: "raised" })]));
+    const { analyze, preferences } = setup({ model });
+    await preferences.savePreference(tenant);
+    const analysis = await analyze();
+    await preferences.deletePreference(tenant.id);
+
+    expect(pointsOf(analysis)[0]?.guidance).toEqual({
+      effect: "raised",
+      label: "Tenant isolation",
+      preferenceId: tenant.id,
+    });
+  });
+
+  it("is gone with the model run, and read afresh by the next", async () => {
+    const { analyze, useCases, runModel, preferences } = setup({ fixtures: [guidelines] });
+    await preferences.savePreference(tenant);
+    const ran = await analyze();
+    expect(ran.guidance?.preferences).toHaveLength(1);
+
+    const removed = await useCases.removeModelRun(ran.id);
+    expect(removed.ok && removed.value.analysis.guidance).toBeNull();
+
+    await preferences.savePreference(naming);
+    const again = await runModel(ran.id);
+    expect(again.guidance?.preferences.map((one) => one.text)).toEqual([
+      "Tenant isolation",
+      "Naming of test helpers",
+    ]);
   });
 });
 

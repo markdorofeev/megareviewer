@@ -22,6 +22,7 @@ import type { AnalysisModel, GitHost } from "../ports/index.ts";
 import { type Collected, collect, type OnFilesFetched } from "./collect.ts";
 import type { AppDeps } from "./deps.ts";
 import type { UseCaseError } from "./errors.ts";
+import { runGuidance } from "./guidance.ts";
 import { buildAnalysisInput, fitToModel } from "./model-input.ts";
 import { runDecisions, runFindings, runIntent, runRisk } from "./model-passes.ts";
 import { prep } from "./prep.ts";
@@ -238,8 +239,9 @@ const codeStages = async (
 /**
  * Runs the model's passes on a complete analysis, side by side, adding intent, findings, decisions
  * and the model's risk to it. Collects and preps again from the stored PR first: files come from
- * the file cache, and prep is deterministic. A failure is the analysis's `modelError`; its
- * status stays complete. Never throws.
+ * the file cache, and prep is deterministic. The passes read the reviewer's preferences and the
+ * repository's guideline files, which the analysis keeps as the run's guidance. A failure is the
+ * analysis's `modelError`; its status stays complete. Never throws.
  */
 export const runModel = async (
   deps: AppDeps,
@@ -255,6 +257,7 @@ export const runModel = async (
       beforeModel: keepBeforeModel(current),
       modelError: null,
       modelOption: run.option,
+      guidance: null,
       stages: mapModelStages(current.stages, () => "pending"),
     }));
     await modelStages(deps, run.model, host, pullRequest, checkout, tracker);
@@ -282,6 +285,15 @@ const modelStages = async (
   const { prepared, proofRisk, ruleRisk } = await prepare(deps, collected.value, checkout);
   const { files } = collected.value;
 
+  const read = await runGuidance(deps, pullRequest);
+  const { guidance } = read;
+  await tracker.save((analysis) => ({
+    guidance,
+    // A run tried again reads the same files: what it couldn't send is said once.
+    ...adding({
+      warnings: read.warnings.filter((warning) => !analysis.warnings.includes(warning)),
+    })(analysis),
+  }));
   const fitted = await fitToModel(
     model,
     buildAnalysisInput({
@@ -290,6 +302,7 @@ const modelStages = async (
       files,
       headContents: collected.value.headContents,
       prepared,
+      guidance: read.input,
     }),
   );
   if (!fitted.ok) return tracker.failModel("intent", fitted.error);
@@ -318,14 +331,21 @@ const modelStages = async (
     intentRun,
     // Findings read the intent's mismatches, to name the one a finding shows, so they wait for it.
     intentRun.then(async (intent) => {
-      const result = await runFindings(model, input, intent.ok ? intent.value : null, hunks, deps);
+      const result = await runFindings(
+        model,
+        input,
+        intent.ok ? intent.value : null,
+        hunks,
+        deps,
+        guidance,
+      );
       await tracker.setStage("findings", result.outcome.ok ? "done" : "failed", (analysis) => ({
         ...(result.outcome.ok ? { findings: result.outcome.value } : {}),
         ...adding(result)(analysis),
       }));
       return result.outcome;
     }),
-    runRisk(model, input, prepared.required, hunks, deps).then(async (result) => {
+    runRisk(model, input, prepared.required, hunks, deps, guidance).then(async (result) => {
       await tracker.setStage("risk", result.outcome.ok ? "done" : "failed", (analysis) => ({
         ...(result.outcome.ok
           ? { risk: [...proofRisk, ...raiseByRules(result.outcome.value, ruleRisk)] }

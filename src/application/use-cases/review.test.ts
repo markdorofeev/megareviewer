@@ -40,12 +40,23 @@ const network: HostError = { kind: "network", message: "socket hang up", retryAf
 const firstId = PublicationId.parse("00000000-0000-4000-8000-000000000001");
 const secondId = PublicationId.parse("00000000-0000-4000-8000-000000000002");
 
+/** A preference store whose signal writes fail, as a full disk would make them. */
+class FailingSignals extends InMemoryPreferenceStore {
+  override async recordSignal(): Promise<void> {
+    throw new Error("disk full");
+  }
+  override async removeSignal(): Promise<void> {
+    throw new Error("disk full");
+  }
+}
+
 const setup = (
   options: {
     githubUser?: HostUser;
     onlyGithub?: boolean;
     noHosts?: boolean;
     analysis?: Analysis;
+    preferences?: InMemoryPreferenceStore;
   } = {},
 ) => {
   const clock = new FixedClock("2026-10-21T10:00:00Z");
@@ -57,6 +68,8 @@ const setup = (
   });
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: allFixtures, clock });
   const store = new InMemoryAnalysisStore();
+  const preferences = options.preferences ?? new InMemoryPreferenceStore();
+  const logger = new RecordingLogger();
   const tickets = new FakeTicketSource();
   const useCases = createUseCases(
     {
@@ -65,7 +78,7 @@ const setup = (
       models: new FakeModelCatalog(),
       store,
       fileCache: new InMemoryFileCache(),
-      preferences: new InMemoryPreferenceStore(),
+      preferences,
       history: {},
       checkouts: new FakeLocalCheckouts(),
       threads: {},
@@ -73,12 +86,12 @@ const setup = (
       parser: new FakeCodeParser(),
       events: createAnalysisEvents(),
       clock,
-      logger: new RecordingLogger(),
+      logger,
     },
     { version: "1.2.3" },
   );
   const seeded = store.saveAnalysis(options.analysis ?? smallFeatureAnalysis);
-  return { clock, github, bitbucket, store, useCases, seeded };
+  return { clock, github, bitbucket, store, preferences, logger, useCases, seeded };
 };
 
 const running: Analysis = { ...smallFeatureAnalysis, status: "running" };
@@ -206,6 +219,76 @@ describe("recordPointState", () => {
     const expected = { pointId: p("f1"), state: "raised", updatedAt: "2026-10-21T10:00:00.000Z" };
     expect(saved).toEqual(ok(expected));
     expect(await store.getPointReviews(id)).toEqual([expected]);
+  });
+
+  it("records a dismissed or raised point as a signal, with the point's text as it is", async () => {
+    const { useCases, preferences, clock, seeded } = setup();
+    await seeded;
+    await useCases.recordPointState(id, p("f1"), "dismissed");
+    clock.advance(1000);
+    await useCases.recordPointState(id, p("d1"), "raised");
+
+    const [finding] = smallFeatureAnalysis.findings;
+    const [decision] = smallFeatureAnalysis.decisions;
+    expect(await preferences.listSignals(10)).toEqual([
+      {
+        kind: "raised",
+        at: "2026-10-21T10:00:01.000Z",
+        pullRequest: ref,
+        pointKind: "decision",
+        title: decision?.title,
+        text: decision?.whyItMatters,
+        path: expect.any(String),
+      },
+      {
+        kind: "dismissed",
+        at: "2026-10-21T10:00:00.000Z",
+        pullRequest: ref,
+        pointKind: "finding",
+        title: finding?.title,
+        text: finding?.explanation,
+        path: "src/services/receipts.ts",
+      },
+    ]);
+  });
+
+  it("keeps one signal per point, its latest state, and none once it's reopened", async () => {
+    const { useCases, preferences, seeded } = setup();
+    await seeded;
+    await useCases.recordPointState(id, p("f1"), "dismissed");
+    await useCases.recordPointState(id, p("f1"), "raised");
+    expect((await preferences.listSignals(10)).map((signal) => signal.kind)).toEqual(["raised"]);
+
+    await useCases.recordPointState(id, p("f1"), "open");
+    expect(await preferences.listSignals(10)).toEqual([]);
+  });
+
+  it("keeps a signal's text after Remove AI review took the point away", async () => {
+    const { useCases, preferences, seeded } = setup();
+    await seeded;
+    await useCases.recordPointState(id, p("f1"), "dismissed");
+
+    expect((await useCases.removeModelRun(id)).ok).toBe(true);
+
+    expect((await preferences.listSignals(10)).map((signal) => signal.title)).toEqual([
+      smallFeatureAnalysis.findings[0]?.title,
+    ]);
+  });
+
+  it("saves the state even when the signal can't be written or removed", async () => {
+    const { useCases, store, logger, seeded } = setup({ preferences: new FailingSignals() });
+    await seeded;
+
+    expect((await useCases.recordPointState(id, p("f1"), "dismissed")).ok).toBe(true);
+    expect((await useCases.recordPointState(id, p("d1"), "open")).ok).toBe(true);
+
+    expect((await store.getPointReviews(id)).map((review) => review.state)).toEqual([
+      "dismissed",
+      "open",
+    ]);
+    expect(
+      logger.entries.filter((entry) => entry.level === "warn").map((entry) => entry.message),
+    ).toEqual(["Couldn't record a review signal", "Couldn't remove a review signal"]);
   });
 
   it("needs a complete analysis and a point it has", async () => {
@@ -437,6 +520,56 @@ describe("publishing", () => {
       CommentKey.parse("summary"),
       raisedKey,
     ]);
+  });
+
+  it("records a line comment the host accepted as a signal, once however the review is retried", async () => {
+    const { useCases, github, preferences, seeded } = setup();
+    await seeded;
+    github.failPublishAtPost(2, network);
+    expect((await useCases.publishReview(id, first("Summary.", raised))).ok).toBe(false);
+    // The summary went; the line comment didn't, so nothing says what the reviewer looks for yet.
+    expect(await preferences.listSignals(10)).toEqual([]);
+
+    expect((await useCases.publishReview(id, first("Summary.", raised))).ok).toBe(true);
+    expect((await useCases.publishReview(id, first("Summary.", raised))).ok).toBe(true);
+
+    expect(await preferences.listSignals(10)).toEqual([
+      {
+        kind: "comment",
+        at: "2026-10-21T10:00:00.000Z",
+        pullRequest: ref,
+        pointKind: null,
+        title: "",
+        text: "Out of scope.",
+        path: commented.path,
+      },
+    ]);
+  });
+
+  it("records a comment on the same line by a later review as a signal of its own", async () => {
+    const { useCases, preferences, seeded } = setup();
+    await seeded;
+    await useCases.publishReview(id, first("", raised));
+    const again = {
+      ...first("", {
+        hunkComments: raised.hunkComments.map((one) => ({ ...one, body: "Still out of scope." })),
+      }),
+      publicationId: secondId,
+    };
+    await useCases.publishReview(id, again);
+
+    expect((await preferences.listSignals(10)).map((signal) => signal.text).sort()).toEqual([
+      "Out of scope.",
+      "Still out of scope.",
+    ]);
+  });
+
+  it("publishes even when the signal can't be written", async () => {
+    const { useCases, store, seeded } = setup({ preferences: new FailingSignals() });
+    await seeded;
+
+    expect((await useCases.publishReview(id, first("", raised))).ok).toBe(true);
+    expect(await store.getPublications(id)).toHaveLength(1);
   });
 
   it("refuses a stale analysis unless allowed", async () => {

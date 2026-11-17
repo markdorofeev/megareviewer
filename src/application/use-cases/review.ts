@@ -12,13 +12,16 @@ import {
   type PublicationId,
   type PublicationReceipt,
   type PublicationVerdict,
+  pointSignalKey,
   pointsOf,
+  publishedSignalKey,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { GitHost } from "../ports/index.ts";
 import { hostFor } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
+import { recordSignal, removeSignal } from "./signals.ts";
 
 const MAX_CACHED_BYTES = 1024 * 1024;
 
@@ -167,8 +170,22 @@ export const createReviewUseCases = (deps: AppDeps) => {
     const published = await host.value.publish(key.ref, publication, {
       headSha: key.headSha,
       alreadyPosted: new Set(alreadyPosted.keys()),
-      onPosted: (commentKey, hostCommentId) =>
-        deps.store.recordPostedComment(id, number, commentKey, hostCommentId),
+      onPosted: async (commentKey, hostCommentId) => {
+        await deps.store.recordPostedComment(id, number, commentKey, hostCommentId);
+        // A line comment says what the reviewer looks for. Keyed by the review and the comment,
+        // so a retry that posts the rest writes each once.
+        const comment = publication.comments.find((one) => one.key === commentKey);
+        if (comment === undefined) return;
+        await recordSignal(deps, publishedSignalKey(id, number, commentKey), {
+          kind: "comment",
+          at: deps.clock.now(),
+          pullRequest: key.ref,
+          pointKind: null,
+          title: "",
+          text: comment.body,
+          path: comment.path,
+        });
+      },
     });
     // Posted comments are already recorded, so a retry continues where this stopped.
     if (!published.ok) return err(appError("host-error", published.error.message));
@@ -243,11 +260,26 @@ export const createReviewUseCases = (deps: AppDeps) => {
     ): Promise<Result<PointReview, UseCaseError>> {
       const analysis = await getComplete(id);
       if (!analysis.ok) return analysis;
-      if (!pointsOf(analysis.value).some((point) => point.id === pointId)) {
+      const point = pointsOf(analysis.value).find((one) => one.id === pointId);
+      if (point === undefined) {
         return err(appError("not-found", `No point ${pointId} in analysis ${id}`));
       }
       const saved: PointReview = { pointId, state, updatedAt: deps.clock.now() };
       await deps.store.savePointReview(id, saved);
+      // The point's text as it is now: Remove AI review takes it away, and a new run reuses its ID.
+      const signalKey = pointSignalKey(id, pointId);
+      if (state === "open") await removeSignal(deps, signalKey);
+      else {
+        await recordSignal(deps, signalKey, {
+          kind: state,
+          at: saved.updatedAt,
+          pullRequest: analysis.value.key.ref,
+          pointKind: point.kind,
+          title: point.title,
+          text: point.explanation,
+          path: point.path,
+        });
+      }
       return ok(saved);
     },
 

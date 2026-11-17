@@ -29,6 +29,7 @@ const setup = async (options: { threads?: readonly ReviewThread[]; noThreads?: b
   const threads = new FakeReviewThreads({ host: "github", clock });
   threads.setThreads(ref, { threads: options.threads ?? smallFeatureThreadList.threads });
   const store = new InMemoryAnalysisStore(clock);
+  const preferences = new InMemoryPreferenceStore();
   const fileCache = new InMemoryFileCache();
   const useCases = createUseCases(
     {
@@ -39,7 +40,7 @@ const setup = async (options: { threads?: readonly ReviewThread[]; noThreads?: b
       models: new FakeModelCatalog(),
       store,
       fileCache,
-      preferences: new InMemoryPreferenceStore(),
+      preferences,
       history: {},
       checkouts: new FakeLocalCheckouts(),
       parser: new FakeCodeParser(),
@@ -50,7 +51,16 @@ const setup = async (options: { threads?: readonly ReviewThread[]; noThreads?: b
     { version: "1.2.3" },
   );
   await store.saveAnalysis(smallFeatureAnalysis);
-  return { github, threads, store, fileCache, useCases, id: smallFeatureAnalysis.id };
+  return {
+    clock,
+    github,
+    threads,
+    store,
+    preferences,
+    fileCache,
+    useCases,
+    id: smallFeatureAnalysis.id,
+  };
 };
 
 describe("getThreads", () => {
@@ -226,9 +236,44 @@ describe("postComment", () => {
   });
 
   it("passes the host's refusal on, recording nothing", async () => {
-    const { useCases, threads, id } = await setup();
+    const { useCases, threads, preferences, id } = await setup();
     threads.failNext("comment", { kind: "rejected", message: "No.", retryAfterSeconds: null });
     expect(await useCases.postComment(id, comment)).toMatchObject({ ok: false });
     expect((await useCases.getReviewActivity()).comments).toEqual([]);
+    expect(await preferences.listSignals(10)).toEqual([]);
+  });
+
+  it("records the comment as a signal, and a second one on the line as another", async () => {
+    const { useCases, preferences, clock, id } = await setup();
+    await useCases.postComment(id, { ...comment, suggestion: ["const ttl = 300;"] });
+    clock.advance(1000);
+    await useCases.postComment(id, { ...comment, body: "And why here?" });
+
+    expect(await preferences.listSignals(10)).toEqual([
+      {
+        kind: "comment",
+        at: "2026-10-21T10:00:01.000Z",
+        pullRequest: ref,
+        pointKind: null,
+        title: "",
+        text: "And why here?",
+        path: hunk.path,
+      },
+      {
+        kind: "comment",
+        at: "2026-10-21T10:00:00.000Z",
+        pullRequest: ref,
+        pointKind: null,
+        title: "",
+        text: "Why 600?\n\n```suggestion\nconst ttl = 300;\n```",
+        path: hunk.path,
+      },
+    ]);
+  });
+
+  it("records no signal for a reply: it answers someone, it isn't what the reviewer looks for", async () => {
+    const { useCases, preferences, id } = await setup();
+    await useCases.replyToThread(id, "PRRT_cache", "Capped.");
+    expect(await preferences.listSignals(10)).toEqual([]);
   });
 });

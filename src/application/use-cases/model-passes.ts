@@ -2,12 +2,15 @@ import type { Hunk, HunkId, PartId } from "../../domain/diff/index.ts";
 import {
   type CheckingTest,
   type CoverageProblem,
+  checkGuidanceMark,
   checkingTestProblem,
   type Decision,
   DecisionId,
   type Finding,
   FindingId,
   type FindingProblem,
+  type Guidance,
+  type GuidanceMark,
   type Intent,
   type ModelCall,
   type ModelError,
@@ -114,6 +117,23 @@ const callChecked = async <T>(
   return { outcome: first, usage, modelCalls };
 };
 
+/**
+ * A finding's or a risk's guidance mark when it checks out against what the run was given, else
+ * null: the point stays, unmarked, so the reviewer sees it as any other. Logged, never retried.
+ */
+const checkedMark = (
+  mark: GuidanceMark | null,
+  guidance: Guidance | null,
+  logger: Logger,
+  on: Readonly<Record<string, unknown>>,
+): GuidanceMark | null => {
+  const checked = checkGuidanceMark(mark, guidance);
+  if (mark !== null && checked === null) {
+    logger.warn("Dropped a guidance mark that doesn't check out", { ...on, ...mark });
+  }
+  return checked;
+};
+
 type Feedback = Readonly<Record<CoverageProblem["kind"], (id: PartId) => string>>;
 
 const RISK_FEEDBACK: Feedback = {
@@ -182,8 +202,8 @@ const FINDING_FEEDBACK = (problem: FindingProblem): string => {
 /**
  * Findings on lines the PR's hunks show, each with the intent's mismatch it shows, if any; the
  * intent is null when its pass failed. One still invalid after the retry is dropped and logged,
- * not shown: the reviewer can't act on the model's mistake. One wrong only in its suggestion or
- * mismatch keeps its place without them.
+ * not shown: the reviewer can't act on the model's mistake. One wrong only in its suggestion,
+ * mismatch or guidance mark keeps its place without them.
  */
 export const runFindings = async (
   model: AnalysisModel,
@@ -191,6 +211,7 @@ export const runFindings = async (
   intent: Intent | null,
   hunks: ReadonlyMap<HunkId, Hunk>,
   deps: PassDeps,
+  guidance: Guidance | null = null,
 ): Promise<PassResult<Finding[]>> => {
   const mismatches = intent?.mismatches.length ?? 0;
   const { outcome, usage, modelCalls } = await callChecked(
@@ -214,6 +235,7 @@ export const runFindings = async (
             ...draft,
             ...(stripped(index, "suggestion-old-side") ? { suggestion: null } : {}),
             ...(stripped(index, "unknown-mismatch") ? { mismatch: null } : {}),
+            guidance: checkedMark(draft.guidance, guidance, deps.logger, { finding: index + 1 }),
           },
         ],
   );
@@ -234,7 +256,8 @@ const checkingTest = (claim: ModelCheckingTest): CheckingTest => ({
 /**
  * The model's assessments, one per required hunk, with fallbacks for the ones it missed. A
  * checking test is kept only on a contract hunk and only as the server can check it; one it
- * can't is dropped without a retry, which leaves the risk unmarked, the safe side.
+ * can't is dropped without a retry, which leaves the risk unmarked, the safe side. A guidance mark
+ * is kept the same way: on a contract hunk, when it checks out.
  */
 export const runRisk = async (
   model: AnalysisModel,
@@ -242,6 +265,7 @@ export const runRisk = async (
   required: ReadonlySet<HunkId>,
   hunks: ReadonlyMap<HunkId, Hunk>,
   deps: PassDeps,
+  guidance: Guidance | null = null,
 ): Promise<PassResult<RiskAssessment[]>> => {
   const { outcome, usage, modelCalls } = await callChecked(
     "risk",
@@ -282,6 +306,9 @@ export const runRisk = async (
       ...assessment,
       source: "model",
       lines: fits ? risk.lines : null,
+      guidance: contract
+        ? checkedMark(risk.guidance, guidance, deps.logger, { hunkId: risk.hunkId })
+        : null,
       ...(claim === null || problem !== null ? {} : { checkedBy: claim }),
     });
   }

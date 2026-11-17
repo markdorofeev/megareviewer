@@ -4,6 +4,7 @@ import {
   commentFits,
   composeBody,
   type HunkComment,
+  postedSignalKey,
   type ThreadComment,
   type ThreadId,
   type ThreadList,
@@ -13,6 +14,7 @@ import type { Attachment, ReviewThreads } from "../ports/index.ts";
 import { hostFor } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
+import { recordSignal } from "./signals.ts";
 
 /** Attachments kept in memory at most, all together: a few screen recordings. */
 export const MAX_CACHED_ATTACHMENT_BYTES = 100 * 1024 * 1024;
@@ -150,6 +152,16 @@ export const createThreadUseCases = (deps: AppDeps) => {
       });
       if (!posted.ok) return err(fromHostError(posted.error));
       await deps.store.recordThreadPost(id, "comment");
+      const at = deps.clock.now();
+      await recordSignal(deps, postedSignalKey(id, at, comment), {
+        kind: "comment",
+        at,
+        pullRequest: ref,
+        pointKind: null,
+        title: "",
+        text: body,
+        path: hunk.path,
+      });
       return ok(null);
     },
 
