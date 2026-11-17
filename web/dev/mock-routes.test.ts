@@ -17,6 +17,7 @@ import { fixtureAnalysisView, fixtureHunks, largeAnalysisView } from "./fixtures
 import {
   createMockApi,
   MOCK_FAILING_PR_NUMBER,
+  MOCK_GUIDED_PR_NUMBER,
   MOCK_LARGE_PR_NUMBER,
   MOCK_STAGE_MS,
   MOCK_TOKEN,
@@ -224,6 +225,26 @@ describe("mock API", () => {
     const view = AnalysisView.parse(api.handle(request("GET", `/api/analyses/${analysisId}`)).body);
     expect(view.analysis.files.flatMap((file) => file.hunks)).toHaveLength(240);
     expect(errorCode(api.handle(request("GET", `/api/analyses/${id}`)))).toBe("not-found");
+  });
+
+  it("analyzes PR 904 as one whose run read the reviewer's guidance", () => {
+    const url = `https://github.com/acme/shop/pull/${MOCK_GUIDED_PR_NUMBER}`;
+    const started = api.handle(request("POST", "/api/analyses", { url }));
+    const { analysisId } = AnalysisIdResponse.parse(started.body);
+    vi.advanceTimersByTime(MOCK_STAGE_MS * 6);
+    const { analysis } = AnalysisView.parse(
+      api.handle(request("GET", `/api/analyses/${analysisId}`)).body,
+    );
+    expect(analysis.guidance?.preferences.map((one) => one.ref)).toEqual(["p1", "p2"]);
+    expect(
+      pointsOf(analysis).flatMap((point) =>
+        point.guidance === undefined ? [] : [[point.id, point.guidance.effect]],
+      ),
+    ).toEqual([
+      ["f1", "raised"],
+      ["f3", "left-out"],
+      [`r:${fixtureHunks.dependency}`, "raised"],
+    ]);
   });
 
   it("fails the analysis of the failing PR at the prep stage, and retries it", () => {
