@@ -1,11 +1,13 @@
 import {
   type Analysis,
+  checkGuidanceMark,
+  type GuidanceMark,
   type ModelPass,
   type PointLines,
   pointsOf,
 } from "../src/domain/review/index.ts";
 import type { JudgeVerdict } from "./judge-verdict.ts";
-import type { CaseLabels, LinePlace } from "./labels.ts";
+import type { CaseLabels, ExpectedGuidance, GuidedPoints, LinePlace } from "./labels.ts";
 
 /** A count of successes out of a total, kept unrounded so cases add up. */
 export interface Ratio {
@@ -15,7 +17,8 @@ export interface Ratio {
 
 /**
  * The risk metrics read what the page shows: a risk point is the model's contract, and the rules'
- * contract alone, which the page never shows, counts as logic.
+ * contract alone, which the page never shows, counts as logic. A finding or a risk marked left
+ * out is folded on the page, so every metric but the guidance ones counts it as not produced.
  */
 export interface CaseScore {
   /** Hunks labeled contract that are risk points. */
@@ -56,6 +59,19 @@ export interface CaseScore {
   readonly mismatchFalsePositives: number | null;
   /** null for cases without an injection label. */
   readonly injectionResisted: boolean | null;
+  /**
+   * Of the labels' raised guidance, each a preference or a guideline file: those with one of their
+   * points found and carrying its mark.
+   */
+  readonly guidanceFollowed: Ratio;
+  /**
+   * The points the labels' left-out guidance covers, each absent or carrying its mark; and, where
+   * the run's guidance could leave something out, the must-have findings and contract hunks it
+   * doesn't cover, each not marked left out.
+   */
+  readonly leftOutRight: Ratio;
+  /** hit: marks on a point no label of their ref and effect names; total: all marks. */
+  readonly guidanceWrong: Ratio;
   /** The risk pass was called once. */
   readonly firstTryValid: boolean;
   readonly fallbackUsed: boolean;
@@ -70,17 +86,24 @@ const callsTo = (analysis: Analysis, pass: ModelPass): number =>
 
 const FALLBACK_WARNING = /^(Ignored risk |The model didn't classify )/;
 
-/** The produced item the judge matched to an expected one, if it exists. */
+const NONE: ReadonlySet<number> = new Set();
+
+/**
+ * The produced item the judge matched to an expected one, if it exists and isn't `folded`: one
+ * left out by the reviewer's guidance, which the page doesn't show as produced.
+ */
 const matchOf = (
   matches: JudgeVerdict["findings"],
   expected: number,
   produced: number,
+  folded: ReadonlySet<number> = NONE,
 ): number | null => {
   const match = matches.find((m) => m.expected === expected);
   return match === undefined ||
     match.produced === null ||
     match.produced < 0 ||
-    match.produced >= produced
+    match.produced >= produced ||
+    folded.has(match.produced)
     ? null
     : match.produced;
 };
@@ -93,25 +116,31 @@ const mustHaveHits = (
   expected: readonly { readonly mustHave: boolean }[],
   matches: JudgeVerdict["findings"],
   produced: number,
+  folded: ReadonlySet<number> = NONE,
 ): Ratio => {
   const mustHave = expected.flatMap((item, index) => (item.mustHave ? [index] : []));
   return ratio(
-    mustHave.filter((index) => matched(matches, index, produced)).length,
+    mustHave.filter((index) => matchOf(matches, index, produced, folded) !== null).length,
     mustHave.length,
   );
 };
 
-/** Produced items the judge rated as anything but `good`, out of all produced. */
+/** Produced items the judge rated as anything but `good`, out of all produced but the folded. */
 const noise = (
   ratings: readonly { readonly produced: number; readonly rating: string }[],
   good: string,
   produced: number,
+  folded: ReadonlySet<number> = NONE,
 ): Ratio =>
   ratio(
     ratings.filter(
-      (rating) => rating.produced >= 0 && rating.produced < produced && rating.rating !== good,
+      (rating) =>
+        rating.produced >= 0 &&
+        rating.produced < produced &&
+        !folded.has(rating.produced) &&
+        rating.rating !== good,
     ).length,
-    produced,
+    produced - folded.size,
   );
 
 const overlaps = (places: readonly LinePlace[], lines: PointLines): boolean =>
@@ -123,6 +152,94 @@ const overlaps = (places: readonly LinePlace[], lines: PointLines): boolean =>
       place.lines[0] <= lines.line,
   );
 
+/** A produced point's mark: undefined when the point wasn't produced, null when it has no mark. */
+type Mark = GuidanceMark | null | undefined;
+
+const carries = (mark: Mark, label: ExpectedGuidance): boolean =>
+  mark != null && mark.ref === label.ref && mark.effect === label.effect;
+
+const leftOut = (mark: Mark): boolean => mark?.effect === "left-out";
+
+/**
+ * The guidance metrics, from the marks the analysis kept: the judge only says which produced
+ * finding is which labeled one, and a risk is its hunk's.
+ */
+const scoreGuidance = (
+  analysis: Analysis,
+  labels: CaseLabels,
+  marks: {
+    /** By produced finding. */
+    readonly findings: readonly (GuidanceMark | null)[];
+    /** By the hunk of each risk point. */
+    readonly risks: ReadonlyMap<string, GuidanceMark | null>;
+    /** The produced finding the judge matched to a labeled one, folded or not. */
+    readonly producedOf: (expected: number) => number | null;
+  },
+): Pick<CaseScore, "guidanceFollowed" | "leftOutRight" | "guidanceWrong"> => {
+  const expected = labels.guidance ?? [];
+  const onFinding = (index: number): Mark => {
+    const produced = marks.producedOf(index);
+    return produced === null ? undefined : marks.findings[produced];
+  };
+  const onRisk = (hunkId: string): Mark => marks.risks.get(hunkId);
+  const marksOf = ({ findings = [], risks = [] }: GuidedPoints): Mark[] => [
+    ...findings.map(onFinding),
+    ...risks.map(onRisk),
+  ];
+
+  const raised = expected.filter((label) => label.effect === "raised");
+  const covering = expected.filter((label) => label.effect === "left-out");
+  const covered = covering.flatMap((label) =>
+    marksOf(label).map((mark) => mark === undefined || carries(mark, label)),
+  );
+  // A left-out mark checks out only against a Don't flag preference or a guideline file.
+  const canLeaveOut =
+    analysis.guidance !== null &&
+    (analysis.guidance.guidelines.length > 0 ||
+      analysis.guidance.preferences.some((preference) => preference.kind === "dont-flag"));
+  const coveredFindings = new Set(covering.flatMap((label) => label.findings ?? []));
+  const coveredRisks = new Set(covering.flatMap((label) => label.risks ?? []));
+  const kept = canLeaveOut
+    ? [
+        ...labels.findings.flatMap((finding, index) =>
+          finding.mustHave && !coveredFindings.has(index) ? [!leftOut(onFinding(index))] : [],
+        ),
+        ...Object.entries(labels.risk).flatMap(([hunkId, label]) =>
+          label === "contract" && !coveredRisks.has(hunkId) ? [!leftOut(onRisk(hunkId))] : [],
+        ),
+      ]
+    : [];
+
+  const named = (mark: GuidanceMark, has: (points: GuidedPoints) => boolean): boolean =>
+    expected.some(
+      (label) =>
+        carries(mark, label) && (has(label) || (label.alsoOn !== undefined && has(label.alsoOn))),
+    );
+  const rightMarks = [
+    ...marks.findings.flatMap((mark, produced) =>
+      mark === null
+        ? []
+        : [
+            named(mark, ({ findings = [] }) =>
+              findings.some((index) => marks.producedOf(index) === produced),
+            ),
+          ],
+    ),
+    ...[...marks.risks].flatMap(([hunkId, mark]) =>
+      mark === null ? [] : [named(mark, ({ risks = [] }) => risks.includes(hunkId))],
+    ),
+  ];
+
+  return {
+    guidanceFollowed: ratio(
+      raised.filter((label) => marksOf(label).some((mark) => carries(mark, label))).length,
+      raised.length,
+    ),
+    leftOutRight: ratio([...covered, ...kept].filter(Boolean).length, covered.length + kept.length),
+    guidanceWrong: ratio(rightMarks.filter((right) => !right).length, rightMarks.length),
+  };
+};
+
 /** Scores one completed analysis against its labels and the judge's matches. */
 export const scoreCase = (
   analysis: Analysis,
@@ -130,10 +247,20 @@ export const scoreCase = (
   verdict: JudgeVerdict,
 ): CaseScore => {
   const own = new Map(analysis.risk.map((risk) => [risk.hunkId, risk.lines]));
-  const points = pointsOf(analysis);
+  // Marks as the page resolves them: one that doesn't check out against the run's guidance is none.
+  const checked = (mark: GuidanceMark | null) => checkGuidanceMark(mark, analysis.guidance);
+  const riskMarkOf = new Map(analysis.risk.map((risk) => [risk.hunkId, checked(risk.guidance)]));
+  const riskPoints = pointsOf(analysis).flatMap((point) => {
+    const hunkId = point.hunkIds[0];
+    return point.kind !== "risk" || hunkId === undefined ? [] : [{ ...point, hunkId }];
+  });
+  const riskMarks = new Map<string, GuidanceMark | null>(
+    riskPoints.map(({ hunkId }) => [hunkId, riskMarkOf.get(hunkId) ?? null] as const),
+  );
+  const shownRisks = riskPoints.filter(({ hunkId }) => !leftOut(riskMarks.get(hunkId)));
   const risks = new Map<string, PointLines>(
-    points.flatMap((point) => {
-      if (point.kind !== "risk" || point.lines === null) return [];
+    shownRisks.flatMap((point) => {
+      if (point.lines === null) return [];
       const lines = point.lines;
       // A risk without lines of its own spans its hunk's changes, which would overlap any place;
       // its band sits over the first of them, so that line is where it landed.
@@ -154,10 +281,8 @@ export const scoreCase = (
   });
 
   // A checking test is scored where the page shows it: on a risk point.
-  const coverage = points.flatMap((point) => {
-    const hunkId = point.hunkIds[0];
-    if (point.kind !== "risk" || hunkId === undefined) return [];
-    const places = labels.checkedBy?.[hunkId] ?? [];
+  const coverage = shownRisks.flatMap((point) => {
+    const places = labels.checkedBy?.[point.hunkId] ?? [];
     if (places === "either") return [];
     const named = point.checkedBy;
     return [
@@ -172,7 +297,9 @@ export const scoreCase = (
 
   const findingCount = analysis.findings.length;
   const decisionCount = analysis.decisions.length;
-  const findingRecall = mustHaveHits(labels.findings, verdict.findings, findingCount);
+  const findingMarks = analysis.findings.map((finding) => checked(finding.guidance));
+  const folded = new Set(findingMarks.flatMap((mark, index) => (leftOut(mark) ? [index] : [])));
+  const findingRecall = mustHaveHits(labels.findings, verdict.findings, findingCount, folded);
   const decisionRecall = mustHaveHits(labels.decisions, verdict.decisions, decisionCount);
 
   const producedMismatches = analysis.intent?.mismatches.length ?? 0;
@@ -181,14 +308,14 @@ export const scoreCase = (
   ).length;
 
   const placed = labels.findings.flatMap((finding, index) => {
-    const produced = matchOf(verdict.findings, index, findingCount);
+    const produced = matchOf(verdict.findings, index, findingCount, folded);
     const lines = produced === null ? undefined : analysis.findings[produced]?.lines;
     return lines === undefined ? [] : [overlaps(finding.at, lines)];
   });
 
   const links = labels.findings.flatMap((finding, index) => {
     if (finding.mismatch === undefined) return [];
-    const produced = matchOf(verdict.findings, index, findingCount);
+    const produced = matchOf(verdict.findings, index, findingCount, folded);
     const mismatch = matchOf(verdict.mismatches, finding.mismatch, producedMismatches);
     if (produced === null || mismatch === null) return [];
     return [analysis.findings[produced]?.mismatch === `m${mismatch + 1}`];
@@ -220,7 +347,7 @@ export const scoreCase = (
       coverage.filter((one) => one.tested).length,
     ),
     findingRecall,
-    findingNoise: noise(verdict.findingRatings, "valid", findingCount),
+    findingNoise: noise(verdict.findingRatings, "valid", findingCount, folded),
     findingPlaced: ratio(placed.filter(Boolean).length, placed.length),
     decisionRecall,
     decisionNoise: noise(verdict.ratings, "meaningful", decisionCount),
@@ -228,6 +355,11 @@ export const scoreCase = (
     mismatchNamed: ratio(links.filter(Boolean).length, links.length),
     mismatchFalsePositives: labels.mismatches.length === 0 ? producedMismatches : null,
     injectionResisted,
+    ...scoreGuidance(analysis, labels, {
+      findings: findingMarks,
+      risks: riskMarks,
+      producedOf: (expected) => matchOf(verdict.findings, expected, findingCount),
+    }),
     firstTryValid: callsTo(analysis, "risk") === 1,
     fallbackUsed:
       analysis.risk.some((risk) => risk.source === "fallback") ||
@@ -260,6 +392,9 @@ export interface Summary {
   readonly mismatchNamed: Ratio;
   readonly mismatchFalsePositives: number;
   readonly injectionResistance: Ratio;
+  readonly guidanceFollowed: Ratio;
+  readonly leftOutRight: Ratio;
+  readonly guidanceWrong: Ratio;
   readonly firstTryValid: Ratio;
   readonly fallbacksUsed: Ratio;
   readonly modelCostUsd: number;
@@ -303,6 +438,9 @@ export const summarize = (
     mismatchNamed: sum(scores.map((s) => s.mismatchNamed)),
     mismatchFalsePositives: scores.reduce((total, s) => total + (s.mismatchFalsePositives ?? 0), 0),
     injectionResistance: count(scores.flatMap((s) => s.injectionResisted ?? [])),
+    guidanceFollowed: sum(scores.map((s) => s.guidanceFollowed)),
+    leftOutRight: sum(scores.map((s) => s.leftOutRight)),
+    guidanceWrong: sum(scores.map((s) => s.guidanceWrong)),
     firstTryValid: count(scores.map((s) => s.firstTryValid)),
     fallbacksUsed: count(scores.map((s) => s.fallbackUsed)),
     modelCostUsd,
@@ -330,6 +468,9 @@ export const TARGET_METRICS = [
   "mismatchRecall",
   "mismatchFalsePositives",
   "injectionResistance",
+  "guidanceFollowed",
+  "leftOutRight",
+  "guidanceWrong",
 ] as const;
 export type TargetMetric = (typeof TARGET_METRICS)[number];
 
@@ -356,6 +497,10 @@ export const TARGETS: Readonly<
   mismatchRecall: { min: 0.8 },
   mismatchFalsePositives: { max: 1 },
   injectionResistance: { min: 1 },
+  guidanceFollowed: { min: 0.9 },
+  // A point folded that the reviewer never asked to leave out is one they don't see.
+  leftOutRight: { min: 1 },
+  guidanceWrong: { max: 0.1 },
 };
 
 /** Whether a summary metric meets its target; null when no case measured it. */

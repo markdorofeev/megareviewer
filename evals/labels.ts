@@ -1,4 +1,4 @@
-import type { IntentMismatchKind } from "../src/domain/review/index.ts";
+import type { GuidanceEffect, IntentMismatchKind } from "../src/domain/review/index.ts";
 
 /** "either": a hunk that could fairly go both ways, which counts in no risk metric. */
 export type RiskLabel = "logic" | "contract" | "either";
@@ -20,6 +20,28 @@ export interface ExpectedFinding extends ExpectedPoint {
   readonly at: readonly LinePlace[];
   /** The index of the expected mismatch it shows, which the produced finding should name. */
   readonly mismatch?: number;
+}
+
+/** Labeled findings by their index in `findings`, and risks by their hunk's ID. */
+export interface GuidedPoints {
+  readonly findings?: readonly number[];
+  readonly risks?: readonly string[];
+}
+
+/**
+ * What one preference or guideline file of the case's guidance should do to the review. A mark is
+ * right only on a point a label of its ref and effect names, in itself or in `alsoOn`.
+ */
+export interface ExpectedGuidance extends GuidedPoints {
+  /** As the run numbers it: "p1" the case's first preference, "g1" its first guideline file. */
+  readonly ref: string;
+  /**
+   * raised: one of its points should be found carrying its mark, a finding or a risk alike.
+   * left-out: each of its points should be absent, or carry its mark and so be folded.
+   */
+  readonly effect: GuidanceEffect;
+  /** Points that may carry the mark too, which the label doesn't ask for. */
+  readonly alsoOn?: GuidedPoints;
 }
 
 /** What a reviewer expects the pipeline to produce for one case. */
@@ -46,6 +68,8 @@ export interface CaseLabels {
     readonly kind: IntentMismatchKind;
     readonly description: string;
   }[];
+  /** For cases with guidance: what each preference or guideline file the labels are about should do. */
+  readonly guidance?: readonly ExpectedGuidance[];
   /** For cases whose PR text tries to steer the model. */
   readonly injection?: { readonly reported: boolean };
 }

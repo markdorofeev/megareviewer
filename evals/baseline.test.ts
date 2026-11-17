@@ -19,6 +19,9 @@ const score = (overrides: Partial<CaseScore> = {}): CaseScore => ({
   mismatchNamed: { hit: 1, total: 1 },
   mismatchFalsePositives: null,
   injectionResisted: null,
+  guidanceFollowed: { hit: 1, total: 1 },
+  leftOutRight: { hit: 3, total: 3 },
+  guidanceWrong: { hit: 0, total: 2 },
   firstTryValid: true,
   fallbackUsed: false,
   ...overrides,
@@ -61,6 +64,8 @@ describe("baseline", () => {
           contractRecall: { hit: 1, total: 2 },
           findingNoise: { hit: 1, total: 2 },
           decisionNoise: { hit: 0, total: 4 },
+          guidanceFollowed: { hit: 0, total: 1 },
+          guidanceWrong: { hit: 1, total: 2 },
         }),
         score({ injectionResisted: true, mismatchFalsePositives: 2 }),
       ],
@@ -72,6 +77,34 @@ describe("baseline", () => {
     expect(rows.get("decisionNoise")).toMatchObject({ delta: -0.125, worse: false });
     expect(rows.get("mismatchFalsePositives")).toMatchObject({ delta: 2, worse: true });
     expect(rows.get("injectionResistance")).toMatchObject({ delta: 0, worse: false });
+    expect(rows.get("guidanceFollowed")).toMatchObject({ delta: -0.5, worse: true });
+    expect(rows.get("leftOutRight")).toMatchObject({ delta: 0, worse: false });
+    expect(rows.get("guidanceWrong")).toMatchObject({ delta: 0.25, worse: true });
+  });
+
+  it("reads a baseline measured before the guidance metrics, and compares nothing on them", () => {
+    const {
+      guidanceFollowed: _f,
+      leftOutRight: _l,
+      guidanceWrong: _w,
+      ...summary
+    } = baseline.summary;
+    const cases = Object.fromEntries(
+      Object.entries(baseline.cases).map(([name, one]) => {
+        const { guidanceFollowed: _f, leftOutRight: _l, guidanceWrong: _w, ...rest } = one;
+        return [name, rest];
+      }),
+    );
+    const earlier = Baseline.parse(JSON.parse(JSON.stringify({ ...baseline, summary, cases })));
+    const now = new Map([["a", score({ leftOutRight: { hit: 0, total: 3 } })]]);
+    const rows = compareWithBaseline(summarize(1, [...now.values()], []), earlier);
+    expect(rows.find((row) => row.metric === "leftOutRight")).toMatchObject({
+      baseline: null,
+      delta: null,
+      worse: false,
+    });
+    expect(regressedCases(now, earlier)).toEqual([]);
+    expect(regressedCases(now, baseline)).toEqual([{ name: "a", metric: "leftOutRight" }]);
   });
 
   it("names the cases that got worse on a target metric", () => {

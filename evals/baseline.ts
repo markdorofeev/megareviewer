@@ -36,6 +36,10 @@ export const Baseline = z.object({
     mismatchNamed: RatioSchema,
     mismatchFalsePositives: z.number(),
     injectionResistance: RatioSchema,
+    // Absent from baselines measured before the passes read the reviewer's guidance.
+    guidanceFollowed: RatioSchema.optional(),
+    leftOutRight: RatioSchema.optional(),
+    guidanceWrong: RatioSchema.optional(),
     firstTryValid: RatioSchema,
     fallbacksUsed: RatioSchema,
     modelCostUsd: z.number(),
@@ -61,6 +65,9 @@ export const Baseline = z.object({
       mismatchNamed: RatioSchema,
       mismatchFalsePositives: z.number().nullable(),
       injectionResisted: z.boolean().nullable(),
+      guidanceFollowed: RatioSchema.optional(),
+      leftOutRight: RatioSchema.optional(),
+      guidanceWrong: RatioSchema.optional(),
       firstTryValid: z.boolean(),
       fallbackUsed: z.boolean(),
       /** Model and judge, for the next run's estimate. */
@@ -87,6 +94,9 @@ export const COMPARED = [
   "mismatchNamed",
   "mismatchFalsePositives",
   "injectionResistance",
+  "guidanceFollowed",
+  "leftOutRight",
+  "guidanceWrong",
   "firstTryValid",
   "fallbacksUsed",
 ] as const;
@@ -98,6 +108,7 @@ const LOWER_IS_BETTER: ReadonlySet<ComparedMetric> = new Set([
   "findingNoise",
   "decisionNoise",
   "mismatchFalsePositives",
+  "guidanceWrong",
   "fallbacksUsed",
 ]);
 
