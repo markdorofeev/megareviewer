@@ -54,7 +54,7 @@ for (const combination of COMBINATIONS) {
     // macOS job.
     test.skip(process.platform !== "darwin", "baselines are macOS screenshots");
     await open(page, combination);
-    for (const section of ["foundations", "screens", "main-page"]) {
+    for (const section of ["foundations", "screens", "main-page", "preferences"]) {
       await expect(page.locator(`#${section}`)).toHaveScreenshot(
         `${section}-${combination.name}.png`,
       );

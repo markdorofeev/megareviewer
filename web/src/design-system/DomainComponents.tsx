@@ -1,7 +1,12 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Hunk } from "../../../src/domain/diff/index.ts";
-import { type Check, PointId, type Reviewer } from "../../../src/domain/review/index.ts";
+import {
+  type Check,
+  PointId,
+  PreferenceId,
+  type Reviewer,
+} from "../../../src/domain/review/index.ts";
 import { DEEP_APP_PATHS, JAVA_SERVICE_PATHS, MONOREPO_PATHS } from "../../dev/fixtures/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
 import { VERDICT_STATUS } from "../lib/status.ts";
@@ -500,12 +505,15 @@ const Card = ({ children }: { readonly children: ReactNode }) => (
 
 /**
  * Claude's points one by one: a finding's card, then folded into the review and dismissed; a
- * risk's note, a dismissed one and one a test checks; a decision's chip and its footnote; and the marks a finding's
- * and a risk's lines take on their numbers, on unchanged, deleted and added lines.
+ * risk's note, a dismissed one and one a test checks; a finding a preference raised, one a
+ * preference left out, folded until Show, and a risk from a guideline file; a decision's chip and
+ * its footnote; and the marks a finding's and a risk's lines take on their numbers, on unchanged,
+ * deleted and added lines.
  */
 const PointStates = () => {
   const [finding, risk, decision] = POINTS;
   const [open, setOpen] = useState(true);
+  const [shown, setShown] = useState(false);
   if (finding === undefined || risk === undefined || decision === undefined) return null;
   const actions = {
     state: "open",
@@ -570,6 +578,53 @@ const PointStates = () => {
               path: "src/http/retry.test.ts",
             },
           }),
+        }}
+        {...actions}
+      />
+      <FindingCard
+        point={{
+          ...finding,
+          id: PointId.parse("f9"),
+          title: "Tells the caller of a failure 16 s late",
+          suggestion: null,
+          guidance: {
+            effect: "raised",
+            label: "Waits a caller can't see or cancel",
+            preferenceId: PreferenceId.parse("pref_00000000000000d1"),
+          },
+        }}
+        {...actions}
+        inReview={false}
+        removed={null}
+        language={null}
+      />
+      <FindingCard
+        point={{
+          ...finding,
+          id: PointId.parse("f10"),
+          title: "`attempt` could be `tries`",
+          explanation: "The loop counts tries from zero; `attempt + 1` reads as an off-by-one.",
+          severity: "minor",
+          suggestion: null,
+          guidance: {
+            effect: "left-out",
+            label: "Naming",
+            preferenceId: PreferenceId.parse("pref_00000000000000d2"),
+          },
+        }}
+        {...actions}
+        leftOut={!shown}
+        onShow={() => setShown(true)}
+        inReview={false}
+        removed={null}
+        language={null}
+      />
+      <RiskNote
+        point={{
+          ...risk,
+          id: PointId.parse("r:h_00000000000000fd"),
+          title: "Retries a request that isn't idempotent, so a payment could be taken twice.",
+          guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null },
         }}
         {...actions}
       />

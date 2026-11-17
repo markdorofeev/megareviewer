@@ -49,6 +49,7 @@ export const ModelAction = ({
   idle = null,
   run,
   now = Date.now,
+  initial,
 }: {
   readonly label: string;
   /** What it says while it runs: "Reading your reviews…". */
@@ -65,9 +66,15 @@ export const ModelAction = ({
   readonly idle?: ReactNode;
   readonly run: (optionId: ModelOptionId | undefined) => Promise<ModelActionResult>;
   readonly now?: () => number;
+  /** A run to start from, for the design system's examples: one going on, or how one ended. */
+  readonly initial?: ModelActionResult | { readonly runningSince: number };
 }) => {
   const id = useId();
-  const [phase, setPhase] = useState<Phase>({ is: "idle" });
+  const [phase, setPhase] = useState<Phase>(() => {
+    if (initial === undefined) return { is: "idle" };
+    if ("runningSince" in initial) return { is: "running", since: initial.runningSince };
+    return initial.ok ? { is: "done", said: initial.said } : { is: "failed", ...initial };
+  });
   const elapsed = useElapsed(phase.is === "running" ? phase.since : null, now);
   const { chosen, locked } = choice;
   const busy = phase.is === "running";
