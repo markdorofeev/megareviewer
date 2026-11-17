@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
-import type { ModelPass } from "../../../../domain/review/index.ts";
+import { ModelPass } from "../../../../domain/review/index.ts";
 import type { ClaudeRun, RunClaude, RunClaudeOptions } from "../run-claude.ts";
 import synthetic from "./claude-code/errors.synthetic.json" with { type: "json" };
 
 /**
- * A run's lines: a pass on small-feature, or the recording signed out. The findings pass's are
- * synthetic, in the recorded passes' shape, until it's recorded.
+ * A run's lines: a pass on small-feature, the suggestion call on the fixture history, or the
+ * recording signed out. The findings pass's are synthetic, in the recorded passes' shape, until
+ * it's recorded.
  */
-export const recordedLines = (name: ModelPass | "not-signed-in"): string[] =>
+export const recordedLines = (name: ModelPass | "suggest" | "not-signed-in"): string[] =>
   readFileSync(
     new URL(
       `./claude-code/${name === "findings" ? "findings.synthetic" : name}.jsonl`,
@@ -40,8 +41,8 @@ export const createFakeRunClaude = (
 ) => {
   const calls: FakeRunCall[] = [];
   const run: RunClaude = async (args, options = {}) => {
-    const pass = /^Task: (\w+)\./m.exec(options.stdin ?? "")?.[1] as ModelPass | undefined;
-    const answered = answer(pass ?? null, args);
+    const pass = ModelPass.safeParse(/^Task: (\w+)\./m.exec(options.stdin ?? "")?.[1]);
+    const answered = answer(pass.success ? pass.data : null, args);
     let result: ClaudeRun;
     if (Array.isArray(answered)) {
       const lines: string[] = [];
