@@ -1466,7 +1466,12 @@ const Review = ({
       )}
 
       <footer className="flex items-center justify-end gap-3">
-        <ModelCalls calls={live.modelCalls} option={live.modelOption} />
+        <ModelCalls
+          calls={live.modelCalls}
+          option={live.modelOption}
+          guidance={live.guidance}
+          leftOut={points.filter((point) => point.guidance?.effect === "left-out").length}
+        />
         {complete && !modelRunning && hasModelRun(live) && (
           // A new run of the code's stages under the same ID: the page starts afresh to follow it.
           <RemoveModelRun
@@ -1476,7 +1481,7 @@ const Review = ({
             onRemoved={(removed) => restart({ ...view, ...removed })}
           />
         )}
-        <UsageFooter usage={live.usage} option={live.modelOption} />
+        <UsageFooter usage={live.usage} option={live.modelOption} guidance={live.guidance} />
       </footer>
 
       {publishing && (

@@ -6,6 +6,7 @@ import type { AnalysisView } from "../../../../contracts/index.ts";
 import { PointId } from "../../../../src/domain/review/index.ts";
 import {
   fixtureAnalysisView,
+  fixtureGuidance,
   fixtureHunks,
   guidedAnalysisView,
 } from "../../../dev/fixtures/index.ts";
@@ -15,7 +16,9 @@ import { PageDisplayProvider } from "../../lib/page-display.tsx";
 import { type Highlighter, HighlighterContext } from "../../review/index.ts";
 import { testApi } from "../../testing/api.tsx";
 import { fakeFetch, jsonResponse, type RecordedRequest } from "../../testing/fetch.ts";
+import { ModelCalls } from "./ModelCalls.tsx";
 import { ReviewPage } from "./ReviewPage.tsx";
+import { guidanceRead, runLine, UsageFooter } from "./UsageFooter.tsx";
 
 const id = fixtureAnalysisView.analysis.id;
 /** The fixture PR after a run that read guidance, under the ID the mock API serves. */
@@ -265,5 +268,86 @@ describe("Don't flag things like this, on the review page", () => {
     ).toBeTruthy();
     expect(pointCard(STALE).dataset.state).toBe("open");
     expect(requests.filter((request) => request.method === "PUT")).toHaveLength(0);
+  });
+});
+
+describe("what a run read", () => {
+  const { usage, modelCalls, modelOption } = analysis;
+
+  it("is named on the usage line, after the model", async () => {
+    renderReview();
+    await loaded();
+    expect(screen.getByRole("button", { name: /Usage:/ }).textContent).toMatch(
+      /^Sonnet 5\.5 through Claude Code with 2 preferences and REVIEW\.md · Usage: /,
+    );
+  });
+
+  it("says nothing new for a run without guidance", () => {
+    const none = { preferences: [], guidelines: [] };
+    expect([guidanceRead(null), guidanceRead(none)]).toEqual([null, null]);
+    expect(runLine(modelOption, none)).toBe("Sonnet 5.5 through Claude Code");
+    render(<UsageFooter usage={usage} option={modelOption} guidance={none} />);
+    expect(screen.getByRole("button").textContent).toMatch(
+      /^Sonnet 5\.5 through Claude Code · Usage: /,
+    );
+  });
+
+  it("counts the preferences and names each guideline file", () => {
+    const [first] = fixtureGuidance.preferences;
+    if (first === undefined) throw new Error("the fixture has preferences");
+    expect(guidanceRead({ preferences: [first], guidelines: [] })).toBe("1 preference");
+    expect(
+      guidanceRead({
+        ...fixtureGuidance,
+        guidelines: [...fixtureGuidance.guidelines, { ref: "g2", path: "AGENTS.md", bytes: 2_000 }],
+      }),
+    ).toBe("2 preferences, REVIEW.md, and AGENTS.md");
+    expect(runLine(null, fixtureGuidance)).toBe("With 2 preferences and REVIEW.md");
+  });
+
+  it("is listed in Run details, with how many points were left out", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Run details…" }));
+    const read = within(await screen.findByRole("dialog")).getByRole("region", {
+      name: "What the run read beside the code",
+    });
+    expect(read.textContent).toContain(
+      "2 preferences and REVIEW.md, as they were when the run started. 1 point was left out by them, folded where its card would be.",
+    );
+    expect(
+      within(read)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Look forLookups that aren't scoped to the signed-in userEverywhere",
+      "Don't flagRetries without backoffacme/shop",
+      "REVIEW.md1.2 KB",
+    ]);
+    expect(within(read).getByRole("link", { name: "Preferences" }).getAttribute("href")).toBe(
+      "/preferences",
+    );
+  });
+
+  it("lists nothing in Run details for a run that read nothing", () => {
+    render(
+      <ModelCalls
+        calls={modelCalls}
+        option={modelOption}
+        guidance={{ preferences: [], guidelines: [] }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Run details…" }));
+    expect(
+      within(screen.getByRole("dialog")).queryByRole("region", {
+        name: "What the run read beside the code",
+      }),
+    ).toBeNull();
+  });
+
+  it("says when the run's guidance left no point out", () => {
+    render(<ModelCalls calls={modelCalls} option={modelOption} guidance={fixtureGuidance} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run details…" }));
+    expect(screen.getByRole("dialog").textContent).toContain("No point was left out by them.");
   });
 });

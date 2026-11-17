@@ -1,5 +1,6 @@
 import { useId } from "react";
 import {
+  type Guidance,
   type ModelPass,
   type ModelRunOption,
   type ModelUsage,
@@ -30,6 +31,33 @@ export const formatDuration = (ms: number | undefined): string =>
 /** "Sonnet 5.5 through Claude Code"; null for a run stored before the choice, all Haiku 5.5. */
 export const runName = (option: ModelRunOption | null): string | null =>
   option === null ? null : `${option.modelName} through ${option.providerName}`;
+
+const AND = new Intl.ListFormat("en", { type: "conjunction" });
+
+/**
+ * "6 preferences and REVIEW.md": what a run read beside the code, as the analysis recorded it.
+ * Null for a run that read nothing, or stored before runs read any.
+ */
+export const guidanceRead = (guidance: Guidance | null): string | null => {
+  if (guidance === null) return null;
+  const count = guidance.preferences.length;
+  const read = [
+    ...(count === 0 ? [] : [`${count} ${count === 1 ? "preference" : "preferences"}`]),
+    ...guidance.guidelines.map((file) => file.path),
+  ];
+  return read.length === 0 ? null : AND.format(read);
+};
+
+/** "Sonnet 5.5 through Claude Code with 6 preferences and REVIEW.md": what ran, and on what. */
+export const runLine = (
+  option: ModelRunOption | null,
+  guidance: Guidance | null,
+): string | null => {
+  const name = runName(option);
+  const read = guidanceRead(guidance);
+  if (read === null) return name;
+  return name === null ? `With ${read}` : `${name} with ${read}`;
+};
 
 /** A call's cost, or a dash for a model with no known price. */
 const formatCallCost = (usd: number | null): string => (usd === null ? "—" : formatCost(usd));
@@ -62,10 +90,13 @@ const inputOf = (usage: ModelUsage): number => usage.inputTokens + usage.cacheWr
 export const UsageFooter = ({
   usage,
   option = null,
+  guidance = null,
 }: {
   readonly usage: readonly ModelUsage[];
   /** The option of the latest run. */
   readonly option?: ModelRunOption | null;
+  /** The preferences and guideline files the latest run read. */
+  readonly guidance?: Guidance | null;
 }) => {
   const id = useId();
   if (usage.length === 0) return null;
@@ -81,7 +112,7 @@ export const UsageFooter = ({
         className="peer tabular min-h-6 rounded-sm text-caption text-muted-foreground hover:text-foreground"
         aria-describedby={`${id}-breakdown`}
       >
-        {runName(option) === null ? "" : `${runName(option)} · `}
+        {runLine(option, guidance) === null ? "" : `${runLine(option, guidance)} · `}
         Usage: {formatTokens(sum(inputOf))} tokens in ·{" "}
         {formatTokens(sum((u) => u.cacheReadTokens))} cache read ·{" "}
         {formatTokens(sum((u) => u.outputTokens))} out ·{" "}
