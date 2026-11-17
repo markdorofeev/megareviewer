@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   type CommentKey,
   type HostError,
+  type PastComment,
   type Publication,
   type PullRequestRef,
+  type RepoRef,
   validateRiskCoverage,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
-import type { AnalysisInput } from "../ports/index.ts";
+import type { AnalysisInput, ProposalDraft, SuggestionInput } from "../ports/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
@@ -17,15 +19,22 @@ import {
   describeFileCacheContract,
   describeGitHostContract,
   describeLocalCheckoutContract,
+  describePreferenceStoreContract,
+  describeReviewHistoryContract,
   describeTicketSourceContract,
   FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckout,
+  FakeModelCatalog,
+  FakePreferenceSuggester,
+  FakeReviewHistory,
   FakeTicketSource,
   FixedClock,
+  fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryPreferenceStore,
   RecordingLogger,
   smallFeature,
   smallFeatureInput,
@@ -97,6 +106,26 @@ describeTicketSourceContract("fake", {
 
 describeAnalysisStoreContract("in-memory", (clock) => new InMemoryAnalysisStore(clock));
 describeFileCacheContract("in-memory", () => new InMemoryFileCache());
+describePreferenceStoreContract("in-memory", () => new InMemoryPreferenceStore());
+
+const reviewedRepo: RepoRef = { host: "github", owner: "acme", repo: "shop" };
+const pastComment = (number: number, at: string, body: string): PastComment => ({
+  pullRequest: { repo: reviewedRepo, number },
+  path: "src/orders.ts",
+  body,
+  at,
+});
+const pastComments = [
+  pastComment(7, "2026-10-01T10:00:00.000Z", "Filter by tenant here."),
+  pastComment(9, "2026-10-03T10:00:00.000Z", "This query isn't scoped to the tenant."),
+  pastComment(9, "2026-10-02T10:00:00.000Z", "Say the charset."),
+];
+
+describeReviewHistoryContract("fake", () => ({
+  history: () => new FakeReviewHistory({ host: "github", comments: pastComments }),
+  repo: reviewedRepo,
+  unreviewedRepo: { ...reviewedRepo, repo: "api" },
+}));
 
 describeLocalCheckoutContract("fake", async () => {
   const sha = "c".repeat(40);
@@ -353,6 +382,78 @@ describe("FakeCodeParser", () => {
       "symbols",
       "syntaxNodes",
     ]);
+  });
+});
+
+describe("FakeReviewHistory", () => {
+  it("fails the next read as told, then reads again", async () => {
+    const history = new FakeReviewHistory({ host: "github", comments: pastComments });
+    history.failWith(network);
+
+    expect(await history.getReviewerComments(reviewedRepo, { pullRequests: 30 })).toEqual(
+      err(network),
+    );
+    const read = await history.getReviewerComments(reviewedRepo, { pullRequests: 30 });
+    expect(read.ok && read.value.comments.length).toBe(3);
+    expect(history.calls).toEqual([
+      { repo: reviewedRepo, pullRequests: 30 },
+      { repo: reviewedRepo, pullRequests: 30 },
+    ]);
+  });
+});
+
+describe("FakePreferenceSuggester", () => {
+  const input: SuggestionInput = {
+    signals: [],
+    comments: pastComments,
+    preferences: [],
+    rejected: [],
+    repo: reviewedRepo,
+  };
+  const draft: ProposalDraft = {
+    kind: "look-for",
+    text: "Tenant isolation",
+    scope: "repo",
+    evidence: ["Filter by tenant here."],
+  };
+
+  it("answers its scripts in order, then its drafts, keeping what it was asked", async () => {
+    const suggester = new FakePreferenceSuggester({ drafts: [draft] });
+    const overloaded = { kind: "overloaded" as const, message: "Try again." };
+    suggester.script(err(overloaded), ok([]));
+
+    expect(await suggester.suggest(input)).toEqual(err(overloaded));
+    expect(await suggester.suggest(input)).toMatchObject({ ok: true, value: { value: [] } });
+    const third = await suggester.suggest(input);
+    expect(third).toMatchObject({ ok: true, value: { value: [draft] } });
+    expect(third.ok && third.value.usage.outputTokens).toBeGreaterThan(0);
+    expect(suggester.calls).toEqual([input, input, input]);
+  });
+
+  it("answers no drafts unless given some", async () => {
+    expect(await new FakePreferenceSuggester().suggest(input)).toMatchObject({
+      ok: true,
+      value: { value: [] },
+    });
+  });
+});
+
+describe("FakeModelCatalog", () => {
+  const down = fakeModelOption({ model: "claude-opus-5-5", available: false, reason: "No plan" });
+
+  it("serves the passes and the suggester for an option that can run, and neither for one that can't", () => {
+    const suggester = new FakePreferenceSuggester();
+    const catalog = new FakeModelCatalog({ suggester, options: [fakeModelOption(), down] });
+
+    expect(catalog.suggester(fakeModelOption().id)).toBe(suggester);
+    expect(catalog.model(fakeModelOption().id)).not.toBeNull();
+    expect(catalog.suggester(down.id)).toBeNull();
+    expect(catalog.model(down.id)).toBeNull();
+  });
+
+  it("has a suggester of its own unless told the provider can't suggest", () => {
+    expect(new FakeModelCatalog().suggester(fakeModelOption().id)).not.toBeNull();
+    expect(new FakeModelCatalog({ suggester: null }).suggester(fakeModelOption().id)).toBeNull();
   });
 });
 

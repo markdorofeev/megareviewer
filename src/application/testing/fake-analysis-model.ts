@@ -116,6 +116,7 @@ export class FakeAnalysisModel implements AnalysisModel {
                   severity: "major" as const,
                   suggestion: null,
                   mismatch: null,
+                  guidance: null,
                 },
               ];
         })
@@ -135,6 +136,7 @@ export class FakeAnalysisModel implements AnalysisModel {
           reason: "Ordinary code change",
           lines: null,
           checkedBy: null,
+          guidance: null,
         })),
       ),
     );

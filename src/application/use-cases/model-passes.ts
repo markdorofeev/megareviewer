@@ -292,6 +292,7 @@ export const runRisk = async (
     riskClass: "logic" as const,
     reason: "Not classified by the model",
     lines: null,
+    guidance: null,
   }));
   const warnings =
     outcome.value.problems.length === 0

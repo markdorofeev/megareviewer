@@ -4,7 +4,9 @@ import { type FileChange, HunkId } from "../diff/index.ts";
 import {
   type Finding,
   FindingId,
+  type Guidance,
   MismatchId,
+  PreferenceId,
   pointsOf,
   strippable,
   validateFindings,
@@ -24,6 +26,7 @@ const finding = (lines: Partial<Finding["lines"]> = {}): Finding => ({
   severity: "major",
   suggestion: null,
   mismatch: null,
+  guidance: null,
 });
 
 describe("pointsOf", () => {
@@ -52,6 +55,81 @@ describe("pointsOf", () => {
       path: "src/services/receipts.ts",
       lines: { hunkId: receiptsHunk.id, side: "new", startLine: 9, line: 11 },
       hunkIds: [receiptsHunk.id],
+    });
+  });
+
+  describe("guidance", () => {
+    const tenant = PreferenceId.parse("pref_00000000000000a1");
+    const naming = PreferenceId.parse("pref_00000000000000a2");
+    const guidance: Guidance = {
+      preferences: [
+        {
+          ref: "p1",
+          id: tenant,
+          kind: "look-for",
+          text: "Tenant isolation",
+          scope: { kind: "global" },
+        },
+        { ref: "p2", id: naming, kind: "dont-flag", text: "Naming", scope: { kind: "global" } },
+      ],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
+    };
+    const contractRisk = smallFeatureAnalysis.risk[0];
+    if (contractRisk === undefined) throw new Error("small-feature has risks");
+
+    it("says which preference raised a finding or left it out, and which file a risk is from", () => {
+      const points = pointsOf({
+        ...smallFeatureAnalysis,
+        intent: null,
+        guidance,
+        findings: [
+          { ...finding(), guidance: { ref: "p1", effect: "raised" } },
+          { ...finding(), id: FindingId.parse("f2"), guidance: { ref: "p2", effect: "left-out" } },
+          { ...finding(), id: FindingId.parse("f3") },
+        ],
+        risk: [{ ...contractRisk, guidance: { ref: "g1", effect: "raised" } }],
+        decisions: [],
+      });
+
+      expect(points.map((point) => [point.id, point.guidance])).toEqual([
+        ["f1", { effect: "raised", label: "Tenant isolation", preferenceId: tenant }],
+        ["f2", { effect: "left-out", label: "Naming", preferenceId: naming }],
+        ["f3", undefined],
+        [`r:${contractRisk.hunkId}`, { effect: "raised", label: "REVIEW.md", preferenceId: null }],
+      ]);
+    });
+
+    it("drops a mark that doesn't check out and keeps its point", () => {
+      const points = pointsOf({
+        ...smallFeatureAnalysis,
+        intent: null,
+        guidance,
+        findings: [
+          { ...finding(), guidance: { ref: "p9", effect: "raised" } },
+          { ...finding(), id: FindingId.parse("f2"), guidance: { ref: "p1", effect: "left-out" } },
+        ],
+        risk: [{ ...contractRisk, guidance: { ref: "p2", effect: "raised" } }],
+        decisions: [],
+      });
+
+      expect(points.map((point) => point.id)).toEqual(["f1", "f2", `r:${contractRisk.hunkId}`]);
+      expect(points.every((point) => !("guidance" in point))).toBe(true);
+    });
+
+    it("keeps no mark on an analysis without the run's guidance", () => {
+      const marked = { ...finding(), guidance: { ref: "p1", effect: "raised" as const } };
+      for (const without of [{ guidance: null }, {}]) {
+        const [point] = pointsOf({
+          files: smallFeatureAnalysis.files,
+          intent: null,
+          findings: [marked],
+          risk: [],
+          decisions: [],
+          ...without,
+        });
+        expect(point?.id).toBe("f1");
+        expect(point?.guidance).toBeUndefined();
+      }
     });
   });
 
@@ -175,6 +253,7 @@ describe("pointsOf", () => {
           reason: "Session TTL.",
           source: "model",
           lines: null,
+          guidance: null,
         },
         {
           hunkId: receiptsHunk.id,
@@ -182,6 +261,7 @@ describe("pointsOf", () => {
           reason: "Renders.",
           source: "model",
           lines: null,
+          guidance: null,
         },
         {
           hunkId: receiptsHunk.id,
@@ -189,6 +269,7 @@ describe("pointsOf", () => {
           reason: "A path rule.",
           source: "rule",
           lines: null,
+          guidance: null,
         },
       ],
     });
@@ -215,6 +296,7 @@ describe("pointsOf", () => {
           reason: "x",
           source: "model",
           lines: null,
+          guidance: null,
         },
       ],
     });
@@ -248,6 +330,7 @@ describe("pointsOf", () => {
             reason: "Accepts a token.",
             source: "model",
             lines: { hunkId: routeHunk.id, side: "new", startLine, line },
+            guidance: null,
           },
         ],
       })[0]?.lines;
@@ -294,6 +377,7 @@ describe("a risk's checking test", () => {
           source: "model",
           lines: null,
           checkedBy,
+          guidance: null,
         },
       ],
     });

@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { smallFeatureAnalysis } from "../../application/testing/index.ts";
 import { HunkId } from "../diff/index.ts";
 import {
+  Analysis,
   AnalysisId,
   CommentKey,
   DecisionId,
+  GuidanceRef,
   HttpUrl,
   Intent,
+  PreferenceId,
+  ProposalId,
   PublicationReceipt,
   Sha,
   Timestamp,
@@ -48,6 +53,14 @@ describe("ID and primitive schemas", () => {
     [HttpUrl, "http://localhost:8080/x", true],
     [HttpUrl, "javascript:alert(1)", false],
     [HttpUrl, "data:text/html,hi", false],
+    [PreferenceId, "pref_0123456789abcdef", true],
+    [PreferenceId, "prop_0123456789abcdef", false],
+    [ProposalId, "prop_0123456789abcdef", true],
+    [ProposalId, "prop_0123", false],
+    [GuidanceRef, "p1", true],
+    [GuidanceRef, "g12", true],
+    [GuidanceRef, "p0", false],
+    [GuidanceRef, "f1", false],
   ] as const)("%#: %s", (schema, value, valid) => {
     expect(accepts(schema, value)).toBe(valid);
   });
@@ -80,5 +93,23 @@ describe("Intent", () => {
       behaviorChanges: ["GET /receipt"],
       watch: [],
     });
+  });
+});
+
+describe("Analysis", () => {
+  it("reads one stored before guidance: none on the run, no mark on a finding or a risk", () => {
+    const { guidance: _, ...analysis } = smallFeatureAnalysis;
+    const stored = {
+      ...analysis,
+      findings: analysis.findings.map(({ guidance: _, ...finding }) => finding),
+      risk: analysis.risk.map(({ guidance: _, ...risk }) => risk),
+    };
+
+    const parsed = Analysis.parse(JSON.parse(JSON.stringify(stored)));
+
+    expect(parsed).toEqual(smallFeatureAnalysis);
+    expect(parsed.guidance).toBeNull();
+    expect(parsed.findings.map((finding) => finding.guidance)).toEqual([null]);
+    expect(parsed.risk.every((risk) => risk.guidance === null)).toBe(true);
   });
 });

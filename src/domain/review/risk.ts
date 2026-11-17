@@ -2,6 +2,7 @@ import { z } from "zod";
 import { HunkId } from "../diff/index.ts";
 import { CheckingTest } from "./checking-test.ts";
 import { PointLines } from "./point-lines.ts";
+import { GuidanceMark } from "./preference.ts";
 
 export const RiskClass = z.enum(["mechanical", "logic", "contract"]);
 export type RiskClass = z.infer<typeof RiskClass>;
@@ -23,6 +24,8 @@ export const RiskAssessment = z
      * the other sources and on analyses stored before the risk pass named one.
      */
     checkedBy: CheckingTest.optional(),
+    /** The preference or guideline file the model says shaped a contract hunk's risk. */
+    guidance: GuidanceMark.nullable().default(null),
   })
   .readonly();
 export type RiskAssessment = z.infer<typeof RiskAssessment>;

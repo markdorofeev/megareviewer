@@ -9,7 +9,12 @@
 import { writeFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClaudeAnalysisModel } from "../src/adapters/model/index.ts";
-import type { AnalysisInput, AnalysisModel, Logger } from "../src/application/ports/index.ts";
+import {
+  type AnalysisInput,
+  type AnalysisModel,
+  type Logger,
+  NO_GUIDANCE,
+} from "../src/application/ports/index.ts";
 import {
   type PullRequestFixture,
   promptInjection,
@@ -72,6 +77,7 @@ const inputFrom = (fixture: PullRequestFixture): AnalysisInput => {
       };
     }),
     callGraph: [],
+    guidance: NO_GUIDANCE,
   };
   return input;
 };

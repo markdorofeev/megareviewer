@@ -227,6 +227,9 @@ export const compose = async (
           tickets: createTicketSource(config, logger),
           models,
           store,
+          preferences: store,
+          // Reading past reviews from the hosts comes with their adapters.
+          history: {},
           fileCache: store,
           checkouts: createGitCheckouts({ dir: options.checkoutDir }),
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),

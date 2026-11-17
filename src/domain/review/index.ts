@@ -94,6 +94,44 @@ export {
   strippable,
   validateFindings,
 } from "./point.ts";
+export {
+  canEnable,
+  checkGuidanceMark,
+  DEFAULT_GUIDELINE_PATH,
+  GUIDELINE_PATHS,
+  Guidance,
+  GuidanceEffect,
+  GuidanceMark,
+  GuidanceRef,
+  GuidelineFile,
+  GuidelinePath,
+  guidanceOf,
+  guidelineEnabled,
+  guidelineFile,
+  inCreationOrder,
+  MAX_ENABLED_PREFERENCES,
+  MAX_EVIDENCE_LINES,
+  MAX_GUIDELINE_BYTES,
+  MAX_PREFERENCE_TEXT,
+  PastComment,
+  type PointGuidance,
+  Preference,
+  PreferenceId,
+  PreferenceKind,
+  PreferenceProposal,
+  PreferenceScope,
+  PreferenceSource,
+  PreferenceText,
+  ProposalId,
+  preferenceId,
+  preferencesFor,
+  proposalId,
+  ReviewSignal,
+  resolveGuidanceMark,
+  SignalKey,
+  sameRepo,
+  sameScope,
+} from "./preference.ts";
 export { HttpUrl, Sha, Timestamp } from "./primitives.ts";
 export {
   buildPublication,
@@ -139,6 +177,7 @@ export {
   raiseByRules,
   ruleReasons,
 } from "./risk-rules.ts";
+export { pointSignalKey, postedSignalKey, publishedSignalKey } from "./signal-key.ts";
 export {
   ReviewThread,
   ThreadComment,

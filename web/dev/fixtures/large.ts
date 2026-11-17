@@ -125,6 +125,7 @@ export const syntheticAnalysisView = ({
               reason: "Changes an exported function.",
               source: "rule",
               lines: null,
+              guidance: null,
             }
           : {
               hunkId: hunk.id,
@@ -132,6 +133,7 @@ export const syntheticAnalysisView = ({
               reason: "No rule matched.",
               source: "rule",
               lines: null,
+              guidance: null,
             },
     ),
   );

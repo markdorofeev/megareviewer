@@ -105,6 +105,7 @@ export const partIndex = (analysis: Analysis) => {
         reason: UNCLASSIFIED,
         source: "fallback",
         lines: null,
+        guidance: null,
       }
     );
   };

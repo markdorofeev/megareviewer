@@ -449,6 +449,7 @@ const modelRisk: readonly RiskAssessment[] = [
     reason: "Adds a runtime dependency.",
     source: "model",
     lines: null,
+    guidance: null,
   },
   {
     hunkId: h.routeImports,
@@ -456,6 +457,7 @@ const modelRisk: readonly RiskAssessment[] = [
     reason: "Imports for the new route.",
     source: "model",
     lines: null,
+    guidance: null,
   },
   {
     hunkId: h.receiptRoute,
@@ -463,6 +465,7 @@ const modelRisk: readonly RiskAssessment[] = [
     reason: "Adds a public endpoint, GET /orders/:id/receipt, that clients will build on.",
     source: "model",
     lines: { hunkId: h.receiptRoute, side: "new", startLine: 14, line: 21 },
+    guidance: null,
   },
   {
     hunkId: h.receiptFormatting,
@@ -470,6 +473,7 @@ const modelRisk: readonly RiskAssessment[] = [
     reason: "Changes how dates and prices appear on receipts.",
     source: "model",
     lines: null,
+    guidance: null,
   },
   {
     hunkId: h.retryAndCache,
@@ -477,6 +481,7 @@ const modelRisk: readonly RiskAssessment[] = [
     reason: "Retries tax service calls and caches rendered receipts in memory.",
     source: "model",
     lines: null,
+    guidance: null,
   },
 ];
 
@@ -671,6 +676,7 @@ const analysis: Analysis = {
               reason: proof.detail,
               source: "proof",
               lines: null,
+              guidance: null,
             },
           ],
     ),
@@ -686,6 +692,7 @@ const analysis: Analysis = {
       severity: "blocking",
       suggestion: ["  const order = await findOrder(req.user.id, req.params.id);"],
       mismatch: MismatchId.parse("m1"),
+      guidance: null,
     },
     {
       id: FindingId.parse("f2"),
@@ -696,6 +703,7 @@ const analysis: Analysis = {
       severity: "major",
       suggestion: null,
       mismatch: null,
+      guidance: null,
     },
     {
       id: FindingId.parse("f3"),
@@ -706,6 +714,7 @@ const analysis: Analysis = {
       severity: "minor",
       suggestion: null,
       mismatch: null,
+      guidance: null,
     },
   ],
   decisions: [
@@ -812,6 +821,7 @@ const analysis: Analysis = {
     modelName: "Sonnet 5.5",
     family: "Claude",
   },
+  guidance: null,
   beforeModel: null,
   createdAt: "2026-10-21T09:42:10Z",
   updatedAt: "2026-10-21T09:43:02Z",

@@ -33,6 +33,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryPreferenceStore,
   type PullRequestFixture,
   promptInjection,
   RecordingLogger,
@@ -112,6 +113,8 @@ const setup = (
       models,
       store,
       fileCache,
+      preferences: new InMemoryPreferenceStore(),
+      history: {},
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
       threads: {},
       statuses: {},
@@ -208,6 +211,7 @@ const configRule = (hunkId: HunkId) => ({
   reason: "changes app config (app.yaml)",
   source: "rule" as const,
   lines: null,
+  guidance: null,
 });
 const configHunks = new Set(smallFeatureFiles[0]?.hunks.map((hunk) => hunk.id));
 /** Well-formed, but not a hunk of any fixture. */
@@ -218,6 +222,7 @@ const logic = (hunkId: HunkId) => ({
   reason: "Logic",
   lines: null,
   checkedBy: null,
+  guidance: null,
 });
 
 const modelError = (kind: ModelError["kind"], message = `${kind} happened`): ModelError => ({
@@ -264,6 +269,7 @@ describe("the analysis pipeline", () => {
               reason: "Ordinary code change",
               source: "model",
               lines: null,
+              guidance: null,
             },
       ),
     );
@@ -879,6 +885,7 @@ describe("the analysis pipeline", () => {
       severity: "major" as const,
       suggestion: ["fixed();"],
       mismatch: null,
+      guidance: null,
     });
 
     it("names the intent's mismatch a finding shows, from the intent it read", async () => {

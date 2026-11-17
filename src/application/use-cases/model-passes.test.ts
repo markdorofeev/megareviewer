@@ -52,6 +52,7 @@ const contract = (checkedBy: ModelRisk["checkedBy"]): ModelRisk => ({
   reason: "Any signed-in user could read another user's receipt.",
   lines: { hunkId: route.id, side: "new", startLine: 2, line: 2 },
   checkedBy,
+  guidance: null,
 });
 const logic = (hunkId: HunkId): ModelRisk => ({
   hunkId,
@@ -59,6 +60,7 @@ const logic = (hunkId: HunkId): ModelRisk => ({
   reason: "Tests.",
   lines: null,
   checkedBy: null,
+  guidance: null,
 });
 const named = (test: string, startLine: number, line: number) => ({
   hunkId: tests.id,

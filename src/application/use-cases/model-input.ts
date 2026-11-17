@@ -7,7 +7,13 @@ import {
 } from "../../domain/diff/index.ts";
 import type { ModelError, PullRequest, Ticket } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { AnalysisInput, AnalysisInputFile, AnalysisModel } from "../ports/index.ts";
+import {
+  type AnalysisInput,
+  type AnalysisInputFile,
+  type AnalysisModel,
+  type InputGuidance,
+  NO_GUIDANCE,
+} from "../ports/index.ts";
 import { appError, type UseCaseError } from "./errors.ts";
 import type { Prepared } from "./prep.ts";
 import { count } from "./text.ts";
@@ -22,6 +28,8 @@ export const buildAnalysisInput = (input: {
   readonly files: readonly FileChange[];
   readonly headContents: ReadonlyMap<string, string | null>;
   readonly prepared: Prepared;
+  /** What the reviewer and the repository ask of the passes; none when left out. */
+  readonly guidance?: InputGuidance;
 }): AnalysisInput => {
   const { pullRequest, prepared } = input;
   const proofOf = new Map(
@@ -62,6 +70,7 @@ export const buildAnalysisInput = (input: {
       prepared.callGraph.filter((hint) => hint.use === "call"),
       hunkIdOf,
     ),
+    guidance: input.guidance ?? NO_GUIDANCE,
   };
 };
 

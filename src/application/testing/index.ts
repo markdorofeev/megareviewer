@@ -10,10 +10,15 @@ export {
   describeLocalCheckoutContract,
   type LocalCheckoutContractSetup,
 } from "./contracts/local-checkout-contract.ts";
+export { describePreferenceStoreContract } from "./contracts/preference-store-contract.ts";
 export {
   describePullRequestStatusContract,
   type PullRequestStatusContractSetup,
 } from "./contracts/pull-request-status-contract.ts";
+export {
+  describeReviewHistoryContract,
+  type ReviewHistoryContractSetup,
+} from "./contracts/review-history-contract.ts";
 export {
   describeReviewThreadsContract,
   type ReviewThreadsContractSetup,
@@ -36,7 +41,9 @@ export {
   FakeLocalCheckouts,
 } from "./fake-local-checkout.ts";
 export { FakeModelCatalog, fakeModelOption } from "./fake-model-catalog.ts";
+export { FakePreferenceSuggester } from "./fake-preference-suggester.ts";
 export { FakePullRequestStatusSource } from "./fake-pull-request-status-source.ts";
+export { FakeReviewHistory } from "./fake-review-history.ts";
 export {
   FakeReviewThreads,
   type ReviewThreadsMethod,
@@ -47,4 +54,5 @@ export { createFixtureFetch, type RecordedExchange } from "./fixture-fetch.ts";
 export * from "./fixtures/index.ts";
 export { InMemoryAnalysisStore } from "./in-memory-analysis-store.ts";
 export { InMemoryFileCache } from "./in-memory-file-cache.ts";
+export { InMemoryPreferenceStore } from "./in-memory-preference-store.ts";
 export { type LogEntry, RecordingLogger } from "./recording-logger.ts";

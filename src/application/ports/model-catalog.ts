@@ -1,5 +1,6 @@
 import type { ModelOptionId, ModelOptions } from "../../domain/review/index.ts";
 import type { AnalysisModel } from "./analysis-model.ts";
+import type { PreferenceSuggester } from "./preference-suggester.ts";
 
 /** Every model option the reviewer's machine can or could run, and the passes on one of them. */
 export interface ModelCatalog {
@@ -13,4 +14,6 @@ export interface ModelCatalog {
    * unknown option or one that can't run.
    */
   model(optionId: ModelOptionId): AnalysisModel | null;
+  /** The call that proposes preferences on one option, as `model`; null too when it can't make it. */
+  suggester(optionId: ModelOptionId): PreferenceSuggester | null;
 }

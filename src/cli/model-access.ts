@@ -458,6 +458,9 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
       models.set(optionId, model);
       return model;
     },
+
+    // No transport makes the suggestion call yet.
+    suggester: () => null,
   };
 };
 

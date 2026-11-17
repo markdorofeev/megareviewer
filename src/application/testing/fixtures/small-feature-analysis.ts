@@ -14,7 +14,7 @@ import {
   type Tour,
   TourStepId,
 } from "../../../domain/review/index.ts";
-import type { AnalysisInput, AnalysisInputFile } from "../../ports/index.ts";
+import { type AnalysisInput, type AnalysisInputFile, NO_GUIDANCE } from "../../ports/index.ts";
 import { fileChange, hunk } from "./builders.ts";
 import { smallFeature } from "./small-feature.ts";
 
@@ -159,6 +159,7 @@ export const smallFeatureInput: AnalysisInput = {
       use: "call",
     },
   ],
+  guidance: NO_GUIDANCE,
 };
 
 const key: AnalysisKey = {
@@ -252,6 +253,7 @@ export const smallFeatureAnalysis: Analysis = {
       severity: "major",
       suggestion: null,
       mismatch: null,
+      guidance: null,
     },
   ],
   risk: [
@@ -261,6 +263,7 @@ export const smallFeatureAnalysis: Analysis = {
       reason: "Changes the rate limit.",
       source: "model",
       lines: null,
+      guidance: null,
     },
     {
       hunkId: cacheTtlHunk.id,
@@ -268,6 +271,7 @@ export const smallFeatureAnalysis: Analysis = {
       reason: "Adds a config setting.",
       source: "model",
       lines: null,
+      guidance: null,
     },
     {
       hunkId: receiptsConfigHunk.id,
@@ -275,6 +279,7 @@ export const smallFeatureAnalysis: Analysis = {
       reason: "Adds a config section.",
       source: "model",
       lines: null,
+      guidance: null,
     },
     {
       hunkId: importHunk.id,
@@ -282,6 +287,7 @@ export const smallFeatureAnalysis: Analysis = {
       reason: "Imports the new service.",
       source: "model",
       lines: null,
+      guidance: null,
     },
     {
       hunkId: receiptRouteHunk.id,
@@ -289,6 +295,7 @@ export const smallFeatureAnalysis: Analysis = {
       reason: "Adds a public endpoint.",
       source: "model",
       lines: null,
+      guidance: null,
     },
     {
       hunkId: receiptServiceHunk.id,
@@ -296,6 +303,7 @@ export const smallFeatureAnalysis: Analysis = {
       reason: "Renders and caches receipts.",
       source: "model",
       lines: null,
+      guidance: null,
     },
   ],
   decisions: [
@@ -417,6 +425,7 @@ export const smallFeatureAnalysis: Analysis = {
   beforeModel: null,
   createdAt: "2026-10-21T09:00:00Z",
   updatedAt: "2026-10-21T09:01:10Z",
+  guidance: null,
 };
 
 /** The code's tour of the small-feature PR, which the fixture analysis's tour titles. */

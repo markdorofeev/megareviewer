@@ -39,6 +39,7 @@ describe("partIndex", () => {
       reason: "Not classified yet.",
       source: "fallback",
       lines: null,
+      guidance: null,
     });
   });
 

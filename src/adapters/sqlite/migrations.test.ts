@@ -28,9 +28,14 @@ describe("migrate", () => {
     expect(tableNames(db)).toEqual([
       "analyses",
       "file_contents",
+      "guideline_switches",
       "point_reviews",
+      "preference_proposals",
+      "preference_suggestions",
+      "preferences",
       "publications",
       "published_comments",
+      "review_signals",
       "thread_posts",
     ]);
   });
@@ -116,6 +121,42 @@ describe("migrate", () => {
         receipt: "{}",
       },
     ]);
+  });
+
+  it("adds the preference tables beside the analyses, which keep their rows", () => {
+    const db = databaseAt(5);
+    db.exec(`INSERT INTO analyses VALUES
+      ('a_0123456789abcdef', 'github', 'acme', 'shop', 1, 'sha', 'v1', 'complete', '{}', 't', 't')`);
+
+    expect(migrate(db, MIGRATIONS)).toEqual([6]);
+
+    expect(db.prepare("SELECT id FROM analyses").all()).toEqual([{ id: "a_0123456789abcdef" }]);
+    db.exec(`INSERT INTO review_signals VALUES
+      ('point:a_0123456789abcdef:f1', 'dismissed', 't', 'github', 'acme', 'shop', 1, 'finding',
+       'Missing JSDoc', '', NULL)`);
+    // A signal outlives its analysis.
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec("DELETE FROM analyses");
+    expect(db.prepare("SELECT signal_key FROM review_signals").all()).toEqual([
+      { signal_key: "point:a_0123456789abcdef:f1" },
+    ]);
+  });
+
+  it("refuses a preference, a proposal or a signal of a kind it doesn't know", () => {
+    const db = databaseAt(MIGRATIONS.length);
+
+    expect(() =>
+      db.exec(`INSERT INTO preferences VALUES
+        ('pref_1', 'ignore', 'Naming', NULL, NULL, NULL, 'written', 1, 't', 't')`),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db.exec(`INSERT INTO preference_proposals VALUES
+        ('prop_1', 'look-for', 'Naming', NULL, NULL, NULL, 'written', '[]', 'pending', 't')`),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db.exec(`INSERT INTO review_signals VALUES
+        ('k', 'liked', 't', 'github', 'acme', 'shop', 1, NULL, '', '', NULL)`),
+    ).toThrow(/CHECK/);
   });
 
   it("rolls back a failed migration and stays at the last good version", () => {

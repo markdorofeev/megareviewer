@@ -282,8 +282,15 @@ describe("fileOverview with every directory opened", () => {
   it("sums lines, shows contract as logic, and lists hunks in tour order", () => {
     const files = [file("a.py", [1, 2], "x = 1", 3), file("b.py", [3])];
     const risk: RiskAssessment[] = [
-      { hunkId: h(1), riskClass: "logic", reason: "", source: "rule", lines: null },
-      { hunkId: h(2), riskClass: "contract", reason: "", source: "rule", lines: null },
+      { hunkId: h(1), riskClass: "logic", reason: "", source: "rule", lines: null, guidance: null },
+      {
+        hunkId: h(2),
+        riskClass: "contract",
+        reason: "",
+        source: "rule",
+        lines: null,
+        guidance: null,
+      },
     ];
     const overview = opened(input(files, { risk, callGraph: [call(1, 3)] }), [
       step(1, "Second hunk first", [2, 1, 3]),
@@ -537,6 +544,7 @@ describe("fileOverview by directory", () => {
     reason: "",
     source: "rule",
     lines: null,
+    guidance: null,
   });
 
   it("makes each directory a box with its files, its risk and its tests, never contract", () => {

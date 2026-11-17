@@ -33,7 +33,14 @@ const orders = modifiedFile(
 const card = (index: number, riskClass: RiskClass, reason = `${riskClass} reason`) => {
   const hunk = orders.hunks[index];
   if (hunk === undefined) throw new Error(`no hunk ${index}`);
-  const risk: RiskAssessment = { hunkId: hunk.id, riskClass, reason, source: "model", lines: null };
+  const risk: RiskAssessment = {
+    hunkId: hunk.id,
+    riskClass,
+    reason,
+    source: "model",
+    lines: null,
+    guidance: null,
+  };
   return { hunk, file: orders, risk };
 };
 
@@ -481,6 +488,7 @@ describe("HunkCard", () => {
       reason: "",
       source: "model",
       lines: null,
+      guidance: null,
     };
     const parts = [partHunk(hunk, { start: 0, end: 2 }), partHunk(hunk, { start: 2, end: 4 })];
     const { container } = renderWith(
@@ -505,7 +513,14 @@ describe("HunkCard", () => {
       <HunkCard
         hunk={hunk}
         file={file}
-        risk={{ hunkId: hunk.id, riskClass: "logic", reason: "", source: "model", lines: null }}
+        risk={{
+          hunkId: hunk.id,
+          riskClass: "logic",
+          reason: "",
+          source: "model",
+          lines: null,
+          guidance: null,
+        }}
       />,
       { highlight },
     );
@@ -525,7 +540,14 @@ describe("HunkCard", () => {
       <HunkCard
         hunk={hunk}
         file={file}
-        risk={{ hunkId: hunk.id, riskClass: "logic", reason: "", source: "model", lines: null }}
+        risk={{
+          hunkId: hunk.id,
+          riskClass: "logic",
+          reason: "",
+          source: "model",
+          lines: null,
+          guidance: null,
+        }}
       />,
     );
     expect(screen.getAllByRole("row").map((row) => cells(row)[2])).toEqual([
@@ -550,7 +572,14 @@ describe("HunkCard", () => {
       <HunkCard
         hunk={hunk}
         file={file}
-        risk={{ hunkId: hunk.id, riskClass: "logic", reason: "", source: "model", lines: null }}
+        risk={{
+          hunkId: hunk.id,
+          riskClass: "logic",
+          reason: "",
+          source: "model",
+          lines: null,
+          guidance: null,
+        }}
       />,
     );
     const header = screen.getByRole("region").querySelector("header");
@@ -577,7 +606,14 @@ describe("HunkCard", () => {
       <HunkCard
         hunk={hunk}
         file={file}
-        risk={{ hunkId: hunk.id, riskClass: "logic", reason: "", source: "model", lines: null }}
+        risk={{
+          hunkId: hunk.id,
+          riskClass: "logic",
+          reason: "",
+          source: "model",
+          lines: null,
+          guidance: null,
+        }}
       />,
     );
     expect(screen.getByRole("region").querySelector("header")?.textContent).toMatch(

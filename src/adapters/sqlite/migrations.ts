@@ -109,6 +109,54 @@ export const MIGRATIONS: readonly string[] = [
   DROP TABLE publications;
   ALTER TABLE publications_numbered RENAME TO publications;
   `,
+  // What the reviewer values. None references analyses: a preference is for every pull request,
+  // and a signal keeps a point's text after its analysis loses the model run or is gone.
+  `
+  CREATE TABLE preferences (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('look-for', 'dont-flag')),
+    text TEXT NOT NULL,
+    host TEXT, owner TEXT, repo TEXT,   -- all NULL: every repository
+    source TEXT NOT NULL CHECK (source IN ('written', 'learned', 'imported')),
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE preference_proposals (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('look-for', 'dont-flag')),
+    text TEXT NOT NULL,
+    host TEXT, owner TEXT, repo TEXT,   -- all NULL: every repository
+    source TEXT NOT NULL CHECK (source IN ('learned', 'imported')),
+    evidence TEXT NOT NULL,             -- a JSON array of lines
+    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE review_signals (
+    signal_key TEXT PRIMARY KEY,        -- what made it, so a retry writes it once
+    kind TEXT NOT NULL CHECK (kind IN ('dismissed', 'raised', 'comment')),
+    at TEXT NOT NULL,
+    host TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL, number INTEGER NOT NULL,
+    point_kind TEXT,                    -- NULL for a comment
+    title TEXT NOT NULL,
+    text TEXT NOT NULL,
+    path TEXT
+  );
+  CREATE INDEX review_signals_at ON review_signals (at);
+
+  CREATE TABLE guideline_switches (
+    host TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
+    path TEXT NOT NULL,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    PRIMARY KEY (host, owner, repo, path)
+  );
+
+  CREATE TABLE preference_suggestions (
+    id INTEGER PRIMARY KEY,
+    suggested_at TEXT NOT NULL
+  );
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

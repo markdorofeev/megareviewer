@@ -59,6 +59,7 @@ const risk: readonly RiskAssessment[] = proofs.flatMap((each) =>
           reason: each.detail,
           source: "proof",
           lines: null,
+          guidance: null,
         },
       ],
 );

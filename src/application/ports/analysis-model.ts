@@ -10,10 +10,13 @@ import {
   type Commit,
   Decision,
   Finding,
+  GuidanceMark,
+  type GuidanceRef,
   type Intent,
   type ModelError,
   type ModelUsage,
   PointLines,
+  type PreferenceKind,
   type Ticket,
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
@@ -50,7 +53,29 @@ export interface AnalysisInput {
   readonly tickets: readonly Ticket[];
   readonly files: readonly AnalysisInputFile[];
   readonly callGraph: readonly CallGraphHint[];
+  readonly guidance: InputGuidance;
 }
+
+/**
+ * What the reviewer wants the passes to look for and leave out, and the repository's guideline
+ * files, each by the ref a finding or a risk marks it with. Both empty when there's none.
+ */
+export interface InputGuidance {
+  readonly preferences: readonly {
+    readonly ref: GuidanceRef;
+    readonly kind: PreferenceKind;
+    readonly text: string;
+    /** Everywhere, or the pull request's repository. */
+    readonly scope: "global" | "repo";
+  }[];
+  readonly guidelines: readonly {
+    readonly ref: GuidanceRef;
+    readonly path: string;
+    readonly content: string;
+  }[];
+}
+
+export const NO_GUIDANCE: InputGuidance = { preferences: [], guidelines: [] };
 
 export interface PassOutput<T> {
   readonly value: T;
@@ -91,6 +116,8 @@ export const ModelRisk = z
     lines: PointLines.nullable().default(null),
     /** For a contract hunk, the test whose assertions check what the reason says; else null. */
     checkedBy: ModelCheckingTest.nullable().default(null),
+    /** The preference or guideline file that made it contract, or says to leave it out. */
+    guidance: GuidanceMark.nullable().default(null),
   })
   .readonly();
 export type ModelRisk = z.infer<typeof ModelRisk>;

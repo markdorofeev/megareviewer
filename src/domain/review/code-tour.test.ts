@@ -69,6 +69,7 @@ const contract = (...ns: number[]): RiskAssessment[] =>
     reason: "r",
     source: "rule",
     lines: null,
+    guidance: null,
   }));
 
 const all = (files: readonly FileChange[]) =>

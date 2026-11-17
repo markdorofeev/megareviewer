@@ -105,6 +105,7 @@ const risksOf = (input: AnalysisInput): ModelRisk[] => {
             line: lineOf(hunk, "findOrder("),
           },
           checkedBy,
+          guidance: null,
         };
       }
       if (hunk.id === limit?.id) {
@@ -115,9 +116,17 @@ const risksOf = (input: AnalysisInput): ModelRisk[] => {
           reason: "Every client can now send ten times as many requests a minute to the API.",
           lines: { hunkId: hunk.id, side: "new", startLine: line, line },
           checkedBy: null,
+          guidance: null,
         };
       }
-      return { hunkId: hunk.id, riskClass: "logic", reason: "", lines: null, checkedBy: null };
+      return {
+        hunkId: hunk.id,
+        riskClass: "logic",
+        reason: "",
+        lines: null,
+        checkedBy: null,
+        guidance: null,
+      };
     }),
   );
 };

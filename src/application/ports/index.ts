@@ -4,8 +4,10 @@ export {
   type AnalysisModel,
   DecisionDraft,
   FindingDraft,
+  type InputGuidance,
   ModelCheckingTest,
   ModelRisk,
+  NO_GUIDANCE,
   type PassOptions,
   type PassOutput,
 } from "./analysis-model.ts";
@@ -31,7 +33,15 @@ export {
 } from "./local-checkout.ts";
 export type { LogFields, Logger } from "./logger.ts";
 export type { ModelCatalog } from "./model-catalog.ts";
+export type { PreferenceStore } from "./preference-store.ts";
+export {
+  type PreferenceSuggester,
+  ProposalDraft,
+  type SuggestionInput,
+  type SuggestionOutput,
+} from "./preference-suggester.ts";
 export type { PullRequestStatusSource } from "./pull-request-status-source.ts";
+export type { ReviewerComments, ReviewHistory } from "./review-history.ts";
 export {
   type Attachment,
   MAX_ATTACHMENT_BYTES,

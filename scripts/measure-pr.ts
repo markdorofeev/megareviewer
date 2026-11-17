@@ -101,6 +101,7 @@ export const measure = async (
             reason: proof.detail,
             source: "proof",
             lines: null,
+            guidance: null,
           },
         ],
   );

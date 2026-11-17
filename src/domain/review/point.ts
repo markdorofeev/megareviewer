@@ -2,11 +2,19 @@ import { z } from "zod";
 import { type FileChange, type Hunk, HunkId, hunkHasLine } from "../diff/index.ts";
 import type { Decision } from "./decision.ts";
 import { type Intent, IntentMismatchKind } from "./intent.ts";
+import { PointKind } from "./point-kind.ts";
 import { PointLines } from "./point-lines.ts";
+import {
+  type Guidance,
+  GuidanceEffect,
+  GuidanceMark,
+  PreferenceId,
+  resolveGuidanceMark,
+} from "./preference.ts";
 import { Timestamp } from "./primitives.ts";
 import type { RiskAssessment } from "./risk.ts";
 
-export { PointLines };
+export { PointKind, PointLines };
 
 /** "f1", "f2", … in the order the model listed the findings. */
 export const FindingId = z
@@ -41,12 +49,11 @@ export const Finding = z
     suggestion: z.array(z.string()).readonly().nullable().default(null),
     /** The intent mismatch it shows, which then isn't a point of its own. */
     mismatch: MismatchId.nullable().default(null),
+    /** The preference or guideline file that raised it or says to leave it out, as the model marks it. */
+    guidance: GuidanceMark.nullable().default(null),
   })
   .readonly();
 export type Finding = z.infer<typeof Finding>;
-
-export const PointKind = z.enum(["finding", "risk", "decision"]);
-export type PointKind = z.infer<typeof PointKind>;
 
 /**
  * A finding's ID, "m1" for the first intent mismatch, a decision's ID, or "r:" and the hunk ID for
@@ -80,6 +87,14 @@ export const Point = z
     /** The test that checks a risk's behavior, in the file `path` names; only on a risk. */
     checkedBy: z
       .object({ test: z.string(), checks: z.string(), lines: PointLines, path: z.string() })
+      .readonly()
+      .optional(),
+    /**
+     * The preference or guideline file that shaped a finding or a risk, by its text or its path;
+     * left-out is one the reviewer asked not to be flagged, which the page folds.
+     */
+    guidance: z
+      .object({ effect: GuidanceEffect, label: z.string(), preferenceId: PreferenceId.nullable() })
       .readonly()
       .optional(),
   })
@@ -120,6 +135,8 @@ export interface PointsInput {
   readonly findings: readonly Finding[];
   readonly risk: readonly RiskAssessment[];
   readonly decisions: readonly Decision[];
+  /** What the model run was given; without it no point keeps a guidance mark. */
+  readonly guidance?: Guidance | null;
 }
 
 /**
@@ -137,6 +154,11 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     const hunk = first === undefined ? undefined : hunks.get(first);
     const lines = hunk === undefined ? null : changedLines(hunk);
     return { hunkIds: known, lines, path: lines === null ? null : (hunk?.path ?? null) };
+  };
+
+  const marked = (mark: GuidanceMark | null) => {
+    const guidance = resolveGuidanceMark(mark, analysis.guidance ?? null);
+    return guidance === null ? {} : { guidance };
   };
 
   const mismatchList = analysis.intent?.mismatches ?? [];
@@ -163,6 +185,7 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         severity: finding.severity,
         suggestion: finding.lines.side === "new" ? finding.suggestion : null,
         mismatch,
+        ...marked(finding.guidance),
       },
     ];
   });
@@ -205,6 +228,7 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         ...(checked === undefined || test === undefined
           ? {}
           : { checkedBy: { ...checked, path: test.path } }),
+        ...marked(risk.guidance),
       },
     ];
   });

@@ -14,6 +14,7 @@ import { ModelError } from "./errors.ts";
 import { Intent, Ticket } from "./intent.ts";
 import { ModelRunOption } from "./model-option.ts";
 import { Finding } from "./point.ts";
+import { Guidance } from "./preference.ts";
 import { Sha, Timestamp } from "./primitives.ts";
 import { PullRequest, PullRequestRef } from "./pull-request.ts";
 import { RiskAssessment } from "./risk.ts";
@@ -197,6 +198,8 @@ export const Analysis = z
     modelError: AnalysisError.nullable().default(null),
     /** The option the model run used. Absent on analyses stored before the choice, all Haiku 5.5. */
     modelOption: ModelRunOption.nullable().default(null),
+    /** The preferences and guideline files the model run was given; null without a run. */
+    guidance: Guidance.nullable().default(null),
     /**
      * What the code made of the fields a model run changes, kept when the first run starts so that
      * removing the run puts them back. Null without a run, and where a run started before it was kept.
@@ -271,6 +274,7 @@ export const withoutModelRun = (
   modelCalls: [],
   modelError: null,
   modelOption: null,
+  guidance: null,
   beforeModel: null,
   updatedAt,
 });

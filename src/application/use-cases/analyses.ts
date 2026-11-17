@@ -130,6 +130,7 @@ const newAnalysis = (
   error: null,
   modelError: null,
   modelOption: null,
+  guidance: null,
   beforeModel: null,
   createdAt,
   updatedAt: deps.clock.now(),

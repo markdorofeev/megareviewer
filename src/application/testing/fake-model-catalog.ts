@@ -4,8 +4,9 @@ import {
   type ModelOptions,
   modelOptionId,
 } from "../../domain/review/index.ts";
-import type { AnalysisModel, ModelCatalog } from "../ports/index.ts";
+import type { AnalysisModel, ModelCatalog, PreferenceSuggester } from "../ports/index.ts";
 import { FakeAnalysisModel } from "./fake-analysis-model.ts";
+import { FakePreferenceSuggester } from "./fake-preference-suggester.ts";
 
 /** Sonnet 5.5 on Claude Code, available: the catalog's one option unless given others. */
 export const fakeModelOption = (overrides: Partial<ModelOption> = {}): ModelOption => {
@@ -27,12 +28,13 @@ export const fakeModelOption = (overrides: Partial<ModelOption> = {}): ModelOpti
 };
 
 /**
- * Serves `model` for every available option, and the options as given. The default is the first
- * available option on `defaultModel`, else the first available, else the first. `asked` counts
- * calls to `options()`.
+ * Serves `model` and `suggester` for every available option, and the options as given. The default
+ * is the first available option on `defaultModel`, else the first available, else the first.
+ * `asked` counts calls to `options()`. A null `suggester` is a provider that can't suggest.
  */
 export class FakeModelCatalog implements ModelCatalog {
   readonly model: (optionId: ModelOptionId) => AnalysisModel | null;
+  readonly suggester: (optionId: ModelOptionId) => PreferenceSuggester | null;
   asked = 0;
   private current: readonly ModelOption[];
   private readonly defaultModel: string | null;
@@ -40,6 +42,7 @@ export class FakeModelCatalog implements ModelCatalog {
   constructor(
     options: {
       readonly model?: AnalysisModel;
+      readonly suggester?: PreferenceSuggester | null;
       readonly options?: readonly ModelOption[];
       readonly defaultModel?: string;
     } = {},
@@ -47,8 +50,12 @@ export class FakeModelCatalog implements ModelCatalog {
     this.defaultModel = options.defaultModel ?? null;
     const model = options.model ?? new FakeAnalysisModel();
     this.current = options.options ?? [fakeModelOption()];
-    this.model = (optionId) =>
-      this.current.some((option) => option.id === optionId && option.available) ? model : null;
+    const suggester =
+      options.suggester === undefined ? new FakePreferenceSuggester() : options.suggester;
+    const runs = (optionId: ModelOptionId) =>
+      this.current.some((option) => option.id === optionId && option.available);
+    this.model = (optionId) => (runs(optionId) ? model : null);
+    this.suggester = (optionId) => (runs(optionId) ? suggester : null);
   }
 
   /** Replaces the options, as signing in or out would. */

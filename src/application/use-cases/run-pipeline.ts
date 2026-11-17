@@ -127,6 +127,7 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
             reason: proof.detail,
             source: "proof" as const,
             lines: null,
+            guidance: null,
           },
         ],
   );

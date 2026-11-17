@@ -11,6 +11,7 @@ import {
   FixedClock,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryPreferenceStore,
   RecordingLogger,
   smallFeature,
 } from "../testing/index.ts";
@@ -68,6 +69,8 @@ const setup = () => {
     models: new FakeModelCatalog(),
     store: new InMemoryAnalysisStore(),
     fileCache,
+    preferences: new InMemoryPreferenceStore(),
+    history: {},
     checkouts: new FakeLocalCheckouts(),
     threads: {},
     statuses: {},

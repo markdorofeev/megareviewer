@@ -13,6 +13,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryPreferenceStore,
   type PullRequestFixture,
 } from "../src/application/testing/index.ts";
 import { createUseCases } from "../src/application/use-cases/index.ts";
@@ -99,6 +100,8 @@ export const analyzeCase = async (
       }),
       store,
       fileCache: new InMemoryFileCache(),
+      preferences: new InMemoryPreferenceStore(),
+      history: {},
       checkouts: new FakeLocalCheckouts(),
       threads: {},
       statuses: {},

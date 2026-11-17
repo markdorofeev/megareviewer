@@ -9,7 +9,9 @@ import type {
   LocalCheckouts,
   Logger,
   ModelCatalog,
+  PreferenceStore,
   PullRequestStatusSource,
+  ReviewHistory,
   ReviewThreads,
   TicketSource,
 } from "../ports/index.ts";
@@ -25,6 +27,10 @@ export interface AppDeps {
   /** The models the reviewer can choose, asked by the status and before every model run. */
   readonly models: ModelCatalog;
   readonly store: AnalysisStore;
+  /** What the reviewer values: their preferences, proposals, review signals and guideline switches. */
+  readonly preferences: PreferenceStore;
+  /** The reviewer's past comments, for the hosts that can read them. */
+  readonly history: Partial<Record<HostKind, ReviewHistory>>;
   readonly fileCache: FileCache;
   readonly parser: CodeParser;
   /** Where unchanged callers are read from, when a checkout of the PR's repository is found. */

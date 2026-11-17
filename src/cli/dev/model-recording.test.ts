@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { FindingDraft } from "../../application/ports/index.ts";
 import {
   describeAnalysisModelContract,
   smallFeatureInput,
@@ -62,7 +64,9 @@ describe("the replayed model's scenarios", () => {
       feedback: ["Finding 1's lines"],
     });
     expect(first.ok && first.value.value[0]?.lines.startLine).toBe(100_000);
-    expect(retry.ok && retry.value.value).toEqual(recording.passes.findings.answer);
+    expect(retry.ok && retry.value.value).toEqual(
+      z.array(FindingDraft).parse(recording.passes.findings.answer),
+    );
   });
 
   it("isn't signed in", async () => {
