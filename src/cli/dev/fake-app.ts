@@ -3,14 +3,21 @@ import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { type ErrorResponse, TOKEN_HEADER } from "../../../contracts/index.ts";
-import type { AnalysisModel, CodeParser, Logger } from "../../application/ports/index.ts";
+import type {
+  AnalysisModel,
+  CodeParser,
+  Logger,
+  ProposalDraft,
+} from "../../application/ports/index.ts";
 import {
   allFixtures,
   FakeAnalysisModel,
   FakeGitHost,
   FakeLocalCheckouts,
   FakeModelCatalog,
+  FakePreferenceSuggester,
   FakePullRequestStatusSource,
+  FakeReviewHistory,
   FakeReviewThreads,
   FakeTicketSource,
   fakeModelOption,
@@ -22,7 +29,12 @@ import {
   smallFeatureStatus,
   smallFeatureThreadList,
 } from "../../application/testing/index.ts";
-import { parsePullRequestUrl, pullRequestUrl, Sha } from "../../domain/review/index.ts";
+import {
+  type PastComment,
+  parsePullRequestUrl,
+  pullRequestUrl,
+  Sha,
+} from "../../domain/review/index.ts";
 import { err } from "../../domain/shared/index.ts";
 import { allowedHosts, assemble, type Composition, systemClock } from "../compose.ts";
 import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
@@ -58,6 +70,52 @@ const FAKE_MODELS = [
   ["claude-opus-5-5", "Opus 5.5"],
 ] as const;
 
+/** What the fake model proposes, from signals and from past comments alike. */
+export const fakeProposalDrafts: readonly ProposalDraft[] = [
+  {
+    kind: "dont-flag",
+    text: "Missing JSDoc on internal helpers",
+    scope: "repo",
+    evidence: [
+      "Dismissed: Missing JSDoc on `parseConfig`, acme/shop #101",
+      "Dismissed: Missing JSDoc on `renderReceipt`, acme/shop #101",
+    ],
+  },
+  {
+    kind: "look-for",
+    text: "Cached data that outlives a change to what it was made from",
+    scope: "global",
+    evidence: [
+      "Raised: Serves a stale receipt for an hour after its order changes, acme/shop #101",
+      'Comment: "What invalidates this when the order is refunded?", acme/shop #101',
+    ],
+  },
+];
+
+const shop = smallFeature.pullRequest.ref.repo;
+
+/** The reviewer's comments on small-feature's repository, on pull requests before it. */
+export const fakePastComments: readonly PastComment[] = [
+  {
+    pullRequest: { repo: shop, number: 96 },
+    path: "src/services/orders.ts",
+    body: "This cache never hears about refunds. What invalidates it?",
+    at: "2026-10-14T15:20:00.000Z",
+  },
+  {
+    pullRequest: { repo: shop, number: 96 },
+    path: "src/routes/orders.ts",
+    body: "The lookup isn't scoped to the signed-in user.",
+    at: "2026-10-14T15:12:00.000Z",
+  },
+  {
+    pullRequest: { repo: shop, number: 88 },
+    path: "src/services/catalog.ts",
+    body: "Same as last time: the price is cached with no way to expire it when the product changes.",
+    at: "2026-10-02T09:40:00.000Z",
+  },
+];
+
 /**
  * Claude's three models on Claude Code, which the fake model answers for, and on the Anthropic
  * API, which has no credentials, as on a machine signed in to Claude Code only.
@@ -65,6 +123,7 @@ const FAKE_MODELS = [
 const fakeModels = (model: AnalysisModel, available: boolean): FakeModelCatalog =>
   new FakeModelCatalog({
     model,
+    suggester: new FakePreferenceSuggester({ drafts: fakeProposalDrafts }),
     defaultModel: "claude-sonnet-5-5",
     options: [
       ...FAKE_MODELS.map(([id, modelName]) =>
@@ -186,11 +245,16 @@ export interface FakeApp {
   readonly github: FakeGitHost;
   readonly bitbucket: FakeGitHost;
   readonly threads: { readonly github: FakeReviewThreads; readonly bitbucket: FakeReviewThreads };
+  readonly preferences: InMemoryPreferenceStore;
   /** The API and UI like the real CLI's, plus the control routes. */
   app(port: number): Hono;
 }
 
-/** The real use cases and HTTP app on fakes seeded with every fixture, and an in-memory store. */
+/**
+ * The real use cases and HTTP app on fakes seeded with every fixture, and in-memory stores.
+ * Preferences start empty; the fake model proposes two, from the signals or from the three
+ * comments GitHub's history has on small-feature's repository.
+ */
 export const createFakeApp = async (options: {
   readonly parser: CodeParser;
   readonly logger: Logger;
@@ -216,6 +280,7 @@ export const createFakeApp = async (options: {
     bitbucket: new FakePullRequestStatusSource({ host: "bitbucket" }),
   };
   statuses.github.setStatus(smallFeature.pullRequest.ref, smallFeatureStatus);
+  const preferences = new InMemoryPreferenceStore();
   const composition = await assemble(
     {
       hosts: { github, bitbucket },
@@ -234,8 +299,8 @@ export const createFakeApp = async (options: {
         options.modelAvailable !== false,
       ),
       store: new InMemoryAnalysisStore(clock),
-      preferences: new InMemoryPreferenceStore(),
-      history: {},
+      preferences,
+      history: { github: new FakeReviewHistory({ host: "github", comments: fakePastComments }) },
       fileCache: new InMemoryFileCache(),
       checkouts: new FakeLocalCheckouts(),
       parser: options.parser,
@@ -254,6 +319,7 @@ export const createFakeApp = async (options: {
     github,
     bitbucket,
     threads,
+    preferences,
     app: (port) => {
       const real = composition.app(port);
       const control = controlRoutes({

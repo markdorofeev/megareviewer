@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ErrorResponse, PullRequestListResponse, TOKEN_HEADER } from "../../../contracts/index.ts";
+import {
+  ErrorResponse,
+  PullRequestListResponse,
+  routes,
+  TOKEN_HEADER,
+} from "../../../contracts/index.ts";
 import {
   FakeAnalysisModel,
   FakeCodeParser,
@@ -9,8 +14,13 @@ import {
   smallFeatureInput,
   smallFeaturePublication,
 } from "../../application/testing/index.ts";
-import { CommentKey } from "../../domain/review/index.ts";
-import { createFakeApp, failingIntentOnce, intentFailsOnce } from "./fake-app.ts";
+import { CommentKey, SignalKey } from "../../domain/review/index.ts";
+import {
+  createFakeApp,
+  failingIntentOnce,
+  fakeProposalDrafts,
+  intentFailsOnce,
+} from "./fake-app.ts";
 
 const PORT = 4823;
 const HOST = `127.0.0.1:${PORT}`;
@@ -43,6 +53,47 @@ describe("createFakeApp", () => {
     expect((await call("/api/status")).status).toBe(200);
     const list = PullRequestListResponse.parse(await (await call("/api/pull-requests")).json());
     expect(list.items.map((item) => item.url)).toContain(intentFailsOnce.pullRequest.url);
+  });
+
+  it("starts without preferences, and proposes two from the reviewer's three past comments", async () => {
+    const { call } = await setup();
+    const { repo } = smallFeature.pullRequest.ref;
+    const view = routes.getPreferences.response.parse(
+      await (await call("/api/preferences")).json(),
+    );
+    expect(view).toMatchObject({ preferences: [], proposals: [], signalsSinceSuggestion: 0 });
+
+    const imported = routes.importPreferences.response.parse(
+      await (await call("/api/preferences/imports", { method: "POST", body: { repo } })).json(),
+    );
+
+    expect(imported).toMatchObject({ comments: 3, pullRequests: 2 });
+    expect(imported.proposals.map((one) => [one.text, one.source, one.scope])).toEqual([
+      [fakeProposalDrafts[0]?.text, "imported", { kind: "repo", repo }],
+      [fakeProposalDrafts[1]?.text, "imported", { kind: "global" }],
+    ]);
+  });
+
+  it("proposes the same two from a recorded signal", async () => {
+    const { fake, call } = await setup();
+    await fake.preferences.recordSignal(SignalKey.parse("point:a:f1"), {
+      kind: "dismissed",
+      at: "2026-10-21T10:00:00.000Z",
+      pullRequest: smallFeature.pullRequest.ref,
+      pointKind: "finding",
+      title: "Missing JSDoc on `parseConfig`",
+      text: "",
+      path: "src/config.ts",
+    });
+
+    const suggested = routes.suggestPreferences.response.parse(
+      await (await call("/api/preferences/suggestions", { method: "POST" })).json(),
+    );
+
+    expect(suggested.signals).toBe(1);
+    expect(suggested.proposals.map((one) => [one.text, one.source])).toEqual(
+      fakeProposalDrafts.map((draft) => [draft.text, "learned"]),
+    );
   });
 
   it("lists what the fake hosts received", async () => {

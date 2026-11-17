@@ -188,6 +188,34 @@ describe("compose", () => {
     expect((await stat(join(config.home, "db.sqlite"))).isFile()).toBe(true);
   });
 
+  it("keeps the reviewer's preferences in the database, across a restart", async () => {
+    const config = await configIn();
+    const first = await composed(config);
+    const added = await first.useCases.addPreference({
+      kind: "look-for",
+      text: "Tenant isolation",
+      scope: { kind: "global" },
+    });
+    await first.close();
+
+    const second = await composed(config);
+
+    expect((await second.useCases.getPreferences()).preferences).toEqual([added.ok && added.value]);
+  });
+
+  it("can't read past reviews from a host yet, which importing says", async () => {
+    const composition = await composed(await configIn());
+    const repo = { host: "github", owner: "acme", repo: "shop" } as const;
+
+    expect(await composition.useCases.importPreferences(repo)).toEqual({
+      ok: false,
+      error: {
+        code: "bad-request",
+        message: "megareviewer can't read past reviews from GitHub",
+      },
+    });
+  });
+
   it("doesn't mount fake mode's control routes", async () => {
     const composition = await composed(await configIn());
     const response = await composition.app(4823).request("/__fake/publications", {

@@ -263,6 +263,12 @@ describe("createModelCatalog", () => {
     expect(catalog.model("nobody/claude-opus-5-5")).toBeNull();
   });
 
+  it("has no suggester on any option yet", async () => {
+    const { catalog } = catalogWith([signedIn], [true]);
+    const { options } = await catalog.options();
+    expect(options.map((option) => catalog.suggester(option.id))).toEqual(options.map(() => null));
+  });
+
   it("runs the API's options on the API, on their model", async () => {
     const { catalog } = catalogWith([signedOut], [true]);
     await catalog.options();
