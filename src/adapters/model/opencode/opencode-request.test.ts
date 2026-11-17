@@ -105,12 +105,17 @@ describe("variantFor", () => {
 });
 
 describe("opencodeConfig", () => {
-  it("defines the agent with the shared instructions, denying every tool last", () => {
+  it("defines the passes' agent and the suggestion's, each denying every tool last", () => {
     const config = opencodeConfig();
     expect(config.agents).toEqual({
       megareviewer: expect.objectContaining({
         mode: "primary",
         system: expect.stringContaining("You help a human reviewer"),
+        permissions: [{ action: "*", resource: "*", effect: "deny" }],
+      }),
+      "megareviewer-suggest": expect.objectContaining({
+        mode: "primary",
+        system: expect.stringContaining("You help a code reviewer write down"),
         permissions: [{ action: "*", resource: "*", effect: "deny" }],
       }),
     });

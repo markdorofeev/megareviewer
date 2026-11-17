@@ -10,3 +10,5 @@ Recorded with opencode 2.3.0 on macOS, its Anthropic provider from `ANTHROPIC_AP
 | `unreachable.json` | The spike: the Anthropic provider's base URL on a local proxy that couldn't forward |
 
 Tool calls, shells, skills, second steps and the providers' other errors are written into these in the tests, so they're synthetic; the model never called its one tool in the spike.
+
+The passes were recorded before a finding and a risk had a guidance mark, so their answers have none, which parses as null; a finding with a mark is written into `findings.json` in the test. The suggestion call has no recording either: `opencode-suggester.test.ts` answers it with `intent.json`, its text replaced by the proposals recorded through Claude Code. Neither it nor its agent, `megareviewer-suggest`, was run on a real opencode.

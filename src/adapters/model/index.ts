@@ -17,6 +17,11 @@ export {
   planName,
 } from "./claude/claude-code-status.ts";
 export {
+  type ClaudeCodeSuggesterOptions,
+  createClaudeCodeSuggester,
+} from "./claude/claude-code-suggester.ts";
+export { type ClaudeSuggesterOptions, createClaudeSuggester } from "./claude/claude-suggester.ts";
+export {
   CLAUDE_MODELS,
   type ClaudeModel,
   claudeModel,
@@ -41,6 +46,7 @@ export {
   codexStatus,
   MIN_CODEX_VERSION,
 } from "./codex/codex-status.ts";
+export { type CodexSuggesterOptions, createCodexSuggester } from "./codex/codex-suggester.ts";
 export { CODEX_MODELS, type CodexModel, codexModel, DEFAULT_CODEX_MODEL } from "./codex/models.ts";
 export { type CodexRun, createRunCodex, type RunCodex } from "./codex/run-codex.ts";
 export {
@@ -65,6 +71,10 @@ export {
   type OpencodeStatus,
   opencodeStatus,
 } from "./opencode/opencode-status.ts";
+export {
+  createOpencodeSuggester,
+  type OpencodeSuggesterOptions,
+} from "./opencode/opencode-suggester.ts";
 export { createRunOpencode, type RunOpencode } from "./opencode/run-opencode.ts";
 export { EFFORTS, type Effort } from "./shared/effort.ts";
 export { renderInput } from "./shared/render-input.ts";

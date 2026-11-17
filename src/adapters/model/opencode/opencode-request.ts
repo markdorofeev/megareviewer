@@ -1,10 +1,14 @@
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
 import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { SUGGEST_SYSTEM_PROMPT } from "../shared/prompts/suggest.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
+import { SUGGESTION_ANSWER_FORMAT, SUGGESTION_EFFORT } from "../shared/suggestion.ts";
 
 /** The agent megareviewer defines in the server's config and runs every pass as. */
 export const AGENT = "megareviewer";
+/** The agent the suggestion call runs as: an agent's system prompt is fixed in the config. */
+export const SUGGEST_AGENT = "megareviewer-suggest";
 /** Given at creation, so opencode doesn't spend a call naming the session. */
 export const SESSION_TITLE = "megareviewer";
 /** The session instruction entries that hold the PR, in order: `pull-request-00`, `-01`… */
@@ -15,20 +19,27 @@ export const PR_ENTRY = "pull-request";
  */
 export const MAX_ENTRY_BYTES = 250_000;
 
+const agent = (description: string, system: string) => ({
+  mode: "primary",
+  hidden: true,
+  description,
+  system,
+  permissions: [{ action: "*", resource: "*", effect: "deny" }],
+});
+
 /**
  * The config megareviewer passes in `OPENCODE_CONFIG_CONTENT`, on top of the reviewer's own: an
- * agent with our instructions whose permissions end by denying everything, the last match
- * winning, and none of opencode's own background work.
+ * agent for the passes and one for the suggestion call, each with our instructions and
+ * permissions that end by denying everything, the last match winning, and none of opencode's own
+ * background work.
  */
 export const opencodeConfig = (): Record<string, unknown> => ({
   agents: {
-    [AGENT]: {
-      mode: "primary",
-      hidden: true,
-      description: "One pass of megareviewer's analysis of a pull request",
-      system: SYSTEM_PROMPT,
-      permissions: [{ action: "*", resource: "*", effect: "deny" }],
-    },
+    [AGENT]: agent("One pass of megareviewer's analysis of a pull request", SYSTEM_PROMPT),
+    [SUGGEST_AGENT]: agent(
+      "megareviewer's proposals of review preferences from a reviewer's history",
+      SUGGEST_SYSTEM_PROMPT,
+    ),
   },
   share: "disabled",
   update: "disable",
@@ -199,5 +210,34 @@ export const opencodeRequest = (
     },
     entries: prEntries(renderedInput),
     prompt: passText(pass, message),
+  };
+};
+
+/** The suggestion call's prompt: the task, then the schema of its answer, as for a pass. */
+export const suggestionText = (message: string): string =>
+  `${message}
+
+Answer with one JSON object and nothing else: no prose before or after it, no code fence. It must match this JSON schema:
+${JSON.stringify(SUGGESTION_ANSWER_FORMAT.schema)}`;
+
+/** The suggestion call: a session as the agent with its instructions, and no PR to read. */
+export const opencodeSuggestionRequest = (
+  message: string,
+  model: OpencodeModelRef,
+  variants: readonly string[] = [],
+): OpencodeRequest => {
+  const variant = variantFor(variants, SUGGESTION_EFFORT);
+  return {
+    session: {
+      agent: SUGGEST_AGENT,
+      title: SESSION_TITLE,
+      model: {
+        providerID: model.providerID,
+        id: model.id,
+        ...(variant === null ? {} : { variant }),
+      },
+    },
+    entries: [],
+    prompt: suggestionText(message),
   };
 };

@@ -2,7 +2,9 @@ import { join } from "node:path";
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
 import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { SUGGEST_SYSTEM_PROMPT } from "../shared/prompts/suggest.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
+import { SUGGESTION_ANSWER_FORMAT, SUGGESTION_EFFORT } from "../shared/suggestion.ts";
 import { codexEffort } from "./models.ts";
 
 export const INSTRUCTIONS_FILE = "instructions.md";
@@ -105,6 +107,27 @@ export const codexRequest = (
     files: {
       [INSTRUCTIONS_FILE]: codexInstructions(renderedInput),
       [SCHEMA_FILE]: JSON.stringify(PASS_ANSWER_FORMAT.schema),
+    },
+    dirs: [WORK_DIR],
+    stdin: message,
+  };
+};
+
+/**
+ * The suggestion call, locked down as a pass is: its own instructions in place of Codex's, its own
+ * schema, the reviewer's history on stdin.
+ */
+export const codexSuggestionRequest = (
+  message: string,
+  model: string,
+  efforts: readonly string[] = [],
+): CodexRequest => {
+  const effort = codexEffort(efforts, SUGGESTION_EFFORT);
+  return {
+    args: (dir) => codexArgs(model, effort, dir),
+    files: {
+      [INSTRUCTIONS_FILE]: SUGGEST_SYSTEM_PROMPT,
+      [SCHEMA_FILE]: JSON.stringify(SUGGESTION_ANSWER_FORMAT.schema),
     },
     dirs: [WORK_DIR],
     stdin: message,
