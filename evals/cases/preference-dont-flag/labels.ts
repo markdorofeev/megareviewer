@@ -18,6 +18,7 @@ export const labels: CaseLabels = {
         "Page 1 starts at the 51st event and the last page is empty: the offset is the page number times the page size, though pages count from 1",
       at: [{ hunkId: route, side: "new", lines: [14, 15] }],
       mustHave: true,
+      mismatch: 0,
     },
     {
       description: "Leaves a console.log of the page and offset in the request handler",
@@ -38,7 +39,16 @@ export const labels: CaseLabels = {
       mustHave: false,
     },
   ],
-  mismatches: [],
+  // The description says the console can page back through the whole log, newest first, and the
+  // code can't reach the newest 50: as test-named-coverage's bug does, it defeats what was asked.
+  // None was expected at first. The console.log is no mismatch: a leftover, not a behavior.
+  mismatches: [
+    {
+      kind: "contradicts",
+      description:
+        "Page 1 skips the newest 50 events, so the log can't be paged through whole, newest first, as the description says",
+    },
+  ],
   // p2: leftover debug logging. It covers the console.log and nothing else: the paging bug two
   // lines up is a must-have, which leftOutRight fails when it's folded. p1, hard-coded secrets,
   // matches nothing here, so it has no label and any mark of it is wrong.

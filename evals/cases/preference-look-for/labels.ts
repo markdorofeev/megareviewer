@@ -45,6 +45,8 @@ export const labels: CaseLabels = {
       mustHave: false,
     },
   ],
+  // The description asks for the filters and says nothing of tenants, so the leak is a bug it
+  // doesn't speak of, a finding and no mismatch, as auth-middleware's token in the URL is.
   mismatches: [],
   // p1: tenant isolation. Its mark belongs on the finding; the risk on the query and the finding
   // about the test may carry it too.

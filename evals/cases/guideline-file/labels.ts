@@ -7,8 +7,12 @@ export const labels: CaseLabels = {
   risk: {
     [migration]: "contract", // schema: a column and an index on subscriptions
     [route]: "contract", // new POST /subscriptions/:id/pause
-    h_795da19db7c8ef04: "logic", // the field and column, following from the migration
-    h_e41c5502431d69d2: "logic", // the update, called only by the new route
+    // Follows from the migration, but its column list is what makes the existing GET's response
+    // carry pausedAt: a JSON shape others read. Logic at first; the first run marked it contract.
+    h_795da19db7c8ef04: "either",
+    // A new function only the new route calls, and what gets persisted on subscription rows: the
+    // risk prompt's rules point both ways. Logic at first; the first run marked it contract.
+    h_e41c5502431d69d2: "either",
     h_cfa357a78312f67d: "logic", // import
   },
   riskAt: {
