@@ -4,6 +4,7 @@ import {
   CommentKey,
   canEnable,
   checkGuidanceMark,
+  evidenceRepo,
   type Guidance,
   guidanceOf,
   guidelineEnabled,
@@ -24,6 +25,7 @@ import {
   publishedSignalKey,
   type RepoRef,
   resolveGuidanceMark,
+  sameRule,
   sameScope,
 } from "./index.ts";
 
@@ -110,11 +112,12 @@ describe("preferencesFor", () => {
     expect(read.map((one) => one.text)).toEqual(["early", "late", "ours", "ours later"]);
   });
 
-  it("orders two made at the same time by their id, the same on every read", () => {
+  it("keeps two made at the same time in the order given", () => {
     const a = preference({ text: "a" });
     const b = preference({ text: "b" });
-    expect(inCreationOrder([b, a])).toEqual([a, b]);
-    expect(inCreationOrder([a, b])).toEqual([a, b]);
+    const earlier = preference({ text: "earlier", createdAt: "2026-10-01T10:00:00.000Z" });
+    expect(inCreationOrder([b, a, earlier])).toEqual([earlier, b, a]);
+    expect(inCreationOrder([a, earlier, b])).toEqual([earlier, a, b]);
   });
 });
 
@@ -238,6 +241,64 @@ describe("resolveGuidanceMark", () => {
       label: "REVIEW.md",
       preferenceId: null,
     });
+  });
+});
+
+describe("evidenceRepo", () => {
+  const apiV2: RepoRef = { host: "github", owner: "acme", repo: "api-v2" };
+
+  it("is the only repository there is, whatever the evidence says", () => {
+    expect(evidenceRepo([], [shop, { ...shop }])).toEqual(shop);
+    expect(evidenceRepo(["Dismissed: Naming"], [shop])).toEqual(shop);
+  });
+
+  it("is the one repository every line names", () => {
+    const evidence = [
+      "Dismissed: Missing JSDoc on `parseConfig`, acme/shop #12",
+      "Dismissed: Missing JSDoc, acme/shop.",
+    ];
+    expect(evidenceRepo(evidence, [shop, api])).toEqual(shop);
+  });
+
+  it("is none when the lines name two repositories, or one names none", () => {
+    expect(
+      evidenceRepo(["Dismissed: A, acme/shop #1", "Raised: B, acme/api #2"], [shop, api]),
+    ).toBeNull();
+    expect(evidenceRepo(["Dismissed: A, acme/shop #1", "Dismissed: B"], [shop, api])).toBeNull();
+    expect(evidenceRepo(["acme/shop and acme/api both"], [shop, api])).toBeNull();
+  });
+
+  it("is none without evidence or without repositories", () => {
+    expect(evidenceRepo([], [shop, api])).toBeNull();
+    expect(evidenceRepo(["acme/shop #1"], [])).toBeNull();
+  });
+
+  it("doesn't take a longer name for the repository it starts with or ends in", () => {
+    expect(evidenceRepo(["Dismissed: A, acme/api-v2 #1"], [api, apiV2])).toEqual(apiV2);
+    expect(evidenceRepo(["Dismissed: A, acme/api.js #1"], [api, shop])).toBeNull();
+    expect(evidenceRepo(["Dismissed: A, big-acme/api #1"], [api, shop])).toBeNull();
+    expect(evidenceRepo(["see github.com/acme/api/pull/3"], [api, shop])).toBeNull();
+  });
+
+  it("can't tell one name on two hosts apart", () => {
+    expect(evidenceRepo(["acme/shop #1"], [shop, { ...shop, host: "bitbucket" }])).toBeNull();
+  });
+});
+
+describe("sameRule", () => {
+  it("is the same kind saying the same words, whatever their case and spacing", () => {
+    expect(
+      sameRule(
+        { kind: "dont-flag", text: " Naming  of helpers" },
+        { kind: "dont-flag", text: "naming of Helpers" },
+      ),
+    ).toBe(true);
+    expect(
+      sameRule({ kind: "dont-flag", text: "Naming" }, { kind: "look-for", text: "Naming" }),
+    ).toBe(false);
+    expect(
+      sameRule({ kind: "dont-flag", text: "Naming" }, { kind: "dont-flag", text: "Names" }),
+    ).toBe(false);
   });
 });
 

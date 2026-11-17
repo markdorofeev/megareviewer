@@ -1,5 +1,6 @@
 import { createAnalysisRunner } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
+import { createPreferenceUseCases } from "./preferences.ts";
 import { createPullRequestStatusUseCases } from "./pull-request-status.ts";
 import { createReviewUseCases } from "./review.ts";
 import { createStatusUseCases } from "./status.ts";
@@ -12,6 +13,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
   const status = createStatusUseCases(deps, options.version);
   const threads = createThreadUseCases(deps);
   const pullRequestStatus = createPullRequestStatusUseCases(deps);
+  const preferences = createPreferenceUseCases(deps);
   return {
     startAnalysis: runner.startAnalysis,
     retryAnalysis: runner.retryAnalysis,
@@ -32,6 +34,14 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     replyToThread: threads.replyToThread,
     resolveThread: threads.resolveThread,
     postComment: threads.postComment,
+    getPreferences: preferences.getPreferences,
+    addPreference: preferences.addPreference,
+    updatePreference: preferences.updatePreference,
+    deletePreference: preferences.deletePreference,
+    suggestPreferences: preferences.suggestPreferences,
+    importPreferences: preferences.importPreferences,
+    decideProposal: preferences.decideProposal,
+    setGuidelineSwitch: preferences.setGuidelineSwitch,
   };
 };
 

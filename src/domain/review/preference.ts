@@ -185,18 +185,10 @@ export const sameRepo = (a: RepoRef, b: RepoRef): boolean =>
 export const sameScope = (a: PreferenceScope, b: PreferenceScope): boolean =>
   scopeKey(a) === scopeKey(b);
 
-const byCreation = (
-  a: { readonly id: string; readonly createdAt: Timestamp },
-  b: { readonly id: string; readonly createdAt: Timestamp },
-): number => {
-  const [at, bt] = [Date.parse(a.createdAt), Date.parse(b.createdAt)];
-  return at !== bt ? at - bt : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-};
-
-/** In the order they were made, the same on every read. */
-export const inCreationOrder = <T extends { readonly id: string; readonly createdAt: Timestamp }>(
+/** In the order they were made; ones made at the same time keep the order they're given in. */
+export const inCreationOrder = <T extends { readonly createdAt: Timestamp }>(
   items: readonly T[],
-): T[] => [...items].sort(byCreation);
+): T[] => [...items].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
 /** What a model run on a pull request of `repo` reads: the enabled ones, everywhere's first. */
 export const preferencesFor = (preferences: readonly Preference[], repo: RepoRef): Preference[] => {
@@ -288,6 +280,52 @@ export const checkGuidanceMark = (
   mark: GuidanceMark | null,
   guidance: Guidance | null,
 ): GuidanceMark | null => (resolveGuidanceMark(mark, guidance) === null ? null : mark);
+
+/** Whether a line of evidence names a repository, as "owner/repo" and not as part of a longer name. */
+const names = (line: string, { owner, repo }: RepoRef): boolean => {
+  const name = `${owner}/${repo}`;
+  for (let at = line.indexOf(name); at !== -1; at = line.indexOf(name, at + 1)) {
+    const before = line[at - 1] ?? " ";
+    const after = line.slice(at + name.length, at + name.length + 2);
+    if (!/[\w./-]/.test(before) && !/^(?:[\w-]|\.\w)/.test(after)) return true;
+  }
+  return false;
+};
+
+/**
+ * The repository a proposal drafted for "this repository" means, among those its evidence could be
+ * from: the only one there is, or else the one every line of its evidence names. Null when a line
+ * names none or more than one, where the proposal is for every repository: the reviewer reads the
+ * scope before accepting it.
+ */
+export const evidenceRepo = (
+  evidence: readonly string[],
+  repos: readonly RepoRef[],
+): RepoRef | null => {
+  const distinct = repos.filter(
+    (repo, index) => repos.findIndex((other) => sameRepo(other, repo)) === index,
+  );
+  const [only] = distinct;
+  if (distinct.length === 1 && only !== undefined) return only;
+  const named = evidence.map((line) => distinct.filter((repo) => names(line, repo)));
+  const first = named[0]?.[0];
+  return first !== undefined &&
+    named.every((found) => {
+      const [repo] = found;
+      return found.length === 1 && repo !== undefined && sameRepo(repo, first);
+    })
+    ? first
+    : null;
+};
+
+/** Two rules that say the same, whatever their case and spacing. */
+export const sameRule = (
+  a: { readonly kind: PreferenceKind; readonly text: string },
+  b: { readonly kind: PreferenceKind; readonly text: string },
+): boolean => {
+  const said = (text: string) => text.trim().toLowerCase().replace(/\s+/g, " ");
+  return a.kind === b.kind && said(a.text) === said(b.text);
+};
 
 const freshId = (prefix: string, seed: string, taken: ReadonlySet<string>): string => {
   for (let salt = 0; ; salt += 1) {

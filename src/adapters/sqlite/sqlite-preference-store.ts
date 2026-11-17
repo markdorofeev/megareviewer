@@ -80,7 +80,7 @@ const scopeOf = (row: z.infer<z.ZodObject<typeof ScopeColumns>>): unknown =>
 export const createSqlitePreferenceStore = (db: DatabaseSync, logger: Logger): PreferenceStore => {
   // julianday, since a host's timestamps and the clock's differ in their fractional seconds.
   const selectPreferences = db.prepare(
-    "SELECT * FROM preferences ORDER BY julianday(created_at), id",
+    "SELECT * FROM preferences ORDER BY julianday(created_at), rowid",
   );
   const upsertPreference = db.prepare(
     `INSERT INTO preferences
@@ -93,7 +93,7 @@ export const createSqlitePreferenceStore = (db: DatabaseSync, logger: Logger): P
   );
   const deletePreference = db.prepare("DELETE FROM preferences WHERE id = ?");
   const selectProposals = db.prepare(
-    "SELECT * FROM preference_proposals ORDER BY julianday(created_at), id",
+    "SELECT * FROM preference_proposals ORDER BY julianday(created_at), rowid",
   );
   const upsertProposal = db.prepare(
     `INSERT INTO preference_proposals

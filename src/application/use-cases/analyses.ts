@@ -24,7 +24,7 @@ import {
   withoutModelRun,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { AnalysisModel, GitHost, ModelCatalog } from "../ports/index.ts";
+import type { GitHost, ModelCatalog } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { pipelineVersion } from "./pipeline-version.ts";
@@ -36,14 +36,17 @@ const RECOVERY_SCAN_LIMIT = 200;
 
 const STAGES: readonly StageName[] = StageNames.options;
 
-export const hostFor = (deps: AppDeps, host: HostKind): Result<GitHost, UseCaseError> => {
+export const hostFor = (
+  deps: Pick<AppDeps, "hosts">,
+  host: HostKind,
+): Result<GitHost, UseCaseError> => {
   const gitHost = deps.hosts[host];
   return gitHost === undefined
     ? err(appError("host-not-configured", `${hostName(host)} isn't configured`))
     : ok(gitHost);
 };
 
-const hostName = (host: HostKind): string =>
+export const hostName = (host: HostKind): string =>
   ({ github: "GitHub", bitbucket: "Bitbucket Cloud" })[host];
 
 const fetchPullRequest = async (
@@ -59,13 +62,15 @@ const fetchPullRequest = async (
 };
 
 /**
- * The option a run uses: the one asked for, else the catalog's default, with its passes. An
- * unknown option is a bad request; one that can't run is unavailable, with why.
+ * The option a model call uses: the one asked for, else the catalog's default, with what makes
+ * the call, the passes or the suggester. An unknown option is a bad request; one that can't run,
+ * or can't make that call, is unavailable, with why.
  */
-const chooseModel = async (
+export const chooseOption = async <T>(
   catalog: ModelCatalog,
   optionId: ModelOptionId | undefined,
-): Promise<Result<{ option: ModelOption; model: AnalysisModel }, UseCaseError>> => {
+  runner: (optionId: ModelOptionId) => T | null,
+): Promise<Result<{ option: ModelOption; runner: T }, UseCaseError>> => {
   const { options, defaultId } = await catalog.options();
   const id = optionId ?? defaultId;
   const option = options.find((candidate) => candidate.id === id);
@@ -84,8 +89,8 @@ const chooseModel = async (
       ),
     );
   if (!option.available) return unavailable(option.reason ?? "it can't run");
-  const model = catalog.model(option.id);
-  return model === null ? unavailable("it can't run") : ok({ option, model });
+  const found = runner(option.id);
+  return found === null ? unavailable("it can't run") : ok({ option, runner: found });
 };
 
 const newAnalysis = (
@@ -257,7 +262,9 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           ),
         );
       }
-      const chosen = await chooseModel(deps.models, optionId);
+      const chosen = await chooseOption(deps.models, optionId, (option) =>
+        deps.models.model(option),
+      );
       if (!chosen.ok) return chosen;
       const host = hostFor(deps, analysis.key.ref.repo.host);
       if (!host.ok) return host;
@@ -272,7 +279,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
         host.value,
         analysis,
         pullRequest,
-        { model: chosen.value.model, option: runOptionOf(chosen.value.option) },
+        { model: chosen.value.runner, option: runOptionOf(chosen.value.option) },
         checkout?.at ?? null,
       )
         .catch((error: unknown) => {

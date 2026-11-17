@@ -98,6 +98,7 @@ export {
   canEnable,
   checkGuidanceMark,
   DEFAULT_GUIDELINE_PATH,
+  evidenceRepo,
   GUIDELINE_PATHS,
   Guidance,
   GuidanceEffect,
@@ -130,6 +131,7 @@ export {
   resolveGuidanceMark,
   SignalKey,
   sameRepo,
+  sameRule,
   sameScope,
 } from "./preference.ts";
 export { HttpUrl, Sha, Timestamp } from "./primitives.ts";

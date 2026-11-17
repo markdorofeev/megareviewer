@@ -85,6 +85,17 @@ export const describePreferenceStoreContract = (
       expect(await store.listPreferences()).toEqual([preference(), scoped]);
     });
 
+    it("lists ones made at the same time in the order first saved, also after one is saved again", async () => {
+      const ids = ["pref_00000000000000c3", "pref_00000000000000c1", "pref_00000000000000c2"];
+      const made = ids.map((id) => preference({ id: PreferenceId.parse(id), text: id }));
+      for (const one of made) await store.savePreference(one);
+      const [first, second, third] = made;
+      if (first === undefined) throw new Error("made three");
+      await store.savePreference({ ...first, enabled: false });
+
+      expect(await store.listPreferences()).toEqual([{ ...first, enabled: false }, second, third]);
+    });
+
     it("replaces a preference saved again under its id", async () => {
       await store.savePreference(preference());
       const edited = preference({

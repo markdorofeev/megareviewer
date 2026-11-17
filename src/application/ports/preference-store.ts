@@ -14,12 +14,12 @@ import type {
  * Nothing here is stamped by the store: every time comes in on the value.
  */
 export interface PreferenceStore {
-  /** In the order they were made. */
+  /** In the order they were made, and ones made at the same time in the order first saved. */
   listPreferences(): Promise<Preference[]>;
   /** Upsert by id. */
   savePreference(preference: Preference): Promise<void>;
   deletePreference(id: PreferenceId): Promise<void>;
-  /** Whatever their status, in the order they were made. */
+  /** Whatever their status, in the preferences' order. */
   listProposals(): Promise<PreferenceProposal[]>;
   /** Upsert by id. */
   saveProposal(proposal: PreferenceProposal): Promise<void>;
