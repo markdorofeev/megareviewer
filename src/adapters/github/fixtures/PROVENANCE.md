@@ -8,6 +8,7 @@ Each JSON file is a list of exchanges in the format of `createFixtureFetch` (`sr
 | `search.synthetic.json` | Written from GitHub's docs for `GET /search/issues`. Recording would capture the token owner's own PRs. |
 | `open.synthetic.ts` | Written from GitHub's GraphQL docs: the state of #210, merged, and of a missing PR in the same query, which fails only its own alias. A TypeScript file, since its query is built by the adapter. |
 | `publish.synthetic.json` | Written from GitHub's docs for creating a review and listing its comments, against #210's head SHA. Recording would post a real review. |
+| `history.synthetic.ts` | Written from GitHub's docs for `GET /search/issues` and `GET /repos/{owner}/{repo}/pulls/{n}/comments` and from the shapes of live answers, for a made-up `octo-org`: the reviewer's comments on three reviewed PRs, one of them on two pages, a repository with nothing reviewed, and the 422 for one the token can't search. Recording would capture the token owner's own comments; `record-history.ts` records a read with every comment's text and every login replaced, from a public repository. |
 | `unauthorized.synthetic.json`, `rate-limited.synthetic.json` | Written from GitHub's docs: a 401 for every method, including the GraphQL file read, and a 403 with `x-ratelimit-remaining: 0`. |
 
 To re-record `read.json`:

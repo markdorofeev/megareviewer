@@ -8,6 +8,7 @@ Each JSON file is a list of exchanges in the format of `createFixtureFetch` (`sr
 | `list.synthetic.json` | Written from Bitbucket's API docs: `GET /user`, the workspace's repositories, the reviewer query per repository, and the workspace's PRs by author, for a made-up `acme` workspace. Recording would capture the token owner's account and workspace. |
 | `publish.synthetic.json` | Written from Bitbucket's API docs for creating PR comments and requesting changes, against #26's diff. Recording would post real comments. |
 | `resolved-threads.json` | Recorded from [atlassian/trigger-pipeline#56](https://bitbucket.org/atlassian/trigger-pipeline/pull-requests/56), a public PR with four resolved threads, one resolved by someone other than its author. The comments list twice: with `fields` asking for `resolution.user` and `resolution.created_on`, as the adapter asks, and without, where every resolution is `{}`. Bodies keep only the fields the adapter reads; names and account IDs are replaced with `user-<uuid prefix>` and `account-<uuid prefix>`, and comment text with `Comment N.` |
+| `history.synthetic.ts` | Written from Bitbucket's API docs and from the shapes of live answers, for the made-up `acme` workspace: the PR list asked for its participants, on two pages, the comments of the three PRs the user acted on, a repository with nothing reviewed, and the 404 for one the credentials can't see. Recording would capture the credentials' owner's own comments; `record-history.ts` records a read with every comment's text, every name and the owner's UUID replaced, from a public repository. |
 | `unauthorized.synthetic.json` | A 401 for every method, shaped like the live 401 (empty `text/html` body). |
 | `rate-limited.synthetic.json` | A 429 copied from one seen live on an anonymous request: `text/plain` body, `x-ratelimit-reset` in seconds, no `retry-after`. |
 
@@ -19,7 +20,7 @@ Create a scoped Atlassian API token for Bitbucket with:
 |---|---|
 | `read:user:bitbucket` | `GET /user`, the current user |
 | `read:repository:bitbucket` | Files, commits, the merge base, the diff, the workspace's repositories |
-| `read:pullrequest:bitbucket` | PRs, their commits, and listing PRs |
+| `read:pullrequest:bitbucket` | PRs, their commits and comments, and listing PRs |
 | `write:pullrequest:bitbucket` | Posting comments, approving, requesting changes |
 
 Scope names come from the `x-atlassian-oauth2-scopes` of each endpoint in Bitbucket's OpenAPI spec (`https://api.bitbucket.org/swagger.json`). The spec lists only the read scope for posting a PR comment; the write scope is listed here because approving needs it anyway.
