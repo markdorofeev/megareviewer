@@ -1,6 +1,6 @@
 # Stage 55: Preferences: the domain, the store, the API and the run's guidance
 
-**Status:** Not started
+**Status:** In progress (branch claude/local-preferences-feature-07de4b)
 **Depends on:** 43, 45, 51, 54
 **Owns:** `src/domain/review/preference.ts` and the guidance fields of `point.ts`, `risk.ts` and `analysis.ts`; the `PreferenceStore`, `PreferenceSuggester` and `ReviewHistory` ports, `ModelCatalog.suggester`, `AnalysisInput.guidance`, their fakes and contract suites; the preference tables and store in `src/adapters/sqlite/`; `src/application/use-cases/preferences.ts`, the guidance of a model run in `run-pipeline.ts` and `model-passes.ts`, the signals in `review.ts` and `threads.ts`; the preference routes in `contracts/api.ts` and `src/adapters/http/`; their wiring in `src/cli/compose.ts` and `src/cli/dev/fake-app.ts`; the feature's text in DESIGN.md, ARCHITECTURE.md and ENGINEERING.md
 
