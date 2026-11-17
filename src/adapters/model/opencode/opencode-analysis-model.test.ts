@@ -6,7 +6,7 @@ import {
   smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelErrorKind } from "../../../domain/review/index.ts";
-import { guidedInput } from "../shared/fixtures/guidance.ts";
+import { withGuidance } from "../shared/fixtures/guidance.ts";
 import {
   createFakeOpencodeClient,
   recorded,
@@ -17,6 +17,8 @@ import { readTurn } from "./opencode-output.ts";
 import { AGENT, PR_ENTRY } from "./opencode-request.ts";
 
 const HAIKU_VARIANTS = ["none", "low", "medium", "high", "xhigh", "max"];
+
+const guidedInput = withGuidance(smallFeatureInput);
 
 const modelWith = (
   answer?: Parameters<typeof createFakeOpencodeClient>[0],

@@ -1,7 +1,6 @@
-// Test support: the small-feature input with a reviewer's guidance, as a model run would send it.
+// Test support: a reviewer's guidance as a model run would send it.
 
 import type { AnalysisInput, InputGuidance } from "../../../../application/ports/index.ts";
-import { smallFeatureInput } from "../../../../application/testing/index.ts";
 
 export const guidance: InputGuidance = {
   preferences: [
@@ -16,7 +15,7 @@ export const guidance: InputGuidance = {
   guidelines: [{ ref: "g1", path: "REVIEW.md", content: "# Review\n\nNo raw SQL in routes.\n" }],
 };
 
-export const guidedInput: AnalysisInput = { ...smallFeatureInput, guidance };
+export const withGuidance = (input: AnalysisInput): AnalysisInput => ({ ...input, guidance });
 
 /** How the guidance block starts, right before the PR's. */
 export const GUIDANCE_BLOCK = /<reviewer_guidance>\n<preferences>\np1 look-for \(everywhere\): /;

@@ -7,7 +7,7 @@ import {
   smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
-import { GUIDANCE_BLOCK, guidedInput } from "../shared/fixtures/guidance.ts";
+import { GUIDANCE_BLOCK, withGuidance } from "../shared/fixtures/guidance.ts";
 import { createClaudeAnalysisModel } from "./claude-analysis-model.ts";
 import { createAnthropicFetch, type FixtureAnswer } from "./fixtures/anthropic-fetch.ts";
 import errors from "./fixtures/errors.synthetic.json" with { type: "json" };
@@ -16,6 +16,8 @@ import { costUsd, HIGHEST_PRICE, PRICES } from "./pricing.ts";
 import { PROMPT_VERSION } from "./version.ts";
 
 type Answers = Parameters<typeof createAnthropicFetch>[0];
+
+const guidedInput = withGuidance(smallFeatureInput);
 
 /** The fixtures were recorded on Haiku 5.5. */
 const modelWith = (answers: Answers, options: { maxInputTokens?: number; model?: string } = {}) => {

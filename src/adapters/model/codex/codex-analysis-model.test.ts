@@ -5,7 +5,7 @@ import {
   smallFeatureInput,
 } from "../../../application/testing/index.ts";
 import type { ModelBilling, ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
-import { GUIDANCE_BLOCK, guidedInput } from "../shared/fixtures/guidance.ts";
+import { GUIDANCE_BLOCK, withGuidance } from "../shared/fixtures/guidance.ts";
 import { createCodexAnalysisModel, OVERHEAD_TOKENS } from "./codex-analysis-model.ts";
 import { NOT_INSTALLED, NOT_SIGNED_IN } from "./codex-errors.ts";
 import { INSTRUCTIONS_FILE, SCHEMA_FILE } from "./codex-request.ts";
@@ -19,6 +19,8 @@ import {
 import type { CodexRun } from "./run-codex.ts";
 
 const recorded = (pass: ModelPass | null) => recordedLines(pass ?? "intent");
+
+const guidedInput = withGuidance(smallFeatureInput);
 
 const modelWith = (
   answer: Parameters<typeof createFakeRunCodex>[0] = recorded,

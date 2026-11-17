@@ -7,7 +7,7 @@ import {
 } from "../../../application/testing/index.ts";
 import type { ModelBilling, ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import type { Effort } from "../shared/effort.ts";
-import { GUIDANCE_BLOCK, guidedInput } from "../shared/fixtures/guidance.ts";
+import { GUIDANCE_BLOCK, withGuidance } from "../shared/fixtures/guidance.ts";
 import { createClaudeCodeAnalysisModel, OVERHEAD_TOKENS } from "./claude-code-analysis-model.ts";
 import { NOT_INSTALLED, NOT_SIGNED_IN } from "./claude-code-errors.ts";
 import { SYSTEM_PROMPT_FILE } from "./claude-code-request.ts";
@@ -21,6 +21,8 @@ import type { ClaudeRun } from "./run-claude.ts";
 import { CLAUDE_CODE_VERSION } from "./version.ts";
 
 const recorded = (pass: ModelPass | null) => recordedLines(pass ?? "intent");
+
+const guidedInput = withGuidance(smallFeatureInput);
 
 const modelWith = (
   answer: Parameters<typeof createFakeRunClaude>[0] = recorded,
