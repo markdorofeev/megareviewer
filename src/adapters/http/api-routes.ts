@@ -120,6 +120,20 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
       const posted = await useCases.postComment(params.id, body);
       return posted.ok ? ok({}) : posted;
     },
+    getPreferences: async () => ok(await useCases.getPreferences()),
+    addPreference: ({ body }) => useCases.addPreference(body),
+    suggestPreferences: ({ body }) => useCases.suggestPreferences(body?.optionId),
+    importPreferences: ({ body }) => useCases.importPreferences(body.repo, body.optionId),
+    setGuidelineSwitch: async ({ body }) => {
+      const switched = await useCases.setGuidelineSwitch(body.repo, body.path, body.enabled);
+      return switched.ok ? ok({}) : switched;
+    },
+    decideProposal: ({ params, body }) => useCases.decideProposal(params.proposalId, body),
+    updatePreference: ({ params, body }) => useCases.updatePreference(params.preferenceId, body),
+    deletePreference: async ({ params }) => {
+      const deleted = await useCases.deletePreference(params.preferenceId);
+      return deleted.ok ? ok({}) : deleted;
+    },
   };
   register(app, routes.getStatus, handlers.getStatus);
   register(app, routes.listPullRequests, handlers.listPullRequests);
@@ -138,4 +152,13 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   register(app, routes.replyToThread, handlers.replyToThread);
   register(app, routes.resolveThread, handlers.resolveThread);
   register(app, routes.postComment, handlers.postComment);
+  register(app, routes.getPreferences, handlers.getPreferences);
+  register(app, routes.addPreference, handlers.addPreference);
+  register(app, routes.suggestPreferences, handlers.suggestPreferences);
+  register(app, routes.importPreferences, handlers.importPreferences);
+  // Before the routes that take a preference's id in the same place.
+  register(app, routes.setGuidelineSwitch, handlers.setGuidelineSwitch);
+  register(app, routes.decideProposal, handlers.decideProposal);
+  register(app, routes.updatePreference, handlers.updatePreference);
+  register(app, routes.deletePreference, handlers.deletePreference);
 };

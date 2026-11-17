@@ -1,7 +1,11 @@
 import type { z } from "zod";
 import {
+  type AddPreferenceRequest,
   attachmentRoute,
+  type DecideProposalRequest,
   ErrorResponse,
+  type GuidelineSwitchRequest,
+  type ImportPreferencesRequest,
   type JsonRoute,
   type PublicationPreviewRequest,
   type PublishRequest,
@@ -13,13 +17,17 @@ import {
   routePath,
   routes,
   type StartAnalysisRequest,
+  type SuggestPreferencesRequest,
   TOKEN_HEADER,
   TOKEN_QUERY_PARAM,
+  type UpdatePreferenceRequest,
 } from "../../../contracts/index.ts";
 import type {
   AnalysisId,
   HunkComment,
   PointId,
+  PreferenceId,
+  ProposalId,
   ThreadId,
 } from "../../../src/domain/review/index.ts";
 import { err, ok, type Result } from "../../../src/domain/shared/index.ts";
@@ -95,6 +103,18 @@ export const createApiClient = (options: ApiClientOptions) => {
     resolveThread: (id: AnalysisId, threadId: ThreadId, body: ResolveRequest) =>
       send(routes.resolveThread, { id, threadId }, body),
     postComment: (id: AnalysisId, body: HunkComment) => send(routes.postComment, { id }, body),
+    getPreferences: () => send(routes.getPreferences, {}),
+    addPreference: (body: AddPreferenceRequest) => send(routes.addPreference, {}, body),
+    suggestPreferences: (body: SuggestPreferencesRequest = {}) =>
+      send(routes.suggestPreferences, {}, body),
+    importPreferences: (body: ImportPreferencesRequest) => send(routes.importPreferences, {}, body),
+    setGuidelineSwitch: (body: GuidelineSwitchRequest) => send(routes.setGuidelineSwitch, {}, body),
+    decideProposal: (proposalId: ProposalId, body: DecideProposalRequest) =>
+      send(routes.decideProposal, { proposalId }, body),
+    updatePreference: (preferenceId: PreferenceId, body: UpdatePreferenceRequest) =>
+      send(routes.updatePreference, { preferenceId }, body),
+    deletePreference: (preferenceId: PreferenceId) =>
+      send(routes.deletePreference, { preferenceId }),
   } satisfies Record<RouteName, unknown>;
 
   return {

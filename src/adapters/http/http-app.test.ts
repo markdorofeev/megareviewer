@@ -24,7 +24,9 @@ import {
   FakeGitHost,
   FakeLocalCheckouts,
   FakeModelCatalog,
+  FakePreferenceSuggester,
   FakePullRequestStatusSource,
+  FakeReviewHistory,
   FakeReviewThreads,
   FakeTicketSource,
   FixedClock,
@@ -39,7 +41,7 @@ import {
   smallFeatureThreadList,
 } from "../../application/testing/index.ts";
 import { createUseCases } from "../../application/use-cases/index.ts";
-import { type Analysis, AnalysisId, PublicationId } from "../../domain/review/index.ts";
+import { type Analysis, AnalysisId, PublicationId, SignalKey } from "../../domain/review/index.ts";
 import { createHttpApp } from "./index.ts";
 
 const TOKEN = "session-token-0123456789abcdef";
@@ -54,6 +56,7 @@ const setupApp = (
     events?: AnalysisEvents;
     onlyGithub?: boolean;
     staticDir?: string;
+    modelAvailable?: boolean;
   } = {},
 ) => {
   const clock = new FixedClock("2026-10-21T10:00:00Z");
@@ -65,17 +68,45 @@ const setupApp = (
   const statuses = new FakePullRequestStatusSource({ host: "github" });
   statuses.setStatus(smallFeature.pullRequest.ref, smallFeatureStatus);
   const store = options.store ?? new InMemoryAnalysisStore();
+  const preferences = new InMemoryPreferenceStore();
+  const suggester = new FakePreferenceSuggester({
+    drafts: [
+      {
+        kind: "dont-flag",
+        text: "Missing JSDoc on internal helpers",
+        scope: "repo",
+        evidence: ["Dismissed: Missing JSDoc on `parseConfig`, acme/shop #101"],
+      },
+    ],
+  });
+  const history = new FakeReviewHistory({
+    host: "github",
+    comments: [
+      {
+        pullRequest: { repo: smallFeature.pullRequest.ref.repo, number: 90 },
+        path: "src/orders.ts",
+        body: "This query isn't scoped to the tenant.",
+        at: "2026-10-01T10:00:00.000Z",
+      },
+    ],
+  });
   const events = options.events ?? createAnalysisEvents();
   const logger = new RecordingLogger();
   const useCases = createUseCases(
     {
       hosts: options.onlyGithub ? { github } : { github, bitbucket },
       tickets: new FakeTicketSource({ tickets: allFixtures.flatMap((fixture) => fixture.tickets) }),
-      models: new FakeModelCatalog({ model: options.model ?? new FakeAnalysisModel() }),
+      models: new FakeModelCatalog({
+        model: options.model ?? new FakeAnalysisModel(),
+        suggester,
+        ...(options.modelAvailable === false
+          ? { options: [fakeModelOption({ available: false, reason: "Not signed in" })] }
+          : {}),
+      }),
       store,
       fileCache: new InMemoryFileCache(),
-      preferences: new InMemoryPreferenceStore(),
-      history: {},
+      preferences,
+      history: { github: history },
       checkouts: new FakeLocalCheckouts(),
       threads: { github: threads },
       statuses: { github: statuses },
@@ -157,6 +188,8 @@ const setupApp = (
     bitbucket,
     threads,
     store,
+    preferences,
+    suggester,
     events,
     logger,
     useCases,
@@ -811,6 +844,224 @@ describe("the thread routes", () => {
       await call("resolveThread", { params: { id, threadId: "a b" }, body: { resolved: true } }),
     ];
     expect(bad.map((one) => one.error?.code)).toEqual(["bad-request", "bad-request"]);
+  });
+});
+
+describe("the preference routes", () => {
+  const repo = ref.repo;
+  const dismissed = {
+    kind: "dismissed",
+    at: "2026-10-21T09:00:00.000Z",
+    pullRequest: ref,
+    pointKind: "finding",
+    title: "Missing JSDoc on `parseConfig`",
+    text: "",
+    path: "src/config.ts",
+  } as const;
+
+  it("add, list, change and delete a preference", async () => {
+    const { call } = await seeded();
+    const added = await call("addPreference", {
+      body: { kind: "look-for", text: " Tenant isolation ", scope: { kind: "repo", repo } },
+    });
+    expect(added.body).toMatchObject({
+      kind: "look-for",
+      text: "Tenant isolation",
+      scope: { kind: "repo", repo },
+      source: "written",
+      enabled: true,
+    });
+    const preferenceId = added.body?.id ?? "";
+
+    const listed = await call("getPreferences");
+    expect(listed.body).toEqual({
+      preferences: [added.body],
+      proposals: [],
+      repositories: [{ repo, guidelineFiles: [], guidelineNote: null }],
+      signalsSinceSuggestion: 0,
+    });
+
+    const changed = await call("updatePreference", {
+      params: { preferenceId },
+      body: { kind: "dont-flag", enabled: false },
+    });
+    expect(changed.body).toMatchObject({
+      kind: "dont-flag",
+      text: "Tenant isolation",
+      enabled: false,
+    });
+
+    expect((await call("deletePreference", { params: { preferenceId } })).body).toEqual({});
+    expect((await call("getPreferences")).body?.preferences).toEqual([]);
+    expect((await call("deletePreference", { params: { preferenceId } })).error?.code).toBe(
+      "not-found",
+    );
+  });
+
+  it("saves a rule from a point as learned", async () => {
+    const { call } = setupApp();
+    const added = await call("addPreference", {
+      body: { kind: "dont-flag", text: "Naming", scope: { kind: "global" }, source: "learned" },
+    });
+    expect(added.body?.source).toBe("learned");
+  });
+
+  it("refuses the 51st enabled preference of a scope with a message", async () => {
+    const { call } = setupApp();
+    const body = { kind: "look-for", scope: { kind: "global" } };
+    for (let n = 0; n < 50; n += 1)
+      await call("addPreference", { body: { ...body, text: `Rule ${n}` } });
+
+    const refused = await call("addPreference", { body: { ...body, text: "One more" } });
+
+    expect(refused.error).toEqual({
+      code: "bad-request",
+      message:
+        "50 preferences are already enabled for every repository: switch one off or delete it first",
+    });
+  });
+
+  it("suggest preferences from the signals, then accept one with an edit and reject the next", async () => {
+    const { call, preferences, suggester } = setupApp();
+    expect((await call("suggestPreferences")).error?.code).toBe("bad-request");
+    await preferences.recordSignal(SignalKey.parse("point:a:f1"), dismissed);
+    expect((await call("getPreferences")).body?.signalsSinceSuggestion).toBe(1);
+
+    const suggested = await call("suggestPreferences", {
+      body: { optionId: fakeModelOption().id },
+    });
+    expect(suggested.body).toMatchObject({
+      proposals: [
+        {
+          text: "Missing JSDoc on internal helpers",
+          source: "learned",
+          scope: { kind: "repo", repo },
+        },
+      ],
+      signals: 1,
+    });
+    const proposalId = suggested.body?.proposals[0]?.id ?? "";
+    expect((await call("getPreferences")).body).toMatchObject({
+      proposals: suggested.body?.proposals,
+      signalsSinceSuggestion: 0,
+    });
+
+    const accepted = await call("decideProposal", {
+      params: { proposalId },
+      body: { decision: "accept", text: "JSDoc on helpers", scope: { kind: "global" } },
+    });
+    expect(accepted.body?.preference).toMatchObject({
+      kind: "dont-flag",
+      text: "JSDoc on helpers",
+      scope: { kind: "global" },
+      source: "learned",
+      enabled: true,
+    });
+    expect((await call("getPreferences")).body?.proposals).toEqual([]);
+    const again = await call("decideProposal", {
+      params: { proposalId },
+      body: { decision: "reject" },
+    });
+    expect(again.error?.code).toBe("bad-request");
+
+    suggester.script({
+      ok: true,
+      value: [{ kind: "look-for", text: "Retries without backoff", scope: "global", evidence: [] }],
+    });
+    const next = await call("suggestPreferences");
+    const rejected = await call("decideProposal", {
+      params: { proposalId: next.body?.proposals[0]?.id ?? "" },
+      body: { decision: "reject" },
+    });
+    expect(rejected.body).toEqual({ preference: null });
+  });
+
+  it("answer model-unavailable, with why, when the option can't run", async () => {
+    const { call, preferences } = setupApp({ modelAvailable: false });
+    await preferences.recordSignal(SignalKey.parse("point:a:f1"), dismissed);
+
+    const suggested = await call("suggestPreferences");
+    const imported = await call("importPreferences", { body: { repo } });
+
+    expect(suggested.error).toEqual({
+      code: "model-unavailable",
+      message: "Sonnet 5.5 through Claude Code can't run: Not signed in",
+    });
+    expect(imported.error?.code).toBe("model-unavailable");
+  });
+
+  it("import proposals from the reviewer's past comments on a repository", async () => {
+    const { call } = setupApp();
+
+    const imported = await call("importPreferences", { body: { repo } });
+    const none = await call("importPreferences", { body: { repo: { ...repo, repo: "api" } } });
+    const unread = await call("importPreferences", {
+      body: { repo: { host: "bitbucket", owner: "acme", repo: "payments" } },
+    });
+
+    expect(imported.body).toMatchObject({
+      proposals: [{ source: "imported", status: "pending" }],
+      comments: 1,
+      pullRequests: 1,
+    });
+    expect(none.body).toEqual({ proposals: [], comments: 0, pullRequests: 0 });
+    expect(unread.error).toEqual({
+      code: "bad-request",
+      message: "megareviewer can't read past reviews from Bitbucket Cloud",
+    });
+  });
+
+  it("switch a repository's guideline file, which isn't taken for a preference's id", async () => {
+    const { call, preferences } = setupApp();
+
+    const switched = await call("setGuidelineSwitch", {
+      body: { repo, path: "CLAUDE.md", enabled: true },
+    });
+
+    expect(switched.body).toEqual({});
+    expect(await preferences.getGuidelineSwitches(repo)).toEqual(new Map([["CLAUDE.md", true]]));
+  });
+
+  it("validate params and bodies", async () => {
+    const { call } = setupApp();
+    const scope = { kind: "global" };
+    const bad = [
+      await call("addPreference", { body: { kind: "look-for", text: "  ", scope } }),
+      await call("addPreference", { body: { kind: "ignore", text: "Naming", scope } }),
+      await call("addPreference", {
+        body: { kind: "look-for", text: "Naming", scope, source: "imported" },
+      }),
+      await call("updatePreference", { params: { preferenceId: "p1" }, body: { enabled: true } }),
+      await call("updatePreference", {
+        params: { preferenceId: "pref_0123456789abcdef" },
+        body: { text: "x".repeat(301) },
+      }),
+      await call("deletePreference", { params: { preferenceId: "guidelines" } }),
+      await call("decideProposal", {
+        params: { proposalId: "prop_1" },
+        body: { decision: "accept" },
+      }),
+      await call("decideProposal", {
+        params: { proposalId: "prop_0123456789abcdef" },
+        body: { decision: "maybe" },
+      }),
+      await call("importPreferences", { body: {} }),
+      await call("suggestPreferences", { body: { optionId: "not an option" } }),
+      await call("setGuidelineSwitch", { body: { repo, path: "docs/STYLE.md", enabled: true } }),
+    ];
+    expect(bad.map((one) => one.error?.code)).toEqual(bad.map(() => "bad-request"));
+
+    const unknown = [
+      await call("updatePreference", {
+        params: { preferenceId: "pref_0123456789abcdef" },
+        body: { enabled: false },
+      }),
+      await call("decideProposal", {
+        params: { proposalId: "prop_0123456789abcdef" },
+        body: { decision: "reject" },
+      }),
+    ];
+    expect(unknown.map((one) => one.error?.code)).toEqual(["not-found", "not-found"]);
   });
 });
 

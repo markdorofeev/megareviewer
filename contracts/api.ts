@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   Analysis,
   AnalysisId,
+  GuidelineFile,
+  GuidelinePath,
   HostKind,
   HostUser,
   HunkComment,
@@ -10,12 +12,20 @@ import {
   PointId,
   PointReview,
   PointState,
+  Preference,
+  PreferenceId,
+  PreferenceKind,
+  PreferenceProposal,
+  PreferenceScope,
+  PreferenceText,
+  ProposalId,
   Publication,
   PublicationId,
   PublicationReceipt,
   PublicationVerdict,
   PullRequestStatus,
   PullRequestSummary,
+  RepoRef,
   ReviewActivity,
   StageName,
   StageStatus,
@@ -148,6 +158,106 @@ export type ResolveRequest = z.infer<typeof ResolveRequest>;
 export const ResolveResponse = ResolveRequest;
 export type ResolveResponse = z.infer<typeof ResolveResponse>;
 
+/** A repository the preferences page lists, with the guideline files it has. */
+export const RepositoryPreferences = z
+  .object({
+    repo: RepoRef,
+    /** Null when they couldn't be looked for, with why in `guidelineNote`. */
+    guidelineFiles: z.array(GuidelineFile).readonly().nullable(),
+    guidelineNote: z.string().nullable(),
+  })
+  .readonly();
+export type RepositoryPreferences = z.infer<typeof RepositoryPreferences>;
+
+export const PreferencesView = z
+  .object({
+    preferences: z.array(Preference).readonly(),
+    /** The proposals the reviewer hasn't decided on. */
+    proposals: z.array(PreferenceProposal).readonly(),
+    /** The repositories analyzed lately, then the others that have a preference. */
+    repositories: z.array(RepositoryPreferences).readonly(),
+    /** Review signals recorded since preferences were last suggested from them. */
+    signalsSinceSuggestion: z.number().int().nonnegative(),
+  })
+  .readonly();
+export type PreferencesView = z.infer<typeof PreferencesView>;
+
+export const AddPreferenceRequest = z
+  .object({
+    kind: PreferenceKind,
+    text: PreferenceText,
+    scope: PreferenceScope,
+    /** learned: a rule saved from a point, with "Don't flag things like this". Else written. */
+    source: z.enum(["written", "learned"]).optional(),
+  })
+  .readonly();
+export type AddPreferenceRequest = z.infer<typeof AddPreferenceRequest>;
+
+export const UpdatePreferenceRequest = z
+  .object({
+    kind: PreferenceKind.optional(),
+    text: PreferenceText.optional(),
+    scope: PreferenceScope.optional(),
+    enabled: z.boolean().optional(),
+  })
+  .readonly();
+export type UpdatePreferenceRequest = z.infer<typeof UpdatePreferenceRequest>;
+
+export const PreferenceDeleted = z.object({}).readonly();
+export type PreferenceDeleted = z.infer<typeof PreferenceDeleted>;
+
+/** The option to make the call on; the server's default without one, or without a body. */
+export const SuggestPreferencesRequest = RunModelRequest;
+export type SuggestPreferencesRequest = z.infer<typeof SuggestPreferencesRequest>;
+
+export const SuggestedPreferences = z
+  .object({
+    /** The proposals this call added: none when the model had nothing new to say. */
+    proposals: z.array(PreferenceProposal).readonly(),
+    /** How many review signals it read. */
+    signals: z.number().int().nonnegative(),
+  })
+  .readonly();
+export type SuggestedPreferences = z.infer<typeof SuggestedPreferences>;
+
+export const ImportPreferencesRequest = z
+  .object({ repo: RepoRef, optionId: ModelOptionId.optional() })
+  .readonly();
+export type ImportPreferencesRequest = z.infer<typeof ImportPreferencesRequest>;
+
+export const ImportedPreferences = z
+  .object({
+    proposals: z.array(PreferenceProposal).readonly(),
+    /** The reviewer's comments it read, from this many pull requests. */
+    comments: z.number().int().nonnegative(),
+    pullRequests: z.number().int().nonnegative(),
+  })
+  .readonly();
+export type ImportedPreferences = z.infer<typeof ImportedPreferences>;
+
+/** Accepting a proposal, with what the reviewer changed in it, or rejecting it. */
+export const DecideProposalRequest = z
+  .object({
+    decision: z.enum(["accept", "reject"]),
+    kind: PreferenceKind.optional(),
+    text: PreferenceText.optional(),
+    scope: PreferenceScope.optional(),
+  })
+  .readonly();
+export type DecideProposalRequest = z.infer<typeof DecideProposalRequest>;
+
+/** The preference an accepted proposal became; null for a rejected one. */
+export const ProposalDecided = z.object({ preference: Preference.nullable() }).readonly();
+export type ProposalDecided = z.infer<typeof ProposalDecided>;
+
+export const GuidelineSwitchRequest = z
+  .object({ repo: RepoRef, path: GuidelinePath, enabled: z.boolean() })
+  .readonly();
+export type GuidelineSwitchRequest = z.infer<typeof GuidelineSwitchRequest>;
+
+export const GuidelineSwitched = z.object({}).readonly();
+export type GuidelineSwitched = z.infer<typeof GuidelineSwitched>;
+
 export const ErrorCode = z.enum([
   "bad-request",
   "unsupported-url",
@@ -189,6 +299,8 @@ const FileParams = z
   .object({ id: AnalysisId, side: z.enum(["base", "head"]), path: z.string().min(1) })
   .readonly();
 const ThreadParams = z.object({ id: AnalysisId, threadId: ThreadId }).readonly();
+const PreferenceParams = z.object({ preferenceId: PreferenceId }).readonly();
+const ProposalParams = z.object({ proposalId: ProposalId }).readonly();
 const NoParams = z.object({}).readonly();
 
 export interface JsonRoute {
@@ -350,6 +462,79 @@ export const routes = {
     params: ThreadParams,
     request: ResolveRequest,
     response: ResolveResponse,
+  },
+  /**
+   * What the reviewer wants an AI review to look for and leave out: their preferences, the
+   * proposals waiting for them, and each repository's guideline files.
+   */
+  getPreferences: {
+    method: "GET",
+    path: "/api/preferences",
+    params: NoParams,
+    request: null,
+    response: PreferencesView,
+  },
+  /** Adds a preference, enabled. Answers bad-request when its scope already has 50 enabled. */
+  addPreference: {
+    method: "POST",
+    path: "/api/preferences",
+    params: NoParams,
+    request: AddPreferenceRequest,
+    response: Preference,
+  },
+  /**
+   * Proposes preferences from the review signals recorded here, in one model call on the chosen
+   * option or the default: the response is its result, with no events. Answers bad-request when
+   * no signal is recorded, and model-unavailable, with why, when the option can't run.
+   */
+  suggestPreferences: {
+    method: "POST",
+    path: "/api/preferences/suggestions",
+    params: NoParams,
+    request: SuggestPreferencesRequest,
+    response: SuggestedPreferences,
+  },
+  /**
+   * Proposes preferences for a repository from the reviewer's own comments on its recent pull
+   * requests, read from its host, in one model call. No comments is no proposals.
+   */
+  importPreferences: {
+    method: "POST",
+    path: "/api/preferences/imports",
+    params: NoParams,
+    request: ImportPreferencesRequest,
+    response: ImportedPreferences,
+  },
+  /** Switches a repository's guideline file on or off for the model runs on its pull requests. */
+  setGuidelineSwitch: {
+    method: "PUT",
+    path: "/api/preferences/guidelines",
+    params: NoParams,
+    request: GuidelineSwitchRequest,
+    response: GuidelineSwitched,
+  },
+  /** Accepts a pending proposal, which makes it a preference, or rejects it. */
+  decideProposal: {
+    method: "PUT",
+    path: "/api/preferences/proposals/:proposalId",
+    params: ProposalParams,
+    request: DecideProposalRequest,
+    response: ProposalDecided,
+  },
+  /** Changes a preference's kind, text, scope or switch. */
+  updatePreference: {
+    method: "PUT",
+    path: "/api/preferences/:preferenceId",
+    params: PreferenceParams,
+    request: UpdatePreferenceRequest,
+    response: Preference,
+  },
+  deletePreference: {
+    method: "DELETE",
+    path: "/api/preferences/:preferenceId",
+    params: PreferenceParams,
+    request: null,
+    response: PreferenceDeleted,
   },
 } as const satisfies Record<string, JsonRoute>;
 

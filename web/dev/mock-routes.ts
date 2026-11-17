@@ -261,6 +261,9 @@ export const createMockApi = (
 
   const unauthorized = failure("unauthorized", "Missing or wrong session token");
 
+  // The mock keeps no preferences: `pnpm dev:fake` serves them from the real use cases.
+  const noPreferences = () => failure("bad-request", "The mock API keeps no preferences");
+
   const handlers: Record<
     RouteName,
     (params: Readonly<Record<string, string>>, body: unknown) => MockResponse
@@ -492,6 +495,15 @@ export const createMockApi = (
       ];
       return success({});
     },
+    getPreferences: () =>
+      success({ preferences: [], proposals: [], repositories: [], signalsSinceSuggestion: 0 }),
+    addPreference: noPreferences,
+    suggestPreferences: noPreferences,
+    importPreferences: noPreferences,
+    setGuidelineSwitch: noPreferences,
+    decideProposal: noPreferences,
+    updatePreference: noPreferences,
+    deletePreference: noPreferences,
   };
 
   return {

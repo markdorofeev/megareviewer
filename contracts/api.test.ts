@@ -29,6 +29,28 @@ const receipt = {
   postedCommentIds: { [CommentKey.parse("summary")]: "1", [CommentKey.parse("decision:d3")]: "2" },
 };
 
+const repo = { host: "github", owner: "acme", repo: "shop" } as const;
+const preference = {
+  id: "pref_0123456789abcdef",
+  kind: "look-for",
+  text: "Tenant isolation: every query filters by tenant ID",
+  scope: { kind: "global" },
+  source: "written",
+  enabled: true,
+  createdAt: "2026-11-10T10:00:00Z",
+  updatedAt: "2026-11-10T10:00:00Z",
+} as const;
+const proposal = {
+  id: "prop_0123456789abcdef",
+  kind: "dont-flag",
+  text: "Missing JSDoc on internal helpers",
+  scope: { kind: "repo", repo },
+  source: "learned",
+  evidence: ["Dismissed: Missing JSDoc on `parseConfig`, acme/shop #12"],
+  status: "pending",
+  createdAt: "2026-11-10T10:05:00Z",
+} as const;
+
 const responses: Record<RouteName, unknown> = {
   getStatus: {
     version: "0.1.0",
@@ -109,6 +131,37 @@ const responses: Record<RouteName, unknown> = {
   replyToThread: smallFeatureThreadList.threads[0]?.comments[1],
   resolveThread: { resolved: true },
   postComment: {},
+  getPreferences: {
+    preferences: [preference],
+    proposals: [proposal],
+    repositories: [
+      {
+        repo,
+        guidelineFiles: [
+          { path: "REVIEW.md", bytes: 1200, enabled: true, tooLarge: false },
+          { path: "CLAUDE.md", bytes: 48_000, enabled: false, tooLarge: true },
+        ],
+        guidelineNote: null,
+      },
+      {
+        repo: { ...repo, repo: "api" },
+        guidelineFiles: null,
+        guidelineNote: "No pull request of this repository has been analyzed yet",
+      },
+    ],
+    signalsSinceSuggestion: 14,
+  },
+  addPreference: preference,
+  updatePreference: { ...preference, enabled: false },
+  deletePreference: {},
+  suggestPreferences: { proposals: [proposal], signals: 14 },
+  importPreferences: {
+    proposals: [{ ...proposal, source: "imported" }],
+    comments: 92,
+    pullRequests: 30,
+  },
+  decideProposal: { preference: { ...preference, source: "learned" } },
+  setGuidelineSwitch: {},
 };
 
 const requests: Partial<Record<RouteName, unknown>> = {
@@ -128,6 +181,11 @@ const requests: Partial<Record<RouteName, unknown>> = {
     line: 41,
     body: "Name it for what it counts.",
   },
+  addPreference: { kind: "dont-flag", text: "Naming", scope: { kind: "repo", repo } },
+  updatePreference: { enabled: false },
+  importPreferences: { repo },
+  decideProposal: { decision: "accept", text: "Missing JSDoc on helpers" },
+  setGuidelineSwitch: { repo, path: "CLAUDE.md", enabled: true },
 };
 
 const routeNames = Object.keys(routes).filter((name): name is RouteName => name in routes);
@@ -144,6 +202,42 @@ describe("routes", () => {
     } else {
       expect(request.safeParse(requests[name]).error).toBeUndefined();
     }
+  });
+
+  it("takes a model call's request without a body, as the default option", () => {
+    expect(routes.suggestPreferences.request.safeParse(undefined).success).toBe(true);
+    expect(
+      routes.suggestPreferences.request.safeParse({ optionId: "claude-code/claude-haiku-5-5" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("takes a preference's text trimmed, between 1 and 300 characters", () => {
+    const request = { kind: "look-for", scope: { kind: "global" } };
+    const parsed = routes.addPreference.request.safeParse({ ...request, text: "  Naming " });
+    expect(parsed.success && parsed.data.text).toBe("Naming");
+    for (const text of ["   ", "x".repeat(301)]) {
+      expect(routes.addPreference.request.safeParse({ ...request, text }).success).toBe(false);
+      expect(routes.updatePreference.request.safeParse({ text }).success).toBe(false);
+      expect(routes.decideProposal.request.safeParse({ decision: "accept", text }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  it("refuses a preference saved as imported, and a guideline path megareviewer doesn't read", () => {
+    expect(
+      routes.addPreference.request.safeParse({
+        kind: "look-for",
+        text: "Naming",
+        scope: { kind: "global" },
+        source: "imported",
+      }).success,
+    ).toBe(false);
+    expect(
+      routes.setGuidelineSwitch.request.safeParse({ repo, path: "docs/STYLE.md", enabled: true })
+        .success,
+    ).toBe(false);
   });
 
   it("parses path params into domain IDs and rejects bad ones", () => {
