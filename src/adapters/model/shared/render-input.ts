@@ -1,8 +1,15 @@
-import type { AnalysisInput, AnalysisInputFile } from "../../../application/ports/index.ts";
+import type {
+  AnalysisInput,
+  AnalysisInputFile,
+  InputGuidance,
+} from "../../../application/ports/index.ts";
 import type { DiffLine, Hunk } from "../../../domain/diff/index.ts";
 
-/** Every tag the rendering uses. PR content can't open or close any of them. */
+/** Every tag the rendering uses. Neither PR content nor guidance can open or close any of them. */
 const TAGS = [
+  "reviewer_guidance",
+  "preferences",
+  "guideline_file",
   "pull_request_data",
   "pull_request",
   "description",
@@ -24,14 +31,20 @@ const TAGS = [
   "tour_skeleton",
   "step",
 ];
-// Case-sensitive: the tags are lowercase, and code is full of "<Hunk>"-like generics.
-const TAG_START = new RegExp(`<(/?)(?=(?:${TAGS.join("|")})\\b)`, "g");
+/**
+ * Escapes text placed between `tags`: a "<" that would start one of them becomes "&lt;".
+ * Case-sensitive: the tags are lowercase, and code is full of "<Hunk>"-like generics.
+ */
+export const tagEscaper = (tags: readonly string[]): ((text: string) => string) => {
+  const start = new RegExp(`<(/?)(?=(?:${tags.join("|")})\\b)`, "g");
+  return (text) => text.replace(start, "&lt;$1");
+};
 
 /**
  * Untrusted text placed between tags. A "<" that would start one of our tags becomes "&lt;",
  * which the system prompt explains, so a PR can't close the data block or fake a hunk.
  */
-export const escapeText = (text: string): string => text.replace(TAG_START, "&lt;$1");
+export const escapeText = tagEscaper(TAGS);
 
 /** Untrusted text placed in a double-quoted attribute: it can't end the attribute or open a tag. */
 const escapeAttribute = (text: string): string =>
@@ -41,7 +54,7 @@ const escapeAttribute = (text: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll("\n", " ");
 
-const attributes = (values: Readonly<Record<string, string | number | null>>): string =>
+export const attributes = (values: Readonly<Record<string, string | number | null>>): string =>
   Object.entries(values)
     .filter((entry): entry is [string, string | number] => entry[1] !== null)
     .map(([name, value]) => ` ${name}="${escapeAttribute(String(value))}"`)
@@ -92,13 +105,41 @@ const block = (tag: string, lines: readonly string[]): string[] => [
 const byPath = (a: AnalysisInputFile, b: AnalysisInputFile): number =>
   a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
 
+const SCOPE = { global: "everywhere", repo: "this repository" } as const;
+
 /**
- * The PR as one text block, byte-identical for the same input so that every pass reads it from
- * the prompt cache. Hunks without a proof go in full; mechanical ones as stats only.
+ * What the reviewer and the repository ask of the passes. Nothing without any, so a run without
+ * guidance reads the PR as it always did. A preference is one line, whatever its text holds.
+ */
+const renderGuidance = ({ preferences, guidelines }: InputGuidance): string[] =>
+  preferences.length === 0 && guidelines.length === 0
+    ? []
+    : block("reviewer_guidance", [
+        ...(preferences.length === 0
+          ? []
+          : block(
+              "preferences",
+              preferences.map(
+                ({ ref, kind, scope, text }) =>
+                  `${ref} ${kind} (${SCOPE[scope]}): ${escapeText(text.replace(/\s+/g, " ").trim())}`,
+              ),
+            )),
+        ...guidelines.flatMap(({ ref, path, content }) => [
+          `<guideline_file${attributes({ ref, path })}>`,
+          escapeText(content),
+          "</guideline_file>",
+        ]),
+      ]);
+
+/**
+ * The reviewer's guidance, when there is some, then the PR, as one text block, byte-identical for
+ * the same input so that every pass reads it from the prompt cache. Hunks without a proof go in
+ * full; mechanical ones as stats only.
  */
 export const renderInput = (input: AnalysisInput): string => {
   const { pullRequest, tickets, files, callGraph } = input;
   const lines = [
+    ...renderGuidance(input.guidance),
     "<pull_request_data>",
     ...block("pull_request", [
       `title: ${escapeText(pullRequest.title)}`,
