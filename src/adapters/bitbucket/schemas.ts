@@ -110,6 +110,23 @@ export const BitbucketThreadComment = z.object({
 });
 export type BitbucketThreadComment = z.infer<typeof BitbucketThreadComment>;
 
+/** A PR in a list asked for who's on it, which says whether the user reviewed it. */
+export const BitbucketListedPullRequest = z.object({
+  id: z.number().int().positive(),
+  updated_on: BitbucketTimestamp,
+  participants: z
+    .array(
+      z.object({
+        /** Missing for some deleted accounts. */
+        user: z.object({ uuid: z.string() }).nullish(),
+        /** When they last approved, asked for changes or commented; null when they did none. */
+        participated_on: z.string().nullish(),
+      }),
+    )
+    .nullish(),
+});
+export type BitbucketListedPullRequest = z.infer<typeof BitbucketListedPullRequest>;
+
 /** Someone on a PR: a reviewer, or a participant by having commented. */
 const BitbucketPullRequestParticipant = z.object({
   /** Missing for some deleted accounts. */
