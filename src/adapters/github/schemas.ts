@@ -113,6 +113,23 @@ export const GitHubReviewComment = z.object({
 });
 export type GitHubReviewComment = z.infer<typeof GitHubReviewComment>;
 
+/** The pull requests a search found, with when each was last updated. */
+export const GitHubReviewedPullRequests = z.object({
+  incomplete_results: z.boolean(),
+  items: z.array(z.object({ number: z.number().int().positive(), updated_at: Timestamp })),
+});
+export type GitHubReviewedPullRequests = z.infer<typeof GitHubReviewedPullRequests>;
+
+/** A comment on a pull request's code, a reply among them, as the REST API lists them. */
+export const GitHubPullRequestComment = z.object({
+  /** null when the account was deleted. */
+  user: Account.nullable(),
+  path: z.string().min(1),
+  body: z.string(),
+  created_at: Timestamp,
+});
+export type GitHubPullRequestComment = z.infer<typeof GitHubPullRequestComment>;
+
 export const GitHubErrorBody = z.object({
   message: z.string(),
   errors: z.array(z.union([z.string(), z.object({ message: z.string().optional() })])).optional(),
