@@ -1,6 +1,12 @@
 import type { HostError } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
-import type { GitHost, Logger, PullRequestStatusSource, ReviewThreads } from "../ports/index.ts";
+import type {
+  GitHost,
+  Logger,
+  PullRequestStatusSource,
+  ReviewHistory,
+  ReviewThreads,
+} from "../ports/index.ts";
 
 /** The wait before each retry: three retries, so four attempts in all. */
 export const RETRY_DELAYS_MS: readonly number[] = [1000, 2000, 4000];
@@ -78,5 +84,21 @@ export const retryingStatusSource = (
     host: source.host,
     getStatus: (ref, headSha) =>
       retried("the pull request's status", () => source.getStatus(ref, headSha)),
+  };
+};
+
+/**
+ * Retries reading the reviewer's past comments after a network failure, as for the host's other
+ * reads. It's a request per pull request, so an adapter keeps what a failed read got.
+ */
+export const retryingReviewHistory = (
+  history: ReviewHistory,
+  options: RetryOptions,
+): ReviewHistory => {
+  const retried = retrier(history.host, options);
+  return {
+    host: history.host,
+    getReviewerComments: (repo, read) =>
+      retried("the reviewer's past comments", () => history.getReviewerComments(repo, read)),
   };
 };

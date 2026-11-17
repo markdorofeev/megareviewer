@@ -3,13 +3,19 @@ import type { HostError } from "../../domain/review/index.ts";
 import {
   FakeGitHost,
   FakePullRequestStatusSource,
+  FakeReviewHistory,
   FakeReviewThreads,
   RecordingLogger,
   smallFeature,
   smallFeaturePublication,
   smallFeatureThreadList,
 } from "../testing/index.ts";
-import { retryingGitHost, retryingReviewThreads, retryingStatusSource } from "./index.ts";
+import {
+  retryingGitHost,
+  retryingReviewHistory,
+  retryingReviewThreads,
+  retryingStatusSource,
+} from "./index.ts";
 
 const networkError: HostError = {
   kind: "network",
@@ -183,6 +189,49 @@ describe("retryingStatusSource", () => {
 
     fake.failNext({ kind: "forbidden", message: "no", retryAfterSeconds: null });
     expect((await source.getStatus(ref, "abc")).ok).toBe(false);
+    expect(delays).toEqual([1000]);
+  });
+});
+
+describe("retryingReviewHistory", () => {
+  it("retries reading past comments after a network failure, but not after a refusal", async () => {
+    const comment = {
+      pullRequest: ref,
+      path: "src/a.ts",
+      body: "Check the owner here.",
+      at: "2026-01-05T10:00:00Z",
+    };
+    const fake = new FakeReviewHistory({ host: "github", comments: [comment] });
+    const logger = new RecordingLogger();
+    const delays: number[] = [];
+    const history = retryingReviewHistory(fake, {
+      logger,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    });
+    const asked = { repo: ref.repo, pullRequests: 30 };
+
+    fake.failWith(networkError);
+    expect(await history.getReviewerComments(ref.repo, { pullRequests: 30 })).toEqual({
+      ok: true,
+      value: { comments: [comment], pullRequests: 1 },
+    });
+    expect(delays).toEqual([1000]);
+    expect(fake.calls).toEqual([asked, asked]);
+    expect(logger.entries.filter((entry) => entry.level === "info")).toEqual([
+      expect.objectContaining({
+        message: "Retrying the reviewer's past comments after a network error",
+      }),
+    ]);
+    expect(history.host).toBe("github");
+
+    const refused: HostError = { kind: "forbidden", message: "no", retryAfterSeconds: null };
+    fake.failWith(refused);
+    expect(await history.getReviewerComments(ref.repo, { pullRequests: 30 })).toEqual({
+      ok: false,
+      error: refused,
+    });
     expect(delays).toEqual([1000]);
   });
 });
