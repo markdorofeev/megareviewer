@@ -55,3 +55,9 @@ for (const file of analysis.files) {
   }
 }
 for (const warning of analysis.warnings) console.log(`\nwarning: ${warning}`);
+
+const { preferences = [], guidelines = [] } = analysis.guidance ?? {};
+if (preferences.length + guidelines.length > 0)
+  console.log("\nguidance, by the refs a run gives it");
+for (const { ref, kind, text } of preferences) console.log(`  ${ref} ${kind}: ${text}`);
+for (const { ref, path } of guidelines) console.log(`  ${ref} ${path}`);
