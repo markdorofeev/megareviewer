@@ -11,10 +11,14 @@ import {
   compareVersions,
   createClaudeAnalysisModel,
   createClaudeCodeAnalysisModel,
+  createClaudeCodeSuggester,
+  createClaudeSuggester,
   createCodexAnalysisModel,
+  createCodexSuggester,
   createOpencodeAnalysisModel,
   createOpencodeClient,
   createOpencodeServer,
+  createOpencodeSuggester,
   createRunCodex,
   createRunOpencode,
   DEFAULT_CODEX_MODEL,
@@ -31,7 +35,12 @@ import {
   type RunCodex,
   type RunOpencode,
 } from "../adapters/model/index.ts";
-import type { AnalysisModel, Logger, ModelCatalog } from "../application/ports/index.ts";
+import type {
+  AnalysisModel,
+  Logger,
+  ModelCatalog,
+  PreferenceSuggester,
+} from "../application/ports/index.ts";
 import {
   type ModelBilling,
   type ModelOption,
@@ -163,6 +172,8 @@ export interface CatalogProvider {
 interface Provider extends CatalogProvider {
   probe(): Promise<ProviderStatus>;
   model(model: string, status: ProviderStatus & { available: true }): AnalysisModel;
+  /** The one call that proposes preferences, on `model`. */
+  suggester(model: string, status: ProviderStatus & { available: true }): PreferenceSuggester;
 }
 
 /** A provider's answer, or that it didn't give one in time. Never rejects. */
@@ -320,6 +331,13 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
   // What opencode's server last listed, and its default model.
   let opencodeOffered: readonly OpencodeModel[] = [];
   let opencodeDefault: string | null = null;
+  const opencodeOffer = (model: string): OpencodeModel => {
+    const offered = opencodeOffered.find(
+      (candidate) => `${candidate.providerID}/${candidate.id}` === model,
+    );
+    if (offered === undefined) throw new Error(`opencode doesn't offer ${model}`);
+    return offered;
+  };
 
   const providers: readonly Provider[] = [
     {
@@ -337,6 +355,8 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
       },
       model: (model, status) =>
         createClaudeCodeAnalysisModel({ run: runClaude, billing: status.billing, model, logger }),
+      suggester: (model, status) =>
+        createClaudeCodeSuggester({ run: runClaude, billing: status.billing, model, logger }),
     },
     {
       id: "anthropic-api",
@@ -352,6 +372,7 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
             };
       },
       model: (model) => createClaudeAnalysisModel({ client, logger, model }),
+      suggester: (model) => createClaudeSuggester({ client, logger, model }),
     },
     {
       id: "codex",
@@ -378,6 +399,14 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
           logger,
         });
       },
+      suggester: (model, status) =>
+        createCodexSuggester({
+          run: runCodex,
+          billing: status.billing,
+          model,
+          efforts: codexCatalog?.find((candidate) => candidate.slug === model)?.efforts ?? [],
+          logger,
+        }),
     },
     {
       id: "opencode",
@@ -401,16 +430,24 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
         return { available: true, via: "opencode", billing: "api" };
       },
       model: (model) => {
-        const offered = opencodeOffered.find(
-          (candidate) => `${candidate.providerID}/${candidate.id}` === model,
-        );
-        if (offered === undefined) throw new Error(`opencode doesn't offer ${model}`);
+        const offered = opencodeOffer(model);
         return createOpencodeAnalysisModel({
           client: opencodeClient,
           providerID: offered.providerID,
           model: offered.id,
           variants: offered.variants,
           contextTokens: offered.contextTokens,
+          priced: offered.priced,
+          logger,
+        });
+      },
+      suggester: (model) => {
+        const offered = opencodeOffer(model);
+        return createOpencodeSuggester({
+          client: opencodeClient,
+          providerID: offered.providerID,
+          model: offered.id,
+          variants: offered.variants,
           priced: offered.priced,
           logger,
         });
@@ -440,6 +477,17 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
     return running;
   };
 
+  /** An option's provider, once it has said it can run, and its model, when it lists it. */
+  const running = (optionId: ModelOptionId) => {
+    const [providerId, ...rest] = optionId.split("/");
+    const modelId = rest.join("/");
+    const provider = providers.find((candidate) => candidate.id === providerId);
+    const status = provider === undefined ? undefined : kept.get(provider.id);
+    if (provider === undefined || status === undefined) return null;
+    if (!provider.models(status).some((model) => model.id === modelId)) return null;
+    return { provider, modelId, status };
+  };
+
   return {
     async options() {
       return catalogOptions(providers, await Promise.all(providers.map(statusOf)));
@@ -448,19 +496,17 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
     model(optionId) {
       const cached = models.get(optionId);
       if (cached !== undefined) return cached;
-      const [providerId, ...rest] = optionId.split("/");
-      const modelId = rest.join("/");
-      const provider = providers.find((candidate) => candidate.id === providerId);
-      const status = provider === undefined ? undefined : kept.get(provider.id);
-      if (provider === undefined || status === undefined) return null;
-      if (!provider.models(status).some((model) => model.id === modelId)) return null;
-      const model = provider.model(modelId, status);
+      const runs = running(optionId);
+      if (runs === null) return null;
+      const model = runs.provider.model(runs.modelId, runs.status);
       models.set(optionId, model);
       return model;
     },
 
-    // No transport makes the suggestion call yet.
-    suggester: () => null,
+    suggester(optionId) {
+      const runs = running(optionId);
+      return runs === null ? null : runs.provider.suggester(runs.modelId, runs.status);
+    },
   };
 };
 

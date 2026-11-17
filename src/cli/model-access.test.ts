@@ -84,6 +84,7 @@ const catalogWith = (
   timeoutMs?: number,
   codex: CodexStatus = { state: "not-installed" },
   opencode: OpencodeStatus = { state: "not-installed" },
+  runClaude: RunClaude = neverRun,
 ) => {
   const asked = { claudeCode: 0, api: 0 };
   const next = <T>(answers: readonly T[], count: number): T => {
@@ -92,7 +93,7 @@ const catalogWith = (
     return answer;
   };
   const catalog = createModelCatalog({
-    runClaude: neverRun,
+    runClaude,
     runCodex: async () => {
       throw new Error("the probe answers for Codex");
     },
@@ -263,10 +264,83 @@ describe("createModelCatalog", () => {
     expect(catalog.model("nobody/claude-opus-5-5")).toBeNull();
   });
 
-  it("has no suggester on any option yet", async () => {
-    const { catalog } = catalogWith([signedIn], [true]);
+  it("serves the suggestion call on an option once its provider can run, on that option's model", async () => {
+    const calls: (readonly string[])[] = [];
+    // A locked-down session's first event, then an answer with no proposals.
+    const lines = [
+      {
+        type: "system",
+        subtype: "init",
+        tools: ["StructuredOutput"],
+        mcp_servers: [],
+        apiKeySource: "none",
+      },
+      {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        structured_output: { proposals: [] },
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 3, output_tokens: 5 },
+      },
+    ].map((event) => JSON.stringify(event));
+    const runClaude: RunClaude = async (args, options = {}) => {
+      calls.push(args);
+      for (const line of lines) options.onLine?.(line);
+      return { code: 0, started: true, lines, stderr: "", killed: null };
+    };
+    const { catalog } = catalogWith(
+      [signedIn],
+      [false],
+      undefined,
+      undefined,
+      undefined,
+      runClaude,
+    );
+    expect(catalog.suggester("claude-code/claude-opus-5-5")).toBeNull();
+    await catalog.options();
+
+    const suggester = catalog.suggester("claude-code/claude-opus-5-5");
+    const answered = await suggester?.suggest({
+      signals: [],
+      comments: [],
+      preferences: [],
+      rejected: [],
+      repo: null,
+    });
+    expect(answered).toEqual({
+      ok: true,
+      value: {
+        value: [],
+        usage: {
+          inputTokens: 3,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          outputTokens: 5,
+          costUsd: 0.01,
+          billing: "plan",
+        },
+      },
+    });
+    const [args = []] = calls;
+    expect(args[args.indexOf("--model") + 1]).toBe("claude-opus-5-5");
+    expect(args[args.indexOf("--tools") + 1]).toBe("");
+
+    expect(catalog.suggester("anthropic-api/claude-opus-5-5")).toBeNull();
+    expect(catalog.suggester("claude-code/claude-nothing")).toBeNull();
+    expect(catalog.suggester("nobody/claude-opus-5-5")).toBeNull();
+  });
+
+  it("has a suggester on every option whose provider can run, and on no other", async () => {
+    const { catalog } = catalogWith([signedOut], [true], undefined, codexSignedIn, opencodeRunning);
     const { options } = await catalog.options();
-    expect(options.map((option) => catalog.suggester(option.id))).toEqual(options.map(() => null));
+    expect(options.some((option) => option.available)).toBe(true);
+    for (const provider of ["anthropic-api", "codex", "opencode"]) {
+      expect(options.some((option) => option.provider === provider && option.available)).toBe(true);
+    }
+    expect(options.map((option) => [option.id, catalog.suggester(option.id) !== null])).toEqual(
+      options.map((option) => [option.id, option.available]),
+    );
   });
 
   it("runs the API's options on the API, on their model", async () => {
