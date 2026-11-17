@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { PASS_ANSWER_FORMAT, toStrictJsonSchema } from "./output-schema.ts";
+import { PASS_ANSWER_FORMAT, PassAnswer, toStrictJsonSchema } from "./output-schema.ts";
 
 /** Every object schema inside `schema`, at any depth. */
 const objects = (schema: unknown): Record<string, unknown>[] => {
@@ -47,6 +47,63 @@ describe("the answer format", () => {
       (node) => isObject(node.properties) && "checks" in node.properties,
     );
     expect(test?.required).toEqual(["hunkId", "test", "startLine", "line", "checks"]);
+  });
+
+  it("asks each finding and each risk for the guidance that shaped it, or null", () => {
+    const marked = objects(schema).filter(
+      (node) => isObject(node.properties) && "guidance" in node.properties,
+    );
+    expect(marked.map((node) => Object.keys(node.properties ?? {})[0])).toEqual([
+      "title",
+      "hunkId",
+    ]);
+    for (const node of marked) {
+      expect(node.required).toContain("guidance");
+      expect(isObject(node.properties) ? node.properties.guidance : null).toEqual({
+        anyOf: [
+          {
+            type: "object",
+            properties: {
+              ref: { type: "string" },
+              effect: { type: "string", enum: ["raised", "left-out"] },
+            },
+            required: ["ref", "effect"],
+            additionalProperties: false,
+          },
+          { type: "null" },
+        ],
+      });
+    }
+  });
+
+  it("parses an answer with marks, and one from before there were any as null", () => {
+    const finding = {
+      title: "Serves another tenant's receipt",
+      explanation: "The query has no tenant filter.",
+      lines: { hunkId: "h_0123456789abcdef", side: "new", startLine: 4, line: 4 },
+      severity: "blocking",
+      suggestion: null,
+      mismatch: null,
+    };
+    const answer = (findings: unknown[]) =>
+      PassAnswer.parse({ answer: { pass: "findings", findings } });
+    expect(answer([{ ...finding, guidance: { ref: "p1", effect: "raised" } }, finding])).toEqual({
+      answer: {
+        pass: "findings",
+        findings: [
+          { ...finding, guidance: { ref: "p1", effect: "raised" } },
+          { ...finding, guidance: null },
+        ],
+      },
+    });
+    expect(
+      PassAnswer.safeParse({
+        answer: {
+          pass: "findings",
+          findings: [{ ...finding, guidance: { ref: "REVIEW.md", effect: "raised" } }],
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it("closes every object and drops keywords structured outputs don't support", () => {

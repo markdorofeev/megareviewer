@@ -5,8 +5,8 @@ import { MODEL } from "./request.ts";
  * change, and set PROMPT_FINGERPRINT to the value the version test prints. The version is part
  * of the analysis cache key, so a stale one would serve analyses made with the old prompts.
  */
-export const PROMPT_VERSION = 12;
-export const PROMPT_FINGERPRINT = "b5e6a6dd27ddcd9c";
+export const PROMPT_VERSION = 13;
+export const PROMPT_FINGERPRINT = "31e4322926af2bfe";
 
 export const apiVersion = (model: string): string => `${model}/p${PROMPT_VERSION}`;
 
@@ -17,8 +17,8 @@ export const VERSION = apiVersion(MODEL);
  * the API's, so an analysis made on one transport isn't served for the other. Bump it as above,
  * with CLAUDE_CODE_FINGERPRINT.
  */
-export const CLAUDE_CODE_PROMPT_VERSION = 10;
-export const CLAUDE_CODE_FINGERPRINT = "1d8ca7da07aff664";
+export const CLAUDE_CODE_PROMPT_VERSION = 11;
+export const CLAUDE_CODE_FINGERPRINT = "3772d089a53898a6";
 
 /** An effort for every pass, in place of each pass's own, is named after the model. */
 export const claudeCodeVersion = (model: string, effort?: string): string =>
