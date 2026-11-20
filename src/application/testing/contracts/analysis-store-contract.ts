@@ -255,6 +255,14 @@ export const describeAnalysisStoreContract = (
       expect(await store.getPublications(b.id)).toEqual([]);
     });
 
+    it("keeps the model option last used, the latest replacing the one before", async () => {
+      expect(await store.getLastModelOption()).toBeNull();
+      await store.recordModelOption("claude-code/claude-opus-5-5");
+      await store.recordModelOption("codex/gpt-6-sol");
+
+      expect(await store.getLastModelOption()).toBe("codex/gpt-6-sol");
+    });
+
     it("keeps its own copies of what it stores and returns", async () => {
       const warnings: string[] = [];
       await store.saveAnalysis({ ...a, warnings });

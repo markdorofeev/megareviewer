@@ -3,6 +3,7 @@ import type {
   AnalysisId,
   AnalysisKey,
   CommentKey,
+  ModelOptionId,
   PointReview,
   PublicationId,
   PublicationReceipt,
@@ -58,4 +59,7 @@ export interface AnalysisStore {
    * its summary, and every thread post.
    */
   getReviewActivity(since: Timestamp): Promise<ReviewActivity>;
+  /** The model option the last model call used, kept across restarts; null before the first. */
+  getLastModelOption(): Promise<ModelOptionId | null>;
+  recordModelOption(id: ModelOptionId): Promise<void>;
 }

@@ -1523,6 +1523,29 @@ describe("runModel", () => {
     expect((await runModel(analysis.id)).modelOption?.model).toBe("claude-sonnet-5-5");
   });
 
+  it("runs without a choice on the option last used, while it can run", async () => {
+    const haiku = fakeModelOption({ model: "claude-haiku-5-5", modelName: "Haiku 5.5" });
+    const { analysis, runModel, useCases, models, store } = await codeOnly({
+      modelOptions: [fakeModelOption(), haiku],
+    });
+    expect((await useCases.getStatus()).model.defaultId).toBe("claude-code/claude-sonnet-5-5");
+
+    await runModel(analysis.id, haiku.id);
+    expect(await store.getLastModelOption()).toBe(haiku.id);
+    expect((await useCases.getStatus()).model.defaultId).toBe(haiku.id);
+    expect((await useCases.removeModelRun(analysis.id)).ok).toBe(true);
+    expect((await runModel(analysis.id)).modelOption?.model).toBe("claude-haiku-5-5");
+
+    models.setOptions([fakeModelOption(), { ...haiku, available: false, reason: "signed out" }]);
+    expect((await useCases.getStatus()).model.defaultId).toBe("claude-code/claude-sonnet-5-5");
+  });
+
+  it("doesn't remember an option it refused", async () => {
+    const { analysis, useCases, store } = await codeOnly();
+    await useCases.runModel(analysis.id, "claude-code/claude-nothing");
+    expect(await store.getLastModelOption()).toBeNull();
+  });
+
   it("refuses an option it doesn't know, and one that can't run, with why", async () => {
     const api = fakeModelOption({
       provider: "anthropic-api",

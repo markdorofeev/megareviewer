@@ -59,8 +59,9 @@ export const ModelOptions = z
   .object({
     options: z.array(ModelOption).readonly(),
     /**
-     * The first available provider's default model; with none available, the first provider's,
-     * so the page can say why it can't run. Null only when there are no options at all.
+     * The option the last model call used while it can run, else the first available provider's
+     * default model; with none available, the first provider's, so the page can say why it can't
+     * run. Null only when there are no options at all.
      */
     defaultId: ModelOptionId.nullable(),
   })

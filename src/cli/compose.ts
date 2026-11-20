@@ -37,7 +37,12 @@ import {
   retryingReviewThreads,
   retryingStatusSource,
 } from "../application/retries/index.ts";
-import { type AppDeps, createUseCases, type UseCases } from "../application/use-cases/index.ts";
+import {
+  type AppDeps,
+  createUseCases,
+  modelOptions,
+  type UseCases,
+} from "../application/use-cases/index.ts";
 import type { HostKind, ModelOptions } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
 import type { Config } from "./config.ts";
@@ -57,7 +62,7 @@ export interface ComposeOptions {
 export interface Composition {
   readonly useCases: UseCases;
   readonly sessionToken: string;
-  /** The models "Request AI review" can run on, and the default. */
+  /** The models "Request AI review" can run on, and the one a run without a choice uses. */
   modelOptions(): Promise<ModelOptions>;
   /** The HTTP app for a server listening on `port`, which its Host check needs. */
   app(port: number): Hono;
@@ -197,7 +202,7 @@ export const assemble = async (
   return {
     useCases,
     sessionToken,
-    modelOptions: () => deps.models.options(),
+    modelOptions: () => modelOptions(deps),
     app: (port) =>
       createHttpApp({
         useCases,

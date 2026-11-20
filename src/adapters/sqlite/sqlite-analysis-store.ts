@@ -16,6 +16,7 @@ import {
   type AnalysisId,
   type AnalysisKey,
   CommentKey,
+  ModelOptionId,
   PointReview,
   PublicationId,
   PublicationReceipt,
@@ -61,6 +62,7 @@ const ReviewRow = z.object({
   number: z.number(),
 });
 const AtRow = z.object({ at: z.string() });
+const OptionRow = z.object({ option_id: z.string() });
 const RefRow = z.object({
   host: z.string(),
   owner: z.string(),
@@ -193,6 +195,12 @@ export const openSqliteAnalysisStore = (
      WHERE comment_key <> 'summary' AND julianday(posted_at) >= julianday(?)
      UNION ALL
      SELECT posted_at AS at FROM thread_posts WHERE julianday(posted_at) >= julianday(?)`,
+  );
+
+  const selectLastModelOption = db.prepare("SELECT option_id FROM last_model_option");
+  const upsertLastModelOption = db.prepare(
+    `INSERT INTO last_model_option (id, option_id, used_at) VALUES (1, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET option_id = excluded.option_id, used_at = excluded.used_at`,
   );
 
   const toAnalysis = (row: unknown): Analysis | null => {
@@ -355,6 +363,17 @@ export const openSqliteAnalysisStore = (
         return at.success ? [at.data] : [];
       });
       return { reviews, comments };
+    },
+
+    async getLastModelOption() {
+      const row = selectLastModelOption.get();
+      if (row === undefined) return null;
+      const id = ModelOptionId.safeParse(OptionRow.parse(row).option_id);
+      return id.success ? id.data : null;
+    },
+
+    async recordModelOption(id: ModelOptionId) {
+      upsertLastModelOption.run(id, clock.now());
     },
 
     async get(repo: RepoRef, { sha, path }: FileAt) {

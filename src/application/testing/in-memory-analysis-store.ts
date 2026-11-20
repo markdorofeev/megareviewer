@@ -3,6 +3,7 @@ import type {
   AnalysisId,
   AnalysisKey,
   CommentKey,
+  ModelOptionId,
   PointId,
   PointReview,
   PullRequestRef,
@@ -35,6 +36,8 @@ export class InMemoryAnalysisStore implements AnalysisStore {
     readonly kind: ThreadPostKind;
     readonly at: Timestamp;
   }[] = [];
+
+  private lastModelOption: ModelOptionId | null = null;
 
   private readonly clock: Clock;
 
@@ -149,5 +152,13 @@ export class InMemoryAnalysisStore implements AnalysisStore {
       ...this.threadPosts.map((post) => post.at),
     ].filter(after);
     return { reviews, comments };
+  }
+
+  async getLastModelOption(): Promise<ModelOptionId | null> {
+    return this.lastModelOption;
+  }
+
+  async recordModelOption(id: ModelOptionId): Promise<void> {
+    this.lastModelOption = id;
   }
 }

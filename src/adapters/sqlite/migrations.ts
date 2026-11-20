@@ -157,6 +157,13 @@ export const MIGRATIONS: readonly string[] = [
     suggested_at TEXT NOT NULL
   );
   `,
+  `
+  CREATE TABLE last_model_option (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    option_id TEXT NOT NULL,
+    used_at TEXT NOT NULL
+  );
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

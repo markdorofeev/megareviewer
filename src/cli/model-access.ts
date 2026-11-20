@@ -510,7 +510,9 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
   };
 };
 
-/** The default option and who pays, or each provider's reason when none can run. */
+/**
+ * The option a run without a choice uses and who pays, or each provider's reason when none can run.
+ */
 export const modelSummary = ({ options, defaultId }: ModelOptions): string => {
   const chosen = options.find((option) => option.id === defaultId);
   if (chosen?.available === true) {

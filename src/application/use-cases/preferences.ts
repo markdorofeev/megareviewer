@@ -133,7 +133,7 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
   };
 
   const suggesterFor = (optionId: ModelOptionId | undefined) =>
-    chooseOption(deps.models, optionId, (option) => deps.models.suggester(option));
+    chooseOption(deps, optionId, (option) => deps.models.suggester(option));
 
   /**
    * One model call, whose drafts become pending proposals. A blank draft, or one that says what a

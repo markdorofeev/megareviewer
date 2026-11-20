@@ -10,6 +10,7 @@ import {
   MODEL_STAGES,
   type ModelOption,
   type ModelOptionId,
+  type ModelOptions,
   mapModelStages,
   modelFamily,
   modelRunnable,
@@ -23,7 +24,7 @@ import {
   withoutModelRun,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { GitHost, ModelCatalog } from "../ports/index.ts";
+import type { GitHost } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { hostFor } from "./hosts.ts";
@@ -49,16 +50,29 @@ const fetchPullRequest = async (
 };
 
 /**
- * The option a model call uses: the one asked for, else the catalog's default, with what makes
- * the call, the passes or the suggester. An unknown option is a bad request; one that can't run,
- * or can't make that call, is unavailable, with why.
+ * The catalog's options, with the option the last model call used as the one a run without a
+ * choice uses, while it can run, so a restart doesn't put the reviewer back on the default.
+ */
+export const modelOptions = async ({
+  models,
+  store,
+}: Pick<AppDeps, "models" | "store">): Promise<ModelOptions> => {
+  const [catalog, lastId] = await Promise.all([models.options(), store.getLastModelOption()]);
+  const last = catalog.options.find((option) => option.id === lastId && option.available);
+  return last === undefined ? catalog : { ...catalog, defaultId: last.id };
+};
+
+/**
+ * The option a model call uses: the one asked for, else the one a run without a choice uses, with
+ * what makes the call, the passes or the suggester, and remembered as the last used. An unknown
+ * option is a bad request; one that can't run, or can't make that call, is unavailable, with why.
  */
 export const chooseOption = async <T>(
-  catalog: ModelCatalog,
+  deps: Pick<AppDeps, "models" | "store">,
   optionId: ModelOptionId | undefined,
   runner: (optionId: ModelOptionId) => T | null,
 ): Promise<Result<{ option: ModelOption; runner: T }, UseCaseError>> => {
-  const { options, defaultId } = await catalog.options();
+  const { options, defaultId } = await modelOptions(deps);
   const id = optionId ?? defaultId;
   const option = options.find((candidate) => candidate.id === id);
   if (option === undefined) {
@@ -77,7 +91,9 @@ export const chooseOption = async <T>(
     );
   if (!option.available) return unavailable(option.reason ?? "it can't run");
   const found = runner(option.id);
-  return found === null ? unavailable("it can't run") : ok({ option, runner: found });
+  if (found === null) return unavailable("it can't run");
+  await deps.store.recordModelOption(option.id);
+  return ok({ option, runner: found });
 };
 
 const newAnalysis = (
@@ -249,9 +265,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           ),
         );
       }
-      const chosen = await chooseOption(deps.models, optionId, (option) =>
-        deps.models.model(option),
-      );
+      const chosen = await chooseOption(deps, optionId, (option) => deps.models.model(option));
       if (!chosen.ok) return chosen;
       const host = hostFor(deps, analysis.key.ref.repo.host);
       if (!host.ok) return host;

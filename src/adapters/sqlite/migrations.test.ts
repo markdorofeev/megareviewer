@@ -29,6 +29,7 @@ describe("migrate", () => {
       "analyses",
       "file_contents",
       "guideline_switches",
+      "last_model_option",
       "point_reviews",
       "preference_proposals",
       "preference_suggestions",
@@ -128,7 +129,7 @@ describe("migrate", () => {
     db.exec(`INSERT INTO analyses VALUES
       ('a_0123456789abcdef', 'github', 'acme', 'shop', 1, 'sha', 'v1', 'complete', '{}', 't', 't')`);
 
-    expect(migrate(db, MIGRATIONS)).toEqual([6]);
+    expect(migrate(db, MIGRATIONS.slice(0, 6))).toEqual([6]);
 
     expect(db.prepare("SELECT id FROM analyses").all()).toEqual([{ id: "a_0123456789abcdef" }]);
     db.exec(`INSERT INTO review_signals VALUES

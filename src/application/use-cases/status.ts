@@ -8,6 +8,7 @@ import {
   type ReviewActivity,
 } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
+import { modelOptions } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 
 export interface PullRequestList {
@@ -106,7 +107,7 @@ export const createStatusUseCases = (deps: AppDeps, version: string) => ({
     const [github, bitbucket, model] = await Promise.all([
       hostStatus("github"),
       hostStatus("bitbucket"),
-      deps.models.options(),
+      modelOptions(deps),
     ]);
     return {
       version,

@@ -1,3 +1,4 @@
+export { modelOptions } from "./analyses.ts";
 export { createUseCases, type UseCases } from "./create-use-cases.ts";
 export type { AppDeps } from "./deps.ts";
 export type { ErrorCode, UseCaseError } from "./errors.ts";
