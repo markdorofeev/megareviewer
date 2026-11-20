@@ -128,16 +128,16 @@ test("works from the keyboard", async ({ page }) => {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   });
-  const active = screens.locator("nav [aria-current]");
-  await expect(active).toHaveAttribute("title", "src/http/retry.ts");
+  const active = screens.locator("nav [aria-selected=true]");
+  await expect(active).toHaveAttribute("data-key", "src/http/retry.ts");
   await page.keyboard.press("n");
-  await expect(active).toHaveAttribute("title", "src/util/sleep.ts");
+  await expect(active).toHaveAttribute("data-key", "src/util/sleep.ts");
   await page.keyboard.press("p");
-  await expect(active).toHaveAttribute("title", "src/http/retry.ts");
+  await expect(active).toHaveAttribute("data-key", "src/http/retry.ts");
 
   // / filters the files; Esc clears the filter.
   await page.keyboard.press("/");
-  const filter = page.getByRole("searchbox", { name: "Filter files" }).first();
+  const filter = page.getByRole("textbox", { name: "Filter files by name or path" }).first();
   await expect(filter).toBeFocused();
   await page.keyboard.type("sleep");
   await page.keyboard.press("Escape");
@@ -159,12 +159,12 @@ test("works from the keyboard", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(shortcuts).toHaveCount(0);
   await page.keyboard.press("n");
-  await expect(active).toHaveAttribute("title", "src/http/retry.ts");
+  await expect(active).toHaveAttribute("data-key", "src/http/retry.ts");
 });
 
 // The rail is 17rem beside the code above 1024px; under that the tree takes the page's width. A
-// row wider than the rail scrolled the tree sideways: Claude's points, threads and a chip after a
-// deep row's indent, or a new file's hidden status word after its whole name.
+// row wider than the rail scrolled the tree sideways, and a row never wraps: a long name is
+// shortened in its middle instead.
 for (const width of [1440, 1920, 2560]) {
   test(`keeps every tree row inside the rail's width, at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
@@ -176,18 +176,20 @@ for (const width of [1440, 1920, 2560]) {
         const viewport = box.querySelector<HTMLElement>("[data-slot=scroll-area-viewport]");
         if (viewport === null) throw new Error("no tree viewport");
         const right = viewport.getBoundingClientRect().right;
-        const rows = [...viewport.querySelectorAll<HTMLElement>("li > button")];
+        const rows = [...viewport.querySelectorAll<HTMLElement>("[role=treeitem]")];
+        if (rows.length === 0) throw new Error("no tree rows");
         return {
           sideways: viewport.scrollWidth - viewport.clientWidth,
           rows: rows.filter((row) => row.getBoundingClientRect().right > right + 0.5).length,
+          wrapped: rows.filter((row) => row.getBoundingClientRect().height !== 28).length,
           names: rows.filter((row) => {
-            const name = row.querySelector("[data-slot=file-name]")?.parentElement;
-            return name !== null && name !== undefined && name.getBoundingClientRect().width < 24;
+            const name = row.querySelector("[data-slot=file-name]");
+            return name !== null && name.getBoundingClientRect().width < 24;
           }).length,
         };
       }),
     );
-    expect(overflow).toEqual(Array(3).fill({ sideways: 0, rows: 0, names: 0 }));
+    expect(overflow).toEqual(Array(3).fill({ sideways: 0, rows: 0, wrapped: 0, names: 0 }));
   });
 }
 

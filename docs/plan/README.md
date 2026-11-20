@@ -222,6 +222,12 @@ An AI review says the same things to every reviewer. This slice collects what a 
 
 Stage 55 is the bottleneck on purpose, as stage 02 was: it fixes the types, ports, routes and fakes, so 56, 57 and 58 run side by side, with 59's cases and scoring beside them. Only stage 55 writes DESIGN.md, ARCHITECTURE.md and ENGINEERING.md; the others record what they decide in their own doc's notes, and it's folded in when the slice is merged. The evals run last, once 56's prompts are in.
 
+## Thirteenth slice: the file tree after its v4 design
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 60 | [The file tree after the v4 design](60-file-tree-v4.md) | 36, 45, 50 | `web/src/review/tree/`, the vendored IDEA icons, the tree's tokens and contrast pairs |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

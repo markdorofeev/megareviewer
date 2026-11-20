@@ -931,8 +931,8 @@ describe("map", () => {
     const rail = screen.getByRole("navigation", { name: "Changed files" });
     expect(
       within(rail)
-        .getAllByRole("button")
-        .flatMap((row) => (row.title.endsWith("/") ? [] : [row.title])),
+        .getAllByRole("treeitem")
+        .flatMap((row) => (row.hasAttribute("aria-selected") ? [row.dataset.key] : [])),
     ).toEqual(["src/routes/orders.ts", "src/services/receipts.ts", "package.json"]);
     expect(screen.queryByRole("button", { name: /Jump to/ })).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
@@ -1382,12 +1382,14 @@ describe("points", () => {
   it("count each file's points in the tree", async () => {
     renderReview();
     await loaded();
-    const row = within(rail()).getByTitle("src/routes/orders.ts");
-    const count = (kind: string) =>
-      row.querySelector(`[data-slot=point-count][data-kind=${kind}]`)?.textContent;
-    expect(count("finding")).toBe("1 finding");
-    expect(count("risk")).toBe("1 risk");
-    expect(count("decision")).toBe("1 decision");
+    const row = within(rail())
+      .getAllByRole("treeitem")
+      .find((item) => item.dataset.key === "src/routes/orders.ts");
+    // A dot for findings and a ring for risks; decisions aren't marked in the tree.
+    expect(row?.querySelector("[data-kind=finding]")).not.toBeNull();
+    expect(row?.querySelector("[data-kind=risk]")).not.toBeNull();
+    expect(row?.querySelector("[data-kind=decision]")).toBeNull();
+    expect(row?.getAttribute("aria-label")).toContain("1 finding, 1 risk");
   });
 
   it("can't be acted on once a review is published, which can be followed by another", async () => {

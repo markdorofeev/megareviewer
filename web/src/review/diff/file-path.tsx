@@ -23,9 +23,8 @@ const SplitPath = ({ path, name }: { readonly path: string; readonly name?: stri
 };
 
 /**
- * A file's path; a renamed file's old path, an arrow, and its new one. A new or deleted file has
- * its mark: the status icon before the path, the name in the status color, and the word hidden
- * after it.
+ * A file's path, after its type's icon; a renamed file's old path, an arrow, and its new one. A
+ * new or deleted file's name is in the status color, with the word hidden after it.
  */
 export const FilePath = ({
   file,
@@ -40,8 +39,8 @@ export const FilePath = ({
   const mark = style?.kind === "mark" ? style : null;
   return (
     <span data-slot="file-path" className={cn("min-w-0 break-all font-mono text-code", className)}>
-      {mark !== null && (
-        <FileIcon path={file.path} status={status} className="mr-1 inline-block align-[-2px]" />
+      {status !== undefined && (
+        <FileIcon path={file.path} status={status} className="mr-1 align-[-3px]" />
       )}
       {file.oldPath !== null && file.oldPath !== file.path ? (
         <>

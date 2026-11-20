@@ -11,6 +11,8 @@ const DIST = "dist";
 const GRAMMARS = "src/adapters/treesitter/grammars";
 /** Kept in the repo for maintainers, not needed at runtime. The license texts go into the notices. */
 const GRAMMAR_EXTRAS = new Set(["PROVENANCE.md", "refresh.sh", "licenses"]);
+/** IntelliJ IDEA's icons, which the UI bundles as files rather than as a package. */
+const ICONS = "web/src/review/tree/icons";
 
 // The bundle is ESM, but CommonJS dependencies inside it call require().
 const SERVER_BANNER = `import { createRequire as __megareviewerCreateRequire } from "node:module";
@@ -59,6 +61,8 @@ export interface PackageNotice {
 export const formatNotices = (
   packages: readonly PackageNotice[],
   grammars: readonly GrammarNotice[],
+  /** Sections for what isn't a package or a grammar, each already titled. */
+  others: readonly string[] = [],
 ): string => {
   const rule = "-".repeat(78);
   const sections = packages.map(
@@ -81,6 +85,7 @@ export const formatNotices = (
     ...sections,
     `tree-sitter grammars in grammars/\n\n${grammarLines.join("\n")}\n`,
     ...grammarSections,
+    ...others.map((section) => `${section.trim()}\n`),
   ].join(`\n${rule}\n\n`);
 };
 
@@ -211,7 +216,14 @@ const main = async () => {
   const roots = [...new Set(bundled.flatMap((file) => packageRootOf(file) ?? []))].sort();
   const notices = await Promise.all(roots.map(readNotice));
   const grammars = await readGrammarNotices();
-  await writeFile(join(DIST, "THIRD_PARTY_LICENSES.txt"), formatNotices(notices, grammars));
+  const [iconNotice, iconLicense] = await Promise.all(
+    ["NOTICE.txt", "LICENSE-Apache-2.0.txt"].map((file) => readFile(join(ICONS, file), "utf8")),
+  );
+  const icons = `IntelliJ IDEA icons in the UI, from JetBrains/intellij-community (Apache-2.0)\n\n${iconNotice?.trim()}\n\n${iconLicense?.trim()}`;
+  await writeFile(
+    join(DIST, "THIRD_PARTY_LICENSES.txt"),
+    formatNotices(notices, grammars, [icons]),
+  );
   console.log(
     `Built ${DIST}/ with ${notices.length} bundled packages and ${grammars.length} grammars.`,
   );

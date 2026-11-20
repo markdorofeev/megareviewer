@@ -437,6 +437,12 @@
   --color-diff-del-word: var(--diff-del-word);
   --color-diff-del-gutter: var(--diff-del-gutter);
   --color-diff-del-fg: var(--diff-del-fg);
+  /* The file tree's tints: changed-line counts and a new or deleted file's extension, mixed toward
+     muted so they sit back from the name. check:contrast reads these mixes. */
+  --color-stat-add: color-mix(in srgb, var(--diff-add-fg) 72%, var(--muted-foreground));
+  --color-stat-del: color-mix(in srgb, var(--diff-del-fg) 72%, var(--muted-foreground));
+  --color-file-ext-add: color-mix(in srgb, var(--diff-add-fg) 55%, var(--muted-foreground));
+  --color-file-ext-del: color-mix(in srgb, var(--diff-del-fg) 55%, var(--muted-foreground));
   --color-diff-mod-fg: var(--diff-mod-fg);
   --color-diff-hunk-bg: var(--diff-hunk-bg);
   --color-diff-hunk-fg: var(--diff-hunk-fg);

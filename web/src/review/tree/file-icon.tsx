@@ -1,48 +1,43 @@
-import {
-  BracesIcon,
-  FileCodeIcon,
-  FileMinusIcon,
-  FilePlusIcon,
-  FileTextIcon,
-  FlaskConicalIcon,
-  type LucideIcon,
-  PaletteIcon,
-  FileIcon as PlainFileIcon,
-} from "lucide-react";
 import type { FileStatus } from "../../../../src/domain/diff/index.ts";
-import { FILE_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
-import { type FileFamily, type FileRole, fileFamily, fileRole } from "./file-kind.ts";
+import { type FolderKind, fileKind, type IconName } from "./file-kind.ts";
 
-const SHAPES: Readonly<Record<FileRole, LucideIcon>> = {
-  test: FlaskConicalIcon,
-  code: FileCodeIcon,
-  data: BracesIcon,
-  docs: FileTextIcon,
-  style: PaletteIcon,
-  other: PlainFileIcon,
-};
+// IntelliJ IDEA's icons, unmodified (icons/PROVENANCE.md). Their colors are the icons' own, so they
+// load as images rather than as markup in our source.
+const URLS: Readonly<Record<string, string>> = import.meta.glob<string>("./icons/*.svg", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
 
-// The syntax colors, the hues the code beside the tree already uses.
-const TONES: Readonly<Record<FileFamily, string>> = {
-  python: "text-syntax-function",
-  script: "text-syntax-number",
-  data: "text-syntax-string",
-  markup: "text-syntax-keyword",
-  plain: "text-muted-foreground",
-};
+const url = (name: IconName | "junitTestMark", dark: boolean): string =>
+  URLS[`./icons/${name}${dark ? "_dark" : ""}.svg`] ?? "";
 
-// A new or deleted file's icon says so instead of its type: the plus or minus is the glyph that
-// goes with the color.
-const MARKS: Readonly<Partial<Record<FileStatus, LucideIcon>>> = {
-  added: FilePlusIcon,
-  deleted: FileMinusIcon,
-};
+/** Both variants, the dark one shown under `.dark`, so switching the theme needs no render. */
+const Variants = ({
+  name,
+  className,
+}: {
+  readonly name: IconName | "junitTestMark";
+  readonly className?: string;
+}) => (
+  <>
+    <img
+      src={url(name, false)}
+      alt=""
+      draggable={false}
+      className={cn("block size-4 dark:hidden", className)}
+    />
+    <img
+      src={url(name, true)}
+      alt=""
+      draggable={false}
+      className={cn("hidden size-4 dark:block", className)}
+    />
+  </>
+);
 
-/**
- * A file's icon. Decorative: the name beside it carries the extension, and a hidden word its
- * status, so neither the shape nor the color is the only way to tell them.
- */
+/** A file's icon. Decorative: the row's name says what the file is and its status. */
 export const FileIcon = ({
   path,
   status,
@@ -52,24 +47,22 @@ export const FileIcon = ({
   readonly status?: FileStatus;
   readonly className?: string;
 }) => {
-  const style = status === undefined ? null : FILE_STATUS[status];
-  const Mark = status === undefined ? undefined : MARKS[status];
-  if (style?.kind === "mark" && Mark !== undefined) {
-    return (
-      <Mark
-        aria-hidden="true"
-        data-status={status}
-        className={cn("size-3.5 shrink-0", style.tone, className)}
-      />
-    );
-  }
-  const role = fileRole(path);
-  const Shape = SHAPES[role];
+  const kind = fileKind(path, status);
   return (
-    <Shape
+    <span
       aria-hidden="true"
-      data-role={role}
-      className={cn("size-3.5 shrink-0", TONES[fileFamily(path)], className)}
-    />
+      data-icon={kind.icon}
+      {...(kind.testMark ? { "data-test-mark": "" } : {})}
+      className={cn("relative inline-block size-4 shrink-0", className)}
+    >
+      <Variants name={kind.icon} />
+      {kind.testMark && <Variants name="junitTestMark" className="absolute inset-0" />}
+    </span>
   );
 };
+
+export const FolderIcon = ({ kind }: { readonly kind: FolderKind }) => (
+  <span aria-hidden="true" data-icon={kind} className="inline-block size-4 shrink-0">
+    <Variants name={kind} />
+  </span>
+);

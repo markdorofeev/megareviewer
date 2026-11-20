@@ -268,6 +268,129 @@ export const TREE_FILES: readonly FileEntry[] = [
   { path: "docs/flow.png", status: "modified", additions: 0, deletions: 0 },
 ];
 
+const SVM = "substratevm/src/";
+const CORE = `${SVM}com.oracle.svm.core/src/com/oracle/svm/core/`;
+const HOSTED = `${SVM}com.oracle.svm.hosted/src/com/oracle/svm/hosted/`;
+
+type Change = readonly [
+  name: string,
+  additions: number,
+  deletions?: number,
+  findings?: number,
+  threads?: number,
+];
+
+const java = (directory: string, status: FileEntry["status"], changes: readonly Change[]) =>
+  changes.map(
+    ([name, additions, deletions = 0, findings = 0, threads = 0]): FileEntry => ({
+      path: `${directory}${name}.java`,
+      status,
+      additions,
+      deletions,
+      ...(findings > 0 ? { points: { finding: findings } } : {}),
+      ...(threads > 0 ? { threads } : {}),
+    }),
+  );
+
+/** GraalVM's PGO pull request as the file tree's design draws it: 46 files in Java modules. */
+export const SUBSTRATEVM_FILES: readonly FileEntry[] = [
+  ...java(`${CORE}pgo/`, "added", [
+    ["BranchProfileRecorder", 300, 0, 0, 2],
+    ["BranchProfileThreadLocal", 139],
+    ["CallCountProfileKey", 73],
+    ["CallCountProfileRecorder", 645, 0, 1],
+    ["CallCountProfileSlot", 40],
+    ["IprofWriter", 599],
+    ["ProfileDumper", 168],
+    ["ProfileFrame", 113],
+    ["StackSampleRecorder", 397],
+    ["SwitchProfileKey", 110],
+    ["SwitchProfileRecorder", 103],
+    ["TypeProfileKey", 93],
+    ["TypeProfileRecorder", 749, 0, 0, 1],
+  ]),
+  {
+    path: `${CORE}thread/RecurringCallbackSupport.java`,
+    status: "modified",
+    additions: 60,
+    deletions: 3,
+    points: { risk: 1 },
+    threads: 1,
+  },
+  ...java(`${CORE}thread/`, "modified", [
+    ["ThreadListener", 11],
+    ["ThreadListenerSupport", 7],
+    ["VMThreads", 9],
+  ]),
+  ...java(`${HOSTED}pgo/`, "added", [
+    ["BranchProfileApplier", 188],
+    ["CallCountProfileApplier", 231],
+    ["InliningProfileProvider", 219],
+    ["InstrumentBranchesPhase", 205],
+    ["InstrumentCallCountsPhase", 198],
+    ["IprofParser", 538, 0, 1, 1],
+    ["PGOOptions", 88],
+    ["ProfileDatabase", 276],
+    ["ProfileDumpFeature", 76],
+    ["ProfileInstrumentationPhase", 471],
+    ["ProfileMerger", 183],
+    ["StackSampleAggregator", 262],
+    ["TypeProfileApplier", 309],
+  ]),
+  ...java(`${HOSTED}pgo/`, "modified", [["PGOFeature", 42, 6]]),
+  {
+    path: `${HOSTED}pgo/ProfileReader.java`,
+    oldPath: `${HOSTED}pgo/ProfileFileReader.java`,
+    status: "renamed",
+    additions: 38,
+    deletions: 12,
+  },
+  {
+    path: `${HOSTED}pgo/LegacyProfileFormat.java`,
+    status: "deleted",
+    additions: 0,
+    deletions: 184,
+  },
+  {
+    path: `${HOSTED}pgo/resources/iprof-schema.json`,
+    status: "added",
+    additions: 57,
+    deletions: 0,
+  },
+  ...java(`${HOSTED}code/`, "modified", [
+    ["CEntryPointCallStubSupport", 4, 1],
+    ["CompileQueue", 38, 12, 0, 3],
+    ["DeoptimizationUtils", 12, 3],
+    ["HostedRuntimeConfigurationBuilder", 9, 1],
+    ["NativeImageCodeCache", 6],
+    ["SharedRuntimeConfigurationBuilder", 5, 2],
+    ["SubstrateCompilationDirectives", 27, 4],
+    ["SubstrateGraphBuilderPhase", 14, 2],
+  ]),
+  {
+    path: `${SVM}com.oracle.svm.hosted/src/META-INF/services/com.oracle.svm.core.feature.InternalFeature`,
+    status: "modified",
+    additions: 2,
+    deletions: 0,
+  },
+  ...java(`${SVM}com.oracle.svm.test/src/com/oracle/svm/test/pgo/`, "added", [
+    ["IprofWriterTest", 212],
+  ]),
+  {
+    path: "substratevm/mx.substratevm/suite.py",
+    status: "modified",
+    additions: 24,
+    deletions: 2,
+    threads: 1,
+  },
+  {
+    path: "docs/reference-manual/native-image/PGO-Instrumentation.md",
+    status: "added",
+    additions: 96,
+    deletions: 0,
+  },
+];
+
 export const PENDING_COMMENTS: readonly PendingComment[] = [
   {
     id: "c1",

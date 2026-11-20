@@ -1,248 +1,568 @@
-import { ChevronDownIcon, FolderIcon, FolderOpenIcon, MessageSquare } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { PointKind } from "../../../../src/domain/review/index.ts";
+import { ChevronRightIcon, MessageSquare, SearchIcon } from "lucide-react";
+import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useShortcuts } from "../../lib/keymap.ts";
-import { FILE_STATUS, POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Input } from "../../ui/input.tsx";
 import { ScrollArea } from "../../ui/scroll-area.tsx";
-import { FileStatusChip } from "../diff/file-path.tsx";
-import { EmptyState } from "../shell/empty-state.tsx";
-import { KeyHint } from "../shell/key-hint.tsx";
-import { FileIcon } from "./file-icon.tsx";
-import { type FileEntry, type FileOrder, filterFiles, sortFiles } from "./files.ts";
-import { fileTree, nameOf, type TreeEntry, treeOrder, treeRoot } from "./paths.ts";
+import { FileIcon, FolderIcon } from "./file-icon.tsx";
+import { fileKind } from "./file-kind.ts";
+import { type FileEntry, filterFiles } from "./files.ts";
+import { shortenName, splitName } from "./names.ts";
+import { directoryOf, fileTree, nameOf, type TreeEntry, treeOrder, treePath } from "./paths.ts";
 
 export interface FileTreeProps {
   readonly files: readonly FileEntry[];
   readonly activePath: string | null;
   readonly onSelect: (path: string) => void;
-  /** Directories as headings, or one flat list. */
-  readonly mode?: "tree" | "flat";
-  /** For the flat list: by path, or the most changed first. */
-  readonly order?: FileOrder;
   /** n and p select the next and previous file, in the order shown. One tree per page has it. */
   readonly navigate?: boolean;
   readonly className?: string;
 }
 
-/** A level's indent, and a heading's height: headings stick one under another, by depth. */
-const INDENT = 12;
-const HEADING = 24;
+type Show = "all" | "finding" | "risk";
 
-/**
- * A directory path that keeps its last directory in sight: the rest is cut first, so
- * `src/main/java/com/acme/orders/` reads `src/main/java/c… orders/` in a narrow rail.
- */
-const DirectoryLabel = ({ label }: { readonly label: string }) => {
-  const cut = label.slice(0, -1).lastIndexOf("/") + 1;
-  return cut === 0 ? (
-    <span className="min-w-0 flex-1 truncate">{label}</span>
-  ) : (
-    <span className="flex min-w-0 flex-1">
-      <span className="min-w-[1.5em] shrink-[999] truncate">{label.slice(0, cut)}</span>
-      <span className="min-w-0 truncate">{label.slice(cut)}</span>
-    </span>
-  );
+type Row =
+  | {
+      readonly kind: "directory";
+      readonly key: string;
+      readonly label: string;
+      readonly entry: Extract<TreeEntry, { kind: "directory" }>;
+      readonly depth: number;
+      readonly open: boolean;
+      readonly count: number;
+    }
+  | {
+      readonly kind: "file";
+      readonly key: string;
+      readonly file: FileEntry;
+      readonly depth: number;
+    };
+
+const STATUS_WORD = {
+  added: "new file",
+  modified: "modified",
+  deleted: "deleted",
+  renamed: "renamed",
 };
 
-/** The changed files, filtered with `/`, each with its status and its counts. */
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+const renamedFrom = (file: FileEntry): string | null =>
+  file.status === "renamed" ? (file.oldPath ?? null) : null;
+
+/** What a row says to a screen reader: everything its marks show, in words. */
+const spoken = (file: FileEntry): string => {
+  const { finding = 0, risk = 0 } = file.points ?? {};
+  const old = renamedFrom(file);
+  const from = old === null ? "" : ` from ${old}`;
+  return [
+    nameOf(file.path),
+    `${fileKind(file.path, file.status).label}, ${STATUS_WORD[file.status]}${from}`,
+    file.additions > 0 ? `${plural(file.additions, "line")} added` : "",
+    file.deletions > 0 ? `${plural(file.deletions, "line")} removed` : "",
+    (file.threads ?? 0) > 0 ? plural(file.threads ?? 0, "open thread") : "",
+    finding > 0 ? plural(finding, "finding") : "",
+    risk > 0 ? plural(risk, "risk") : "",
+    directoryOf(file.path) === "" ? "" : `in ${directoryOf(file.path)}`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+};
+
+const tooltip = (file: FileEntry): string => {
+  const word = STATUS_WORD[file.status];
+  const old = renamedFrom(file);
+  const was = old === null ? "" : ` · was ${nameOf(old)}`;
+  return `${file.path}\n${word[0]?.toUpperCase()}${word.slice(1)}${was}`;
+};
+
+/** The changed files: filtered with `/` or by Claude's points, each with its status and counts. */
 export const FileTree = ({
   files,
   activePath,
   onSelect,
-  mode = "tree",
-  order = "path",
   navigate = false,
   className,
 }: FileTreeProps) => {
   const nav = useRef<HTMLElement>(null);
-  // Keep the active file in sight when the list is longer than its box.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the active file changes.
-  useEffect(() => {
-    const box = nav.current?.querySelector<HTMLElement>("[data-slot=scroll-area-viewport]");
-    const row = nav.current?.querySelector<HTMLElement>("[aria-current]");
-    if (box === null || box === undefined || row === null || row === undefined) return;
-    const top = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
-    // Its directories' headings stick over the top of the box.
-    const covered = Number(row.dataset.depth ?? 0) * HEADING;
-    if (top < box.scrollTop + covered || top > box.scrollTop + box.clientHeight - 40) {
-      box.scrollTop = Math.max(0, top - box.clientHeight / 3);
-    }
-  }, [activePath]);
+  const list = useRef<HTMLDivElement>(null);
+  const filter = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  const [show, setShow] = useState<Show>("all");
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  const [focused, setFocused] = useState<string | null>(null);
   // When the file in view changes, open the directories down to it, so its row is drawn and
   // highlighted. Done while rendering rather than in an effect, so the row exists by the time
-  // the effect above scrolls to it. Only on a change: the reviewer can still close the
+  // the effect below scrolls to it. Only on a change: the reviewer can still close the
   // directory they're reading in, and it stays closed until another file comes into view.
   const [openedFor, setOpenedFor] = useState(activePath);
   if (openedFor !== activePath) {
     setOpenedFor(activePath);
-    const shut = [...closed].filter((dir) => activePath?.startsWith(`${dir}/`));
+    const at = activePath === null ? null : treePath(activePath);
+    const shut = [...closed].filter((dir) => at?.startsWith(`${dir}/`));
     if (shut.length > 0) setClosed(new Set([...closed].filter((dir) => !shut.includes(dir))));
   }
-  const filter = useRef<HTMLInputElement>(null);
   useShortcuts({ filterTree: () => filter.current?.focus() });
 
-  const shown = useMemo(() => filterFiles(files, query), [files, query]);
   const byPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
-  const { root, entries: tree } = useMemo(
-    () => treeRoot(fileTree(shown.map((file) => file.path))),
-    [shown],
-  );
+  const tree = useMemo(() => fileTree(files.map((file) => file.path)), [files]);
+  const withFindings = files.filter((file) => (file.points?.finding ?? 0) > 0).length;
+  const withRisks = files.filter((file) => (file.points?.risk ?? 0) > 0).length;
+  const visible = useMemo(() => {
+    const matched = new Set(filterFiles(files, query).map((file) => file.path));
+    return new Set(
+      files
+        .filter((file) => matched.has(file.path))
+        .filter((file) => show === "all" || (file.points?.[show] ?? 0) > 0)
+        .map((file) => file.path),
+    );
+  }, [files, query, show]);
+  const filtering = query.trim() !== "";
 
-  const shownOrder = useMemo(
-    () => (mode === "tree" ? treeOrder(tree) : sortFiles(shown, order).map((file) => file.path)),
-    [mode, tree, shown, order],
-  );
+  const rows = useMemo(() => {
+    const out: Row[] = [];
+    const shownIn = (entry: TreeEntry): number =>
+      entry.kind === "file"
+        ? Number(visible.has(entry.path))
+        : entry.children.reduce((sum, child) => sum + shownIn(child), 0);
+    const walk = (entries: readonly TreeEntry[], depth: number) => {
+      for (const entry of entries) {
+        if (entry.kind === "file") {
+          const file = byPath.get(entry.path);
+          if (file !== undefined && visible.has(file.path))
+            out.push({ kind: "file", key: file.path, file, depth });
+          continue;
+        }
+        const count = shownIn(entry);
+        if (count === 0) continue;
+        // A filter opens every directory, so a match is never hidden.
+        const open = filtering || !closed.has(entry.path);
+        out.push({
+          kind: "directory",
+          key: `${entry.path}/`,
+          label: entry.label,
+          entry,
+          depth,
+          open,
+          count,
+        });
+        if (open) walk(entry.children, depth + 1);
+      }
+    };
+    walk(tree, 0);
+    return out;
+  }, [tree, byPath, visible, closed, filtering]);
+
+  const order = useMemo(() => treeOrder(tree).filter((path) => visible.has(path)), [tree, visible]);
   // Landing, the marks drop in row by row from the top: each marked row's place among them.
   const marked = useMemo(() => {
-    const paths = shownOrder.filter((path) => byPath.get(path)?.points !== undefined);
+    const paths = order.filter((path) => {
+      const { finding = 0, risk = 0 } = byPath.get(path)?.points ?? {};
+      return finding + risk > 0;
+    });
     return new Map(paths.map((path, at) => [path, at]));
-  }, [shownOrder, byPath]);
+  }, [order, byPath]);
   const step = (by: 1 | -1) => {
-    const at = activePath === null ? -1 : shownOrder.indexOf(activePath);
-    const next = shownOrder[Math.min(shownOrder.length - 1, Math.max(0, at + by))];
+    const at = activePath === null ? -1 : order.indexOf(activePath);
+    const next = order[Math.min(order.length - 1, Math.max(0, at + by))];
     if (next !== undefined) onSelect(next);
   };
   useShortcuts({ nextFile: () => step(1), previousFile: () => step(-1) }, navigate);
 
+  // Keep the active file in sight when the list is longer than its box.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the active file changes.
+  useEffect(() => {
+    const box = nav.current?.querySelector<HTMLElement>("[data-slot=scroll-area-viewport]");
+    const row = list.current?.querySelector<HTMLElement>("[aria-selected=true]");
+    if (box === null || box === undefined || row === null || row === undefined) return;
+    const top = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 40) {
+      box.scrollTop = Math.max(0, top - box.clientHeight / 3);
+    }
+  }, [activePath]);
+
+  // One row is a Tab stop: the one last moved to, else the file in view, else the first.
+  const tabbable =
+    rows.find((row) => row.key === focused)?.key ??
+    rows.find((row) => row.kind === "file" && row.file.path === activePath)?.key ??
+    rows[0]?.key;
+
+  const focusRow = (key: string | undefined) => {
+    if (key === undefined) return;
+    setFocused(key);
+    list.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)?.focus();
+  };
   const toggle = (path: string) => {
     const next = new Set(closed);
     if (next.has(path)) next.delete(path);
     else next.add(path);
     setClosed(next);
   };
+  const act = (row: Row) => {
+    setFocused(row.key);
+    if (row.kind === "file") onSelect(row.file.path);
+    else if (!filtering) toggle(row.entry.path);
+  };
 
-  const fileRow = (entry: FileEntry, label: string, depth: number, directory?: string) => (
-    <li key={entry.path}>
-      <FileRow
-        entry={entry}
-        label={label}
-        depth={depth}
-        {...(directory === undefined ? {} : { directory })}
-        active={entry.path === activePath}
-        onSelect={onSelect}
-        {...(marked.has(entry.path)
-          ? { landing: { at: marked.get(entry.path) ?? 0, of: marked.size } }
-          : {})}
-      />
-    </li>
-  );
-
-  const entries = (list: readonly TreeEntry[], depth: number) =>
-    list.map((entry) => {
-      if (entry.kind === "file") {
-        const file = byPath.get(entry.path);
-        return file === undefined ? null : fileRow(file, entry.name, depth, entry.directory);
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const at = rows.findIndex((row) => row.key === (event.target as HTMLElement).dataset.key);
+    const row = rows[at];
+    if (row === undefined) return;
+    const go = (index: number) => {
+      event.preventDefault();
+      focusRow(rows[Math.min(rows.length - 1, Math.max(0, index))]?.key);
+    };
+    switch (event.key) {
+      case "ArrowDown":
+        return go(at + 1);
+      case "ArrowUp":
+        if (at === 0) {
+          event.preventDefault();
+          filter.current?.focus();
+          return;
+        }
+        return go(at - 1);
+      case "Home":
+        return go(0);
+      case "End":
+        return go(rows.length - 1);
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        return act(row);
+      case "ArrowRight":
+        if (row.kind === "directory" && !row.open) {
+          event.preventDefault();
+          toggle(row.entry.path);
+        }
+        return;
+      case "ArrowLeft": {
+        if (row.kind === "directory" && row.open && !filtering) {
+          event.preventDefault();
+          toggle(row.entry.path);
+          return;
+        }
+        const parent = rows.slice(0, at).findLastIndex((one) => one.depth < row.depth);
+        if (parent >= 0) go(parent);
+        return;
       }
-      // A filter opens every directory, so a match is never hidden.
-      const open = query.trim() !== "" || !closed.has(entry.path);
-      const Folder = open ? FolderOpenIcon : FolderIcon;
-      const indent = depth * INDENT + 4;
-      return (
-        <li key={entry.path}>
-          <button
-            type="button"
-            title={`${entry.path}/`}
-            aria-expanded={open}
-            onClick={() => toggle(entry.path)}
-            // Sticks under its parent's heading while its files scroll by, so where the reviewer
-            // is reads at the top of the rail however far down the tree they are. A deeper one
-            // goes under its parents as the end of its directory pushes it out.
-            className="sticky flex h-6 w-full items-center gap-1.5 rounded-md bg-background pr-2 text-left font-medium hover:bg-accent"
-            style={{
-              paddingLeft: `${indent}px`,
-              top: `${depth * HEADING}px`,
-              zIndex: Math.max(1, 30 - depth),
-            }}
-          >
-            <ChevronDownIcon
-              aria-hidden="true"
-              className={cn(
-                "size-3 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-standard",
-                !open && "-rotate-90",
-              )}
-            />
-            <Folder aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-            <DirectoryLabel label={entry.label} />
-          </button>
-          {open && (
-            <div className="relative">
-              {/* A guide under the chevron, so a file's directory is read down its line. */}
-              <span
-                aria-hidden="true"
-                className="absolute inset-y-0 w-px bg-border"
-                style={{ left: `${indent + 6}px` }}
-              />
-              <ul>{entries(entry.children, depth + 1)}</ul>
-            </div>
-          )}
-        </li>
-      );
-    });
+    }
+  };
+
+  const clear = () => {
+    setQuery("");
+    setShow("all");
+  };
 
   return (
-    <nav
-      ref={nav}
-      aria-label="Changed files"
-      className={cn("flex min-h-0 flex-col gap-2", className)}
-    >
-      <div className="relative px-1">
-        <Input
-          ref={filter}
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && query !== "") {
-              event.preventDefault();
-              setQuery("");
-            }
-          }}
-          placeholder="Filter files"
-          aria-label="Filter files"
-          className="h-7 pr-8"
-        />
-        <KeyHint id="filterTree" className="absolute top-1/2 right-3 -translate-y-1/2" />
-      </div>
-      <p
-        className="flex gap-1 px-2 text-caption text-muted-foreground"
-        aria-live="polite"
-        {...(root === null || mode !== "tree" ? {} : { title: root })}
-      >
-        <span className="shrink-0">
-          {query.trim() === ""
-            ? `${files.length} files`
-            : `${shown.length} of ${files.length} files`}
-          {root !== null && mode === "tree" && " in"}
-        </span>{" "}
-        {root !== null && mode === "tree" && (
-          <span className="flex min-w-0 flex-1 font-mono text-code-compact">
-            <DirectoryLabel label={root} />
+    <nav ref={nav} aria-label="Changed files" className={cn("flex min-h-0 flex-col", className)}>
+      <div className="px-2.5 pt-2.5 pb-1">
+        <div className="relative">
+          <SearchIcon
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            ref={filter}
+            type="text"
+            value={query}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setQuery("");
+                event.currentTarget.blur();
+              } else if (event.key === "ArrowDown") {
+                event.preventDefault();
+                focusRow(tabbable);
+              }
+            }}
+            placeholder="Filter files"
+            aria-label="Filter files by name or path"
+            className="h-7.5 pl-7"
+          />
+        </div>
+        <div className="mt-1 flex h-7 items-center justify-between text-caption text-muted-foreground">
+          <span className="tabular" aria-live="polite">
+            {visible.size === files.length
+              ? `${files.length} files`
+              : `${visible.size} of ${files.length} files`}
           </span>
-        )}
-      </p>
-      {shown.length === 0 ? (
-        <EmptyState
-          inline
-          tone="muted"
-          glyph="∅"
-          title="No files match"
-          body={`Nothing in this PR has “${query.trim()}” in its path.`}
-          actions={[{ label: "Clear filter", onClick: () => setQuery("") }]}
-        />
+          {/* biome-ignore lint/a11y/useSemanticElements: a toggle group, as the design has it. */}
+          <div role="group" aria-label="Show" className="flex gap-px">
+            {(
+              [
+                ["all", "All"],
+                ["finding", `Findings ${withFindings}`],
+                ["risk", `Risks ${withRisks}`],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={show === value}
+                onClick={() => setShow(value)}
+                className={cn(
+                  "tabular rounded-sm px-1.5 py-0.5 text-caption hover:text-foreground",
+                  show === value && "bg-secondary font-medium text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <p className="border-t px-3 py-4 text-caption text-muted-foreground">
+          No files match.{" "}
+          <button type="button" onClick={clear} className="text-primary underline">
+            Clear filter
+          </button>
+        </p>
       ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <ul className="flex flex-col gap-px px-1 pb-2">
-            {mode === "tree"
-              ? entries(tree, 0)
-              : sortFiles(shown, order).map((file) => fileRow(file, file.path, 0))}
-          </ul>
+        <ScrollArea className="min-h-0 flex-1 border-t">
+          <div
+            ref={list}
+            role="tree"
+            aria-label="Changed files"
+            onKeyDown={onKeyDown}
+            className="pt-1 pb-4"
+          >
+            {rows.map((row) =>
+              row.kind === "directory" ? (
+                <DirectoryRow
+                  key={row.key}
+                  row={row}
+                  tabbable={row.key === tabbable}
+                  onActivate={() => act(row)}
+                />
+              ) : (
+                <FileRow
+                  key={row.key}
+                  file={row.file}
+                  depth={row.depth}
+                  active={row.file.path === activePath}
+                  tabbable={row.key === tabbable}
+                  onActivate={() => act(row)}
+                  {...(marked.has(row.file.path)
+                    ? { landing: { at: marked.get(row.file.path) ?? 0, of: marked.size } }
+                    : {})}
+                />
+              ),
+            )}
+          </div>
         </ScrollArea>
       )}
     </nav>
+  );
+};
+
+const ROW =
+  "relative flex h-7 cursor-default items-center whitespace-nowrap pr-[7px] select-none hover:bg-surface-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
+
+/** Each level's indent. */
+const indent = (depth: number) => ({ paddingLeft: `${6 + depth * 9}px` });
+
+const DirectoryRow = ({
+  row,
+  tabbable,
+  onActivate,
+}: {
+  readonly row: Extract<Row, { kind: "directory" }>;
+  readonly tabbable: boolean;
+  readonly onActivate: () => void;
+}) => {
+  const cut = row.label.lastIndexOf("/") + 1;
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the tree handles the keys of all its rows.
+    <div
+      role="treeitem"
+      aria-level={row.depth + 1}
+      aria-expanded={row.open}
+      aria-label={`${row.entry.path}, folder, ${plural(row.count, "file")}`}
+      title={row.entry.path}
+      data-key={row.key}
+      tabIndex={tabbable ? 0 : -1}
+      onClick={onActivate}
+      className={cn(ROW, "gap-[5px]")}
+      style={indent(row.depth)}
+    >
+      <ChevronRightIcon
+        aria-hidden="true"
+        className={cn(
+          "size-3 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-standard",
+          row.open && "rotate-90",
+        )}
+      />
+      <span className="mr-px">
+        <FolderIcon kind={row.entry.folder} />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
+        {cut > 0 && <span>{row.label.slice(0, cut)}</span>}
+        <span className="font-medium text-foreground">{row.label.slice(cut)}</span>
+      </span>
+      {!row.open && (
+        <span className="tabular font-mono text-kbd leading-none text-muted-foreground">
+          {row.count}
+        </span>
+      )}
+    </div>
+  );
+};
+
+/** The name's color by status, the extension's a muted mix of it. */
+const NAME_TONE = {
+  added: ["text-diff-add-fg", "text-file-ext-add"],
+  deleted: [
+    "text-diff-del-fg line-through decoration-1",
+    "text-file-ext-del line-through decoration-1",
+  ],
+  modified: ["", "text-muted-foreground"],
+  renamed: ["", "text-muted-foreground"],
+} as const;
+
+let measuring: CanvasRenderingContext2D | null | undefined;
+
+const widthOf = (element: Element, text: string): number | null => {
+  measuring ??= document.createElement("canvas").getContext("2d");
+  if (measuring === null) return null;
+  const style = getComputedStyle(element);
+  measuring.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  measuring.letterSpacing = style.letterSpacing === "normal" ? "0px" : style.letterSpacing;
+  return measuring.measureText(text).width;
+};
+
+/** A file's name, its stem shortened in the middle to fit the row, and its extension. */
+const FileName = ({ file }: { readonly file: FileEntry }) => {
+  const box = useRef<HTMLSpanElement>(null);
+  const [stem, extension] = splitName(nameOf(file.path));
+  const [shown, setShown] = useState(stem);
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (element === null) return;
+    const measure = () => {
+      const width = element.clientWidth;
+      const stemPart = element.firstElementChild;
+      const extensionPart = element.lastElementChild;
+      if (width === 0 || stemPart === null || extensionPart === null) return;
+      const extensionWidth = widthOf(extensionPart, extension);
+      if (extensionWidth === null) return;
+      setShown(
+        shortenName(stem, (text) => (widthOf(stemPart, text) ?? 0) + extensionWidth <= width + 0.5),
+      );
+    };
+    measure();
+    void document.fonts?.ready.then(measure);
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [stem, extension]);
+  const [stemTone, extensionTone] = NAME_TONE[file.status];
+  return (
+    <span
+      ref={box}
+      data-slot="file-name"
+      className="min-w-0 flex-1 basis-0 truncate text-ui font-[450] tracking-[-0.012em]"
+    >
+      <span data-slot="file-stem" className={stemTone}>
+        {shown}
+      </span>
+      <span data-slot="file-extension" className={cn("font-normal", extensionTone)}>
+        {extension}
+      </span>
+    </span>
+  );
+};
+
+/**
+ * A file's row: its type's icon, its name colored by its status, and its marks: open threads,
+ * Claude's findings and risks, and its changed lines. A click selects it.
+ */
+const FileRow = ({
+  file,
+  depth,
+  active,
+  tabbable,
+  landing,
+  onActivate,
+}: {
+  readonly file: FileEntry;
+  readonly depth: number;
+  readonly active: boolean;
+  readonly tabbable: boolean;
+  /** The row's place among the rows with points, for their landing. */
+  readonly landing?: { readonly at: number; readonly of: number };
+  readonly onActivate: () => void;
+}) => {
+  const { finding = 0, risk = 0 } = file.points ?? {};
+  const threads = file.threads ?? 0;
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the tree handles the keys of all its rows.
+    <div
+      role="treeitem"
+      aria-level={depth + 1}
+      aria-selected={active}
+      aria-label={spoken(file)}
+      title={tooltip(file)}
+      data-key={file.path}
+      data-status={file.status}
+      tabIndex={tabbable ? 0 : -1}
+      onClick={onActivate}
+      className={cn(
+        ROW,
+        "gap-1.5",
+        active &&
+          "bg-diff-hunk-bg before:absolute before:top-1 before:bottom-1 before:left-0 before:w-0.5 before:rounded-full before:bg-primary hover:bg-diff-hunk-bg",
+      )}
+      style={indent(depth)}
+    >
+      <FileIcon path={file.path} status={file.status} />
+      <FileName file={file} />
+      <span
+        aria-hidden="true"
+        className="tabular flex flex-none items-center gap-1.5 font-mono text-kbd leading-none tracking-[-0.02em] text-muted-foreground"
+      >
+        {threads > 0 && (
+          <span data-slot="thread-count" className="inline-flex items-center gap-[2.5px]">
+            <MessageSquare className="size-3" strokeWidth={1.75} />
+            {threads}
+          </span>
+        )}
+        {finding + risk > 0 && (
+          <span
+            data-land="drop"
+            style={cssVars({ "--landing-i": landing?.at ?? 0, "--landing-n": landing?.of ?? 1 })}
+            className="inline-flex items-center gap-1.5"
+          >
+            {finding > 0 && (
+              <span
+                data-slot="point-count"
+                data-kind="finding"
+                className="inline-flex items-center gap-[2.5px]"
+              >
+                <i className="size-1.5 rounded-full bg-severity-minor" />
+                {finding > 1 && finding}
+              </span>
+            )}
+            {risk > 0 && (
+              <span data-slot="point-count" data-kind="risk" className="inline-flex items-center">
+                <i className="size-[7px] rounded-full ring-[1.5px] ring-risk-logic ring-inset" />
+              </span>
+            )}
+          </span>
+        )}
+        {(file.additions > 0 || file.deletions > 0) && (
+          <span className="inline-flex items-center gap-[5px]">
+            {file.additions > 0 && <span className="text-stat-add">+{file.additions}</span>}
+            {file.deletions > 0 && <span className="text-stat-del">−{file.deletions}</span>}
+          </span>
+        )}
+      </span>
+    </div>
   );
 };
 
@@ -254,146 +574,3 @@ export const ThreadCount = ({ count }: { readonly count: number }) => (
     <span className="sr-only"> open {count === 1 ? "thread" : "threads"}</span>
   </span>
 );
-
-const POINT_KINDS: readonly PointKind[] = ["finding", "risk", "decision"];
-
-// Spelled out because Tailwind only generates the classes it finds whole in the source.
-const POINT_TONE: Readonly<Record<PointKind, string>> = {
-  finding: "text-review-changes",
-  risk: "text-risk-contract",
-  decision: "text-muted-foreground",
-};
-
-/**
- * A file's points from Claude: an icon and a count per kind, named in words to readers. Landing,
- * they drop in at the row's place among the marked rows (globals.css).
- */
-export const PointCounts = ({
-  points,
-  landing,
-}: {
-  readonly points: Readonly<Partial<Record<PointKind, number>>>;
-  readonly landing?: { readonly at: number; readonly of: number };
-}) => (
-  <span
-    data-land="drop"
-    style={cssVars({ "--landing-i": landing?.at ?? 0, "--landing-n": landing?.of ?? 1 })}
-    className="inline-flex items-center gap-1.5"
-  >
-    {POINT_KINDS.map((kind) => {
-      const count = points[kind] ?? 0;
-      if (count === 0) return null;
-      const { label } = POINT_STATUS[kind];
-      const Icon = POINT_ICON[kind];
-      return (
-        <span
-          key={kind}
-          data-slot="point-count"
-          data-kind={kind}
-          className={cn(
-            "tabular inline-flex items-center gap-0.5 text-caption font-medium",
-            POINT_TONE[kind],
-          )}
-        >
-          <Icon aria-hidden="true" className="size-3" />
-          {count}
-          <span className="sr-only">
-            {" "}
-            {label.toLowerCase()}
-            {count === 1 ? "" : "s"}
-          </span>
-        </span>
-      );
-    })}
-  </span>
-);
-
-/**
- * A file's row: its type's icon, its name (after its directory, muted, when the row stands for a
- * directory of one file), its status when it isn't modified, and its counts. A click selects it.
- */
-export const FileRow = ({
-  entry,
-  label,
-  depth = 0,
-  active = false,
-  directory,
-  landing,
-  onSelect,
-}: {
-  readonly entry: Pick<FileEntry, "path"> & Partial<FileEntry>;
-  /** The row's place among the rows with points, for their landing. */
-  readonly landing?: { readonly at: number; readonly of: number };
-  readonly label: string;
-  readonly depth?: number;
-  readonly active?: boolean;
-  /**
-   * The directories between the heading it's under and the file, with a trailing slash, muted
-   * before the name and cut from their start when the rail is too narrow for both.
-   */
-  readonly directory?: string;
-  readonly onSelect: (path: string) => void;
-}) => {
-  const style = entry.status === undefined ? null : FILE_STATUS[entry.status];
-  const mark = style?.kind === "mark" ? style : null;
-  return (
-    <button
-      type="button"
-      aria-current={active ? "location" : undefined}
-      data-depth={depth}
-      title={entry.path}
-      onClick={() => onSelect(entry.path)}
-      className={cn(
-        "flex min-h-6 w-full flex-wrap items-center gap-x-1.5 rounded-md pr-2 text-left hover:bg-surface-row",
-        active && "bg-surface-row font-medium shadow-[inset_3px_0_0_var(--primary)]",
-      )}
-      style={{ paddingLeft: `${depth * INDENT + 4}px` }}
-    >
-      {/* The name keeps room for a few letters, or all of a directory and name that stand for
-          a heading; what follows wraps under it as one group rather than pushing the row past
-          the rail. */}
-      <span
-        className={cn(
-          "flex items-center gap-1.5",
-          directory === undefined
-            ? "min-w-[min(7rem,100%)] flex-1 basis-0"
-            : "max-w-full flex-[1_0_auto]",
-        )}
-      >
-        <FileIcon path={entry.path} status={entry.status} />
-        <span className="flex min-w-0 flex-1">
-          {directory !== undefined && (
-            // Right to left, so the ellipsis cuts the start and the end next to the name shows.
-            <span className="min-w-[1.5em] shrink-[999] truncate text-muted-foreground [direction:rtl]">
-              <bdi dir="ltr">{directory}</bdi>
-            </span>
-          )}
-          {/* Positioned, so the hidden status word is clipped with the name instead of sitting
-              past the rail's edge after the whole name. */}
-          <span className="relative min-w-0 truncate">
-            <span data-slot="file-name" className={mark?.name}>
-              {label === entry.path ? label : nameOf(entry.path)}
-            </span>
-            {mark !== null && <span className="sr-only">, {mark.label}</span>}
-          </span>
-        </span>
-      </span>
-      <span
-        data-slot="file-row-counts"
-        className="ml-auto flex flex-wrap items-center justify-end gap-x-1.5 whitespace-nowrap"
-      >
-        {entry.status !== undefined && <FileStatusChip status={entry.status} />}
-        {entry.points !== undefined && (
-          <PointCounts points={entry.points} {...(landing === undefined ? {} : { landing })} />
-        )}
-        {entry.threads !== undefined && entry.threads > 0 && <ThreadCount count={entry.threads} />}
-        {entry.additions !== undefined && entry.deletions !== undefined && (
-          <span className="tabular font-mono text-code-compact">
-            <span className="text-diff-add-fg">+{entry.additions}</span>{" "}
-            <span className="text-diff-del-fg">−{entry.deletions}</span>
-          </span>
-        )}
-      </span>
-    </button>
-  );
-};

@@ -8,7 +8,7 @@ import {
   fileTree,
   type TreeEntry,
   treeOrder,
-  treeRoot,
+  treePath,
 } from "../../review/tree/paths.ts";
 import { fileInView } from "./useFileInView.ts";
 
@@ -28,8 +28,8 @@ const tree = fileTree(paths);
 const outline = (entries: readonly TreeEntry[], depth = 0): string[] =>
   entries.flatMap((entry) =>
     entry.kind === "file"
-      ? [`${"  ".repeat(depth)}${entry.directory ?? ""}${entry.name}`]
-      : [`${"  ".repeat(depth)}${entry.label}`, ...outline(entry.children, depth + 1)],
+      ? [`${"  ".repeat(depth)}${entry.name}`]
+      : [`${"  ".repeat(depth)}${entry.label}/`, ...outline(entry.children, depth + 1)],
   );
 
 const headings = (entries: readonly TreeEntry[]): number =>
@@ -39,17 +39,20 @@ const headings = (entries: readonly TreeEntry[]): number =>
   );
 
 describe("fileTree", () => {
-  it("nests files under their directories, one heading for a chain, none for a lone file", () => {
+  it("nests files under their directories, joining top directories without files into their children's", () => {
     expect(outline(tree)).toEqual([
-      "delphi_code/",
-      "  domain/hosting_services.py",
-      "  http_api/",
-      "    routes/hosting_services.py",
-      "    app.py",
-      "  infrastructure/keychain.py",
-      "web/src/",
-      "  routes/setup.tsx",
-      "  setup/ConnectionsSection.tsx",
+      "delphi_code/domain/",
+      "  hosting_services.py",
+      "delphi_code/http_api/",
+      "  routes/",
+      "    hosting_services.py",
+      "  app.py",
+      "delphi_code/infrastructure/",
+      "  keychain.py",
+      "web/src/routes/",
+      "  setup.tsx",
+      "web/src/setup/",
+      "  ConnectionsSection.tsx",
       "CONTRIBUTING.md",
     ]);
   });
@@ -58,7 +61,8 @@ describe("fileTree", () => {
     const deep = fileTree(["a/b/c/one.ts", "a/b/two.ts", "x/y/z/three.ts", "x/y/z/four.ts"]);
     expect(outline(deep)).toEqual([
       "a/b/",
-      "  c/one.ts",
+      "  c/",
+      "    one.ts",
       "  two.ts",
       "x/y/z/",
       "  four.ts",
@@ -66,19 +70,39 @@ describe("fileTree", () => {
     ]);
   });
 
-  it("gives a directory of one file no heading, the row naming the directories down to it", () => {
-    const [only] = fileTree(["packages/config-eslint/index.js"]);
-    expect(only).toEqual({
-      kind: "file",
-      path: "packages/config-eslint/index.js",
-      name: "index.js",
-      directory: "packages/config-eslint/",
-    });
+  it("gives a directory of one file a heading", () => {
     expect(outline(fileTree(["a/one.ts", "a/b/two.ts", "c.ts"]))).toEqual([
       "a/",
-      "  b/two.ts",
+      "  b/",
+      "    two.ts",
       "  one.ts",
       "c.ts",
+    ]);
+  });
+
+  it("keeps a module's heading, and leaves out its repeated package path", () => {
+    const svm = "substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core";
+    const java = fileTree([
+      `${svm}/pgo/A.java`,
+      `${svm}/thread/B.java`,
+      "substratevm/src/com.oracle.svm.hosted/src/com/oracle/svm/hosted/C.java",
+      "substratevm/mx.substratevm/suite.py",
+    ]);
+    expect(outline(java)).toEqual([
+      "substratevm/mx.substratevm/",
+      "  suite.py",
+      "substratevm/src/com.oracle.svm.core/",
+      "  pgo/",
+      "    A.java",
+      "  thread/",
+      "    B.java",
+      "substratevm/src/com.oracle.svm.hosted/",
+      "  C.java",
+    ]);
+    expect(java.map((entry) => (entry.kind === "directory" ? entry.folder : null))).toEqual([
+      "folder",
+      "module",
+      "module",
     ]);
   });
 
@@ -87,29 +111,24 @@ describe("fileTree", () => {
       headings(fileTree(paths)),
       paths.length,
     ]);
-    // Before lone files lost their headings: 23 for 24, 25 for 23 and 35 for 27.
+    // A directory of one file had no heading before v4: 13, 9 and 22.
     expect(counts).toEqual([
-      [13, 24],
-      [9, 23],
+      [18, 24],
+      [20, 23],
       [22, 27],
     ]);
   });
 });
 
-describe("treeRoot", () => {
-  it("lifts out the directory every file is in", () => {
-    const { root, entries } = treeRoot(fileTree(DEEP_APP_PATHS));
-    expect(root).toBe("web/");
-    expect(entries.map((entry) => (entry.kind === "file" ? entry.name : entry.label))).toEqual([
-      "src/",
-      "tests/e2e/",
-    ]);
-  });
-
-  it("leaves a tree with more than one entry at its top as it is", () => {
-    expect(treeRoot(tree)).toEqual({ root: null, entries: tree });
-    const single = fileTree(["a/b/one.ts"]);
-    expect(treeRoot(single)).toEqual({ root: null, entries: single });
+describe("treePath", () => {
+  it("leaves out a module's package path after src/, and only that", () => {
+    expect(treePath("m/com.acme.core/src/com/acme/core/pgo/A.java")).toBe(
+      "m/com.acme.core/pgo/A.java",
+    );
+    expect(treePath("m/com.acme.core/src/com/acme/other/A.java")).toBe(
+      "m/com.acme.core/src/com/acme/other/A.java",
+    );
+    expect(treePath("src/main/java/com/acme/A.java")).toBe("src/main/java/com/acme/A.java");
   });
 });
 
@@ -123,15 +142,16 @@ describe("treeOrder", () => {
   });
 });
 
-/** File rows only: directory headings are buttons too, titled with a trailing slash. */
-const row = (name: string, at = 0): HTMLElement => {
-  const found = screen
-    .getAllByRole("button")
-    .filter((button) => !button.title.endsWith("/") && button.title.endsWith(name));
-  const one = found[at];
+/** A file's row, by the end of its path. */
+const row = (name: string): HTMLElement => {
+  const one = screen
+    .queryAllByRole("treeitem")
+    .find((item) => item.dataset.key?.endsWith(name) && !item.dataset.key.endsWith("/"));
   if (one === undefined) throw new Error(`no row for ${name}`);
   return one;
 };
+const heading = (path: string) =>
+  screen.queryAllByRole("treeitem").find((item) => item.dataset.key === `${path}/`) ?? null;
 
 const entries = paths.map((path) => ({
   path,
@@ -144,32 +164,30 @@ const renderRail = (current: string | null, onGo = vi.fn()) =>
   render(<FileTree files={entries} activePath={current} onSelect={onGo} />);
 
 describe("FileTree as the rail", () => {
-  it("shows directory headings, a row per file, and no contract counts", () => {
+  it("shows directory headings and a row per file", () => {
     renderRail(null);
-    const rail = screen.getByRole("navigation", { name: "Changed files" });
-    expect(within(rail).getByTitle("web/src/").textContent).toBe("web/src/");
+    const rail = screen.getByRole("tree", { name: "Changed files" });
+    expect(heading("web/src/routes")?.textContent).toBe("web/src/routes");
     expect(
       within(rail)
-        .getAllByRole("button")
-        .filter((button) => !button.title.endsWith("/")),
+        .getAllByRole("treeitem")
+        .filter((item) => item.hasAttribute("aria-selected")),
     ).toHaveLength(paths.length);
-    expect(row("routes/hosting_services.py").textContent).not.toContain("contract");
-    expect(within(rail).getByTitle("delphi_code/").textContent).toBe("delphi_code/");
   });
 
-  it("highlights the file in view and only it", () => {
+  it("selects the file in view and only it", () => {
     renderRail("delphi_code/http_api/routes/hosting_services.py");
-    expect(row("routes/hosting_services.py").getAttribute("aria-current")).toBe("location");
+    expect(row("routes/hosting_services.py").getAttribute("aria-selected")).toBe("true");
     for (const name of ["app.py", "domain/hosting_services.py", "CONTRIBUTING.md"]) {
-      expect(row(name).getAttribute("aria-current")).toBeNull();
+      expect(row(name).getAttribute("aria-selected")).toBe("false");
     }
   });
 
   it("opens the directories down to the file that comes into view, and leaves the others closed", async () => {
     const { rerender } = renderRail("CONTRIBUTING.md");
-    await userEvent.click(screen.getByTitle("delphi_code/"));
-    await userEvent.click(screen.getByTitle("web/src/"));
-    expect(screen.queryByTitle("delphi_code/http_api/")).toBeNull();
+    await userEvent.click(heading("delphi_code/http_api") as HTMLElement);
+    await userEvent.click(heading("web/src/routes") as HTMLElement);
+    expect(heading("delphi_code/http_api/routes")).toBeNull();
 
     rerender(
       <FileTree
@@ -178,51 +196,22 @@ describe("FileTree as the rail", () => {
         onSelect={vi.fn()}
       />,
     );
-    expect(screen.getByTitle("delphi_code/").getAttribute("aria-expanded")).toBe("true");
-    expect(row("routes/hosting_services.py").getAttribute("aria-current")).toBe("location");
-    expect(screen.getByTitle("web/src/").getAttribute("aria-expanded")).toBe("false");
+    expect(heading("delphi_code/http_api")?.getAttribute("aria-expanded")).toBe("true");
+    expect(row("routes/hosting_services.py").getAttribute("aria-selected")).toBe("true");
+    expect(heading("web/src/routes")?.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("keeps closed the directory of the file in view when the reviewer closes it", async () => {
+  it("keeps closed the directory of the file in view when the reviewer closes it, with its count", async () => {
     renderRail("delphi_code/http_api/app.py");
-    await userEvent.click(screen.getByTitle("delphi_code/http_api/"));
-    expect(screen.getByTitle("delphi_code/http_api/").getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByTitle("delphi_code/http_api/app.py")).toBeNull();
+    await userEvent.click(heading("delphi_code/http_api") as HTMLElement);
+    expect(heading("delphi_code/http_api")?.getAttribute("aria-expanded")).toBe("false");
+    expect(heading("delphi_code/http_api")?.textContent).toBe("delphi_code/http_api2");
+    expect(() => row("http_api/app.py")).toThrow();
   });
 
-  it("names a lone file's directory on its row, and gives every row its full path", () => {
+  it("gives every row its full path and status in its tooltip", () => {
     renderRail(null);
-    const keychain = row("keychain.py");
-    expect(keychain.textContent).toContain("infrastructure/keychain.py");
-    // The title is the row's description to screen readers, and its tooltip.
-    expect(keychain.title).toBe("delphi_code/infrastructure/keychain.py");
-    expect(screen.queryByTitle("delphi_code/infrastructure/")).toBeNull();
-  });
-
-  it("says once the directory every file is in, rather than indenting them all under it", () => {
-    render(
-      <FileTree
-        files={["web/src/a.ts", "web/src/b.ts", "web/tests/c.ts", "web/tests/d.ts"].map((path) => ({
-          path,
-          status: "modified" as const,
-          additions: 1,
-          deletions: 0,
-        }))}
-        activePath={null}
-        onSelect={vi.fn()}
-      />,
-    );
-    expect(screen.getByText(/4 files in/).parentElement?.textContent).toBe("4 files in web/");
-    expect(screen.getAllByRole("button").filter((button) => button.title === "web/")).toEqual([]);
-    expect(screen.getByTitle("web/src/").getAttribute("aria-expanded")).toBe("true");
-  });
-
-  it("sticks each directory's heading under its parent's, so the deepest stays on top", () => {
-    renderRail(null);
-    const outer = screen.getByTitle("delphi_code/");
-    const inner = screen.getByTitle("delphi_code/http_api/");
-    expect([outer.style.top, inner.style.top]).toEqual(["0px", "24px"]);
-    expect(Number(outer.style.zIndex)).toBeGreaterThan(Number(inner.style.zIndex));
+    expect(row("keychain.py").title).toBe("delphi_code/infrastructure/keychain.py\nModified");
   });
 
   it("goes to a file's card on a click", async () => {
@@ -230,6 +219,28 @@ describe("FileTree as the rail", () => {
     renderRail(null, onGo);
     await userEvent.click(row("keychain.py"));
     expect(onGo).toHaveBeenCalledWith("delphi_code/infrastructure/keychain.py");
+  });
+
+  it("is one Tab stop, moved through with the arrow keys", async () => {
+    const onGo = vi.fn();
+    renderRail("delphi_code/http_api/app.py", onGo);
+    const stops = screen.getAllByRole("treeitem").filter((item) => item.tabIndex === 0);
+    expect(stops).toEqual([row("http_api/app.py")]);
+    row("http_api/app.py").focus();
+    await userEvent.keyboard("{ArrowUp}");
+    expect(document.activeElement).toBe(row("routes/hosting_services.py"));
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(heading("delphi_code/http_api/routes"));
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(heading("delphi_code/http_api/routes")?.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.keyboard("{ArrowRight}");
+    expect(heading("delphi_code/http_api/routes")?.getAttribute("aria-expanded")).toBe("true");
+    await userEvent.keyboard("{End}{Enter}");
+    expect(onGo).toHaveBeenCalledWith("CONTRIBUTING.md");
+    await userEvent.keyboard("{Home}{ArrowUp}");
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: /Filter files/ }));
+    await userEvent.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(heading("delphi_code/domain"));
   });
 });
 

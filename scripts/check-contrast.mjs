@@ -19,10 +19,33 @@ function block(selectorStart) {
   );
 }
 
-const light = block(":root {");
-const dark = { ...light, ...block(".dark {") };
-const cbLight = { ...light, ...block('[data-diff-palette="cb"] {') };
-const cbDark = { ...dark, ...block('.dark[data-diff-palette="cb"]') };
+// Tokens mixed from two others in @theme, as `--color-x: color-mix(in srgb, var(--a) 72%, var(--b))`.
+const MIXES = [
+  ...css.matchAll(
+    /--color-([\w-]+):\s*color-mix\(in srgb, var\(--([\w-]+)\) (\d+)%, var\(--([\w-]+)\)\)/g,
+  ),
+].map(([, name, a, percent, b]) => [name, a, Number(percent) / 100, b]);
+const mix = (a, b, share) => {
+  const channels = (hex) => [16, 8, 0].map((shift) => (parseInt(hex.slice(1), 16) >> shift) & 255);
+  const [x, y] = [channels(a), channels(b)];
+  return `#${x
+    .map((value, at) => Math.round(value * share + y[at] * (1 - share)))
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("")}`;
+};
+const withMixes = (theme) => ({
+  ...theme,
+  ...Object.fromEntries(MIXES.map(([name, a, share, b]) => [name, mix(theme[a], theme[b], share)])),
+});
+
+const light = withMixes(block(":root {"));
+const dark = withMixes({ ...block(":root {"), ...block(".dark {") });
+const cbLight = withMixes({ ...block(":root {"), ...block('[data-diff-palette="cb"] {') });
+const cbDark = withMixes({
+  ...block(":root {"),
+  ...block(".dark {"),
+  ...block('.dark[data-diff-palette="cb"]'),
+});
 
 const lum = (hex) => {
   const n = parseInt(hex.slice(1), 16);
@@ -119,11 +142,27 @@ const PAIRS = [
   ["Active row bar (non-text)", "primary", "surface-row", 3],
   ["Text on active row", "foreground", "surface-row", 4.5],
   ["Muted file name on hovered row", "muted-foreground", "surface-row", 4.5],
-  // hunk: the tree's file icons, on the rail and on the active or hovered row.
-  ...["syntax-function", "syntax-number", "syntax-string", "syntax-keyword"].flatMap((token) => [
-    [`File icon ${token} on background (non-text)`, token, "background", 3],
-    [`File icon ${token} on active row (non-text)`, token, "surface-row", 3],
+  // hunk: the file tree's rows, resting, hovered and current: names by status, extensions, counts
+  // and marks. Its icons are IntelliJ IDEA's, decorative and carrying no status.
+  ...[
+    ["resting", "background"],
+    ["hovered", "surface-row"],
+    ["current", "diff-hunk-bg"],
+  ].flatMap(([row, fill]) => [
+    [`File name on ${row} row`, "foreground", fill, 4.5],
+    [`New file name on ${row} row`, "diff-add-fg", fill, 4.5],
+    [`Deleted file name on ${row} row`, "diff-del-fg", fill, 4.5],
+    [`New file extension on ${row} row`, "file-ext-add", fill, 4.5],
+    [`Deleted file extension on ${row} row`, "file-ext-del", fill, 4.5],
+    [`Extension, folder path and counts on ${row} row`, "muted-foreground", fill, 4.5],
+    [`+ lines on ${row} row`, "stat-add", fill, 4.5],
+    [`− lines on ${row} row`, "stat-del", fill, 4.5],
+    [`Finding dot on ${row} row (non-text)`, "severity-minor", fill, 3],
+    [`Risk ring on ${row} row (non-text)`, "risk-logic", fill, 3],
+    [`Focus outline on ${row} row (non-text)`, "ring", fill, 3],
   ]),
+  ["Current row bar (non-text)", "primary", "diff-hunk-bg", 3],
+  ["Pressed filter in the tree", "foreground", "secondary", 4.5],
   ["Directory name on hover", "foreground", "accent", 4.5],
   // hunk: the focused diff line's 3px bar, over the gutter of each kind of line.
   ["Focused line bar on diff-gutter-bg (non-text)", "ring", "diff-gutter-bg", 3],

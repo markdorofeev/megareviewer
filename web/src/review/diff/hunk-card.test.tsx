@@ -583,7 +583,7 @@ describe("HunkCard", () => {
       />,
     );
     const header = screen.getByRole("region").querySelector("header");
-    expect(header?.querySelector("svg[data-status=added]")).not.toBeNull();
+    expect(header?.querySelector("[data-icon=typeScript]")).not.toBeNull();
     expect(header?.querySelector("[data-slot=file-status]")).toBeNull();
     expect(header?.textContent).toMatch(/^src\/backoff\.ts, new/);
   });

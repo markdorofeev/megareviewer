@@ -13,7 +13,8 @@
       "!**/fixtures/**/*.json",
       "!.idea",
       "!!.claude",
-      "!!hunk-design-system"
+      "!!hunk-design-system",
+      "!!web/src/review/tree/icons"
     ]
   },
   "css": {

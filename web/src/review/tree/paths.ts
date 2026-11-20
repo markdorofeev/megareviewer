@@ -1,13 +1,34 @@
-// The changed files as a directory tree, for the rail beside the code. Pure, and it imports nothing,
-// so the overview can share its order.
+import { type FolderKind, folderKind } from "./file-kind.ts";
+
+// The changed files as a directory tree, for the rail beside the code. Pure, so the overview can
+// share its order.
 
 /**
- * Paths as a directory tree lists them: at each level, directories before files, then by name,
- * ignoring case first.
+ * A path as the tree shows it. A Java module's sources repeat its name, as in
+ * `com.oracle.svm.core/src/com/oracle/svm/core/pgo/`, so the repeat after `src/` is left out:
+ * `com.oracle.svm.core/pgo/`.
+ */
+export const treePath = (path: string): string => {
+  const segments = path.split("/");
+  for (let at = 0; at < segments.length - 2; at++) {
+    const module = segments[at] ?? "";
+    if (!module.includes(".") || segments[at + 1] !== "src") continue;
+    const parts = module.split(".");
+    if (segments.slice(at + 2, at + 2 + parts.length).join(".") !== module) continue;
+    if (at + 2 + parts.length >= segments.length) continue;
+    segments.splice(at + 1, 1 + parts.length);
+    break;
+  }
+  return segments.join("/");
+};
+
+/**
+ * Paths as the tree lists them: at each level, directories before files, then by name, ignoring
+ * case first. The page shows its file cards in this order too.
  */
 export const byTreePath = (a: string, b: string): number => {
-  const left = a.split("/");
-  const right = b.split("/");
+  const left = treePath(a).split("/");
+  const right = treePath(b).split("/");
   for (let at = 0; at < Math.min(left.length, right.length); at++) {
     const x = left[at] ?? "";
     const y = right[at] ?? "";
@@ -31,19 +52,15 @@ export interface TreeFile {
   readonly kind: "file";
   readonly path: string;
   readonly name: string;
-  /**
-   * The directories between the heading it's under and the file, with a trailing slash, for a
-   * directory that holds only this file: its row stands for it rather than a heading of its own.
-   */
-  readonly directory?: string;
 }
 
 export interface TreeDirectory {
   readonly kind: "directory";
-  /** The full path, without a trailing slash. */
+  /** Its path as the tree shows it (`treePath`), without a trailing slash. */
   readonly path: string;
-  /** Its path below its parent heading, with a trailing slash: `web/src/` for a chain. */
+  /** Its path below its parent heading: `web/src` for a chain. */
   readonly label: string;
+  readonly folder: FolderKind;
   readonly children: readonly TreeEntry[];
 }
 
@@ -57,63 +74,71 @@ interface Building {
 /**
  * The files as a tree, in `byTreePath` order: directories before files at each level. A directory
  * with no files and one directory in it is one heading with that directory, so a chain like
- * `web/src/` takes one row, and a directory that holds only one file is no heading at all: the
- * file's row names it, as `routes/setup.tsx`. Top-level files sit at the root, after its
- * directories.
+ * `web/src` takes one row. At the top, a directory with no files and more than one directory in
+ * it is no heading: its name goes before its children's, as `substratevm/src/com.oracle.svm.core`,
+ * so it costs no indent on every row under it.
  */
 export const fileTree = (paths: readonly string[]): readonly TreeEntry[] => {
   const root: Building = { directories: new Map(), files: [] };
   for (const path of paths) {
     let at = root;
-    for (const segment of path.split("/").slice(0, -1)) {
+    for (const segment of treePath(path).split("/").slice(0, -1)) {
       const next = at.directories.get(segment) ?? { directories: new Map(), files: [] };
       at.directories.set(segment, next);
       at = next;
     }
     at.files.push(path);
   }
-  const entries = (node: Building, parent: string): TreeEntry[] => {
-    const directories = [...node.directories].map(([segment, child]): TreeEntry => {
-      let label = segment;
-      let inner = child;
-      let path = parent === "" ? segment : `${parent}/${segment}`;
-      for (
-        let [only] = inner.directories;
-        inner.files.length === 0 && inner.directories.size === 1 && only !== undefined;
-        [only] = inner.directories
-      ) {
-        label = `${label}/${only[0]}`;
-        path = `${path}/${only[0]}`;
-        inner = only[1];
-      }
-      const [lone] = inner.files;
-      if (lone !== undefined && inner.files.length === 1 && inner.directories.size === 0) {
-        return { kind: "file", path: lone, name: nameOf(lone), directory: `${label}/` };
-      }
-      return { kind: "directory", path, label: `${label}/`, children: entries(inner, path) };
-    });
-    const files = node.files.map((path): TreeFile => ({ kind: "file", path, name: nameOf(path) }));
-    // A file that stands for its directory keeps the directory's place.
-    const place = (entry: TreeEntry) => (entry.kind === "file" ? entry.path : `${entry.path}/x`);
-    return [
-      ...directories.sort((a, b) => byTreePath(place(a), place(b))),
-      ...files.sort((a, b) => byTreePath(a.path, b.path)),
-    ];
+  const directory = (segment: string, child: Building, parent: string, prefix: string) => {
+    let label = segment;
+    let inner = child;
+    let path = parent === "" ? segment : `${parent}/${segment}`;
+    for (
+      let [only] = inner.directories;
+      inner.files.length === 0 && inner.directories.size === 1 && only !== undefined;
+      [only] = inner.directories
+    ) {
+      label = `${label}/${only[0]}`;
+      path = `${path}/${only[0]}`;
+      inner = only[1];
+    }
+    return { label: `${prefix}${label}`, path, inner };
   };
-  return entries(root, "");
-};
-
-/**
- * The directory every file is in, when there's one, and the tree below it: shown once above the
- * tree rather than as a heading every row is indented under.
- */
-export const treeRoot = (
-  tree: readonly TreeEntry[],
-): { readonly root: string | null; readonly entries: readonly TreeEntry[] } => {
-  const [only] = tree;
-  return tree.length === 1 && only?.kind === "directory"
-    ? { root: only.label, entries: only.children }
-    : { root: null, entries: tree };
+  const heading = (label: string, path: string, inner: Building): TreeDirectory => ({
+    kind: "directory",
+    path,
+    label,
+    folder: folderKind(path, paths),
+    children: entries(inner, path),
+  });
+  const sorted = (list: TreeEntry[]): TreeEntry[] =>
+    list.sort((a, b) =>
+      byTreePath(
+        a.kind === "file" ? a.path : `${a.path}/x`,
+        b.kind === "file" ? b.path : `${b.path}/x`,
+      ),
+    );
+  const entries = (node: Building, parent: string): TreeEntry[] =>
+    sorted([
+      ...[...node.directories].map(([segment, child]) => {
+        const { label, path, inner } = directory(segment, child, parent, "");
+        return heading(label, path, inner);
+      }),
+      ...node.files.map((path): TreeFile => ({ kind: "file", path, name: nameOf(path) })),
+    ]);
+  const hoisted = (node: Building, parent: string, prefix: string): TreeEntry[] =>
+    [...node.directories].flatMap(([segment, child]) => {
+      const { label, path, inner } = directory(segment, child, parent, prefix);
+      // A dotted directory is a module, which keeps its heading.
+      const own = label.slice(prefix.length);
+      return inner.files.length === 0 && inner.directories.size > 1 && !own.includes(".")
+        ? hoisted(inner, path, `${label}/`)
+        : [heading(label, path, inner)];
+    });
+  return sorted([
+    ...hoisted(root, "", ""),
+    ...root.files.map((path): TreeFile => ({ kind: "file", path, name: nameOf(path) })),
+  ]);
 };
 
 /** The tree's files in its order, which is the order the page shows them. */

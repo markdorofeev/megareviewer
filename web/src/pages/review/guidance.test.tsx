@@ -136,10 +136,8 @@ describe("a review whose run read guidance", () => {
     expect(titles.size).toBe(4);
     expect([...titles].some((title) => RETRIES.test(title ?? ""))).toBe(false);
     // The files beside the code count what the chips count.
-    const counted = [
-      ...document.querySelectorAll("[data-slot=point-count][data-kind=finding]"),
-    ].map((count) => count.textContent);
-    expect(counted).toEqual(["1 finding", "1 finding"]);
+    const counted = [...document.querySelectorAll("[role=treeitem][aria-label*='1 finding']")];
+    expect(counted).toHaveLength(2);
 
     await userEvent.click(position());
     const list = within(await screen.findByRole("dialog")).getByRole("list", { name: "Points" });

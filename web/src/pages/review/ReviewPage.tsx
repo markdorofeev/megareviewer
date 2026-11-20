@@ -452,6 +452,7 @@ const Review = ({
       files.map(({ file }) => ({
         path: file.path,
         status: file.status,
+        oldPath: file.oldPath,
         additions: file.additions,
         deletions: file.deletions,
         ...(pointsByFile.has(file.path) ? { points: pointsByFile.get(file.path) } : {}),

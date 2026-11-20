@@ -54,6 +54,7 @@ import {
   PULL_REQUEST,
   RENAMED_FILE,
   RETRY_FILE,
+  SUBSTRATEVM_FILES,
   THREADS,
   TREE_FILES,
 } from "./fixtures.ts";
@@ -145,8 +146,12 @@ export const DomainComponents = () => {
 
       <Group title="File tree">
         <div className="grid gap-4 md:grid-cols-3">
-          <TreeDemo mode="tree" />
-          <TreeDemo mode="flat" />
+          <TreeDemo name="A small PR" files={TREE_FILES} active="src/http/retry.ts" />
+          <TreeDemo
+            name="Java modules, as the design draws them"
+            files={SUBSTRATEVM_FILES}
+            active={SUBSTRATEVM_FILES[3]?.path ?? null}
+          />
           <div className="h-80 rounded-lg border p-2">
             <TreeSkeleton />
           </div>
@@ -368,21 +373,20 @@ const LongDiff = () => {
   return <DiffViewer file={file} height="420px" onComment={() => undefined} />;
 };
 
-const TreeDemo = ({ mode }: { readonly mode: "tree" | "flat" }) => {
-  const [active, setActive] = useState<string | null>("src/http/retry.ts");
+const TreeDemo = ({
+  name,
+  files,
+  active: initial,
+}: {
+  readonly name: string;
+  readonly files: readonly FileEntry[];
+  readonly active: string | null;
+}) => {
+  const [active, setActive] = useState<string | null>(initial);
   return (
     <div className="flex h-80 flex-col rounded-lg border p-2">
-      <p className="px-2 pb-1 text-caption font-medium text-muted-foreground">
-        {mode === "tree" ? "Tree" : "Flat, by size"}
-      </p>
-      <FileTree
-        files={TREE_FILES}
-        activePath={active}
-        onSelect={setActive}
-        mode={mode}
-        order="size"
-        className="flex-1"
-      />
+      <p className="px-2 pb-1 text-caption font-medium text-muted-foreground">{name}</p>
+      <FileTree files={files} activePath={active} onSelect={setActive} className="flex-1" />
     </div>
   );
 };
