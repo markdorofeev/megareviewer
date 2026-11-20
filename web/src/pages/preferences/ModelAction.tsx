@@ -5,6 +5,7 @@ import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import { SPIN } from "../picker/PullRequestList.tsx";
+import { ModelMenu } from "../review/ModelMenu.tsx";
 import type { ModelChoice } from "../review/model-choice.ts";
 
 /** What a run came to: what to say of it, or why it failed. */
@@ -34,9 +35,10 @@ const useElapsed = (since: number | null, now: () => number): number => {
 };
 
 /**
- * A button that makes one model call on the option chosen for Request AI review, and what came of
- * it beside it. Its tooltip says which model and who pays, as that button's does. It can't run
- * twice at once; when it can't run at all it stays focusable and says why.
+ * A button that makes one model call on the option chosen for Request AI review, with the same arrow
+ * beside it to change that choice, and what came of it after. Its tooltip says which model and who
+ * pays, as that button's does. It can't run twice at once; when it can't run at all it stays
+ * focusable and says why.
  */
 export const ModelAction = ({
   label,
@@ -90,34 +92,42 @@ export const ModelAction = ({
 
   return (
     <div data-slot="model-action" className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-      <Tooltip disabled={note === null}>
-        <TooltipTrigger
-          render={
-            <Button
-              variant={variant}
-              size="sm"
-              disabled={busy || cannot !== null || chosen === null}
-              focusableWhenDisabled
-              aria-busy={busy}
-              aria-describedby={note === null ? undefined : `${id}-note`}
-              onClick={() => void start()}
-            />
-          }
-        >
-          {busy ? (
-            <LoaderCircleIcon aria-hidden="true" className={SPIN} />
-          ) : locked !== null && blocked === null ? (
-            <LockIcon aria-hidden="true" />
-          ) : (
-            icon
-          )}
-          {label}
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="start">
-          {cannot !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
-          {note}
-        </TooltipContent>
-      </Tooltip>
+      <span className="flex shrink-0 items-center">
+        <Tooltip disabled={note === null}>
+          <TooltipTrigger
+            render={
+              <Button
+                variant={variant}
+                size="sm"
+                disabled={busy || cannot !== null || chosen === null}
+                focusableWhenDisabled
+                aria-busy={busy}
+                aria-describedby={note === null ? undefined : `${id}-note`}
+                onClick={() => void start()}
+                className="rounded-r-none"
+              />
+            }
+          >
+            {busy ? (
+              <LoaderCircleIcon aria-hidden="true" className={SPIN} />
+            ) : locked !== null && blocked === null ? (
+              <LockIcon aria-hidden="true" />
+            ) : (
+              icon
+            )}
+            {label}
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start">
+            {cannot !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
+            {note}
+          </TooltipContent>
+        </Tooltip>
+        <ModelMenu
+          choice={choice}
+          disabled={busy || choice.options.length === 0}
+          filled={variant === "default" && cannot === null}
+        />
+      </span>
       {/* The tooltip is for the eye; a screen reader reads the same words as the description. */}
       {note !== null && (
         <span id={`${id}-note`} hidden>

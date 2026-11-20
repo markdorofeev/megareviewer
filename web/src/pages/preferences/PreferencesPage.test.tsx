@@ -84,7 +84,10 @@ const description = (element: Element): string =>
     .join(" ")
     .trim();
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  window.localStorage.clear();
+});
 
 describe("PreferencesPage", () => {
   it("shows a skeleton while it loads", async () => {
@@ -399,6 +402,39 @@ describe("PreferencesPage's Suggest from my reviews", () => {
     // Nothing's new since, so it can't run again until something is recorded.
     expect(suggest().getAttribute("aria-disabled")).toBe("true");
     expect(description(suggest())).toBe(NOTHING_RECORDED);
+  });
+
+  it("runs on the model chosen beside it, which every model button shares", async () => {
+    const { sent } = renderPage({ preferences: withoutProposals });
+    await everywhere();
+    const action = suggest().closest("[data-slot=model-action]") as HTMLElement;
+    await userEvent.click(await within(action).findByRole("button", { name: "Model: Sonnet 5.5" }));
+    await userEvent.click(
+      within(await screen.findByRole("menu")).getAllByRole("menuitemradio", {
+        name: "Opus 5.5",
+      })[0] as HTMLElement,
+    );
+    await waitFor(() =>
+      expect(description(suggest())).toBe("Runs Opus 5.5 through Claude Code, on your Pro plan"),
+    );
+    expect(within(shop()).getByRole("button", { name: "Model: Opus 5.5" })).toBeTruthy();
+    await userEvent.click(suggest());
+    await waitFor(() => expect(sent("POST", "/api/preferences/suggestions")).toHaveLength(1));
+    expect(sent("POST", "/api/preferences/suggestions")[0]?.body).toEqual({
+      optionId: "claude-code/claude-opus-5-5",
+    });
+    // The same per-browser choice as Request AI review's.
+    expect(window.localStorage.getItem("megareviewer:model-option")).toBe(
+      JSON.stringify("claude-code/claude-opus-5-5"),
+    );
+  });
+
+  it("keeps the model's arrow when nothing is recorded, for Import", async () => {
+    renderPage({ preferences: { ...withoutProposals, signalsSinceSuggestion: 0 } });
+    await everywhere();
+    const action = suggest().closest("[data-slot=model-action]") as HTMLElement;
+    const arrow = await within(action).findByRole("button", { name: "Model: Sonnet 5.5" });
+    expect(arrow.hasAttribute("disabled")).toBe(false);
   });
 
   it("is disabled but focusable with nothing recorded, and says what's recorded", async () => {
