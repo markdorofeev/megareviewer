@@ -1,5 +1,7 @@
+import { CircleCheckIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import {
+  MODEL_STAGES,
   type ModelOptions,
   mapModelStages,
   type Point,
@@ -13,13 +15,16 @@ import {
   lockedModelOptions,
   opencodeModelOptions,
 } from "../../dev/fixtures/index.ts";
+import { cn } from "../lib/utils.ts";
 import { ClaudeElement, type ClaudeRun, type Narrowing } from "../pages/review/ClaudeElement.tsx";
+import { barButtons } from "../pages/review/header-buttons.ts";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
 import { narrowTo } from "../pages/review/stepper.ts";
 import { ThreadStepper, threadChip } from "../pages/review/ThreadStepper.tsx";
 import { type ThreadScope, threadScopeOf, threadSteps } from "../pages/review/thread-steps.ts";
 import { Button } from "../ui/button.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip.tsx";
 import { DESIGN_RUN, POINTS, PULL_REQUEST, THREADS, useDemoChoice } from "./fixtures.ts";
 
 /** The point card's points and a second finding, so a chip has more than one to walk. */
@@ -79,6 +84,9 @@ const BarDemo = ({
   startThread = null,
   resolvedHere = [],
   scope = null,
+  pending = 0,
+  isAuthor = false,
+  stale = false,
 }: {
   readonly label: string;
   readonly run?: ClaudeRun;
@@ -98,6 +106,11 @@ const BarDemo = ({
   /** Threads resolved on the page, which stay steps. */
   readonly resolvedHere?: readonly ThreadId[];
   readonly scope?: ThreadScope | null;
+  /** Line comments waiting for the review. */
+  readonly pending?: number;
+  readonly isAuthor?: boolean;
+  /** The PR has new commits since the analysis. */
+  readonly stale?: boolean;
 }) => {
   const [current, setCurrent] = useState<PointId | null>(start);
   const [thread, setThread] = useState<ThreadId | null>(startThread);
@@ -111,7 +124,7 @@ const BarDemo = ({
     <div className="flex flex-col gap-1">
       <span className="text-caption text-muted-foreground">{label}</span>
       {/* The page's root gives the bar its height. */}
-      <div className="relative rounded-lg border px-3 [--review-bar-h:2.75rem]">
+      <div className="relative rounded-lg border px-3 [--review-bar-h:3.25rem]">
         <ReviewBar
           title={PULL_REQUEST.title}
           stuck={stuck}
@@ -130,7 +143,6 @@ const BarDemo = ({
               analysis={run}
               choice={choice}
               running={running}
-              startedAt={running ? Date.now() - 42_000 : null}
               starting={false}
               error={null}
               points={points}
@@ -147,6 +159,9 @@ const BarDemo = ({
                 if (to !== null) setCurrent(to);
               }}
               onRun={() => {}}
+              onRerun={() => {}}
+              reanalyze={stale ? { starting: false, onReanalyze: () => {} } : null}
+              filesChanged={7}
             >
               {!walkingThreads ? (
                 <PointStepper
@@ -173,16 +188,74 @@ const BarDemo = ({
           }
           tools={null}
           publish={
-            <Button size="sm" className="shrink-0">
-              Publish review…
-              <span className="tabular rounded-full bg-primary-foreground px-1.5 text-caption text-primary">
-                2<span className="sr-only"> to post</span>
-              </span>
-            </Button>
+            <Verdicts
+              run={run}
+              running={running}
+              pending={pending}
+              isAuthor={isAuthor}
+              stale={stale}
+            />
           }
         />
       </div>
     </div>
+  );
+};
+
+/** Approve and Publish, filled as the page fills them. */
+const Verdicts = ({
+  run,
+  running,
+  pending,
+  isAuthor,
+  stale,
+}: {
+  readonly run: ClaudeRun;
+  readonly running: boolean;
+  readonly pending: number;
+  readonly isAuthor: boolean;
+  readonly stale: boolean;
+}) => {
+  const bar = barButtons({
+    aiDone: MODEL_STAGES.every((stage) => run.stages[stage] === "done"),
+    running,
+    pending,
+    isAuthor,
+    stale,
+  });
+  return bar.order.map((which) =>
+    which === "approve" ? (
+      <Tooltip key="approve" disabled={bar.approve.disabledReason === null}>
+        <TooltipTrigger
+          render={
+            <Button
+              variant={bar.approve.filled ? "approve" : "outline"}
+              disabled={bar.approve.disabledReason !== null}
+              focusableWhenDisabled
+            />
+          }
+        >
+          <CircleCheckIcon
+            aria-hidden="true"
+            className={cn(!bar.approve.filled && "text-review-approved")}
+          />
+          Approve
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="end">
+          {bar.approve.disabledReason}
+        </TooltipContent>
+      </Tooltip>
+    ) : (
+      <Button key="publish" variant={bar.publish.filled ? "default" : "outline"}>
+        Publish review…
+        {bar.publish.count > 0 && (
+          <span className="tabular rounded-full bg-primary-foreground px-1.5 text-caption text-primary">
+            {bar.publish.count}
+            <span className="sr-only"> to post</span>
+          </span>
+        )}
+      </Button>
+    ),
   );
 };
 
@@ -290,6 +363,21 @@ export const ReviewBarStates = (): ReactNode => (
       run={DESIGN_RUN}
       points={[]}
       threads={ALL_RESOLVED}
+    />
+    <BarDemo
+      label="Comments pending: Publish is the filled button, with their count"
+      start={PointId.parse("f1")}
+      pending={2}
+    />
+    <BarDemo
+      label="New commits since the analysis: Re-analyze, and Approve says why it waits"
+      start={PointId.parse("f1")}
+      stale
+    />
+    <BarDemo
+      label="The reviewer's own PR: Approve is disabled, and says why"
+      start={PointId.parse("f1")}
+      isAuthor
     />
     <BarDemo label="Stuck to the top: the title first" stuck start={PointId.parse("f1")} />
     <BarDemo label="Published" published start={PointId.parse("f1")} />

@@ -36,6 +36,7 @@ const run = (overrides: Partial<ClaudeRun>): ClaudeRun => ({
   },
   modelError: null,
   modelOption: null,
+  usage: [],
   ...overrides,
 });
 
@@ -44,7 +45,6 @@ const element = (analysis: ClaudeRun, running: boolean) => (
     analysis={analysis}
     choice={choice}
     running={running}
-    startedAt={null}
     starting={false}
     error={null}
     points={[]}
@@ -132,7 +132,6 @@ describe("a long group", () => {
         })}
         choice={withOpencode}
         running={false}
-        startedAt={null}
         starting={false}
         error={null}
         points={[]}

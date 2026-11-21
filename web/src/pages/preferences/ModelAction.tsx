@@ -125,7 +125,7 @@ export const ModelAction = ({
         <ModelMenu
           choice={choice}
           disabled={busy || choice.options.length === 0}
-          filled={variant === "default" && cannot === null}
+          variant={variant === "default" && cannot === null ? "default" : "outline"}
         />
       </span>
       {/* The tooltip is for the eye; a screen reader reads the same words as the description. */}

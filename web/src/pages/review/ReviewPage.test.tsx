@@ -237,7 +237,15 @@ describe("ReviewPage states", () => {
     await loaded();
     // The code's stages are done, so the strip is gone; Claude's run says so in the header.
     expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull();
-    expect(within(reviewBar()).getByText("Claude is reading this PR")).toBeTruthy();
+    // The AI split is busy, says how far the run got, and the brief's status line says so too.
+    const reviewing = within(reviewBar()).getByRole("button", { name: /^Reviewing · \d of 4$/ });
+    expect(reviewing.getAttribute("aria-disabled")).toBe("true");
+    expect(within(reviewBar()).getByRole("status").textContent).toMatch(
+      /^Claude is reading this PR, \d of 4 passes done$/,
+    );
+    expect(document.querySelector("[data-slot=ai-status]")?.textContent).toMatch(
+      /^AI review running.*\d of 4 passes$/,
+    );
     expect(
       reviewBar().querySelector("[data-slot=model-hairline]")?.getAttribute("data-state"),
     ).toBe("running");
@@ -332,7 +340,7 @@ describe("ReviewPage states", () => {
     expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
 
     setView({ ...fixture, analysis: analysisInProgress(analysis, 2) });
-    expect(await screen.findByText("Claude is reading this PR")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /^Reviewing · / })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Request AI review" })).toBeNull();
   });
 
@@ -440,10 +448,10 @@ describe("ReviewPage states", () => {
       view: { ...fixture, analysis: analysisFailed(analysis, "intent", "Overloaded") },
     });
     await loaded();
-    // Quieter than Publish, the bar's one filled button once Claude has run.
+    // Quiet, in the AI's outline rather than its tint: the run has had its go.
     const again = within(reviewBar()).getByRole("button", { name: "Try again" });
     expect(again.getAttribute("data-slot")).toBe("request-review");
-    expect(again.className).toContain("border-border");
+    expect(again.className).toContain("border-ai-soft-bd");
     expect(within(reviewBar()).getByRole("alert").textContent).toBe(
       "Claude couldn't finish: Overloaded",
     );
@@ -534,7 +542,7 @@ describe("the PR's standing in the header", () => {
     requests.filter((request) => request.url === statusPath).length;
   const standing = () => document.querySelector<HTMLElement>("[data-slot=pr-standing]");
 
-  it("shows the state and review status after the title, and CI and reviewers by the threads", async () => {
+  it("shows the state and review status after the title, and CI and reviewers at the row's end", async () => {
     renderReview();
     await loaded();
     expect(await screen.findByText("Open")).toBeTruthy();
@@ -550,7 +558,8 @@ describe("the PR's standing in the header", () => {
         name: "3 reviewers: 1 requested changes, 1 approved, 1 not reviewed yet, show reviewers",
       }),
     ).toBeTruthy();
-    expect(standing()?.textContent).toContain("4 threads · 3 unresolved");
+    // The threads are counted in the bar, not here.
+    expect(standing()?.textContent).not.toContain("threads");
   });
 
   it("always shows the state, Open included, and the review status only when it says something", async () => {
@@ -691,37 +700,34 @@ describe("the PR's standing in the header", () => {
 });
 
 describe("header", () => {
-  it("names the PR once, with who wants to merge what, how much it changes and its threads", async () => {
+  it("names the PR once: its number linked after the title, where it is, who wants to merge what and how much it changes", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-21T10:21:00Z"));
     renderReview();
     await loaded();
-    const link = screen.getByRole("link", { name: "shop #128" });
+    const link = screen.getByRole("link", { name: "#128" });
     expect(link.getAttribute("href")).toBe("https://github.com/acme/shop/pull/128");
+    expect(link.getAttribute("title")).toBe("Open on GitHub");
     const byline = document.querySelector<HTMLElement>("[data-slot=pr-byline]");
+    // No count of files, which the tree has, nor of threads, which the bar has.
     expect(byline?.textContent?.replace(/\s+/g, " ")).toBe(
-      "Sam Rivera wants to merge shop-142-order-receipts → into main · updated 40m ago · 7 files +58 −13, 58 lines added, 13 removed",
+      "shop · Sam Rivera wants to merge shop-142-order-receipts → into main · updated 40m ago · +58 −1358 lines added, 13 removed",
     );
-    await waitFor(() =>
-      expect(document.querySelector("[data-slot=thread-totals]")?.textContent).toBe(
-        "4 threads · 3 unresolved",
-      ),
-    );
+    expect(screen.queryByText(/\d threads/)).toBeNull();
   });
 
-  it("leaves out who, what and the threads while the pull request is being collected", async () => {
+  it("leaves out who, what and how much while the pull request is being collected", async () => {
     const { setView } = renderReview({
       view: { ...fixture, analysis: analysisInProgress(analysis, 0) },
     });
     await screen.findByRole("heading", { level: 1, name: "Collecting the pull request…" });
-    expect(document.querySelector("[data-slot=pr-byline]")).toBeNull();
-    expect(document.querySelector("[data-slot=thread-totals]")).toBeNull();
+    expect(document.querySelector("[data-slot=pr-byline]")?.textContent).toBe("shop");
 
-    // Collected, but the diff isn't read yet: who and what, but no count of files.
+    // Collected, but the diff isn't read yet: who and what, but no count of lines.
     setView({ ...fixture, analysis: analysisInProgress(analysis, 1) });
     await loaded();
     const byline = document.querySelector("[data-slot=pr-byline]");
     expect(byline?.textContent).toContain("Sam Rivera wants to merge");
-    expect(byline?.textContent).not.toContain("files");
+    expect(byline?.textContent).not.toContain("lines added");
   });
 
   it("shows up to two warnings in full and collapses more to a count", async () => {
@@ -735,7 +741,7 @@ describe("header", () => {
     expect(await screen.findByText("3 warnings")).toBeTruthy();
   });
 
-  it("warns about new commits and re-analyzes the PR", async () => {
+  it("re-analyzes the PR from the bar when it has new commits, and won't approve until then", async () => {
     const { requests } = renderReview({
       view: { ...fixture, stale: true },
       respond: (request) =>
@@ -744,8 +750,17 @@ describe("header", () => {
           : undefined,
     });
     await loaded();
-    expect(screen.getByText("This PR has new commits since the analysis.")).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Re-analyze" }));
+    expect(document.querySelector("[data-slot=ai-status]")?.textContent).toContain(
+      "new commits since",
+    );
+    const approve = within(reviewBar()).getByRole("button", { name: "Approve" });
+    expect(approve.getAttribute("aria-disabled")).toBe("true");
+    expect(description(approve)).toBe(
+      "The PR has new commits since the analysis: re-analyze to approve them.",
+    );
+    await userEvent.click(
+      within(reviewBar()).getByRole("button", { name: "Re-analyze · new commits" }),
+    );
     expect(requests.find((request) => request.url === "/api/analyses")?.body).toEqual({
       url: "https://github.com/acme/shop/pull/128",
     });
@@ -839,7 +854,7 @@ describe("intent", () => {
   it("says the code does what was asked when they agree, with what was asked in the details", async () => {
     renderReview({ view: withIntent({ mismatches: [] }) });
     await loaded();
-    expect(screen.getByText("✓ Does what was asked:")).toBeTruthy();
+    expect(screen.getByText("Does what was asked:")).toBeTruthy();
     expect(document.querySelector("[data-slot=mismatch-chip]")).toBeNull();
     const intent = await openDetails();
     expect(within(intent).queryByRole("heading", { name: "Inferred from the code" })).toBeNull();
@@ -2131,6 +2146,110 @@ describe("publishing", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(requests.some((request) => request.url === `${viewPath}/publication`)).toBe(false);
+  });
+});
+
+describe("the bar's verdicts", () => {
+  const approveButton = () => within(reviewBar()).getByRole("button", { name: "Approve" });
+  const publishButton = () => within(reviewBar()).getByRole("button", { name: /^Publish review…/ });
+
+  it("fills Approve once Claude's run is done and nothing waits, and approves at once", async () => {
+    const { requests } = renderReview();
+    await loaded();
+    expect(approveButton().className).toContain("bg-review-approved");
+    expect(publishButton().className).toContain("border-border");
+    // The main action is last.
+    expect(comesBefore(publishButton(), approveButton())).toBe(true);
+
+    await userEvent.click(approveButton());
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(await within(reviewBar()).findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(requests.find((request) => request.url === `${viewPath}/publication`)?.body).toEqual({
+      publicationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      summary: "",
+      allowStale: false,
+      hunkComments: [],
+      verdict: "approve",
+    });
+  });
+
+  it("fills Publish while comments wait, and approving leaves them for the next review", async () => {
+    const { requests } = renderReview();
+    await loaded();
+    await userEvent.click(addToReview(FINDING));
+    expect(publishButton().className).toContain("bg-primary");
+    expect(publishButton().textContent).toContain("1 to post");
+    expect(approveButton().className).not.toContain("bg-review-approved");
+    expect(comesBefore(approveButton(), publishButton())).toBe(true);
+
+    await userEvent.click(approveButton());
+    expect(await within(reviewBar()).findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(
+      requests.find((request) => request.url === `${viewPath}/publication`)?.body,
+    ).toMatchObject({ hunkComments: [], verdict: "approve" });
+    expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toContain(
+      "Any signed-in user can read",
+    );
+  });
+
+  it("disables Approve on the reviewer's own PR and says why", async () => {
+    const { requests } = renderReview({ view: { ...fixture, isAuthor: true } });
+    await loaded();
+    expect(approveButton().getAttribute("aria-disabled")).toBe("true");
+    expect(description(approveButton())).toBe(
+      "You opened this pull request, and its author can't approve it.",
+    );
+    await userEvent.click(approveButton());
+    expect(requests.some((request) => request.url === `${viewPath}/publication`)).toBe(false);
+  });
+
+  it("fills nothing before Claude runs, and says what a run would cover", async () => {
+    renderReview({
+      view: {
+        ...codeOnly,
+        analysis: {
+          ...codeOnly.analysis,
+          stages: { ...codeOnly.analysis.stages, findings: "skipped" },
+          usage: [],
+        },
+      },
+    });
+    await loaded();
+    expect(approveButton().className).not.toContain("bg-review-approved");
+    expect(publishButton().className).toContain("border-border");
+    expect(reviewBar().textContent).toContain(
+      "No AI review yetFind bugs, risks and decisions across 7 files",
+    );
+    expect(
+      within(reviewBar()).getByRole("button", { name: "Request AI review" }).className,
+    ).toContain("bg-ai-soft");
+  });
+
+  it("re-runs Claude after asking: takes the run off and runs the chosen model again", async () => {
+    let running = false;
+    const { requests } = renderReview({
+      respond: (request) => {
+        if (request.url !== viewPath && request.url !== `${viewPath}/model`) return undefined;
+        if (request.method === "POST") {
+          running = true;
+          return jsonResponse(200, { analysisId: id });
+        }
+        return request.method === "GET" && running
+          ? jsonResponse(200, { ...fixture, analysis: analysisInProgress(analysis, 2) })
+          : undefined;
+      },
+    });
+    await loaded();
+    await userEvent.click(within(reviewBar()).getByRole("button", { name: "Re-run" }));
+    const dialog = await screen.findByRole("dialog", { name: "Re-run AI review" });
+    expect(dialog.textContent).toContain("Sonnet 5.5 through Claude Code, on your Pro plan");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Re-run" }));
+
+    expect(await within(reviewBar()).findByRole("button", { name: /^Reviewing · / })).toBeTruthy();
+    const model = requests.filter((request) => request.url === `${viewPath}/model`);
+    expect(model.map((request) => request.method)).toEqual(["DELETE", "POST"]);
+    expect(model[1]?.body).toEqual({ optionId: "claude-code/claude-sonnet-5-5" });
+    expect(screen.queryByRole("status", { name: "Loading the analysis" })).toBeNull();
   });
 });
 

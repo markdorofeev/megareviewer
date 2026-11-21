@@ -1,7 +1,7 @@
-import { InfoIcon } from "lucide-react";
+import { CheckIcon, InfoIcon, Loader2Icon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { hunkIdOf } from "../../../../src/domain/diff/index.ts";
-import type { Analysis } from "../../../../src/domain/review/index.ts";
+import { type Analysis, hasModelRun, MODEL_STAGES } from "../../../../src/domain/review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { codeSpans, type Reach, reachOf, type Through } from "./brief.ts";
 
@@ -42,7 +42,7 @@ export const firstSentence = (text: string): string => {
   return SENTENCE_END.exec(line)?.[1] ?? line;
 };
 
-const LEAD = "font-medium text-muted-foreground";
+const LEAD = "font-semibold text-foreground";
 
 /** Model text, with its code spans set in code and the rest's Markdown markers dropped. */
 const ModelText = ({ text }: { readonly text: string }) => (
@@ -112,6 +112,77 @@ const Line = ({ lead, children }: { readonly lead: string; readonly children: Re
   </p>
 );
 
+/** "Sonnet 5.5 through Claude Code", when the run recorded its option. */
+const runName = (analysis: Analysis): string | null =>
+  analysis.modelOption === null
+    ? null
+    : `${analysis.modelOption.modelName} through ${analysis.modelOption.providerName}`;
+
+/**
+ * Where the brief comes from: the AI review, its model and whether it's of the latest commit, or
+ * while it runs, how many of its passes are done. Status only: the bar holds what can be done
+ * about it. Nothing before a run, which the bar says.
+ */
+const AiStatus = ({
+  analysis,
+  running,
+  stale,
+}: {
+  readonly analysis: Analysis;
+  readonly running: boolean;
+  readonly stale: boolean;
+}) => {
+  if (!running && !hasModelRun(analysis)) return null;
+  const name = runName(analysis);
+  const done = MODEL_STAGES.filter((stage) => analysis.stages[stage] === "done").length;
+  return (
+    <div
+      data-slot="ai-status"
+      className="mb-1.5 flex flex-wrap items-center gap-x-1.5 text-caption text-muted-foreground"
+    >
+      {running ? (
+        <Loader2Icon
+          aria-hidden="true"
+          className="size-3.5 animate-spin text-primary motion-reduce:animate-none"
+        />
+      ) : (
+        <SparklesIcon aria-hidden="true" className="size-3.5 text-primary" />
+      )}
+      <span className="font-semibold text-foreground">
+        {running ? "AI review running" : "AI review"}
+      </span>
+      {name !== null && (
+        <>
+          <span aria-hidden="true">·</span> <span>{name}</span>
+        </>
+      )}
+      <span aria-hidden="true">·</span>{" "}
+      {running ? (
+        <>
+          <span>
+            {done} of {MODEL_STAGES.length} passes
+          </span>
+          <span
+            role="progressbar"
+            aria-label="AI review progress"
+            aria-valuemin={0}
+            aria-valuemax={MODEL_STAGES.length}
+            aria-valuenow={done}
+            className="ml-1 h-1 w-30 overflow-hidden rounded-full bg-secondary"
+          >
+            <span
+              className="block h-full bg-primary transition-[width] motion-reduce:transition-none"
+              style={{ width: `${(done / MODEL_STAGES.length) * 100}%` }}
+            />
+          </span>
+        </>
+      ) : (
+        <span>{stale ? "new commits since" : "latest commit"}</span>
+      )}
+    </div>
+  );
+};
+
 /**
  * The intent's brief under the title, what to know before reading the code, in up to three
  * lines: what the change does, how it runs through the system, and what to keep in mind. Claude's
@@ -126,6 +197,7 @@ export const IntentLine = ({
   analysis,
   through,
   running,
+  stale = false,
   onDetails,
 }: {
   readonly analysis: Analysis;
@@ -133,6 +205,8 @@ export const IntentLine = ({
   readonly through: Through | null;
   /** Claude's run, as the page shows it. */
   readonly running: boolean;
+  /** The PR has new commits since the analysis. */
+  readonly stale?: boolean;
   readonly onDetails: () => void;
 }) => {
   const { intent, pullRequest } = analysis;
@@ -191,12 +265,18 @@ export const IntentLine = ({
   const inferred = intent !== null && (
     <div data-arriving={swapping || undefined} className="flex min-w-0 flex-col gap-0.5">
       <p className="min-w-0">
-        <span
-          className={mismatches.length === 0 ? "font-medium text-review-approved" : "font-medium"}
-        >
-          {mismatches.length > 0 || intent.stated === null
-            ? "From the code:"
-            : "✓ Does what was asked:"}
+        <span className={LEAD}>
+          {mismatches.length > 0 || intent.stated === null ? (
+            "From the code:"
+          ) : (
+            <>
+              <CheckIcon
+                aria-hidden="true"
+                className="mr-1 inline size-3.5 align-[-0.125em] text-review-approved"
+              />
+              Does what was asked:
+            </>
+          )}
         </span>{" "}
         <ModelText text={intent.inferred.summary} />
         {details}
@@ -226,6 +306,7 @@ export const IntentLine = ({
 
   return (
     <div data-slot="intent-brief" className="flex min-w-0 flex-col gap-1 text-body">
+      <AiStatus analysis={analysis} running={running} stale={stale} />
       {inferred !== false ? (
         swapping ? (
           <div data-slot="intent-swap" className="min-w-0">

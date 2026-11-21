@@ -133,12 +133,13 @@ export const useAnalysisView = (id: AnalysisId, seed: AnalysisView | null = null
       followed.current = id;
       return;
     }
-    // Only another analysis starts from nothing; following the same one again keeps the view.
-    if (followed.current !== id) {
-      followed.current = id;
+    // Only another analysis starts from nothing; following the same one again keeps the view, and
+    // so does a seed of it still running, as after Re-run.
+    if (followed.current !== id && lastView.current?.analysis.id !== id) {
       lastView.current = null;
       setState({ view: null, error: null, loading: true });
     }
+    followed.current = id;
     void refetch();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = subscribe(id, (event) => {

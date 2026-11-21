@@ -123,12 +123,14 @@ const ModelGroup = ({
 export const ModelMenu = ({
   choice,
   disabled,
-  filled,
+  variant,
+  size = "sm",
 }: {
   readonly choice: ModelChoice;
   readonly disabled: boolean;
-  /** Filled as the button beside it, so the two read as one control. */
-  readonly filled: boolean;
+  /** The button's beside it, so the two read as one control. */
+  readonly variant: "default" | "outline" | "ai" | "ai-strong" | "ai-quiet";
+  readonly size?: "sm" | "default";
 }) => {
   const id = useId();
   return (
@@ -136,23 +138,27 @@ export const ModelMenu = ({
       <DropdownMenuTrigger
         render={
           <Button
-            variant={filled ? "default" : "outline"}
-            size="sm"
+            variant={variant}
+            size={size}
             data-slot="model-menu"
             disabled={disabled}
             aria-label={
               choice.chosen === null ? "Choose a model" : `Model: ${choice.chosen.modelName}`
             }
             className={cn(
-              "w-6 rounded-l-none px-0",
-              filled ? "border-l-primary-foreground/30" : "border-l-0",
+              "rounded-l-none px-0",
+              size === "sm" ? "w-6" : "w-7",
+              // Its left border divides it from the button, which leaves its own right one out.
+              variant === "default" && "border-l-primary-foreground/30",
+              variant === "outline" && "border-l-0",
+              variant.startsWith("ai") && "border-l-primary/30",
             )}
           />
         }
       >
         <ChevronDownIcon aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="start" className="w-80">
         <DropdownMenuRadioGroup
           value={choice.chosen?.id ?? null}
           onValueChange={(value: string) => choice.choose(value)}

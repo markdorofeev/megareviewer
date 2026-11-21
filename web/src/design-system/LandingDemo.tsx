@@ -159,7 +159,6 @@ export const LandingDemo = () => {
           analysis={run === "running" ? DESIGN_RUN : ran}
           choice={choice}
           running={landing.running}
-          startedAt={null}
           starting={false}
           error={null}
           points={points}

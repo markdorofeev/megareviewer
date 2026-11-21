@@ -33,7 +33,7 @@ const openReview = async (page: Page, url: string, title: string, claude = true)
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
   if (!claude) return;
   await page.getByRole("button", { name: "Request AI review" }).click();
-  await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
+  await expect(page.getByText(/^(From the code|Does what was asked):$/)).toBeVisible();
   await expect(page.locator("[data-slot=model-hairline]")).toHaveCount(0);
   await expect(page.locator("[data-landing]")).toHaveAttribute("data-landing", "done");
 };

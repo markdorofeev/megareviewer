@@ -1,3 +1,4 @@
+import { CircleCheckIcon } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
 import {
@@ -12,10 +13,12 @@ import {
   HunkComment,
   hasModelRun,
   inProgress,
+  MODEL_STAGES,
   modelFamily,
   type Point,
   PointId,
   type PointState,
+  PublicationId,
   pointsOf,
   pullRequestUrl,
   type ReviewThread,
@@ -49,6 +52,7 @@ import {
 } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import type { RuleFields } from "../preferences/PreferenceForm.tsx";
 import { scopeOptions } from "../preferences/rule.tsx";
 import { failureReason } from "../preferences/view.ts";
@@ -57,6 +61,7 @@ import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks, checkingTestPayload } from "./calls.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
+import { barButtons } from "./header-buttons.ts";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
@@ -70,7 +75,6 @@ import {
   parseLayout,
   partIndex,
   pointPlaces,
-  threadTotals,
   tourSteps,
   trailingProofs,
 } from "./model.ts";
@@ -93,6 +97,7 @@ import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { Rail } from "./Rail.tsx";
 import { RemoveModelRun } from "./RemoveModelRun.tsx";
+import { RerunModel } from "./RerunModel.tsx";
 import { ReviewBar } from "./ReviewBar.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
@@ -534,7 +539,7 @@ const Review = ({
     [],
   );
   // When this page saw Claude's run start, for the time since.
-  const [modelStartedAt, setModelStartedAt] = useState<number | null>(null);
+  const [rerunning, setRerunning] = useState(false);
   // The hunks of a decision or mismatch the reviewer went to.
   const [highlight, setHighlight] = useState<ReadonlySet<PartId>>(new Set());
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
@@ -956,9 +961,35 @@ const Review = ({
   };
 
   const openPublish = () => setPublishing(true);
+  // Approve posts the verdict alone. Its ID stays until the host answers, so a retry after a lost
+  // answer doesn't approve twice.
+  const approve = useMutation(client.publish);
+  const approveId = useRef<PublicationId | null>(null);
+  const approveNow = async () => {
+    approveId.current ??= PublicationId.parse(crypto.randomUUID());
+    const result = await approve.run(analysisId, {
+      publicationId: approveId.current,
+      summary: "",
+      allowStale: false,
+      hunkComments: [],
+      verdict: "approve",
+    });
+    if (!result.ok) return;
+    approveId.current = null;
+    threads.reload();
+    prStatus.reload();
+    void refetch();
+  };
 
   // What publishing will post on the code: the reviewer's comments, raised points among them.
   const toPost = hunkComments.length;
+  const bar = barButtons({
+    aiDone: MODEL_STAGES.every((stage) => live.stages[stage] === "done"),
+    running: modelRunning,
+    pending: toPost,
+    isAuthor: view.isAuthor,
+    stale: view.stale,
+  });
   const totals = useMemo(() => changeTotals(analysis.files), [analysis.files]);
   const failureTitle =
     pointStates.failure === null
@@ -1242,6 +1273,7 @@ const Review = ({
             analysis={live}
             through={through}
             running={landing.running}
+            stale={view.stale}
             onDetails={() => {
               detailsReturnFocus.current = true;
               setShowDetails(true);
@@ -1249,17 +1281,10 @@ const Review = ({
           />
         }
         totals={totals}
-        threads={threads.list === null ? null : threadTotals(threads.list.threads)}
         status={prStatus.status}
         statusError={prStatus.error}
         onRetryStatus={prStatus.reload}
         now={Date.now()}
-        reanalyzing={reanalyze.pending}
-        reanalyzeError={reanalyze.error}
-        onReanalyze={async () => {
-          const result = await reanalyze.run({ url: prUrl });
-          if (result.ok) open(result.value.analysisId);
-        }}
       />
       <ReviewBar
         title={live.pullRequest?.title ?? null}
@@ -1268,9 +1293,27 @@ const Review = ({
             analysis={live}
             choice={modelChoice}
             running={landing.running}
-            startedAt={modelStartedAt}
             starting={runModel.pending}
-            error={runModel.error === null ? null : errorMessage(runModel.error)}
+            error={
+              runModel.error !== null
+                ? errorMessage(runModel.error)
+                : reanalyze.error !== null
+                  ? errorMessage(reanalyze.error)
+                  : null
+            }
+            filesChanged={analysis.stages.prep === "done" ? totals.files : null}
+            reanalyze={
+              view.stale
+                ? {
+                    starting: reanalyze.pending,
+                    onReanalyze: async () => {
+                      const result = await reanalyze.run({ url: prUrl });
+                      if (result.ok) open(result.value.analysisId);
+                    },
+                  }
+                : null
+            }
+            onRerun={() => setRerunning(true)}
             points={walked}
             leftOut={folded.size}
             threads={threadChip(orderedThreads, threadScope, resolvedHere)}
@@ -1283,7 +1326,6 @@ const Review = ({
                 optionId === undefined ? {} : { optionId },
               );
               if (!result.ok) return;
-              setModelStartedAt(Date.now());
               follow();
             }}
           >
@@ -1326,20 +1368,65 @@ const Review = ({
         }
         publish={
           canPublish && (
-            <Button
-              size="sm"
-              data-slot="publish-button"
-              className="shrink-0"
-              onClick={() => void openPublish()}
-            >
-              Publish review…
-              {toPost > 0 && (
-                <span className="tabular rounded-full bg-primary-foreground px-1.5 text-caption text-primary">
-                  {toPost}
-                  <span className="sr-only"> to post</span>
+            <>
+              {bar.order.map((which) =>
+                which === "approve" ? (
+                  <Tooltip key="approve" disabled={bar.approve.disabledReason === null}>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant={bar.approve.filled ? "approve" : "outline"}
+                          data-slot="approve-button"
+                          disabled={approve.pending || bar.approve.disabledReason !== null}
+                          focusableWhenDisabled
+                          aria-describedby={
+                            bar.approve.disabledReason === null ? undefined : "approve-reason"
+                          }
+                          onClick={() => void approveNow()}
+                        />
+                      }
+                    >
+                      <CircleCheckIcon
+                        aria-hidden="true"
+                        className={cn(!bar.approve.filled && "text-review-approved")}
+                      />
+                      {/* Below 640px the icon alone; a screen reader still hears the word. */}
+                      <span className="max-sm:sr-only">
+                        {approve.pending ? "Approving…" : "Approve"}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" align="end">
+                      {bar.approve.disabledReason}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    key="publish"
+                    variant={bar.publish.filled ? "default" : "outline"}
+                    data-slot="publish-button"
+                    aria-haspopup="dialog"
+                    onClick={() => void openPublish()}
+                  >
+                    {/* Below 640px "Publish…"; a screen reader hears it all. */}
+                    <span className="max-sm:sr-only">Publish review…</span>
+                    <span aria-hidden="true" className="sm:hidden">
+                      Publish…
+                    </span>
+                    {bar.publish.count > 0 && (
+                      <span className="tabular rounded-full bg-primary-foreground px-1.5 text-caption text-primary">
+                        {bar.publish.count}
+                        <span className="sr-only"> to post</span>
+                      </span>
+                    )}
+                  </Button>
+                ),
+              )}
+              {bar.approve.disabledReason !== null && (
+                <span id="approve-reason" hidden>
+                  {bar.approve.disabledReason}
                 </span>
               )}
-            </Button>
+            </>
           )
         }
         publication={publication}
@@ -1366,6 +1453,17 @@ const Review = ({
             }}
           >
             {retry.pending ? "Retrying…" : "Retry"}
+          </Button>
+        </div>
+      )}
+      {approve.error !== null && (
+        <div
+          className={cn(DANGER, "flex flex-wrap items-center justify-between gap-2")}
+          role="alert"
+        >
+          <p>Couldn't approve. {errorMessage(approve.error)}</p>
+          <Button variant="ghost" size="sm" onClick={approve.reset}>
+            Dismiss
           </Button>
         </div>
       )}
@@ -1485,6 +1583,16 @@ const Review = ({
         <UsageFooter usage={live.usage} option={live.modelOption} guidance={live.guidance} />
       </footer>
 
+      {rerunning && modelChoice.chosen !== null && (
+        <RerunModel
+          analysisId={analysisId}
+          view={view}
+          family={family}
+          chosen={modelChoice.chosen}
+          onClose={() => setRerunning(false)}
+          onRestart={(seed) => restart(seed)}
+        />
+      )}
       {publishing && (
         <PublishDialog
           analysisId={analysisId}

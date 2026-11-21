@@ -121,11 +121,14 @@ export const FILE_STATUS: Readonly<Record<FileStatus, FileStatusStyle | null>> =
   },
 };
 
-/** A PR's state on its host, always shown: an icon and a word go with its tint. */
+/**
+ * A PR's state on its host, always shown: an icon and a word go with its tint. Open, which nearly
+ * every PR reviewed is, is grey, leaving indigo to actions and AI.
+ */
 export const PR_STATE_STATUS: Readonly<
   Record<PullRequestState, { readonly label: string; readonly className: string }>
 > = {
-  open: { label: "Open", className: "text-pr-open bg-pr-open-bg border-pr-open/25" },
+  open: { label: "Open", className: "text-foreground bg-secondary border-transparent" },
   draft: { label: "Draft", className: "text-muted-foreground bg-muted border-border" },
   merged: { label: "Merged", className: "text-pr-merged bg-pr-merged-bg border-pr-merged/25" },
   closed: {

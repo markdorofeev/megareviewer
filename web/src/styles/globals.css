@@ -165,6 +165,14 @@
   --review-approved-bg: #EAF7EE;
   --review-changes: #B42323;
   --review-changes-bg: #FDEEEE;
+
+  /* AI review: the primary as a tint, never solid, so AI reads apart from committing a review.
+     Over the background: the fill 8%, the quiet border 38%, the new-commits border 65% (3:1). */
+  --ai-soft-bg: #F1F0FD;
+  --ai-soft-bd: #BCB9F5;
+  --ai-soft-bd-strong: #8D87EE;
+  /* Pressed: 12% of the primary. */
+  --ai-soft-active: #EAE9FC;
   --review-pending: #9A6700;
   --review-pending-bg: #FDF6E3;
   --review-commented: #5B5B66;
@@ -200,8 +208,6 @@
   --avatar-8-fg: #86198F;
 
   /* PR state */
-  --pr-open: #4F46E5;
-  --pr-open-bg: #EEF0FD;
   --pr-merged: #6D28D9;
   --pr-merged-bg: #F3EEFE;
 
@@ -289,6 +295,13 @@
   --review-approved-bg: #1D3A28;
   --review-changes: #F87171;
   --review-changes-bg: #3F1E22;
+
+  /* 8% as in light rather than the design's 14%: its hover, 6% nearer the primary, keeps 4.5:1. */
+  --ai-soft-bg: #282830;
+  --ai-soft-bd: #505181;
+  --ai-soft-bd-strong: #6567AD;
+  /* Pressed goes darker rather than nearer the primary, which would drop the label under 4.5:1. */
+  --ai-soft-active: #222228;
   --review-pending: #FBBF24;
   --review-pending-bg: #3D3012;
   --review-commented: #A1A1AA;
@@ -322,8 +335,6 @@
   --avatar-8-fg: #F5D0FE;
 
   /* PR state */
-  --pr-open: #A5B4FC;
-  --pr-open-bg: #26283F;
   --pr-merged: #C4B5FD;
   --pr-merged-bg: #2E2640;
 
@@ -457,6 +468,15 @@
   --color-review-approved-bg: var(--review-approved-bg);
   --color-review-changes: var(--review-changes);
   --color-review-changes-bg: var(--review-changes-bg);
+  --color-review-approved-hover: color-mix(in srgb, var(--foreground) 10%, var(--review-approved));
+  --color-review-approved-active: color-mix(in srgb, var(--foreground) 20%, var(--review-approved));
+  --color-ai-soft: var(--ai-soft-bg);
+  --color-ai-soft-bd: var(--ai-soft-bd);
+  --color-ai-soft-bd-strong: var(--ai-soft-bd-strong);
+  --color-ai-soft-hover: color-mix(in srgb, var(--primary) 6%, var(--ai-soft-bg));
+  --color-ai-soft-active: var(--ai-soft-active);
+  --color-ai-quiet-hover: color-mix(in srgb, var(--primary) 6%, var(--card));
+  --color-ai-quiet-active: color-mix(in srgb, var(--primary) 12%, var(--card));
   --color-review-pending: var(--review-pending);
   --color-review-pending-bg: var(--review-pending-bg);
   --color-review-commented: var(--review-commented);
@@ -486,8 +506,6 @@
   --color-avatar-7-fg: var(--avatar-7-fg);
   --color-avatar-8-bg: var(--avatar-8-bg);
   --color-avatar-8-fg: var(--avatar-8-fg);
-  --color-pr-open: var(--pr-open);
-  --color-pr-open-bg: var(--pr-open-bg);
   --color-pr-merged: var(--pr-merged);
   --color-pr-merged-bg: var(--pr-merged-bg);
   --color-severity-blocker: var(--severity-blocker);
@@ -596,7 +614,7 @@
  * height: file headers and the tree rail sit below it, and the focus never lands under it.
  */
 :root:has([data-slot="review-page"]) {
-  --review-bar-h: 2.75rem;
+  --review-bar-h: 3.25rem;
   scroll-padding-top: var(--review-bar-h);
 }
 

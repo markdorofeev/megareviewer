@@ -22,6 +22,14 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20",
         link: "text-primary underline-offset-4 hover:underline",
+        // hunk: the review bar's AI controls, tinted and never filled, and Approve filled green.
+        ai: "border-primary bg-ai-soft text-primary hover:bg-ai-soft-hover active:bg-ai-soft-active aria-expanded:bg-ai-soft-hover aria-disabled:hover:bg-ai-soft",
+        "ai-strong":
+          "border-ai-soft-bd-strong bg-ai-soft text-primary hover:bg-ai-soft-hover active:bg-ai-soft-active aria-expanded:bg-ai-soft-hover aria-disabled:hover:bg-ai-soft",
+        "ai-quiet":
+          "border-ai-soft-bd bg-card text-primary hover:bg-ai-quiet-hover active:bg-ai-quiet-active aria-expanded:bg-ai-quiet-hover aria-disabled:hover:bg-card",
+        approve:
+          "bg-review-approved text-primary-foreground hover:bg-review-approved-hover active:bg-review-approved-active aria-disabled:hover:bg-review-approved",
       },
       size: {
         default:

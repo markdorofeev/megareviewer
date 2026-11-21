@@ -228,6 +228,12 @@ Stage 55 is the bottleneck on purpose, as stage 02 was: it fixes the types, port
 |---|---|---|---|
 | 60 | [The file tree after the v4 design](60-file-tree-v4.md) | 36, 45, 50 | `web/src/review/tree/`, the vendored IDEA icons, the tree's tokens and contrast pairs |
 
+## Fourteenth slice: the review header after its final design
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 61 | [The review header after its final design](61-review-header.md) | 15, 41, 47 | The review page's header and bar, Approve, the AI tint's tokens and contrast pairs |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

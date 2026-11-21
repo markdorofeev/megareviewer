@@ -18,7 +18,7 @@ const openPicker = async (page: Page) => {
 /** Asks Claude on the open review and waits until its passes are done. */
 const analyzeWithClaude = async (page: Page) => {
   await page.getByRole("button", { name: "Request AI review" }).click();
-  await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
+  await expect(page.getByText(/^(From the code|Does what was asked):$/)).toBeVisible();
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
   await landed(page);
 };
@@ -85,7 +85,7 @@ test("analyzes a PR from its URL, and asks Claude on it", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Request AI review" })).toBeVisible();
   await analyzeWithClaude(page);
   await expect(page.getByRole("button", { name: "Request AI review" })).toHaveCount(0);
-  await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
+  await expect(page.getByText(/^(From the code|Does what was asked):$/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Details", exact: true })).toBeVisible();
 });
 
@@ -336,7 +336,7 @@ test.describe("the bar, with many of Claude's points", () => {
         .map((box) => Math.round(box.top + box.height / 2)),
     );
     expect(Math.max(...middles) - Math.min(...middles)).toBeLessThanOrEqual(1);
-    expect(await bar.evaluate((one) => one.getBoundingClientRect().height)).toBeLessThanOrEqual(45);
+    expect(await bar.evaluate((one) => one.getBoundingClientRect().height)).toBeLessThanOrEqual(53);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       1024,
     );
@@ -496,11 +496,14 @@ test("Claude's failure leaves the review, says why, and tries again", async ({ p
 
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(failure).toBeHidden();
-  await expect(page.getByText(/^(From the code|✓ Does what was asked):$/)).toBeVisible();
+  await expect(page.getByText(/^(From the code|Does what was asked):$/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
 });
 
-test("a PR with new commits warns, and publishing asks first", async ({ page, server }) => {
+test("a PR with new commits offers Re-analyze, and publishing asks first", async ({
+  page,
+  server,
+}) => {
   await openPicker(page);
   // The analysis keeps the head it started with; the push lands while it runs.
   const started = await server.request.post("/api/analyses", { data: { url: PR.smallFeature } });
@@ -512,8 +515,13 @@ test("a PR with new commits warns, and publishing asks first", async ({ page, se
   expect(pushed.ok()).toBe(true);
 
   await page.goto(`/review/${analysisId}`);
-  await expect(page.getByRole("status").filter({ hasText: "new commits" })).toBeVisible();
-  await analyzeWithClaude(page);
+  const bar = page.locator("[data-slot=review-bar]");
+  await expect(bar.getByRole("button", { name: "Re-analyze · new commits" })).toBeVisible();
+  // Approving at once would vouch for code the analysis hasn't read; the dialog asks first.
+  await expect(bar.getByRole("button", { name: "Approve" })).toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish review" });

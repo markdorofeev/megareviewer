@@ -11,7 +11,6 @@ import {
   partIndex,
   partsInPathOrder,
   pointPlaces,
-  threadTotals,
   tourSteps,
   trailingProofs,
 } from "./model.ts";
@@ -258,13 +257,5 @@ describe("totals", () => {
     const totals = changeTotals(analysis.files);
     expect(totals).toEqual({ files: 7, additions: 58, deletions: 13 });
     expect(changeTotals([])).toEqual({ files: 0, additions: 0, deletions: 0 });
-  });
-
-  it("count the threads and those still open", () => {
-    expect(threadTotals([{ resolved: false }, { resolved: true }, { resolved: false }])).toEqual({
-      threads: 3,
-      unresolved: 2,
-    });
-    expect(threadTotals([])).toEqual({ threads: 0, unresolved: 0 });
   });
 });

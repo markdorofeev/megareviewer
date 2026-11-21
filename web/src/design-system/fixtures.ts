@@ -596,6 +596,7 @@ export const POINT_GUIDANCE: Pick<PointActions, "leftOut" | "onShow" | "ruleScop
 /** As much of an analysis as Claude's element reads: how far its run got, and how it ended. */
 export const DESIGN_RUN: ClaudeRun = {
   modelOption: null,
+  usage: [],
   status: "complete",
   stages: {
     collect: "done",

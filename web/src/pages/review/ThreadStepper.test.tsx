@@ -168,6 +168,7 @@ describe("ClaudeElement with threads", () => {
     },
     modelError: null,
     modelOption: null,
+    usage: [],
   });
   const finding: Point = {
     id: PointId.parse("f1"),
@@ -192,7 +193,6 @@ describe("ClaudeElement with threads", () => {
         analysis={props.analysis}
         choice={choice}
         running={props.running ?? false}
-        startedAt={null}
         starting={false}
         error={null}
         points={props.points ?? []}

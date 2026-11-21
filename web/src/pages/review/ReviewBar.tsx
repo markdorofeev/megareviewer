@@ -30,7 +30,7 @@ const useStuck = () => {
 /**
  * The row under the header that stays at the top of the window while the code scrolls: Claude's
  * run and the stepper through its points, Show files at 1024px or less, the latest review
- * published, and Publish. Its height is `--review-bar-h`, which what sticks or scrolls under it
+ * published, and Approve and Publish. Its height is `--review-bar-h`, which what sticks or scrolls under it
  * reads. Stuck, it names the PR first.
  */
 export const ReviewBar = ({
@@ -48,7 +48,7 @@ export const ReviewBar = ({
   readonly claude: ReactNode;
   /** Show files, at 1024px or less. */
   readonly tools: ReactNode;
-  /** The Publish button, while a review can be published: before and after one is. */
+  /** Approve and Publish, while a review can be published: before and after one is. */
   readonly publish: ReactNode;
   /** The latest review published from the analysis. */
   readonly publication: PublicationReceipt | null;
@@ -67,7 +67,7 @@ export const ReviewBar = ({
       ref={observed.bar}
       data-slot="review-bar"
       data-stuck={stuck || undefined}
-      className="sticky top-0 z-20 flex h-(--review-bar-h) min-w-0 items-center gap-3 border-b bg-background"
+      className="sticky top-0 z-20 flex h-(--review-bar-h) min-w-0 items-center gap-3 border-y bg-background"
     >
       {hairline !== null && (
         // Drawn by globals.css: a still, full-width bar under reduced motion.
@@ -77,12 +77,14 @@ export const ReviewBar = ({
       )}
       {stuck && title !== null && (
         // The h1 above still names the page.
-        <span
-          aria-hidden="true"
-          className="max-w-72 shrink truncate font-semibold max-xl:hidden"
-          title={title}
-        >
-          {title}
+        <span aria-hidden="true" className="flex max-w-96 shrink items-center gap-3 max-xl:hidden">
+          <span
+            className="truncate font-semibold motion-safe:animate-in motion-safe:fade-in"
+            title={title}
+          >
+            {title}
+          </span>
+          <span className="h-4.5 w-px shrink-0 bg-border" />
         </span>
       )}
       <div data-slot="claude-slot" className="flex min-w-0 flex-1 items-center">
@@ -110,7 +112,7 @@ export const ReviewBar = ({
           )}
         </p>
       )}
-      {publish}
+      <div className="flex shrink-0 items-center gap-2">{publish}</div>
     </div>
   );
 };
