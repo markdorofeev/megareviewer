@@ -11,7 +11,7 @@ import { Button } from "../../ui/button.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
 import { KeyHintLine } from "../shell/key-hint.tsx";
 import { CommentCard } from "./comment-card.tsx";
-import { absoluteTime, initialsOf, relativeTime } from "./people.ts";
+import { absoluteTime, avatarColors, initialsOf, relativeTime } from "./people.ts";
 import { lineRef, RefChip } from "./place-ref.tsx";
 import { SuggestionDiff } from "./suggestion-diff.tsx";
 import { ThreadBody } from "./thread-body.tsx";
@@ -57,12 +57,19 @@ export interface ReviewThreadProps {
 
 const RING = "shadow-[inset_0_0_0_2px_var(--ring)]";
 
-const Initials = ({ name }: { readonly name: string }) => (
+const Initials = ({
+  person,
+}: {
+  readonly person: { readonly id: string; readonly name: string };
+}) => (
   <span
     aria-hidden="true"
-    className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-caption font-medium text-muted-foreground"
+    className={cn(
+      "flex size-6 shrink-0 items-center justify-center rounded-full text-caption font-medium",
+      avatarColors(person.id),
+    )}
   >
-    {initialsOf(name)}
+    {initialsOf(person.name)}
   </span>
 );
 
@@ -222,7 +229,7 @@ export const ReviewThreadView = ({
         data-slot="thread-group"
         className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-2.5 gap-y-0.5"
       >
-        <Initials name={head.author.name} />
+        <Initials person={head.author} />
         <header className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="font-medium">{head.author.name}</span>
           {authorId !== null && head.author.id === authorId && (

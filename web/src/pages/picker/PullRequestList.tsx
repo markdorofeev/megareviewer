@@ -4,7 +4,7 @@ import type { HostKind, PullRequestSummary } from "../../../../src/domain/review
 import { isPlainClick } from "../../app/Link.tsx";
 import { pullRequestPath } from "../../app/router.ts";
 import { cn } from "../../lib/utils.ts";
-import { initialsOf, KeyHint } from "../../review/index.ts";
+import { avatarColors, initialsOf, KeyHint } from "../../review/index.ts";
 import { Badge } from "../../ui/badge.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
 import { fullDate, relativeTime } from "./relative-time.ts";
@@ -16,25 +16,6 @@ export const HOST_NAMES: Readonly<Record<HostKind, string>> = {
 
 export const prLabel = ({ repo, number }: PullRequestSummary["ref"]): string =>
   `${repo.owner}/${repo.repo} #${number}`;
-
-// Spelled out because Tailwind only generates the classes it finds whole in the source.
-const AVATARS = [
-  "bg-avatar-1-bg text-avatar-1-fg",
-  "bg-avatar-2-bg text-avatar-2-fg",
-  "bg-avatar-3-bg text-avatar-3-fg",
-  "bg-avatar-4-bg text-avatar-4-fg",
-  "bg-avatar-5-bg text-avatar-5-fg",
-  "bg-avatar-6-bg text-avatar-6-fg",
-  "bg-avatar-7-bg text-avatar-7-fg",
-  "bg-avatar-8-bg text-avatar-8-fg",
-] as const;
-
-/** An author's colors, the same for them on every row: a hash of their host ID. */
-export const avatarColors = (authorId: string): string => {
-  let hash = 0;
-  for (const char of authorId) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
-  return AVATARS[hash % AVATARS.length] ?? AVATARS[0];
-};
 
 export const SPIN = "animate-spin motion-reduce:animate-[spin_3s_linear_infinite]";
 

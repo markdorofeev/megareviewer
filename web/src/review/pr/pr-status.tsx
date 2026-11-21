@@ -30,7 +30,7 @@ import { Badge } from "../../ui/badge.tsx";
 import { Button } from "../../ui/button.tsx";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../../ui/popover.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
-import { initialsOf } from "../thread/people.ts";
+import { avatarColors, initialsOf } from "../thread/people.ts";
 
 const PR_STATE_ICON: Readonly<Record<PullRequestState, LucideIcon>> = {
   open: GitPullRequestArrowIcon,
@@ -221,7 +221,12 @@ const SHOWN_REVIEWERS = 3;
 const Initials = ({ reviewer }: { readonly reviewer: Reviewer }) => {
   const Icon = reviewer.verdict === null ? null : VERDICT_ICON[reviewer.verdict];
   return (
-    <span className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-caption font-medium text-muted-foreground ring-2 ring-background">
+    <span
+      className={cn(
+        "relative flex size-6 shrink-0 items-center justify-center rounded-full text-caption font-medium ring-2 ring-background",
+        avatarColors(reviewer.id),
+      )}
+    >
       {initialsOf(reviewer.name)}
       {Icon !== null && reviewer.verdict !== null && (
         <span className="absolute -right-0.5 -bottom-0.5 flex size-3 items-center justify-center rounded-full bg-background">

@@ -12,6 +12,25 @@ export const initialsOf = (name: string): string => {
   return initials === "" ? "?" : initials;
 };
 
+// Spelled out because Tailwind only generates the classes it finds whole in the source.
+const AVATARS = [
+  "bg-avatar-1-bg text-avatar-1-fg",
+  "bg-avatar-2-bg text-avatar-2-fg",
+  "bg-avatar-3-bg text-avatar-3-fg",
+  "bg-avatar-4-bg text-avatar-4-fg",
+  "bg-avatar-5-bg text-avatar-5-fg",
+  "bg-avatar-6-bg text-avatar-6-fg",
+  "bg-avatar-7-bg text-avatar-7-fg",
+  "bg-avatar-8-bg text-avatar-8-fg",
+] as const;
+
+/** A person's colors, the same for them wherever their initials show: a hash of their host ID. */
+export const avatarColors = (id: string): string => {
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
+  return AVATARS[hash % AVATARS.length] ?? AVATARS[0];
+};
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;

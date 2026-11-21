@@ -1,5 +1,5 @@
 export { CommentCard, type CommentState } from "./comment-card.tsx";
-export { initialsOf, relativeTime } from "./people.ts";
+export { avatarColors, initialsOf, relativeTime } from "./people.ts";
 export { lineRef, RefChip } from "./place-ref.tsx";
 export {
   CHIP,

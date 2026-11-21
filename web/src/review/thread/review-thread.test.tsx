@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { ReviewThread } from "../../../../src/domain/review/index.ts";
 import { type Highlighter, HighlighterContext } from "../diff/syntax.ts";
-import { initialsOf, relativeTime } from "./people.ts";
+import { avatarColors, initialsOf, relativeTime } from "./people.ts";
 import { type ReviewThreadProps, ReviewThreadView } from "./review-thread.tsx";
 
 const pending: Highlighter = { highlight: () => new Promise(() => {}) };
@@ -417,6 +417,21 @@ describe("people", () => {
     expect(initialsOf("sindresorhus")).toBe("SI");
     expect(initialsOf("  ")).toBe("?");
     expect(initialsOf("ana-maria silva")).toBe("AM");
+  });
+
+  it("gives a person the same colors every time, and people different ones", () => {
+    expect(avatarColors("sam-rivera")).toBe(avatarColors("sam-rivera"));
+    const ids = ["sam-rivera", "lee-park", "jo-tanaka", "priya", "lsato", "jkim", "rnovak", "mina"];
+    expect(new Set(ids.map(avatarColors)).size).toBeGreaterThan(3);
+  });
+
+  it("colors a commenter's initials by their host ID", () => {
+    show();
+    const [samInitials, danaInitials] = screen
+      .getAllByText(/^(SO|DK)$/)
+      .map((initials) => initials.className);
+    expect(samInitials).toContain(avatarColors("sam"));
+    expect(danaInitials).toContain(avatarColors("dana"));
   });
 
   it("says how long ago, then the date", () => {
