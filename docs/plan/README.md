@@ -234,6 +234,12 @@ Stage 55 is the bottleneck on purpose, as stage 02 was: it fixes the types, port
 |---|---|---|---|
 | 61 | [The review header after its final design](61-review-header.md) | 15, 41, 47 | The review page's header and bar, Approve, the AI tint's tokens and contrast pairs |
 
+## Fifteenth slice: code and file tree typography
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 62 | [Code and file tree typography](62-code-and-tree-type.md) | 14, 60, 61 | The code and tree fonts, the type scale, the syntax palette and its roles, the light diff tints and their contrast pairs |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

@@ -88,6 +88,10 @@
   --radius: 0.5rem;
   --hunk-font-sans: "Geist", "Geist Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
   --hunk-font-mono: "Geist Mono", "Geist Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* hunk: code and the file tree have faces of their own, for reading long: JetBrains Mono for
+     code, line numbers and counts, Inter for the tree's names. The chrome keeps Geist. */
+  --hunk-font-code: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --hunk-font-tree: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --duration-instant: 0ms;
   --duration-fast: 100ms;
   --duration-base: 150ms;
@@ -139,19 +143,19 @@
   --surface-row: #FAFAFA;
 
   /* diff */
-  --diff-add-bg: #EAF7EE;
-  --diff-add-word: #CCEFD7;
-  --diff-add-gutter: #DDF3E4;
+  --diff-add-bg: #EBF6E9;
+  --diff-add-word: #C3E5BD;
+  --diff-add-gutter: #DDEFDA;
   --diff-add-fg: #15703A;
-  --diff-del-bg: #FDEEEE;
-  --diff-del-word: #FADADA;
-  --diff-del-gutter: #FBE0E0;
+  --diff-del-bg: #FCEEED;
+  --diff-del-word: #F4C9C6;
+  --diff-del-gutter: #F8E0DE;
   --diff-del-fg: #B42323;
   --diff-mod-fg: #9A6700;
-  --diff-hunk-bg: #EEF0FD;
-  --diff-hunk-fg: #4338CA;
+  --diff-hunk-bg: #EEF1FB;
+  --diff-hunk-fg: #2B3FA8;
   --diff-gutter-bg: #FAFAFA;
-  --diff-gutter-fg: #71717A;
+  --diff-gutter-fg: #5E5E68;
 
   /* comments and suggestions */
   --thread-bg: #FFFFFF;
@@ -219,12 +223,16 @@
   --severity-nit: #5B5B66;
   --severity-info: #4F46E5;
 
-  /* syntax (map Shiki css-variables theme to these) */
-  --syntax-keyword: #6D28D9;
-  --syntax-string: #0E6E5C;
-  --syntax-function: #1D4ED8;
-  --syntax-comment: #5B5B66;
-  --syntax-number: #92400E;
+  /* syntax (map Shiki css-variables theme to these). hunk: IntelliJ's palette without the hues
+     that mean something here: no green, red or amber, which are added, removed and risk. Each is
+     4.5:1 on every line and word tint; the tightest is a removed word, at 4.6:1. */
+  --syntax-keyword: #0033B3;
+  --syntax-string: #0A655C;
+  --syntax-function: #00627A;
+  --syntax-comment: #585862;
+  --syntax-number: #144AD6;
+  --syntax-decorator: #7A3E9D;
+  --syntax-attribute: #871094;
 
   /* hunk: risk classes (contract, logic, mechanical), added for megareviewer. Always paired with a
      glyph and a label. Only contract has a hue, amber, so Claude's points read as the error,
@@ -279,9 +287,9 @@
   --diff-del-fg: #F87171;
   --diff-mod-fg: #FBBF24;
   --diff-hunk-bg: #26283F;
-  --diff-hunk-fg: #A5B4FC;
+  --diff-hunk-fg: #AEB8FF;
   --diff-gutter-bg: #1F1F1F;
-  --diff-gutter-fg: #8D8D96;
+  --diff-gutter-fg: #9A9DA6;
 
   /* comments and suggestions */
   --thread-bg: #1F1F1F;
@@ -346,13 +354,16 @@
   --severity-nit: #A1A1AA;
   --severity-info: #A5B4FC;
 
-  /* syntax (map Shiki css-variables theme to these). hunk: keyword, string and function lifted
-     from #C4B5FD, #7DD3C0 and #93C5FD to 4.5:1 on an added word's #286142. */
-  --syntax-keyword: #D2C7FD;
-  --syntax-string: #94DBCB;
-  --syntax-function: #AAD1FD;
+  /* syntax (map Shiki css-variables theme to these). hunk: the design's hues, #A6ABFF, #62C1AE,
+     #6EB6F8, #42C2CD and #D3A0CE, lifted in lightness to 4.5:1 on an added word's #286142, which
+     is lighter than the near-black page they were drawn for. */
+  --syntax-keyword: #C7CAFF;
+  --syntax-string: #89DCCB;
+  --syntax-function: #A2D2FF;
   --syntax-comment: #CCCCD1;
-  --syntax-number: #FCD34D;
+  --syntax-number: #6ADDE7;
+  --syntax-decorator: #E8C1E4;
+  --syntax-attribute: #E8C1E4;
 
   /* hunk: risk classes */
   --risk-contract: #F0B95A;   --risk-contract-bg: #45330F;   --risk-contract-border: #72561E;   --risk-contract-solid: #D99A2B;
@@ -519,6 +530,8 @@
   --color-syntax-function: var(--syntax-function);
   --color-syntax-comment: var(--syntax-comment);
   --color-syntax-number: var(--syntax-number);
+  --color-syntax-decorator: var(--syntax-decorator);
+  --color-syntax-attribute: var(--syntax-attribute);
   /* hunk: risk classes */
   --color-risk-contract: var(--risk-contract);
   --color-risk-contract-bg: var(--risk-contract-bg);
@@ -535,6 +548,11 @@
 
   --font-sans: var(--hunk-font-sans);
   --font-mono: var(--hunk-font-mono);
+  /* JetBrains Mono draws => and != as contextual alternates, so "calt" goes off with "liga":
+     a reviewer reads every character as typed. */
+  --font-code: var(--hunk-font-code);
+  --font-code--font-feature-settings: "liga" 0, "calt" 0;
+  --font-tree: var(--hunk-font-tree);
 
   --radius-sm: calc(var(--radius) - 4px); /* 4px: badges, kbd, word highlight */
   --radius-md: calc(var(--radius) - 2px); /* 6px: buttons, inputs, tree rows */
@@ -546,9 +564,12 @@
   --text-body: 0.875rem;          --text-body--line-height: 1.375rem;      /* 14/22 */
   --text-ui: 0.8125rem;           --text-ui--line-height: 1.25rem;         /* 13/20 */
   --text-caption: 0.75rem;        --text-caption--line-height: 1rem;       /* 12/16 */
-  --text-code: 0.8125rem;         --text-code--line-height: 1.25rem;       /* 13/20 */
+  --text-code: 0.84375rem;        --text-code--line-height: 1.375rem;      /* 13.5/22 */
   --text-code-compact: 0.75rem;   --text-code-compact--line-height: 1.125rem; /* 12/18 */
-  --text-code-comfy: 0.875rem;    --text-code-comfy--line-height: 1.375rem;   /* 14/22 */
+  --text-code-comfy: 0.90625rem;  --text-code-comfy--line-height: 1.5rem;     /* 14.5/24 */
+  --text-code-gutter: 0.78125rem; /* 12.5: line numbers and hunk headers, on their row's line height */
+  --text-tree: 0.84375rem;        --text-tree--line-height: 1.15625rem;    /* 13.5/18.5: file names */
+  --text-tree-folder: 0.78125rem; --text-tree-folder--line-height: 1rem;   /* 12.5/16: directories */
   --text-kbd: 0.6875rem;          --text-kbd--line-height: 1rem;           /* 11/16 */
 
   --shadow-sm: var(--elevation-sm);

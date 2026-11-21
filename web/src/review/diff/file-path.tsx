@@ -127,7 +127,7 @@ export const UnchangedUses = ({
                 <span className="text-foreground">{use.path}</span>:{use.line}
                 {use.use === "type" && <span> type</span>}
               </p>
-              <pre className="overflow-x-auto rounded-md border bg-background py-1 font-mono text-code-compact">
+              <pre className="overflow-x-auto rounded-md border bg-background py-1 font-code text-code-compact">
                 {use.excerpt.lines.map((text, at) => {
                   const line = use.excerpt.start + at;
                   const used = line === use.line;

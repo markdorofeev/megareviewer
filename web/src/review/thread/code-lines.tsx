@@ -8,6 +8,8 @@ const SYNTAX: Readonly<Record<SyntaxTokenType, string>> = {
   function: "text-syntax-function",
   comment: "text-syntax-comment",
   number: "text-syntax-number",
+  decorator: "text-syntax-decorator",
+  attribute: "text-syntax-attribute",
 };
 
 /** Tokens per line of `code` in `language`, or null while they load or when there's no grammar. */

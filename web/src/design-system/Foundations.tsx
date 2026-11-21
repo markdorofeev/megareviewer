@@ -100,6 +100,8 @@ const COLOR_GROUPS: readonly { readonly title: string; readonly tokens: readonly
       "syntax-function",
       "syntax-comment",
       "syntax-number",
+      "syntax-decorator",
+      "syntax-attribute",
     ],
   },
 ];
@@ -111,13 +113,28 @@ const TYPE_SCALE = [
   { name: "text-body", className: "text-body", use: "Descriptions, comment bodies" },
   { name: "text-ui", className: "text-ui", use: "Buttons, tabs, tree; the body default" },
   { name: "text-caption", className: "text-caption", use: "Badges, meta" },
-  { name: "text-code", className: "font-mono text-code", use: "Diff, default density" },
+  { name: "text-code", className: "font-code text-code", use: "Diff, default density" },
   {
     name: "text-code-compact",
-    className: "font-mono text-code-compact",
+    className: "font-code text-code-compact",
     use: "Compact density, counts",
   },
-  { name: "text-code-comfy", className: "font-mono text-code-comfy", use: "Comfortable density" },
+  { name: "text-code-comfy", className: "font-code text-code-comfy", use: "Comfortable density" },
+  {
+    name: "text-code-gutter",
+    className: "font-code text-code-gutter",
+    use: "Line numbers, hunk headers",
+  },
+  {
+    name: "text-tree",
+    className: "font-tree text-tree font-medium",
+    use: "File names in the tree",
+  },
+  {
+    name: "text-tree-folder",
+    className: "font-tree text-tree-folder",
+    use: "Directories in the tree",
+  },
   { name: "text-kbd", className: "font-mono text-kbd font-medium", use: "Key hints" },
 ] as const;
 

@@ -604,7 +604,7 @@ const CheckedBy = ({
   readonly peek: TestPeek | null;
   readonly id: string;
 }) => {
-  const name = <span className="font-mono text-code-compact">{checkedBy.test}</span>;
+  const name = <span className="font-code text-code-compact">{checkedBy.test}</span>;
   return (
     <p data-slot="checked-by" className="flex items-start gap-1.5 pb-0.5 text-muted-foreground">
       <FlaskConicalIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
@@ -795,7 +795,9 @@ export const DecisionChip = ({
       aria-expanded={open}
       aria-label={`Decision: ${point.title}`}
       className={cn(
-        "ml-3 inline-flex min-h-5 scroll-mt-24 items-center gap-1 rounded-full border bg-background px-2 align-middle font-sans text-caption text-muted-foreground hover:text-foreground",
+        // From the line's top with a pixel over it: the middle of a 22px line of code sits above
+        // the chip's own, and aligned to it the chip made its line a fraction taller.
+        "mt-px ml-3 inline-flex min-h-5 scroll-mt-24 items-center gap-1 rounded-full border bg-background px-2 align-top font-sans text-caption text-muted-foreground hover:text-foreground",
         state === "dismissed" && "line-through",
         current && RING,
       )}

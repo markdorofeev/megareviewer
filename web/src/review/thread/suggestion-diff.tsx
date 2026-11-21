@@ -57,7 +57,7 @@ export const SuggestionDiff = ({
   return (
     <div
       data-slot="suggestion-diff"
-      className="overflow-x-auto rounded-md border font-mono text-code-compact"
+      className="overflow-x-auto rounded-md border font-code text-code-compact"
     >
       {title !== undefined && (
         <p className="border-b px-2 py-1 font-sans text-caption font-medium text-primary">

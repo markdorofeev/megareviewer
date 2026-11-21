@@ -181,7 +181,7 @@ for (const width of [1440, 1920, 2560]) {
         return {
           sideways: viewport.scrollWidth - viewport.clientWidth,
           rows: rows.filter((row) => row.getBoundingClientRect().right > right + 0.5).length,
-          wrapped: rows.filter((row) => row.getBoundingClientRect().height !== 28).length,
+          wrapped: rows.filter((row) => row.getBoundingClientRect().height !== 30).length,
           names: rows.filter((row) => {
             const name = row.querySelector("[data-slot=file-name]");
             return name !== null && name.getBoundingClientRect().width < 24;

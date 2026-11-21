@@ -17,6 +17,8 @@ describe("syntaxType", () => {
     expect(syntaxType("var(--shiki-token-keyword)")).toBe("keyword");
     expect(syntaxType("var(--shiki-token-string-expression)")).toBe("string");
     expect(syntaxType("var(--shiki-token-constant)")).toBe("number");
+    expect(syntaxType("var(--shiki-token-decorator)")).toBe("decorator");
+    expect(syntaxType("var(--shiki-token-attribute)")).toBe("attribute");
     expect(syntaxType("var(--shiki-token-punctuation)")).toBeNull();
     expect(syntaxType("var(--shiki-foreground)")).toBeNull();
     expect(syntaxType("#ff0000")).toBeNull();
@@ -121,6 +123,55 @@ const typesOf = (line: readonly SyntaxToken[] | undefined, word: string) => {
   });
 };
 
+describe("roles on top of the theme", () => {
+  const highlight = (language: string, ...lines: string[]) =>
+    createShikiHighlighter().highlight(lines.join("\n"), language);
+
+  it("colors a Python decorator by its name and a keyword argument by its own", async () => {
+    const tokens = await highlight(
+      "python",
+      "@dataclass(frozen=True)",
+      "class Host:",
+      "    @property",
+      "    def name(self): return read(self.key, timeout=3)",
+    );
+    expect(typesOf(tokens?.[0], "@dataclass")).toEqual(["decorator"]);
+    expect(typesOf(tokens?.[0], "frozen")).toEqual(["attribute"]);
+    expect(typesOf(tokens?.[2], "@property")).toEqual(["decorator"]);
+    expect(typesOf(tokens?.[3], "timeout")).toEqual(["attribute"]);
+    expect(typesOf(tokens?.[3], "read")).toEqual(["function"]);
+  });
+
+  it("colors a TypeScript decorator, and a tag's attributes", async () => {
+    const tokens = await highlight(
+      "tsx",
+      "class Panel { @Input() name = 1; @observable open = false; }",
+      'const panel = <Panel title="x" onClose={close} />;',
+    );
+    expect(typesOf(tokens?.[0], "@Input")).toEqual(["decorator"]);
+    expect(typesOf(tokens?.[0], "@observable")).toEqual(["decorator"]);
+    expect(typesOf(tokens?.[1], "title")).toEqual(["attribute"]);
+    expect(typesOf(tokens?.[1], "onClose")).toEqual(["attribute"]);
+  });
+
+  it("leaves receivers and declared constants plain, and literals the number color", async () => {
+    const tokens = await highlight(
+      "typescript",
+      "const ordersRouter = Router();",
+      "res.json(orders.map(toResponse), 404, null);",
+      "let total: number = Math.max(1, 2);",
+    );
+    expect(typesOf(tokens?.[0], "ordersRouter")).toEqual([null]);
+    expect(typesOf(tokens?.[1], "res")).toEqual([null]);
+    expect(typesOf(tokens?.[1], "orders")).toEqual([null]);
+    expect(typesOf(tokens?.[1], "json")).toEqual(["function"]);
+    expect(typesOf(tokens?.[1], "404")).toEqual(["number"]);
+    expect(typesOf(tokens?.[1], "null")).toEqual(["number"]);
+    expect(typesOf(tokens?.[2], "number")).toEqual(["keyword"]);
+    expect(typesOf(tokens?.[2], "Math")).toEqual([null]);
+  });
+});
+
 describe("Java", () => {
   const java = (...lines: string[]) => createShikiHighlighter().highlight(lines.join("\n"), "java");
 
@@ -136,7 +187,7 @@ describe("Java", () => {
     const signature = tokens?.[1];
     expect(typesOf(signature, "find")).toEqual(["function"]);
     expect(typesOf(signature, "throws")).toEqual(["keyword"]);
-    expect(typesOf(signature, "@PathVariable")).toEqual(["number"]);
+    expect(typesOf(signature, "@PathVariable")).toEqual(["decorator"]);
     for (const plain of ["Optional<Order>", "(", ") String id)", "NotFoundException"]) {
       expect(typesOf(signature, plain).every((type) => type === null)).toBe(true);
     }
@@ -228,8 +279,8 @@ describe("Java", () => {
       "        if (status == Status.PENDING) return super.label(null);",
       '        return switch (status) { case SHIPPED -> "On its way"; default -> MAX_ITEMS + "" + true; };',
     );
-    expect(typesOf(tokens?.[0], "@RestController")).toEqual(["number"]);
-    expect(typesOf(tokens?.[3], "@Override")).toEqual(["number"]);
+    expect(typesOf(tokens?.[0], "@RestController")).toEqual(["decorator"]);
+    expect(typesOf(tokens?.[3], "@Override")).toEqual(["decorator"]);
     expect(typesOf(tokens?.[2], "MAX_ITEMS")).toEqual(["number"]);
     expect(typesOf(tokens?.[2], "1_000")).toEqual(["number"]);
     expect(typesOf(tokens?.[5], "LOG")).toEqual(["number"]);

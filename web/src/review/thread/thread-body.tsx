@@ -23,7 +23,7 @@ const CodeBlock = ({
   return (
     <pre
       data-slot="thread-code"
-      className="overflow-x-auto rounded-md border bg-surface-subtle px-2.5 py-1.5 font-mono text-code-compact"
+      className="overflow-x-auto rounded-md border bg-surface-subtle px-2.5 py-1.5 font-code text-code-compact"
     >
       <code>
         {lines.map((line, at) => (
@@ -115,7 +115,7 @@ const SpanView = ({ span, mediaUrl }: { readonly span: Span; readonly mediaUrl: 
       return <>{span.text}</>;
     case "code":
       return (
-        <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">{span.text}</code>
+        <code className="rounded-sm bg-muted px-1 font-code text-code-compact">{span.text}</code>
       );
     case "strong":
       return (

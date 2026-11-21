@@ -14,14 +14,21 @@ export type Density = "compact" | "default" | "comfy";
 /** Row height in pixels per density, matching the type scale's line heights. */
 export const ROW_HEIGHT: Readonly<Record<Density, number>> = {
   compact: 18,
-  default: 20,
-  comfy: 22,
+  default: 22,
+  comfy: 24,
 };
 
 const DENSITY: Readonly<Record<Density, string>> = {
   compact: "text-code-compact",
   default: "text-code",
   comfy: "text-code-comfy",
+};
+
+/** Line numbers sit a step under the code's size, but in compact, where the code is that small. */
+const GUTTER_SIZE: Readonly<Record<Density, string>> = {
+  compact: "",
+  default: "text-code-gutter",
+  comfy: "text-code-gutter",
 };
 
 const KIND: Readonly<
@@ -65,6 +72,8 @@ const SYNTAX: Readonly<Record<SyntaxTokenType, string>> = {
   function: "text-syntax-function",
   comment: "text-syntax-comment",
   number: "text-syntax-number",
+  decorator: "text-syntax-decorator",
+  attribute: "text-syntax-attribute",
 };
 
 interface Segment {
@@ -216,6 +225,7 @@ export const DiffLine = memo(function DiffLine({
       }
       className={cn(
         "tabular relative w-12 shrink-0 select-none text-right",
+        GUTTER_SIZE[density],
         // The number button takes the padding, so its fill reaches the cell's edges.
         numberButton?.side === side && value !== null ? "pr-0" : "pr-2",
         kind.gutter,
@@ -296,7 +306,7 @@ export const DiffLine = memo(function DiffLine({
             })
       }
       className={cn(
-        "group/line relative flex min-w-full font-mono",
+        "group/line relative flex min-w-full font-code",
         onRowClick !== undefined && "cursor-pointer",
         DENSITY[density],
         kind.row,
@@ -317,7 +327,7 @@ export const DiffLine = memo(function DiffLine({
       <span
         aria-hidden="true"
         className={cn(
-          "w-5 shrink-0 select-none text-center font-semibold",
+          "w-5 shrink-0 select-none text-center",
           line.kind === "add" && "text-diff-add-fg",
           line.kind === "del" && "text-diff-del-fg",
         )}
@@ -409,7 +419,7 @@ export const LineEnd = ({
 export const EmptyHalf = ({ density = "default" }: { readonly density?: Density }) => (
   <div
     aria-hidden="true"
-    className={cn("flex min-w-full bg-surface-subtle font-mono", DENSITY[density])}
+    className={cn("flex min-w-full bg-surface-subtle font-code", DENSITY[density])}
   >
     <span className="w-12 shrink-0 bg-diff-gutter-bg" />
     <span className="flex-1">{" "}</span>

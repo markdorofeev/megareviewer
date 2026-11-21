@@ -98,13 +98,12 @@ const PAIRS = [
     "syntax-function",
     "syntax-comment",
     "syntax-number",
+    "syntax-decorator",
+    "syntax-attribute",
   ].flatMap((token) =>
-    ["diff-add-bg", "diff-add-word", "diff-del-bg", "diff-del-word"].map((surface) => [
-      `${token} on ${surface}`,
-      token,
-      surface,
-      4.5,
-    ]),
+    ["background", "diff-add-bg", "diff-add-word", "diff-del-bg", "diff-del-word"].map(
+      (surface) => [`${token} on ${surface}`, token, surface, 4.5],
+    ),
   ),
   ["Approved badge", "review-approved", "review-approved-bg", 4.5],
   // hunk: the bar's AI controls, tinted at rest, hovered and pressed, and Approve filled green.
@@ -176,7 +175,7 @@ const PAIRS = [
     [`+ lines on ${row} row`, "stat-add", fill, 4.5],
     [`− lines on ${row} row`, "stat-del", fill, 4.5],
     [`Finding dot on ${row} row (non-text)`, "severity-minor", fill, 3],
-    [`Risk ring on ${row} row (non-text)`, "risk-logic", fill, 3],
+    [`Risk ring on ${row} row (non-text)`, "risk-contract-solid", fill, 3],
     [`Focus outline on ${row} row (non-text)`, "ring", fill, 3],
   ]),
   ["Current row bar (non-text)", "primary", "diff-hunk-bg", 3],

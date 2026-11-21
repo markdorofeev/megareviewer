@@ -282,7 +282,11 @@ export const FileTree = ({
   };
 
   return (
-    <nav ref={nav} aria-label="Changed files" className={cn("flex min-h-0 flex-col", className)}>
+    <nav
+      ref={nav}
+      aria-label="Changed files"
+      className={cn("flex min-h-0 flex-col font-tree", className)}
+    >
       <div className="px-2.5 pt-2.5 pb-1">
         <div className="relative">
           <SearchIcon
@@ -401,11 +405,11 @@ export const FileTree = ({
 };
 
 const ROW =
-  "relative flex h-7 cursor-default items-center whitespace-nowrap pr-[7px] select-none hover:bg-surface-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
+  "relative flex min-h-7.5 cursor-default items-center whitespace-nowrap pr-[7px] select-none hover:bg-surface-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 
 /** Each level's indent, and one more in a group. */
 const indent = (depth: number, inset = false) => ({
-  paddingLeft: `${6 + (depth + Number(inset)) * 9}px`,
+  paddingLeft: `${6 + (depth + Number(inset)) * 14}px`,
 });
 
 /** The directories a group's headings are in, said once above them. */
@@ -454,7 +458,7 @@ const DirectoryRow = ({
     </span>
     <PathLabel path={row.label} />
     {!row.open && (
-      <span className="tabular font-mono text-kbd leading-none text-muted-foreground">
+      <span className="tabular font-code text-code-compact leading-none text-muted-foreground">
         {row.count}
       </span>
     )}
@@ -529,7 +533,10 @@ const PathLabel = ({
   }, [path, suffix]);
   const cut = shown.lastIndexOf("/") + 1;
   return (
-    <span ref={box} className="min-w-0 flex-1 basis-0 truncate text-caption text-muted-foreground">
+    <span
+      ref={box}
+      className="min-w-0 flex-1 basis-0 truncate text-tree-folder text-muted-foreground"
+    >
       <span>{shown.slice(0, cut)}</span>
       <span className={caption ? undefined : "font-medium text-foreground"}>
         {shown.slice(cut)}
@@ -564,7 +571,7 @@ const FileName = ({ file }: { readonly file: FileEntry }) => {
     <span
       ref={box}
       data-slot="file-name"
-      className="min-w-0 flex-1 basis-0 truncate text-ui font-[450] tracking-[-0.012em]"
+      className="min-w-0 flex-1 basis-0 truncate text-tree font-medium tracking-[-0.012em]"
     >
       <span data-slot="file-stem" className={stemTone}>
         {shown}
@@ -624,7 +631,7 @@ const FileRow = ({
       <FileName file={file} />
       <span
         aria-hidden="true"
-        className="tabular flex flex-none items-center gap-1.5 font-mono text-kbd leading-none tracking-[-0.02em] text-muted-foreground"
+        className="tabular flex flex-none items-center gap-1.5 font-code text-code-compact leading-none text-muted-foreground"
       >
         {threads > 0 && (
           <span data-slot="thread-count" className="inline-flex items-center gap-[2.5px]">
@@ -650,7 +657,7 @@ const FileRow = ({
             )}
             {risk > 0 && (
               <span data-slot="point-count" data-kind="risk" className="inline-flex items-center">
-                <i className="size-[7px] rounded-full ring-[1.5px] ring-risk-logic ring-inset" />
+                <i className="size-[7px] rounded-full ring-[1.5px] ring-risk-contract-solid ring-inset" />
               </span>
             )}
           </span>

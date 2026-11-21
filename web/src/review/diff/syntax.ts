@@ -4,12 +4,19 @@ import type { FileChange, Hunk } from "../../../../src/domain/diff/index.ts";
 import { GRAMMARS, grammarContext, hunkSides, languageOf } from "./languages.ts";
 import { displayLines } from "./lines.ts";
 
-// Syntax colors come from the five --syntax-* tokens, never from a theme's hex values, so they
+// Syntax colors come from the seven --syntax-* tokens, never from a theme's hex values, so they
 // follow light, dark and the contrast check. Shiki's CSS-variables theme names each token's scope
 // (var(--shiki-token-keyword)), and that name picks the token's type; what has no type is plain
 // text in the foreground color.
 
-export type SyntaxTokenType = "keyword" | "string" | "function" | "comment" | "number";
+export type SyntaxTokenType =
+  | "keyword"
+  | "string"
+  | "function"
+  | "comment"
+  | "number"
+  | "decorator"
+  | "attribute";
 
 export interface SyntaxToken {
   readonly text: string;
@@ -23,6 +30,8 @@ const TYPES: Readonly<Record<string, SyntaxTokenType>> = {
   "token-function": "function",
   "token-comment": "comment",
   "token-constant": "number",
+  "token-decorator": "decorator",
+  "token-attribute": "attribute",
 };
 
 /** The type a Shiki token's color names, or null for plain text. */
@@ -78,17 +87,56 @@ export interface Highlighter {
 
 const shiki = (name: string) => `var(--shiki-${name})`;
 
-// Java's scopes, on top of the theme's, which fit TypeScript's grammar. A type is plain wherever
-// it's used, as in IntelliJ and on GitHub, since the grammar names one only in some places; a
-// call's scope covers its arguments, so only the name is colored; an annotation takes the
-// constant color, as on GitHub; receivers, fields, import paths and operators are plain.
-const JAVA_SCOPES: readonly { readonly scope: readonly string[]; readonly color: string }[] = [
+interface ScopeColor {
+  readonly scope: readonly string[];
+  readonly color: string;
+}
+
+// Two roles the theme doesn't have, in every language: a decorator or annotation, by its name and
+// its @, and an attribute, which is a tag's or a keyword argument's name.
+const ROLE_SCOPES: readonly ScopeColor[] = [
   {
     scope: [
-      "storage.type.annotation.java",
-      "punctuation.definition.annotation.java",
-      "variable.language.java",
+      "entity.name.function.decorator",
+      "punctuation.definition.decorator",
+      "meta.function.decorator support.type",
+      "punctuation.decorator",
+      "meta.decorator entity.name.function",
+      "meta.decorator variable.other.readwrite",
+      "storage.type.annotation",
+      "punctuation.definition.annotation",
+      "entity.name.type.annotation",
     ],
+    color: shiki("token-decorator"),
+  },
+  {
+    scope: ["entity.other.attribute-name", "variable.parameter.function-call"],
+    color: shiki("token-attribute"),
+  },
+  // The theme colors a receiver, a declared constant and a built-in type as a constant, which is
+  // the number color: a blue beside the keywords' blue, on half the names of a line. They're plain,
+  // as Java's receivers are, and the number color is left to literals.
+  {
+    scope: [
+      "variable.other.object",
+      "variable.other.class",
+      "variable.other.constant",
+      "support.class",
+      "support.type",
+      "support.variable",
+    ],
+    color: shiki("foreground"),
+  },
+  { scope: ["support.type.primitive"], color: shiki("token-keyword") },
+];
+
+// Java's scopes, on top of the theme's, which fit TypeScript's grammar. A type is plain wherever
+// it's used, as in IntelliJ and on GitHub, since the grammar names one only in some places; a
+// call's scope covers its arguments, so only the name is colored; receivers, fields, import paths
+// and operators are plain.
+const JAVA_SCOPES: readonly ScopeColor[] = [
+  {
+    scope: ["variable.language.java", "variable.other.constant.java"],
     color: shiki("token-constant"),
   },
   {
@@ -148,7 +196,7 @@ export const createShikiHighlighter = (): Highlighter => {
           ...theme,
           tokenColors: [
             ...(theme.tokenColors ?? []),
-            ...JAVA_SCOPES.map(({ scope, color }) => ({
+            ...[...ROLE_SCOPES, ...JAVA_SCOPES].map(({ scope, color }) => ({
               scope: [...scope],
               settings: { foreground: color },
             })),

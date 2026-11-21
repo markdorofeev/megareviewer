@@ -24,7 +24,7 @@ export interface HunkHeaderProps {
 export const HunkHeader = ({ hunk, position, count }: HunkHeaderProps) => (
   <div
     role="row"
-    className="flex h-7 items-center bg-diff-hunk-bg font-mono text-code text-diff-hunk-fg"
+    className="flex h-7 items-center bg-diff-hunk-bg font-code text-code-gutter text-diff-hunk-fg"
   >
     <span role="gridcell" className="truncate px-3">
       <span className="sr-only">{`Hunk ${position} of ${count}, ${hunkPlace(hunk)}. `}</span>
