@@ -66,6 +66,17 @@ export interface TreeDirectory {
 
 export type TreeEntry = TreeFile | TreeDirectory;
 
+/** Top-level headings that share the directories they're in, said once in a caption above them. */
+export interface TreeGroup {
+  readonly kind: "group";
+  /** The directories, as the tree shows them, without a trailing slash. */
+  readonly path: string;
+  /** Each labeled by its path below the group's. */
+  readonly children: readonly TreeDirectory[];
+}
+
+export type TreeTop = TreeEntry | TreeGroup;
+
 interface Building {
   readonly directories: Map<string, Building>;
   readonly files: string[];
@@ -75,10 +86,11 @@ interface Building {
  * The files as a tree, in `byTreePath` order: directories before files at each level. A directory
  * with no files and one directory in it is one heading with that directory, so a chain like
  * `web/src` takes one row. At the top, a directory with no files and more than one directory in
- * it is no heading: its name goes before its children's, as `substratevm/src/com.oracle.svm.core`,
- * so it costs no indent on every row under it.
+ * it is no heading, so it costs no indent on every row under it: two or more headings in a row
+ * that start with it are a group with it as their caption, and one alone is labeled by its whole
+ * path, as `substratevm/src/com.oracle.svm.core`.
  */
-export const fileTree = (paths: readonly string[]): readonly TreeEntry[] => {
+export const fileTree = (paths: readonly string[]): readonly TreeTop[] => {
   const root: Building = { directories: new Map(), files: [] };
   for (const path of paths) {
     let at = root;
@@ -126,21 +138,48 @@ export const fileTree = (paths: readonly string[]): readonly TreeEntry[] => {
       }),
       ...node.files.map((path): TreeFile => ({ kind: "file", path, name: nameOf(path) })),
     ]);
-  const hoisted = (node: Building, parent: string, prefix: string): TreeEntry[] =>
+  // Each top-level heading with the directories before it that are no heading, as `a/b/`.
+  const hoisted = (
+    node: Building,
+    parent: string,
+    prefix: string,
+  ): { readonly prefix: string; readonly heading: TreeDirectory }[] =>
     [...node.directories].flatMap(([segment, child]) => {
       const { label, path, inner } = directory(segment, child, parent, prefix);
       // A dotted directory is a module, which keeps its heading.
       const own = label.slice(prefix.length);
       return inner.files.length === 0 && inner.directories.size > 1 && !own.includes(".")
         ? hoisted(inner, path, `${label}/`)
-        : [heading(label, path, inner)];
+        : [{ prefix, heading: heading(label, path, inner) }];
     });
-  return sorted([
-    ...hoisted(root, "", ""),
-    ...root.files.map((path): TreeFile => ({ kind: "file", path, name: nameOf(path) })),
-  ]);
+  const headings = hoisted(root, "", "").sort((a, b) =>
+    byTreePath(`${a.heading.path}/x`, `${b.heading.path}/x`),
+  );
+  const top: TreeTop[] = [];
+  for (let at = 0; at < headings.length; ) {
+    const prefix = headings[at]?.prefix ?? "";
+    let end = at + 1;
+    while (prefix !== "" && headings[end]?.heading.path.startsWith(prefix)) end++;
+    const run = headings.slice(at, end).map(({ heading }) => heading);
+    top.push(
+      ...(run.length < 2
+        ? run
+        : [
+            {
+              kind: "group" as const,
+              path: prefix.slice(0, -1),
+              children: run.map((one) => ({ ...one, label: one.path.slice(prefix.length) })),
+            },
+          ]),
+    );
+    at = end;
+  }
+  return [
+    ...top,
+    ...sorted(root.files.map((path): TreeFile => ({ kind: "file", path, name: nameOf(path) }))),
+  ];
 };
 
 /** The tree's files in its order, which is the order the page shows them. */
-export const treeOrder = (tree: readonly TreeEntry[]): string[] =>
+export const treeOrder = (tree: readonly TreeTop[]): string[] =>
   tree.flatMap((entry) => (entry.kind === "file" ? [entry.path] : treeOrder(entry.children)));

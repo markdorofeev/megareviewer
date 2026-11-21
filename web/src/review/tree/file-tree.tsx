@@ -1,5 +1,13 @@
 import { ChevronRightIcon, MessageSquare, SearchIcon } from "lucide-react";
-import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type KeyboardEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useShortcuts } from "../../lib/keymap.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Input } from "../../ui/input.tsx";
@@ -7,8 +15,8 @@ import { ScrollArea } from "../../ui/scroll-area.tsx";
 import { FileIcon, FolderIcon } from "./file-icon.tsx";
 import { fileKind } from "./file-kind.ts";
 import { type FileEntry, filterFiles } from "./files.ts";
-import { shortenName, splitName } from "./names.ts";
-import { directoryOf, fileTree, nameOf, type TreeEntry, treeOrder, treePath } from "./paths.ts";
+import { shortenName, shortenPath, splitName } from "./names.ts";
+import { directoryOf, fileTree, nameOf, type TreeTop, treeOrder, treePath } from "./paths.ts";
 
 export interface FileTreeProps {
   readonly files: readonly FileEntry[];
@@ -21,13 +29,12 @@ export interface FileTreeProps {
 
 type Show = "all" | "finding" | "risk";
 
-type Row =
+type Row = (
   | {
       readonly kind: "directory";
       readonly key: string;
       readonly label: string;
-      readonly entry: Extract<TreeEntry, { kind: "directory" }>;
-      readonly depth: number;
+      readonly entry: Extract<TreeTop, { kind: "directory" }>;
       readonly open: boolean;
       readonly count: number;
     }
@@ -35,8 +42,12 @@ type Row =
       readonly kind: "file";
       readonly key: string;
       readonly file: FileEntry;
-      readonly depth: number;
-    };
+    }
+) & {
+  readonly depth: number;
+  /** The caption of the group it's in, which indents it a level, or null. */
+  readonly group: string | null;
+};
 
 const STATUS_WORD = {
   added: "new file",
@@ -121,16 +132,20 @@ export const FileTree = ({
 
   const rows = useMemo(() => {
     const out: Row[] = [];
-    const shownIn = (entry: TreeEntry): number =>
+    const shownIn = (entry: TreeTop): number =>
       entry.kind === "file"
         ? Number(visible.has(entry.path))
         : entry.children.reduce((sum, child) => sum + shownIn(child), 0);
-    const walk = (entries: readonly TreeEntry[], depth: number) => {
+    const walk = (entries: readonly TreeTop[], depth: number, group: string | null) => {
       for (const entry of entries) {
+        if (entry.kind === "group") {
+          walk(entry.children, depth, entry.path);
+          continue;
+        }
         if (entry.kind === "file") {
           const file = byPath.get(entry.path);
           if (file !== undefined && visible.has(file.path))
-            out.push({ kind: "file", key: file.path, file, depth });
+            out.push({ kind: "file", key: file.path, file, depth, group });
           continue;
         }
         const count = shownIn(entry);
@@ -143,15 +158,27 @@ export const FileTree = ({
           label: entry.label,
           entry,
           depth,
+          group,
           open,
           count,
         });
-        if (open) walk(entry.children, depth + 1);
+        if (open) walk(entry.children, depth + 1, group);
       }
     };
-    walk(tree, 0);
+    walk(tree, 0, null);
     return out;
   }, [tree, byPath, visible, closed, filtering]);
+  // Runs of rows in one group, or in none, for the groups' captions.
+  const runs = useMemo(
+    () =>
+      rows.reduce<{ readonly group: string | null; readonly rows: Row[] }[]>((all, row) => {
+        const last = all.at(-1);
+        if (last !== undefined && last.group === row.group) last.rows.push(row);
+        else all.push({ group: row.group, rows: [row] });
+        return all;
+      }, []),
+    [rows],
+  );
 
   const order = useMemo(() => treeOrder(tree).filter((path) => visible.has(path)), [tree, visible]);
   // Landing, the marks drop in row by row from the top: each marked row's place among them.
@@ -331,28 +358,41 @@ export const FileTree = ({
             onKeyDown={onKeyDown}
             className="pt-1 pb-4"
           >
-            {rows.map((row) =>
-              row.kind === "directory" ? (
-                <DirectoryRow
-                  key={row.key}
-                  row={row}
-                  tabbable={row.key === tabbable}
-                  onActivate={() => act(row)}
-                />
+            {runs.map((run) => {
+              const drawn = run.rows.map((row) =>
+                row.kind === "directory" ? (
+                  <DirectoryRow
+                    key={row.key}
+                    row={row}
+                    tabbable={row.key === tabbable}
+                    onActivate={() => act(row)}
+                  />
+                ) : (
+                  <FileRow
+                    key={row.key}
+                    file={row.file}
+                    depth={row.depth}
+                    inset={row.group !== null}
+                    active={row.file.path === activePath}
+                    tabbable={row.key === tabbable}
+                    onActivate={() => act(row)}
+                    {...(marked.has(row.file.path)
+                      ? { landing: { at: marked.get(row.file.path) ?? 0, of: marked.size } }
+                      : {})}
+                  />
+                ),
+              );
+              const key = run.rows[0]?.key ?? "";
+              return run.group === null ? (
+                <Fragment key={key}>{drawn}</Fragment>
               ) : (
-                <FileRow
-                  key={row.key}
-                  file={row.file}
-                  depth={row.depth}
-                  active={row.file.path === activePath}
-                  tabbable={row.key === tabbable}
-                  onActivate={() => act(row)}
-                  {...(marked.has(row.file.path)
-                    ? { landing: { at: marked.get(row.file.path) ?? 0, of: marked.size } }
-                    : {})}
-                />
-              ),
-            )}
+                // biome-ignore lint/a11y/useSemanticElements: a group of a tree's items, as ARIA has it.
+                <div key={key} role="group" aria-label={`${run.group}/`}>
+                  <GroupCaption path={run.group} />
+                  {drawn}
+                </div>
+              );
+            })}
           </div>
         </ScrollArea>
       )}
@@ -363,8 +403,22 @@ export const FileTree = ({
 const ROW =
   "relative flex h-7 cursor-default items-center whitespace-nowrap pr-[7px] select-none hover:bg-surface-row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 
-/** Each level's indent. */
-const indent = (depth: number) => ({ paddingLeft: `${6 + depth * 9}px` });
+/** Each level's indent, and one more in a group. */
+const indent = (depth: number, inset = false) => ({
+  paddingLeft: `${6 + (depth + Number(inset)) * 9}px`,
+});
+
+/** The directories a group's headings are in, said once above them. */
+const GroupCaption = ({ path }: { readonly path: string }) => (
+  <div
+    aria-hidden="true"
+    title={path}
+    className="flex h-6 items-end pr-[7px] pb-0.5 whitespace-nowrap select-none"
+    style={indent(0)}
+  >
+    <PathLabel path={path} caption />
+  </div>
+);
 
 const DirectoryRow = ({
   row,
@@ -374,44 +428,38 @@ const DirectoryRow = ({
   readonly row: Extract<Row, { kind: "directory" }>;
   readonly tabbable: boolean;
   readonly onActivate: () => void;
-}) => {
-  const cut = row.label.lastIndexOf("/") + 1;
-  return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the tree handles the keys of all its rows.
-    <div
-      role="treeitem"
-      aria-level={row.depth + 1}
-      aria-expanded={row.open}
-      aria-label={`${row.entry.path}, folder, ${plural(row.count, "file")}`}
-      title={row.entry.path}
-      data-key={row.key}
-      tabIndex={tabbable ? 0 : -1}
-      onClick={onActivate}
-      className={cn(ROW, "gap-[5px]")}
-      style={indent(row.depth)}
-    >
-      <ChevronRightIcon
-        aria-hidden="true"
-        className={cn(
-          "size-3 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-standard",
-          row.open && "rotate-90",
-        )}
-      />
-      <span className="mr-px">
-        <FolderIcon kind={row.entry.folder} />
-      </span>
-      <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
-        {cut > 0 && <span>{row.label.slice(0, cut)}</span>}
-        <span className="font-medium text-foreground">{row.label.slice(cut)}</span>
-      </span>
-      {!row.open && (
-        <span className="tabular font-mono text-kbd leading-none text-muted-foreground">
-          {row.count}
-        </span>
+}) => (
+  // biome-ignore lint/a11y/useKeyWithClickEvents: the tree handles the keys of all its rows.
+  <div
+    role="treeitem"
+    aria-level={row.depth + 1}
+    aria-expanded={row.open}
+    aria-label={`${row.entry.path}, folder, ${plural(row.count, "file")}`}
+    title={row.entry.path}
+    data-key={row.key}
+    tabIndex={tabbable ? 0 : -1}
+    onClick={onActivate}
+    className={cn(ROW, "gap-[5px]")}
+    style={indent(row.depth, row.group !== null)}
+  >
+    <ChevronRightIcon
+      aria-hidden="true"
+      className={cn(
+        "size-3 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-standard",
+        row.open && "rotate-90",
       )}
-    </div>
-  );
-};
+    />
+    <span className="mr-px">
+      <FolderIcon kind={row.entry.folder} />
+    </span>
+    <PathLabel path={row.label} />
+    {!row.open && (
+      <span className="tabular font-mono text-kbd leading-none text-muted-foreground">
+        {row.count}
+      </span>
+    )}
+  </div>
+);
 
 /** The name's color by status, the extension's a muted mix of it. */
 const NAME_TONE = {
@@ -435,6 +483,62 @@ const widthOf = (element: Element, text: string): number | null => {
   return measuring.measureText(text).width;
 };
 
+/** Measures now, once the fonts are in, and whenever the element's width changes. */
+const observeWidth = (element: HTMLElement, measure: () => void) => {
+  measure();
+  void document.fonts?.ready.then(measure);
+  if (typeof ResizeObserver === "undefined") return;
+  const observer = new ResizeObserver(measure);
+  observer.observe(element);
+  return () => observer.disconnect();
+};
+
+/**
+ * A directory path, muted but its last directory, shortened in the middle to fit the row. A
+ * caption is muted throughout and ends with a slash, since what it names goes on under it.
+ */
+const PathLabel = ({
+  path,
+  caption = false,
+}: {
+  readonly path: string;
+  readonly caption?: boolean;
+}) => {
+  const box = useRef<HTMLSpanElement>(null);
+  const suffix = caption ? "/" : "";
+  const [shown, setShown] = useState(path);
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (element === null) return;
+    return observeWidth(element, () => {
+      const width = element.clientWidth;
+      const head = element.firstElementChild;
+      const tail = element.lastElementChild;
+      if (width === 0 || head === null || tail === null) return;
+      setShown(
+        shortenPath(path, (text) => {
+          const cut = text.lastIndexOf("/") + 1;
+          const parts = [
+            widthOf(head, text.slice(0, cut)),
+            widthOf(tail, text.slice(cut) + suffix),
+          ];
+          return (parts[0] ?? 0) + (parts[1] ?? 0) <= width + 0.5;
+        }),
+      );
+    });
+  }, [path, suffix]);
+  const cut = shown.lastIndexOf("/") + 1;
+  return (
+    <span ref={box} className="min-w-0 flex-1 basis-0 truncate text-caption text-muted-foreground">
+      <span>{shown.slice(0, cut)}</span>
+      <span className={caption ? undefined : "font-medium text-foreground"}>
+        {shown.slice(cut)}
+        {suffix}
+      </span>
+    </span>
+  );
+};
+
 /** A file's name, its stem shortened in the middle to fit the row, and its extension. */
 const FileName = ({ file }: { readonly file: FileEntry }) => {
   const box = useRef<HTMLSpanElement>(null);
@@ -443,7 +547,7 @@ const FileName = ({ file }: { readonly file: FileEntry }) => {
   useLayoutEffect(() => {
     const element = box.current;
     if (element === null) return;
-    const measure = () => {
+    return observeWidth(element, () => {
       const width = element.clientWidth;
       const stemPart = element.firstElementChild;
       const extensionPart = element.lastElementChild;
@@ -453,13 +557,7 @@ const FileName = ({ file }: { readonly file: FileEntry }) => {
       setShown(
         shortenName(stem, (text) => (widthOf(stemPart, text) ?? 0) + extensionWidth <= width + 0.5),
       );
-    };
-    measure();
-    void document.fonts?.ready.then(measure);
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
+    });
   }, [stem, extension]);
   const [stemTone, extensionTone] = NAME_TONE[file.status];
   return (
@@ -485,6 +583,7 @@ const FileName = ({ file }: { readonly file: FileEntry }) => {
 const FileRow = ({
   file,
   depth,
+  inset,
   active,
   tabbable,
   landing,
@@ -492,6 +591,7 @@ const FileRow = ({
 }: {
   readonly file: FileEntry;
   readonly depth: number;
+  readonly inset: boolean;
   readonly active: boolean;
   readonly tabbable: boolean;
   /** The row's place among the rows with points, for their landing. */
@@ -518,7 +618,7 @@ const FileRow = ({
         active &&
           "bg-diff-hunk-bg before:absolute before:top-1 before:bottom-1 before:left-0 before:w-0.5 before:rounded-full before:bg-primary hover:bg-diff-hunk-bg",
       )}
-      style={indent(depth)}
+      style={indent(depth, inset)}
     >
       <FileIcon path={file.path} status={file.status} />
       <FileName file={file} />

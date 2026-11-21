@@ -86,6 +86,8 @@ export {
   fileTree,
   nameOf,
   type TreeEntry,
+  type TreeGroup,
+  type TreeTop,
   treeOrder,
   treePath,
 } from "./tree/paths.ts";

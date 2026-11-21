@@ -6,7 +6,7 @@ import { FileTree } from "../../review/index.ts";
 import {
   byTreePath,
   fileTree,
-  type TreeEntry,
+  type TreeTop,
   treeOrder,
   treePath,
 } from "../../review/tree/paths.ts";
@@ -24,36 +24,58 @@ const paths = [
 ];
 const tree = fileTree(paths);
 
-/** Headings and file rows, indented by depth: the tree as the rail draws it. */
-const outline = (entries: readonly TreeEntry[], depth = 0): string[] =>
+/** Captions, headings and file rows, indented by depth: the tree as the rail draws it. */
+const outline = (entries: readonly TreeTop[], depth = 0): string[] =>
   entries.flatMap((entry) =>
     entry.kind === "file"
       ? [`${"  ".repeat(depth)}${entry.name}`]
-      : [`${"  ".repeat(depth)}${entry.label}/`, ...outline(entry.children, depth + 1)],
+      : [
+          `${"  ".repeat(depth)}${entry.kind === "group" ? `(${entry.path}/)` : `${entry.label}/`}`,
+          ...outline(entry.children, depth + 1),
+        ],
   );
 
-const headings = (entries: readonly TreeEntry[]): number =>
+const count = (entries: readonly TreeTop[], kind: "directory" | "group"): number =>
   entries.reduce(
-    (sum, entry) => sum + (entry.kind === "file" ? 0 : 1 + headings(entry.children)),
+    (sum, entry) =>
+      sum + (entry.kind === "file" ? 0 : Number(entry.kind === kind) + count(entry.children, kind)),
     0,
   );
 
 describe("fileTree", () => {
-  it("nests files under their directories, joining top directories without files into their children's", () => {
+  it("nests files under their directories, and says top directories without files once, as a caption", () => {
     expect(outline(tree)).toEqual([
-      "delphi_code/domain/",
-      "  hosting_services.py",
-      "delphi_code/http_api/",
-      "  routes/",
+      "(delphi_code/)",
+      "  domain/",
       "    hosting_services.py",
-      "  app.py",
-      "delphi_code/infrastructure/",
-      "  keychain.py",
-      "web/src/routes/",
-      "  setup.tsx",
-      "web/src/setup/",
-      "  ConnectionsSection.tsx",
+      "  http_api/",
+      "    routes/",
+      "      hosting_services.py",
+      "    app.py",
+      "  infrastructure/",
+      "    keychain.py",
+      "(web/src/)",
+      "  routes/",
+      "    setup.tsx",
+      "  setup/",
+      "    ConnectionsSection.tsx",
       "CONTRIBUTING.md",
+    ]);
+  });
+
+  it("captions the headings after the first of a run by its directories, and leaves one alone uncaptioned", () => {
+    const top = fileTree(JAVA_SERVICE_PATHS).map((entry) =>
+      entry.kind === "group"
+        ? `(${entry.path}/) ${entry.children.map((child) => child.label).join(", ")}`
+        : entry.kind === "directory"
+          ? entry.label
+          : entry.name,
+    );
+    expect(top).toEqual([
+      "(src/main/) java/com/acmecorp/fulfillment/orders, resources",
+      "(src/test/java/com/acmecorp/fulfillment/orders/) controllers, entities, services/payment, services/shipping",
+      "src/test/resources/fixtures",
+      "pom.xml",
     ]);
   });
 
@@ -89,33 +111,35 @@ describe("fileTree", () => {
       "substratevm/mx.substratevm/suite.py",
     ]);
     expect(outline(java)).toEqual([
-      "substratevm/mx.substratevm/",
-      "  suite.py",
-      "substratevm/src/com.oracle.svm.core/",
-      "  pgo/",
-      "    A.java",
-      "  thread/",
-      "    B.java",
-      "substratevm/src/com.oracle.svm.hosted/",
-      "  C.java",
+      "(substratevm/)",
+      "  mx.substratevm/",
+      "    suite.py",
+      "  src/com.oracle.svm.core/",
+      "    pgo/",
+      "      A.java",
+      "    thread/",
+      "      B.java",
+      "  src/com.oracle.svm.hosted/",
+      "    C.java",
     ]);
-    expect(java.map((entry) => (entry.kind === "directory" ? entry.folder : null))).toEqual([
+    const [group] = java;
+    expect(group?.kind === "group" && group.children.map((child) => child.folder)).toEqual([
       "folder",
       "module",
       "module",
     ]);
   });
 
-  it("takes fewer headings than files on the many-folder fixtures", () => {
-    const counts = [JAVA_SERVICE_PATHS, MONOREPO_PATHS, DEEP_APP_PATHS].map((paths) => [
-      headings(fileTree(paths)),
-      paths.length,
-    ]);
+  it("takes fewer headings and captions than files on the many-folder fixtures", () => {
+    const counts = [JAVA_SERVICE_PATHS, MONOREPO_PATHS, DEEP_APP_PATHS].map((paths) => {
+      const tree = fileTree(paths);
+      return [count(tree, "directory"), count(tree, "group"), paths.length];
+    });
     // A directory of one file had no heading before v4: 13, 9 and 22.
     expect(counts).toEqual([
-      [18, 24],
-      [20, 23],
-      [22, 27],
+      [18, 2, 24],
+      [20, 2, 23],
+      [22, 7, 27],
     ]);
   });
 });
@@ -167,7 +191,9 @@ describe("FileTree as the rail", () => {
   it("shows directory headings and a row per file", () => {
     renderRail(null);
     const rail = screen.getByRole("tree", { name: "Changed files" });
-    expect(heading("web/src/routes")?.textContent).toBe("web/src/routes");
+    expect(heading("web/src/routes")?.textContent).toBe("routes");
+    const group = within(rail).getByRole("group", { name: "web/src/" });
+    expect(within(group).getAllByRole("treeitem")).toContain(heading("web/src/routes"));
     expect(
       within(rail)
         .getAllByRole("treeitem")
@@ -205,7 +231,7 @@ describe("FileTree as the rail", () => {
     renderRail("delphi_code/http_api/app.py");
     await userEvent.click(heading("delphi_code/http_api") as HTMLElement);
     expect(heading("delphi_code/http_api")?.getAttribute("aria-expanded")).toBe("false");
-    expect(heading("delphi_code/http_api")?.textContent).toBe("delphi_code/http_api2");
+    expect(heading("delphi_code/http_api")?.textContent).toBe("http_api2");
     expect(() => row("http_api/app.py")).toThrow();
   });
 

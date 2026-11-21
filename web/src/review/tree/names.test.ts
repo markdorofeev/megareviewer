@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shortenName, splitName } from "./names.ts";
+import { shortenName, shortenPath, splitName } from "./names.ts";
 
 /** Fits when it has at most `length` characters. */
 const upTo = (length: number) => (text: string) => text.length <= length;
@@ -45,5 +45,24 @@ describe("splitName", () => {
     ],
   ] as const)("%s", (name, parts) => {
     expect(splitName(name)).toEqual(parts);
+  });
+});
+
+describe("shortenPath", () => {
+  it("keeps a path that fits", () => {
+    expect(shortenPath("web/src/routes", upTo(20))).toBe("web/src/routes");
+  });
+
+  it("cuts the fewest directories from the middle, keeping where it starts and what it names", () => {
+    const caption = "src/test/java/com/acmecorp/fulfillment/orders";
+    expect(shortenPath(caption, upTo(43))).toBe("src/test/java/…/acmecorp/fulfillment/orders");
+    expect(shortenPath(caption, upTo(34))).toBe("src/test/java/…/fulfillment/orders");
+    expect(shortenPath(caption, upTo(20))).toBe("src/test/…/orders");
+  });
+
+  it("falls back to its last directory, which the row cuts if even that doesn't fit", () => {
+    expect(shortenPath("packages/api-client/src/generated/models", upTo(14))).toBe("…/models");
+    expect(shortenPath("packages/payments", upTo(5))).toBe("…/payments");
+    expect(shortenPath("payments", upTo(5))).toBe("payments");
   });
 });
