@@ -150,7 +150,7 @@ interface CaseResult {
     | "findings"
     | "risk"
     | "decisions"
-    | "tour"
+    | "flows"
     | "warnings"
     | "usage"
     | "modelCalls"

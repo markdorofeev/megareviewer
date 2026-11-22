@@ -3,9 +3,9 @@ import { AnalysisView, PullRequestListResponse, StatusResponse } from "../../../
 import { hunkIdOf } from "../../../src/domain/diff/index.ts";
 import {
   pointLinesFit,
+  validateFlows,
   validateHunkReferences,
   validateRiskCoverage,
-  validateTour,
 } from "../../../src/domain/review/index.ts";
 import {
   deepAppAnalysisView,
@@ -86,9 +86,9 @@ describe("the fixture analysis", () => {
     }
   });
 
-  it("has a 4-step tour covering every part of every non-mechanical hunk once", () => {
-    expect(analysis.tour?.steps).toHaveLength(4);
-    expect(validateTour(analysis.tour ?? { steps: [] }, reviewedIds, analysis.parts)).toEqual([]);
+  it("has 4 flows covering every part of every non-mechanical hunk once", () => {
+    expect(analysis.flows?.steps).toHaveLength(4);
+    expect(validateFlows(analysis.flows ?? { steps: [] }, reviewedIds, analysis.parts)).toEqual([]);
   });
 
   it("references only hunks that exist", () => {
@@ -131,11 +131,11 @@ describe("the large fixture analysis", () => {
   const hunks = analysis.files.flatMap((file) => file.hunks);
   const hunkIds = new Set(hunks.map((hunk) => hunk.id));
 
-  it("matches the HTTP API contract, with 240 hunks the tour and risk cover", () => {
+  it("matches the HTTP API contract, with 240 hunks the flows and risk cover", () => {
     expect(AnalysisView.parse(largeAnalysisView)).toEqual(largeAnalysisView);
     expect(hunks).toHaveLength(240);
     expect(validateRiskCoverage(analysis.risk, hunkIds)).toEqual([]);
-    expect(analysis.tour && validateTour(analysis.tour, hunkIds)).toEqual([]);
+    expect(analysis.flows && validateFlows(analysis.flows, hunkIds)).toEqual([]);
   });
 
   it("puts every call on a line its calling hunk shows", () => {
@@ -152,10 +152,10 @@ describe.each([
   ["monorepo", monorepoAnalysisView],
   ["deep app", deepAppAnalysisView],
 ])("the %s fixture", (_, view) => {
-  it("matches the HTTP API contract, with a tour and risk covering every hunk", () => {
+  it("matches the HTTP API contract, with flows and risk covering every hunk", () => {
     const hunkIds = new Set(view.analysis.files.flatMap((file) => file.hunks.map((h) => h.id)));
     expect(AnalysisView.parse(view)).toEqual(view);
     expect(validateRiskCoverage(view.analysis.risk, hunkIds)).toEqual([]);
-    expect(view.analysis.tour && validateTour(view.analysis.tour, hunkIds)).toEqual([]);
+    expect(view.analysis.flows && validateFlows(view.analysis.flows, hunkIds)).toEqual([]);
   });
 });

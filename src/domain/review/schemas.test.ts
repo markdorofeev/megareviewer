@@ -6,6 +6,7 @@ import {
   AnalysisId,
   CommentKey,
   DecisionId,
+  FlowId,
   GuidanceRef,
   HttpUrl,
   Intent,
@@ -14,7 +15,6 @@ import {
   PublicationReceipt,
   Sha,
   Timestamp,
-  TourStepId,
 } from "./index.ts";
 
 const accepts = (schema: { safeParse: (v: unknown) => { success: boolean } }, value: unknown) =>
@@ -34,8 +34,8 @@ describe("ID and primitive schemas", () => {
     [DecisionId, "d12", true],
     [DecisionId, "d0", false],
     [DecisionId, "s1", false],
-    [TourStepId, "s3", true],
-    [TourStepId, "d3", false],
+    [FlowId, "s3", true],
+    [FlowId, "d3", false],
     [AnalysisId, "a_0123456789abcdef", true],
     [AnalysisId, "a_0123", false],
     [CommentKey, "summary", true],

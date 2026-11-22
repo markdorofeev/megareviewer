@@ -11,6 +11,7 @@ import {
 import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
 import { ModelError } from "./errors.ts";
+import { Flows } from "./flows.ts";
 import { Intent, Ticket } from "./intent.ts";
 import { ModelRunOption } from "./model-option.ts";
 import { Finding } from "./point.ts";
@@ -19,7 +20,6 @@ import { Sha, Timestamp } from "./primitives.ts";
 import { PullRequest, PullRequestRef } from "./pull-request.ts";
 import { RiskAssessment } from "./risk.ts";
 import { Stop } from "./stop.ts";
-import { Tour } from "./tour.ts";
 
 export const StageName = z.enum([
   "collect",
@@ -172,72 +172,86 @@ export const BeforeModel = z
   .readonly();
 export type BeforeModel = z.infer<typeof BeforeModel>;
 
-export const Analysis = z
-  .object({
-    id: AnalysisId,
-    key: AnalysisKey,
-    status: AnalysisStatus,
-    stages: z.preprocess(currentStages, z.record(StageName, StageStatus)).readonly(),
-    /** null until Collect starts fetching. Defaults for analyses stored before it existed. */
-    filesFetched: FilesFetched.nullable().default(null),
-    pullRequest: PullRequest.nullable(),
-    files: z.array(FileChange).readonly(),
-    tickets: z.array(Ticket).readonly(),
-    /** Ticket keys found in the PR that Jira didn't return. */
-    missingTicketKeys: z.array(z.string()).readonly(),
-    proofs: z.array(MechanicalProof).readonly(),
-    /** The parts of split hunks, in diff order. A hunk with none here is one part. */
-    parts: z.array(HunkPart).readonly(),
-    callGraph: z.array(CallGraphHint).readonly(),
-    /** Defaults for analyses stored before it existed. */
-    callSites: z.array(CallSite).readonly().default([]),
-    /** Changed files an import in another changed file reaches. */
-    fileLinks: z.array(FileLink).readonly(),
-    /** Paths whose first lines say a tool wrote them. Grouped and faded, never hidden. */
-    generated: z.array(z.string()).readonly(),
-    checkout: CheckoutStatus,
-    /** Read from the checkout: uses outside the PR of the definitions it changes. */
-    unchangedCallers: z.array(UnchangedCallers).readonly(),
-    intent: Intent.nullable(),
-    /** Defaults for analyses stored before the findings pass. */
-    findings: z.array(Finding).readonly().default([]),
-    risk: z.array(RiskAssessment).readonly(),
-    decisions: z.array(Decision).readonly(),
-    /** The code's tour, which orders and labels the overview. */
-    tour: Tour.nullable(),
-    /** The page's tour, which the stops pass writes; null when no run asked for it. */
-    stops: z.array(Stop).readonly().nullable().default(null),
-    /**
-     * Why a run that asked for the tour has none: the stops pass failed, or its checks left fewer
-     * than three stops. Never the run's `modelError`: the review is there without a tour.
-     */
-    stopsError: AnalysisError.nullable().default(null),
-    warnings: z.array(z.string()).readonly(),
-    usage: z.preprocess(withoutTourPass, z.array(ModelUsage)).readonly(),
-    /** Defaults for analyses stored before model calls were traced. */
-    modelCalls: z.preprocess(withoutTourPass, z.array(ModelCall)).readonly().default([]),
-    /** Why the analysis failed; never set by the model passes, which have `modelError`. */
-    error: AnalysisError.nullable(),
-    /**
-     * Why the last model run failed. The analysis itself stays complete: the code's review is
-     * there with or without the model.
-     */
-    modelError: AnalysisError.nullable().default(null),
-    /** The option the model run used. Absent on analyses stored before the choice, all Haiku 5.5. */
-    modelOption: ModelRunOption.nullable().default(null),
-    /** The preferences and guideline files the model run was given; null without a run. */
-    guidance: Guidance.nullable().default(null),
-    /**
-     * What the code made of the fields a model run changes, kept when the first run starts so that
-     * removing the run puts them back. Null without a run, and where a run started before it was kept.
-     */
-    beforeModel: BeforeModel.nullable().default(null),
-    /** The run's guardrail call; null when it didn't make one. Never a stage: the review lands without it. */
-    guardrails: GuardrailCallStatus.nullable().default(null),
-    createdAt: Timestamp,
-    updatedAt: Timestamp,
-  })
-  .readonly();
+/**
+ * Analyses stored before the code's flows were named so keep them under `tour`, with the same
+ * shape and step IDs: read into `flows`, so the cache still serves them.
+ */
+const flowsUnderOldName = (stored: unknown) =>
+  typeof stored === "object" && stored !== null && "tour" in stored && !("flows" in stored)
+    ? Object.fromEntries(
+        Object.entries(stored).map(([key, value]) => [key === "tour" ? "flows" : key, value]),
+      )
+    : stored;
+
+export const Analysis = z.preprocess(
+  flowsUnderOldName,
+  z
+    .object({
+      id: AnalysisId,
+      key: AnalysisKey,
+      status: AnalysisStatus,
+      stages: z.preprocess(currentStages, z.record(StageName, StageStatus)).readonly(),
+      /** null until Collect starts fetching. Defaults for analyses stored before it existed. */
+      filesFetched: FilesFetched.nullable().default(null),
+      pullRequest: PullRequest.nullable(),
+      files: z.array(FileChange).readonly(),
+      tickets: z.array(Ticket).readonly(),
+      /** Ticket keys found in the PR that Jira didn't return. */
+      missingTicketKeys: z.array(z.string()).readonly(),
+      proofs: z.array(MechanicalProof).readonly(),
+      /** The parts of split hunks, in diff order. A hunk with none here is one part. */
+      parts: z.array(HunkPart).readonly(),
+      callGraph: z.array(CallGraphHint).readonly(),
+      /** Defaults for analyses stored before it existed. */
+      callSites: z.array(CallSite).readonly().default([]),
+      /** Changed files an import in another changed file reaches. */
+      fileLinks: z.array(FileLink).readonly(),
+      /** Paths whose first lines say a tool wrote them. Grouped and faded, never hidden. */
+      generated: z.array(z.string()).readonly(),
+      checkout: CheckoutStatus,
+      /** Read from the checkout: uses outside the PR of the definitions it changes. */
+      unchangedCallers: z.array(UnchangedCallers).readonly(),
+      intent: Intent.nullable(),
+      /** Defaults for analyses stored before the findings pass. */
+      findings: z.array(Finding).readonly().default([]),
+      risk: z.array(RiskAssessment).readonly(),
+      decisions: z.array(Decision).readonly(),
+      /** The code's flows from the call graph, which order and label the overview. */
+      flows: Flows.nullable(),
+      /** The page's tour, which the stops pass writes; null when no run asked for it. */
+      stops: z.array(Stop).readonly().nullable().default(null),
+      /**
+       * Why a run that asked for the tour has none: the stops pass failed, or its checks left fewer
+       * than three stops. Never the run's `modelError`: the review is there without a tour.
+       */
+      stopsError: AnalysisError.nullable().default(null),
+      warnings: z.array(z.string()).readonly(),
+      usage: z.preprocess(withoutTourPass, z.array(ModelUsage)).readonly(),
+      /** Defaults for analyses stored before model calls were traced. */
+      modelCalls: z.preprocess(withoutTourPass, z.array(ModelCall)).readonly().default([]),
+      /** Why the analysis failed; never set by the model passes, which have `modelError`. */
+      error: AnalysisError.nullable(),
+      /**
+       * Why the last model run failed. The analysis itself stays complete: the code's review is
+       * there with or without the model.
+       */
+      modelError: AnalysisError.nullable().default(null),
+      /** The option the model run used. Absent on analyses stored before the choice, all Haiku 5.5. */
+      modelOption: ModelRunOption.nullable().default(null),
+      /** The preferences and guideline files the model run was given; null without a run. */
+      guidance: Guidance.nullable().default(null),
+      /**
+       * What the code made of the fields a model run changes, kept when the first run starts so that
+       * removing the run puts them back. Null without a run, and where a run started before it was kept.
+       */
+      beforeModel: BeforeModel.nullable().default(null),
+      /** The run's guardrail call; null when it didn't make one. Never a stage: the review lands without it. */
+      guardrails: GuardrailCallStatus.nullable().default(null),
+      createdAt: Timestamp,
+      updatedAt: Timestamp,
+    })
+    .readonly(),
+);
 export type Analysis = z.infer<typeof Analysis>;
 
 export const MODEL_STAGES = [

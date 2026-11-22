@@ -22,7 +22,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 |---|---|
 | Pull request | A host-agnostic PR: title, description, branch, commits, diff, head SHA |
 | Hunk | One contiguous change, identified by a stable hunk ID. Risk, proofs and decisions are per hunk |
-| Part | The lines of a hunk that change one definition, identified by a part ID. A hunk that isn't split is one part. The tour and hints are per part |
+| Part | The lines of a hunk that change one definition, identified by a part ID. A hunk that isn't split is one part. The flows and hints are per part |
 | Risk class | *mechanical*, *logic* or *contract*. Contract is internal: the page shows only the model's, as a risk |
 | Mechanical proof | Deterministic evidence that a hunk is mechanical: generated, whitespace, rename, move or formatting |
 | Intent | Stated intent (description, tickets), inferred intent (code: what it does, its shape across the system, what to watch), and the mismatches between them |
@@ -32,8 +32,9 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Point state | What the reviewer did with a point: *open* (nothing, which means fine), *raised* or *dismissed* |
 | Checking test | A test in the PR whose assertions check the very behavior a risk names, by its name, lines and what it asserts. The model names it, the server checks it, and it's a mark on the risk, never a reason to show it less |
 | Verdict | What the published review says: approve, request changes or comment. The reviewer picks it |
-| Tour | Hunks ordered into steps, grouped by concept |
-| Stop | A place on the page's tour: one sentence and the lines of one or two hunks that decide it, in call order. The model writes the stops and the server checks them; the code's tour and its steps keep ordering the overview |
+| Flow | An entry point a user or caller reaches and the changed code it runs, callers first, found from the call graph by the code; or a supporting step for changes no flow runs. The flows order and label the overview |
+| Tour | The page's tour of a PR: a few stops in call order, which the model writes and the Understand layout shows |
+| Stop | A place on the page's tour: one sentence and the lines of one or two hunks that decide it, in call order. The model writes the stops and the server checks them |
 | Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed |
 | Unchanged caller | Code outside the PR that calls a definition the PR changes, or names it as a type. Read from a checkout |
 | Call site | A use, at a line and column of a part, of a definition the PR changes: where the page shows the code a call runs |

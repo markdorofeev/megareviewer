@@ -11,14 +11,14 @@ import {
   routeReceivers,
 } from "../diff/index.ts";
 import { type Entry, entryLabel, entryOf } from "./entry-points.ts";
+import { type Flow, FlowId, type Flows } from "./flows.ts";
 import type { RiskAssessment } from "./risk.ts";
-import { type Tour, type TourStep, TourStepId } from "./tour.ts";
 
-export interface CodeTourInput {
+export interface CodeFlowsInput {
   readonly files: readonly FileChange[];
   /** Hunks without a mechanical proof: every one is in exactly one step. */
   readonly required: ReadonlySet<HunkId>;
-  /** Split hunks' parts, which the tour places one by one. Any other hunk is one part. */
+  /** Split hunks' parts, which the flows place one by one. Any other hunk is one part. */
   readonly parts?: readonly HunkPart[];
   readonly callGraph: readonly CallGraphHint[];
   readonly risk: readonly RiskAssessment[];
@@ -89,12 +89,13 @@ interface Start {
   readonly kind: FlowKind;
 }
 
-interface Flow extends Start {
+/** A flow while it's walked: the hunks it reads so far and the earlier ones it passes through. */
+interface Walk extends Start {
   readonly hunks: PartId[];
   readonly via: PartId[];
 }
 
-type StepDraft = Omit<TourStep, "id">;
+type StepDraft = Omit<Flow, "id">;
 
 /** A request a flow sends to a route an earlier step reads. */
 interface Send {
@@ -104,12 +105,12 @@ interface Send {
 }
 
 /**
- * The tour without the model: flows from entry points (routes, pages, commands) or roots, callers
+ * The code's flows, without the model: from entry points (routes, pages, commands) or roots, callers
  * before callees. Code several flows run is read once, in a shared section before them. What no
  * flow runs joins the flow it belongs with, else a supporting step. Every required hunk lands in
  * exactly one step; ARCHITECTURE.md has the ordering rules.
  */
-export const codeTour = (input: CodeTourInput): Tour => {
+export const codeFlows = (input: CodeFlowsInput): Flows => {
   const { files, required, callGraph, risk, definitions } = input;
   const generated = input.generated ?? new Set<string>();
   const byHunk = partsByHunk(input.parts ?? []);
@@ -250,9 +251,9 @@ export const codeTour = (input: CodeTourInput): Tour => {
     reach(start.starts).flatMap((id) => requestsOf(id).map(([route]) => route)),
   );
 
-  const owner = new Map<PartId, Flow>();
-  const flows: Flow[] = [];
-  const own = (flow: Flow, id: PartId) => {
+  const owner = new Map<PartId, Walk>();
+  const flows: Walk[] = [];
+  const own = (flow: Walk, id: PartId) => {
     flow.hunks.push(id);
     owner.set(id, flow);
   };
@@ -268,7 +269,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
       for (const id of reached.filter((one) => !owner.has(one))) own(host, id);
       continue;
     }
-    const flow: Flow = { ...start, hunks: [], via: [] };
+    const flow: Walk = { ...start, hunks: [], via: [] };
     flows.push(flow);
     for (const id of reached) {
       if (owner.has(id)) flow.via.push(id);
@@ -296,7 +297,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
     owner.set(id, flow);
   }
 
-  const consumers = new Map<PartId, Flow[]>();
+  const consumers = new Map<PartId, Walk[]>();
   for (const flow of flows) {
     for (const id of reach(flow.starts)) {
       if (entryOfHunk.has(id) || wiring.has(id)) continue;
@@ -305,7 +306,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
   }
   const shared = new Set([...consumers].flatMap(([id, users]) => (users.length > 1 ? [id] : [])));
   /** Each shared section, and the flows that pass through it. */
-  const usedBy = new Map<Flow, Flow[]>();
+  const usedBy = new Map<Walk, Walk[]>();
   while (shared.size > 0) {
     const first = ids.find((id) => shared.has(id));
     if (first === undefined) break;
@@ -320,8 +321,8 @@ export const codeTour = (input: CodeTourInput): Tour => {
       (id) => !codeCallers(id).some((caller) => component.has(caller)),
     );
     const orderedParts = reach([...roots, ...component]).filter((id) => component.has(id));
-    const section: Flow = { starts: roots, entries: [], kind: "root", hunks: [], via: [] };
-    const users: Flow[] = [];
+    const section: Walk = { starts: roots, entries: [], kind: "root", hunks: [], via: [] };
+    const users: Walk[] = [];
     usedBy.set(section, users);
     for (const id of orderedParts) {
       const previous = owner.get(id);
@@ -344,7 +345,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
         isCode(id) && names.includes(stem(basename(pathOf(id)))) ? [flow] : [],
       ),
     );
-  const belongsWith = (id: PartId): Flow | undefined => {
+  const belongsWith = (id: PartId): Walk | undefined => {
     const path = pathOf(id);
     // A schema or generated file a flow only names stays with the API schema.
     if (isSchemaLike(id)) return undefined;
@@ -400,7 +401,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
 
   // A flow passes through the routes it requests in earlier flows, but never walks into them: a
   // page flow that read the backend would read the whole PR.
-  const sendsOf = (flow: Flow, at: number): Send[] => {
+  const sendsOf = (flow: Walk, at: number): Send[] => {
     const sent: Send[] = [];
     for (const [route, symbols] of flow.hunks.flatMap(requestsOf)) {
       const routeAt = flows.findIndex((other) => other.hunks.includes(route));
@@ -449,7 +450,7 @@ export const codeTour = (input: CodeTourInput): Tour => {
     ),
   ];
   return {
-    steps: steps.map((step, index) => ({ id: TourStepId.parse(`s${index + 1}`), ...step })),
+    steps: steps.map((step, index) => ({ id: FlowId.parse(`s${index + 1}`), ...step })),
     builtBy: "code",
   };
 };
@@ -495,7 +496,7 @@ const mostCommon = <T>(values: readonly (T | undefined)[]): T | undefined => {
 };
 
 const flowTitle = (
-  flow: Flow,
+  flow: Walk,
   pathOf: (id: PartId) => string,
   definitions: ReadonlyMap<PartId, readonly string[]>,
 ): string => {
@@ -507,7 +508,7 @@ const flowTitle = (
 };
 
 const flowExplanation = (
-  flow: Flow,
+  flow: Walk,
   pathOf: (id: PartId) => string,
   isTest: (id: PartId) => boolean,
   stepOf: (id: PartId) => number | undefined,

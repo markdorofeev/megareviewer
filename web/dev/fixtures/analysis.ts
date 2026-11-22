@@ -16,6 +16,7 @@ import {
   analysisId,
   DecisionId,
   FindingId,
+  FlowId,
   MismatchId,
   type ModelCall,
   type ModelUsage,
@@ -24,7 +25,6 @@ import {
   type Stop,
   StopId,
   type Ticket,
-  TourStepId,
 } from "../../../src/domain/review/index.ts";
 import { callSitesOf } from "./call-sites.ts";
 
@@ -758,10 +758,10 @@ const analysis: Analysis = {
       lines: { hunkId: h.receiptFormatting, side: "new", startLine: 2, line: 2 },
     },
   ],
-  tour: {
+  flows: {
     steps: [
       {
-        id: TourStepId.parse("s1"),
+        id: FlowId.parse("s1"),
         title: "The receipt endpoint",
         explanation:
           "Start at the new route: it looks up the order, gets its receipt from cachedReceipt, which renders each receipt once, and sends it as plain text.",
@@ -773,7 +773,7 @@ const analysis: Analysis = {
         merged: [],
       },
       {
-        id: TourStepId.parse("s2"),
+        id: FlowId.parse("s2"),
         title: "Retrying the tax service",
         explanation: "Rendering a receipt now retries the tax service up to 3 times.",
         partIds: [fixtureParts.retry],
@@ -784,7 +784,7 @@ const analysis: Analysis = {
         merged: [],
       },
       {
-        id: TourStepId.parse("s3"),
+        id: FlowId.parse("s3"),
         title: "Dates and prices on the receipt",
         explanation:
           "Receipt lines now format prices with the shared formatMoney and dates with dayjs.",
@@ -796,7 +796,7 @@ const analysis: Analysis = {
         merged: [],
       },
       {
-        id: TourStepId.parse("s4"),
+        id: FlowId.parse("s4"),
         title: "The new dependency",
         explanation: "dayjs is added for the date format above.",
         partIds: [h.dependency],

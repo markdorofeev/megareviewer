@@ -10,12 +10,12 @@ import {
 } from "../../../../src/domain/diff/index.ts";
 import {
   type Analysis,
+  type Flow,
+  FlowId,
   type HunkComment,
   type Point,
   type PointId,
   type RiskAssessment,
-  type TourStep,
-  TourStepId,
 } from "../../../../src/domain/review/index.ts";
 import { commentPlace, type HunkItem } from "../../review/index.ts";
 import { byTreePath } from "../../review/tree/paths.ts";
@@ -133,7 +133,7 @@ export const partIndex = (analysis: Analysis) => {
 
 export type PartIndex = ReturnType<typeof partIndex>;
 
-/** Non-mechanical parts in path order, then file order: the reading order before a tour exists. */
+/** Non-mechanical parts in path order, then file order: the reading order before the flows exist. */
 export const partsInPathOrder = (analysis: Analysis, index: PartIndex): PartId[] =>
   [...analysis.files]
     .sort(byPath)
@@ -141,20 +141,20 @@ export const partsInPathOrder = (analysis: Analysis, index: PartIndex): PartId[]
     .filter((id) => !index.mechanical.has(id));
 
 /**
- * The tour's steps, plus a step for non-mechanical hunks the tour misses. The server checks the
- * tour covers each one, but a hunk left out of every step would be invisible, so show it anyway.
+ * The flows' steps, plus a step for non-mechanical hunks the flows miss. The server checks the
+ * flows cover each one, but a hunk left out of every step would be invisible, so show it anyway.
  */
-export const tourSteps = (analysis: Analysis, index: PartIndex): readonly TourStep[] => {
-  const steps = analysis.tour?.steps ?? [];
+export const flowSteps = (analysis: Analysis, index: PartIndex): readonly Flow[] => {
+  const steps = analysis.flows?.steps ?? [];
   const covered = new Set(steps.flatMap((step) => step.partIds));
   const missed = partsInPathOrder(analysis, index).filter((id) => !covered.has(id));
   if (missed.length === 0) return steps;
   return [
     ...steps,
     {
-      id: TourStepId.parse(`s${steps.length + 1}`),
-      title: "Changes the tour left out",
-      explanation: "The tour didn't include these changes, so they're shown here in file order.",
+      id: FlowId.parse(`s${steps.length + 1}`),
+      title: "Changes the flows left out",
+      explanation: "The flows didn't include these changes, so they're shown here in file order.",
       partIds: missed,
       kind: "supporting",
       via: [],

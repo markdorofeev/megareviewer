@@ -9,8 +9,8 @@ import {
 import {
   type Analysis,
   entryOf,
+  type Flow,
   type RiskClass,
-  type TourStep,
 } from "../../../../src/domain/review/index.ts";
 import { byTreePath, directoryOf, treePath } from "../../review/tree/paths.ts";
 
@@ -45,7 +45,7 @@ export interface OverviewNode {
   readonly entries: readonly string[];
   /** The titles of the flows that read it. */
   readonly flows: readonly string[];
-  /** Its hunks to review, in tour order: a click opens the first. Outside, the parts it uses. */
+  /** Its hunks to review, in reading order: a click opens the first. Outside, the parts it uses. */
   readonly partIds: readonly PartId[];
   /** Outside the pull request, how many uses of changed definitions it has; 0 in it. */
   readonly uses: number;
@@ -141,7 +141,7 @@ const routesLabel = (routes: readonly Route[]): string => {
  */
 const entryLabels = (
   analysis: OverviewInput,
-  steps: readonly TourStep[],
+  steps: readonly Flow[],
 ): ReadonlyMap<string, readonly string[]> => {
   const byHunk = partsByHunk(analysis.parts);
   const located = new Map(
@@ -272,13 +272,13 @@ export type OverviewInput = Pick<
 
 /**
  * The changed files by directory, as layered nodes: each one row below its lowest caller, cycles
- * broken toward tour order. Edges merge imports, calls, type uses and requests per pair. Tests are
+ * broken toward reading order. Edges merge imports, calls, type uses and requests per pair. Tests are
  * badges, unlinked nodes go to the strip, and files outside the PR that use its code are faded
  * nodes under it. ARCHITECTURE.md's Overview has the rest.
  */
 export const fileOverview = (
   analysis: OverviewInput,
-  steps: readonly TourStep[],
+  steps: readonly Flow[],
   expanded: ReadonlySet<string> = new Set(),
 ): FileOverview => {
   const { mechanical, files, pathOfHunk, links } = linksBetweenFiles(analysis);
@@ -452,7 +452,7 @@ export const fileOverview = (
 
   // Break cycles until there are none. Two nodes that link each other keep the edge joining more
   // pairs of files pointing down, so the directory with more calls into the other sits above it.
-  // Otherwise, and on a tie, the edges into the node earliest in tour order point up.
+  // Otherwise, and on a tie, the edges into the node earliest in reading order point up.
   const back = new Set<string>();
   const edgeKey = (from: string, to: string) => `${from}\u0000${to}`;
   const forward = (key: string) =>

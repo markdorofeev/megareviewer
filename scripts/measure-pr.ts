@@ -18,16 +18,16 @@ import {
 } from "../src/domain/diff/index.ts";
 import {
   classifyByRules,
-  codeTour,
+  codeFlows,
+  type Flows,
   joinParts,
   PullRequest,
   type RiskAssessment,
-  type Tour,
 } from "../src/domain/review/index.ts";
 import { type FileOverview, fileOverview } from "../web/src/pages/review/overview.ts";
 
 // Every stage of the flows slice measures itself on one real PR. This runs today's prep, rule
-// risk and code tour on a PR whose diff and files are cached in ~/.megareviewer/db.sqlite, the way
+// risk and code flows on a PR whose diff and files are cached in ~/.megareviewer/db.sqlite, the way
 // the pipeline does without the model, and prints what the stages track. It reads the database
 // only, and never calls a host.
 
@@ -42,11 +42,11 @@ export interface Measured {
   readonly fileLinks: readonly FileLink[];
   readonly generated: readonly string[];
   readonly proofs: readonly MechanicalProof[];
-  /** Split hunks' parts, after the tour joined back the ones it reads together. */
+  /** Split hunks' parts, after the flows joined back the ones they read together. */
   readonly parts: readonly HunkPart[];
   /** How many candidate parts prep cut, before joining back. */
   readonly candidates: number;
-  readonly tour: Tour;
+  readonly flows: Flows;
   /** Read from a local checkout at the head commit; none without one. */
   readonly unchangedCallers: readonly UnchangedCallers[];
   /** Files the PR changes that aren't in the cache, so they weren't parsed. */
@@ -110,7 +110,7 @@ export const measure = async (
     ...classifyByRules(files, new Set(proofRisk.map((one) => one.hunkId))),
   ];
   const joined = joinParts(
-    codeTour({ files, risk, ...prepared }),
+    codeFlows({ files, risk, ...prepared }),
     prepared.parts,
     prepared.callGraph,
     prepared.unchangedCallers,
@@ -126,7 +126,7 @@ export const measure = async (
     proofs: prepared.proofs,
     parts: joined.parts,
     candidates: prepared.parts.length,
-    tour: joined.tour,
+    flows: joined.flows,
     unchangedCallers: joined.unchangedCallers,
     missing: [...new Set(missing)],
   };
@@ -134,13 +134,13 @@ export const measure = async (
 
 /** The counts this slice tracks, from a measured PR. */
 export const counts = (measured: Measured) => {
-  const { files, callGraph, tour } = measured;
+  const { files, callGraph, flows } = measured;
   const pathOf = new Map<PartId, string>(
     files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, file.path])),
   );
   const calls = callGraph.filter((hint) => hint.use === "call");
   const split = new Set(measured.parts.map((part) => part.hunkId)).size;
-  const placed = tour.steps.flatMap((step) => step.partIds);
+  const placed = flows.steps.flatMap((step) => step.partIds);
   const expected = files
     .flatMap((file) => file.hunks)
     .filter((hunk) => !measured.proofs.some((proof) => proof.hunkId === hunk.id))
@@ -151,13 +151,13 @@ export const counts = (measured: Measured) => {
   return {
     largestFlow: Math.max(
       0,
-      ...tour.steps.filter((step) => step.kind === "flow").map((step) => step.partIds.length),
+      ...flows.steps.filter((step) => step.kind === "flow").map((step) => step.partIds.length),
     ),
-    crossStepReferences: tour.steps.reduce((sum, step) => sum + step.via.length, 0),
-    destinationSummaries: tour.steps.reduce(
+    crossStepReferences: flows.steps.reduce((sum, step) => sum + step.via.length, 0),
+    destinationSummaries: flows.steps.reduce(
       (sum, step) =>
         sum +
-        new Set(step.via.map((id) => tour.steps.findIndex((other) => other.partIds.includes(id))))
+        new Set(step.via.map((id) => flows.steps.findIndex((other) => other.partIds.includes(id))))
           .size,
       0,
     ),
@@ -185,7 +185,7 @@ export const counts = (measured: Measured) => {
 };
 
 export const overviewOf = (measured: Measured): FileOverview =>
-  fileOverview(measured, measured.tour.steps);
+  fileOverview(measured, measured.flows.steps);
 
 /** The overview's rows and strip, one line each, with entries, flags and badges. */
 export const overviewLines = ({ rows, strip }: FileOverview): string[] => {
@@ -216,8 +216,8 @@ export const report = (measured: Measured): string => {
     const risks = file.hunks.map((hunk) => (riskOf.get(hunk.id) ?? "logic")[0]).join("");
     out.push(`  ${file.path}  +${added} -${deleted}  hunks ${risks}`);
   }
-  out.push("", "Tour");
-  measured.tour.steps.forEach((step, at) => {
+  out.push("", "Flows");
+  measured.flows.steps.forEach((step, at) => {
     const via = step.via.length > 0 ? `, ${step.via.length} via` : "";
     const hunks = step.partIds.length === 1 ? "1 part" : `${step.partIds.length} parts`;
     out.push(`  ${at + 1}. [${step.kind}] ${step.title}  (${hunks}${via})`);

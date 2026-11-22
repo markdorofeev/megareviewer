@@ -49,7 +49,7 @@ export {
   checkingTestProblem,
   MAX_CHECKING_LINES,
 } from "./checking-test.ts";
-export { type CodeTourInput, codeTour, looksGenerated } from "./code-tour.ts";
+export { type CodeFlowsInput, codeFlows, looksGenerated } from "./code-flows.ts";
 export { Decision, DecisionCategory, DecisionId } from "./decision.ts";
 export { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 export {
@@ -60,6 +60,7 @@ export {
   TicketError,
   TicketErrorKind,
 } from "./errors.ts";
+export { Flow, FlowId, Flows } from "./flows.ts";
 export {
   BUILD_FILE_PATHS,
   CHECK_CONFIG_PATHS,
@@ -243,13 +244,12 @@ export {
   type TableAlign,
 } from "./thread-body.ts";
 export { extractTicketKeys } from "./ticket-keys.ts";
-export { Tour, TourStep, TourStepId } from "./tour.ts";
 export {
   CoverageProblem,
+  type FlowsProblem,
   partsOfHunks,
   type RiskProblem,
-  type TourProblem,
+  validateFlows,
   validateHunkReferences,
   validateRiskCoverage,
-  validateTour,
 } from "./validation.ts";

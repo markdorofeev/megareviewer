@@ -28,7 +28,7 @@ export interface Prepared {
   /** At most one per hunk. */
   readonly proofs: readonly MechanicalProof[];
   /**
-   * Every hunk's candidate parts, one per definition it changes, for the tour to place. The tour
+   * Every hunk's candidate parts, one per definition it changes, for the flows to place. The flows
    * joins back the ones it places together.
    */
   readonly parts: readonly HunkPart[];
@@ -37,9 +37,9 @@ export interface Prepared {
   /** Every use of what the PR changes, naming candidate parts like the hints. */
   readonly callSites: readonly CallSite[];
   readonly fileLinks: readonly FileLink[];
-  /** Each part's changed definitions, for the tour's entry points. Not stored. */
+  /** Each part's changed definitions, for the flows' entry points. Not stored. */
   readonly definitions: ReadonlyMap<PartId, readonly string[]>;
-  /** Paths whose first lines say a tool wrote them, for the tour's grouping and the overview. */
+  /** Paths whose first lines say a tool wrote them, for the flows' grouping and the overview. */
   readonly generated: ReadonlySet<string>;
   /** Read from the checkout, naming candidate parts like the hints; none without a checkout. */
   readonly unchangedCallers: readonly UnchangedCallers[];

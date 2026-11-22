@@ -45,20 +45,20 @@ const cachedDatabase = (cachedPaths: readonly string[]) => {
 };
 
 describe("measure-pr", () => {
-  it("rebuilds the tour of a cached PR and counts its calls", async () => {
+  it("rebuilds the flows of a cached PR and counts its calls", async () => {
     const paths = [...new Set([...Object.keys(baseFiles), ...Object.keys(headFiles)])];
     const { pullRequest: read, cached } = fromDatabase(cachedDatabase(paths), "a_1");
     expect(read).toEqual(pullRequest);
     const measured = await measure(new FakeCodeParser(), read, cached);
     expect(measured.missing).toEqual([]);
-    expect(measured.tour.builtBy).toBe("code");
+    expect(measured.flows.builtBy).toBe("code");
     const found = counts(measured);
     expect(found.hunks).toBe(measured.files.flatMap((file) => file.hunks).length);
     expect(found.callHints).toBe(measured.callGraph.filter((hint) => hint.use === "call").length);
     expect(found.callHints).toBeGreaterThan(0);
     expect(found.callSites).toBeGreaterThan(0);
     const printed = report(measured);
-    expect(printed).toContain("Tour\n  1. [flow] ");
+    expect(printed).toContain("Flows\n  1. [flow] ");
     expect(printed).toContain(`  callHints: ${found.callHints}`);
     // The overview's rows: the route's file above the service it imports and calls.
     expect(found.fileLinks).toBe(1);

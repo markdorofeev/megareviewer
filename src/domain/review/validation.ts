@@ -14,7 +14,7 @@ export const CoverageProblem = z
 export type CoverageProblem = z.infer<typeof CoverageProblem>;
 
 /** A coverage problem, or a step passing through a part no earlier step reads. */
-export type TourProblem = CoverageProblem | { readonly kind: "via"; readonly id: PartId };
+export type FlowsProblem = CoverageProblem | { readonly kind: "via"; readonly id: PartId };
 export type RiskProblem = CoverageProblem;
 
 /** The referenced IDs that aren't known, each once, in first-seen order. */
@@ -61,8 +61,8 @@ export const partsOfHunks = (
  * appear. A step that names a split hunk, as the model's do, names all of its parts. A step may
  * pass through only parts that earlier steps read.
  */
-export const validateTour = (
-  tour: {
+export const validateFlows = (
+  flows: {
     readonly steps: readonly {
       readonly partIds: readonly PartId[];
       readonly via?: readonly PartId[];
@@ -70,18 +70,18 @@ export const validateTour = (
   },
   requiredHunkIds: ReadonlySet<HunkId>,
   parts: readonly HunkPart[] = [],
-): TourProblem[] => {
+): FlowsProblem[] => {
   const partsOf = partsOfHunks(requiredHunkIds, parts);
   const splitParts: ReadonlyMap<PartId, readonly PartId[]> = partsOfHunks(
     parts.map((part) => part.hunkId),
     parts,
   );
-  const expanded = tour.steps.map((step) =>
+  const expanded = flows.steps.map((step) =>
     step.partIds.flatMap((id) => splitParts.get(id) ?? [id]),
   );
   const read = new Set<PartId>();
-  const via: TourProblem[] = [];
-  tour.steps.forEach((step, at) => {
+  const via: FlowsProblem[] = [];
+  flows.steps.forEach((step, at) => {
     for (const id of step.via ?? []) if (!read.has(id)) via.push({ kind: "via", id });
     for (const id of expanded[at] ?? []) read.add(id);
   });

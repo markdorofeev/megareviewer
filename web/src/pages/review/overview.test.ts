@@ -7,11 +7,7 @@ import {
   PartId,
   type UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
-import {
-  type RiskAssessment,
-  type TourStep,
-  TourStepId,
-} from "../../../../src/domain/review/index.ts";
+import { type Flow, FlowId, type RiskAssessment } from "../../../../src/domain/review/index.ts";
 import { directoryOf } from "../../review/tree/paths.ts";
 import {
   type FileOverview,
@@ -65,8 +61,8 @@ const step = (
   title: string,
   hunks: readonly number[],
   entries: readonly number[] = [],
-): TourStep => ({
-  id: TourStepId.parse(`s${n}`),
+): Flow => ({
+  id: FlowId.parse(`s${n}`),
   title,
   explanation: "",
   partIds: hunks.map(h),
@@ -88,8 +84,8 @@ const input = (files: readonly FileChange[], more: Partial<OverviewInput> = {}):
   ...more,
 });
 
-/** A tour reading the files' hunks in the order given, as one step. */
-const tourOf = (files: readonly FileChange[]): TourStep[] => [
+/** Flows reading the files' hunks in the order given, as one step. */
+const tourOf = (files: readonly FileChange[]): Flow[] => [
   step(
     1,
     "Everything",
@@ -98,7 +94,7 @@ const tourOf = (files: readonly FileChange[]): TourStep[] => [
 ];
 
 /** The overview with every directory opened in place, so each file is a node of its own. */
-const opened = (analysis: OverviewInput, steps: readonly TourStep[]): FileOverview =>
+const opened = (analysis: OverviewInput, steps: readonly Flow[]): FileOverview =>
   fileOverview(
     analysis,
     steps,
@@ -129,7 +125,7 @@ describe("fileOverview with every directory opened", () => {
     expect(rowsOf(overview)).toEqual([["a.py"], ["b.py"], ["c.py"], ["d.py"]]);
   });
 
-  it("breaks a cycle at the edge into the file earliest in tour order", () => {
+  it("breaks a cycle at the edge into the file earliest in reading order", () => {
     const files = [file("a.py", [1]), file("b.py", [2]), file("c.py", [3])];
     const callGraph = [call(1, 2), call(2, 3), call(3, 1)];
     const overview = opened(input(files, { callGraph }), tourOf(files));
@@ -279,7 +275,7 @@ describe("fileOverview with every directory opened", () => {
     expect([...overview.placeOf.keys()].sort()).toEqual(["a.py", "b.py"]);
   });
 
-  it("sums lines, shows contract as logic, and lists hunks in tour order", () => {
+  it("sums lines, shows contract as logic, and lists hunks in reading order", () => {
     const files = [file("a.py", [1, 2], "x = 1", 3), file("b.py", [3])];
     const risk: RiskAssessment[] = [
       { hunkId: h(1), riskClass: "logic", reason: "", source: "rule", lines: null, guidance: null },
@@ -320,8 +316,8 @@ describe("fileOverview with every directory opened", () => {
       definitions: [],
     }));
     const steps = [1, 2].map(
-      (n): TourStep => ({
-        id: TourStepId.parse(`s${n}`),
+      (n): Flow => ({
+        id: FlowId.parse(`s${n}`),
         title: `Route ${n}`,
         explanation: "",
         partIds: [part(n)],

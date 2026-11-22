@@ -7,12 +7,12 @@ import {
   CommentKey,
   DecisionId,
   FindingId,
+  FlowId,
+  type Flows,
   type Intent,
   type ModelCall,
   type ModelPass,
   type Publication,
-  type Tour,
-  TourStepId,
 } from "../../../domain/review/index.ts";
 import { type AnalysisInput, type AnalysisInputFile, NO_GUIDANCE } from "../../ports/index.ts";
 import { fileChange, hunk } from "./builders.ts";
@@ -205,7 +205,7 @@ export const smallFeatureIntent: Intent = {
 };
 
 const d = DecisionId.parse;
-const s = TourStepId.parse;
+const s = FlowId.parse;
 
 const answered = (pass: ModelPass, startedAt: string, durationMs: number): ModelCall => ({
   pass,
@@ -341,7 +341,7 @@ export const smallFeatureAnalysis: Analysis = {
       lines: null,
     },
   ],
-  tour: {
+  flows: {
     steps: [
       {
         id: s("s1"),
@@ -432,9 +432,9 @@ export const smallFeatureAnalysis: Analysis = {
   guidance: null,
 };
 
-/** The code's tour of the small-feature PR, which the fixture analysis's tour titles. */
-export const smallFeatureSkeleton: Tour = {
-  steps: (smallFeatureAnalysis.tour?.steps ?? []).map((step) => ({
+/** The code's flows of the small-feature PR, which the fixture analysis's flows title. */
+export const smallFeatureSkeleton: Flows = {
+  steps: (smallFeatureAnalysis.flows?.steps ?? []).map((step) => ({
     ...step,
     title: step.codeTitle ?? step.title,
     explanation: "Read by the code.",

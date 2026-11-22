@@ -133,7 +133,7 @@ const newAnalysis = (
   findings: [],
   risk: [],
   decisions: [],
-  tour: null,
+  flows: null,
   stops: null,
   stopsError: null,
   warnings: [],

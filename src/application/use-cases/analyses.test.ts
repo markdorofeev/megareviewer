@@ -16,8 +16,8 @@ import {
   pointsOf,
   type StageName,
   type StageStatus,
+  validateFlows,
   validateRiskCoverage,
-  validateTour,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
@@ -285,8 +285,8 @@ describe("the analysis pipeline", () => {
       ),
     );
     expect(analysis.decisions.map((decision) => decision.id)).toEqual(["d1", "d2", "d3"]);
-    expect(analysis.tour?.steps.map((step) => step.id)).toEqual(["s1", "s2"]);
-    expect(analysis.tour?.builtBy).toBe("code");
+    expect(analysis.flows?.steps.map((step) => step.id)).toEqual(["s1", "s2"]);
+    expect(analysis.flows?.builtBy).toBe("code");
     expect(analysis.warnings).toEqual([]);
     expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
     // The guardrail call after the passes, since the run has a finding.
@@ -354,7 +354,7 @@ describe("the analysis pipeline", () => {
     const analysis = await analyze(fixture);
     expect(analysis.status).toBe("complete");
     expect(validateRiskCoverage(analysis.risk, allHunkIds(analysis))).toEqual([]);
-    expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
+    expect(validateFlows(analysis.flows ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
   });
 
   it("proves every refactor-move hunk and still runs the passes with nothing to cover", async () => {
@@ -372,7 +372,7 @@ describe("the analysis pipeline", () => {
     ]);
     expect(analysis.risk.every((risk) => risk.source === "proof")).toBe(true);
     expect(analysis.risk).toHaveLength(4);
-    expect(analysis.tour).toEqual({ steps: [], builtBy: "code" });
+    expect(analysis.flows).toEqual({ steps: [], builtBy: "code" });
     expect(analysis.warnings).toEqual([
       "pnpm-lock.yaml changed without a change to package.json or pnpm-workspace.yaml",
     ]);
@@ -1039,19 +1039,19 @@ describe("the analysis pipeline", () => {
     });
   });
 
-  describe("tour", () => {
-    it("shows the code's tour from prep on, before the model passes", async () => {
+  describe("flows", () => {
+    it("shows the code's flows from prep on, before the model passes", async () => {
       const { analyze, store } = setup();
       await analyze();
       const afterPrep = store.saves.find((analysis) => analysis.stages.prep === "done");
       expect(afterPrep?.stages.intent).toBe("pending");
-      expect(afterPrep?.tour?.builtBy).toBe("code");
+      expect(afterPrep?.flows?.builtBy).toBe("code");
     });
 
-    it("keeps the code's tour: the model doesn't title it", async () => {
+    it("keeps the code's flows: the model doesn't title them", async () => {
       const withoutModel = await setup({ modelEnabled: false }).analyze();
       const analysis = await setup().analyze();
-      expect(analysis.tour).toEqual(withoutModel.tour);
+      expect(analysis.flows).toEqual(withoutModel.flows);
     });
   });
 
@@ -1152,7 +1152,7 @@ describe("starting analyses", () => {
   it("runs an analysis left running by an earlier process again", async () => {
     const { analyze, store, model } = setup();
     const complete = await analyze();
-    const interrupted: Analysis = { ...complete, status: "running", tour: null };
+    const interrupted: Analysis = { ...complete, status: "running", flows: null };
     const { analyze: analyzeAgain, store: otherStore } = setup({ model });
     await otherStore.saveAnalysis(interrupted);
     const again = await analyzeAgain();
@@ -1262,7 +1262,7 @@ describe("retryAnalysis", () => {
 });
 
 describe("without the model", () => {
-  it("completes after prep, with rule risk and the call-graph tour, and calls no model", async () => {
+  it("completes after prep, with rule risk and the call-graph flows, and calls no model", async () => {
     const { analyze, model, emitted } = setup({ modelEnabled: false });
     const analysis = await analyze();
 
@@ -1285,8 +1285,8 @@ describe("without the model", () => {
     expect(analysis.risk.map((risk) => [risk.hunkId, risk.source])).toEqual(
       smallFeatureHunks.map((hunkId) => [hunkId, "rule"]),
     );
-    expect(analysis.tour?.builtBy).toBe("code");
-    expect(validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
+    expect(analysis.flows?.builtBy).toBe("code");
+    expect(validateFlows(analysis.flows ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
     expect(emitted.at(-1)?.event).toEqual({ type: "done" });
   });
 
@@ -1304,7 +1304,7 @@ describe("without the model", () => {
         ),
       );
       expect(
-        validateTour(analysis.tour ?? { steps: [] }, requiredHunkIds(analysis), analysis.parts),
+        validateFlows(analysis.flows ?? { steps: [] }, requiredHunkIds(analysis), analysis.parts),
       ).toEqual([]);
       for (const hint of analysis.callGraph) {
         expect([known.has(hint.fromPartId), known.has(hint.toPartId)]).toEqual([true, true]);
@@ -1466,7 +1466,7 @@ describe("runModel", () => {
     expect(after.status).toBe("complete");
     expect(after.intent).not.toBeNull();
     expect(after.decisions).toHaveLength(3);
-    expect(after.tour?.builtBy).toBe("code");
+    expect(after.flows?.builtBy).toBe("code");
     expect(Object.values(after.stages)).toEqual([...Array(6).fill("done"), "skipped"]);
     expect(model.callsTo("intent")).toHaveLength(1);
   });

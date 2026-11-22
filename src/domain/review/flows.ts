@@ -1,16 +1,20 @@
 import { z } from "zod";
 import { PartId } from "../diff/index.ts";
 
-/** "s1", "s2", … in tour order. */
-export const TourStepId = z
+/** "s1", "s2", … in reading order: stored analyses have these IDs, so the format stays. */
+export const FlowId = z
   .string()
   .regex(/^s[1-9][0-9]*$/)
-  .brand<"TourStepId">();
-export type TourStepId = z.infer<typeof TourStepId>;
+  .brand<"FlowId">();
+export type FlowId = z.infer<typeof FlowId>;
 
-export const TourStep = z
+/**
+ * A flow from the call graph: an entry point a user or caller reaches and the changed code it runs,
+ * or a supporting step for changes no flow runs. The overview reads them for its order and labels.
+ */
+export const Flow = z
   .object({
-    id: TourStepId,
+    id: FlowId,
     title: z.string().min(1),
     explanation: z.string(),
     /** The parts the step reads, in order: a hunk that isn't split is one part. */
@@ -30,11 +34,12 @@ export const TourStep = z
     merged: z.array(z.object({ title: z.string(), reason: z.string() }).readonly()).readonly(),
   })
   .readonly();
-export type TourStep = z.infer<typeof TourStep>;
+export type Flow = z.infer<typeof Flow>;
 
-export const Tour = z
+/** The code's flows, in reading order: shared code first, then flows, then supporting steps. */
+export const Flows = z
   .object({
-    steps: z.array(TourStep).readonly(),
+    steps: z.array(Flow).readonly(),
     /**
      * Both are the code's steps from the call graph. code: with the code's titles. model: titled
      * by the tour pass, which may have merged supporting steps, on analyses stored before it was
@@ -43,4 +48,4 @@ export const Tour = z
     builtBy: z.enum(["model", "code"]),
   })
   .readonly();
-export type Tour = z.infer<typeof Tour>;
+export type Flows = z.infer<typeof Flows>;

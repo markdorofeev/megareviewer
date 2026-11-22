@@ -10,9 +10,9 @@ import {
   type AnalysisKey,
   analysisId,
   DecisionId,
+  FlowId,
   type PullRequest,
   type RiskAssessment,
-  TourStepId,
 } from "../../../src/domain/review/index.ts";
 import { fixtureAnalysisView } from "./analysis.ts";
 import { callSitesOf } from "./call-sites.ts";
@@ -189,9 +189,9 @@ export const syntheticAnalysisView = ({
         lines: null,
       },
     ],
-    tour: {
+    flows: {
       steps: directories.map((directory, at) => ({
-        id: TourStepId.parse(`s${at + 1}`),
+        id: FlowId.parse(`s${at + 1}`),
         title: directory === "" ? "Top level" : directory,
         explanation: `The functions of ${directory === "" ? "the top level" : directory}.`,
         partIds: files

@@ -257,7 +257,7 @@ const requestHints = (
   return [...first.values()].slice(0, MAX_HINTS_PER_HUNK);
 };
 
-/** Each part's changed definitions, innermost, by name: what the tour reads entry points from. */
+/** Each part's changed definitions, innermost, by name: what the flows read entry points from. */
 export const changedDefinitionNames = (
   files: readonly FileChange[],
   symbolsByPath: ReadonlyMap<string, FileSymbols>,

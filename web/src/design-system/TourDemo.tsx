@@ -12,7 +12,7 @@ const analysis = tourAnalysisView.analysis;
 /** The Understand layout on the fixture PR's tour, and the pieces it shows elsewhere. */
 export const TourDemo = () => {
   const tour = useMemo(
-    () => tourOf(analysis, fileOverview(analysis, analysis.tour?.steps ?? []), pointsOf(analysis)),
+    () => tourOf(analysis, fileOverview(analysis, analysis.flows?.steps ?? []), pointsOf(analysis)),
     [],
   );
   const found = (excerpt: TourExcerpt) =>

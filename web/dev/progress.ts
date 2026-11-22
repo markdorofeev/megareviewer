@@ -54,7 +54,7 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
         ? analysis.risk.filter((assessment) => assessment.source === "proof")
         : [],
     decisions: done("decisions") ? analysis.decisions : [],
-    tour: done("prep") ? analysis.tour : null,
+    flows: done("prep") ? analysis.flows : null,
     warnings: [],
     usage: analysis.usage.filter((usage) => usage.pass !== "guardrails" && done(usage.pass)),
     error: null,

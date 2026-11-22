@@ -10,9 +10,9 @@ import {
   Publication,
   PullRequest,
   Ticket,
+  validateFlows,
   validateHunkReferences,
   validateRiskCoverage,
-  validateTour,
 } from "../../../domain/review/index.ts";
 import {
   allFixtures,
@@ -104,10 +104,10 @@ describe("small-feature analysis", () => {
   });
 
   it("is a valid, complete analysis", () => {
-    const { tour, risk, decisions, intent, callGraph } = smallFeatureAnalysis;
+    const { flows, risk, decisions, intent, callGraph } = smallFeatureAnalysis;
 
     expect(Analysis.parse(smallFeatureAnalysis)).toEqual(smallFeatureAnalysis);
-    expect(tour && validateTour(tour, hunkIds)).toEqual([]);
+    expect(flows && validateFlows(flows, hunkIds)).toEqual([]);
     expect(validateRiskCoverage(risk, hunkIds)).toEqual([]);
     const referenced = [
       ...decisions.flatMap((decision) => decision.hunkIds),

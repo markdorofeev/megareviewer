@@ -4,6 +4,7 @@ import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fi
 import {
   byTreePath,
   changeTotals,
+  flowSteps,
   gapBetween,
   mapFiles,
   mechanicalCount,
@@ -11,7 +12,6 @@ import {
   partIndex,
   partsInPathOrder,
   pointPlaces,
-  tourSteps,
   trailingProofs,
 } from "./model.ts";
 import { formatCost, formatTokens, formatTotalCost } from "./UsageFooter.tsx";
@@ -47,22 +47,22 @@ describe("partIndex", () => {
   });
 });
 
-describe("tourSteps", () => {
-  it("is the tour when it covers every non-mechanical hunk", () => {
-    expect(tourSteps(analysis, partIndex(analysis))).toBe(analysis.tour?.steps);
+describe("flowSteps", () => {
+  it("is the flows when they cover every non-mechanical hunk", () => {
+    expect(flowSteps(analysis, partIndex(analysis))).toBe(analysis.flows?.steps);
   });
 
-  it("adds a step for non-mechanical hunks the tour misses, so none goes unshown", () => {
-    const steps = analysis.tour?.steps ?? [];
+  it("adds a step for non-mechanical hunks the flows miss, so none goes unshown", () => {
+    const steps = analysis.flows?.steps ?? [];
     const partial: Analysis = {
       ...analysis,
-      tour: { steps: steps.slice(0, 2), builtBy: "model" },
+      flows: { steps: steps.slice(0, 2), builtBy: "model" },
     };
-    const result = tourSteps(partial, partIndex(partial));
+    const result = flowSteps(partial, partIndex(partial));
     expect(result).toHaveLength(3);
     expect(result[2]).toMatchObject({
       id: "s3",
-      title: "Changes the tour left out",
+      title: "Changes the flows left out",
       partIds: [h.receiptFormatting, h.dependency],
     });
   });

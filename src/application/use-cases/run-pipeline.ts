@@ -4,7 +4,7 @@ import {
   type AnalysisError,
   type BeforeModel,
   classifyByRules,
-  codeTour,
+  codeFlows,
   type FilesFetched,
   joinParts,
   keepBeforeModel,
@@ -148,7 +148,7 @@ const adding =
     modelCalls: [...analysis.modelCalls, ...(added.modelCalls ?? [])],
   });
 
-/** What the code alone makes of a collected PR: proofs, risk from rules, and the code's tour. */
+/** What the code alone makes of a collected PR: proofs, risk from rules, and the code's flows. */
 const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt | null) => {
   const prepared = await prep(deps.parser, collected, checkout);
   const {
@@ -176,9 +176,9 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
         ],
   );
   const ruleRisk = classifyByRules(collected.files, new Set(proofRisk.map((risk) => risk.hunkId)));
-  // The tour is the code's with or without the model, ordered by the rules' risk; the model
+  // The flows are the code's with or without the model, ordered by the rules' risk; the model
   // only titles it.
-  const skeleton = codeTour({
+  const skeleton = codeFlows({
     files: collected.files,
     required,
     parts,

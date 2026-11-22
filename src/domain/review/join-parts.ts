@@ -9,10 +9,10 @@ import {
   renameHints,
   type UnchangedCallers,
 } from "../diff/index.ts";
-import type { Tour } from "./tour.ts";
+import type { Flows } from "./flows.ts";
 
 export interface JoinedParts {
-  readonly tour: Tour;
+  readonly flows: Flows;
   /** The parts left, of the hunks still split. */
   readonly parts: readonly HunkPart[];
   readonly callGraph: readonly CallGraphHint[];
@@ -21,18 +21,18 @@ export interface JoinedParts {
 }
 
 /**
- * Joins consecutive candidate parts of a hunk that the tour put in one step, and makes a hunk whole
+ * Joins consecutive candidate parts of a hunk that the flows put in one step, and makes a hunk whole
  * again when all of its parts did. Parts left are renumbered, and everything naming them remapped.
  */
 export const joinParts = (
-  tour: Tour,
+  flows: Flows,
   candidates: readonly HunkPart[],
   callGraph: readonly CallGraphHint[],
   unchangedCallers: readonly UnchangedCallers[] = [],
   callSites: readonly CallSite[] = [],
 ): JoinedParts => {
   const stepOf = new Map<PartId, number>();
-  tour.steps.forEach((step, at) => {
+  flows.steps.forEach((step, at) => {
     for (const id of step.partIds) if (!stepOf.has(id)) stepOf.set(id, at);
   });
   const rename = new Map<PartId, PartId>();
@@ -66,9 +66,9 @@ export const joinParts = (
   const renamed = (id: PartId): PartId => rename.get(id) ?? id;
   const each = (ids: readonly PartId[]): PartId[] => [...new Set(ids.map(renamed))];
   return {
-    tour: {
-      ...tour,
-      steps: tour.steps.map((step) => ({
+    flows: {
+      ...flows,
+      steps: flows.steps.map((step) => ({
         ...step,
         partIds: each(step.partIds),
         via: each(step.via),

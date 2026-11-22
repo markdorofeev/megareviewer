@@ -75,13 +75,13 @@ import { ModelCalls } from "./ModelCalls.tsx";
 import {
   changeTotals,
   commentsInParts,
+  flowSteps,
   type Layout,
   mapFiles,
   mechanicalCount,
   parseLayout,
   partIndex,
   pointPlaces,
-  tourSteps,
   trailingProofs,
 } from "./model.ts";
 import { useModelChoice } from "./model-choice.ts";
@@ -364,7 +364,7 @@ const Review = ({
   const readOnly = publication !== null || !complete;
 
   const index = useMemo(() => partIndex(analysis), [analysis]);
-  const steps = useMemo(() => tourSteps(analysis, index), [analysis, index]);
+  const steps = useMemo(() => flowSteps(analysis, index), [analysis, index]);
   const files = useMemo(() => mapFiles(analysis, index), [analysis, index]);
   const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);

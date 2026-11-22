@@ -147,3 +147,14 @@ describe("the stops pass", () => {
     expect(removed.stopsError).toBeNull();
   });
 });
+
+describe("the code's flows", () => {
+  it("load from an analysis stored with them under `tour`, steps and IDs intact", () => {
+    const { flows, ...rest } = smallFeatureAnalysis;
+    const stored = JSON.parse(JSON.stringify({ ...rest, tour: flows }));
+    const parsed = Analysis.parse(stored);
+    expect(parsed.flows).toEqual(flows);
+    expect(parsed.flows?.steps.map((step) => step.id)).toEqual(flows?.steps.map((step) => step.id));
+    expect(parsed).not.toHaveProperty("tour");
+  });
+});

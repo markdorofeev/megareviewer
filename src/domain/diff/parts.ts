@@ -188,7 +188,7 @@ export const partHunk = (hunk: Hunk, part: Pick<HunkPart, "start" | "end">): Hun
   };
 };
 
-/** A hunk, or a part of a split one, with its own lines: what hints and the tour are built on. */
+/** A hunk, or a part of a split one, with its own lines: what hints and the flows are built on. */
 export interface Piece {
   readonly id: PartId;
   /** The part's lines as a hunk, which keeps the hunk's ID. */
