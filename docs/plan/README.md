@@ -256,7 +256,7 @@ Between the brief's three lines and the files, nothing says what happens and in 
 
 | # | Stage | Depends on | Owns |
 |---|---|---|---|
-| 64 | [A tour of the PR, behind a switch](63-tour.md) | 27, 45, 50, 56, 61 | The `steps` pass and its checks, the Understand layout, the Display menu's switches, the steps' eval scores |
+| 64 | [A tour of the PR, behind a switch](64-tour.md) | 27, 45, 50, 56, 61 | The `steps` pass and its checks, the Understand layout, the Display menu's switches, the steps' eval scores |
 
 ## How to pick up a stage
 
