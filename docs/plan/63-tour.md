@@ -135,4 +135,4 @@ Each part is one commit that passes `pnpm check`.
 
 ## Notes for later stages
 
-None yet.
+- **The union check (part 2), 2026-11-22.** Claude Code 2.1.303 on Haiku 5.5 took the five-variant schema with `--json-schema` and answered `{"answer":{"pass":"stops","stops":[]}}`. The Anthropic API refused it with 400 `invalid_request_error`: "The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools." It refuses today's four-variant schema the same way, on Haiku 5.5 and Sonnet 5.5, and so it refuses the real `passRequest` for the intent pass on small-feature without the tour (4,437 bytes of schema; the five are 5,003). So the API transport can't run any pass now, with or without the tour, and the stops variant isn't what broke it. `evals/union-check.ts` repeats the check.

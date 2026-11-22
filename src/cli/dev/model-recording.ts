@@ -14,6 +14,7 @@ import {
   type ModelErrorKind,
   type ModelPass,
   ModelUsage,
+  StopDraft,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 
@@ -39,6 +40,8 @@ export const ModelRecording = z
       findings: RecordedPass,
       risk: RecordedPass,
       decisions: RecordedPass,
+      /** Recordings made before the stops pass have none; a replay then writes no tour. */
+      stops: RecordedPass.optional(),
     }),
   })
   .readonly();
@@ -134,6 +137,7 @@ export const createReplayAnalysisModel = (
     invalid: () => unknown,
   ): Promise<Result<PassOutput<T>, ModelError>> => {
     const recorded = recording.passes[pass];
+    if (recorded === undefined) throw new Error(`No ${pass} pass recorded`);
     // A replay has no cache to wait for.
     passOptions?.onAnswering?.();
     await sleep(recorded.durationMs * speed);
@@ -199,5 +203,25 @@ export const createReplayAnalysisModel = (
           hunkIds: ["h_ffffffffffffffff"],
         })),
       ),
+    stops: async (_input, passOptions) =>
+      recording.passes.stops === undefined
+        ? ok({
+            value: [],
+            usage: {
+              pass: "stops",
+              inputTokens: 0,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 0,
+              outputTokens: 0,
+              costUsd: 0,
+              billing: recording.passes.intent.usage.billing,
+            },
+          })
+        : play(
+            "stops",
+            passOptions,
+            (answer) => parsed(z.array(StopDraft), answer, "stops"),
+            () => [],
+          ),
   };
 };

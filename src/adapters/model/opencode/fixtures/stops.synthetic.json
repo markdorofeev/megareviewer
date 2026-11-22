@@ -1,0 +1,66 @@
+{
+ "data": [
+  {
+   "id": "msg_1da8a3ffa001E4MDXgmQY3Kiij",
+   "time": {
+    "created": 1794667855866
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1da89ff590015pQ1lVzX2wA85X",
+   "time": {
+    "created": 1794667839323,
+    "firstToken": 1794667840006,
+    "streamed": 1794667855861,
+    "completed": 1794667855863
+   },
+   "type": "assistant",
+   "agent": "megareviewer",
+   "model": {
+    "id": "claude-haiku-5-5",
+    "providerID": "anthropic",
+    "variant": "high"
+   },
+   "content": [
+    {
+     "type": "reasoning",
+     "text": "Following the receipt route into the receipt code.",
+     "time": {
+      "created": 1794667840007,
+      "completed": 1794667854745
+     }
+    },
+    {
+     "type": "text",
+     "text": "{\"answer\":{\"pass\":\"stops\",\"stops\":[{\"sentence\":\"`GET /orders/:id/receipt` sends the user's own order's receipt as plain text, or a 404\",\"excerpts\":[{\"hunkId\":\"h_5c94b39812b2e8f8\",\"side\":\"new\",\"startLine\":33,\"line\":40}]},{\"sentence\":\"`renderReceipt` serves a cached receipt for an hour before rendering it again\",\"excerpts\":[{\"hunkId\":\"h_a2e0236601ffc778\",\"side\":\"new\",\"startLine\":8,\"line\":19}]},{\"sentence\":\"The app config adds a receipt currency and footer\",\"excerpts\":[{\"hunkId\":\"h_3822ea0f7192c70e\",\"side\":\"new\",\"startLine\":31,\"line\":35}]}]}}"
+    }
+   ],
+   "finish": "stop",
+   "rawFinish": "end_turn",
+   "cost": 0.00197687,
+   "tokens": {
+    "input": 4,
+    "output": 633,
+    "reasoning": 2992,
+    "cache": {
+     "read": 4597,
+     "write": 944
+    }
+   }
+  },
+  {
+   "id": "msg_1da89ff51001IqeBPJ4PLDmlxj",
+   "time": {
+    "created": 1794667839317
+   },
+   "text": "Task: stops.",
+   "type": "user"
+  }
+ ],
+ "cursor": {
+  "previous": "eyJpZCI6Im1zZ18xZGE4YTNmZmEwMDFFNE1EWGdtUVkzS2lpaiIsIm9yZGVyIjoiZGVzYyIsImRpcmVjdGlvbiI6InByZXZpb3VzIn0",
+  "next": "eyJpZCI6Im1zZ18xZGE4OWZmNTEwMDFJcWVCUEo0UExEbWx4aiIsIm9yZGVyIjoiZGVzYyIsImRpcmVjdGlvbiI6Im5leHQifQ"
+ }
+}

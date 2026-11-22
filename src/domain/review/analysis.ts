@@ -55,7 +55,7 @@ export const AnalysisKey = z
   .readonly();
 export type AnalysisKey = z.infer<typeof AnalysisKey>;
 
-export const ModelPass = z.enum(["intent", "findings", "risk", "decisions"]);
+export const ModelPass = z.enum(["intent", "findings", "risk", "decisions", "stops"]);
 export type ModelPass = z.infer<typeof ModelPass>;
 
 /** What a model call of a run was: one of the passes, or the guardrail call after them. */

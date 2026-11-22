@@ -57,6 +57,7 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
         renderInput(input),
         passMessage(pass, intent, passOptions?.feedback),
         model,
+        passOptions?.tour,
       );
       logger.debug("Model pass started", {
         pass,

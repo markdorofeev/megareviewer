@@ -115,6 +115,7 @@ export const createCodexAnalysisModel = (options: CodexAnalysisModelOptions): An
         {
           ...(options.efforts === undefined ? {} : { efforts: options.efforts }),
           ...(effort === undefined ? {} : { effort }),
+          ...(passOptions?.tour === true ? { tour: true } : {}),
         },
       );
       logger.debug("Model pass started", {

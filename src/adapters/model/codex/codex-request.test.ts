@@ -1,20 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
-import { ModelPass } from "../../../domain/review/index.ts";
+import { MODEL_STAGES, ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import { codexRequest, DISABLED_FEATURES, INSTRUCTIONS_FILE } from "./codex-request.ts";
 import { codexEffort } from "./models.ts";
-import { CODEX_FINGERPRINT, CODEX_PROMPT_VERSION, codexVersion } from "./version.ts";
+import {
+  CODEX_FINGERPRINT,
+  CODEX_PROMPT_VERSION,
+  CODEX_TOUR_FINGERPRINT,
+  codexVersion,
+} from "./version.ts";
 
-const requests = (model = "gpt-6-luna") =>
-  ModelPass.options.map((pass) =>
+/** The review's four passes, or with the tour every pass, the stops pass among them. */
+const requests = (model = "gpt-6-luna", tour = false) =>
+  (tour ? ModelPass.options : MODEL_STAGES).map((pass) =>
     codexRequest(
       pass,
       renderInput(smallFeatureInput),
       passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"]),
       model,
+      tour ? { tour } : {},
     ),
   );
 
@@ -61,9 +68,7 @@ describe("codexRequest", () => {
       request.args("/tmp/run").filter((arg) => !arg.startsWith("model_reasoning_effort=")),
     );
     expect(new Set(withoutEffort.map((args) => JSON.stringify(args))).size).toBe(1);
-    expect(all.map((request) => /^Task: (\w+)/m.exec(request.stdin)?.[1])).toEqual(
-      ModelPass.options,
-    );
+    expect(all.map((request) => /^Task: (\w+)/m.exec(request.stdin)?.[1])).toEqual(MODEL_STAGES);
   });
 });
 
@@ -86,6 +91,22 @@ describe("prompt version", () => {
       `The prompts or arguments changed. Bump CODEX_PROMPT_VERSION in version.ts (now ` +
         `${CODEX_PROMPT_VERSION}) and set CODEX_FINGERPRINT to "${current}".`,
     ).toBe(CODEX_FINGERPRINT);
+  });
+
+  it("is bumped whenever a run with the tour changes its requests", () => {
+    const current = fnv1a64(
+      JSON.stringify(
+        requests("gpt-6-luna", true).map((request) => ({
+          ...request,
+          args: request.args("/tmp/run"),
+        })),
+      ),
+    );
+    expect(
+      current,
+      `A run with the tour changed its requests. Bump CODEX_PROMPT_VERSION in version.ts (now ` +
+        `${CODEX_PROMPT_VERSION}) and set CODEX_TOUR_FINGERPRINT to "${current}".`,
+    ).toBe(CODEX_TOUR_FINGERPRINT);
   });
 
   it("names the model, and an effort for every pass", () => {

@@ -97,7 +97,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     getAnalysis: ({ params }) => useCases.getAnalysisView(params.id),
     getFileContent: ({ params }) => useCases.getFileContent(params.id, params.side, params.path),
     retryAnalysis: ({ params }) => useCases.retryAnalysis(params.id),
-    runModel: ({ params, body }) => useCases.runModel(params.id, body?.optionId),
+    runModel: ({ params, body }) => useCases.runModel(params.id, body?.optionId, body?.tour),
     removeModelRun: ({ params }) => useCases.removeModelRun(params.id),
     putPointState: ({ params, body }) =>
       useCases.recordPointState(params.id, params.pointId, body.state),

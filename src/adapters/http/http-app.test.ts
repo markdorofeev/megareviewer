@@ -1111,6 +1111,30 @@ describe("GET /api/analyses/:id/attachment", () => {
   });
 });
 
+describe("POST /api/analyses/:id/model", () => {
+  it("runs the stops pass only when the body asks for the tour", async () => {
+    for (const tour of [undefined, true]) {
+      const model = new GatedModel();
+      const { call, complete, events } = setupApp({ model });
+      const started = await call("startAnalysis", { body: { url: smallFeature.pullRequest.url } });
+      const analysisId = AnalysisId.parse(started.body?.analysisId ?? "");
+      await complete(analysisId);
+      const ended = new Promise<void>((resolve) => {
+        events.subscribe(analysisId, (event) => {
+          if (event.type === "done") resolve();
+        });
+      });
+      await call("runModel", {
+        params: { id: analysisId },
+        ...(tour === undefined ? {} : { body: { tour } }),
+      });
+      model.release();
+      await ended;
+      expect(model.callsTo("stops")).toHaveLength(tour === true ? 1 : 0);
+    }
+  });
+});
+
 describe("GET /api/analyses/:id/events", () => {
   it("forwards a running analysis's events in order, then done", async () => {
     const model = new GatedModel();

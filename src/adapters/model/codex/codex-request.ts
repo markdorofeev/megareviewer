@@ -2,7 +2,7 @@ import { join } from "node:path";
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
 import type { OneCall } from "../shared/one-call.ts";
-import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { PASS_ANSWER_FORMAT, passAnswerFormat } from "../shared/output-schema.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 import { codexEffort } from "./models.ts";
 
@@ -98,6 +98,8 @@ export const codexRequest = (
     readonly efforts?: readonly string[];
     /** One for every pass, only to measure it, as the evals' --effort does. */
     readonly effort?: Effort;
+    /** The run asked for the tour: the schema has the stops pass's variant. */
+    readonly tour?: boolean;
   } = {},
 ): CodexRequest => {
   const effort = codexEffort(options.efforts ?? [], options.effort ?? PASS_EFFORT[pass]);
@@ -105,7 +107,7 @@ export const codexRequest = (
     args: (dir) => codexArgs(model, effort, dir),
     files: {
       [INSTRUCTIONS_FILE]: codexInstructions(renderedInput),
-      [SCHEMA_FILE]: JSON.stringify(PASS_ANSWER_FORMAT.schema),
+      [SCHEMA_FILE]: JSON.stringify(passAnswerFormat(options.tour).schema),
     },
     dirs: [WORK_DIR],
     stdin: message,

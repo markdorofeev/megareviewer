@@ -13,6 +13,7 @@ const PASS_NAMES: Readonly<Record<ModelCallName, string>> = {
   risk: "Risk",
   decisions: "Decisions",
   guardrails: "Guardrails",
+  stops: "Tour",
 };
 
 /** "182k" for counts in the thousands, so the totals read at a glance. */

@@ -7,6 +7,8 @@ import { MODEL } from "./request.ts";
  */
 export const PROMPT_VERSION = 15;
 export const PROMPT_FINGERPRINT = "31e4322926af2bfe";
+/** The same, of a run that asks for the tour: every pass, with the stops pass's variant in the schema. */
+export const TOUR_FINGERPRINT = "70a5b1ffeb343d1e";
 
 export const apiVersion = (model: string): string => `${model}/p${PROMPT_VERSION}`;
 
@@ -19,6 +21,7 @@ export const VERSION = apiVersion(MODEL);
  */
 export const CLAUDE_CODE_PROMPT_VERSION = 13;
 export const CLAUDE_CODE_FINGERPRINT = "3772d089a53898a6";
+export const CLAUDE_CODE_TOUR_FINGERPRINT = "469f50267f1a6031";
 
 /** An effort for every pass, in place of each pass's own, is named after the model. */
 export const claudeCodeVersion = (model: string, effort?: string): string =>

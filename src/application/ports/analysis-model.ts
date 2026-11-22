@@ -17,6 +17,7 @@ import {
   type ModelUsage,
   PointLines,
   type PreferenceKind,
+  type StopDraft,
   type Ticket,
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
@@ -90,6 +91,11 @@ export interface PassOptions {
    * the prompt cache. A transport that can't tell doesn't call it.
    */
   readonly onAnswering?: () => void;
+  /**
+   * The run asked for the tour. Every pass of such a run answers through the schema that has the
+   * stops pass's variant too, so that they share one cache; a run without the tour sends the four.
+   */
+  readonly tour?: boolean;
 }
 
 // Output schemas of the passes whose shape isn't a domain type as is. Model output is untrusted
@@ -152,4 +158,9 @@ export interface AnalysisModel {
     input: AnalysisInput,
     options?: PassOptions,
   ): Promise<Result<PassOutput<DecisionDraft[]>, ModelError>>;
+  /** The page's tour, in call order; only a run that asks for the tour calls it. */
+  stops(
+    input: AnalysisInput,
+    options?: PassOptions,
+  ): Promise<Result<PassOutput<StopDraft[]>, ModelError>>;
 }

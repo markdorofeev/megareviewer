@@ -14,6 +14,7 @@ import {
   modelFamily,
   type PullRequest,
   raiseByRules,
+  STOPS_STAGE,
   type StageName,
   type StageStatus,
 } from "../../domain/review/index.ts";
@@ -25,7 +26,14 @@ import type { UseCaseError } from "./errors.ts";
 import { askable, type GuardrailCall, runGuardrailCall } from "./guardrails.ts";
 import { runGuidance } from "./guidance.ts";
 import { buildAnalysisInput, fitToModel } from "./model-input.ts";
-import { runDecisions, runFindings, runIntent, runRisk } from "./model-passes.ts";
+import {
+  askingForTour,
+  runDecisions,
+  runFindings,
+  runIntent,
+  runRisk,
+  runStops,
+} from "./model-passes.ts";
 import { prep } from "./prep.ts";
 import type { CheckoutAt } from "./unchanged-callers.ts";
 
@@ -275,8 +283,9 @@ const codeStages = async (
  * Runs the model's passes on a complete analysis, side by side, adding intent, findings, decisions
  * and the model's risk to it. Collects and preps again from the stored PR first: files come from
  * the file cache, and prep is deterministic. The passes read the reviewer's preferences and the
- * repository's guideline files, which the analysis keeps as the run's guidance. A failure is the
- * analysis's `modelError`; its status stays complete. Never throws.
+ * repository's guideline files, which the analysis keeps as the run's guidance. A run that asks for
+ * the tour runs the stops pass beside them. A failure of the four is the analysis's `modelError`,
+ * and the stops pass's is its `stopsError`; its status stays complete. Never throws.
  */
 export const runModel = async (
   deps: AppDeps,
@@ -288,6 +297,7 @@ export const runModel = async (
     readonly option: ModelRunOption;
     /** The option's guardrail call; null when its provider can't make it. */
     readonly advisor: GuardrailAdvisor | null;
+    readonly tour?: boolean;
   },
   checkout: CheckoutAt | null = null,
 ): Promise<void> => {
@@ -299,9 +309,22 @@ export const runModel = async (
       modelOption: run.option,
       guidance: null,
       guardrails: null,
-      stages: { ...mapModelStages(current.stages, () => "pending"), stops: "skipped" },
+      stops: null,
+      stopsError: null,
+      stages: {
+        ...mapModelStages(current.stages, () => "pending"),
+        stops: run.tour === true ? "pending" : "skipped",
+      },
     }));
-    await modelStages(deps, run, host, pullRequest, checkout, tracker);
+    await modelStages(
+      deps,
+      { model: run.tour === true ? askingForTour(run.model) : run.model, advisor: run.advisor },
+      run.tour === true,
+      host,
+      pullRequest,
+      checkout,
+      tracker,
+    );
   } catch (error) {
     deps.logger.error("The model run crashed", { analysisId: analysis.id, error });
     await tracker.failModel(tracker.lastStage, {
@@ -317,6 +340,7 @@ const noProgress: OnFilesFetched = async () => {};
 const modelStages = async (
   deps: AppDeps,
   { model, advisor }: { readonly model: AnalysisModel; readonly advisor: GuardrailAdvisor | null },
+  tour: boolean,
   host: GitHost,
   pullRequest: PullRequest,
   checkout: CheckoutAt | null,
@@ -369,6 +393,7 @@ const modelStages = async (
     };
 
   for (const stage of MODEL_STAGES) await tracker.setStage(stage, "running");
+  if (tour) await tracker.setStage(STOPS_STAGE, "running");
   // The intent pass writes the PR to the prompt cache; risk and decisions start once it's there, to
   // read it rather than each write it again. A transport that can't tell starts them at its end.
   const { promise: cached, resolve: cacheWritten } = Promise.withResolvers<void>();
@@ -432,6 +457,36 @@ const modelStages = async (
       );
       return result.outcome;
     }),
+    // The tour is optional to the run: its failure is its own, never the run's.
+    tour
+      ? runStops(
+          model,
+          input,
+          {
+            hunks,
+            mechanical: new Set(prepared.proofs.flatMap((proof) => proof.hunkId ?? [])),
+            parts: prepared.parts,
+            callGraph: prepared.callGraph,
+          },
+          deps,
+        ).then(async (result) => {
+          await tracker.setStage(
+            STOPS_STAGE,
+            result.outcome.ok ? "done" : "failed",
+            (analysis) => ({
+              stops: result.outcome.ok ? result.outcome.value : [],
+              stopsError: result.outcome.ok
+                ? null
+                : {
+                    stage: STOPS_STAGE,
+                    code: "model-error",
+                    message: result.outcome.error.message,
+                  },
+              ...adding(result)(analysis),
+            }),
+          );
+        })
+      : null,
   ]);
   // What finished stays; the first failure is the run's error.
   const failure = [

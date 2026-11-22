@@ -50,6 +50,7 @@ const capturingModel = (onInput: (input: AnalysisInput) => void): AnalysisModel 
     findings: fail,
     risk: fail,
     decisions: fail,
+    stops: fail,
   };
 };
 

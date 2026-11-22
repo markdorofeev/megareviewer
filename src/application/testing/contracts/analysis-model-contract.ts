@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Intent, ModelUsage, validateFindings } from "../../../domain/review/index.ts";
+import {
+  Intent,
+  ModelUsage,
+  StopDraft,
+  validateFindings,
+  validateStops,
+} from "../../../domain/review/index.ts";
 import {
   type AnalysisModel,
   DecisionDraft,
@@ -70,6 +76,22 @@ export const describeAnalysisModelContract = (
 
       for (const item of result.value.value) expect(DecisionDraft.parse(item)).toEqual(item);
       expectUsage(result.value, "decisions");
+    });
+
+    it("returns stops on lines of the PR's hunks sent in full, in call order", async () => {
+      const result = await model.stops(smallFeatureInput, { tour: true });
+      if (!result.ok) throw new Error(`stops failed: ${result.error.message}`);
+
+      for (const item of result.value.value) expect(StopDraft.parse(item)).toEqual(item);
+      const hunks = new Map(
+        smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
+      );
+      const mechanical = new Set(
+        smallFeatureInput.files.flatMap((file) => file.mechanicalHunks.map((hunk) => hunk.hunkId)),
+      );
+      const context = { hunks, mechanical, parts: [], callGraph: smallFeatureInput.callGraph };
+      expect(validateStops(result.value.value, context)).toEqual([]);
+      expectUsage(result.value, "stops");
     });
   });
 };

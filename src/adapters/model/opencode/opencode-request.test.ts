@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
-import { ModelPass } from "../../../domain/review/index.ts";
+import { MODEL_STAGES, ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { PassAnswer } from "../shared/output-schema.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
@@ -15,12 +15,18 @@ import {
   prEntry,
   variantFor,
 } from "./opencode-request.ts";
-import { OPENCODE_FINGERPRINT, OPENCODE_PROMPT_VERSION, opencodeVersion } from "./version.ts";
+import {
+  OPENCODE_FINGERPRINT,
+  OPENCODE_PROMPT_VERSION,
+  OPENCODE_TOUR_FINGERPRINT,
+  opencodeVersion,
+} from "./version.ts";
 
 const haiku = { providerID: "anthropic", id: "claude-haiku-5-5" };
 
-const requests = () =>
-  ModelPass.options.map((pass) =>
+/** The review's four passes, or every pass, the stops pass among them. */
+const requests = (passes: readonly ModelPass[] = MODEL_STAGES) =>
+  passes.map((pass) =>
     opencodeRequest(
       pass,
       renderInput(smallFeatureInput),
@@ -43,7 +49,7 @@ describe("opencodeRequest", () => {
 
   it("ends each pass's prompt with the schema of its own answer only", () => {
     for (const [index, pass] of ModelPass.options.entries()) {
-      const prompt = requests()[index]?.prompt ?? "";
+      const prompt = requests(ModelPass.options)[index]?.prompt ?? "";
       expect(prompt).toContain(`Task: ${pass}.`);
       expect(prompt).toMatch(/Answer with one JSON object and nothing else/);
       expect(prompt.endsWith(JSON.stringify(passSchema(pass)))).toBe(true);
@@ -135,6 +141,15 @@ describe("prompt version", () => {
       `The prompts or requests changed. Bump OPENCODE_PROMPT_VERSION in version.ts (now ` +
         `${OPENCODE_PROMPT_VERSION}) and set OPENCODE_FINGERPRINT to "${current}".`,
     ).toBe(OPENCODE_FINGERPRINT);
+  });
+
+  it("is bumped whenever the stops pass's request changes", () => {
+    const current = fnv1a64(JSON.stringify(requests(["stops"])));
+    expect(
+      current,
+      `The stops pass's request changed. Bump OPENCODE_PROMPT_VERSION in version.ts (now ` +
+        `${OPENCODE_PROMPT_VERSION}) and set OPENCODE_TOUR_FINGERPRINT to "${current}".`,
+    ).toBe(OPENCODE_TOUR_FINGERPRINT);
   });
 
   it("names the provider and model, and an effort for every pass", () => {

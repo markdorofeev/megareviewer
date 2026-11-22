@@ -1,4 +1,10 @@
-import type { Intent, ModelError, ModelPass, ModelUsage } from "../../domain/review/index.ts";
+import type {
+  Intent,
+  ModelError,
+  ModelPass,
+  ModelUsage,
+  StopDraft,
+} from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type {
   AnalysisInput,
@@ -15,6 +21,7 @@ export interface PassValues {
   findings: FindingDraft[];
   risk: ModelRisk[];
   decisions: DecisionDraft[];
+  stops: StopDraft[];
 }
 
 /** A scripted answer to one pass call: a value (valid or not) or an error. */
@@ -46,6 +53,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     findings: [],
     risk: [],
     decisions: [],
+    stops: [],
   };
 
   constructor(options: { version?: string; maxInputTokens?: number } = {}) {
@@ -155,6 +163,14 @@ export class FakeAnalysisModel implements AnalysisModel {
         lines: null,
       })),
     );
+  }
+
+  /** Derives no tour: a fake can't follow calls. Tests script the stops they need. */
+  async stops(
+    input: AnalysisInput,
+    options?: PassOptions,
+  ): Promise<Result<PassOutput<StopDraft[]>, ModelError>> {
+    return this.answer("stops", input, options, () => []);
   }
 
   private async answer<P extends ModelPass>(

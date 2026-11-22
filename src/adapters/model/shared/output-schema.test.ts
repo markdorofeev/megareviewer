@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { PASS_ANSWER_FORMAT, PassAnswer, toStrictJsonSchema } from "./output-schema.ts";
+import {
+  PASS_ANSWER_FORMAT,
+  PassAnswer,
+  passAnswerFormat,
+  TOUR_PASS_ANSWER_FORMAT,
+  toStrictJsonSchema,
+} from "./output-schema.ts";
 
 /** Every object schema inside `schema`, at any depth. */
 const objects = (schema: unknown): Record<string, unknown>[] => {
@@ -125,5 +131,48 @@ describe("toStrictJsonSchema", () => {
       required: ["ref"],
       additionalProperties: false,
     });
+  });
+});
+
+describe("the answer format of a run with the tour", () => {
+  const json = JSON.stringify(TOUR_PASS_ANSWER_FORMAT.schema);
+
+  it("adds the stops pass's variant after the four, which it leaves as they were", () => {
+    expect(json.match(/"const":"(intent|findings|risk|decisions|stops)"/g)).toEqual([
+      '"const":"intent"',
+      '"const":"findings"',
+      '"const":"risk"',
+      '"const":"decisions"',
+      '"const":"stops"',
+    ]);
+    const variants = (schema: unknown): unknown[] => {
+      const answer =
+        isObject(schema) && isObject(schema.properties) ? schema.properties.answer : null;
+      return isObject(answer) && Array.isArray(answer.anyOf) ? answer.anyOf : [];
+    };
+    expect(variants(TOUR_PASS_ANSWER_FORMAT.schema).slice(0, 4)).toEqual(
+      variants(PASS_ANSWER_FORMAT.schema),
+    );
+  });
+
+  it("is sent only when the run asks for the tour", () => {
+    expect(passAnswerFormat(undefined)).toBe(PASS_ANSWER_FORMAT);
+    expect(passAnswerFormat(false)).toBe(PASS_ANSWER_FORMAT);
+    expect(passAnswerFormat(true)).toBe(TOUR_PASS_ANSWER_FORMAT);
+  });
+
+  it("parses a stops answer, and every answer of the four", () => {
+    const stop = {
+      sentence: "A token is saved",
+      excerpts: [{ hunkId: "h_0123456789abcdef", side: "new", startLine: 1, line: 4 }],
+    };
+    expect(PassAnswer.parse({ answer: { pass: "stops", stops: [stop] } }).answer).toEqual({
+      pass: "stops",
+      stops: [stop],
+    });
+    expect(
+      PassAnswer.safeParse({ answer: { pass: "stops", stops: [{ ...stop, excerpts: [] }] } })
+        .success,
+    ).toBe(false);
   });
 });

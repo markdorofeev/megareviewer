@@ -1,6 +1,6 @@
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
-import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { PASS_ANSWER_FORMAT, passAnswerFormat } from "../shared/output-schema.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 import { claudeModel, effortFor } from "./models.ts";
 import { MODEL } from "./request.ts";
@@ -107,18 +107,22 @@ export const structuredCallRequest = (call: StructuredCall): ClaudeCodeRequest =
   stdin: call.message,
 });
 
-/** Everything but the effort is the same for every pass, so later passes read the cache. */
+/**
+ * Everything but the effort is the same for every pass of a run, so later passes read the cache.
+ * `tour`: the run asked for the tour, so every pass sends the schema with the stops pass's variant.
+ */
 export const passCall = (
   pass: ModelPass,
   renderedInput: string,
   message: string,
   model: string = MODEL,
   effort?: Effort,
+  tour = false,
 ): StructuredCall => ({
   model,
   effort: effort ?? effortFor(claudeModel(model), PASS_EFFORT[pass]),
   systemPrompt: claudeCodeSystemPrompt(renderedInput),
-  schema: PASS_ANSWER_FORMAT.schema,
+  schema: passAnswerFormat(tour).schema,
   message,
 });
 
@@ -134,4 +138,6 @@ export const claudeCodeRequest = (
   renderedInput: string,
   message: string,
   model: string = MODEL,
-): ClaudeCodeRequest => structuredCallRequest(passCall(pass, renderedInput, message, model));
+  tour = false,
+): ClaudeCodeRequest =>
+  structuredCallRequest(passCall(pass, renderedInput, message, model, undefined, tour));

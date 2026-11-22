@@ -12,18 +12,24 @@ import {
   type Guidance,
   type GuidanceMark,
   type Intent,
+  keptStops,
+  MIN_STOPS,
   type ModelCall,
   type ModelError,
   type ModelPass,
   type ModelUsage,
   pointLinesFit,
   type RiskAssessment,
+  type Stop,
+  type StopContext,
+  type StopProblem,
   strippable,
   validateFindings,
   validateHunkReferences,
   validateRiskCoverage,
+  validateStops,
 } from "../../domain/review/index.ts";
-import { ok, type Result } from "../../domain/shared/index.ts";
+import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type {
   AnalysisInput,
   AnalysisModel,
@@ -379,4 +385,78 @@ export const runDecisions = async (
     modelCalls,
     warnings: [],
   };
+};
+
+/**
+ * The model with every pass told that the run asked for the tour, so they all send the answer
+ * schema with the stops pass's variant and share one cache.
+ */
+export const askingForTour = (model: AnalysisModel): AnalysisModel => ({
+  version: model.version,
+  checkSize: (input) => model.checkSize(input),
+  intent: (input, options) => model.intent(input, { ...options, tour: true }),
+  findings: (input, intent, options) => model.findings(input, intent, { ...options, tour: true }),
+  risk: (input, options) => model.risk(input, { ...options, tour: true }),
+  decisions: (input, options) => model.decisions(input, { ...options, tour: true }),
+  stops: (input, options) => model.stops(input, { ...options, tour: true }),
+});
+
+const describeStopProblem = (problem: StopProblem): string => {
+  const stop = `Stop ${problem.stop + 1}`;
+  switch (problem.kind) {
+    case "unknown-hunk":
+      return `${stop}'s excerpt ${problem.excerpt + 1} rests on ${problem.hunkId}, which isn't a hunk of this pull request.`;
+    case "mechanical":
+      return `${stop}'s excerpt ${problem.excerpt + 1} rests on ${problem.hunkId}, a mechanical hunk sent as stats only. Use hunks sent in full.`;
+    case "lines-outside":
+      return `${stop}'s excerpt ${problem.excerpt + 1} has lines ${problem.hunkId} doesn't show on that side.`;
+    case "same-file":
+      return `${stop} has two excerpts in one file. Give two only when the hop crosses into another process, each in its own file.`;
+    case "order":
+      return `${stop} comes before stop ${problem.caller + 1}, whose code calls it. Put callers first.`;
+    case "too-many":
+      return `${stop} is past the seventh. Merge neighboring stops into at most 7.`;
+  }
+};
+
+/**
+ * The page's tour: the stops the model wrote, checked, with one retry for what the checks find.
+ * After it, what's still wrong is repaired as `keptStops` says and logged. An answer of fewer than
+ * three stops is no tour: the change is too small for one. An answer the checks leave with fewer
+ * than three is no tour either, and the reason is the pass's error, which the page shows.
+ */
+export const runStops = async (
+  model: AnalysisModel,
+  input: AnalysisInput,
+  context: StopContext,
+  deps: PassDeps,
+): Promise<PassResult<Stop[]>> => {
+  const { outcome, usage, modelCalls } = await callChecked(
+    "stops",
+    (options) => model.stops(input, options),
+    (drafts) => validateStops(drafts, context).map(describeStopProblem),
+    deps,
+  );
+  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
+  const drafts = outcome.value.value;
+  if (drafts.length < MIN_STOPS) return { outcome: ok([]), usage, modelCalls, warnings: [] };
+  const problems = validateStops(drafts, context);
+  if (problems.length > 0) {
+    deps.logger.warn("Repaired the stops the checks found wrong after the retry", {
+      problems: problems.map(describeStopProblem),
+    });
+  }
+  const stops = keptStops(drafts, problems);
+  if (stops.length < MIN_STOPS) {
+    return {
+      outcome: err({
+        kind: "invalid-output",
+        message: `Only ${stops.length} of the tour's ${drafts.length} stops showed lines of this pull request, and a tour needs ${MIN_STOPS}`,
+      }),
+      usage,
+      modelCalls,
+      warnings: [],
+    };
+  }
+  return { outcome: ok(stops), usage, modelCalls, warnings: [] };
 };

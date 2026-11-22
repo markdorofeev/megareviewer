@@ -19,6 +19,7 @@ import {
   type PullRequestRef,
   parsePullRequestUrl,
   runOptionOf,
+  STOPS_STAGE,
   type StageName,
   StageName as StageNames,
   withoutModelRun,
@@ -240,12 +241,14 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     },
 
     /**
-     * Runs the model's passes on a complete analysis, adding to it. A run already going is
-     * joined; one that's done or can't run is refused.
+     * Runs the model's passes on a complete analysis, adding to it, and the stops pass beside them
+     * when `tour` asks for the page's tour. A run already going is joined; one that's done or can't
+     * run is refused.
      */
     async runModel(
       id: AnalysisId,
       optionId?: ModelOptionId,
+      tour = false,
     ): Promise<Result<{ analysisId: AnalysisId }, UseCaseError>> {
       let analysis = await deps.store.getAnalysis(id);
       if (analysis === null) return err(appError("not-found", `No analysis ${id}`));
@@ -288,6 +291,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           model: chosen.value.runner,
           option: runOptionOf(chosen.value.option),
           advisor: deps.models.advisor(chosen.value.option.id),
+          tour,
         },
         checkout?.at ?? null,
       )
@@ -354,18 +358,23 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           analysis.status === "complete" && inProgress(analysis) && !inFlight.has(analysis.id),
       );
       for (const analysis of stopped) {
+        const unfinished = (name: StageName) =>
+          analysis.stages[name] === "running" || analysis.stages[name] === "pending";
         const stage = MODEL_STAGES.find((name) => analysis.stages[name] === "running") ?? "intent";
+        const message = `megareviewer stopped while ${modelFamily(analysis.modelOption)} analyzed the pull request`;
         await deps.store.saveAnalysis({
           ...analysis,
           stages: mapModelStages(analysis.stages, (status) =>
             status === "running" ? "failed" : status === "pending" ? "skipped" : status,
           ),
           ...(analysis.guardrails === "running" ? { guardrails: "failed" as const } : {}),
-          modelError: {
-            stage,
-            code: "interrupted",
-            message: `megareviewer stopped while ${modelFamily(analysis.modelOption)} analyzed the pull request`,
-          },
+          // A tour still being written is the tour's error, never the run's.
+          ...(MODEL_STAGES.some(unfinished)
+            ? { modelError: { stage, code: "interrupted", message } }
+            : {}),
+          ...(unfinished(STOPS_STAGE)
+            ? { stopsError: { stage: STOPS_STAGE, code: "interrupted", message } }
+            : {}),
           updatedAt: deps.clock.now(),
         });
       }

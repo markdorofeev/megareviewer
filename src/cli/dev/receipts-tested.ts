@@ -143,4 +143,5 @@ export const withCheckingTests = (model: AnalysisModel, url: string): AnalysisMo
     return ok({ ...answer.value, value: risksOf(input) });
   },
   decisions: (input, options) => model.decisions(input, options),
+  stops: (input, options) => model.stops(input, options),
 });

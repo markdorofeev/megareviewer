@@ -74,9 +74,12 @@ export type PullRequestListResponse = z.infer<typeof PullRequestListResponse>;
 export const StartAnalysisRequest = z.object({ url: z.string().min(1) }).readonly();
 export type StartAnalysisRequest = z.infer<typeof StartAnalysisRequest>;
 
-/** The option to run the passes on; the server's default without one, or without a body. */
+/**
+ * The option to run the passes on; the server's default without one, or without a body. `tour`
+ * asks for the stops pass too, which the review page does only with its Tour switch on.
+ */
 export const RunModelRequest = z
-  .object({ optionId: ModelOptionId.optional() })
+  .object({ optionId: ModelOptionId.optional(), tour: z.boolean().optional() })
   .readonly()
   .optional();
 export type RunModelRequest = z.infer<typeof RunModelRequest>;

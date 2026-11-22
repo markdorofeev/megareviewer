@@ -7,8 +7,14 @@ import type { OpencodeClient, OpencodeHttpError } from "../opencode-client.ts";
 export type RecordedSession = ModelPass | "provider-error" | "unreachable";
 export type RecordedList = "models" | "providers" | "default-model";
 
+/** The stops pass's session is synthetic, in the recorded sessions' shape, until it's recorded. */
 export const recorded = (name: RecordedSession | RecordedList): unknown =>
-  JSON.parse(readFileSync(new URL(`./${name}.json`, import.meta.url), "utf8"));
+  JSON.parse(
+    readFileSync(
+      new URL(`./${name === "stops" ? "stops.synthetic" : name}.json`, import.meta.url),
+      "utf8",
+    ),
+  );
 
 export interface FakeCall {
   readonly method: string;
@@ -21,7 +27,7 @@ type Answer = unknown | { readonly fail: OpencodeHttpError };
 
 const Session = z.object({ data: z.array(z.record(z.string(), z.unknown())) }).loose();
 
-const PASS = /^Task: (intent|findings|risk|decisions|tour)\./m;
+const PASS = /^Task: (intent|findings|risk|decisions|stops)\./m;
 
 const isFailure = (answer: unknown): answer is { readonly fail: OpencodeHttpError } =>
   typeof answer === "object" && answer !== null && "fail" in answer;

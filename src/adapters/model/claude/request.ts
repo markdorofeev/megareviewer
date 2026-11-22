@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
 import type { OneCall } from "../shared/one-call.ts";
-import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { PASS_ANSWER_FORMAT, passAnswerFormat } from "../shared/output-schema.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 import { claudeModel, DEFAULT_MODEL, effortFor } from "./models.ts";
 
@@ -38,19 +38,24 @@ type PassRequest = Anthropic.Beta.Messages.MessageCreateParamsStreaming;
 
 /**
  * The request for one pass. Everything up to and including the PR data block is identical for
- * every pass of the same input, so passes after the first read it from the prompt cache.
+ * every pass of a run, so passes after the first read it from the prompt cache. `tour`: the run
+ * asked for the tour, so every pass sends the format with the stops pass's variant.
  */
 export const passRequest = (
   pass: ModelPass,
   renderedInput: string,
   message: string,
   model: string = MODEL,
+  tour = false,
 ): Omit<PassRequest, "stream"> => ({
   model,
   max_tokens: apiLimits(model).maxTokens,
   betas: [...BETAS],
   thinking: { type: "adaptive" },
-  output_config: { effort: effortFor(claudeModel(model), BASE_EFFORT), format: PASS_ANSWER_FORMAT },
+  output_config: {
+    effort: effortFor(claudeModel(model), BASE_EFFORT),
+    format: passAnswerFormat(tour),
+  },
   system: SYSTEM_PROMPT,
   messages: [
     {

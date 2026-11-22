@@ -81,6 +81,7 @@ export const createClaudeCodeAnalysisModel = (
         passMessage(pass, intent, passOptions?.feedback),
         model,
         effort,
+        passOptions?.tour,
       );
       logger.debug("Model pass started", {
         pass,

@@ -146,6 +146,42 @@
         "server_tool_use": null,
         "service_tier": "standard"
       }
+    },
+    "stops": {
+      "id": "msg_synthetic_stops",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-haiku-5-5",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "",
+          "signature": "c2lnbmF0dXJlLXN5bnRoZXRpYy03"
+        },
+        {
+          "type": "text",
+          "text": "{\"answer\":{\"pass\":\"stops\",\"stops\":[{\"sentence\":\"`GET /orders/:id/receipt` sends the user's own order's receipt as plain text, or a 404\",\"excerpts\":[{\"hunkId\":\"h_5c94b39812b2e8f8\",\"side\":\"new\",\"startLine\":33,\"line\":40}]},{\"sentence\":\"`renderReceipt` serves a cached receipt for an hour before rendering it again\",\"excerpts\":[{\"hunkId\":\"h_a2e0236601ffc778\",\"side\":\"new\",\"startLine\":8,\"line\":19}]},{\"sentence\":\"The app config adds a receipt currency and footer\",\"excerpts\":[{\"hunkId\":\"h_3822ea0f7192c70e\",\"side\":\"new\",\"startLine\":31,\"line\":35}]}]}}",
+          "citations": null
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "stop_details": null,
+      "container": null,
+      "context_management": null,
+      "usage": {
+        "input_tokens": 244,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 6012,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 688,
+        "iterations": null,
+        "server_tool_use": null,
+        "service_tier": "standard"
+      }
     }
   }
 }

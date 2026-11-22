@@ -2,7 +2,7 @@ import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
 import { GUARDRAIL_CALL } from "../shared/guardrail-call.ts";
 import type { OneCall } from "../shared/one-call.ts";
-import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { PASS_ANSWER_FORMAT, TOUR_PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 import { SUGGESTION_CALL } from "../shared/suggestion.ts";
 
@@ -128,10 +128,11 @@ const isSchema = (value: unknown): value is JsonSchema =>
 
 /**
  * The schema of one pass's answer: its variant of the union, which every other provider enforces
- * whole. Asked for in the prompt, a smaller schema is one the model can follow.
+ * whole. Asked for in the prompt, a smaller schema is one the model can follow. It's the same
+ * whether the run asked for the tour or not, since the tour only adds the stops pass's variant.
  */
 export const passSchema = (pass: ModelPass): JsonSchema => {
-  const answer = PASS_ANSWER_FORMAT.schema.properties;
+  const answer = TOUR_PASS_ANSWER_FORMAT.schema.properties;
   const variants = isSchema(answer) && isSchema(answer.answer) ? answer.answer.anyOf : undefined;
   const variant = Array.isArray(variants)
     ? variants.find(

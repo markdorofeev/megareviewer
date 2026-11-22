@@ -12,8 +12,12 @@ export type RecordedRun =
   | "agent-tool"
   | "api-key-rejected";
 
+/** The stops pass's are synthetic, in the recorded passes' shape, until it's recorded. */
 export const recordedLines = (name: RecordedRun): string[] =>
-  readFileSync(new URL(`./${name}.jsonl`, import.meta.url), "utf8")
+  readFileSync(
+    new URL(`./${name === "stops" ? "stops.synthetic" : name}.jsonl`, import.meta.url),
+    "utf8",
+  )
     .split("\n")
     .filter((line) => line !== "");
 
@@ -30,7 +34,7 @@ export interface FakeRunCall {
 
 type Answer = readonly string[] | Partial<CodexRun>;
 
-const PASS = /^Task: (intent|findings|risk|decisions)\./m;
+const PASS = /^Task: (intent|findings|risk|decisions|stops)\./m;
 
 /**
  * Answers each run with the lines `answer` gives for its pass, read from the message on stdin,
@@ -68,4 +72,10 @@ export const createFakeRunCodex = (
 };
 
 const ModelPassOf = (name: string | undefined): ModelPass | null =>
-  name === "intent" || name === "findings" || name === "risk" || name === "decisions" ? name : null;
+  name === "intent" ||
+  name === "findings" ||
+  name === "risk" ||
+  name === "decisions" ||
+  name === "stops"
+    ? name
+    : null;

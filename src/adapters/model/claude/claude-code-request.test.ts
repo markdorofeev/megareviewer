@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
-import { ModelPass } from "../../../domain/review/index.ts";
+import { MODEL_STAGES, ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
-import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
+import { PASS_ANSWER_FORMAT, TOUR_PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 import { renderInput } from "../shared/render-input.ts";
@@ -12,18 +12,24 @@ import {
   SYSTEM_PROMPT_FILE,
 } from "./claude-code-request.ts";
 import { CLAUDE_MODELS } from "./models.ts";
-import { CLAUDE_CODE_FINGERPRINT, CLAUDE_CODE_PROMPT_VERSION } from "./version.ts";
+import {
+  CLAUDE_CODE_FINGERPRINT,
+  CLAUDE_CODE_PROMPT_VERSION,
+  CLAUDE_CODE_TOUR_FINGERPRINT,
+} from "./version.ts";
 
 /** The fingerprint was taken on Haiku 5.5, the model the prompts were tuned on. */
 const HAIKU = "claude-haiku-5-5";
 
-const requests = (model: string = HAIKU) =>
-  ModelPass.options.map((pass) =>
+/** The review's four passes, or with the tour every pass, the stops pass among them. */
+const requests = (model: string = HAIKU, tour = false) =>
+  (tour ? ModelPass.options : MODEL_STAGES).map((pass) =>
     claudeCodeRequest(
       pass,
       renderInput(smallFeatureInput),
       passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"]),
       model,
+      tour,
     ),
   );
 
@@ -93,5 +99,22 @@ describe("Claude Code request", () => {
       `The Claude Code request changed. Bump CLAUDE_CODE_PROMPT_VERSION in version.ts (now ` +
         `${CLAUDE_CODE_PROMPT_VERSION}) and set CLAUDE_CODE_FINGERPRINT to "${current}".`,
     ).toBe(CLAUDE_CODE_FINGERPRINT);
+  });
+
+  it("is versioned with the tour too", () => {
+    const current = fnv1a64(JSON.stringify(requests(HAIKU, true)));
+    expect(
+      current,
+      `A run with the tour changed its requests. Bump CLAUDE_CODE_PROMPT_VERSION in version.ts ` +
+        `(now ${CLAUDE_CODE_PROMPT_VERSION}) and set CLAUDE_CODE_TOUR_FINGERPRINT to "${current}".`,
+    ).toBe(CLAUDE_CODE_TOUR_FINGERPRINT);
+  });
+
+  it("sends every pass of a run with the tour the schema with the stops pass's variant", () => {
+    const all = requests(HAIKU, true);
+    const schemas = new Set(all.map((request) => flag(request.args, "--json-schema")));
+    expect(schemas.size).toBe(1);
+    expect(JSON.parse([...schemas][0] ?? "")).toEqual(TOUR_PASS_ANSWER_FORMAT.schema);
+    expect(all.at(-1)?.stdin).toMatch(/^Task: stops\./m);
   });
 });
