@@ -20,6 +20,7 @@ import {
   largeAnalysisView,
   lockedModelOptions,
   NO_API_CREDENTIALS,
+  tourAnalysisView,
 } from "../../../dev/fixtures/index.ts";
 import { mockFetch } from "../../../dev/mock-fetch.ts";
 import { createMockApi } from "../../../dev/mock-routes.ts";
@@ -1586,6 +1587,117 @@ describe("overview", () => {
     await userEvent.click(screen.getByRole("button", { name: "Collapse src/module1/" }));
     expect(nodeOf("group:src/module1")).toBeTruthy();
   }, 30_000);
+});
+
+describe("the tour", () => {
+  const withTour = () => {
+    window.localStorage.setItem("megareviewer:tour", "true");
+    window.localStorage.setItem("megareviewer:review-layout", '"overview"');
+  };
+  const tourRegion = () => screen.getByRole("region", { name: "Tour stops" });
+
+  it("is the Understand layout only while the Tour switch is on", async () => {
+    const first = renderReview();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    expect(await screen.findByRole("menuitemradio", { name: "Overview" })).toBeTruthy();
+    expect(screen.queryByRole("menuitemradio", { name: "Understand" })).toBeNull();
+    first.unmount();
+
+    window.localStorage.setItem("megareviewer:tour", "true");
+    renderReview();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    expect(await screen.findByRole("menuitemradio", { name: "Understand" })).toBeTruthy();
+  });
+
+  it("shows the stops in order, their points, and what the tour didn't show", async () => {
+    withTour();
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    const stops = within(await screen.findByRole("region", { name: "Tour stops" }));
+    expect(stops.getAllByRole("heading", { level: 2 }).map((one) => one.textContent)).toEqual([
+      "Stop 1: GET /orders/:id/receipt sends an order's receipt as plain text, or a 404",
+      "Stop 2: cachedReceipt keeps each order's receipt in memory once it's rendered",
+      "Stop 3: Tax lines are fetched up to 3 times before the receipt fails",
+      "Stop 4: Receipt lines show prices through formatMoney and dates through dayjs",
+      "After the tour",
+    ]);
+    expect(stops.getByText("lines 14–21 · 8 of 18 changed lines")).toBeTruthy();
+    const [firstChip] = stops.getAllByRole("button", { name: /^Finding/ });
+    expect(firstChip?.textContent).toContain(
+      "Any signed-in user can read every customer's receipt",
+    );
+    expect(stops.getByText("Not in the tour")).toBeTruthy();
+    expect(stops.getByText("Suggested depth")).toBeTruthy();
+    const strip = screen.getByRole("group", { name: "Directories on the tour" });
+    expect(within(strip).getByRole("button", { name: /^src\/routes\/, stop 1/ })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
+  });
+
+  it("opens a chip's card in the map", async () => {
+    withTour();
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    const [chip] = within(await screen.findByRole("region", { name: "Tour stops" })).getAllByRole(
+      "button",
+      { name: /^Finding/ },
+    );
+    if (chip === undefined) throw new Error("no chip");
+    await userEvent.click(chip);
+    await waitFor(() => expect(layoutIs("map")).toBe(true));
+  });
+
+  it("keeps a comment on a stop's line as a draft of the review, which the map shows", async () => {
+    withTour();
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    const region = await screen.findByRole("region", { name: "Tour stops" });
+    const [number] = within(region).getAllByRole("button", { name: /^Comment on line \d+$/ });
+    if (number === undefined) throw new Error("no commentable line");
+    const line = Number(number.textContent);
+    await userEvent.click(number);
+    await userEvent.type(
+      within(region).getByRole("textbox", { name: `Comment on line ${line}` }),
+      "Why here?",
+    );
+    await userEvent.click(within(region).getByRole("button", { name: "Add to review" }));
+    const stored = z
+      .array(z.object({ line: z.number(), body: z.string() }).passthrough())
+      .parse(JSON.parse(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`) ?? "[]"));
+    expect(stored).toMatchObject([{ line, body: "Why here?" }]);
+
+    await userEvent.keyboard("v");
+    await waitFor(() => expect(layoutIs("map")).toBe(true));
+    expect(within(mainArea()).getByText("Why here?")).toBeTruthy();
+  });
+
+  it("is the overview and a line saying why, without a tour", async () => {
+    withTour();
+    const first = renderReview();
+    await loaded();
+    expect(
+      await screen.findByText("This AI review ran without the tour. Re-run it to get one."),
+    ).toBeTruthy();
+    expect(overviewBox()).toBeTruthy();
+    first.unmount();
+
+    renderReview({
+      view: {
+        ...codeOnly,
+        analysis: {
+          ...codeOnly.analysis,
+          stages: { ...codeOnly.analysis.stages, findings: "skipped" },
+          usage: [],
+          modelCalls: [],
+        },
+      },
+    });
+    await loaded();
+    expect(await screen.findByText(/^No AI review yet\. The tour/)).toBeTruthy();
+    expect(overviewBox()).toBeTruthy();
+    expect(() => tourRegion()).toThrow();
+  });
 });
 
 describe("layouts", () => {

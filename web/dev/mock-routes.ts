@@ -47,6 +47,7 @@ import {
   fixturePullRequestStatus,
   fixturePullRequests,
   fixtureStatus,
+  fixtureStops,
   fixtureSuggestions,
   fixtureThreads,
   guidedAnalysisView,
@@ -200,6 +201,8 @@ export const createMockApi = (
   let fixture = asked(fixtureView.analysis);
   /** The model's stages, stepped through when the reviewer asks Claude in a scenario. */
   let modelStagesDone: number | null = null;
+  /** The run asked for the tour, which the fixture's stops answer once it ends. */
+  let tourAsked = false;
 
   let stagesDone = CODE_STAGES;
   let failAt: StageName | null = null;
@@ -226,9 +229,15 @@ export const createMockApi = (
     }
     // Claude's run: each pass's results appear as its stage finishes, then the scenario's end.
     const ended = afterModelRun(fixtureView.analysis, scenario);
-    return modelStagesDone >= MODEL_STAGES.length
-      ? ended
-      : analysisInProgress(ended, CODE_STAGES + modelStagesDone);
+    if (modelStagesDone >= MODEL_STAGES.length) {
+      return tourAsked
+        ? { ...ended, stages: { ...ended.stages, stops: "done" as const }, stops: fixtureStops }
+        : ended;
+    }
+    const running = analysisInProgress(ended, CODE_STAGES + modelStagesDone);
+    return tourAsked
+      ? { ...running, stages: { ...running.stages, stops: "running" as const } }
+      : running;
   };
   const view = (): AnalysisView => ({
     ...fixtureView,
@@ -383,12 +392,13 @@ export const createMockApi = (
       const response: RemovedModelRun = { analysis: analysis(), pointReviews: [] };
       return success(response);
     },
-    runModel: ({ id }) => {
+    runModel: ({ id }, body) => {
       const missing = findAnalysis(id);
       if (missing !== null) return missing;
       if (scenario === undefined) {
         return failure("model-unavailable", "the mock API doesn't run Claude");
       }
+      tourAsked = routes.runModel.request.safeParse(body).data?.tour === true;
       // A run that ended plays again, as Try again does on the server.
       if (timer === null) {
         modelStagesDone = 0;

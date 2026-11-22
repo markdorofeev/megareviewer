@@ -5,6 +5,7 @@ import {
   type Hunk,
   hunkIdOf,
   type PartId,
+  partHunk,
   type UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
 import {
@@ -39,6 +40,7 @@ import {
   DANGER,
   DiffSkeleton,
   FileTree,
+  HunkCard,
   KeyHint,
   type LineComment,
   type LinePlace,
@@ -109,6 +111,8 @@ import { parseBoolean, useStoredState } from "./storage.ts";
 import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
 import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
+import { type NoTour, noTourOf, type TourExcerpt, tourOf } from "./tour.ts";
+import { NoTourLine, Understand } from "./Understand.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
 import { useLanding } from "./useLanding.ts";
@@ -206,6 +210,27 @@ const LAYOUTS: readonly { readonly value: Layout; readonly label: string }[] = [
   { value: "map", label: "Map" },
   { value: "overview", label: "Overview" },
 ];
+/** With the Tour switch on, the second layout is the tour's; it's stored as the overview still. */
+const TOUR_LAYOUTS: readonly { readonly value: Layout; readonly label: string }[] = [
+  { value: "map", label: "Map" },
+  { value: "overview", label: "Understand" },
+];
+
+/** Why Understand shows the overview instead of a tour. */
+const noTourText = (reason: NoTour): string => {
+  switch (reason.kind) {
+    case "no-review":
+      return "No AI review yet. The tour through these directories is written with one: Request AI review above.";
+    case "without-tour":
+      return "This AI review ran without the tour. Re-run it to get one.";
+    case "writing":
+      return "The tour is being written.";
+    case "too-small":
+      return "The change is too small for a tour: it has fewer than 3 stops to make.";
+    case "failed":
+      return `The tour couldn't be written: ${reason.message}`;
+  }
+};
 
 /** The shortcuts the review page has, for its `?` dialog. */
 const PAGE_SHORTCUTS: readonly ShortcutId[] = [
@@ -477,6 +502,17 @@ const Review = ({
     () => fileOverview(analysis, steps, new Set(expandedGroups)),
     [analysis, steps, expandedGroups],
   );
+  // With the Tour switch on, the overview's layout is Understand: the tour, or the overview and
+  // a line saying why there's none. The tour is drawn from the analysis shown; whether it's being
+  // written, from the live one.
+  const tourOverview = useMemo(() => fileOverview(analysis, steps), [analysis, steps]);
+  const everyPoint = useMemo(() => pointsOf(analysis), [analysis]);
+  const noTour = tourOn ? noTourOf(live) : null;
+  const tour = useMemo(
+    () =>
+      tourOn ? tourOf(analysis, tourOverview, everyPoint, (point) => stateOf(point.id)) : null,
+    [tourOn, analysis, tourOverview, everyPoint, stateOf],
+  );
 
   // The brief's line of directories, from the overview with none opened.
   const through = useMemo(
@@ -485,6 +521,7 @@ const Review = ({
   );
 
   const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);
+  const understand = layout === "overview" && noTour === null && tour !== null;
   const filePaths = useMemo(() => files.map((group) => group.file.path), [files]);
   const fileInView = useFileInView(filePaths, layout === "map" && analysis.stages.prep === "done");
   // At 1024px or less the rail is behind a button.
@@ -736,12 +773,38 @@ const Review = ({
     if (folded.has(id)) showLeftOut(id);
     if (narrowed === "thread") setNarrowed(null);
     setHighlight(new Set((point?.hunkIds ?? []).flatMap(index.partsOf)));
-    if (layout === "overview") {
+    if (layout === "overview" && !understand) {
       if (cardPart !== undefined) showHunk(cardPart);
     } else {
+      // The tour has no point cards: its points open the map.
+      if (layout === "overview") {
+        setLayout(() => "map");
+        setOpenedFrom(null);
+      }
       scrollTo(pointAnchor(id));
     }
     setCurrentPoint(id);
+  };
+  /** Opens the map on a part, from the tour. */
+  const openPartFromTour = (id: PartId) => {
+    setLayout(() => "map");
+    setOpenedFrom(null);
+    setFocusedHunkId(id);
+    setHighlight(new Set([id]));
+    scrollTo(order.includes(id) ? hunkAnchor(id) : MECHANICAL_ANCHOR);
+  };
+  /** A chip's card in the map; a decision's lines while decisions are off, which have no card. */
+  const openTourPoint = (point: Point) => {
+    if (point.kind !== "decision" || decisionsOn) return goToPoint(point.id);
+    const part = places.cardPart.get(point.id) ?? point.hunkIds.flatMap(index.partsOf)[0];
+    if (part !== undefined) openPartFromTour(part);
+  };
+  const openFileFromTour = (path: string) => {
+    setLayout(() => "map");
+    setOpenedFrom(null);
+    scrollTo(
+      files.some((group) => group.file.path === path) ? fileAnchor(path) : MECHANICAL_ANCHOR,
+    );
   };
   /**
    * Goes to a thread in the map, from the overview too, since the overview doesn't show threads:
@@ -816,7 +879,7 @@ const Review = ({
   };
   usePageDisplay({
     label: "Layout",
-    options: LAYOUTS,
+    options: tourOn ? TOUR_LAYOUTS : LAYOUTS,
     value: layout,
     onChange: (next) => {
       if (next !== layout) switchLayout();
@@ -1270,6 +1333,50 @@ const Review = ({
     }
     return parts.join("\u0000");
   };
+  const hunkFiles = useMemo(
+    () =>
+      new Map(
+        analysis.files.flatMap((file) =>
+          file.hunks.map((hunk) => [hunk.id, { hunk, file }] as const),
+        ),
+      ),
+    [analysis.files],
+  );
+  /** A stop's excerpt: its rows, drawn as a part's, with the comment box and the drafts on them. */
+  const excerptCard = (excerpt: TourExcerpt): ReactNode => {
+    const found = hunkFiles.get(excerpt.hunkId);
+    if (found === undefined) return null;
+    const shown = partHunk(found.hunk, excerpt);
+    const onShownLine = (comment: HunkComment) =>
+      comment.hunkId === excerpt.hunkId &&
+      shown.lines.some((line) => {
+        const place = commentPlace(line);
+        return place !== null && place.side === comment.side && place.line === comment.line;
+      });
+    const open = openComment?.partId === excerpt.partId ? openComment.place : null;
+    return (
+      <HunkCard
+        id={excerpt.partId}
+        hunk={shown}
+        file={found.file}
+        risk={index.items([excerpt.partId])[0]?.risk ?? null}
+        inFile
+        comments={hunkComments.filter(onShownLine)}
+        openComment={
+          open !== null && shown.lines.some((line) => commentPlace(line)?.line === open.line)
+            ? open
+            : null
+        }
+        onOpenComment={openCommentOn}
+        onCancelComment={cancelComment}
+        {...(complete ? { onComment: writeComment, onCommentNow: postCommentNow } : {})}
+        threadsAt={(place) => threadsAt(excerpt.partId, place)}
+        {...(RANGE_NOTES[analysis.key.ref.repo.host] === undefined
+          ? {}
+          : { rangeNote: RANGE_NOTES[analysis.key.ref.repo.host] })}
+      />
+    );
+  };
   const deps: HunkDeps = {
     index,
     unchangedOf,
@@ -1632,8 +1739,20 @@ const Review = ({
             signatureOf={signatureOf}
           />
         </div>
+      ) : understand && tour !== null ? (
+        <Understand
+          tour={tour}
+          stateOf={(point) => stateOf(point.id)}
+          renderExcerpt={excerptCard}
+          onOpenPoint={openTourPoint}
+          onOpenFile={openFileFromTour}
+          onOpenInCode={(_, excerpt) => openPartFromTour(excerpt.partId)}
+        />
       ) : (
-        <div>
+        <div className="flex flex-col gap-3">
+          {noTour !== null && (
+            <NoTourLine busy={noTour.kind === "writing"}>{noTourText(noTour)}</NoTourLine>
+          )}
           <Overview
             overview={overview}
             focusKey={overviewFocus}

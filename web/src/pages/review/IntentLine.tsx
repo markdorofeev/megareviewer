@@ -45,7 +45,7 @@ export const firstSentence = (text: string): string => {
 const LEAD = "font-semibold text-foreground";
 
 /** Model text, with its code spans set in code and the rest's Markdown markers dropped. */
-const ModelText = ({ text }: { readonly text: string }) => (
+export const ModelText = ({ text }: { readonly text: string }) => (
   <span data-slot="model-text" className="whitespace-pre-line">
     {codeSpans(text).map((piece, at) =>
       piece.code ? (

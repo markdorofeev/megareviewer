@@ -21,6 +21,8 @@ import {
   type ModelUsage,
   type PullRequest,
   type RiskAssessment,
+  type Stop,
+  StopId,
   type Ticket,
   TourStepId,
 } from "../../../src/domain/review/index.ts";
@@ -839,4 +841,38 @@ export const fixtureAnalysisView: AnalysisView = {
   isAuthor: false,
   currentUserId: "lee-park",
   stale: false,
+};
+
+/** Claude's tour of the fixture PR, in call order: the route, the cache, the retry, the formatting. */
+export const fixtureStops: readonly Stop[] = [
+  {
+    id: StopId.parse("t1"),
+    sentence: "`GET /orders/:id/receipt` sends an order's receipt as plain text, or a 404",
+    excerpts: [{ hunkId: h.receiptRoute, side: "new", startLine: 14, line: 21 }],
+  },
+  {
+    id: StopId.parse("t2"),
+    sentence: "`cachedReceipt` keeps each order's receipt in memory once it's rendered",
+    excerpts: [{ hunkId: h.retryAndCache, side: "new", startLine: 41, line: 50 }],
+  },
+  {
+    id: StopId.parse("t3"),
+    sentence: "Tax lines are fetched up to 3 times before the receipt fails",
+    excerpts: [{ hunkId: h.retryAndCache, side: "new", startLine: 29, line: 39 }],
+  },
+  {
+    id: StopId.parse("t4"),
+    sentence: "Receipt lines show prices through `formatMoney` and dates through dayjs",
+    excerpts: [{ hunkId: h.receiptFormatting, side: "new", startLine: 3, line: 13 }],
+  },
+];
+
+/** The fixture analysis after a run that asked for the tour. */
+export const tourAnalysisView: AnalysisView = {
+  ...fixtureAnalysisView,
+  analysis: {
+    ...analysis,
+    stages: { ...analysis.stages, stops: "done" },
+    stops: fixtureStops,
+  },
 };
