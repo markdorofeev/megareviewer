@@ -7,6 +7,8 @@ import { Link } from "./Link.tsx";
 import {
   matchRoute,
   navigate,
+  panelOf,
+  preferencesPath,
   pullRequestPath,
   redirect,
   reviewPath,
@@ -31,6 +33,15 @@ describe("matchRoute", () => {
     expect(matchRoute("/preferences")).toEqual({ page: "preferences" });
     expect(matchRoute("/preferences/")).toEqual({ page: "preferences" });
     expect(matchRoute("/preferences/naming")).toEqual({ page: "not-found" });
+  });
+
+  it("names a preferences panel in the query, slashes as they are, and reads it back", () => {
+    expect(preferencesPath(null)).toBe("/preferences");
+    expect(preferencesPath("suggestions")).toBe("/preferences?scope=suggestions");
+    const path = preferencesPath("github/acme/my shop");
+    expect(path).toBe("/preferences?scope=github/acme/my%20shop");
+    expect(panelOf(new URL(path, "http://x").search)).toBe("github/acme/my shop");
+    expect(panelOf("")).toBeNull();
   });
 
   it("answers not-found for anything else", () => {

@@ -19,6 +19,15 @@ const NOT_FOUND: Route = { page: "not-found" };
 
 export const PREFERENCES_PATH = "/preferences";
 
+/** The preferences page on one panel; none is Everywhere's. Slashes stay, so the key reads as it is. */
+export const preferencesPath = (panel: string | null): string =>
+  panel === null
+    ? PREFERENCES_PATH
+    : `${PREFERENCES_PATH}?scope=${panel.split("/").map(encodeURIComponent).join("/")}`;
+
+/** The panel a preferences page's query names, or null. */
+export const panelOf = (search: string): string | null => new URLSearchParams(search).get("scope");
+
 const decoded = (part: string | undefined): string | null => {
   if (part === undefined) return null;
   try {
@@ -73,6 +82,9 @@ const subscribe = (onChange: () => void) => {
 
 export const usePathname = (): string =>
   useSyncExternalStore(subscribe, () => window.location.pathname);
+
+export const useSearch = (): string =>
+  useSyncExternalStore(subscribe, () => window.location.search);
 
 export const navigate = (path: string): void => {
   window.history.pushState(null, "", path);
