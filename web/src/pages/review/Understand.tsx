@@ -6,13 +6,21 @@ import {
   SparklesIcon,
   XIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Point, PointState } from "../../../../src/domain/review/index.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { ModelText } from "./IntentLine.tsx";
-import type { LedgerGroupId, TourBox, TourExcerpt, TourStop, TourView } from "./tour.ts";
+import {
+  depthText,
+  type LedgerGroupId,
+  listOf,
+  type TourBox,
+  type TourExcerpt,
+  type TourStop,
+  type TourView,
+} from "./tour.ts";
 
 // The Understand layout with a tour: a strip of the directories the stops reach, the stops, then
 // what the tour didn't show. The window scrolls; the strip sticks under the bar.
@@ -30,12 +38,6 @@ const splitLabel = (label: string): { readonly prefix: string; readonly name: st
 };
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
-/** "1, 2 and 3". */
-const listOf = (numbers: readonly number[]): string =>
-  numbers.length < 2
-    ? numbers.join("")
-    : `${numbers.slice(0, -1).join(", ")} and ${numbers.at(-1)}`;
 
 const linesLabel = (excerpt: TourExcerpt): string => {
   const { startLine, line, side } = excerpt.lines;
@@ -389,11 +391,6 @@ const TourEnd = ({
   readonly onOpenPoint: (point: Point) => void;
 }) => {
   const files = tour.ledger.reduce((sum, group) => sum + group.files.length, 0);
-  const { depth } = tour;
-  const outsideText =
-    depth.findingsOutside + depth.risksOutside === 0
-      ? "No open finding or risk is outside the stops."
-      : `${count(depth.findingsOutside, "finding")} and ${count(depth.risksOutside, "risk")} are outside the stops.`;
   return (
     <section
       aria-labelledby="tour-end-title"
@@ -484,12 +481,7 @@ const TourEnd = ({
         <SparklesIcon aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary" />
         <div>
           <h3 className="font-semibold">Suggested depth</h3>
-          <p>
-            {depth.read.length === 0
-              ? "No stop has an open finding or a risk no test checks."
-              : `Read ${depth.read.length === 1 ? "stop" : "stops"} ${listOf(depth.read)} in the code: ${depth.read.length === 1 ? "it has" : "each has"} an open finding or a risk no test checks.`}{" "}
-            {outsideText}
-          </p>
+          <p>{depthText(tour.depth)}</p>
         </div>
       </div>
     </section>
@@ -504,6 +496,22 @@ const useCurrentStop = (
 ) => {
   const [current, setCurrent] = useState<number | null>(count > 0 ? 1 : null);
   const [stuck, setStuck] = useState(false);
+  // A stop the page went to stays current until the reader moves, whatever the geometry says.
+  const pinned = useRef<number | null>(null);
+  const pin = useCallback((stop: number) => {
+    pinned.current = stop;
+    setCurrent(stop);
+  }, []);
+  useEffect(() => {
+    const unpin = () => {
+      pinned.current = null;
+    };
+    const events = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
+    for (const event of events) window.addEventListener(event, unpin, { passive: true });
+    return () => {
+      for (const event of events) window.removeEventListener(event, unpin);
+    };
+  }, []);
   useEffect(() => {
     let frame = 0;
     const measure = () => {
@@ -517,7 +525,7 @@ const useCurrentStop = (
       sections.forEach((section, at) => {
         if (section.getBoundingClientRect().top <= line) passed = at + 1;
       });
-      setCurrent(passed);
+      if (pinned.current === null) setCurrent(passed);
       const barHeight = Number.parseFloat(getComputedStyle(bar).top) || 0;
       setStuck(window.scrollY > 0 && bar.getBoundingClientRect().top <= barHeight + 1);
     };
@@ -533,7 +541,7 @@ const useCurrentStop = (
       if (frame !== 0) window.cancelAnimationFrame(frame);
     };
   }, [container, strip]);
-  return { current, stuck };
+  return { current, stuck, pin };
 };
 
 const useNarrow = () => {
@@ -577,9 +585,18 @@ export const Understand = ({
     () => container.current?.querySelector<HTMLElement>("[data-slot=tour-strip]") ?? null,
     [],
   );
-  const { current, stuck } = useCurrentStop(container, strip, tour.stops.length);
+  const { current, stuck, pin } = useCurrentStop(container, strip, tour.stops.length);
   const narrow = useNarrow();
-  const compact = stuck || narrow;
+  // Going to a stop compacts the strip first, so the stop lands under the strip it'll stay under.
+  const [forced, setForced] = useState(false);
+  const compact = stuck || narrow || forced;
+  useEffect(() => {
+    const top = () => {
+      if (window.scrollY === 0) setForced(false);
+    };
+    window.addEventListener("scroll", top, { passive: true });
+    return () => window.removeEventListener("scroll", top);
+  }, []);
   const [openGroups, setOpenGroups] = useState<ReadonlySet<LedgerGroupId>>(new Set());
   const [flashed, setFlashed] = useState<LedgerGroupId | null>(null);
 
@@ -593,21 +610,26 @@ export const Understand = ({
       const bar = strip();
       const below = bar === null ? 0 : bar.getBoundingClientRect().height;
       const barTop = bar === null ? 0 : Number.parseFloat(getComputedStyle(bar).top) || 0;
-      const top = window.scrollY + element.getBoundingClientRect().top - barTop - below - 8;
+      const top = window.scrollY + element.getBoundingClientRect().top - barTop - below - 4;
       window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
     },
     [strip],
   );
 
-  const goToStop = useCallback(
-    (number: number) => {
-      const section = document.getElementById(stopAnchor(number));
-      if (section === null) return;
-      scrollUnderStrip(section);
-      section.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
-    },
-    [scrollUnderStrip],
-  );
+  const [going, setGoing] = useState<{ readonly stop: number; readonly n: number } | null>(null);
+  const goToStop = useCallback((stop: number) => {
+    setForced(true);
+    setGoing((previous) => ({ stop, n: (previous?.n ?? 0) + 1 }));
+  }, []);
+  // Once the strip is compact: the stop at the top under it, focused and current.
+  useLayoutEffect(() => {
+    if (going === null) return;
+    const section = document.getElementById(stopAnchor(going.stop));
+    if (section === null) return;
+    scrollUnderStrip(section);
+    section.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+    pin(going.stop);
+  }, [going, scrollUnderStrip, pin]);
 
   const goToGroup = (id: LedgerGroupId) => {
     setOpenGroups((previous) => new Set([...previous, id]));
@@ -694,6 +716,9 @@ export const NoTourLine = ({
   </p>
 );
 
+/** The landing label's anchor, which Open in code scrolls to. */
+export const TOUR_LANDING = "tour-landing";
+
 /** Over the excerpt's lines in the map: which stop of the tour they are. */
 export const TourLanding = ({
   stop,
@@ -703,8 +728,9 @@ export const TourLanding = ({
   readonly excerpt: TourExcerpt;
 }) => (
   <p
+    id={TOUR_LANDING}
     data-slot="tour-landing"
-    className="flex flex-wrap items-center gap-x-1.5 border-b bg-ai-soft px-3 py-1.5 text-ui text-primary"
+    className="scroll-mt-24 flex flex-wrap items-center gap-x-1.5 border-b bg-ai-soft px-3 py-1.5 text-ui text-primary"
   >
     <RouteIcon aria-hidden="true" className="size-3.5 shrink-0" />
     <span className="font-semibold">Tour stop {stop.number}</span>

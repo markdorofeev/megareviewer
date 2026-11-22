@@ -1,5 +1,5 @@
 import { CircleCheckIcon, Undo2Icon } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
 import {
   type Hunk,
@@ -67,6 +67,7 @@ import { Dialog } from "./Dialog.tsx";
 import { DraftGuardrail } from "./Guardrail.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { barButtons, verdictAfter, verdictLabel } from "./header-buttons.ts";
+import { holdInView } from "./heldScroll.ts";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
@@ -112,7 +113,7 @@ import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
 import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
 import { type NoTour, noTourOf, type TourExcerpt, type TourStop, tourOf } from "./tour.ts";
-import { BackToTour, NoTourLine, TourLanding, Understand } from "./Understand.tsx";
+import { BackToTour, NoTourLine, TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
 import { useLanding } from "./useLanding.ts";
@@ -792,6 +793,12 @@ const Review = ({
     readonly excerpt: TourExcerpt;
   } | null>(null);
   const [landOn, setLandOn] = useState<{ readonly stop: number; readonly n: number } | null>(null);
+  // Cards above a stop's lines take their size after the map scrolled to it: hold it in place.
+  const [landingHeld, setLandingHeld] = useState(0);
+  useEffect(() => {
+    if (landingHeld === 0 || layout !== "map") return;
+    return holdInView(TOUR_LANDING, "[aria-label=Changes]");
+  }, [landingHeld, layout]);
   const storedStopKey = `tour-stop:${analysisId}`;
   const readStoredStop = (): number => {
     const stored = readSession(storedStopKey);
@@ -814,7 +821,9 @@ const Review = ({
     setFromStop({ stop, excerpt });
     setFocusedHunkId(excerpt.partId);
     writeSession(storedStopKey, stop.number);
-    scrollTo(hunkAnchor(excerpt.partId));
+    // The label over the excerpt, which can start well below its part's top.
+    scrollTo(TOUR_LANDING);
+    setLandingHeld((previous) => previous + 1);
   };
   /** Opens the map on a part, from the tour. */
   const openPartFromTour = (id: PartId) => {

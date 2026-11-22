@@ -319,3 +319,27 @@ export const noTourOf = (
   }
   return hasModelRun(analysis) ? { kind: "without-tour" } : { kind: "no-review" };
 };
+
+const counted = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
+
+/** "1, 2 and 3". */
+export const listOf = (numbers: readonly number[]): string =>
+  numbers.length < 2
+    ? numbers.join("")
+    : `${numbers.slice(0, -1).join(", ")} and ${numbers.at(-1)}`;
+
+/** The suggested depth in words: the stops to read, then what's outside them, a zero left out. */
+export const depthText = (depth: Depth): string => {
+  const { read, findingsOutside, risksOutside } = depth;
+  const stops =
+    read.length === 0
+      ? "No stop has an open finding or a risk no test checks."
+      : `Read ${read.length === 1 ? "stop" : "stops"} ${listOf(read)} in the code: ${read.length === 1 ? "it has" : "each has"} an open finding or a risk no test checks.`;
+  const outside = [
+    ...(findingsOutside > 0 ? [counted(findingsOutside, "finding")] : []),
+    ...(risksOutside > 0 ? [counted(risksOutside, "risk")] : []),
+  ];
+  if (outside.length === 0) return stops;
+  const many = outside.length > 1 || findingsOutside + risksOutside > 1;
+  return `${stops} ${outside.join(" and ")} ${many ? "are" : "is"} outside the stops.`;
+};

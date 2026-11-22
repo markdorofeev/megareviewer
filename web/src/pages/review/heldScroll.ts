@@ -43,3 +43,29 @@ export const holdTopLine = (area: string): (() => void) => {
     if (moved !== 0) window.scrollBy({ top: moved, behavior: "instant" });
   };
 };
+
+/** How long a landing is held while what's above it takes its size. */
+const HOLD_MS = 2000;
+const MOVES = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
+
+/**
+ * Keeps the element `id` at the top of the window while `area` resizes, as cards above it take
+ * their real size after a scroll put it there, until the reader moves or a moment passes. Returns
+ * what lets go sooner.
+ */
+export const holdInView = (id: string, area: string): (() => void) => {
+  const observed = document.querySelector(area);
+  if (observed === null || typeof ResizeObserver !== "function") return nothing;
+  const observer = new ResizeObserver(() => {
+    document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "instant" });
+  });
+  const release = () => {
+    observer.disconnect();
+    window.clearTimeout(timer);
+    for (const move of MOVES) window.removeEventListener(move, release);
+  };
+  const timer = window.setTimeout(release, HOLD_MS);
+  for (const move of MOVES) window.addEventListener(move, release, { passive: true });
+  observer.observe(observed);
+  return release;
+};

@@ -8,7 +8,7 @@ import {
 } from "../../../../src/domain/review/index.ts";
 import { fixtureHunks, tourAnalysisView } from "../../../dev/fixtures/index.ts";
 import { fileOverview } from "./overview.ts";
-import { noTourOf, rowsOf, tourOf } from "./tour.ts";
+import { depthText, noTourOf, rowsOf, tourOf } from "./tour.ts";
 
 const analysis = tourAnalysisView.analysis;
 const overview = fileOverview(analysis, analysis.tour?.steps ?? []);
@@ -172,5 +172,28 @@ describe("noTourOf", () => {
       }),
     ).toEqual({ kind: "failed", message: "Overloaded" });
     expect(noTourOf(ran)).toBeNull();
+  });
+});
+
+describe("depthText", () => {
+  const depth = (read: number[], findingsOutside: number, risksOutside: number) =>
+    depthText({ read, findingsOutside, risksOutside });
+
+  it("names the stops to read, and leaves a zero count out", () => {
+    expect(depth([1, 2, 3], 0, 1)).toBe(
+      "Read stops 1, 2 and 3 in the code: each has an open finding or a risk no test checks. 1 risk is outside the stops.",
+    );
+    expect(depth([2], 2, 0)).toBe(
+      "Read stop 2 in the code: it has an open finding or a risk no test checks. 2 findings are outside the stops.",
+    );
+    expect(depth([], 1, 2)).toBe(
+      "No stop has an open finding or a risk no test checks. 1 finding and 2 risks are outside the stops.",
+    );
+  });
+
+  it("says nothing of outside the stops when nothing is", () => {
+    expect(depth([1], 0, 0)).toBe(
+      "Read stop 1 in the code: it has an open finding or a risk no test checks.",
+    );
   });
 });

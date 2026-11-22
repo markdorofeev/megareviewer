@@ -1686,12 +1686,20 @@ describe("the tour", () => {
     expect(screen.getByRole("button", { name: "Back to tour · Stop 2" })).toBeTruthy();
     const label = document.querySelector("[data-slot=tour-landing]");
     expect(label?.textContent).toContain("Tour stop 2");
+    // The label is what the map scrolls to, not the top of the part it's in.
+    expect(scrolledTo().at(-1)).toBe(label?.id);
     expect(document.querySelectorAll("[data-point-mark=stop]").length).toBeGreaterThan(0);
 
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(layoutIs("overview")).toBe(true));
     expect(document.activeElement?.textContent).toContain("Stop 2:");
     expect(screen.queryByRole("button", { name: "Back to tour · Stop 2" })).toBeNull();
+    // The stop it came back to is the current one.
+    const current = document.querySelector("[data-slot=tour-stop][aria-current=step]");
+    expect(current?.textContent).toContain("cachedReceipt keeps each order's receipt");
+    expect(
+      screen.getByRole("button", { name: /^src\/services\/, stops 2, 3 and 4, current stop$/ }),
+    ).toBeTruthy();
   });
 
   it("switches with v between the tour's current stop and its lines in the map", async () => {
