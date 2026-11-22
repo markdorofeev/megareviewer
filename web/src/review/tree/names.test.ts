@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shortenName, shortenPath, splitName } from "./names.ts";
+import { shortenName, shortenPath, shortenRepoName, splitName } from "./names.ts";
 
 /** Fits when it has at most `length` characters. */
 const upTo = (length: number) => (text: string) => text.length <= length;
@@ -64,5 +64,33 @@ describe("shortenPath", () => {
     expect(shortenPath("packages/api-client/src/generated/models", upTo(14))).toBe("…/models");
     expect(shortenPath("packages/payments", upTo(5))).toBe("…/payments");
     expect(shortenPath("payments", upTo(5))).toBe("payments");
+  });
+});
+
+describe("shortenRepoName", () => {
+  it("keeps a name that fits", () => {
+    expect(shortenRepoName("delphi-code", upTo(22))).toBe("delphi-code");
+  });
+
+  it("cuts whole segments from the middle, with the separator on both sides of the cut", () => {
+    expect(shortenRepoName("delphi-payments-reconciliation-service", upTo(22))).toBe(
+      "delphi-…-service",
+    );
+    expect(shortenRepoName("delphi-payments-reconciliation-service", upTo(26))).toBe(
+      "delphi-payments-…-service",
+    );
+    expect(shortenRepoName("spring-boot-starter-data-elasticsearch-reactive", upTo(22))).toBe(
+      "spring-boot-…-reactive",
+    );
+    expect(shortenRepoName("analytics_backend_service_v2_migration", upTo(22))).toBe(
+      "analytics_…_migration",
+    );
+  });
+
+  it("cuts as a file name is cut when segments can't", () => {
+    expect(shortenRepoName("averyveryverylongname", upTo(12))).toBe("ave…longname");
+    expect(shortenRepoName("short-averyveryverylongname", upTo(12))).toBe(
+      shortenName("short-averyveryverylongname", upTo(12)),
+    );
   });
 });

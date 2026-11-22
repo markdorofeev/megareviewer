@@ -47,6 +47,26 @@ export const shortenName = (stem: string, fits: (text: string) => boolean): stri
 };
 
 /**
+ * The longest form of a repository's name that `fits`: the whole name; else the fewest whole
+ * segments between `-`, `_` or `.` cut from its middle, the separator kept on both sides of the
+ * cut, as `delphi-…-service`; else as `shortenName` cuts it.
+ */
+export const shortenRepoName = (name: string, fits: (text: string) => boolean): string => {
+  if (fits(name)) return name;
+  // "delphi-", "payments-", "service": each segment with the separator after it.
+  const parts = name.split(/(?<=[-_.])(?=.)/);
+  for (let cut = 1; cut <= parts.length - 2; cut++) {
+    for (let start = Math.ceil((parts.length - cut) / 2); start >= 1; start--) {
+      if (start + cut > parts.length - 1) continue;
+      const separator = parts[start + cut - 1]?.slice(-1) ?? "";
+      const text = `${parts.slice(0, start).join("")}${ELLIPSIS}${separator}${parts.slice(start + cut).join("")}`;
+      if (fits(text)) return text;
+    }
+  }
+  return shortenName(name, fits);
+};
+
+/**
  * The longest form of a directory path that `fits`: the whole path; else the fewest directories
  * cut from its middle, as `src/test/…/orders`, so where it starts and the directory it names stay
  * readable; else `…/` and its last directory, which the row cuts at its end if that doesn't fit.
