@@ -19,8 +19,10 @@ import {
   PointId,
   type PointState,
   PublicationId,
+  type PullRequestStatus,
   pointsOf,
   pullRequestUrl,
+  type ReviewerVerdict,
   type ReviewThread,
   type ThreadId,
 } from "../../../../src/domain/review/index.ts";
@@ -61,7 +63,7 @@ import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks, checkingTestPayload } from "./calls.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
-import { barButtons } from "./header-buttons.ts";
+import { barButtons, verdictAfter, verdictLabel } from "./header-buttons.ts";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
@@ -961,6 +963,27 @@ const Review = ({
   };
 
   const openPublish = () => setPublishing(true);
+  // The reviewer's verdict on the host, so an approval given on the host's own page counts too.
+  // What they just did here stands until the status read after it answers, so the bar follows the
+  // click rather than the read, which can fail.
+  const [justDid, setJustDid] = useState<{
+    readonly verdict: ReviewerVerdict | null;
+    readonly over: PullRequestStatus | null;
+  } | null>(null);
+  const latestStatus = useRef(prStatus.status);
+  latestStatus.current = prStatus.status;
+  const hostVerdict =
+    view.currentUserId === null
+      ? null
+      : (prStatus.status?.reviewers.find((reviewer) => reviewer.id === view.currentUserId)
+          ?.verdict ?? null);
+  const fresh = justDid !== null && justDid.over === prStatus.status;
+  const yourVerdict = fresh ? justDid.verdict : hostVerdict;
+  const verdictKnown = fresh || (prStatus.status !== null && view.currentUserId !== null);
+  const did = (verdict: ReviewerVerdict | null) => {
+    setJustDid({ verdict, over: latestStatus.current });
+    prStatus.reload();
+  };
   // Approve posts the verdict alone. Its ID stays until the host answers, so a retry after a lost
   // answer doesn't approve twice.
   const approve = useMutation(client.publish);
@@ -976,22 +999,15 @@ const Review = ({
     });
     if (!result.ok) return;
     approveId.current = null;
+    did("approved");
     threads.reload();
-    prStatus.reload();
     void refetch();
   };
   const revoke = useMutation(client.revokeApproval);
   const revokeNow = async () => {
     const result = await revoke.run(analysisId);
-    if (result.ok) prStatus.reload();
+    if (result.ok) did(null);
   };
-  // Read from the host, so an approval given on the host's own page counts too.
-  const approved =
-    view.currentUserId !== null &&
-    (prStatus.status?.reviewers.some(
-      (reviewer) => reviewer.id === view.currentUserId && reviewer.verdict === "approved",
-    ) ??
-      false);
 
   // What publishing will post on the code: the reviewer's comments, raised points among them.
   const toPost = hunkComments.length;
@@ -1001,7 +1017,7 @@ const Review = ({
     pending: toPost,
     isAuthor: view.isAuthor,
     stale: view.stale,
-    approved,
+    verdict: yourVerdict,
   });
   const totals = useMemo(() => changeTotals(analysis.files), [analysis.files]);
   const failureTitle =
@@ -1455,7 +1471,7 @@ const Review = ({
             </>
           )
         }
-        publication={publication}
+        verdict={verdictLabel(yourVerdict, verdictKnown, publication)}
         hairline={landing.running ? "running" : landing.phase === "landing" ? "finishing" : null}
       />
 
@@ -1637,13 +1653,12 @@ const Review = ({
           isAuthor={view.isAuthor}
           published={publication !== null}
           onClose={() => setPublishing(false)}
-          onPublished={() => {
+          onPublished={(_, verdict) => {
             setPublishing(false);
             // The drafts are threads on the host now; read those instead of keeping both.
             setHunkComments(() => []);
             threads.reload();
-            // The reviewer's own verdict is one of the reviewers' now.
-            prStatus.reload();
+            did(verdictAfter(verdict, yourVerdict));
             void refetch();
           }}
         />

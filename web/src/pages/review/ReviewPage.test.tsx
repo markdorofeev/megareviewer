@@ -1997,7 +1997,7 @@ describe("publishing", () => {
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Publish and request changes" }),
     );
-    expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Changes requested" })).toBeTruthy();
     expect(
       requests.find((request) => request.url === `${viewPath}/publication`)?.body,
     ).toMatchObject({ verdict: "request_changes" });
@@ -2013,7 +2013,7 @@ describe("publishing", () => {
     const { requests } = renderReview();
     await loaded();
     await approve(await openDialog());
-    expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Approved" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
     // The drafts posted with it are threads on the host now.
     expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toBe("[]");
@@ -2033,7 +2033,7 @@ describe("publishing", () => {
     const first = await openDialog();
     await userEvent.type(within(first).getByLabelText("Summary"), "One question first.");
     await userEvent.click(within(first).getByRole("button", { name: "Publish the summary" }));
-    expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Commented" })).toBeTruthy();
 
     const second = await openDialog();
     expect(within(second).getByText(/^Your earlier review is on the pull request\./)).toBeTruthy();
@@ -2106,7 +2106,7 @@ describe("publishing", () => {
       await within(dialog).findByText("This PR changed since the analysis. Publish anyway?"),
     ).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Publish anyway" }));
-    expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Approved" })).toBeTruthy();
     const publishes = requests.filter((request) => request.url === `${viewPath}/publication`);
     const publicationId = expect.stringMatching(/^[0-9a-f-]{36}$/);
     const review = { publicationId, summary: "", hunkComments: [], verdict: "approve" };
@@ -2136,7 +2136,7 @@ describe("publishing", () => {
     const alert = await within(dialog).findByRole("alert");
     expect(alert.textContent).toContain("The git host returned an error: GitHub returned 502.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
-    expect(await screen.findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Approved" })).toBeTruthy();
   });
 
   it("closes with Cancel without publishing", async () => {
@@ -2163,7 +2163,7 @@ describe("the bar's verdicts", () => {
 
     await userEvent.click(approveButton());
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(await within(reviewBar()).findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(await within(reviewBar()).findByRole("link", { name: "Approved" })).toBeTruthy();
     expect(requests.find((request) => request.url === `${viewPath}/publication`)?.body).toEqual({
       publicationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       summary: "",
@@ -2183,7 +2183,7 @@ describe("the bar's verdicts", () => {
     expect(comesBefore(approveButton(), publishButton())).toBe(true);
 
     await userEvent.click(approveButton());
-    expect(await within(reviewBar()).findByRole("link", { name: "Published" })).toBeTruthy();
+    expect(await within(reviewBar()).findByRole("link", { name: "Approved" })).toBeTruthy();
     expect(
       requests.find((request) => request.url === `${viewPath}/publication`)?.body,
     ).toMatchObject({ hunkComments: [], verdict: "approve" });
@@ -2216,15 +2216,56 @@ describe("the bar's verdicts", () => {
     const revoke = await within(reviewBar()).findByRole("button", { name: "Revoke approval" });
     expect(revoke.getAttribute("aria-disabled")).toBeNull();
     expect(revoke.className).not.toContain("bg-review-approved");
+    // An approval is the whole review: no Publish, and no link, since it wasn't sent from here.
+    const verdict = () => reviewBar().querySelector("[data-slot=your-verdict]");
+    expect(verdict()?.textContent).toBe("Approved");
+    expect(verdict()?.querySelector("a")).toBeNull();
+    expect(within(reviewBar()).queryByRole("button", { name: /^Publish review…/ })).toBeNull();
 
     await userEvent.click(revoke);
     const approve = await within(reviewBar()).findByRole("button", { name: "Approve" });
     expect(approve.getAttribute("aria-disabled")).toBe("true");
+    expect(verdict()).toBeNull();
+    expect(within(reviewBar()).getByRole("button", { name: /^Publish review…/ })).toBeTruthy();
     expect(
       requests.filter(
         (request) => request.method === "DELETE" && request.url === `${viewPath}/approval`,
       ),
     ).toHaveLength(1);
+  });
+
+  it("brings Publish back beside Revoke approval once a comment waits", async () => {
+    renderReview({
+      respond: (request) =>
+        request.url === statusPath
+          ? jsonResponse(200, {
+              ...fixturePullRequestStatus,
+              reviewers: [{ id: "lee-park", name: "Lee Park", team: false, verdict: "approved" }],
+            })
+          : undefined,
+    });
+    await loaded();
+    const revoke = await within(reviewBar()).findByRole("button", { name: "Revoke approval" });
+    await userEvent.click(addToReview(FINDING));
+    expect(publishButton().className).toContain("bg-primary");
+    expect(comesBefore(revoke, publishButton())).toBe(true);
+  });
+
+  it("says the reviewer requested changes, and doesn't fill Approve after it", async () => {
+    renderReview({
+      respond: (request) =>
+        request.url === statusPath
+          ? jsonResponse(200, {
+              ...fixturePullRequestStatus,
+              reviewers: [
+                { id: "lee-park", name: "Lee Park", team: false, verdict: "changes-requested" },
+              ],
+            })
+          : undefined,
+    });
+    await loaded();
+    expect(await within(reviewBar()).findByText("Changes requested")).toBeTruthy();
+    expect(approveButton().className).not.toContain("bg-review-approved");
   });
 
   it("says why an approval couldn't be revoked", async () => {

@@ -129,14 +129,8 @@ const BarDemo = ({
           title={PULL_REQUEST.title}
           stuck={stuck}
           hairline={hairline}
-          publication={
-            published
-              ? {
-                  url: `${PULL_REQUEST.url}#pullrequestreview-1`,
-                  publishedAt: "2026-10-21T10:00:00Z",
-                  postedCommentIds: {},
-                }
-              : null
+          verdict={
+            published ? { kind: "published", url: `${PULL_REQUEST.url}#pullrequestreview-1` } : null
           }
           claude={
             <ClaudeElement
@@ -222,7 +216,7 @@ const Verdicts = ({
     pending,
     isAuthor,
     stale,
-    approved: false,
+    verdict: null,
   });
   return bar.order.map((which) =>
     which === "approve" ? (

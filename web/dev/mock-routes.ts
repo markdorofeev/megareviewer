@@ -32,6 +32,7 @@ import {
   parsePullRequestUrl,
   pointsOf,
   preferenceId,
+  type ReviewerVerdict,
   type ReviewThread,
   StageName,
   sameRepo,
@@ -208,8 +209,8 @@ export const createMockApi = (
   /** The reviews published, by the ID the page chose; the view shows the latest. */
   const publications = new Map<string, PublicationReceipt>();
   let publication: PublicationReceipt | null = null;
-  /** The reviewer approved, from the bar or the dialog, and hasn't taken it back. */
-  let approved = false;
+  /** The reviewer's verdict on the host, from what they published and revoked here. */
+  let yourVerdict: ReviewerVerdict | null = null;
   let threads: ReviewThread[] = structuredClone([...fixtureThreads.threads]);
   let replies = 0;
   let preferences = options.preferences ?? fixturePreferencesView;
@@ -478,25 +479,30 @@ export const createMockApi = (
         ),
       };
       publications.set(request.data.publicationId, publication);
-      if (published.verdict === "approve") approved = true;
+      yourVerdict =
+        published.verdict === "approve"
+          ? "approved"
+          : published.verdict === "request_changes"
+            ? "changes-requested"
+            : (yourVerdict ?? "commented");
       return success(publication);
     },
     revokeApproval: ({ id }) => {
       const missing = findAnalysis(id);
       if (missing !== null) return missing;
-      approved = false;
+      if (yourVerdict === "approved") yourVerdict = null;
       return success({});
     },
     getThreads: ({ id }) => findAnalysis(id) ?? success({ threads }),
     getPullRequestStatus: ({ id }) =>
       findAnalysis(id) ??
       success(
-        approved
+        yourVerdict !== null
           ? {
               ...fixturePullRequestStatus,
               reviewers: [
                 ...fixturePullRequestStatus.reviewers.filter((one) => one.id !== "lee-park"),
-                { id: "lee-park", name: "Lee Park", team: false, verdict: "approved" },
+                { id: "lee-park", name: "Lee Park", team: false, verdict: yourVerdict },
               ],
             }
           : fixturePullRequestStatus,

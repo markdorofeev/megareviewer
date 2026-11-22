@@ -58,7 +58,8 @@ export const PublishDialog = ({
   /** A review was published from this analysis already, so this one is another. */
   readonly published: boolean;
   readonly onClose: () => void;
-  readonly onPublished: (receipt: PublicationReceipt) => void;
+  /** With the verdict it posted, which is a comment on the reviewer's own PR. */
+  readonly onPublished: (receipt: PublicationReceipt, verdict: PublicationVerdict) => void;
 }) => {
   const { client } = useApi();
   const id = useId();
@@ -101,7 +102,7 @@ export const PublishDialog = ({
       verdict: chosen,
     });
     if (result.ok) {
-      onPublished(result.value);
+      onPublished(result.value, chosen);
     } else if (result.error.code === "stale-analysis") {
       publish.reset();
       setConfirmStale(true);

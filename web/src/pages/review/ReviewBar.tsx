@@ -1,5 +1,7 @@
+import { CheckIcon, MessageSquareIcon, XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import type { PublicationReceipt } from "../../../../src/domain/review/index.ts";
+import { cn } from "../../lib/utils.ts";
+import type { VerdictLabel } from "./header-buttons.ts";
 
 export type HairlineState = "running" | "finishing";
 
@@ -29,8 +31,8 @@ const useStuck = () => {
 
 /**
  * The row under the header that stays at the top of the window while the code scrolls: Claude's
- * run and the stepper through its points, Show files at 1024px or less, the latest review
- * published, and Approve and Publish. Its height is `--review-bar-h`, which what sticks or scrolls under it
+ * run and the stepper through its points, Show files at 1024px or less, the reviewer's verdict on
+ * the host, and Approve and Publish. Its height is `--review-bar-h`, which what sticks or scrolls under it
  * reads. Stuck, it names the PR first.
  */
 export const ReviewBar = ({
@@ -38,7 +40,7 @@ export const ReviewBar = ({
   claude,
   tools,
   publish,
-  publication,
+  verdict,
   hairline,
   stuck: stuckAs,
 }: {
@@ -50,8 +52,8 @@ export const ReviewBar = ({
   readonly tools: ReactNode;
   /** Approve and Publish, while a review can be published: before and after one is. */
   readonly publish: ReactNode;
-  /** The latest review published from the analysis. */
-  readonly publication: PublicationReceipt | null;
+  /** The reviewer's verdict on the host, or that a review was published while it's unknown. */
+  readonly verdict: VerdictLabel | null;
   /**
    * Claude is reading the PR: a segment runs along the bar's bottom edge. Once it's done, it
    * runs out to the full width and fades.
@@ -91,23 +93,22 @@ export const ReviewBar = ({
         {claude}
       </div>
       <div className="flex shrink-0 items-center gap-2">{tools}</div>
-      {publication !== null && (
-        // The latest review; Publish beside it sends another, approving after a comment, say.
+      {verdict !== null && (
+        // Publish beside it sends another review: approving after a comment, say.
         <p
           role="status"
-          className="flex shrink-0 items-center gap-1 font-medium text-review-approved"
+          data-slot="your-verdict"
+          className={cn(
+            "flex shrink-0 items-center gap-1 font-medium",
+            VERDICT_STYLES[verdict.kind].className,
+          )}
         >
-          <span aria-hidden="true">✓</span>{" "}
-          {publication.url === null ? (
-            "Published"
+          <VerdictIcon kind={verdict.kind} />
+          {verdict.url === null ? (
+            VERDICT_STYLES[verdict.kind].label
           ) : (
-            <a
-              href={publication.url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-review-approved"
-            >
-              Published
+            <a href={verdict.url} target="_blank" rel="noreferrer" className="text-inherit">
+              {VERDICT_STYLES[verdict.kind].label}
             </a>
           )}
         </p>
@@ -115,4 +116,19 @@ export const ReviewBar = ({
       <div className="flex shrink-0 items-center gap-2">{publish}</div>
     </div>
   );
+};
+
+const VERDICT_STYLES: Readonly<
+  Record<VerdictLabel["kind"], { readonly label: string; readonly className: string }>
+> = {
+  approved: { label: "Approved", className: "text-review-approved" },
+  "changes-requested": { label: "Changes requested", className: "text-review-changes" },
+  commented: { label: "Commented", className: "text-muted-foreground" },
+  published: { label: "Published", className: "text-review-approved" },
+};
+
+const VerdictIcon = ({ kind }: { readonly kind: VerdictLabel["kind"] }) => {
+  const Icon =
+    kind === "changes-requested" ? XIcon : kind === "commented" ? MessageSquareIcon : CheckIcon;
+  return <Icon aria-hidden="true" className="size-4" />;
 };
