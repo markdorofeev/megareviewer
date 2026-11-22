@@ -8,12 +8,18 @@ const GUIDED_TITLE = "Add receipt download endpoint, with guidance";
 const STALE = "Serves a receipt rendered before a refund for up to an hour";
 const NAMING = "`lines` could say what the lines are of";
 
-const everywhere = (page: Page) => page.getByRole("region", { name: "Everywhere" });
-const storefront = (page: Page) => page.getByRole("region", { name: /^acme\/storefront/ });
-const shop = (page: Page) => page.getByRole("region", { name: /^acme\/shop/ });
-const suggested = (page: Page) => page.getByRole("region", { name: "Suggested" });
+const everywhere = (page: Page) => page.getByRole("region", { name: "Everywhere", exact: true });
+const storefront = (page: Page) =>
+  page.getByRole("region", { name: "acme/storefront", exact: true });
+const shop = (page: Page) => page.getByRole("region", { name: "acme/shop", exact: true });
+const suggestions = (page: Page) => page.getByRole("region", { name: "Suggestions", exact: true });
 const preferences = (section: ReturnType<typeof everywhere>) =>
   section.locator("[data-slot=preference]");
+const proposals = (section: ReturnType<typeof everywhere>) =>
+  section.locator("[data-slot=proposal]");
+/** Opens a scope's panel from the list beside it. */
+const openScope = (page: Page, name: RegExp) =>
+  page.getByRole("navigation", { name: "Scopes" }).getByRole("button", { name }).click();
 const pointCard = (page: Page, title: string) => page.getByRole("article", { name: title });
 const chips = (page: Page) =>
   page.locator("[data-slot=review-bar] [data-slot=point-chip]:not([data-kind=thread])");
@@ -63,17 +69,18 @@ test("adds a preference, switches it off, edits it and deletes it", async ({ pag
   await openPreferences(page);
   const section = everywhere(page);
   await expect(preferences(section)).toHaveCount(0);
+  await expect(section).toContainText("No preferences for every repository yet.");
 
-  await section.getByRole("button", { name: "Add preference" }).click();
+  // The form is always open, so the rule can be typed and saved with Enter.
   const form = section.getByRole("form", { name: "Add a preference" });
-  // The text has the focus as the form opens, so the rule can be typed and saved with Enter.
-  await expect(form.getByRole("textbox")).toBeFocused();
+  await form.getByRole("textbox").click();
   await page.keyboard.type("Import order");
   await expect(form.locator("[data-slot=character-count]")).toHaveText(/^12\/300/);
-  await form.getByRole("button", { name: "Don't flag" }).click();
+  await form.getByRole("radio", { name: "Don't flag" }).click();
   await form.getByRole("textbox").press("Enter");
-  await expect(preferences(section)).toHaveText(["Don't flagImport orderwritten"]);
-  await expect(form).toHaveCount(0);
+  await expect(preferences(section)).toHaveText(["Don't flagImport order"]);
+  await expect(form.getByRole("textbox")).toHaveValue("");
+  await expect(form.getByRole("radio", { name: "Don't flag" })).toBeChecked();
 
   const use = section.getByRole("switch", { name: "Use in AI reviews: Import order" });
   await use.click();
@@ -81,30 +88,50 @@ test("adds a preference, switches it off, edits it and deletes it", async ({ pag
 
   // The server has it: it's there, switched off, after a reload.
   await page.reload();
-  await expect(preferences(everywhere(page))).toHaveText(["Don't flagImport orderwritten · off"]);
+  await expect(preferences(everywhere(page))).toHaveText(["Don't flagImport orderoff"]);
 
-  await section.getByRole("button", { name: "More for: Import order" }).click();
-  await page.getByRole("menuitem", { name: "Edit" }).click();
+  await section.getByRole("button", { name: "Edit: Import order" }).click();
   const edit = section.getByRole("form", { name: "Edit: Import order" });
+  await expect(edit.getByRole("textbox")).toBeFocused();
   await edit.getByRole("textbox").fill("The order of imports");
   await edit.getByRole("button", { name: "Save" }).click();
-  await expect(preferences(section)).toHaveText(["Don't flagThe order of importswritten · off"]);
+  await expect(preferences(section)).toHaveText(["Don't flagThe order of importsoff"]);
+  await expect(section.getByRole("button", { name: "Edit: The order of imports" })).toBeFocused();
 
-  await section.getByRole("button", { name: "More for: The order of imports" }).click();
-  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  await section.getByRole("button", { name: "Delete: The order of imports" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete preference" });
   await expect(dialog).toContainText("The order of imports");
   await dialog.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(preferences(section)).toHaveCount(0);
 });
 
-test("suggests from what the reviewer did, and accepts a suggestion", async ({ page }) => {
+test("keeps the scope chosen in the URL, through a reload and Back", async ({ page }) => {
+  await openReview(page, PR.smallFeature, "Add receipt download endpoint", false);
+  await page.getByRole("link", { name: "Preferences" }).click();
+  await expect(everywhere(page)).toBeVisible();
+  await openScope(page, /^acme\/shop/);
+  await expect(page).toHaveURL(/\/preferences\?scope=github\/acme\/shop$/);
+  await expect(shop(page).getByRole("heading", { level: 2, name: "acme/shop" })).toBeFocused();
+  await page.reload();
+  await expect(shop(page)).toBeVisible();
+  await page.goBack();
+  await expect(everywhere(page)).toBeVisible();
+
+  // Under 1024px the list is a select.
+  await page.setViewportSize({ width: 900, height: 900 });
+  await expect(page.getByRole("navigation", { name: "Scopes" })).toBeHidden();
+  await page.getByRole("combobox", { name: "Scope" }).click();
+  await page.getByRole("option", { name: /^acme\/shop/ }).click();
+  await expect(shop(page)).toBeVisible();
+  await expect(shop(page).getByRole("heading", { level: 2 })).toBeFocused();
+});
+
+test("suggests from what the reviewer did, and adds a suggestion", async ({ page }) => {
   await openPreferences(page);
   // Nothing is recorded yet, so there's nothing to suggest from, and the button says so.
   const suggest = page.getByRole("button", { name: "Suggest from my reviews" });
   await expect(suggest).toHaveAttribute("aria-disabled", "true");
   await expect(suggest).toHaveAccessibleDescription(/^Nothing new to suggest from/);
-  await expect(suggested(page)).toHaveCount(0);
 
   // A dismissed point is something to suggest from.
   await openReview(page, PR.smallFeature, "Add receipt download endpoint");
@@ -119,50 +146,66 @@ test("suggests from what the reviewer did, and accepts a suggestion", async ({ p
   await expect(page.getByText("1 action recorded since the last suggestions")).toBeVisible();
   await expect(suggest).toHaveAccessibleDescription(/^Runs Sonnet 5\.5 through Claude Code/);
   await suggest.click();
-  await expect(page.getByText("2 suggestions from 1 action, above.")).toBeVisible();
-  await expect(suggested(page).locator("[data-slot=proposal]")).toHaveCount(2);
+  await expect(
+    page.getByText("2 suggestions from 1 action, 1 for Everywhere and 1 for acme/shop."),
+  ).toBeVisible();
+  await expect(proposals(everywhere(page))).toHaveCount(1);
 
-  await suggested(page)
-    .getByRole("button", { name: "Accept: Missing JSDoc on internal helpers" })
+  await openScope(page, /^Suggestions/);
+  await expect(proposals(suggestions(page))).toHaveCount(2);
+  await suggestions(page)
+    .getByRole("button", { name: "Add suggestion: Missing JSDoc on internal helpers" })
     .click();
+  await expect(proposals(suggestions(page))).toHaveCount(1);
+  await suggestions(page)
+    .getByRole("button", { name: /^Dismiss suggestion: Cached data that outlives/ })
+    .click();
+  await expect(proposals(suggestions(page))).toHaveCount(0);
+  await expect(suggestions(page)).toContainText("No suggestions yet.");
+  await expect(suggestions(page).getByRole("heading", { level: 2 })).toBeFocused();
+
+  // Added and dismissed for good: both are as they were after a reload.
+  await openScope(page, /^acme\/shop/);
   await expect(preferences(shop(page))).toHaveText([
-    "Don't flagMissing JSDoc on internal helperslearned",
+    "Don't flagMissing JSDoc on internal helpersFrom your reviews",
   ]);
-  await suggested(page)
-    .getByRole("button", { name: /^Reject: Cached data that outlives/ })
-    .click();
-  await expect(suggested(page)).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Preferences", level: 1 })).toBeFocused();
-
-  // Accepted and rejected for good: both are as they were after a reload.
   await page.reload();
   await expect(preferences(shop(page))).toHaveCount(1);
-  await expect(suggested(page)).toHaveCount(0);
+  await expect(proposals(shop(page))).toHaveCount(0);
 });
 
 test("imports from the reviewer's past reviews of a repository", async ({ page }) => {
   await openReview(page, PR.smallFeature, "Add receipt download endpoint", false);
   await page.getByRole("link", { name: "Preferences" }).click();
+  await openScope(page, /^acme\/shop/);
+  // A repository with nothing for it yet offers both runs in its first-run box.
+  await expect(shop(page).locator("[data-slot=first-run]")).toBeVisible();
   await shop(page).getByRole("button", { name: "Import from my past reviews" }).click();
+  // Each goes to the panel of its scope, and the line says where.
   await expect(
-    shop(page).getByText("Read 3 comments from 2 pull requests: 2 suggestions, above."),
+    shop(page).getByText(
+      "Read 3 comments from 2 pull requests: 2 suggestions, 1 for Everywhere and 1 for acme/shop.",
+    ),
   ).toBeVisible();
-  await expect(suggested(page).locator("[data-slot=proposal]")).toHaveCount(2);
-  await expect(suggested(page)).toContainText("acme/shop, from your past reviews");
+  await expect(proposals(shop(page))).toHaveCount(1);
+  await expect(shop(page).locator("[data-slot=first-run]")).toHaveCount(0);
 });
 
 test("switches a guideline file, which the next AI review doesn't read", async ({ page }) => {
   await openReview(page, PR.receiptsGuided, GUIDED_TITLE, false);
   await page.getByRole("link", { name: "Preferences" }).click();
+  await openScope(page, /^acme\/storefront/);
   const files = storefront(page).locator("[data-slot=guideline-file]");
   await expect(files).toHaveText([
-    /^REVIEW\.md\d+ B$/,
-    /^CLAUDE\.md\d+ KBtoo large to send/,
-    /^CONTRIBUTING\.md\d+ B$/,
+    /^REVIEW\.md\d+ BFollowed by AI reviews$/,
+    /^CLAUDE\.md\d+ KBToo large to send/,
+    /^CONTRIBUTING\.md\d+ BIgnored$/,
   ]);
   // A file too large to send has no switch.
-  await expect(storefront(page).getByRole("switch", { name: /^Read / })).toHaveCount(2);
-  const review = storefront(page).getByRole("switch", { name: /^Read REVIEW\.md/ });
+  await expect(
+    storefront(page).getByRole("switch", { name: /^Use .* in AI reviews$/ }),
+  ).toHaveCount(2);
+  const review = storefront(page).getByRole("switch", { name: "Use REVIEW.md in AI reviews" });
   await expect(review).toHaveAttribute("aria-checked", "true");
   await review.click();
   await expect(review).toHaveAttribute("aria-checked", "false");
@@ -232,21 +275,20 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   await expect(stale).toContainText("Dismissed, and saved to your preferences");
 
   await stale.getByRole("link", { name: "preferences" }).click();
+  await openScope(page, /^acme\/storefront/);
   await expect(preferences(storefront(page))).toHaveText([
-    "Look forCaches with nothing that invalidates themwritten",
-    "Don't flagNamingwritten",
-    "Don't flagReceipts cached for an hourlearned",
+    "Look forCaches with nothing that invalidates them",
+    "Don't flagNaming",
+    "Don't flagReceipts cached for an hourFrom your reviews",
   ]);
 });
 
 test("never scrolls sideways", async ({ page }) => {
   await openReview(page, PR.receiptsGuided, GUIDED_TITLE, false);
   await page.getByRole("link", { name: "Preferences" }).click();
+  await openScope(page, /^acme\/storefront/);
   await expect(storefront(page).locator("[data-slot=guideline-file]")).toHaveCount(3);
-  await storefront(page)
-    .getByRole("button", { name: /^Add preference/ })
-    .click();
-  for (const width of [1440, 1024, 768, 375]) {
+  for (const width of [1440, 1024, 900, 768, 375]) {
     await page.setViewportSize({ width, height: 800 });
     await expect
       .poll(
@@ -260,6 +302,13 @@ test("never scrolls sideways", async ({ page }) => {
   }
 });
 
+/** What the accessibility checks find on the page as it is. */
+const problems = async (page: Page) => {
+  const focus = await focusProblems(page);
+  await expect(page.locator("[data-slot=tooltip-content]")).toHaveCount(0);
+  return [...(await unnamedControls(page)), ...(await pageProblems(page)), ...focus.problems];
+};
+
 for (const theme of ["light", "dark"] as const) {
   for (const palette of ["default", "cb"] as const) {
     test(`meets the accessibility checks, ${theme} ${palette}`, async ({ page }) => {
@@ -270,21 +319,18 @@ for (const theme of ["light", "dark"] as const) {
         },
         [theme, palette],
       );
-      // A repository with guideline files, proposals waiting, and the form open.
+      // A repository with proposals waiting, then one with preferences and guideline files.
       await openReview(page, PR.receiptsGuided, GUIDED_TITLE, false);
       await openReview(page, PR.smallFeature, "Add receipt download endpoint", false);
       await page.getByRole("link", { name: "Preferences" }).click();
-      await expect(storefront(page).locator("[data-slot=guideline-file]")).toHaveCount(3);
+      await openScope(page, /^acme\/shop/);
       await shop(page).getByRole("button", { name: "Import from my past reviews" }).click();
-      await expect(suggested(page).locator("[data-slot=proposal]")).toHaveCount(2);
-      await everywhere(page).getByRole("button", { name: "Add preference" }).click();
-      const focus = await focusProblems(page);
-      await expect(page.locator("[data-slot=tooltip-content]")).toHaveCount(0);
-      expect([
-        ...(await unnamedControls(page)),
-        ...(await pageProblems(page)),
-        ...focus.problems,
-      ]).toEqual([]);
+      await expect(proposals(shop(page))).toHaveCount(1);
+      expect(await problems(page)).toEqual([]);
+      await openScope(page, /^acme\/storefront/);
+      await expect(storefront(page).locator("[data-slot=guideline-file]")).toHaveCount(3);
+      await storefront(page).getByRole("textbox").fill("x".repeat(310));
+      expect(await problems(page)).toEqual([]);
     });
   }
 }

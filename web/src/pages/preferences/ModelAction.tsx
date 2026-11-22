@@ -13,11 +13,14 @@ export type ModelActionResult =
   | { readonly ok: true; readonly said: string }
   | { readonly ok: false; readonly message: string };
 
-type Phase =
+/** Where a run is. The page keeps it, so it outlives the panel the button was pressed on. */
+export type RunPhase =
   | { readonly is: "idle" }
   | { readonly is: "running"; readonly since: number }
   | { readonly is: "done"; readonly said: string }
   | { readonly is: "failed"; readonly message: string };
+
+export const IDLE: RunPhase = { is: "idle" };
 
 const clock = (seconds: number): string =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -34,137 +37,153 @@ const useElapsed = (since: number | null, now: () => number): number => {
   return since === null ? 0 : Math.max(0, Math.round((at - since) / 1000));
 };
 
-/**
- * A button that makes one model call on the option chosen for Request AI review, with the same arrow
- * beside it to change that choice, and what came of it after. Its tooltip says which model and who
- * pays, as that button's does. It can't run twice at once; when it can't run at all it stays
- * focusable and says why.
- */
-export const ModelAction = ({
-  label,
-  running,
-  icon,
-  variant = "outline",
-  choice,
-  what = "Runs",
-  blocked = null,
-  idle = null,
-  run,
-  now = Date.now,
-  initial,
-}: {
+export interface ModelActionProps {
   readonly label: string;
   /** What it says while it runs: "Reading your reviews…". */
   readonly running: string;
   readonly icon: ReactNode;
-  readonly variant?: "default" | "outline";
+  /** The smaller button, for the quieter of two side by side. */
+  readonly size?: "sm" | "default";
   /** The reviewer's choice of model, the same as the review page's. */
   readonly choice: ModelChoice;
   /** How the tooltip starts, before the model's name. */
   readonly what?: string;
   /** Why there's nothing to run it on, whatever the model. */
   readonly blocked?: string | null;
-  /** Beside the button before it has run. */
+  /** What the status line says before it has run. */
   readonly idle?: ReactNode;
   readonly run: (optionId: ModelOptionId | undefined) => Promise<ModelActionResult>;
   readonly now?: () => number;
-  /** A run to start from, for the design system's examples: one going on, or how one ended. */
-  readonly initial?: ModelActionResult | { readonly runningSince: number };
-}) => {
+  readonly phase: RunPhase;
+  readonly onPhase: (phase: RunPhase) => void;
+}
+
+const start = async ({ choice, run, now = Date.now, onPhase }: ModelActionProps) => {
+  onPhase({ is: "running", since: now() });
+  const result = await run(choice.chosen?.id);
+  onPhase(result.ok ? { is: "done", said: result.said } : { is: "failed", ...result });
+};
+
+/** What the button's tooltip and description say: why it can't run, or what runs it. */
+const noteOf = ({ choice, blocked = null, what = "Runs" }: ModelActionProps): string | null =>
+  blocked ??
+  choice.locked ??
+  (choice.chosen === null
+    ? null
+    : `${what} ${choice.chosen.modelName} through ${choice.chosen.via}`);
+
+/**
+ * A button that makes one model call on the option chosen for Request AI review, with the same
+ * arrow beside it to change that choice. Its tooltip says which model and who pays, as that
+ * button's does. It can't run twice at once; when it can't run at all it stays focusable and says
+ * why. What came of it is `ModelActionStatus`, which the panel places apart from it.
+ */
+export const ModelActionButton = (props: ModelActionProps) => {
   const id = useId();
-  const [phase, setPhase] = useState<Phase>(() => {
-    if (initial === undefined) return { is: "idle" };
-    if ("runningSince" in initial) return { is: "running", since: initial.runningSince };
-    return initial.ok ? { is: "done", said: initial.said } : { is: "failed", ...initial };
-  });
-  const elapsed = useElapsed(phase.is === "running" ? phase.since : null, now);
-  const { chosen, locked } = choice;
+  const { label, icon, size = "default", choice, blocked = null, phase } = props;
   const busy = phase.is === "running";
-  const cannot = blocked ?? locked;
-  const note =
-    cannot ?? (chosen === null ? null : `${what} ${chosen.modelName} through ${chosen.via}`);
-
-  const start = async () => {
-    setPhase({ is: "running", since: now() });
-    const result = await run(chosen?.id);
-    setPhase(result.ok ? { is: "done", said: result.said } : { is: "failed", ...result });
-  };
-
+  const cannot = blocked ?? choice.locked;
+  const note = noteOf(props);
   return (
-    <div data-slot="model-action" className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-      <span className="flex shrink-0 items-center">
-        <Tooltip disabled={note === null}>
-          <TooltipTrigger
-            render={
-              <Button
-                variant={variant}
-                size="sm"
-                disabled={busy || cannot !== null || chosen === null}
-                focusableWhenDisabled
-                aria-busy={busy}
-                aria-describedby={note === null ? undefined : `${id}-note`}
-                onClick={() => void start()}
-                className="rounded-r-none"
-              />
-            }
-          >
-            {busy ? (
-              <LoaderCircleIcon aria-hidden="true" className={SPIN} />
-            ) : locked !== null && blocked === null ? (
-              <LockIcon aria-hidden="true" />
-            ) : (
-              icon
-            )}
-            {label}
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="start">
-            {cannot !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
-            {note}
-          </TooltipContent>
-        </Tooltip>
-        <ModelMenu
-          choice={choice}
-          disabled={busy || choice.options.length === 0}
-          variant={variant === "default" && cannot === null ? "default" : "outline"}
-        />
-      </span>
+    <span data-slot="model-action" className="flex shrink-0 items-center">
+      <Tooltip disabled={note === null}>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ai-quiet"
+              size={size}
+              disabled={busy || cannot !== null || choice.chosen === null}
+              focusableWhenDisabled
+              aria-busy={busy}
+              aria-describedby={note === null ? undefined : `${id}-note`}
+              onClick={() => void start(props)}
+              className="rounded-r-none"
+            />
+          }
+        >
+          {busy ? (
+            <LoaderCircleIcon aria-hidden="true" className={SPIN} />
+          ) : choice.locked !== null && blocked === null ? (
+            <LockIcon aria-hidden="true" />
+          ) : (
+            icon
+          )}
+          {label}
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="end">
+          {cannot !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
+          {note}
+        </TooltipContent>
+      </Tooltip>
+      <ModelMenu
+        choice={choice}
+        disabled={busy || choice.options.length === 0}
+        variant="ai-quiet"
+        size={size}
+      />
       {/* The tooltip is for the eye; a screen reader reads the same words as the description. */}
       {note !== null && (
         <span id={`${id}-note`} hidden>
           {note}
         </span>
       )}
-      <span
-        role={phase.is === "failed" ? "alert" : "status"}
-        className={cn(
-          "flex min-w-0 flex-1 basis-56 flex-wrap items-center gap-x-2 text-caption",
-          phase.is === "failed" ? "text-destructive" : "text-muted-foreground",
-        )}
-      >
-        {phase.is === "running" ? (
-          <>
-            {running} <span className="tabular">{clock(elapsed)}</span>
-          </>
-        ) : phase.is === "done" ? (
-          phase.said
-        ) : phase.is === "failed" ? (
-          <>
-            <span>
-              <TriangleAlertIcon aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" />
-              {phase.message}
-            </span>
-            <Button
-              variant="link"
-              className="h-6 min-w-6 px-1 text-caption"
-              onClick={() => void start()}
-            >
-              Try again
-            </Button>
-          </>
-        ) : (
-          idle
-        )}
-      </span>
+    </span>
+  );
+};
+
+/** What a run is doing or came to, with Try again after a failure; before a run, `idle`. */
+export const ModelActionStatus = (props: ModelActionProps & { readonly className?: string }) => {
+  const { running, idle = null, now = Date.now, phase, className } = props;
+  const elapsed = useElapsed(phase.is === "running" ? phase.since : null, now);
+  if (phase.is === "idle" && idle === null) return null;
+  return (
+    <p
+      role={phase.is === "failed" ? "alert" : "status"}
+      data-slot="model-action-status"
+      className={cn(
+        "flex min-w-0 flex-wrap items-center gap-x-2 text-caption",
+        phase.is === "failed" ? "text-destructive" : "text-muted-foreground",
+        className,
+      )}
+    >
+      {phase.is === "running" ? (
+        <>
+          {running} <span className="tabular">{clock(elapsed)}</span>
+        </>
+      ) : phase.is === "done" ? (
+        phase.said
+      ) : phase.is === "failed" ? (
+        <>
+          <span>
+            <TriangleAlertIcon aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" />
+            {phase.message}
+          </span>
+          <Button
+            variant="link"
+            className="h-6 min-w-6 px-1 text-caption"
+            onClick={() => void start(props)}
+          >
+            Try again
+          </Button>
+        </>
+      ) : (
+        idle
+      )}
+    </p>
+  );
+};
+
+/** The button and its status together, with a run of its own, for the design system's examples. */
+export const ModelAction = ({
+  initial = IDLE,
+  ...props
+}: Omit<ModelActionProps, "phase" | "onPhase"> & { readonly initial?: RunPhase }) => {
+  const [phase, setPhase] = useState(initial);
+  const all = { ...props, phase, onPhase: setPhase };
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <ModelActionButton {...all} />
+      <ModelActionStatus {...all} />
     </div>
   );
 };

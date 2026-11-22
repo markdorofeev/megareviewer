@@ -1,9 +1,11 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PreferencesView, StatusResponse } from "../../../../contracts/index.ts";
+import type { RepoRef } from "../../../../src/domain/review/index.ts";
 import {
   emptyPreferencesView,
+  fixtureImport,
   fixturePreferencesView,
   fixtureStatus,
   lockedModelOptions,
@@ -14,6 +16,7 @@ import { ConnectionsProvider } from "../../app/connections-context.tsx";
 import { testApi } from "../../testing/api.tsx";
 import { fakeFetch, jsonResponse, type RecordedRequest } from "../../testing/fetch.ts";
 import { TooltipProvider } from "../../ui/tooltip.tsx";
+import { tooLong } from "./PreferenceForm.tsx";
 import { NOTHING_RECORDED, PreferencesPage } from "./PreferencesPage.tsx";
 
 type Respond = (request: RecordedRequest) => Response | Promise<Response>;
@@ -31,14 +34,16 @@ const held = () => {
   return { respond, release: (response: Response) => release(response) };
 };
 
-/** The page over the mock API, with some routes answered otherwise, by "METHOD /path". */
+/** The page over the mock API, at `path`, with some routes answered otherwise, by "METHOD /path". */
 const renderPage = (
   options: {
     readonly preferences?: PreferencesView;
     readonly overrides?: Readonly<Record<string, Respond>>;
     readonly now?: () => number;
+    readonly path?: string;
   } = {},
 ) => {
+  window.history.replaceState(null, "", options.path ?? "/preferences");
   const mock = mockFetch(
     createMockApi(options.preferences === undefined ? {} : { preferences: options.preferences }),
   );
@@ -70,11 +75,19 @@ const renderPage = (
   return { requests, sent };
 };
 
-const everywhere = () => screen.findByRole("region", { name: "Everywhere" });
-const shop = () => screen.getByRole("region", { name: /^acme\/shop/ });
-const suggested = () => screen.getByRole("region", { name: "Suggested" });
+const SHOP = "/preferences?scope=github/acme/shop";
+const API = "/preferences?scope=bitbucket/acme/api";
+const SUGGESTIONS = "/preferences?scope=suggestions";
+
+/** The panel shown, by its title. */
+const panel = (name: string | RegExp) => screen.findByRole("region", { name });
+const everywhere = () => panel("Everywhere");
+const scopes = () => screen.getByRole("navigation", { name: "Scopes" });
 const rows = (section: HTMLElement) =>
   [...section.querySelectorAll("[data-slot=preference]")].map((row) => row.textContent);
+const proposalRows = (section: HTMLElement) => [
+  ...section.querySelectorAll("[data-slot=proposal]"),
+];
 
 /** The text an element's aria-describedby points to. */
 const description = (element: Element): string =>
@@ -83,6 +96,10 @@ const description = (element: Element): string =>
     .map((id) => document.getElementById(id)?.textContent ?? "")
     .join(" ")
     .trim();
+
+beforeEach(() => {
+  window.history.replaceState(null, "", "/preferences");
+});
 
 afterEach(() => {
   vi.useRealTimers();
@@ -119,17 +136,130 @@ describe("PreferencesPage", () => {
     expect(sent("GET", "/api/preferences")).toHaveLength(2);
   });
 
-  it("says what a preference is, with two examples and the form, when there's none", async () => {
+  it("lists the scopes, with a count only where there's one, and opens on Everywhere", async () => {
+    renderPage({ preferences: { ...fixturePreferencesView, preferences: [] } });
+    await everywhere();
+    const buttons = within(scopes()).getAllByRole("button");
+    expect(buttons.map((one) => one.getAttribute("aria-label"))).toEqual([
+      "Suggestions, 2 waiting",
+      "Everywhere",
+      "acme/shop",
+      "acme/api",
+    ]);
+    expect(buttons.map((one) => one.textContent)).toEqual([
+      "Suggestions2",
+      "Everywhere",
+      "shop",
+      "api",
+    ]);
+    expect(buttons[1]?.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("opens the scope chosen, says so in the URL, and moves the focus to it", async () => {
+    renderPage();
+    await everywhere();
+    const shop = within(scopes()).getByRole("button", { name: "acme/shop, 2 preferences" });
+    await userEvent.click(shop);
+    const section = await panel("acme/shop");
+    expect(window.location.search).toBe("?scope=github/acme/shop");
+    expect(shop.getAttribute("aria-current")).toBe("page");
+    expect(document.activeElement).toBe(
+      within(section).getByRole("heading", { level: 2, name: "acme/shop" }),
+    );
+    expect(section.textContent).toContain("GitHub");
+    expect(screen.queryByRole("region", { name: "Everywhere" })).toBeNull();
+
+    // Back goes to the scope before, as a page would.
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => window.addEventListener("popstate", resolve, { once: true }));
+    });
+    expect(await everywhere()).toBeTruthy();
+  });
+
+  it("opens the scope the URL names, as after a reload, and Everywhere for one it doesn't know", async () => {
+    renderPage({ path: API });
+    expect(await panel("acme/api")).toBeTruthy();
+    expect(
+      within(scopes())
+        .getByRole("button", { name: /^acme\/api/ })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+  });
+
+  it("falls back to Everywhere for a scope it doesn't list", async () => {
+    renderPage({ path: "/preferences?scope=github/acme/gone" });
+    expect(await everywhere()).toBeTruthy();
+  });
+
+  it("offers the same scopes in a select for a narrow screen", async () => {
+    renderPage();
+    await everywhere();
+    const select = screen.getByRole("combobox", { name: "Scope" });
+    expect(select.textContent).toContain("Everywhere");
+    await userEvent.click(select);
+    const options = await screen.findAllByRole("option");
+    expect(options.map((one) => one.getAttribute("aria-label"))).toEqual([
+      "Suggestions, 2 waiting",
+      "Everywhere, 2 preferences",
+      "acme/shop, 2 preferences",
+      "acme/api, 1 preference",
+    ]);
+    await userEvent.click(screen.getByRole("option", { name: /^acme\/api/ }));
+    const section = await panel("acme/api");
+    expect(window.location.search).toBe("?scope=bitbucket/acme/api");
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(section).getByRole("heading", { level: 2 })),
+    );
+  });
+
+  it("names a repository by its name alone, and its owner where another has the name", async () => {
+    const shop = fixturePreferencesView.repositories[0];
+    if (shop === undefined) throw new Error("the fixture has repositories");
+    const fork: RepoRef = { ...shop.repo, owner: "tomkx" };
+    renderPage({
+      preferences: {
+        ...fixturePreferencesView,
+        repositories: [...fixturePreferencesView.repositories, { ...shop, repo: fork }],
+      },
+    });
+    await everywhere();
+    const names = within(scopes())
+      .getAllByRole("button")
+      .slice(2)
+      .map((one) => [one.getAttribute("aria-label"), one.textContent]);
+    expect(names).toEqual([
+      ["acme/shop, 2 preferences", "acme/shop2"],
+      ["acme/api, 1 preference", "api1"],
+      ["tomkx/shop", "tomkx/shop"],
+    ]);
+  });
+
+  it("says nothing's suggested yet only where Suggest's own line doesn't", async () => {
+    renderPage({ preferences: { ...emptyPreferencesView, signalsSinceSuggestion: 3 } });
+    const section = await everywhere();
+    expect(section.textContent).toContain(
+      "No suggestions yet. megareviewer suggests preferences from the points you raise or dismiss and the comments you post.",
+    );
+    expect(section.textContent).toContain("3 actions recorded since the last suggestions");
+  });
+
+  it("says what a preference is, with the form, when there's none", async () => {
     const { sent } = renderPage({ preferences: emptyPreferencesView });
     const section = await everywhere();
-    expect(section.textContent).toContain("A preference is one rule for AI reviews");
-    expect(section.textContent).toContain("Tenant isolation: every query filters by tenant ID");
-    expect(section.textContent).toContain("“Naming”");
-    expect(screen.queryByRole("region", { name: "Suggested" })).toBeNull();
-    // The form is there already, so there's no button to open it and nothing to cancel.
-    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
-    await userEvent.type(within(section).getByRole("textbox"), "Unbounded retries");
-    await userEvent.click(within(section).getByRole("button", { name: "Add preference" }));
+    expect(section.textContent).toContain(
+      "No preferences for every repository yet. A preference is one rule for AI reviews: Look for something to look for, or Don't flag something not to flag.",
+    );
+    // Nothing is recorded, so Suggest's line says where suggestions come from, once.
+    expect(section.textContent).toContain(NOTHING_RECORDED);
+    expect(section.textContent).not.toContain("No suggestions yet.");
+    expect(within(section).queryByRole("region", { name: /^Preferences/ })).toBeNull();
+    expect(within(section).queryByRole("region", { name: /^Suggestions/ })).toBeNull();
+    // The form is always open, so there's nothing to open it with or to cancel.
+    expect(within(section).queryByRole("button", { name: "Cancel" })).toBeNull();
+    const form = within(section).getByRole("form", { name: "Add a preference" });
+    await userEvent.type(within(form).getByRole("textbox"), "Unbounded retries");
+    await userEvent.click(within(form).getByRole("button", { name: "Add preference" }));
     await waitFor(() => expect(rows(section)).toHaveLength(1));
     expect(sent("POST", "/api/preferences")[0]?.body).toEqual({
       kind: "look-for",
@@ -137,21 +267,27 @@ describe("PreferencesPage", () => {
       scope: { kind: "global" },
     });
     expect(section.textContent).not.toContain("A preference is one rule");
+    expect(within(scopes()).getByRole("button", { name: "Everywhere, 1 preference" })).toBeTruthy();
   });
 
-  it("lists each scope's preferences with their kind, source and switch", async () => {
+  it("lists a scope's preferences with their kind, where they came from and their switch", async () => {
     renderPage();
     const section = await everywhere();
     expect(rows(section)).toEqual([
-      "Look forTenant isolation: every query filters by tenant IDwritten",
-      "Don't flagNaminglearned",
+      "Look forTenant isolation: every query filters by tenant ID",
+      "Don't flagNamingFrom your reviews",
     ]);
-    expect(within(section).getByText("2 preferences")).toBeTruthy();
-    expect(rows(shop())).toEqual([
-      "Look forMigrations that lock a tableimported",
-      "Don't flagMissing tests for changes that only add loggingwritten · off",
+    expect(within(section).getByRole("heading", { level: 3, name: "Preferences 2" })).toBeTruthy();
+  });
+
+  it("keeps a switched-off preference's switch, and says it's off in words", async () => {
+    renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    expect(rows(section)).toEqual([
+      "Look forMigrations that lock a tableFrom your reviews",
+      "Don't flagMissing tests for changes that only add loggingoff",
     ]);
-    const switches = within(shop()).getAllByRole("switch", { name: /^Use in AI reviews: / });
+    const switches = within(section).getAllByRole("switch", { name: /^Use in AI reviews: / });
     expect(switches.map((one) => one.getAttribute("aria-checked"))).toEqual(["true", "false"]);
   });
 
@@ -173,70 +309,90 @@ describe("PreferencesPage", () => {
     expect(sent("PUT", "/api/preferences/pref_0000000000000002")[0]?.body).toEqual({
       enabled: false,
     });
-    const off = within(shop()).getByRole("switch", { name: /Missing tests/ });
+    await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/shop/ }));
+    const shop = await panel("acme/shop");
+    const off = within(shop).getByRole("switch", { name: /Missing tests/ });
     await userEvent.click(off);
-    expect((await within(shop()).findByRole("alert")).textContent).toBe(
+    expect((await within(shop).findByRole("alert")).textContent).toBe(
       "50 preferences are already enabled for acme/shop: switch one off or delete it first.",
     );
     expect(off.getAttribute("aria-checked")).toBe("false");
   });
 
-  it("adds a preference from a repository's section, on that repository", async () => {
-    const { sent } = renderPage();
-    await everywhere();
-    const open = within(shop()).getByRole("button", { name: "Add preference for acme/shop" });
-    await userEvent.click(open);
-    const form = within(shop()).getByRole("form", { name: "Add a preference" });
-    expect(document.activeElement).toBe(within(form).getByRole("textbox"));
+  it("adds a preference on the panel's repository, and keeps the kind for the next", async () => {
+    const { sent } = renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    const form = within(section).getByRole("form", { name: "Add a preference" });
     expect(within(form).getByRole("combobox", { name: "Applies to" }).textContent).toContain(
       "acme/shop",
     );
-    await userEvent.type(within(form).getByRole("textbox"), "Money as floats{Enter}");
-    await waitFor(() => expect(rows(shop())).toHaveLength(3));
-    expect(sent("POST", "/api/preferences")[0]?.body).toMatchObject({
+    await userEvent.click(within(form).getByRole("radio", { name: "Don't flag" }));
+    const field = within(form).getByRole<HTMLTextAreaElement>("textbox");
+    await userEvent.type(field, "Money as floats{Enter}");
+    await waitFor(() => expect(rows(section)).toHaveLength(3));
+    expect(sent("POST", "/api/preferences")[0]?.body).toEqual({
+      kind: "dont-flag",
       text: "Money as floats",
       scope: { kind: "repo", repo: { host: "github", owner: "acme", repo: "shop" } },
     });
-    // The form closes, and the focus is back where it was opened from.
-    expect(within(shop()).queryByRole("form")).toBeNull();
-    expect(document.activeElement).toBe(open);
+    expect(field.value).toBe("");
+    expect(
+      within(form).getByRole("radio", { name: "Don't flag" }).getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(within(scopes()).getByRole("button", { name: "acme/shop, 3 preferences" })).toBeTruthy();
   });
 
-  it("edits a preference in place, from its menu", async () => {
+  it("says under the field why a preference wasn't added, keeping what was written", async () => {
+    renderPage({
+      overrides: {
+        "POST /api/preferences": () =>
+          failure(400, "bad-request", "50 preferences are already enabled for every repository"),
+      },
+    });
+    const section = await everywhere();
+    const form = within(section).getByRole("form", { name: "Add a preference" });
+    const field = within(form).getByRole<HTMLTextAreaElement>("textbox");
+    await userEvent.type(field, "Naming{Enter}");
+    expect((await within(form).findByText(/50 preferences are already enabled/)).textContent).toBe(
+      "50 preferences are already enabled for every repository.",
+    );
+    expect(field.value).toBe("Naming");
+  });
+
+  it("edits a preference in place, and gives the focus back to Edit", async () => {
     const { sent } = renderPage();
     const section = await everywhere();
-    await userEvent.click(within(section).getByRole("button", { name: "More for: Naming" }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    await userEvent.click(within(section).getByRole("button", { name: "Edit: Naming" }));
     const form = within(section).getByRole("form", { name: "Edit: Naming" });
     const field = within(form).getByRole("textbox");
+    expect(document.activeElement).toBe(field);
     await userEvent.clear(field);
     await userEvent.type(field, "Names of locals");
     await userEvent.click(within(form).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(rows(section)[1]).toBe("Don't flagNames of localslearned"));
+    await waitFor(() =>
+      expect(rows(section)[1]).toBe("Don't flagNames of localsFrom your reviews"),
+    );
     expect(sent("PUT", "/api/preferences/pref_0000000000000002")[0]?.body).toEqual({
       kind: "dont-flag",
       text: "Names of locals",
       scope: { kind: "global" },
     });
-    // The form went, so the focus is back on the menu it was opened from.
     expect(document.activeElement).toBe(
-      within(section).getByRole("button", { name: "More for: Names of locals" }),
+      within(section).getByRole("button", { name: "Edit: Names of locals" }),
     );
   });
 
   it("asks before deleting a preference", async () => {
     const { sent } = renderPage();
     const section = await everywhere();
-    await userEvent.click(within(section).getByRole("button", { name: "More for: Naming" }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
+    await userEvent.click(within(section).getByRole("button", { name: "Delete: Naming" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete preference" });
     expect(dialog.textContent).toContain("Naming");
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(rows(section)).toHaveLength(2);
     expect(sent("DELETE", "/api/preferences/pref_0000000000000002")).toHaveLength(0);
 
-    await userEvent.click(within(section).getByRole("button", { name: "More for: Naming" }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
+    await userEvent.click(within(section).getByRole("button", { name: "Delete: Naming" }));
     await userEvent.click(
       within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }),
     );
@@ -246,109 +402,123 @@ describe("PreferencesPage", () => {
 });
 
 describe("PreferencesPage's suggestions", () => {
-  it("shows what a proposal would add, where, and what it's based on", async () => {
-    renderPage();
-    await everywhere();
-    const proposals = [...suggested().querySelectorAll("[data-slot=proposal]")];
-    expect(proposals).toHaveLength(2);
-    expect(proposals[0]?.textContent).toContain("Don't flagMissing JSDoc on internal helpers");
-    expect(proposals[0]?.textContent).toContain("acme/shop, from what you did in reviews");
-    expect(proposals[0]?.textContent).toContain(
-      "Based on:Dismissed: Missing JSDoc on `parseConfig`, acme/shop #121",
+  /** Two proposals waiting for acme/shop, one for everywhere. */
+  const twoForShop = {
+    ...fixturePreferencesView,
+    proposals: [...fixturePreferencesView.proposals, fixtureImport],
+  };
+
+  it("lists every proposal on its own panel, by scope, with what it's based on", async () => {
+    renderPage({ path: SUGGESTIONS });
+    const section = await panel("Suggestions");
+    const groups = within(section).getAllByRole("heading", { level: 3 });
+    expect(groups.map((one) => one.textContent)).toEqual(["Everywhere 1", "acme/shop 1"]);
+    const [jsdoc] = proposalRows(
+      within(section).getByRole("list", { name: "Suggestions for acme/shop" }),
     );
-    expect(within(suggested()).getByText("2 suggestions")).toBeTruthy();
+    expect(jsdoc?.textContent).toContain("Don't flagMissing JSDoc on internal helpers");
+    expect(within(jsdoc as HTMLElement).getByRole("list", { name: "Based on" }).textContent).toBe(
+      "Dismissed: Missing JSDoc on `parseConfig`, acme/shop #121Dismissed: Missing JSDoc on `renderReceipt`, acme/shop #128",
+    );
+    expect(within(section).queryByRole("form")).toBeNull();
   });
 
-  it("accepts a proposal as it reads, which makes it a preference", async () => {
-    const { sent } = renderPage();
-    await everywhere();
+  it("shows a scope's own proposals first on its panel", async () => {
+    renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    const suggestions = within(section).getByRole("region", {
+      name: "Suggestions from your reviews 1",
+    });
+    expect(proposalRows(suggestions)).toHaveLength(1);
+    expect(
+      suggestions.compareDocumentPosition(
+        within(section).getByRole("region", { name: /^Preferences/ }),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("adds a proposal as it reads, which makes it a preference", async () => {
+    const { sent } = renderPage({ path: SHOP, preferences: twoForShop });
+    const section = await panel("acme/shop");
+    const list = within(section).getByRole("list", { name: "Suggestions for acme/shop" });
     await userEvent.click(
-      within(suggested()).getByRole("button", {
-        name: "Accept: Missing JSDoc on internal helpers",
+      within(list).getByRole("button", {
+        name: "Add suggestion: Missing JSDoc on internal helpers",
       }),
     );
-    await waitFor(() => expect(rows(shop())).toHaveLength(3));
-    expect(rows(shop())[2]).toBe("Don't flagMissing JSDoc on internal helperslearned");
+    await waitFor(() => expect(rows(section)).toHaveLength(3));
+    expect(rows(section)[2]).toBe("Don't flagMissing JSDoc on internal helpersFrom your reviews");
     expect(sent("PUT", "/api/preferences/proposals/prop_0000000000000001")[0]?.body).toEqual({
       decision: "accept",
     });
-    expect(suggested().querySelectorAll("[data-slot=proposal]")).toHaveLength(1);
-    // The button went with its proposal, so the card takes the focus.
-    expect(document.activeElement).toBe(suggested());
+    expect(proposalRows(list)).toHaveLength(1);
+    // The button went with its proposal, so the list takes the focus.
+    expect(document.activeElement).toBe(list);
+    expect(within(scopes()).getByRole("button", { name: "Suggestions, 2 waiting" })).toBeTruthy();
   });
 
-  it("opens a proposal in the form first, and accepts it as edited", async () => {
-    const { sent } = renderPage();
-    const section = await everywhere();
-    const edit = () => within(suggested()).getByRole("button", { name: /^Edit: Cached data/ });
-    // Cancel leaves the proposal waiting, with the focus back on Edit.
-    await userEvent.click(edit());
-    await userEvent.click(within(suggested()).getByRole("button", { name: "Cancel" }));
-    expect(document.activeElement).toBe(edit());
-    expect(sent("PUT", "/api/preferences/proposals/prop_0000000000000002")).toHaveLength(0);
-
-    await userEvent.click(edit());
-    const form = within(suggested()).getByRole("form", { name: /^Edit the suggestion/ });
-    const field = within(form).getByRole("textbox");
-    await userEvent.clear(field);
-    await userEvent.type(field, "Caches with no invalidation");
-    await userEvent.click(within(form).getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(rows(section)).toHaveLength(3));
-    expect(sent("PUT", "/api/preferences/proposals/prop_0000000000000002")[0]?.body).toEqual({
-      decision: "accept",
-      kind: "look-for",
-      text: "Caches with no invalidation",
-      scope: { kind: "global" },
-    });
-  });
-
-  it("rejects a proposal, and the card goes with the last one", async () => {
-    const { sent } = renderPage({
-      preferences: {
-        ...fixturePreferencesView,
-        proposals: fixturePreferencesView.proposals.slice(0, 1),
-      },
-    });
-    await everywhere();
-    await userEvent.click(within(suggested()).getByRole("button", { name: /^Reject: / }));
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Suggested" })).toBeNull());
+  it("dismisses a proposal for good, and the section goes with the last one", async () => {
+    const { sent } = renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    await userEvent.click(within(section).getByRole("button", { name: /^Dismiss suggestion: / }));
+    await waitFor(() =>
+      expect(within(section).queryByRole("region", { name: /^Suggestions from/ })).toBeNull(),
+    );
     expect(sent("PUT", "/api/preferences/proposals/prop_0000000000000001")[0]?.body).toEqual({
       decision: "reject",
     });
-    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1 }));
+    expect(document.activeElement).toBe(within(section).getByRole("heading", { level: 2 }));
   });
 
-  it("opens the form on a proposal too long to accept as it reads", async () => {
+  it("opens a proposal too long to add as it reads in the form, cut to fit there", async () => {
     const [proposal] = fixturePreferencesView.proposals;
     if (proposal === undefined) throw new Error("the fixture has proposals");
     const { sent } = renderPage({
+      path: SHOP,
       preferences: {
         ...fixturePreferencesView,
         proposals: [{ ...proposal, text: "x".repeat(310) }],
       },
     });
-    await everywhere();
-    await userEvent.click(within(suggested()).getByRole("button", { name: /^Accept: / }));
-    const form = within(suggested()).getByRole("form");
-    expect(within(form).getByRole("status").textContent).toContain("this is 10 too many");
+    const section = await panel("acme/shop");
+    const add = () => within(section).getByRole("button", { name: /^Add suggestion: / });
+    // Cancel leaves it waiting, with the focus back where it was.
+    await userEvent.click(add());
+    await userEvent.click(within(section).getByRole("button", { name: "Cancel" }));
+    expect(add()).toBeTruthy();
+
+    await userEvent.click(add());
+    const form = within(section).getByRole("form", { name: /^Cut the suggestion to fit/ });
+    expect(within(form).getByRole("status").textContent).toBe(tooLong(10));
     expect(sent("PUT", `/api/preferences/proposals/${proposal.id}`)).toHaveLength(0);
+    const field = within(form).getByRole("textbox");
+    expect(document.activeElement).toBe(field);
+    await userEvent.clear(field);
+    await userEvent.type(field, "JSDoc on helpers");
+    await userEvent.click(within(form).getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(rows(section)).toHaveLength(3));
+    expect(sent("PUT", `/api/preferences/proposals/${proposal.id}`)[0]?.body).toEqual({
+      decision: "accept",
+      kind: "dont-flag",
+      text: "JSDoc on helpers",
+      scope: { kind: "repo", repo: { host: "github", owner: "acme", repo: "shop" } },
+    });
   });
 
   it("says why a decision failed, and keeps the proposal", async () => {
     renderPage({
+      path: SHOP,
       overrides: {
         "PUT /api/preferences/proposals/prop_0000000000000001": () =>
           failure(400, "bad-request", "The proposal is already accepted"),
       },
     });
-    await everywhere();
-    await userEvent.click(
-      within(suggested()).getByRole("button", { name: /^Accept: Missing JSDoc/ }),
-    );
-    expect((await within(suggested()).findByRole("alert")).textContent).toBe(
+    const section = await panel("acme/shop");
+    await userEvent.click(within(section).getByRole("button", { name: /^Add suggestion: / }));
+    expect((await within(section).findByRole("alert")).textContent).toBe(
       "The proposal is already accepted.",
     );
-    expect(suggested().querySelectorAll("[data-slot=proposal]")).toHaveLength(2);
+    expect(proposalRows(section)).toHaveLength(1);
   });
 });
 
@@ -365,7 +535,7 @@ describe("PreferencesPage's Suggest from my reviews", () => {
     expect(screen.getByText("14 actions recorded since the last suggestions")).toBeTruthy();
   });
 
-  it("says it's running and how long, can't run twice, then says what it proposed", async () => {
+  it("says it's running and how long, can't run twice, then where its suggestions went", async () => {
     const pending = held();
     let nowMs = 1_000_000;
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -379,13 +549,12 @@ describe("PreferencesPage's Suggest from my reviews", () => {
     await userEvent.click(suggest());
     expect(suggest().getAttribute("aria-busy")).toBe("true");
     expect(suggest().getAttribute("aria-disabled")).toBe("true");
-    const status = within(suggest().closest("[data-slot=model-action]") as HTMLElement).getByRole(
-      "status",
-    );
-    expect(status.textContent).toBe("Reading what you did in reviews… 0:00");
+    const status = () =>
+      screen.getByText(/^Reading what you did in reviews/, { selector: "[role=status]" });
+    expect(status().textContent).toBe("Reading what you did in reviews… 0:00");
     nowMs += 12_000;
     await act(async () => vi.advanceTimersByTime(1_000));
-    expect(status.textContent).toBe("Reading what you did in reviews… 0:12");
+    expect(status().textContent).toBe("Reading what you did in reviews… 0:12");
     await userEvent.click(suggest());
     expect(sent("POST", "/api/preferences/suggestions")).toHaveLength(1);
     expect(sent("POST", "/api/preferences/suggestions")[0]?.body).toEqual({
@@ -397,18 +566,35 @@ describe("PreferencesPage's Suggest from my reviews", () => {
         jsonResponse(200, { proposals: fixturePreferencesView.proposals, signals: 14 }),
       ),
     );
-    expect(await screen.findByText("2 suggestions from 14 actions, above.")).toBeTruthy();
-    expect(suggested().querySelectorAll("[data-slot=proposal]")).toHaveLength(2);
+    expect(
+      await screen.findByText(
+        "2 suggestions from 14 actions, 1 for Everywhere and 1 for acme/shop.",
+      ),
+    ).toBeTruthy();
+    expect(proposalRows(await everywhere())).toHaveLength(1);
+    expect(within(scopes()).getByRole("button", { name: "Suggestions, 2 waiting" })).toBeTruthy();
     // Nothing's new since, so it can't run again until something is recorded.
     expect(suggest().getAttribute("aria-disabled")).toBe("true");
     expect(description(suggest())).toBe(NOTHING_RECORDED);
   });
 
-  it("runs on the model chosen beside it, which every model button shares", async () => {
-    const { sent } = renderPage({ preferences: withoutProposals });
+  it("keeps what a run came to on every panel that offers it", async () => {
+    renderPage({ preferences: withoutProposals });
     await everywhere();
-    const action = suggest().closest("[data-slot=model-action]") as HTMLElement;
-    await userEvent.click(await within(action).findByRole("button", { name: "Model: Sonnet 5.5" }));
+    await waitFor(() => expect(suggest().getAttribute("aria-disabled")).not.toBe("true"));
+    await userEvent.click(suggest());
+    const said = "2 suggestions from 14 actions, 1 for Everywhere and 1 for acme/shop.";
+    expect(await screen.findByText(said)).toBeTruthy();
+    await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/shop/ }));
+    await panel("acme/shop");
+    expect(screen.getByText(said)).toBeTruthy();
+  });
+
+  it("runs on the model chosen beside it, which every model button shares", async () => {
+    const { sent } = renderPage({ preferences: withoutProposals, path: SHOP });
+    const section = await panel("acme/shop");
+    const [arrow] = await within(section).findAllByRole("button", { name: "Model: Sonnet 5.5" });
+    await userEvent.click(arrow as HTMLElement);
     await userEvent.click(
       within(await screen.findByRole("menu")).getAllByRole("menuitemradio", {
         name: "Opus 5.5",
@@ -417,7 +603,8 @@ describe("PreferencesPage's Suggest from my reviews", () => {
     await waitFor(() =>
       expect(description(suggest())).toBe("Runs Opus 5.5 through Claude Code, on your Pro plan"),
     );
-    expect(within(shop()).getByRole("button", { name: "Model: Opus 5.5" })).toBeTruthy();
+    // Import's arrow beside it says the same choice.
+    expect(within(section).getAllByRole("button", { name: "Model: Opus 5.5" })).toHaveLength(2);
     await userEvent.click(suggest());
     await waitFor(() => expect(sent("POST", "/api/preferences/suggestions")).toHaveLength(1));
     expect(sent("POST", "/api/preferences/suggestions")[0]?.body).toEqual({
@@ -429,14 +616,6 @@ describe("PreferencesPage's Suggest from my reviews", () => {
     );
   });
 
-  it("keeps the model's arrow when nothing is recorded, for Import", async () => {
-    renderPage({ preferences: { ...withoutProposals, signalsSinceSuggestion: 0 } });
-    await everywhere();
-    const action = suggest().closest("[data-slot=model-action]") as HTMLElement;
-    const arrow = await within(action).findByRole("button", { name: "Model: Sonnet 5.5" });
-    expect(arrow.hasAttribute("disabled")).toBe(false);
-  });
-
   it("is disabled but focusable with nothing recorded, and says what's recorded", async () => {
     const { sent } = renderPage({
       preferences: { ...withoutProposals, signalsSinceSuggestion: 0 },
@@ -446,6 +625,9 @@ describe("PreferencesPage's Suggest from my reviews", () => {
     expect(suggest().hasAttribute("disabled")).toBe(false);
     expect(description(suggest())).toBe(NOTHING_RECORDED);
     expect(screen.getByText(NOTHING_RECORDED, { selector: "[role=status]" })).toBeTruthy();
+    // The model's arrow stays, since the choice is Import's and Request AI review's too.
+    const arrow = await screen.findByRole("button", { name: "Model: Sonnet 5.5" });
+    expect(arrow.hasAttribute("disabled")).toBe(false);
     suggest().focus();
     expect(document.activeElement).toBe(suggest());
     await userEvent.click(suggest());
@@ -463,7 +645,7 @@ describe("PreferencesPage's Suggest from my reviews", () => {
     expect(suggest().getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("shows the reason beside it when it fails, with Try again", async () => {
+  it("shows the reason under the title when it fails, with Try again", async () => {
     let fail = true;
     const { sent } = renderPage({
       preferences: withoutProposals,
@@ -490,30 +672,30 @@ describe("PreferencesPage's repositories", () => {
   const files = (section: HTMLElement) =>
     [...section.querySelectorAll("[data-slot=guideline-file]")].map((file) => file.textContent);
 
-  it("lists a repository's guideline files with their size, one too large without a switch", async () => {
-    renderPage();
-    await everywhere();
-    expect(shop().textContent).toContain(
-      "Guideline files, read at the base commit of the pull request",
-    );
-    expect(files(shop())).toEqual([
-      "REVIEW.md1.2 KB",
-      "CLAUDE.md48 KBtoo large to send: a guideline file can be 32 KB",
-      "CONTRIBUTING.md5.9 KB",
+  it("lists a repository's guideline files with their size and state, one too large without a switch", async () => {
+    renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    const guidelines = within(section).getByRole("region", { name: "Guideline files" });
+    expect(guidelines.textContent).toContain("read at each pull request's base commit");
+    expect(files(guidelines)).toEqual([
+      "REVIEW.md1.2 KBFollowed by AI reviews",
+      "CLAUDE.md48 KBToo large to send: a guideline file can be 32 KB",
+      "CONTRIBUTING.md5.9 KBIgnored",
     ]);
-    const switches = within(shop()).getAllByRole("switch", { name: /^Read / });
+    const switches = within(guidelines).getAllByRole("switch");
     expect(switches.map((one) => one.getAttribute("aria-label"))).toEqual([
-      "Read REVIEW.md in AI reviews of acme/shop",
-      "Read CONTRIBUTING.md in AI reviews of acme/shop",
+      "Use REVIEW.md in AI reviews",
+      "Use CONTRIBUTING.md in AI reviews",
     ]);
   });
 
-  it("switches a guideline file", async () => {
-    const { sent } = renderPage();
-    await everywhere();
-    const review = within(shop()).getByRole("switch", { name: /^Read REVIEW\.md/ });
+  it("switches a guideline file, and says its new state", async () => {
+    const { sent } = renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    const review = within(section).getByRole("switch", { name: "Use REVIEW.md in AI reviews" });
     await userEvent.click(review);
     await waitFor(() => expect(review.getAttribute("aria-checked")).toBe("false"));
+    expect(files(section)[0]).toBe("REVIEW.md1.2 KBIgnored");
     expect(sent("PUT", "/api/preferences/guidelines")[0]?.body).toEqual({
       repo: { host: "github", owner: "acme", repo: "shop" },
       path: "REVIEW.md",
@@ -523,21 +705,23 @@ describe("PreferencesPage's repositories", () => {
 
   it("says why a guideline switch failed, and leaves it as it was", async () => {
     renderPage({
+      path: SHOP,
       overrides: {
         "PUT /api/preferences/guidelines": () => failure(500, "internal", "The store is locked"),
       },
     });
-    await everywhere();
-    const review = within(shop()).getByRole("switch", { name: /^Read REVIEW\.md/ });
+    const section = await panel("acme/shop");
+    const review = within(section).getByRole("switch", { name: "Use REVIEW.md in AI reviews" });
     await userEvent.click(review);
-    expect((await within(shop()).findByRole("alert")).textContent).toBe("The store is locked.");
+    expect((await within(section).findByRole("alert")).textContent).toBe("The store is locked.");
     expect(review.getAttribute("aria-checked")).toBe("true");
   });
 
-  it("says why a repository's guideline files weren't read, or that it has none", async () => {
+  it("says that a repository has no guideline files, or why they weren't read", async () => {
     const [first] = fixturePreferencesView.repositories;
     if (first === undefined) throw new Error("the fixture has repositories");
     renderPage({
+      path: SHOP,
       preferences: {
         ...fixturePreferencesView,
         repositories: [
@@ -546,19 +730,20 @@ describe("PreferencesPage's repositories", () => {
         ],
       },
     });
-    await everywhere();
-    expect(shop().textContent).toContain(
-      "None at the repository's root, where megareviewer looks for REVIEW.md, AGENTS.md, CLAUDE.md, CONTRIBUTING.md, or .github/copilot-instructions.md.",
+    const section = await panel("acme/shop");
+    expect(section.textContent).toContain(
+      "None at the repository's root. megareviewer looks for REVIEW.md, AGENTS.md, CLAUDE.md, CONTRIBUTING.md, or .github/copilot-instructions.md.",
     );
-    const api = screen.getByRole("region", { name: /^acme\/api/ });
+    await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/api/ }));
+    const api = await panel("acme/api");
     expect(api.textContent).toContain("Bitbucket");
     expect(api.textContent).toContain("No pull request of this repository has been analyzed yet.");
   });
 
-  it("imports from past reviews, and says what it read", async () => {
-    const { sent } = renderPage();
-    await everywhere();
-    const button = within(shop()).getByRole("button", { name: "Import from my past reviews" });
+  it("imports from past reviews, and says what it read and where its suggestions went", async () => {
+    const { sent } = renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    const button = within(section).getByRole("button", { name: "Import from my past reviews" });
     await waitFor(() =>
       expect(description(button)).toBe(
         "Reads your own comments on its recent pull requests on GitHub, then runs Sonnet 5.5 through Claude Code, on your Pro plan",
@@ -566,21 +751,20 @@ describe("PreferencesPage's repositories", () => {
     );
     await userEvent.click(button);
     expect(
-      await within(shop()).findByText(
-        "Read 92 comments from 30 pull requests: 1 suggestion, above.",
+      await within(section).findByText(
+        "Read 92 comments from 30 pull requests: 1 suggestion, for acme/shop.",
       ),
     ).toBeTruthy();
     expect(sent("POST", "/api/preferences/imports")[0]?.body).toEqual({
       repo: { host: "github", owner: "acme", repo: "shop" },
       optionId: fixtureStatus.model.defaultId,
     });
-    expect(suggested().querySelectorAll("[data-slot=proposal]")).toHaveLength(3);
-    expect(suggested().textContent).toContain("acme/shop, from your past reviews");
+    expect(proposalRows(section)).toHaveLength(2);
 
     // Again, there's nothing it hasn't proposed already.
     await userEvent.click(button);
     expect(
-      await within(shop()).findByText(
+      await within(section).findByText(
         "Read 92 comments from 30 pull requests: nothing new to suggest.",
       ),
     ).toBeTruthy();
@@ -588,6 +772,7 @@ describe("PreferencesPage's repositories", () => {
 
   it("says when an import found no comments, and why one failed", async () => {
     renderPage({
+      path: SHOP,
       overrides: {
         "POST /api/preferences/imports": (request) =>
           JSON.stringify(request.body).includes("bitbucket")
@@ -595,17 +780,51 @@ describe("PreferencesPage's repositories", () => {
             : jsonResponse(200, { proposals: [], comments: 0, pullRequests: 30 }),
       },
     });
-    await everywhere();
-    const button = within(shop()).getByRole("button", { name: "Import from my past reviews" });
+    const section = await panel("acme/shop");
+    const button = within(section).getByRole("button", { name: "Import from my past reviews" });
     await waitFor(() => expect(button.getAttribute("aria-disabled")).not.toBe("true"));
     await userEvent.click(button);
     expect(
-      await within(shop()).findByText("Found no comment of yours on its last 30 pull requests."),
+      await within(section).findByText("Found no comment of yours on its last 30 pull requests."),
     ).toBeTruthy();
-    const api = screen.getByRole("region", { name: /^acme\/api/ });
+    await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/api/ }));
+    const api = await panel("acme/api");
     await userEvent.click(within(api).getByRole("button", { name: /^Import/ }));
     expect((await within(api).findByRole("alert")).textContent).toContain(
       "megareviewer can't read past reviews from Bitbucket.",
     );
+  });
+
+  it("says what a preference is on a repository with nothing yet, and offers both runs there once", async () => {
+    const ledger: RepoRef = { host: "github", owner: "acme", repo: "ledger" };
+    renderPage({
+      path: "/preferences?scope=github/acme/ledger",
+      preferences: {
+        ...fixturePreferencesView,
+        repositories: [
+          ...fixturePreferencesView.repositories,
+          { repo: ledger, guidelineFiles: [], guidelineNote: null },
+        ],
+      },
+    });
+    const section = await panel("acme/ledger");
+    expect(section.textContent).toContain(
+      "No preferences for this repository yet. A preference is one rule for AI reviews here: Look for something to look for, or Don't flag something not to flag. Rules for Everywhere still apply.",
+    );
+    const box = section.querySelector<HTMLElement>("[data-slot=first-run]");
+    if (box === null) throw new Error("the first run has its box");
+    expect(within(box).getByRole("button", { name: "Suggest from my reviews" })).toBeTruthy();
+    expect(within(box).getByRole("button", { name: "Import from my past reviews" })).toBeTruthy();
+    expect(
+      within(section).getAllByRole("button", { name: "Suggest from my reviews" }),
+    ).toHaveLength(1);
+    expect(within(box).getByText("14 actions recorded since the last suggestions")).toBeTruthy();
+    expect(within(section).getByRole("form", { name: "Add a preference" })).toBeTruthy();
+    // Its first preference ends the first run.
+    await userEvent.type(within(section).getByRole("textbox"), "Ledger entries balance{Enter}");
+    await waitFor(() => expect(section.querySelector("[data-slot=first-run]")).toBeNull());
+    expect(
+      within(section).getAllByRole("button", { name: "Suggest from my reviews" }),
+    ).toHaveLength(1);
   });
 });

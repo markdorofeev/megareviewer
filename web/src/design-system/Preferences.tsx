@@ -1,7 +1,7 @@
-import { SparklesIcon } from "lucide-react";
+import { PlusIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import type { PreferencesView } from "../../../contracts/index.ts";
-import { MAX_PREFERENCE_TEXT } from "../../../src/domain/review/index.ts";
+import type { RepoRef } from "../../../src/domain/review/index.ts";
 import {
   emptyPreferencesView,
   fixtureModelOptions,
@@ -13,7 +13,7 @@ import { createMockApi, MOCK_TOKEN } from "../../dev/mock-routes.ts";
 import { type Api, ApiContext, createApiClient } from "../api/index.ts";
 import { ConnectionsProvider } from "../app/connections-context.tsx";
 import { ModelAction } from "../pages/preferences/ModelAction.tsx";
-import { PreferenceForm, tooLong } from "../pages/preferences/PreferenceForm.tsx";
+import { PreferenceForm } from "../pages/preferences/PreferenceForm.tsx";
 import { NOTHING_RECORDED, PreferencesPage } from "../pages/preferences/PreferencesPage.tsx";
 import { GLOBAL } from "../pages/preferences/rule.tsx";
 import { POINT_GUIDANCE, useDemoChoice } from "./fixtures.ts";
@@ -54,7 +54,15 @@ const READS: Readonly<Record<Read, () => Promise<Response>>> = {
 };
 
 /** The page over an API that keeps the preferences in memory, so its examples can be used. */
-const Page = ({ view, read }: { readonly view?: PreferencesView; readonly read?: Read }) => {
+const Page = ({
+  view,
+  read,
+  startOn,
+}: {
+  readonly view?: PreferencesView;
+  readonly read?: Read;
+  readonly startOn?: string;
+}) => {
   const api = useMemo((): Api => {
     const mock = mockFetch(createMockApi(view === undefined ? {} : { preferences: view }));
     const fetch: typeof globalThis.fetch = (input, init) =>
@@ -69,12 +77,33 @@ const Page = ({ view, read }: { readonly view?: PreferencesView; readonly read?:
   return (
     <ApiContext.Provider value={api}>
       <ConnectionsProvider now={now}>
-        <div className="rounded-xl border bg-surface-subtle p-4">
-          <PreferencesPage now={now} />
+        <div className="rounded-xl border bg-background p-4">
+          <PreferencesPage now={now} startOn={startOn ?? "global"} />
         </div>
       </ConnectionsProvider>
     </ApiContext.Provider>
   );
+};
+
+/** A repository with no preference and no proposal yet, for its first run. */
+const ledger: RepoRef = {
+  host: "github",
+  owner: "acme",
+  repo: "payments-ledger-reconciliation-service",
+};
+const withFirstRun: PreferencesView = {
+  ...fixturePreferencesView,
+  repositories: [
+    ...fixturePreferencesView.repositories,
+    {
+      repo: ledger,
+      guidelineFiles: [
+        { path: "AGENTS.md", bytes: 1_640, enabled: false, tooLarge: false },
+        { path: "CONTRIBUTING.md", bytes: 5_530, enabled: false, tooLarge: false },
+      ],
+      guidelineNote: null,
+    },
+  ],
 };
 
 /** The button that asks a model for proposals, in each state a run leaves it in. */
@@ -113,14 +142,18 @@ const SuggestStates = () => {
         />
       </Example>
       <Example title="Running">
-        <ModelAction {...suggest} choice={choice} initial={{ runningSince: NOW - 12_000 }} />
+        <ModelAction
+          {...suggest}
+          choice={choice}
+          initial={{ is: "running", since: NOW - 12_000 }}
+        />
       </Example>
       <Example title="Failed">
         <ModelAction
           {...suggest}
           choice={choice}
           initial={{
-            ok: false,
+            is: "failed",
             message: "The model call failed: Your Claude plan's usage limit is reached.",
           }}
         />
@@ -129,20 +162,29 @@ const SuggestStates = () => {
         <ModelAction
           {...suggest}
           choice={choice}
-          initial={{ ok: true, said: "2 suggestions from 14 actions, above." }}
+          initial={{
+            is: "done",
+            said: "2 suggestions from 14 actions, 1 for Everywhere and 1 for acme/shop.",
+          }}
         />
       </Example>
     </div>
   );
 };
 
-/** The preferences page in each state of its read, and the parts that have states of their own. */
+/** The preferences page in each panel and each state of its read, and the parts with states of their own. */
 export const Preferences = () => (
   <div className="flex flex-col gap-8">
-    <Group title="The page">
-      <Page view={fixturePreferencesView} />
+    <Group title="A repository">
+      <Page view={fixturePreferencesView} startOn="github/acme/shop" />
     </Group>
-    <Group title="Without a preference">
+    <Group title="A repository's first run">
+      <Page view={withFirstRun} startOn="github/acme/payments-ledger-reconciliation-service" />
+    </Group>
+    <Group title="Suggestions">
+      <Page view={fixturePreferencesView} startOn="suggestions" />
+    </Group>
+    <Group title="Everywhere, without a preference">
       <Page view={emptyPreferencesView} />
     </Group>
     <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -159,21 +201,20 @@ export const Preferences = () => (
     <Group title="The form">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Example title="Too long to save">
-          <div className="rounded-lg border bg-card p-3">
+          <div className="rounded-lg border bg-card p-4">
             <PreferenceForm
               legend="A preference too long to save"
               initial={{ kind: "look-for", text: LONG_RULE, scope: GLOBAL }}
               scopes={POINT_GUIDANCE.ruleScopes}
               submit="Add preference"
               submitting="Adding…"
-              note={tooLong(LONG_RULE.length - MAX_PREFERENCE_TEXT)}
-              onCancel={() => {}}
+              submitIcon={<PlusIcon aria-hidden="true" />}
               onSubmit={noSave}
             />
           </div>
         </Example>
         <Example title="A rule saved from a point">
-          <div className="rounded-lg border bg-card p-3">
+          <div className="rounded-lg border bg-card p-4">
             <PreferenceForm
               legend="Don't flag things like this"
               initial={{

@@ -242,6 +242,23 @@ const PAIRS = [
   ["Outdated thread bar (non-text)", "muted-foreground", "thread-bg", 3],
   ["Severity minor chip", "severity-minor", "review-pending-bg", 4.5],
   ["Severity blocking chip", "severity-blocker", "review-changes-bg", 4.5],
+  // hunk: the preferences page: the current scope's row, the proposals' AI tint, the kind's
+  // segment and chip, the form over its limit, and the repository's tooltip.
+  ["Current scope's name", "foreground", "secondary", 4.5],
+  ["Current scope's count", "muted-foreground", "secondary", 4.5],
+  ["Current Suggestions count", "primary", "secondary", 4.5],
+  ["Current scope's bar (non-text)", "primary", "secondary", 3],
+  ["Hovered Suggestions count", "primary", "surface-row", 4.5],
+  ["Highlighted scope option's count", "muted-foreground", "accent", 4.5],
+  ["Proposal's evidence on its tint", "muted-foreground", "ai-soft-bg", 4.5],
+  ["Proposal's text on its tint", "foreground", "ai-soft-bg", 4.5],
+  ["Kind chip", "secondary-foreground", "secondary", 4.5],
+  ["Chosen kind's ring (non-text)", "foreground", "secondary", 3],
+  ["Unchosen kind on card", "muted-foreground", "card", 4.5],
+  ["Over the limit on card", "destructive", "card", 4.5],
+  ["Invalid field's outline (non-text)", "destructive", "card", 3],
+  ["Switched-off track on card (non-text)", "input", "card", 3],
+  ["Tooltip", "background", "foreground", 4.5],
   // The mechanical bar is decoration: mechanical changes are collapsed rows that say so in words,
   // and the grey is meant to recede. Its label and glyph carry the meaning.
 ];

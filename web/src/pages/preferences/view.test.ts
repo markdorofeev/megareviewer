@@ -8,10 +8,17 @@ import {
 import { GLOBAL, scopeOptions } from "./rule.tsx";
 import {
   formatBytes,
+  isFirstRun,
+  listName,
+  panelFor,
   plural,
   preferencesIn,
+  proposalGroups,
+  proposalsIn,
   repositoriesOf,
+  SUGGESTIONS,
   sentence,
+  whereAdded,
   withGuidelineSwitch,
   withoutPreference,
   withoutProposal,
@@ -62,7 +69,34 @@ describe("the preferences view", () => {
     expect(preferencesIn(view, { kind: "repo", repo: shop.repo })).toHaveLength(2);
   });
 
-  it("gives a section to a repository only a preference names", () => {
+  it("lists a scope's proposals, and groups them by scope in the scopes' order", () => {
+    const options = scopeOptions(repositoriesOf(view).map((one) => one.repo));
+    expect(proposalsIn(view, GLOBAL).map((one) => one.text)).toEqual([
+      "Cached data that outlives a change to what it was made from",
+    ]);
+    expect(
+      proposalGroups(view, options).map(({ option, proposals }) => [
+        option.label,
+        proposals.length,
+      ]),
+    ).toEqual([
+      ["Everywhere", 1],
+      ["acme/shop", 1],
+    ]);
+  });
+
+  it("calls a repository with nothing for it yet a first run, and nothing else", () => {
+    const ledger: RepoRef = { host: "github", owner: "acme", repo: "ledger" };
+    expect(isFirstRun(view, { kind: "repo", repo: ledger })).toBe(true);
+    // acme/api has a preference, acme/shop a proposal too.
+    expect(
+      isFirstRun(view, { kind: "repo", repo: { ...ledger, repo: "api", host: "bitbucket" } }),
+    ).toBe(false);
+    expect(isFirstRun(withoutProposalsOf(view), { kind: "repo", repo: shop.repo })).toBe(false);
+    expect(isFirstRun(emptyPreferencesView, GLOBAL)).toBe(false);
+  });
+
+  it("gives a panel to a repository only a preference names", () => {
     const repo: RepoRef = { host: "github", owner: "acme", repo: "ledger" };
     const named = withPreference(emptyPreferencesView, { ...first, scope: { kind: "repo", repo } });
     expect(repositoriesOf(named)).toEqual([
@@ -73,6 +107,41 @@ describe("the preferences view", () => {
       },
     ]);
     expect(repositoriesOf(view)).toEqual(view.repositories);
+  });
+});
+
+const withoutProposalsOf = (from: typeof view) => ({ ...from, proposals: [] });
+
+describe("the panels", () => {
+  const options = scopeOptions(view.repositories.map((one) => one.repo));
+
+  it("shows the panel a key names, and Everywhere's for any other", () => {
+    expect(panelFor(SUGGESTIONS, options)).toEqual({ kind: "suggestions" });
+    expect(panelFor("github/acme/shop", options)).toEqual({ kind: "scope", option: options[1] });
+    for (const key of [null, "global", "github/acme/gone", ""]) {
+      expect(panelFor(key, options)).toEqual({ kind: "scope", option: options[0] });
+    }
+  });
+
+  it("says where new proposals went", () => {
+    const [jsdoc, cached] = view.proposals;
+    if (jsdoc === undefined || cached === undefined) throw new Error("the fixture has two");
+    expect(whereAdded([jsdoc], options)).toBe("for acme/shop");
+    expect(whereAdded([jsdoc, fixtureImport], options)).toBe("for acme/shop");
+    expect(whereAdded([jsdoc, cached, fixtureImport], options)).toBe(
+      "1 for Everywhere and 2 for acme/shop",
+    );
+  });
+
+  it("names a repository's owner in the list only where another has its name", () => {
+    const shopRepo: RepoRef = { host: "github", owner: "acme", repo: "shop" };
+    const fork: RepoRef = { ...shopRepo, owner: "tomkx" };
+    const elsewhere: RepoRef = { ...shopRepo, host: "bitbucket" };
+    const api: RepoRef = { ...shopRepo, repo: "api" };
+    expect(listName(shopRepo, [shopRepo, api])).toEqual({ owner: null, name: "shop" });
+    expect(listName(fork, [shopRepo, fork, api])).toEqual({ owner: "tomkx", name: "shop" });
+    // The same repository on two hosts is told apart by its host's mark, and its full name says the host.
+    expect(listName(elsewhere, [shopRepo, elsewhere])).toEqual({ owner: "acme", name: "shop" });
   });
 });
 

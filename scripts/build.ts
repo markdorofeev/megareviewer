@@ -11,6 +11,10 @@ const DIST = "dist";
 const GRAMMARS = "src/adapters/treesitter/grammars";
 /** Kept in the repo for maintainers, not needed at runtime. The license texts go into the notices. */
 const GRAMMAR_EXTRAS = new Set(["PROVENANCE.md", "refresh.sh", "licenses"]);
+/** The GitHub and Bitbucket marks the UI draws inline, in web/src/pages/preferences/HostIcon.tsx. */
+const HOST_MARKS =
+  "GitHub and Bitbucket marks in the UI, from Simple Icons 13.21.0 (CC0-1.0)\n\nhttps://github.com/simple-icons/simple-icons, dedicated to the public domain under CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/. GitHub and Bitbucket are trademarks of their owners.";
+
 /** IntelliJ IDEA's icons, which the UI bundles as files rather than as a package. */
 const ICONS = "web/src/review/tree/icons";
 
@@ -222,7 +226,7 @@ const main = async () => {
   const icons = `IntelliJ IDEA icons in the UI, from JetBrains/intellij-community (Apache-2.0)\n\n${iconNotice?.trim()}\n\n${iconLicense?.trim()}`;
   await writeFile(
     join(DIST, "THIRD_PARTY_LICENSES.txt"),
-    formatNotices(notices, grammars, [icons]),
+    formatNotices(notices, grammars, [icons, HOST_MARKS]),
   );
   console.log(
     `Built ${DIST}/ with ${notices.length} bundled packages and ${grammars.length} grammars.`,

@@ -34,4 +34,19 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
   );
 }
 
-export { RadioGroup, RadioGroupItem };
+// hunk: a radio drawn as one segment of a group, told when chosen by a 1px foreground ring as
+// well as its fill, for the preference form's kind.
+function RadioGroupSegment({ className, ...props }: RadioPrimitive.Root.Props) {
+  return (
+    <RadioPrimitive.Root
+      data-slot="radio-group-segment"
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 rounded-sm px-2.5 text-ui font-medium text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 data-checked:bg-secondary data-checked:text-foreground data-checked:inset-ring data-checked:inset-ring-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export { RadioGroup, RadioGroupItem, RadioGroupSegment };

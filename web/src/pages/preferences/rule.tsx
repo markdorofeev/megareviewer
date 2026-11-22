@@ -1,30 +1,19 @@
-import { FlagOffIcon, type LucideIcon, SearchIcon } from "lucide-react";
+import { BanIcon, GlobeIcon, type LucideIcon, SearchIcon } from "lucide-react";
 import type {
   PreferenceKind,
   PreferenceScope,
-  PreferenceSource,
   RepoRef,
 } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import { HOST_NAMES } from "../picker/PullRequestList.tsx";
+import { HostIcon } from "./HostIcon.tsx";
 
-/** A kind's word and glyph, which go wherever its tint does. */
+/** A kind's word and glyph, which say it without a color. */
 export const KIND: Readonly<
-  Record<
-    PreferenceKind,
-    { readonly label: string; readonly icon: LucideIcon; readonly className: string }
-  >
+  Record<PreferenceKind, { readonly label: string; readonly icon: LucideIcon }>
 > = {
-  "look-for": {
-    label: "Look for",
-    icon: SearchIcon,
-    className: "border-diff-hunk-fg/25 bg-diff-hunk-bg text-diff-hunk-fg",
-  },
-  "dont-flag": {
-    label: "Don't flag",
-    icon: FlagOffIcon,
-    className: "border-border bg-muted text-muted-foreground",
-  },
+  "look-for": { label: "Look for", icon: SearchIcon },
+  "dont-flag": { label: "Don't flag", icon: BanIcon },
 };
 
 export const KindChip = ({
@@ -34,27 +23,20 @@ export const KindChip = ({
   readonly kind: PreferenceKind;
   readonly className?: string;
 }) => {
-  const { label, icon: Icon, className: tint } = KIND[kind];
+  const { label, icon: Icon } = KIND[kind];
   return (
     <span
       data-slot="preference-kind"
       data-kind={kind}
       className={cn(
-        "inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-caption font-medium whitespace-nowrap",
-        tint,
+        "inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-md border bg-secondary pr-2 pl-[7px] text-caption font-medium whitespace-nowrap text-secondary-foreground",
         className,
       )}
     >
-      <Icon aria-hidden="true" className="size-3" />
+      <Icon aria-hidden="true" className="size-3 text-muted-foreground" />
       {label}
     </span>
   );
-};
-
-export const SOURCE: Readonly<Record<PreferenceSource, string>> = {
-  written: "written",
-  learned: "learned",
-  imported: "imported",
 };
 
 export const GLOBAL: PreferenceScope = { kind: "global" };
@@ -85,3 +67,17 @@ export const scopeOptions = (repos: readonly RepoRef[]): ScopeOption[] => [
     };
   }),
 ];
+
+/** A scope's glyph: a globe for everywhere, else its repository's host. */
+export const ScopeIcon = ({
+  scope,
+  className,
+}: {
+  readonly scope: PreferenceScope;
+  readonly className?: string;
+}) =>
+  scope.kind === "global" ? (
+    <GlobeIcon aria-hidden="true" className={cn("size-[15px] shrink-0", className)} />
+  ) : (
+    <HostIcon host={scope.repo.host} className={className} />
+  );

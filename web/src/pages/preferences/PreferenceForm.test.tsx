@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { RepoRef } from "../../../../src/domain/review/index.ts";
-import { EMPTY_RULE, PreferenceForm, type RuleFields } from "./PreferenceForm.tsx";
+import { EMPTY_RULE, PreferenceForm, type RuleFields, tooLong } from "./PreferenceForm.tsx";
 import { GLOBAL, scopeOptions } from "./rule.tsx";
 
 const shop: RepoRef = { host: "github", owner: "acme", repo: "shop" };
@@ -35,8 +35,12 @@ const add = () => screen.getByRole("button", { name: /^Add/ });
 describe("PreferenceForm", () => {
   it("saves the kind, the trimmed text and the scope the reviewer chose", async () => {
     const { onSubmit } = renderForm();
-    await userEvent.click(screen.getByRole("button", { name: "Don't flag" }));
-    expect(screen.getByLabelText("What an AI review should leave out")).toBe(field());
+    const kinds = screen.getByRole("radiogroup", { name: "Kind" });
+    expect(
+      within(kinds).getByRole("radio", { name: "Look for" }).getAttribute("aria-checked"),
+    ).toBe("true");
+    await userEvent.click(within(kinds).getByRole("radio", { name: "Don't flag" }));
+    expect(screen.getByLabelText("What an AI review should not flag")).toBe(field());
     await userEvent.type(field(), "  Naming ");
     await userEvent.click(screen.getByRole("combobox", { name: "Applies to" }));
     await userEvent.click(await screen.findByRole("option", { name: "acme/shop" }));
@@ -48,27 +52,57 @@ describe("PreferenceForm", () => {
     });
   });
 
-  it("counts the characters of 300, and says how many are too many instead of saving", async () => {
+  it("counts the characters of 300, and over them says by how much and won't save", async () => {
     const { onSubmit } = renderForm();
     const count = () => document.querySelector("[data-slot=character-count]")?.textContent;
     expect(count()).toBe("0/300 characters");
     fireEvent.change(field(), { target: { value: "x".repeat(312) } });
-    expect(count()).toBe("312/300 characters, 12 too many");
+    expect(count()).toBe("312/300 characters");
     expect(field().getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("status").textContent).toBe(tooLong(12));
+    expect(tooLong(12)).toBe(
+      "12 characters over the limit. Keep it to one rule; add another preference for the rest.",
+    );
+    expect(tooLong(1)).toMatch(/^1 character over/);
+    // Disabled, but still reachable, and it says why.
+    expect(add().getAttribute("aria-disabled")).toBe("true");
+    expect(add().hasAttribute("disabled")).toBe(false);
+    expect(add().getAttribute("aria-describedby")).toBe(screen.getByRole("status").id);
+    add().focus();
+    expect(document.activeElement).toBe(add());
     await userEvent.click(add());
-    expect(screen.getByRole("status").textContent).toContain("this is 12 too many");
+    await userEvent.type(field(), "{Enter}");
     expect(onSubmit).not.toHaveBeenCalled();
-    // What's wrong goes as soon as the text changes.
+    // What's wrong goes as soon as the text fits.
     fireEvent.change(field(), { target: { value: "x".repeat(300) } });
     expect(screen.getByRole("status").textContent).toBe("");
     expect(count()).toBe("300/300 characters");
+    expect(add().getAttribute("aria-disabled")).not.toBe("true");
   });
 
-  it("asks for the rule before saving an empty one", async () => {
+  it("asks for the rule before saving an empty one, with the focus on it", async () => {
     const { onSubmit } = renderForm();
     await userEvent.click(add());
     expect(screen.getByRole("status").textContent).toBe(EMPTY_RULE);
+    expect(document.activeElement).toBe(field());
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("clears the text once it's saved, keeping the kind and the scope", async () => {
+    const { onSubmit } = renderForm();
+    await userEvent.click(screen.getByRole("radio", { name: "Don't flag" }));
+    await userEvent.type(field(), "Naming{Enter}");
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(field().value).toBe("");
+    expect(screen.getByRole("radio", { name: "Don't flag" }).getAttribute("aria-checked")).toBe(
+      "true",
+    );
+    await userEvent.type(field(), "Import order{Enter}");
+    expect(onSubmit).toHaveBeenLastCalledWith({
+      kind: "dont-flag",
+      text: "Import order",
+      scope: GLOBAL,
+    });
   });
 
   it("saves on Enter, and keeps the rule one line", async () => {
@@ -111,15 +145,17 @@ describe("PreferenceForm", () => {
       scopes: scopeOptions([]),
     });
     const form = screen.getByRole("form", { name: "Add a preference" });
-    expect(within(form).queryByRole("button", { name: "Look for" })).toBeNull();
+    expect(within(form).queryByRole("radiogroup")).toBeNull();
     expect(form.querySelector("[data-slot=preference-kind]")?.textContent).toBe("Don't flag");
     expect(within(form).queryByRole("combobox")).toBeNull();
-    expect(within(form).getByText("everywhere")).toBeTruthy();
+    expect(within(form).getByText("Everywhere")).toBeTruthy();
   });
 
-  it("starts on a note, such as why a suggestion needs an edit, and cancels", async () => {
-    const { onCancel } = renderForm({ note: "Shorten it first." });
-    expect(screen.getByRole("status").textContent).toBe("Shorten it first.");
+  it("starts over the limit on a text too long, as a suggestion's can be, and cancels", async () => {
+    const { onCancel } = renderForm({
+      initial: { kind: "look-for", text: "x".repeat(310), scope: GLOBAL },
+    });
+    expect(screen.getByRole("status").textContent).toBe(tooLong(10));
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalled();
   });

@@ -66,8 +66,7 @@ const Shell = () => {
           <main
             className={cn(
               "px-4 py-5 sm:px-6",
-              (route.page === "picker" || route.page === "preferences") &&
-                "min-h-[calc(100dvh-3rem)] bg-surface-subtle",
+              route.page === "picker" && "min-h-[calc(100dvh-3rem)] bg-surface-subtle",
             )}
           >
             {route.page === "picker" ? (

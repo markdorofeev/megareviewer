@@ -6,6 +6,7 @@ import {
   type GuidelinePath,
   MAX_GUIDELINE_BYTES,
 } from "../../../../src/domain/review/index.ts";
+import { cn } from "../../lib/utils.ts";
 import { Switch } from "../../ui/switch.tsx";
 import { formatBytes, sentence } from "./view.ts";
 
@@ -13,34 +14,47 @@ const LOOKED_FOR = new Intl.ListFormat("en", { type: "disjunction" }).format(GUI
 
 const File = ({
   file,
-  repository,
   onSwitch,
 }: {
   readonly file: GuidelineFile;
-  readonly repository: string;
   readonly onSwitch: (path: GuidelinePath, enabled: boolean) => Promise<string | null>;
 }) => {
   const [failure, setFailure] = useState<string | null>(null);
   return (
-    <li data-slot="guideline-file" className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1">
-      <FileTextIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+    <li
+      data-slot="guideline-file"
+      className="flex min-h-11 flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-2"
+    >
+      <FileTextIcon aria-hidden="true" className="size-[15px] shrink-0 text-muted-foreground" />
       <span className="min-w-0 font-mono text-code-compact break-all">{file.path}</span>
       <span className="tabular shrink-0 text-caption text-muted-foreground">
         {formatBytes(file.bytes)}
       </span>
       {file.tooLarge ? (
-        <span className="text-caption text-muted-foreground">
-          too large to send: a guideline file can be {formatBytes(MAX_GUIDELINE_BYTES)}
+        <span className="ml-auto text-caption text-muted-foreground">
+          Too large to send: a guideline file can be {formatBytes(MAX_GUIDELINE_BYTES)}
         </span>
       ) : (
-        <Switch
-          checked={file.enabled}
-          aria-label={`Read ${file.path} in AI reviews of ${repository}`}
-          onCheckedChange={async (checked) => {
-            setFailure(null);
-            setFailure(await onSwitch(file.path, checked));
-          }}
-        />
+        <span className="ml-auto flex items-center gap-2">
+          <Switch
+            checked={file.enabled}
+            aria-label={`Use ${file.path} in AI reviews`}
+            onCheckedChange={async (checked) => {
+              setFailure(null);
+              setFailure(await onSwitch(file.path, checked));
+            }}
+          />
+          {/* The state in words, so it never rests on the thumb's place or its color. */}
+          <span
+            aria-hidden="true"
+            className={cn(
+              "text-caption",
+              file.enabled ? "text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {file.enabled ? "Followed by AI reviews" : "Ignored"}
+          </span>
+        </span>
       )}
       {failure !== null && (
         <p role="alert" className="basis-full text-caption text-destructive">
@@ -53,40 +67,38 @@ const File = ({
 };
 
 /**
- * A repository's guideline files with their size and switch; one too large to send says so and
- * has no switch. Without any read, why.
+ * A repository's guideline files with their size, switch and what the switch means; one too large
+ * to send says so and has no switch. Without any read, why.
  */
 export const GuidelineFiles = ({
   files,
   note,
-  repository,
   onSwitch,
 }: {
   /** null when they couldn't be looked for, with why in `note`. */
   readonly files: readonly GuidelineFile[] | null;
   readonly note: string | null;
-  /** "acme/shop", for the switches' names. */
-  readonly repository: string;
   readonly onSwitch: (path: GuidelinePath, enabled: boolean) => Promise<string | null>;
-}) => (
-  <div data-slot="guideline-files" className="flex flex-col gap-1 border-t px-4 py-3">
-    <h3 className="text-caption font-medium text-muted-foreground">
-      Guideline files, read at the base commit of the pull request
-    </h3>
-    {files === null ? (
-      <p className="text-caption text-muted-foreground">
-        {sentence(note ?? "Couldn't look for them")}
+}) =>
+  files === null ? (
+    <p className="text-ui text-muted-foreground">{sentence(note ?? "Couldn't look for them")}</p>
+  ) : files.length === 0 ? (
+    <p className="max-w-[620px] text-ui text-muted-foreground">
+      None at the repository's root. megareviewer looks for {LOOKED_FOR}.
+    </p>
+  ) : (
+    <>
+      <p className="mb-2.5 max-w-[620px] text-ui text-muted-foreground">
+        At the repository root, read at each pull request's base commit. When a file is on, AI
+        reviews follow it the same way as your preferences; when off, it is ignored.
       </p>
-    ) : files.length === 0 ? (
-      <p className="text-caption text-muted-foreground">
-        None at the repository's root, where megareviewer looks for {LOOKED_FOR}.
-      </p>
-    ) : (
-      <ul className="flex flex-col">
+      <ul
+        data-slot="guideline-files"
+        className="divide-y overflow-hidden rounded-lg border bg-card"
+      >
         {files.map((file) => (
-          <File key={file.path} file={file} repository={repository} onSwitch={onSwitch} />
+          <File key={file.path} file={file} onSwitch={onSwitch} />
         ))}
       </ul>
-    )}
-  </div>
-);
+    </>
+  );

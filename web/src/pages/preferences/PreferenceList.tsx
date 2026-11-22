@@ -1,19 +1,13 @@
-import { EllipsisIcon, PencilIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react";
+import { PencilIcon, SparklesIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react";
 import { useState } from "react";
 import type { Preference, PreferenceId } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import { DANGER } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../../ui/dropdown-menu.tsx";
 import { Switch } from "../../ui/switch.tsx";
 import { Dialog } from "../review/Dialog.tsx";
 import { PreferenceForm, type RuleFields, useFocusBack } from "./PreferenceForm.tsx";
-import { KindChip, type ScopeOption, SOURCE } from "./rule.tsx";
+import { KindChip, type ScopeOption } from "./rule.tsx";
 
 /** What a row can do; each answers why it failed, or null. */
 export interface PreferenceActions {
@@ -80,18 +74,19 @@ const Row = ({
 }) => {
   const [mode, setMode] = useState<"shown" | "editing" | "deleting">("shown");
   const [failure, setFailure] = useState<string | null>(null);
-  const more = useFocusBack<HTMLButtonElement>(mode === "editing");
+  const edit = useFocusBack<HTMLButtonElement>(mode === "editing");
   const { id, kind, text, source, enabled } = preference;
 
   if (mode === "editing") {
     return (
-      <li className="bg-surface-subtle px-4 py-3">
+      <li className="px-4 py-3">
         <PreferenceForm
           legend={`Edit: ${text}`}
           initial={preference}
           scopes={scopes}
           submit="Save"
           submitting="Saving…"
+          focus
           onCancel={() => setMode("shown")}
           onSubmit={async (fields) => {
             const failed = await actions.onEdit(id, fields);
@@ -106,19 +101,25 @@ const Row = ({
     <li
       data-slot="preference"
       data-enabled={enabled}
-      className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2"
+      className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-2.5"
     >
-      <KindChip kind={kind} />
+      <KindChip kind={kind} className="min-w-[98px]" />
       <span
-        className={cn("min-w-0 flex-1 basis-56 break-words", !enabled && "text-muted-foreground")}
+        className={cn(
+          "min-w-0 flex-1 basis-56 text-body break-words",
+          !enabled && "text-muted-foreground",
+        )}
       >
         {text}
       </span>
-      <span className="flex shrink-0 items-center gap-3">
-        <span className="text-caption text-muted-foreground">
-          {SOURCE[source]}
-          {!enabled && " · off"}
-        </span>
+      <span className="-my-[3px] ml-auto flex shrink-0 items-center gap-2">
+        {source !== "written" && (
+          <span className="flex items-center gap-1 text-caption text-muted-foreground">
+            <SparklesIcon aria-hidden="true" className="size-3 text-primary" />
+            From your reviews
+          </span>
+        )}
+        {!enabled && <span className="text-caption text-muted-foreground">off</span>}
         <Switch
           checked={enabled}
           aria-label={`Use in AI reviews: ${text}`}
@@ -127,25 +128,27 @@ const Row = ({
             setFailure(await actions.onSwitch(id, checked));
           }}
         />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button ref={more} variant="ghost" size="icon-xs" aria-label={`More for: ${text}`} />
-            }
+        <span className="flex gap-0.5">
+          <Button
+            ref={edit}
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label={`Edit: ${text}`}
+            onClick={() => setMode("editing")}
           >
-            <EllipsisIcon aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-36">
-            <DropdownMenuItem onClick={() => setMode("editing")}>
-              <PencilIcon aria-hidden="true" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={() => setMode("deleting")}>
-              <Trash2Icon aria-hidden="true" />
-              Delete…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <PencilIcon aria-hidden="true" className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label={`Delete: ${text}`}
+            onClick={() => setMode("deleting")}
+          >
+            <Trash2Icon aria-hidden="true" className="size-3.5" />
+          </Button>
+        </span>
       </span>
       {failure !== null && (
         <p role="alert" className="basis-full text-caption text-destructive">
@@ -164,7 +167,10 @@ const Row = ({
   );
 };
 
-/** A scope's preferences, each with its kind, its text, where it came from and its switch. */
+/**
+ * A scope's preferences, each with its kind, its text, whether it came from the reviewer's
+ * reviews, its switch, and Edit and Delete.
+ */
 export const PreferenceList = ({
   preferences,
   scopes,
@@ -176,7 +182,7 @@ export const PreferenceList = ({
   readonly actions: PreferenceActions;
   readonly label: string;
 }) => (
-  <ul aria-label={label} className="divide-y">
+  <ul aria-label={label} className="divide-y overflow-hidden rounded-lg border bg-card">
     {preferences.map((preference) => (
       <Row key={preference.id} preference={preference} scopes={scopes} actions={actions} />
     ))}
