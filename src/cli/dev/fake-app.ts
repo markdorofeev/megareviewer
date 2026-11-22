@@ -284,19 +284,21 @@ export const createFakeApp = async (options: {
   };
   // small-feature has a conversation on its code; the other fixtures have none.
   threads.github.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);
-  // An approval from the page shows in the status, as the host would show it.
-  const approverOn =
+  // A review published from the page shows in the status, as the host would show it.
+  const viewerOn =
     (host: FakeGitHost, user: HostUser) =>
-    (ref: PullRequestRef): Reviewer | null =>
-      host.approves(ref) ? { ...user, team: false, verdict: "approved" } : null;
+    (ref: PullRequestRef): Reviewer | null => {
+      const verdict = host.verdictOn(ref);
+      return verdict === null ? null : { ...user, team: false, verdict };
+    };
   const statuses = {
     github: new FakePullRequestStatusSource({
       host: "github",
-      approver: approverOn(github, fixtureReviewers.github),
+      viewer: viewerOn(github, fixtureReviewers.github),
     }),
     bitbucket: new FakePullRequestStatusSource({
       host: "bitbucket",
-      approver: approverOn(bitbucket, fixtureReviewers.bitbucket),
+      viewer: viewerOn(bitbucket, fixtureReviewers.bitbucket),
     }),
   };
   statuses.github.setStatus(smallFeature.pullRequest.ref, smallFeatureStatus);

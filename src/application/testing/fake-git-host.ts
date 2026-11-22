@@ -9,6 +9,7 @@ import {
   type PullRequestRef,
   type PullRequestSummary,
   type RepoRef,
+  type ReviewerVerdict,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { Clock, FileAt, GitHost, PublishOptions } from "../ports/index.ts";
@@ -73,8 +74,8 @@ export class FakeGitHost implements GitHost {
   private permanentFailure: HostError | null = null;
   private commentFailure: { n: number; error: HostError } | null = null;
   private nextCommentId = 1;
-  /** PRs the current user approved and hasn't taken back. */
-  private readonly approved = new Set<string>();
+  /** The verdict of what the current user published on each PR, as a host's status shows it. */
+  private readonly verdicts = new Map<string, ReviewerVerdict>();
 
   /** Fixtures for other hosts are skipped, so the same list can seed every host. */
   constructor(options: {
@@ -235,7 +236,16 @@ export class FakeGitHost implements GitHost {
       postedCommentIds[key] = hostCommentId;
     }
     this.publishAttempts.push(attempt("published"));
-    if (publication.verdict === "approve") this.approved.add(prKey(ref));
+    // A comment leaves an approval or a request for changes standing, as both hosts count them.
+    const before = this.verdicts.get(prKey(ref));
+    this.verdicts.set(
+      prKey(ref),
+      publication.verdict === "approve"
+        ? "approved"
+        : publication.verdict === "request_changes"
+          ? "changes-requested"
+          : (before ?? "commented"),
+    );
     return ok({
       url: `${pullRequest.url}#review-${this.publishAttempts.length}`,
       publishedAt: this.clock.now(),
@@ -243,16 +253,21 @@ export class FakeGitHost implements GitHost {
     });
   }
 
+  /** The current user's verdict on `ref`, from what they published, or null. */
+  verdictOn(ref: PullRequestRef): ReviewerVerdict | null {
+    return this.verdicts.get(prKey(ref)) ?? null;
+  }
+
   /** Whether the current user's approval of `ref` stands. */
   approves(ref: PullRequestRef): boolean {
-    return this.approved.has(prKey(ref));
+    return this.verdictOn(ref) === "approved";
   }
 
   async revokeApproval(ref: PullRequestRef): Promise<Result<null, HostError>> {
     const failure = this.fail("revokeApproval");
     if (failure !== null) return failure;
     if (!this.pullRequests.has(prKey(ref))) return err(notFound(`pull request ${prKey(ref)}`));
-    this.approved.delete(prKey(ref));
+    if (this.approves(ref)) this.verdicts.delete(prKey(ref));
     return ok(null);
   }
 

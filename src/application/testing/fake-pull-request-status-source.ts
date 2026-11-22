@@ -28,12 +28,12 @@ export class FakePullRequestStatusSource implements PullRequestStatusSource {
   /** Every head SHA asked about, in order. */
   readonly asked: string[] = [];
 
-  /** Who approves `ref` now, joined to its reviewers: a fake host's approvals, say. */
-  private readonly approver: ((ref: PullRequestRef) => Reviewer | null) | undefined;
+  /** The current user as a reviewer of `ref` now, joined to its reviewers: what a fake host says they published, say. */
+  private readonly viewer: ((ref: PullRequestRef) => Reviewer | null) | undefined;
 
-  constructor(options: { host: HostKind; approver?: (ref: PullRequestRef) => Reviewer | null }) {
+  constructor(options: { host: HostKind; viewer?: (ref: PullRequestRef) => Reviewer | null }) {
     this.host = options.host;
-    this.approver = options.approver;
+    this.viewer = options.viewer;
   }
 
   /** The status of `ref`; one never set reads as OPEN_STATUS. */
@@ -54,9 +54,9 @@ export class FakePullRequestStatusSource implements PullRequestStatusSource {
     const failure = this.failures.shift();
     if (failure !== undefined) return err(failure);
     const status = structuredClone(this.statuses.get(prKey(ref)) ?? OPEN_STATUS);
-    const approver = this.approver?.(ref) ?? null;
-    if (approver === null) return ok(status);
-    const reviewers = [...status.reviewers.filter((one) => one.id !== approver.id), approver];
+    const viewer = this.viewer?.(ref) ?? null;
+    if (viewer === null) return ok(status);
+    const reviewers = [...status.reviewers.filter((one) => one.id !== viewer.id), viewer];
     return ok({ ...status, reviewers, reviewStatus: reviewStatusOf(reviewers) });
   }
 }

@@ -423,7 +423,8 @@ test("publishes exactly what the preview shows, once, then approves in another r
   await dialog.getByRole("button", { name: "Request changes", exact: true }).click();
   await dialog.getByRole("button", { name: "Publish 1 comment and request changes" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole("status").filter({ hasText: "Published" })).toBeVisible();
+  // The bar says the reviewer's verdict, as the host now has it.
+  await expect(page.locator("[data-slot=your-verdict]")).toHaveText("Changes requested");
 
   const [attempt, ...others] = await publishAttempts(server);
   expect(others).toEqual([]);
