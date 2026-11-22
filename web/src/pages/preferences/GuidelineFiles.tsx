@@ -1,5 +1,5 @@
-import { FileTextIcon, TriangleAlertIcon } from "lucide-react";
-import { useState } from "react";
+import { FileTextIcon, InfoIcon, TriangleAlertIcon } from "lucide-react";
+import { useId, useState } from "react";
 import {
   GUIDELINE_PATHS,
   type GuidelineFile,
@@ -7,10 +7,12 @@ import {
   MAX_GUIDELINE_BYTES,
 } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
+import { Button } from "../../ui/button.tsx";
 import { Switch } from "../../ui/switch.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import { formatBytes, sentence } from "./view.ts";
 
-const LOOKED_FOR = new Intl.ListFormat("en", { type: "disjunction" }).format(GUIDELINE_PATHS);
+const LOOKED_FOR = `megareviewer looks for ${new Intl.ListFormat("en", { type: "disjunction" }).format(GUIDELINE_PATHS)}.`;
 
 const File = ({
   file,
@@ -66,6 +68,35 @@ const File = ({
   );
 };
 
+/** None found, with the files looked for behind an info button, out of the sentence's way. */
+const NoneFound = () => {
+  const id = useId();
+  return (
+    <p className="flex items-center gap-1 text-ui text-muted-foreground">
+      None found at the repository's root.
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Files megareviewer looks for"
+              aria-describedby={id}
+            />
+          }
+        >
+          <InfoIcon aria-hidden="true" className="size-3.5" />
+        </TooltipTrigger>
+        <TooltipContent side="right">{LOOKED_FOR}</TooltipContent>
+      </Tooltip>
+      {/* The tooltip is for the eye; a screen reader reads the same words as the description. */}
+      <span id={id} hidden>
+        {LOOKED_FOR}
+      </span>
+    </p>
+  );
+};
+
 /**
  * A repository's guideline files with their size, switch and what the switch means; one too large
  * to send says so and has no switch. Without any read, why.
@@ -83,9 +114,7 @@ export const GuidelineFiles = ({
   files === null ? (
     <p className="text-ui text-muted-foreground">{sentence(note ?? "Couldn't look for them")}</p>
   ) : files.length === 0 ? (
-    <p className="max-w-[620px] text-ui text-muted-foreground">
-      None at the repository's root. megareviewer looks for {LOOKED_FOR}.
-    </p>
+    <NoneFound />
   ) : (
     <>
       <p className="mb-2.5 max-w-[620px] text-ui text-muted-foreground">

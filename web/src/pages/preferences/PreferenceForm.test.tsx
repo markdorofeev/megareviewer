@@ -2,7 +2,13 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { RepoRef } from "../../../../src/domain/review/index.ts";
-import { EMPTY_RULE, PreferenceForm, type RuleFields, tooLong } from "./PreferenceForm.tsx";
+import {
+  COUNT_FROM,
+  EMPTY_RULE,
+  PreferenceForm,
+  type RuleFields,
+  tooLong,
+} from "./PreferenceForm.tsx";
 import { GLOBAL, scopeOptions } from "./rule.tsx";
 
 const shop: RepoRef = { host: "github", owner: "acme", repo: "shop" };
@@ -52,10 +58,15 @@ describe("PreferenceForm", () => {
     });
   });
 
-  it("counts the characters of 300, and over them says by how much and won't save", async () => {
+  it("counts the characters from 250 of 300, and over them says by how much and won't save", async () => {
     const { onSubmit } = renderForm();
     const count = () => document.querySelector("[data-slot=character-count]")?.textContent;
-    expect(count()).toBe("0/300 characters");
+    expect(count()).toBeUndefined();
+    fireEvent.change(field(), { target: { value: "x".repeat(COUNT_FROM - 1) } });
+    expect(count()).toBeUndefined();
+    expect(field().getAttribute("aria-describedby")).toBe(screen.getByRole("status").id);
+    fireEvent.change(field(), { target: { value: "x".repeat(COUNT_FROM) } });
+    expect(count()).toBe("250/300 characters");
     fireEvent.change(field(), { target: { value: "x".repeat(312) } });
     expect(count()).toBe("312/300 characters");
     expect(field().getAttribute("aria-invalid")).toBe("true");
@@ -158,6 +169,27 @@ describe("PreferenceForm", () => {
     expect(screen.getByRole("status").textContent).toBe(tooLong(10));
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("is one row inline, on its scope with no choice of it, labelled for screen readers", async () => {
+    const { onSubmit } = renderForm({
+      inline: true,
+      initial: { kind: "look-for", text: "", scope: { kind: "repo", repo: shop } },
+    });
+    const form = screen.getByRole("form", { name: "Add a preference" });
+    expect(within(form).queryByRole("combobox")).toBeNull();
+    expect(within(form).queryByText("Applies to")).toBeNull();
+    expect(screen.getByLabelText("What an AI review should look for")).toBe(field());
+    expect(form.querySelector("label")?.className).toContain("sr-only");
+    expect(field().getAttribute("placeholder")).toBe(
+      "Tenant isolation: every query filters by tenant ID",
+    );
+    await userEvent.type(field(), "Money as floats{Enter}");
+    expect(onSubmit).toHaveBeenCalledWith({
+      kind: "look-for",
+      text: "Money as floats",
+      scope: { kind: "repo", repo: shop },
+    });
   });
 
   it("puts the caret after the text when it opens with the focus", () => {

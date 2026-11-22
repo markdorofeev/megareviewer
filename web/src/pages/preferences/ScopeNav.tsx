@@ -135,7 +135,7 @@ const GroupLabel = ({ id, children }: { readonly id: string; readonly children: 
   </p>
 );
 
-/** The scopes beside the panel at 1024px and wider: Suggestions, Everywhere, each repository. */
+/** The scopes beside the panel at 1024px and wider: Suggestions, Everywhere, then each repository. */
 export const ScopeList = ({
   entries,
   current,
@@ -152,9 +152,6 @@ export const ScopeList = ({
     <nav aria-label="Scopes" className={className}>
       <ul>
         <Row entry={entries.suggestions} current={current} onSelect={onSelect} />
-      </ul>
-      <GroupLabel id={`${id}-applies`}>Applies to</GroupLabel>
-      <ul aria-labelledby={`${id}-applies`}>
         <Row entry={entries.everywhere} current={current} onSelect={onSelect} />
       </ul>
       {entries.repositories.length > 0 && (
@@ -228,9 +225,8 @@ export const ScopeSelect = ({
           </SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false} align="start" sideOffset={6}>
-          <Option entry={entries.suggestions} />
           <SelectGroup>
-            <SelectLabel>Applies to</SelectLabel>
+            <Option entry={entries.suggestions} />
             <Option entry={entries.everywhere} />
           </SelectGroup>
           {entries.repositories.length > 0 && (

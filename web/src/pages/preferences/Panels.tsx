@@ -8,7 +8,7 @@ import { HostIcon } from "./HostIcon.tsx";
 import { ModelActionButton, type ModelActionProps, ModelActionStatus } from "./ModelAction.tsx";
 import { PreferenceForm, type RuleFields } from "./PreferenceForm.tsx";
 import { type PreferenceActions, PreferenceList } from "./PreferenceList.tsx";
-import { KindChip, repoName, ScopeIcon, type ScopeOption } from "./rule.tsx";
+import { repoName, ScopeIcon, type ScopeOption } from "./rule.tsx";
 import { type ProposalActions, SuggestionList } from "./Suggested.tsx";
 import { isFirstRun, preferencesIn, proposalGroups, proposalsIn } from "./view.ts";
 
@@ -158,37 +158,24 @@ const AddPreference = ({
   readonly option: ScopeOption;
 }) => (
   <Section title="Add a preference">
-    <div className="rounded-lg border bg-card p-4">
-      <PreferenceForm
-        // A new scope's form starts on that scope.
-        key={option.key}
-        legend="Add a preference"
-        initial={{ kind: "look-for", text: "", scope: option.scope }}
-        scopes={context.scopes}
-        submit="Add preference"
-        submitting="Adding…"
-        submitIcon={<PlusIcon aria-hidden="true" />}
-        onSubmit={context.add}
-      />
-    </div>
+    <PreferenceForm
+      // A new scope's form starts on that scope.
+      key={option.key}
+      legend="Add a preference"
+      initial={{ kind: "look-for", text: "", scope: option.scope }}
+      scopes={context.scopes}
+      inline
+      submit="Add preference"
+      submitting="Adding…"
+      submitIcon={<PlusIcon aria-hidden="true" />}
+      onSubmit={context.add}
+    />
   </Section>
 );
 
-/** What a preference is, with both kinds' chips in the sentence. */
-const WhatItIs = ({
-  where,
-  children,
-}: {
-  readonly where: string;
-  readonly children?: ReactNode;
-}) => (
-  <p className="max-w-[620px] text-body">
-    No preferences for {where} yet. A preference is one rule for AI reviews
-    {where === "this repository" ? " here" : ""}:{" "}
-    <KindChip kind="look-for" className="align-middle" /> something to look for, or{" "}
-    <KindChip kind="dont-flag" className="align-middle" /> something not to flag.
-    {children}
-  </p>
+/** Where a scope has neither a preference nor a proposal: one muted line. */
+const NoPreferences = ({ where }: { readonly where: string }) => (
+  <p className="mt-5 text-ui text-muted-foreground">No preferences for {where} yet.</p>
 );
 
 export const EverywherePanel = ({
@@ -210,11 +197,7 @@ export const EverywherePanel = ({
       />
       <Suggestions context={context} option={option} />
       <Preferences context={context} option={option} />
-      {empty && (
-        <div className="mt-5">
-          <WhatItIs where="every repository" />
-        </div>
-      )}
+      {empty && <NoPreferences where="every repository" />}
       <AddPreference context={context} option={option} />
     </>
   );
@@ -243,14 +226,7 @@ export const RepositoryPanel = ({
       <ModelActionStatus {...suggest} className="mt-2" />
       <Suggestions context={context} option={option} />
       <Preferences context={context} option={option} />
-      {isFirstRun(context.view, option.scope) && (
-        <div className="mt-5">
-          <WhatItIs where="this repository">
-            {" "}
-            <span className="text-muted-foreground">Rules for Everywhere still apply.</span>
-          </WhatItIs>
-        </div>
-      )}
+      {isFirstRun(context.view, option.scope) && <NoPreferences where="this repository" />}
       <AddPreference context={context} option={option} />
       <Section title="Guideline files">
         <GuidelineFiles

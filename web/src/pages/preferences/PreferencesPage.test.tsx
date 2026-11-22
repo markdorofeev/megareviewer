@@ -153,6 +153,9 @@ describe("PreferencesPage", () => {
       "api",
     ]);
     expect(buttons[1]?.getAttribute("aria-current")).toBe("page");
+    // Everywhere needs no label above it; the repositories have theirs.
+    expect(scopes().textContent).not.toContain("Applies to");
+    expect(within(scopes()).getByText("Repositories")).toBeTruthy();
   });
 
   it("opens the scope chosen, says so in the URL, and moves the focus to it", async () => {
@@ -250,12 +253,10 @@ describe("PreferencesPage", () => {
     expect(screen.getAllByRole("button", { name: "Suggest from my reviews" })).toHaveLength(1);
   });
 
-  it("says what a preference is, with the form, when there's none", async () => {
+  it("says in one line that there's no preference, with the form, when there's none", async () => {
     const { sent } = renderPage({ preferences: emptyPreferencesView });
     const section = await everywhere();
-    expect(section.textContent).toContain(
-      "No preferences for every repository yet. A preference is one rule for AI reviews: Look for something to look for, or Don't flag something not to flag.",
-    );
+    expect(within(section).getByText("No preferences for every repository yet.")).toBeTruthy();
     expect(within(section).queryByRole("region", { name: /^Preferences/ })).toBeNull();
     expect(within(section).queryByRole("region", { name: /^Suggestions/ })).toBeNull();
     // The form is always open, so there's nothing to open it with or to cancel.
@@ -269,7 +270,7 @@ describe("PreferencesPage", () => {
       text: "Unbounded retries",
       scope: { kind: "global" },
     });
-    expect(section.textContent).not.toContain("A preference is one rule");
+    expect(section.textContent).not.toContain("No preferences for");
     expect(within(scopes()).getByRole("button", { name: "Everywhere, 1 preference" })).toBeTruthy();
   });
 
@@ -326,9 +327,8 @@ describe("PreferencesPage", () => {
     const { sent } = renderPage({ path: SHOP });
     const section = await panel("acme/shop");
     const form = within(section).getByRole("form", { name: "Add a preference" });
-    expect(within(form).getByRole("combobox", { name: "Applies to" }).textContent).toContain(
-      "acme/shop",
-    );
+    // The panel is the scope, so the form has no choice of it.
+    expect(within(form).queryByRole("combobox")).toBeNull();
     await userEvent.click(within(form).getByRole("radio", { name: "Don't flag" }));
     const field = within(form).getByRole<HTMLTextAreaElement>("textbox");
     await userEvent.type(field, "Money as floats{Enter}");
@@ -741,8 +741,10 @@ describe("PreferencesPage's repositories", () => {
       },
     });
     const section = await panel("acme/shop");
-    expect(section.textContent).toContain(
-      "None at the repository's root. megareviewer looks for REVIEW.md, AGENTS.md, CLAUDE.md, CONTRIBUTING.md, or .github/copilot-instructions.md.",
+    expect(section.textContent).toContain("None found at the repository's root.");
+    const which = within(section).getByRole("button", { name: "Files megareviewer looks for" });
+    expect(description(which)).toBe(
+      "megareviewer looks for REVIEW.md, AGENTS.md, CLAUDE.md, CONTRIBUTING.md, or .github/copilot-instructions.md.",
     );
     await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/api/ }));
     const api = await panel("acme/api");
@@ -750,7 +752,7 @@ describe("PreferencesPage's repositories", () => {
     expect(api.textContent).toContain("No pull request of this repository has been analyzed yet.");
   });
 
-  it("says what a preference is on a repository with nothing yet", async () => {
+  it("says in one line that a repository has nothing yet, with Suggest in its header as ever", async () => {
     const ledger: RepoRef = { host: "github", owner: "acme", repo: "ledger" };
     renderPage({
       path: "/preferences?scope=github/acme/ledger",
@@ -763,9 +765,9 @@ describe("PreferencesPage's repositories", () => {
       },
     });
     const section = await panel("acme/ledger");
-    expect(section.textContent).toContain(
-      "No preferences for this repository yet. A preference is one rule for AI reviews here: Look for something to look for, or Don't flag something not to flag. Rules for Everywhere still apply.",
-    );
+    expect(within(section).getByText("No preferences for this repository yet.")).toBeTruthy();
+    // The line under the title says Everywhere's preferences come first.
+    expect(section.textContent).toContain("after the ones for Everywhere");
     expect(
       within(section).getAllByRole("button", { name: "Suggest from my reviews" }),
     ).toHaveLength(1);

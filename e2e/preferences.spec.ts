@@ -75,7 +75,8 @@ test("adds a preference, switches it off, edits it and deletes it", async ({ pag
   const form = section.getByRole("form", { name: "Add a preference" });
   await form.getByRole("textbox").click();
   await page.keyboard.type("Import order");
-  await expect(form.locator("[data-slot=character-count]")).toHaveText(/^12\/300/);
+  // The count shows only as a rule nears its limit.
+  await expect(form.locator("[data-slot=character-count]")).toHaveCount(0);
   await form.getByRole("radio", { name: "Don't flag" }).click();
   await form.getByRole("textbox").press("Enter");
   await expect(preferences(section)).toHaveText(["Don't flagImport order"]);

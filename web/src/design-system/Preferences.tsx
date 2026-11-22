@@ -85,7 +85,7 @@ const Page = ({
   );
 };
 
-/** A repository with no preference and no proposal yet, for its first run. */
+/** A repository with no preference, no proposal and no guideline file yet. */
 const ledger: RepoRef = {
   host: "github",
   owner: "acme",
@@ -97,10 +97,7 @@ const withFirstRun: PreferencesView = {
     ...fixturePreferencesView.repositories,
     {
       repo: ledger,
-      guidelineFiles: [
-        { path: "AGENTS.md", bytes: 1_640, enabled: false, tooLarge: false },
-        { path: "CONTRIBUTING.md", bytes: 5_530, enabled: false, tooLarge: false },
-      ],
+      guidelineFiles: [],
       guidelineNote: null,
     },
   ],
