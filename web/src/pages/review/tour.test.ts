@@ -68,7 +68,7 @@ describe("tourOf", () => {
     ]);
   });
 
-  it("puts each step's directories on the strip in the order the steps first reach them", () => {
+  it("follows the steps on the strip: steps one after another in a directory share a box", () => {
     const tour = view();
     expect(tour.boxes.map((box) => [box.label, box.steps])).toEqual([
       ["src/routes/", [1]],
@@ -78,20 +78,49 @@ describe("tourOf", () => {
     expect(tour.spans).toEqual([]);
   });
 
-  it("groups the two boxes a step crossing into another process spans, when they're neighbors", () => {
+  it("gives a directory the tour comes back to a box of its own, so the numbers only rise", () => {
     const tour = view({
       steps: [
-        step(
-          1,
-          { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 14, line: 21 },
-          { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 41, line: 50 },
-        ),
-        step(2, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 29, line: 39 }),
-        step(3, { hunkId: fixtureHunks.receiptFormatting, side: "new", startLine: 3, line: 13 }),
+        step(1, { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 14, line: 17 }),
+        step(2, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 41, line: 50 }),
+        step(3, { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 18, line: 21 }),
+        step(4, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 29, line: 39 }),
+        step(5, { hunkId: fixtureHunks.receiptFormatting, side: "new", startLine: 3, line: 13 }),
       ],
     });
-    expect(tour.steps[0]?.boxes).toHaveLength(2);
-    expect(tour.spans).toEqual([{ step: 1, keys: ["group:src/routes", "group:src/services"] }]);
+    expect(tour.boxes.map((box) => [box.label, box.steps])).toEqual([
+      ["src/routes/", [1]],
+      ["src/services/", [2]],
+      ["src/routes/", [3]],
+      ["src/services/", [4, 5]],
+    ]);
+    expect(new Set(tour.boxes.map((box) => box.key)).size).toBe(4);
+    expect(tour.boxes.flatMap((box) => box.steps)).toEqual([1, 2, 3, 4, 5]);
+    // A directory on the tour twice is still on it once: never among the others.
+    expect(tour.others.map((box) => box.label)).not.toContain("src/services/");
+  });
+
+  it("groups the two boxes of a step that crosses into another process, apart from its neighbors", () => {
+    const tour = view({
+      steps: [
+        step(1, { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 14, line: 17 }),
+        step(
+          2,
+          { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 18, line: 21 },
+          { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 41, line: 50 },
+        ),
+        step(3, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 29, line: 39 }),
+      ],
+    });
+    expect(tour.steps[1]?.boxes).toHaveLength(2);
+    expect(tour.boxes.map((box) => [box.label, box.steps])).toEqual([
+      ["src/routes/", [1]],
+      ["src/routes/", [2]],
+      ["src/services/", [2]],
+      ["src/services/", [3]],
+    ]);
+    const [, from, to] = tour.boxes;
+    expect(tour.spans).toEqual([{ step: 2, keys: [from?.key, to?.key] }]);
   });
 
   it("chips the points on a step's lines, findings first, decisions too", () => {

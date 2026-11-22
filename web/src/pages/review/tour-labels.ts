@@ -38,18 +38,45 @@ export const chipLabels = (labels: readonly string[]): string[] => {
   );
 };
 
+/** `com.oracle.svm.hosted/pgo` without the dotted parts every such name on the strip starts with. */
+const withoutSharedPackage = (names: readonly string[]): string[] => {
+  const headOf = (name: string) => (name.includes("/") ? name.slice(0, name.indexOf("/")) : "");
+  const heads = [...new Set(names.map(headOf).filter((head) => head.includes(".")))];
+  const [first, ...rest] = heads.map((head) => head.split("."));
+  if (first === undefined || rest.length === 0) return [...names];
+  let shared = 0;
+  // Each keeps its last part: what's left has to name it.
+  while (
+    [first, ...rest].every((parts) => parts.length > shared + 1 && parts[shared] === first[shared])
+  ) {
+    shared += 1;
+  }
+  return names.map((name) => {
+    const head = headOf(name);
+    return heads.includes(head)
+      ? head.split(".").slice(shared).join(".") + name.slice(head.length)
+      : name;
+  });
+};
+
 /**
  * The compact strip's names: each directory by as few of its last directories as tell it from
- * the others on the tour, so two `pgo` read as `core/pgo` and `hosted/pgo`.
+ * the other directories on the tour, and a Java module among them without the package they all
+ * start with, so two `pgo` read as `core/pgo` and `hosted/pgo`. A directory the tour comes back
+ * to has the same name each time.
  */
 export const compactLabels = (labels: readonly string[]): string[] => {
   const paths = labels.map((label) => bare(label).split("/"));
-  return paths.map((parts, at) => {
+  const names = paths.map((parts) => {
+    const whole = parts.join("/");
     for (let take = 1; take < parts.length; take += 1) {
       const name = parts.slice(-take).join("/");
-      const taken = paths.some((other, j) => j !== at && other.slice(-take).join("/") === name);
-      if (!taken) return shortenPath(name, within(COMPACT_CHARS));
+      const taken = paths.some(
+        (other) => other.join("/") !== whole && other.slice(-take).join("/") === name,
+      );
+      if (!taken) return name;
     }
-    return shortenPath(parts.join("/"), within(COMPACT_CHARS));
+    return whole;
   });
+  return withoutSharedPackage(names).map((name) => shortenPath(name, within(COMPACT_CHARS)));
 };

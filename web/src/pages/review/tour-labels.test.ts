@@ -48,11 +48,20 @@ describe("compactLabels", () => {
         "substratevm/src/com.oracle.svm.core/pgo/",
         "substratevm/src/com.oracle.svm.core/thread/",
       ]),
-    ).toEqual(["com.oracle.svm.hosted/pgo", "priorityinline", "com.oracle.svm.core/pgo", "thread"]);
+    ).toEqual(["hosted/pgo", "priorityinline", "core/pgo", "thread"]);
   });
 
-  it("keeps a lone directory's name, and the whole of two that never differ", () => {
+  it("keeps a module's whole name when no other on the strip shares its package", () => {
+    expect(compactLabels(["src/com.acme.orders/api/", "src/web/api/"])).toEqual([
+      "com.acme.orders/api",
+      "web/api",
+    ]);
+  });
+
+  it("keeps a lone directory's name, and names a directory the tour comes back to the same each time", () => {
     expect(compactLabels(["src/routes/"])).toEqual(["routes"]);
-    expect(compactLabels(["a/b/", "a/b/"])).toEqual(["a/b", "a/b"]);
+    expect(
+      compactLabels(["svm/core/pgo/", "svm/core/thread/", "svm/core/pgo/", "svm/hosted/pgo/"]),
+    ).toEqual(["core/pgo", "thread", "core/pgo", "hosted/pgo"]);
   });
 });

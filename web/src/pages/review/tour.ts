@@ -49,9 +49,12 @@ export interface TourStep {
 }
 
 export interface TourBox {
+  /** Its own on the strip: a directory the tour comes back to is a box each time. */
   readonly key: string;
+  /** The directory, by the overview's node key. */
+  readonly directory: string;
   readonly label: string;
-  /** The steps that reach it, by number; none for a box off the tour. */
+  /** The steps it holds, by number, one after another; none for a box off the tour. */
   readonly steps: readonly number[];
 }
 
@@ -72,9 +75,12 @@ export interface LedgerGroup {
 
 export interface TourView {
   readonly steps: readonly TourStep[];
-  /** The directories the steps reach, in the order they first reach them. */
+  /**
+   * The strip, which follows the steps: a box for each run of steps in one directory, so their
+   * numbers only rise along it and a directory the tour comes back to is there again.
+   */
   readonly boxes: readonly TourBox[];
-  /** Two neighboring boxes one step spans, by their keys. */
+  /** The two boxes of a step in two directories, by their keys. */
   readonly spans: readonly { readonly step: number; readonly keys: readonly [string, string] }[];
   /** The other directories, each with the ledger group of its first file. */
   readonly others: readonly (TourBox & { readonly group: LedgerGroupId | null })[];
@@ -199,24 +205,32 @@ export const tourOf = (
     };
   });
 
-  const order: string[] = [];
-  for (const step of steps) for (const key of step.boxes) if (!order.includes(key)) order.push(key);
-  const boxes = order.map((key) => ({
-    key,
-    label: labelOf(key),
-    steps: steps.filter((step) => step.boxes.includes(key)).map((step) => step.number),
-  }));
-  const grouped = new Set<string>();
-  const spans = steps.flatMap((step) => {
-    const [a, b] = step.boxes;
-    if (a === undefined || b === undefined || grouped.has(a) || grouped.has(b)) return [];
-    const [first, second] = [a, b].sort((x, y) => order.indexOf(x) - order.indexOf(y));
-    if (first === undefined || second === undefined) return [];
-    if (order.indexOf(second) - order.indexOf(first) !== 1) return [];
-    grouped.add(first);
-    grouped.add(second);
-    return [{ step: step.number, keys: [first, second] as const }];
+  const boxes: TourBox[] = [];
+  const spans: { step: number; keys: readonly [string, string] }[] = [];
+  const boxOn = (directory: string, step: number): TourBox => ({
+    key: `${directory}#${step}`,
+    directory,
+    label: labelOf(directory),
+    steps: [step],
   });
+  for (const step of steps) {
+    const [first, second] = step.boxes;
+    if (first === undefined) continue;
+    if (second !== undefined) {
+      const pair = [boxOn(first, step.number), boxOn(second, step.number)] as const;
+      boxes.push(...pair);
+      spans.push({ step: step.number, keys: [pair[0].key, pair[1].key] });
+      continue;
+    }
+    const last = boxes.at(-1);
+    const spanned = last !== undefined && spans.some((span) => span.keys.includes(last.key));
+    if (last !== undefined && last.directory === first && !spanned) {
+      boxes[boxes.length - 1] = { ...last, steps: [...last.steps, step.number] };
+    } else {
+      boxes.push(boxOn(first, step.number));
+    }
+  }
+  const onTour = new Set(boxes.map((box) => box.directory));
 
   // The ledger: every changed line no step shows, by file, in groups.
   const stepFiles = new Set(steps.flatMap((step) => step.excerpts.map((excerpt) => excerpt.path)));
@@ -252,9 +266,10 @@ export const tourOf = (
   const groupOfPath = new Map(ledgerFiles.map((one) => [one.file.path, one.group]));
 
   const others = [...overview.rows.flat(), ...overview.strip]
-    .filter((node) => node.kind === "group" && !order.includes(node.key))
+    .filter((node) => node.kind === "group" && !onTour.has(node.key))
     .map((node) => ({
       key: node.key,
+      directory: node.key,
       label: node.label,
       steps: [],
       group: node.paths.map((path) => groupOfPath.get(path)).find((id) => id !== undefined) ?? null,
