@@ -33,6 +33,39 @@ test("with the Tour switch off, a run asks for no tour and the layout is Overvie
   await expect(page.getByRole("menuitemradio", { name: "Overview" })).toBeVisible();
 });
 
+test("scrolling the tour moves its steps by what was scrolled, under a compact strip", async ({
+  page,
+}) => {
+  await page.addInitScript(() => window.localStorage.setItem("megareviewer:tour", "true"));
+  await openReview(page, PR.receiptsTour, TITLE);
+  await page.getByRole("button", { name: "Tour · 3 steps" }).click();
+  await expect(page.locator("[data-slot=tour-step]").first()).toBeVisible();
+
+  // One strip that shrank as it stuck under the bar threw the steps forward by the difference.
+  const moved = await page.evaluate(async () => {
+    const step = document.querySelector("[data-slot=tour-step]");
+    if (step === null) return null;
+    const settled = () =>
+      new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
+    window.scrollTo(0, 0);
+    await settled();
+    const from = step.getBoundingClientRect().top;
+    for (let scroll = 0; scroll < 8; scroll += 1) {
+      window.scrollBy(0, 60);
+      await settled();
+    }
+    return { steps: from - step.getBoundingClientRect().top, window: window.scrollY };
+  });
+  expect(moved?.window).toBeGreaterThan(300);
+  expect(Math.abs((moved?.steps ?? 0) - (moved?.window ?? Number.NaN))).toBeLessThan(1);
+
+  // The path is still in reach, on one line under the bar, and goes to a step.
+  const compact = page.locator("[data-slot=tour-strip-compact]");
+  await expect(compact.locator("[data-slot=tour-box]").first()).toBeVisible();
+  await compact.locator("[data-slot=tour-box]").last().click();
+  await expect(page.locator(":focus")).toContainText("Step 3:");
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`walks the tour and back to the code, in ${theme}`, async ({ page }) => {
     await page.addInitScript((chosen) => {

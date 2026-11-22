@@ -22,21 +22,16 @@ import {
   type TourStep,
   type TourView,
 } from "./tour.ts";
+import { boxLabel, chipLabels, compactLabels } from "./tour-labels.ts";
 
 // The Understand layout with a tour: a strip of the directories the steps reach, the steps, then
-// what the tour didn't show. The window scrolls; the strip sticks under the bar.
+// what the tour didn't show. The window scrolls. The strip scrolls away with it, and a compact one
+// takes its place under the bar: one strip that shrank when it stuck moved the steps under the
+// reader by the difference, 780 px on a pull request with ten directories off the tour.
 
 export const stepAnchor = (number: number): string => `tour-step-${number}`;
 const groupAnchor = (id: LedgerGroupId): string => `tour-ledger-${id}`;
-
-/** "src/routes/" as its parents, muted, and its last directory. */
-const splitLabel = (label: string): { readonly prefix: string; readonly name: string } => {
-  const trimmed = label.endsWith("/") ? label.slice(0, -1) : label;
-  const cut = trimmed.lastIndexOf("/");
-  return cut === -1
-    ? { prefix: "", name: trimmed || label }
-    : { prefix: trimmed.slice(0, cut + 1), name: trimmed.slice(cut + 1) };
-};
+const END_TITLE = "tour-end-title";
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -63,64 +58,59 @@ const StepNumber = ({
   </span>
 );
 
-/** A directory on the strip: on the tour with its steps' numbers, or dashed with no step. */
-const StripBox = ({
+/** A directory on the tour's path, with its steps' numbers; one line of it on the compact strip. */
+const PathBox = ({
   box,
   current,
-  compact,
+  compactName,
+  focusable,
   onGo,
 }: {
   readonly box: TourBox;
   readonly current: number | null;
-  readonly compact: boolean;
+  /** Its name on the compact strip; absent on the full one, which shows its parents too. */
+  readonly compactName?: string;
+  readonly focusable: boolean;
   readonly onGo: () => void;
 }) => {
-  const onTour = box.steps.length > 0;
+  const compact = compactName !== undefined;
   const isCurrent = current !== null && box.steps.includes(current);
-  const { prefix, name } = splitLabel(box.label);
-  const label = onTour
-    ? `${box.label}, ${box.steps.length === 1 ? "step" : "steps"} ${listOf(box.steps)}${isCurrent ? ", current step" : ""}`
-    : `${box.label}, no step, see Not in the tour`;
+  const { prefix, name } = boxLabel(box.label);
   return (
     <button
       type="button"
       data-slot="tour-box"
-      aria-label={label}
+      aria-label={`${box.label}, ${box.steps.length === 1 ? "step" : "steps"} ${listOf(box.steps)}${isCurrent ? ", current step" : ""}`}
+      title={box.label}
       {...(isCurrent ? { "aria-current": "step" as const } : {})}
+      {...(focusable ? {} : { tabIndex: -1 })}
       onClick={onGo}
       className={cn(
-        "relative flex min-w-0 shrink-0 cursor-pointer flex-col items-start rounded-lg text-left",
+        "relative flex min-w-0 shrink-0 cursor-pointer rounded-lg text-left",
         compact
-          ? "flex-row items-center gap-1.5 px-2 py-1"
-          : "min-w-36 max-w-60 gap-0.5 px-2.5 py-2",
-        onTour
-          ? isCurrent
-            ? "border-2 border-primary bg-background"
-            : "border border-primary bg-ai-soft"
-          : "border border-dashed border-input bg-background",
+          ? "max-w-md items-center gap-1.5 px-2 py-1"
+          : "max-w-60 min-w-36 flex-col items-stretch gap-0.5 px-2.5 py-2",
+        isCurrent ? "border-2 border-primary bg-background" : "border border-primary bg-ai-soft",
       )}
     >
-      <span className={cn("flex min-w-0 items-start gap-2", compact && "items-center")}>
-        <span className="min-w-0 font-mono">
-          {!compact && prefix !== "" && (
-            <span className="block truncate text-caption text-muted-foreground">{prefix}</span>
-          )}
-          <span className="block truncate font-semibold text-ui">{name}</span>
+      {!compact && prefix !== "" && (
+        <span className="truncate font-mono text-caption text-muted-foreground">{prefix}</span>
+      )}
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 flex-1 truncate font-mono font-semibold text-ui">
+          {compactName ?? name}
         </span>
-        {onTour && (
-          <span className="flex shrink-0 gap-1">
-            {box.steps.map((number) => (
-              <StepNumber key={number} number={number} current={number === current} />
-            ))}
-          </span>
-        )}
+        <span className="flex shrink-0 gap-1">
+          {box.steps.map((number) => (
+            <StepNumber key={number} number={number} current={number === current} />
+          ))}
+        </span>
       </span>
-      {!onTour && !compact && <span className="text-caption text-muted-foreground">No step</span>}
       {isCurrent && (
         <span
           className={cn(
-            "rounded-full bg-primary px-1.5 font-semibold text-caption text-primary-foreground",
-            compact ? "" : "absolute -bottom-2.5 left-2",
+            "shrink-0 rounded-full bg-primary px-1.5 font-semibold text-caption text-primary-foreground",
+            !compact && "absolute -bottom-2.5 left-2",
           )}
         >
           Current step
@@ -130,27 +120,41 @@ const StripBox = ({
   );
 };
 
-/** The directories the steps reach, in order, then the others; sticky, compact once stuck. */
-const TourStrip = ({
+/** The directories the steps reach, in the order they first reach them, with arrows between. */
+const PathBoxes = ({
   tour,
   current,
   compact,
+  focusable,
   onGoToStep,
-  onGoToGroup,
 }: {
   readonly tour: TourView;
   readonly current: number | null;
   readonly compact: boolean;
+  readonly focusable: boolean;
   readonly onGoToStep: (number: number) => void;
-  readonly onGoToGroup: (id: LedgerGroupId) => void;
 }) => {
-  const lowest = (box: TourBox) => Math.min(...box.steps);
+  const names = compact ? compactLabels(tour.boxes.map((box) => box.label)) : null;
+  const boxAt = (at: number) => {
+    const box = tour.boxes[at];
+    if (box === undefined) return null;
+    const compactName = names?.[at];
+    return (
+      <PathBox
+        key={box.key}
+        box={box}
+        current={current}
+        {...(compactName === undefined ? {} : { compactName })}
+        focusable={focusable}
+        onGo={() => onGoToStep(Math.min(...box.steps))}
+      />
+    );
+  };
   const items: ReactNode[] = [];
   for (let at = 0; at < tour.boxes.length; at += 1) {
     const box = tour.boxes[at];
     if (box === undefined) continue;
     const span = tour.spans.find((one) => one.keys[0] === box.key);
-    const next = span === undefined ? undefined : tour.boxes[at + 1];
     if (at > 0) {
       items.push(
         <ChevronRightIcon
@@ -160,7 +164,7 @@ const TourStrip = ({
         />,
       );
     }
-    if (span !== undefined && next !== undefined) {
+    if (span !== undefined && tour.boxes[at + 1] !== undefined) {
       items.push(
         // biome-ignore lint/a11y/useSemanticElements: a group of two boxes, not of form controls.
         <div
@@ -168,77 +172,142 @@ const TourStrip = ({
           role="group"
           aria-label={`Step ${span.step} spans both`}
           className={cn(
-            "flex shrink-0 items-center gap-1 rounded-xl border-[1.5px] border-dashed border-primary",
+            "flex min-w-0 items-center gap-1 rounded-xl border-[1.5px] border-dashed border-primary",
             compact ? "px-1.5 py-1" : "flex-col items-start px-1.5 pt-1 pb-1.5",
           )}
         >
           <span className="text-caption font-medium text-primary">Step {span.step} spans both</span>
-          <div className="flex items-center gap-1">
-            <StripBox
-              box={box}
-              current={current}
-              compact={compact}
-              onGo={() => onGoToStep(lowest(box))}
-            />
+          <div className="flex min-w-0 items-center gap-1">
+            {boxAt(at)}
             <span aria-hidden="true" className="text-primary">
               +
             </span>
-            <StripBox
-              box={next}
-              current={current}
-              compact={compact}
-              onGo={() => onGoToStep(lowest(next))}
-            />
+            {boxAt(at + 1)}
           </div>
         </div>,
       );
       at += 1;
     } else {
-      items.push(
-        <StripBox
-          key={box.key}
-          box={box}
-          current={current}
-          compact={compact}
-          onGo={() => onGoToStep(lowest(box))}
-        />,
-      );
+      items.push(boxAt(at));
     }
   }
+  return items;
+};
+
+/**
+ * The tour's path and, under it, the directories it leaves out, each a chip that goes to its group
+ * in Not in the tour. Part of the page: it scrolls away, so its height costs the steps nothing.
+ */
+const TourStrip = ({
+  tour,
+  current,
+  onGoToStep,
+  onGoToGroup,
+}: {
+  readonly tour: TourView;
+  readonly current: number | null;
+  readonly onGoToStep: (number: number) => void;
+  readonly onGoToGroup: (id: LedgerGroupId) => void;
+}) => {
+  const chips = chipLabels(tour.others.map((box) => box.label));
   return (
     // biome-ignore lint/a11y/useSemanticElements: a group of buttons, not of form controls.
     <div
       data-slot="tour-strip"
       role="group"
       aria-label="Directories on the tour"
-      className={cn(
-        "sticky top-(--review-bar-h) z-10 -mx-1 flex flex-wrap items-start gap-3 border-b bg-background px-1",
-        compact ? "py-2" : "py-3 pb-4",
-      )}
+      className="flex flex-col gap-3 border-b pt-3 pb-4"
     >
-      {/* The tour's path keeps its width; the directories off it wrap in what's left, or below. */}
-      <div className="flex max-w-full flex-wrap items-center gap-1.5">{items}</div>
+      {/* A row apart from the next by more than the "Current step" label hangs under its box. */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-4">
+        <PathBoxes
+          tour={tour}
+          current={current}
+          compact={false}
+          focusable
+          onGoToStep={onGoToStep}
+        />
+      </div>
       {tour.others.length > 0 && (
-        <div className="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-1.5 border-l pl-3">
-          {!compact && (
-            <span className="w-full text-caption text-muted-foreground">Not on the tour</span>
-          )}
-          {tour.others.map((box) => (
-            <StripBox
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-caption text-muted-foreground">Not on the tour</span>
+          {tour.others.map((box, at) => (
+            <button
               key={box.key}
-              box={box}
-              current={null}
-              compact={compact}
-              onGo={() => {
+              type="button"
+              data-slot="tour-box"
+              aria-label={`${box.label}, no step, see Not in the tour`}
+              title={box.label}
+              onClick={() => {
                 if (box.group !== null) onGoToGroup(box.group);
               }}
-            />
+              className="max-w-full cursor-pointer truncate rounded-md border border-dashed border-input bg-background px-2 py-1 font-mono text-caption hover:bg-surface-row"
+            >
+              {chips[at]}
+            </button>
           ))}
         </div>
       )}
     </div>
   );
 };
+
+/**
+ * The path on one line, under the bar. Beside the full strip it's drawn over the page once that
+ * one has scrolled away, taking no room, and only for the pointer: the full strip is the one a
+ * keyboard and a screen reader find. Below 1180 px it's the only strip, and part of the page.
+ */
+const CompactStrip = ({
+  tour,
+  current,
+  overlay,
+  shown,
+  onGoToStep,
+  onGoToEnd,
+}: {
+  readonly tour: TourView;
+  readonly current: number | null;
+  readonly overlay: boolean;
+  readonly shown: boolean;
+  readonly onGoToStep: (number: number) => void;
+  readonly onGoToEnd: () => void;
+}) => (
+  <div
+    data-slot="tour-strip-compact"
+    {...(overlay ? { "aria-hidden": true } : {})}
+    className={cn("sticky top-(--review-bar-h) z-10", overlay && "h-0")}
+  >
+    {/* biome-ignore lint/a11y/useSemanticElements: a group of buttons, not of form controls. */}
+    <div
+      role="group"
+      aria-label="Directories on the tour"
+      className={cn(
+        "flex flex-wrap items-center gap-1.5 border-b bg-background px-1 py-2",
+        overlay ? "absolute -inset-x-1 top-0" : "-mx-1",
+        overlay && !shown && "invisible",
+      )}
+    >
+      <PathBoxes
+        tour={tour}
+        current={current}
+        compact
+        focusable={!overlay}
+        onGoToStep={onGoToStep}
+      />
+      {tour.others.length > 0 && (
+        <button
+          type="button"
+          data-slot="tour-off"
+          {...(overlay ? { tabIndex: -1 } : {})}
+          onClick={onGoToEnd}
+          className="ml-1 cursor-pointer rounded-md border border-dashed border-input bg-background px-2 py-1 text-caption text-muted-foreground hover:bg-surface-row"
+        >
+          {count(tour.others.length, "directory", "directories")} not on the tour
+        </button>
+      )}
+    </div>
+  </div>
+);
 
 /** One of Claude's points as a chip: its glyph and kind in words, its title, a click to its card. */
 const PointChip = ({
@@ -395,11 +464,11 @@ const TourEnd = ({
   const files = tour.ledger.reduce((sum, group) => sum + group.files.length, 0);
   return (
     <section
-      aria-labelledby="tour-end-title"
+      aria-labelledby={END_TITLE}
       data-slot="tour-end"
       className="flex flex-col gap-5 py-6 lg:pl-10"
     >
-      <h2 id="tour-end-title" className="font-semibold text-heading">
+      <h2 id={END_TITLE} tabIndex={-1} className="font-semibold text-heading outline-none">
         After the tour
       </h2>
       {tour.ledger.length > 0 && (
@@ -490,10 +559,19 @@ const TourEnd = ({
   );
 };
 
-/** The step whose top last passed under the strip, as the window scrolls. */
+/** How tall the compact strip is, and where under the bar it sticks. */
+const stripGeometry = (sticky: HTMLElement | null) => ({
+  top: sticky === null ? 0 : Number.parseFloat(getComputedStyle(sticky).top) || 0,
+  height: sticky?.firstElementChild?.getBoundingClientRect().height ?? 0,
+});
+
+/**
+ * The step whose top last passed under the compact strip, as the window scrolls, and whether that
+ * strip has reached the bar, which is when the full one above it has scrolled away.
+ */
 const useCurrentStep = (
   container: React.RefObject<HTMLDivElement | null>,
-  strip: () => HTMLElement | null,
+  sticky: () => HTMLElement | null,
   count: number,
 ) => {
   const [current, setCurrent] = useState<number | null>(count > 0 ? 1 : null);
@@ -519,17 +597,19 @@ const useCurrentStep = (
     const measure = () => {
       frame = 0;
       const root = container.current;
-      const bar = strip();
+      const bar = sticky();
       if (root === null || bar === null) return;
-      const line = bar.getBoundingClientRect().bottom + 8;
+      const { top, height } = stripGeometry(bar);
+      const at = bar.getBoundingClientRect().top;
+      const line = at + height + 8;
       const sections = [...root.querySelectorAll<HTMLElement>("[data-slot=tour-step]")];
       let passed = sections.length > 0 ? 1 : null;
-      sections.forEach((section, at) => {
-        if (section.getBoundingClientRect().top <= line) passed = at + 1;
+      sections.forEach((section, index) => {
+        if (section.getBoundingClientRect().top <= line) passed = index + 1;
       });
       if (pinned.current === null) setCurrent(passed);
-      const barHeight = Number.parseFloat(getComputedStyle(bar).top) || 0;
-      setStuck(window.scrollY > 0 && bar.getBoundingClientRect().top <= barHeight + 1);
+      // At its place under the bar, not past it: where nothing holds it there it scrolls away.
+      setStuck(window.scrollY > 0 && Math.abs(at - top) <= 1);
     };
     const schedule = () => {
       if (frame === 0) frame = window.requestAnimationFrame(measure);
@@ -542,7 +622,7 @@ const useCurrentStep = (
       window.removeEventListener("resize", schedule);
       if (frame !== 0) window.cancelAnimationFrame(frame);
     };
-  }, [container, strip]);
+  }, [container, sticky]);
   return { current, stuck, pin };
 };
 
@@ -583,22 +663,12 @@ export const Understand = ({
   readonly landOn?: { readonly step: number; readonly n: number } | null;
 }) => {
   const container = useRef<HTMLDivElement>(null);
-  const strip = useCallback(
-    () => container.current?.querySelector<HTMLElement>("[data-slot=tour-strip]") ?? null,
+  const sticky = useCallback(
+    () => container.current?.querySelector<HTMLElement>("[data-slot=tour-strip-compact]") ?? null,
     [],
   );
-  const { current, stuck, pin } = useCurrentStep(container, strip, tour.steps.length);
+  const { current, stuck, pin } = useCurrentStep(container, sticky, tour.steps.length);
   const narrow = useNarrow();
-  // Going to a step compacts the strip first, so the step lands under the strip it'll stay under.
-  const [forced, setForced] = useState(false);
-  const compact = stuck || narrow || forced;
-  useEffect(() => {
-    const top = () => {
-      if (window.scrollY === 0) setForced(false);
-    };
-    window.addEventListener("scroll", top, { passive: true });
-    return () => window.removeEventListener("scroll", top);
-  }, []);
   const [openGroups, setOpenGroups] = useState<ReadonlySet<LedgerGroupId>>(new Set());
   const [flashed, setFlashed] = useState<LedgerGroupId | null>(null);
 
@@ -606,24 +676,21 @@ export const Understand = ({
   reported.current = onCurrentStep;
   useEffect(() => reported.current?.(current), [current]);
 
-  /** Scrolls `element` under the strip, instantly: nothing moves on its own. */
+  /** Scrolls `element` under the compact strip, instantly: nothing moves on its own. */
   const scrollUnderStrip = useCallback(
     (element: HTMLElement) => {
-      const bar = strip();
-      const below = bar === null ? 0 : bar.getBoundingClientRect().height;
-      const barTop = bar === null ? 0 : Number.parseFloat(getComputedStyle(bar).top) || 0;
-      const top = window.scrollY + element.getBoundingClientRect().top - barTop - below - 4;
+      const { top: barTop, height } = stripGeometry(sticky());
+      const top = window.scrollY + element.getBoundingClientRect().top - barTop - height - 4;
       window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
     },
-    [strip],
+    [sticky],
   );
 
   const [going, setGoing] = useState<{ readonly step: number; readonly n: number } | null>(null);
   const goToStep = useCallback((step: number) => {
-    setForced(true);
     setGoing((previous) => ({ step, n: (previous?.n ?? 0) + 1 }));
   }, []);
-  // Once the strip is compact: the step at the top under it, focused and current.
+  // The step at the top under the compact strip, focused and current.
   useLayoutEffect(() => {
     if (going === null) return;
     const section = document.getElementById(stepAnchor(going.step));
@@ -634,6 +701,13 @@ export const Understand = ({
     // Steps above it take their size once near the window, and would push it down.
     return holdInPlace("[data-slot=understand]", () => scrollUnderStrip(section));
   }, [going, scrollUnderStrip, pin]);
+
+  const goToEnd = () => {
+    const title = document.getElementById(END_TITLE);
+    if (title === null) return;
+    scrollUnderStrip(title);
+    title.focus({ preventScroll: true });
+  };
 
   const goToGroup = (id: LedgerGroupId) => {
     setOpenGroups((previous) => new Set([...previous, id]));
@@ -661,12 +735,16 @@ export const Understand = ({
 
   return (
     <div ref={container} data-slot="understand" className="flex min-w-0 flex-col">
-      <TourStrip
+      {!narrow && (
+        <TourStrip tour={tour} current={current} onGoToStep={goToStep} onGoToGroup={goToGroup} />
+      )}
+      <CompactStrip
         tour={tour}
         current={current}
-        compact={compact}
+        overlay={!narrow}
+        shown={stuck}
         onGoToStep={goToStep}
-        onGoToGroup={goToGroup}
+        onGoToEnd={goToEnd}
       />
       <section className="max-w-[73.75rem]" aria-label="Tour steps">
         {tour.steps.map((step) => (
