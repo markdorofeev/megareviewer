@@ -286,7 +286,8 @@ export const focusProblems = async (
       const element = document.activeElement;
       if (element === null || element === document.body) return null;
       const style = getComputedStyle(element);
-      const text = (element.textContent ?? element.getAttribute("aria-label") ?? "")
+      // An icon button has no text, so its label tells it from the one beside it.
+      const text = (element.textContent?.trim() || element.getAttribute("aria-label") || "")
         .trim()
         .replace(/\s+/g, " ")
         .slice(0, 40);
