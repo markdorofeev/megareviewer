@@ -54,7 +54,14 @@ for (const combination of COMBINATIONS) {
     // macOS job.
     test.skip(process.platform !== "darwin", "baselines are macOS screenshots");
     await open(page, combination);
-    for (const section of ["foundations", "screens", "main-page", "preferences"]) {
+    // The tour's cards are colored as they come near the window, each on its own, and skip
+    // painting their lines far from it, which a screenshot taller than the window would catch.
+    for (const card of await page.locator("#tour [data-slot=hunk-card]").all()) {
+      await card.scrollIntoViewIfNeeded();
+      await expect(card.locator('[class*="text-syntax-"]').first()).toBeVisible();
+    }
+    await page.addStyleTag({ content: "#tour * { content-visibility: visible !important; }" });
+    for (const section of ["foundations", "screens", "tour", "main-page", "preferences"]) {
       await expect(page.locator(`#${section}`)).toHaveScreenshot(
         `${section}-${combination.name}.png`,
       );

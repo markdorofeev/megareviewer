@@ -117,6 +117,22 @@ const PAIRS = [
   ["AI label on quiet press", "primary", "ai-quiet-active", 4.5],
   ["AI label on card", "primary", "card", 4.5],
   ["New-commits border (non-text)", "ai-soft-bd-strong", "background", 3],
+  // The tour: a box on it, the current one and its pill, the three kinds of chip, a stop's lines
+  // marked in the map and the label over them, and the ledger's counts on its cards.
+  ["Tour box name on its tint", "foreground", "ai-soft-bg", 4.5],
+  ["Tour box number on its tint", "primary", "ai-soft-bg", 4.5],
+  ["Tour box border on its tint (non-text)", "primary", "ai-soft-bg", 3],
+  ["Current tour box border (non-text)", "primary", "background", 3],
+  ["Current stop pill and filled number", "primary-foreground", "primary", 4.5],
+  ["Box off the tour, dashed (non-text)", "input", "background", 3],
+  ["Finding chip", "review-changes", "review-changes-bg", 4.5],
+  ["Risk chip", "risk-contract", "risk-contract-bg", 4.5],
+  ["Decision chip", "muted-foreground", "muted", 4.5],
+  ["Stop line's number in the map", "primary", "ai-soft-bg", 4.5],
+  ["Stop line's rail (non-text)", "primary", "ai-soft-bg", 3],
+  ["Tour landing sentence", "foreground", "ai-soft-bg", 4.5],
+  ["Ledger + lines on card", "stat-add", "card", 4.5],
+  ["Ledger − lines on card", "stat-del", "card", 4.5],
   ...["review-approved", "review-approved-hover", "review-approved-active"].map((surface) => [
     `Approve label on ${surface}`,
     "primary-foreground",

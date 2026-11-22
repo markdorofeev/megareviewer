@@ -9,6 +9,7 @@ import { MainPage } from "./MainPage.tsx";
 import { Preferences } from "./Preferences.tsx";
 import { Primitives } from "./Primitives.tsx";
 import { Screens } from "./Screens.tsx";
+import { TourDemo } from "./TourDemo.tsx";
 
 const THEMES: readonly { readonly value: ThemePreference; readonly label: string }[] = [
   { value: "light", label: "Light" },
@@ -24,6 +25,7 @@ const SECTIONS: readonly {
   { id: "primitives", title: "Primitives", content: <Primitives /> },
   { id: "components", title: "Review components", content: <DomainComponents /> },
   { id: "screens", title: "Screens", content: <Screens /> },
+  { id: "tour", title: "Tour", content: <TourDemo /> },
   { id: "main-page", title: "Main page", content: <MainPage /> },
   { id: "preferences", title: "Preferences", content: <Preferences /> },
 ];

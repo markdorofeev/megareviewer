@@ -46,6 +46,7 @@ import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./mode
 import { checkedAdvisor, receiptsChecked, withGuardrails } from "./receipts-checked.ts";
 import { receiptsGuided, withGuidance } from "./receipts-guided.ts";
 import { receiptsTested, withCheckingTests } from "./receipts-tested.ts";
+import { receiptsTour, withTour } from "./receipts-tour.ts";
 
 /** The recorded run the scenarios play, read once at startup. */
 const recording = ModelRecording.parse(recordingJson);
@@ -70,6 +71,7 @@ export const fakeFixtures: readonly PullRequestFixture[] = [
   receiptsTested,
   receiptsGuided,
   receiptsChecked,
+  receiptsTour,
 ];
 
 const FAKE_MODELS = [
@@ -313,17 +315,20 @@ export const createFakeApp = async (options: {
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
       models: fakeModels(
-        withGuardrails(
-          withGuidance(
-            withCheckingTests(
-              options.scenario === undefined
-                ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
-                : createReplayAnalysisModel(recording, { scenario: options.scenario }),
-              receiptsTested.pullRequest.url,
+        withTour(
+          withGuardrails(
+            withGuidance(
+              withCheckingTests(
+                options.scenario === undefined
+                  ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+                  : createReplayAnalysisModel(recording, { scenario: options.scenario }),
+                receiptsTested.pullRequest.url,
+              ),
+              receiptsGuided.pullRequest.url,
             ),
-            receiptsGuided.pullRequest.url,
+            receiptsChecked.pullRequest.url,
           ),
-          receiptsChecked.pullRequest.url,
+          receiptsTour.pullRequest.url,
         ),
         options.modelAvailable !== false,
       ),

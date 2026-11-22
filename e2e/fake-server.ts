@@ -91,6 +91,8 @@ export const PR = {
   receiptsGuided: "https://github.com/acme/storefront/pull/7",
   /** small-feature in a repository with a biome.json, whose finding a Biome rule could catch. */
   receiptsChecked: "https://github.com/acme/checkout/pull/31",
+  /** small-feature whose stops pass writes a tour of three stops. */
+  receiptsTour: "https://github.com/acme/shop/pull/106",
 } as const;
 
 /** What the fake hosts received, as GET /__fake/publications reports it. */
