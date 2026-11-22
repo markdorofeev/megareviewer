@@ -5,10 +5,10 @@ import { MODEL } from "./request.ts";
  * change, and set PROMPT_FINGERPRINT to the value the version test prints. The version is part
  * of the analysis cache key, so a stale one would serve analyses made with the old prompts.
  */
-export const PROMPT_VERSION = 15;
-export const PROMPT_FINGERPRINT = "31e4322926af2bfe";
-/** The same, of a run that asks for the tour: every pass, with the steps pass's variant in the schema. */
-export const TOUR_FINGERPRINT = "9b35daf1ff1fd15a";
+export const PROMPT_VERSION = 16;
+export const PROMPT_FINGERPRINT = "0cf796199906ab9d";
+/** The same, of the steps pass, which only a run that asks for the tour sends. */
+export const TOUR_FINGERPRINT = "2d478334836c891d";
 
 export const apiVersion = (model: string): string => `${model}/p${PROMPT_VERSION}`;
 

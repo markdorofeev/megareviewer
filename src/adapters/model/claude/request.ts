@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
 import type { OneCall } from "../shared/one-call.ts";
-import { PASS_ANSWER_FORMAT, passAnswerFormat } from "../shared/output-schema.ts";
+import { passText } from "../shared/prompted-answer.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 import { claudeModel, DEFAULT_MODEL, effortFor } from "./models.ts";
 
@@ -38,24 +38,22 @@ type PassRequest = Anthropic.Beta.Messages.MessageCreateParamsStreaming;
 
 /**
  * The request for one pass. Everything up to and including the PR data block is identical for
- * every pass of a run, so passes after the first read it from the prompt cache. `tour`: the run
- * asked for the tour, so every pass sends the format with the steps pass's variant.
+ * every pass of a run, the steps pass too, so passes after the first read it from the prompt cache.
+ *
+ * It has no output format: the API refuses the passes' union as too large a grammar, and a format
+ * per pass would miss that cache. Each pass's task ends with its own schema instead.
  */
 export const passRequest = (
   pass: ModelPass,
   renderedInput: string,
   message: string,
   model: string = MODEL,
-  tour = false,
 ): Omit<PassRequest, "stream"> => ({
   model,
   max_tokens: apiLimits(model).maxTokens,
   betas: [...BETAS],
   thinking: { type: "adaptive" },
-  output_config: {
-    effort: effortFor(claudeModel(model), BASE_EFFORT),
-    format: passAnswerFormat(tour),
-  },
+  output_config: { effort: effortFor(claudeModel(model), BASE_EFFORT) },
   system: SYSTEM_PROMPT,
   messages: [
     {
@@ -67,7 +65,7 @@ export const passRequest = (
       content: [],
       output_config: { effort: effortFor(claudeModel(model), PASS_EFFORT[pass]) },
     },
-    { role: "user", content: [{ type: "text", text: message }] },
+    { role: "user", content: [{ type: "text", text: passText(pass, message) }] },
   ],
 });
 

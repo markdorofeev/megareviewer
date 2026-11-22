@@ -3,6 +3,7 @@ import type { AnalysisModel, Logger } from "../../../application/ports/index.ts"
 import { err, ok } from "../../../domain/shared/index.ts";
 import { invalidOutput, maxTokens, refusal, tooLarge } from "../shared/errors.ts";
 import { createPassModel } from "../shared/pass-model.ts";
+import { answerJson } from "../shared/prompted-answer.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import { fromSdkError } from "./errors.ts";
@@ -19,7 +20,7 @@ export interface ClaudeAnalysisModelOptions {
   readonly logger: Logger;
 }
 
-/** The five passes on the Anthropic API, with the PR data shared through the prompt cache. */
+/** The four passes on the Anthropic API, with the PR data shared through the prompt cache. */
 export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): AnalysisModel => {
   const client = options.client ?? new Anthropic();
   const model = options.model ?? MODEL;
@@ -57,7 +58,6 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
         renderInput(input),
         passMessage(pass, intent, passOptions?.feedback),
         model,
-        passOptions?.tour,
       );
       logger.debug("Model pass started", {
         pass,
@@ -95,12 +95,8 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
       }
       if (message.stop_reason === "max_tokens") return err(maxTokens(limits.maxTokens));
 
-      let answer: unknown;
-      try {
-        answer = JSON.parse(answerText(message));
-      } catch {
-        return err(invalidOutput("the answer isn't JSON"));
-      }
+      const answer = answerJson(answerText(message));
+      if (answer === undefined) return err(invalidOutput("the answer isn't one JSON object"));
       return ok({ answer, usage });
     },
   });

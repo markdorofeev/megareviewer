@@ -1,8 +1,7 @@
-// Whether Claude Code and the API accept the answer schema with the steps pass's variant:
-// node evals/union-check.ts. One small call on each, on Haiku 5.5; spends a little of the plan and
-// the API account, so CI never runs it.
+// Whether Claude Code accepts the answer schema with the steps pass's variant:
+// node evals/union-check.ts. One small call on Haiku 5.5; spends a little of the plan, so CI never
+// runs it. The API sends no format, since it refused this one and the four's as too large a grammar.
 
-import Anthropic from "@anthropic-ai/sdk";
 import {
   claudeCodeArgs,
   SYSTEM_PROMPT_FILE,
@@ -28,19 +27,4 @@ print(`  structured_output: ${JSON.stringify(result?.structured_output ?? null)}
 if (result?.is_error === true || result?.structured_output === undefined) {
   print(`  result: ${JSON.stringify(result ?? null).slice(0, 2000)}`);
   print(`  stderr: ${code.stderr.slice(0, 2000)}`);
-}
-
-const client = new Anthropic();
-try {
-  const message = await client.beta.messages.create({
-    model: MODEL,
-    max_tokens: 2_000,
-    output_config: { effort: "low", format: TOUR_PASS_ANSWER_FORMAT },
-    system: SYSTEM,
-    messages: [{ role: "user", content: TASK }],
-  });
-  const text = message.content.flatMap((block) => (block.type === "text" ? [block.text] : []));
-  print(`API: ${message.stop_reason}, ${text.join("")}`);
-} catch (error) {
-  print(`API refused: ${error instanceof Error ? error.message : String(error)}`);
 }

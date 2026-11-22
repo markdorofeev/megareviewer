@@ -135,22 +135,3 @@ export const readTurn = (json: unknown): OpencodeTurn | null => {
     tools,
   };
 };
-
-const FENCE = /^```(?:json)?\s*\n([\s\S]*?)\n?```$/;
-
-/**
- * The JSON object an answer holds. Asked for one object and nothing else, a model may still wrap it
- * in a code fence or a sentence, so the outermost braces are taken.
- */
-export const answerJson = (text: string): unknown => {
-  const trimmed = text.trim();
-  const fenced = FENCE.exec(trimmed)?.[1] ?? trimmed;
-  const start = fenced.indexOf("{");
-  const end = fenced.lastIndexOf("}");
-  if (start === -1 || end < start) return undefined;
-  try {
-    return JSON.parse(fenced.slice(start, end + 1));
-  } catch {
-    return undefined;
-  }
-};

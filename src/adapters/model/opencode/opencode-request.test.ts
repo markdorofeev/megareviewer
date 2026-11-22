@@ -2,15 +2,13 @@ import { describe, expect, it } from "vitest";
 import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
 import { MODEL_STAGES, ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
-import { PassAnswer } from "../shared/output-schema.ts";
+import { passSchema } from "../shared/prompted-answer.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
-import { answerJson } from "./opencode-output.ts";
 import {
   entryBytes,
   opencodeConfig,
   opencodeRequest,
-  passSchema,
   prEntries,
   prEntry,
   variantFor,
@@ -54,14 +52,6 @@ describe("opencodeRequest", () => {
       expect(prompt).toMatch(/Answer with one JSON object and nothing else/);
       expect(prompt.endsWith(JSON.stringify(passSchema(pass)))).toBe(true);
     }
-  });
-
-  it("asks for an answer the shared schema accepts", () => {
-    const schema = passSchema("findings");
-    expect(schema).toMatchObject({ required: ["answer"], additionalProperties: false });
-    expect(
-      PassAnswer.safeParse(answerJson('{"answer":{"pass":"findings","findings":[]}}')).success,
-    ).toBe(true);
   });
 
   it("leaves the variant out for a model without any", () => {

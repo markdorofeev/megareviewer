@@ -10,8 +10,8 @@ const REVIEW_VARIANTS = [
 ] as const;
 
 /**
- * One schema for the review's four passes, tagged by pass. The API adds a system prompt for the
- * output format and changing it invalidates the prompt cache, so every pass sends the same one.
+ * One schema for the review's four passes, tagged by pass. Changing the output format invalidates
+ * the prompt cache, so every pass of a transport that enforces one sends the same.
  */
 export const ReviewPassAnswer = z.object({ answer: z.discriminatedUnion("pass", REVIEW_VARIANTS) });
 

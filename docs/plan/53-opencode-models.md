@@ -134,7 +134,7 @@ So the stage's first condition fails as planned: 2.3.0 has no structured output 
 ## Open issues
 
 - **V1 or V2.** 2.3.0 is V2, and serves only V2's routes (see **Measurements**).
-- **The Anthropic API refuses the `PassAnswer` union.** Measured in the spike, outside opencode: "The compiled grammar is too large" on Haiku 5.5 and Sonnet 5.5, so the API transport, the fallback when Claude Code can't run, likely fails every pass. Not this stage's to fix; it belongs to the Claude adapter.
+- **The Anthropic API refuses the `PassAnswer` union.** Measured in the spike, outside opencode: "The compiled grammar is too large" on Haiku 5.5 and Sonnet 5.5, so the API transport, the fallback when Claude Code can't run, likely fails every pass. Not this stage's to fix; it belongs to the Claude adapter. Fixed since: the API transport sends no output format and asks for each pass's schema in its task, as opencode does (ARCHITECTURE.md, Model passes).
 
 - **The spike's sessions are still in this machine's opencode history:** eleven, titled "spike" and two named by opencode, from before megareviewer deleted its sessions. Delete them with opencode's own interface, or `opencode session`.
 - **The routes megareviewer uses for the PR are experimental** (`/api/experimental/session/:id/instructions/entries/:key` and `/wait`). An opencode update may move them; the version check only refuses older versions. Look for a stable route at each bump.

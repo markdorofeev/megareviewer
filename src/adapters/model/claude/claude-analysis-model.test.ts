@@ -8,6 +8,7 @@ import {
 } from "../../../application/testing/index.ts";
 import type { ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import { GUIDANCE_BLOCK, withGuidance } from "../shared/fixtures/guidance.ts";
+import { passSchema } from "../shared/prompted-answer.ts";
 import { createClaudeAnalysisModel } from "./claude-analysis-model.ts";
 import { createAnthropicFetch, type FixtureAnswer } from "./fixtures/anthropic-fetch.ts";
 import errors from "./fixtures/errors.synthetic.json" with { type: "json" };
@@ -151,11 +152,44 @@ describe("ClaudeAnalysisModel", () => {
         max_tokens: 64_000,
         stream: true,
         thinking: { type: "adaptive" },
-        output_config: { effort: "medium", format: { type: "json_schema" } },
       });
       expect(request?.headers.get("anthropic-beta")?.split(",")).toEqual([
         "mid-conversation-output-config-2026-07-01",
       ]);
+    });
+
+    it("sends no output format, since the API refuses the passes' union as too large a grammar", async () => {
+      const requests = await runAllPasses();
+      expect(requests.map((request) => request.body.output_config)).toEqual(
+        Array(3).fill({ effort: "medium" }),
+      );
+      for (const request of requests) expect(request.body).not.toHaveProperty("output_format");
+    });
+
+    it("ends each pass's task with the schema of its own answer", async () => {
+      const requests = await runAllPasses();
+      for (const [index, pass] of (["intent", "risk", "decisions"] as const).entries()) {
+        const task = requests[index]?.body.messages[2]?.content[0]?.text ?? "";
+        expect(task).toMatch(/Answer with one JSON object and nothing else/);
+        expect(task.endsWith(JSON.stringify(passSchema(pass)))).toBe(true);
+      }
+    });
+
+    it("sends a run with the tour what it sends one without, and the steps pass its own schema", async () => {
+      const { model, requests } = modelWith(recorded());
+      await model.intent(smallFeatureInput);
+      await model.intent(smallFeatureInput, { tour: true });
+      const steps = await model.steps(smallFeatureInput, { tour: true });
+      expect(steps.ok && steps.value.value).toHaveLength(3);
+
+      expect(requests[1]?.body).toEqual(requests[0]?.body);
+      const { messages, ...shared } = requests[2]?.body ?? { messages: [] };
+      expect(shared).toEqual({ ...requests[0]?.body, messages: undefined });
+      expect(shared.output_config).toEqual({ effort: "medium" });
+      expect(messages[0]).toEqual(requests[0]?.body.messages[0]);
+      const task = messages[2]?.content[0]?.text ?? "";
+      expect(task).toMatch(/^Task: steps\./);
+      expect(task.endsWith(JSON.stringify(passSchema("steps")))).toBe(true);
     });
 
     it("asks each pass for its own task alone, so the passes can run side by side", async () => {
@@ -178,7 +212,7 @@ describe("ClaudeAnalysisModel", () => {
         return requests[0]?.body.messages[2]?.content[0]?.text ?? "";
       };
       expect(await instruction(["h_1 is not a hunk", "h_2 missing"])).toMatch(
-        /\n\nYour previous answer had these problems: h_1 is not a hunk; h_2 missing\. Fix them\.$/,
+        /\n\nYour previous answer had these problems: h_1 is not a hunk; h_2 missing\. Fix them\.\n\nAnswer with one JSON object/,
       );
       expect(await instruction()).toMatch(/^Task: risk\.$/m);
       expect(await instruction()).not.toContain("previous answer");
@@ -246,7 +280,16 @@ describe("ClaudeAnalysisModel", () => {
       failsWith("decisions", errors.messages.maxTokens, "max-tokens", /64000/));
 
     it("reports an answer that isn't JSON", () =>
-      failsWith("intent", errors.messages.malformed, "invalid-output", /isn't JSON/));
+      failsWith("intent", errors.messages.malformed, "invalid-output", /isn't one JSON object/));
+
+    it("reads an answer wrapped in a code fence or a sentence, which nothing but the prompt forbids", async () => {
+      const [thinking, answer] = smallFeature.passes.intent.content;
+      if (thinking === undefined || answer?.text === undefined) throw new Error("no answer");
+      for (const text of [`\`\`\`json\n${answer.text}\n\`\`\``, `Here it is:\n${answer.text}`]) {
+        const message = { ...smallFeature.passes.intent, content: [thinking, { ...answer, text }] };
+        expect((await runPass("intent", message).result).ok).toBe(true);
+      }
+    });
 
     it("reports an answer outside the schema", () =>
       failsWith("risk", errors.messages.outsideSchema, "invalid-output", /riskClass/));

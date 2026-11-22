@@ -1,8 +1,10 @@
 // Live check of the Claude adapter against the real API: node evals/claude-live-check.ts [--record]
 // Needs Anthropic credentials (ANTHROPIC_API_KEY or `ant auth login`) and spends money, so CI
-// never runs it. Runs checkSize and three passes on the small-feature and prompt-injection
-// fixtures, intent first, prints each pass's answer, usage and cost, and fails unless passes 2–3
-// read the PR from the prompt cache. --record writes the small-feature responses to
+// never runs it. Runs checkSize and the passes, the steps pass among them, on the small-feature and
+// prompt-injection fixtures, intent first, prints each pass's answer, usage and cost, and fails
+// unless the passes after it read the PR from the prompt cache. It's the only check that the API
+// takes the requests: counting tokens accepts what a pass is then refused for, as it was the
+// passes' output format. --record writes the small-feature responses to
 // src/adapters/model/claude/fixtures/small-feature.json, in the format the adapter's tests replay.
 // It lives here because only tests, the dev server and evals may use the test fixtures.
 
@@ -124,13 +126,23 @@ const check = async (model: AnalysisModel, name: string, input: AnalysisInput) =
   if (!intent.ok) throw new Error(`${name} intent: ${intent.error.message}`);
   report(name, "intent", intent.value.usage, intent.value.value);
 
-  const [risk, decisions] = await Promise.all([model.risk(input), model.decisions(input)]);
+  const [risk, decisions, steps] = await Promise.all([
+    model.risk(input),
+    model.decisions(input),
+    model.steps(input, { tour: true }),
+  ]);
   if (!risk.ok) throw new Error(`${name} risk: ${risk.error.message}`);
   if (!decisions.ok) throw new Error(`${name} decisions: ${decisions.error.message}`);
+  if (!steps.ok) throw new Error(`${name} steps: ${steps.error.message}`);
   report(name, "risk", risk.value.usage, risk.value.value);
   report(name, "decisions", decisions.value.usage, decisions.value.value);
+  report(name, "steps", steps.value.usage, steps.value.value);
 
-  const total = [intent, risk, decisions].reduce(
+  const findings = await model.findings(input, intent.value.value);
+  if (!findings.ok) throw new Error(`${name} findings: ${findings.error.message}`);
+  report(name, "findings", findings.value.usage, findings.value.value);
+
+  const total = [intent, risk, decisions, steps, findings].reduce(
     (sum, result) => sum + (result.value.usage.costUsd ?? 0),
     0,
   );
@@ -155,7 +167,9 @@ const main = async (): Promise<void> => {
   await check(model, "prompt-injection", inputFrom(promptInjection));
 
   if (failures.length > 0) throw new Error(failures.join("\n"));
-  print("\nCache reads confirmed for passes 2–3. Check the prompt-injection answers by eye.");
+  print(
+    "\nCache reads confirmed for the passes after the intent. Check the prompt-injection answers by eye.",
+  );
 };
 
 await main();

@@ -5,12 +5,13 @@ import { err, ok, type Result } from "../../../domain/shared/index.ts";
 import type { Effort } from "../shared/effort.ts";
 import { invalidOutput, tooLarge } from "../shared/errors.ts";
 import { createPassModel } from "../shared/pass-model.ts";
+import { answerJson, passText } from "../shared/prompted-answer.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import type { OpencodeClient } from "./opencode-client.ts";
 import { fromHttpError, fromTurn, usedTool } from "./opencode-errors.ts";
-import { answerJson, type OpencodeTokens, readTurn } from "./opencode-output.ts";
-import { type OpencodeRequest, opencodeRequest, passText, prEntry } from "./opencode-request.ts";
+import { type OpencodeTokens, readTurn } from "./opencode-output.ts";
+import { type OpencodeRequest, opencodeRequest, prEntry } from "./opencode-request.ts";
 import { opencodeVersion } from "./version.ts";
 
 /**
