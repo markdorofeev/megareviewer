@@ -36,7 +36,7 @@ import {
   SuggestionDiff,
   ThreadBody,
 } from "../thread/index.ts";
-import { DiffLine, type LineMark, type PointLanding } from "./diff-line.tsx";
+import { DiffLine, type LineMark, type LineMarkKind, type PointLanding } from "./diff-line.tsx";
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { languageOf } from "./languages.ts";
 import { hunkLocation, lineCounts } from "./lines.ts";
@@ -190,7 +190,7 @@ export interface HunkCardProps {
 
 /** A line a point rests on: the kind that wins there, and how the line lands when it does. */
 export interface PointLine {
-  readonly kind: PointKind;
+  readonly kind: LineMarkKind;
   readonly landing?: PointLanding;
 }
 

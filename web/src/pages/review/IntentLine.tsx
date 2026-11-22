@@ -1,7 +1,7 @@
-import { CheckIcon, InfoIcon, Loader2Icon, SparklesIcon } from "lucide-react";
+import { CheckIcon, InfoIcon, Loader2Icon, RouteIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { hunkIdOf } from "../../../../src/domain/diff/index.ts";
-import { type Analysis, hasModelRun, MODEL_STAGES } from "../../../../src/domain/review/index.ts";
+import { type Analysis, hasModelRun, runStages } from "../../../../src/domain/review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { codeSpans, type Reach, reachOf, type Through } from "./brief.ts";
 
@@ -127,14 +127,17 @@ const AiStatus = ({
   analysis,
   running,
   stale,
+  tour,
 }: {
   readonly analysis: Analysis;
   readonly running: boolean;
   readonly stale: boolean;
+  readonly tour: TourLink | null;
 }) => {
   if (!running && !hasModelRun(analysis)) return null;
   const name = runName(analysis);
-  const done = MODEL_STAGES.filter((stage) => analysis.stages[stage] === "done").length;
+  const passes = runStages(analysis);
+  const done = passes.filter((stage) => analysis.stages[stage] === "done").length;
   return (
     <div
       data-slot="ai-status"
@@ -160,24 +163,38 @@ const AiStatus = ({
       {running ? (
         <>
           <span>
-            {done} of {MODEL_STAGES.length} passes
+            {done} of {passes.length} passes
           </span>
           <span
             role="progressbar"
             aria-label="AI review progress"
             aria-valuemin={0}
-            aria-valuemax={MODEL_STAGES.length}
+            aria-valuemax={passes.length}
             aria-valuenow={done}
             className="ml-1 h-1 w-30 overflow-hidden rounded-full bg-secondary"
           >
             <span
               className="block h-full bg-primary transition-[width] motion-reduce:transition-none"
-              style={{ width: `${(done / MODEL_STAGES.length) * 100}%` }}
+              style={{ width: `${(done / passes.length) * 100}%` }}
             />
           </span>
         </>
       ) : (
         <span>{stale ? "new commits since" : "latest commit"}</span>
+      )}
+      {tour !== null && !running && (
+        <>
+          <span aria-hidden="true">·</span>{" "}
+          <button
+            type="button"
+            data-slot="tour-link"
+            onClick={tour.onOpen}
+            className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+          >
+            <RouteIcon aria-hidden="true" className="size-3.5" />
+            Tour · {tour.stops} stops
+          </button>
+        </>
       )}
     </div>
   );
@@ -193,11 +210,18 @@ const AiStatus = ({
  * height. The Details button ends the first line, so it reads as more of it. A mismatch between
  * what was asked and what the code does is one of Claude's points, on the code it rests on.
  */
+/** The brief's way into the tour, once a run wrote one and the Tour switch is on. */
+export interface TourLink {
+  readonly stops: number;
+  readonly onOpen: () => void;
+}
+
 export const IntentLine = ({
   analysis,
   through,
   running,
   stale = false,
+  tour = null,
   onDetails,
 }: {
   readonly analysis: Analysis;
@@ -207,6 +231,7 @@ export const IntentLine = ({
   readonly running: boolean;
   /** The PR has new commits since the analysis. */
   readonly stale?: boolean;
+  readonly tour?: TourLink | null;
   readonly onDetails: () => void;
 }) => {
   const { intent, pullRequest } = analysis;
@@ -306,7 +331,7 @@ export const IntentLine = ({
 
   return (
     <div data-slot="intent-brief" className="flex min-w-0 flex-col gap-1 text-body">
-      <AiStatus analysis={analysis} running={running} stale={stale} />
+      <AiStatus analysis={analysis} running={running} stale={stale} tour={tour} />
       {inferred !== false ? (
         swapping ? (
           <div data-slot="intent-swap" className="min-w-0">

@@ -49,3 +49,21 @@ export const useStoredState = <T>(
 
 export const parseBoolean = (stored: unknown): boolean | undefined =>
   typeof stored === "boolean" ? stored : undefined;
+
+/** For the tab's own session, gone when it closes: the place to come back to, never the reviewer's choices. */
+export const readSession = (key: string): unknown => {
+  try {
+    const text = window.sessionStorage.getItem(PREFIX + key);
+    return text === null ? undefined : JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+export const writeSession = (key: string, value: unknown): void => {
+  try {
+    window.sessionStorage.setItem(PREFIX + key, JSON.stringify(value));
+  } catch {
+    // Not remembered; the page goes on without it.
+  }
+};

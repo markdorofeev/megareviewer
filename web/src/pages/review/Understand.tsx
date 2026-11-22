@@ -1,4 +1,11 @@
-import { ChevronRightIcon, CodeIcon, SparklesIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  CodeIcon,
+  RouteIcon,
+  SparklesIcon,
+  XIcon,
+} from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { Point, PointState } from "../../../../src/domain/review/index.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
@@ -562,8 +569,8 @@ export const Understand = ({
   readonly onOpenInCode: (stop: TourStop, excerpt: TourExcerpt) => void;
   /** Told the stop now current as the window scrolls, to come back to it. */
   readonly onCurrentStop?: (number: number | null) => void;
-  /** A stop to go to once drawn, as when coming back from the code. */
-  readonly landOn?: number | null;
+  /** A stop to go to once drawn, as when coming back from the code; 0 for the tour's top. */
+  readonly landOn?: { readonly stop: number; readonly n: number } | null;
 }) => {
   const container = useRef<HTMLDivElement>(null);
   const strip = useCallback(
@@ -615,9 +622,15 @@ export const Understand = ({
 
   const landed = useRef<number | null>(null);
   useEffect(() => {
-    if (landOn === null || landed.current === landOn) return;
-    landed.current = landOn;
-    goToStop(landOn);
+    if (landOn === null || landed.current === landOn.n) return;
+    landed.current = landOn.n;
+    if (landOn.stop > 0) return goToStop(landOn.stop);
+    const root = container.current;
+    if (root === null) return;
+    const bar =
+      document.querySelector("[data-slot=review-bar]")?.getBoundingClientRect().height ?? 0;
+    const top = window.scrollY + root.getBoundingClientRect().top - bar - 8;
+    window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
   }, [landOn, goToStop]);
 
   return (
@@ -679,4 +692,56 @@ export const NoTourLine = ({
     <SparklesIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
     {children}
   </p>
+);
+
+/** Over the excerpt's lines in the map: which stop of the tour they are. */
+export const TourLanding = ({
+  stop,
+  excerpt,
+}: {
+  readonly stop: TourStop;
+  readonly excerpt: TourExcerpt;
+}) => (
+  <p
+    data-slot="tour-landing"
+    className="flex flex-wrap items-center gap-x-1.5 border-b bg-ai-soft px-3 py-1.5 text-ui text-primary"
+  >
+    <RouteIcon aria-hidden="true" className="size-3.5 shrink-0" />
+    <span className="font-semibold">Tour stop {stop.number}</span>
+    <span aria-hidden="true">·</span>
+    <span>{linesLabel(excerpt)}</span>
+    <span aria-hidden="true">·</span>
+    <span className="text-foreground">
+      <ModelText text={stop.sentence} />
+    </span>
+  </p>
+);
+
+/** The bar's second row in the map, once it was opened from a stop: back to it, or put away. */
+export const BackToTour = ({
+  stop,
+  onBack,
+  onDismiss,
+}: {
+  readonly stop: number;
+  readonly onBack: () => void;
+  readonly onDismiss: () => void;
+}) => (
+  <div
+    data-slot="back-to-tour"
+    className="sticky top-(--review-bar-row) z-20 -mt-px flex h-9 items-center gap-2 border-b bg-background"
+  >
+    <Button
+      variant="outline"
+      size="sm"
+      className="border-ai-soft-bd bg-ai-soft text-primary hover:bg-ai-soft-hover"
+      onClick={onBack}
+    >
+      <ArrowLeftIcon aria-hidden="true" />
+      Back to tour · Stop {stop}
+    </Button>
+    <Button variant="ghost" size="icon-sm" aria-label="Hide Back to tour" onClick={onDismiss}>
+      <XIcon aria-hidden="true" />
+    </Button>
+  </div>
 );

@@ -22,7 +22,12 @@ const LANDED: readonly Point[] = POINTS.map((point) => ({
   id: PointId.parse(point.kind === "risk" ? `${point.id}-2` : `${point.id.slice(0, 1)}101`),
 }));
 
-const RANK: Readonly<Record<Point["kind"], number>> = { finding: 0, risk: 1, decision: 2 };
+const RANK: Readonly<Record<PointLine["kind"], number>> = {
+  finding: 0,
+  risk: 1,
+  decision: 2,
+  stop: 3,
+};
 
 /**
  * Claude's run on made-up data, played as the review page plays it: Play starts a run, which

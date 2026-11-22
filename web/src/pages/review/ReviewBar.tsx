@@ -69,7 +69,7 @@ export const ReviewBar = ({
       ref={observed.bar}
       data-slot="review-bar"
       data-stuck={stuck || undefined}
-      className="sticky top-0 z-20 flex h-(--review-bar-h) min-w-0 items-center gap-3 border-y bg-background"
+      className="sticky top-0 z-20 flex h-(--review-bar-row,var(--review-bar-h)) min-w-0 items-center gap-3 border-y bg-background"
     >
       {hairline !== null && (
         // Drawn by globals.css: a still, full-width bar under reduced motion.

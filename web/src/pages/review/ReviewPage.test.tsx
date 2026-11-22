@@ -1672,6 +1672,53 @@ describe("the tour", () => {
     expect(within(mainArea()).getByText("Why here?")).toBeTruthy();
   });
 
+  it("opens a stop in the map, marked and labelled, and comes back to it with Esc", async () => {
+    withTour();
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    const region = await screen.findByRole("region", { name: "Tour stops" });
+    await userEvent.click(
+      within(region).getByRole("button", {
+        name: "Open src/services/receipts.ts lines 41–50 in code",
+      }),
+    );
+    await waitFor(() => expect(layoutIs("map")).toBe(true));
+    expect(screen.getByRole("button", { name: "Back to tour · Stop 2" })).toBeTruthy();
+    const label = document.querySelector("[data-slot=tour-landing]");
+    expect(label?.textContent).toContain("Tour stop 2");
+    expect(document.querySelectorAll("[data-point-mark=stop]").length).toBeGreaterThan(0);
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(layoutIs("overview")).toBe(true));
+    expect(document.activeElement?.textContent).toContain("Stop 2:");
+    expect(screen.queryByRole("button", { name: "Back to tour · Stop 2" })).toBeNull();
+  });
+
+  it("switches with v between the tour's current stop and its lines in the map", async () => {
+    withTour();
+    window.sessionStorage.clear();
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    await screen.findByRole("region", { name: "Tour stops" });
+    window.sessionStorage.setItem(`megareviewer:tour-stop:${id}`, "3");
+    await userEvent.keyboard("v");
+    await waitFor(() => expect(layoutIs("map")).toBe(true));
+    expect(screen.getByRole("button", { name: "Back to tour · Stop 3" })).toBeTruthy();
+    await userEvent.keyboard("v");
+    await waitFor(() => expect(layoutIs("overview")).toBe(true));
+    expect(document.activeElement?.textContent).toContain("Stop 3:");
+  });
+
+  it("is opened from the brief's link, which shows only with a tour", async () => {
+    window.localStorage.setItem("megareviewer:tour", "true");
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    expect(layoutIs("map")).toBe(true);
+    await userEvent.click(await screen.findByRole("button", { name: "Tour · 4 stops" }));
+    await waitFor(() => expect(layoutIs("overview")).toBe(true));
+    expect(screen.getByRole("region", { name: "Tour stops" })).toBeTruthy();
+  });
+
   it("is the overview and a line saying why, without a tour", async () => {
     withTour();
     const first = renderReview();

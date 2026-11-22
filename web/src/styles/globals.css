@@ -635,8 +635,14 @@
  * height: file headers and the tree rail sit below it, and the focus never lands under it.
  */
 :root:has([data-slot="review-page"]) {
-  --review-bar-h: 3.25rem;
+  --review-bar-row: 3.25rem;
+  --review-bar-h: var(--review-bar-row);
   scroll-padding-top: var(--review-bar-h);
+}
+
+/* Back on the map from the tour, the bar has a second row, which what sticks under it clears too. */
+:root:has([data-slot="back-to-tour"]) {
+  --review-bar-h: calc(var(--review-bar-row) + 2.25rem);
 }
 
 /* The hairline: a segment travelling along a faint track while Claude reads. */

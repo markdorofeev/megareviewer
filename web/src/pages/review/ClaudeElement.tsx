@@ -16,6 +16,7 @@ import {
   modelRunnable,
   type Point,
   type PointKind,
+  runStages,
 } from "../../../../src/domain/review/index.ts";
 
 /** What the model's element reads of an analysis: how far its run got, on what, and how it ended. */
@@ -278,16 +279,18 @@ export const ClaudeElement = ({
   const after = (at: number) =>
     receipt ? { "data-land": "rise", style: cssVars({ "--landing-i": chips + at }) } : {};
 
-  const done = MODEL_STAGES.filter((stage) => analysis.stages[stage] === "done").length;
+  // The run's passes: four, or five when it asked for the tour.
+  const passes = runStages(analysis);
+  const done = passes.filter((stage) => analysis.stages[stage] === "done").length;
   const split = running ? (
     <AiSplit
       choice={choice}
       variant="ai-quiet"
       compact
       icon={Loader2Icon}
-      label={`Reviewing · ${done} of ${MODEL_STAGES.length}`}
+      label={`Reviewing · ${done} of ${passes.length}`}
       note={null}
-      busy={`${family} is reading this PR, ${done} of ${MODEL_STAGES.length} passes done`}
+      busy={`${family} is reading this PR, ${done} of ${passes.length} passes done`}
       slot="claude-running"
     />
   ) : reanalyze !== null ? (
