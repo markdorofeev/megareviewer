@@ -691,7 +691,7 @@ describe("the analysis pipeline", () => {
         findings: "done",
         risk: "done",
         decisions: "done",
-        stops: "skipped",
+        steps: "skipped",
       });
       expect(analysis.modelError).toEqual({
         stage: "intent",
@@ -1276,7 +1276,7 @@ describe("without the model", () => {
       findings: "skipped",
       risk: "skipped",
       decisions: "skipped",
-      stops: "skipped",
+      steps: "skipped",
     });
     expect(analysis.key.pipelineVersion).toBe("20");
     expect(analysis.intent).toBeNull();
@@ -1650,43 +1650,43 @@ describe("a run with the tour", () => {
     },
   ];
 
-  it("never runs the stops pass, nor tells the passes of a tour, when the run doesn't ask", async () => {
+  it("never runs the steps pass, nor tells the passes of a tour, when the run doesn't ask", async () => {
     const { analysis, runModel, model } = await codeOnly();
     const after = await runModel(analysis.id);
-    expect(model.callsTo("stops")).toEqual([]);
+    expect(model.callsTo("steps")).toEqual([]);
     expect(model.calls.filter((call) => call.options?.tour !== undefined)).toEqual([]);
-    expect(after.stages.stops).toBe("skipped");
-    expect(after.stops).toBeNull();
-    expect(after.usage.map((usage) => usage.pass)).not.toContain("stops");
+    expect(after.stages.steps).toBe("skipped");
+    expect(after.steps).toBeNull();
+    expect(after.usage.map((usage) => usage.pass)).not.toContain("steps");
   });
 
-  it("keeps the stops, numbered, and tells every pass of the run the tour was asked for", async () => {
+  it("keeps the steps, numbered, and tells every pass of the run the tour was asked for", async () => {
     const model = new FakeAnalysisModel();
     const { analysis, runModel } = await codeOnly(model);
-    model.script("stops", ok(tourOf(analysis)));
+    model.script("steps", ok(tourOf(analysis)));
     const after = await runModel(analysis.id, undefined, true);
-    expect(after.stages.stops).toBe("done");
-    expect(after.stops?.map((stop) => [stop.id, stop.sentence])).toEqual([
+    expect(after.stages.steps).toBe("done");
+    expect(after.steps?.map((step) => [step.id, step.sentence])).toEqual([
       ["t1", "The route sends a receipt"],
       ["t2", "A receipt is cached for an hour"],
       ["t3", "The config adds a footer"],
     ]);
-    expect(after.stopsError).toBeNull();
+    expect(after.stepsError).toBeNull();
     expect(after.modelError).toBeNull();
     const passes = model.calls.filter((call) => call.pass !== "checkSize");
     expect(passes.map((call) => call.options?.tour)).toEqual(passes.map(() => true));
-    expect(after.usage.map((usage) => usage.pass)).toContain("stops");
+    expect(after.usage.map((usage) => usage.pass)).toContain("steps");
   });
 
-  it("is no tour when the model answers fewer than three stops", async () => {
+  it("is no tour when the model answers fewer than three steps", async () => {
     const model = new FakeAnalysisModel();
     const { analysis, runModel } = await codeOnly(model);
-    model.script("stops", ok(tourOf(analysis).slice(0, 2)));
+    model.script("steps", ok(tourOf(analysis).slice(0, 2)));
     const after = await runModel(analysis.id, undefined, true);
-    expect(after.stages.stops).toBe("done");
-    expect(after.stops).toEqual([]);
-    expect(after.stopsError).toBeNull();
-    expect(model.callsTo("stops")).toHaveLength(1);
+    expect(after.stages.steps).toBe("done");
+    expect(after.steps).toEqual([]);
+    expect(after.stepsError).toBeNull();
+    expect(model.callsTo("steps")).toHaveLength(1);
   });
 
   it("tells the model what the checks found once, then repairs what's left", async () => {
@@ -1694,23 +1694,23 @@ describe("a run with the tour", () => {
     const { analysis, runModel } = await codeOnly(model);
     const outside = lines(analysis, "src/services/receipts.ts", 30, 31);
     const wrong = [...tourOf(analysis), { sentence: "Past the hunk", excerpts: [outside] }];
-    model.script("stops", ok(wrong), ok(wrong));
+    model.script("steps", ok(wrong), ok(wrong));
     const after = await runModel(analysis.id, undefined, true);
-    expect(model.callsTo("stops")[1]?.options?.feedback).toEqual([
-      `Stop 4's excerpt 1 has lines ${outside.hunkId} doesn't show on that side.`,
+    expect(model.callsTo("steps")[1]?.options?.feedback).toEqual([
+      `Step 4's excerpt 1 has lines ${outside.hunkId} doesn't show on that side.`,
     ]);
-    expect(after.stops).toHaveLength(3);
-    expect(after.modelCalls.filter((call) => call.pass === "stops")).toHaveLength(2);
+    expect(after.steps).toHaveLength(3);
+    expect(after.modelCalls.filter((call) => call.pass === "steps")).toHaveLength(2);
   });
 
   it("is the tour's error, never the run's, when the pass fails or the checks leave too few", async () => {
     const failing = new FakeAnalysisModel();
-    failing.script("stops", err(modelError("overloaded", "Overloaded")));
+    failing.script("steps", err(modelError("overloaded", "Overloaded")));
     const first = await codeOnly(failing);
     const failed = await first.runModel(first.analysis.id, undefined, true);
-    expect(failed.stages.stops).toBe("failed");
-    expect(failed.stopsError).toEqual({
-      stage: "stops",
+    expect(failed.stages.steps).toBe("failed");
+    expect(failed.stepsError).toEqual({
+      stage: "steps",
       code: "model-error",
       message: "Overloaded",
     });
@@ -1724,12 +1724,12 @@ describe("a run with the tour", () => {
       sentence: "Outside",
       excerpts: [lines(second.analysis, "config/app.yaml", 90, 91)],
     };
-    const answer = [route, receipts, outside, outside].flatMap((stop) => stop ?? []);
-    sparse.script("stops", ok(answer), ok(answer));
+    const answer = [route, receipts, outside, outside].flatMap((step) => step ?? []);
+    sparse.script("steps", ok(answer), ok(answer));
     const left = await second.runModel(second.analysis.id, undefined, true);
-    expect(left.stages.stops).toBe("failed");
-    expect(left.stopsError?.message).toBe(
-      "Only 2 of the tour's 4 stops showed lines of this pull request, and a tour needs 3",
+    expect(left.stages.steps).toBe("failed");
+    expect(left.stepsError?.message).toBe(
+      "Only 2 of the tour's 4 steps showed lines of this pull request, and a tour needs 3",
     );
     expect(left.modelError).toBeNull();
   });
@@ -1737,15 +1737,15 @@ describe("a run with the tour", () => {
   it("goes with the run when it's removed", async () => {
     const model = new FakeAnalysisModel();
     const { analysis, runModel, useCases } = await codeOnly(model);
-    model.script("stops", ok(tourOf(analysis)));
+    model.script("steps", ok(tourOf(analysis)));
     await runModel(analysis.id, undefined, true);
     const removed = await useCases.removeModelRun(analysis.id);
     if (!removed.ok) throw new Error(removed.error.message);
-    expect(removed.value.analysis.stops).toBeNull();
-    expect(removed.value.analysis.stages.stops).toBe("skipped");
+    expect(removed.value.analysis.steps).toBeNull();
+    expect(removed.value.analysis.stages.steps).toBe("skipped");
   });
 
-  it("fails only the tour when a stop leaves it being written", async () => {
+  it("fails only the tour when a step leaves it being written", async () => {
     const { analysis, useCases, store, clock } = await codeOnly();
     const ran: Analysis = {
       ...analysis,
@@ -1755,16 +1755,16 @@ describe("a run with the tour", () => {
         findings: "done",
         risk: "done",
         decisions: "done",
-        stops: "running",
+        steps: "running",
       },
     };
     await store.saveAnalysis(ran);
     clock.advance(1000);
     expect(await useCases.recoverInterruptedAnalyses()).toBe(1);
     const recovered = await store.getAnalysis(analysis.id);
-    expect(recovered?.stages.stops).toBe("failed");
+    expect(recovered?.stages.steps).toBe("failed");
     expect(recovered?.modelError).toBeNull();
-    expect(recovered?.stopsError?.code).toBe("interrupted");
+    expect(recovered?.stepsError?.code).toBe("interrupted");
   });
 });
 

@@ -252,11 +252,11 @@ It's one stage for one agent: the call, the server's check and the line share th
 
 ## Seventeenth slice: a tour of the PR
 
-Between the brief's three lines and the files, nothing says what happens and in which order. This slice adds a tour to the second layout, behind a switch in the Display menu: a few stops the model writes, each a sentence and the lines that decide, with a count of what the tour didn't show.
+Between the brief's three lines and the files, nothing says what happens and in which order. This slice adds a tour to the second layout, behind a switch in the Display menu: a few steps the model writes, each a sentence and the lines that decide, with a count of what the tour didn't show.
 
 | # | Stage | Depends on | Owns |
 |---|---|---|---|
-| 64 | [A tour of the PR, behind a switch](63-tour.md) | 27, 45, 50, 56, 61 | The `stops` pass and its checks, the Understand layout, the Display menu's switches, the stops' eval scores |
+| 64 | [A tour of the PR, behind a switch](63-tour.md) | 27, 45, 50, 56, 61 | The `steps` pass and its checks, the Understand layout, the Display menu's switches, the steps' eval scores |
 
 ## How to pick up a stage
 

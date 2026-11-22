@@ -26,7 +26,7 @@ const RANK: Readonly<Record<PointLine["kind"], number>> = {
   finding: 0,
   risk: 1,
   decision: 2,
-  stop: 3,
+  step: 3,
 };
 
 /**

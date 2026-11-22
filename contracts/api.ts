@@ -76,7 +76,7 @@ export type StartAnalysisRequest = z.infer<typeof StartAnalysisRequest>;
 
 /**
  * The option to run the passes on; the server's default without one, or without a body. `tour`
- * asks for the stops pass too, which the review page does only with its Tour switch on.
+ * asks for the steps pass too, which the review page does only with its Tour switch on.
  */
 export const RunModelRequest = z
   .object({ optionId: ModelOptionId.optional(), tour: z.boolean().optional() })

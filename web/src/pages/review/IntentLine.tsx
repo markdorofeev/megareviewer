@@ -192,7 +192,7 @@ const AiStatus = ({
             className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
           >
             <RouteIcon aria-hidden="true" className="size-3.5" />
-            Tour · {tour.stops} stops
+            Tour · {tour.steps} steps
           </button>
         </>
       )}
@@ -212,7 +212,7 @@ const AiStatus = ({
  */
 /** The brief's way into the tour, once a run wrote one and the Tour switch is on. */
 export interface TourLink {
-  readonly stops: number;
+  readonly steps: number;
   readonly onOpen: () => void;
 }
 

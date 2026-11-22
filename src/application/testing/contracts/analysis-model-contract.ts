@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   Intent,
   ModelUsage,
-  StopDraft,
+  StepDraft,
   validateFindings,
-  validateStops,
+  validateSteps,
 } from "../../../domain/review/index.ts";
 import {
   type AnalysisModel,
@@ -78,11 +78,11 @@ export const describeAnalysisModelContract = (
       expectUsage(result.value, "decisions");
     });
 
-    it("returns stops on lines of the PR's hunks sent in full, in call order", async () => {
-      const result = await model.stops(smallFeatureInput, { tour: true });
-      if (!result.ok) throw new Error(`stops failed: ${result.error.message}`);
+    it("returns steps on lines of the PR's hunks sent in full, in call order", async () => {
+      const result = await model.steps(smallFeatureInput, { tour: true });
+      if (!result.ok) throw new Error(`steps failed: ${result.error.message}`);
 
-      for (const item of result.value.value) expect(StopDraft.parse(item)).toEqual(item);
+      for (const item of result.value.value) expect(StepDraft.parse(item)).toEqual(item);
       const hunks = new Map(
         smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
       );
@@ -90,8 +90,8 @@ export const describeAnalysisModelContract = (
         smallFeatureInput.files.flatMap((file) => file.mechanicalHunks.map((hunk) => hunk.hunkId)),
       );
       const context = { hunks, mechanical, parts: [], callGraph: smallFeatureInput.callGraph };
-      expect(validateStops(result.value.value, context)).toEqual([]);
-      expectUsage(result.value, "stops");
+      expect(validateSteps(result.value.value, context)).toEqual([]);
+      expectUsage(result.value, "steps");
     });
   });
 };

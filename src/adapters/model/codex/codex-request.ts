@@ -98,7 +98,7 @@ export const codexRequest = (
     readonly efforts?: readonly string[];
     /** One for every pass, only to measure it, as the evals' --effort does. */
     readonly effort?: Effort;
-    /** The run asked for the tour: the schema has the stops pass's variant. */
+    /** The run asked for the tour: the schema has the steps pass's variant. */
     readonly tour?: boolean;
   } = {},
 ): CodexRequest => {

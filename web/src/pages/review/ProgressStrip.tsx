@@ -1,7 +1,7 @@
 import {
   type Analysis,
   MODEL_STAGES,
-  STOPS_STAGE,
+  STEPS_STAGE,
   StageName,
   type StageStatus,
 } from "../../../../src/domain/review/index.ts";
@@ -13,7 +13,7 @@ const STAGE_NAMES: Readonly<Record<StageName, string>> = {
   findings: "Findings",
   risk: "Risk",
   decisions: "Decisions",
-  stops: "Tour",
+  steps: "Tour",
 };
 
 const STATUS_NAMES: Readonly<Record<StageStatus, string>> = {
@@ -80,5 +80,5 @@ export const ProgressStrip = ({
 export const stageName = (stage: StageName): string => STAGE_NAMES[stage];
 
 export const CODE_STAGES: readonly StageName[] = StageName.options.filter(
-  (stage) => !(MODEL_STAGES as readonly StageName[]).includes(stage) && stage !== STOPS_STAGE,
+  (stage) => !(MODEL_STAGES as readonly StageName[]).includes(stage) && stage !== STEPS_STAGE,
 );

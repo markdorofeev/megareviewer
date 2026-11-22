@@ -10,7 +10,7 @@ Recorded with Codex CLI 0.162.0 on macOS, signed in with ChatGPT, on 2026-11-14.
 | `mcp-call.jsonl` | Task 1: code mode asked to call `list_mcp_resources` and `read_mcp_resource` |
 | `agent-tool.jsonl` | Task 1: the model asked to spawn an agent and wait for it |
 | `api-key-rejected.jsonl` | Task 1: `CODEX_API_KEY` set to a made-up key, which wins over the ChatGPT sign-in |
-| `stops.synthetic.jsonl` | Synthetic: `decisions.jsonl` with three stops on small-feature as its last message, until the stops pass is recorded |
+| `steps.synthetic.jsonl` | Synthetic: `decisions.jsonl` with three steps on small-feature as its last message, until the steps pass is recorded |
 | `errors.synthetic.json` | Written by hand: the plan's limit, a prompt too long, a refusal, a file change, a web search, an item type Codex doesn't have yet, a turn with no answer. Their messages are guesses at Codex's; the adapter matches loosely |
 
 The passes were recorded before a finding and a risk had a guidance mark, so their answers have none, which parses as null. The suggestion call has no recording: `codex-suggester.test.ts` answers it with `intent.jsonl`, its last message replaced by the proposals recorded through Claude Code, so it's synthetic. It was never run on Codex.

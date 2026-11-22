@@ -2,13 +2,13 @@ import {
   type Analysis,
   MODEL_STAGES,
   mapModelStages,
-  STOPS_STAGE,
+  STEPS_STAGE,
   StageName,
   type StageStatus,
 } from "../../src/domain/review/index.ts";
 
 // The mock runs never ask for the tour.
-const STAGES: readonly StageName[] = StageName.options.filter((stage) => stage !== STOPS_STAGE);
+const STAGES: readonly StageName[] = StageName.options.filter((stage) => stage !== STEPS_STAGE);
 
 const isModelStage = (stage: StageName): boolean =>
   (MODEL_STAGES as readonly StageName[]).includes(stage);
@@ -37,7 +37,7 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
       findings: status("findings"),
       risk: status("risk"),
       decisions: status("decisions"),
-      stops: "skipped",
+      steps: "skipped",
     },
     pullRequest: done("collect") ? analysis.pullRequest : null,
     tickets: done("collect") ? analysis.tickets : [],

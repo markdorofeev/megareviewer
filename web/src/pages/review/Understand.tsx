@@ -19,14 +19,14 @@ import {
   listOf,
   type TourBox,
   type TourExcerpt,
-  type TourStop,
+  type TourStep,
   type TourView,
 } from "./tour.ts";
 
-// The Understand layout with a tour: a strip of the directories the stops reach, the stops, then
+// The Understand layout with a tour: a strip of the directories the steps reach, the steps, then
 // what the tour didn't show. The window scrolls; the strip sticks under the bar.
 
-export const stopAnchor = (number: number): string => `tour-stop-${number}`;
+export const stepAnchor = (number: number): string => `tour-step-${number}`;
 const groupAnchor = (id: LedgerGroupId): string => `tour-ledger-${id}`;
 
 /** "src/routes/" as its parents, muted, and its last directory. */
@@ -46,7 +46,7 @@ const linesLabel = (excerpt: TourExcerpt): string => {
   return side === "old" ? `base ${range}` : range;
 };
 
-const StopNumber = ({
+const StepNumber = ({
   number,
   current,
 }: {
@@ -63,7 +63,7 @@ const StopNumber = ({
   </span>
 );
 
-/** A directory on the strip: on the tour with its stops' numbers, or dashed with no stop. */
+/** A directory on the strip: on the tour with its steps' numbers, or dashed with no step. */
 const StripBox = ({
   box,
   current,
@@ -75,12 +75,12 @@ const StripBox = ({
   readonly compact: boolean;
   readonly onGo: () => void;
 }) => {
-  const onTour = box.stops.length > 0;
-  const isCurrent = current !== null && box.stops.includes(current);
+  const onTour = box.steps.length > 0;
+  const isCurrent = current !== null && box.steps.includes(current);
   const { prefix, name } = splitLabel(box.label);
   const label = onTour
-    ? `${box.label}, ${box.stops.length === 1 ? "stop" : "stops"} ${listOf(box.stops)}${isCurrent ? ", current stop" : ""}`
-    : `${box.label}, no stop, see Not in the tour`;
+    ? `${box.label}, ${box.steps.length === 1 ? "step" : "steps"} ${listOf(box.steps)}${isCurrent ? ", current step" : ""}`
+    : `${box.label}, no step, see Not in the tour`;
   return (
     <button
       type="button"
@@ -109,13 +109,13 @@ const StripBox = ({
         </span>
         {onTour && (
           <span className="flex shrink-0 gap-1">
-            {box.stops.map((number) => (
-              <StopNumber key={number} number={number} current={number === current} />
+            {box.steps.map((number) => (
+              <StepNumber key={number} number={number} current={number === current} />
             ))}
           </span>
         )}
       </span>
-      {!onTour && !compact && <span className="text-caption text-muted-foreground">No stop</span>}
+      {!onTour && !compact && <span className="text-caption text-muted-foreground">No step</span>}
       {isCurrent && (
         <span
           className={cn(
@@ -123,28 +123,28 @@ const StripBox = ({
             compact ? "" : "absolute -bottom-2.5 left-2",
           )}
         >
-          Current stop
+          Current step
         </span>
       )}
     </button>
   );
 };
 
-/** The directories the stops reach, in order, then the others; sticky, compact once stuck. */
+/** The directories the steps reach, in order, then the others; sticky, compact once stuck. */
 const TourStrip = ({
   tour,
   current,
   compact,
-  onGoToStop,
+  onGoToStep,
   onGoToGroup,
 }: {
   readonly tour: TourView;
   readonly current: number | null;
   readonly compact: boolean;
-  readonly onGoToStop: (number: number) => void;
+  readonly onGoToStep: (number: number) => void;
   readonly onGoToGroup: (id: LedgerGroupId) => void;
 }) => {
-  const lowest = (box: TourBox) => Math.min(...box.stops);
+  const lowest = (box: TourBox) => Math.min(...box.steps);
   const items: ReactNode[] = [];
   for (let at = 0; at < tour.boxes.length; at += 1) {
     const box = tour.boxes[at];
@@ -166,19 +166,19 @@ const TourStrip = ({
         <div
           key={`span-${box.key}`}
           role="group"
-          aria-label={`Stop ${span.stop} spans both`}
+          aria-label={`Step ${span.step} spans both`}
           className={cn(
             "flex shrink-0 items-center gap-1 rounded-xl border-[1.5px] border-dashed border-primary",
             compact ? "px-1.5 py-1" : "flex-col items-start px-1.5 pt-1 pb-1.5",
           )}
         >
-          <span className="text-caption font-medium text-primary">Stop {span.stop} spans both</span>
+          <span className="text-caption font-medium text-primary">Step {span.step} spans both</span>
           <div className="flex items-center gap-1">
             <StripBox
               box={box}
               current={current}
               compact={compact}
-              onGo={() => onGoToStop(lowest(box))}
+              onGo={() => onGoToStep(lowest(box))}
             />
             <span aria-hidden="true" className="text-primary">
               +
@@ -187,7 +187,7 @@ const TourStrip = ({
               box={next}
               current={current}
               compact={compact}
-              onGo={() => onGoToStop(lowest(next))}
+              onGo={() => onGoToStep(lowest(next))}
             />
           </div>
         </div>,
@@ -200,7 +200,7 @@ const TourStrip = ({
           box={box}
           current={current}
           compact={compact}
-          onGo={() => onGoToStop(lowest(box))}
+          onGo={() => onGoToStep(lowest(box))}
         />,
       );
     }
@@ -279,26 +279,26 @@ const PointChip = ({
   );
 };
 
-const StopSection = ({
-  stop,
+const StepSection = ({
+  step,
   current,
   stateOf,
   renderExcerpt,
   onOpenPoint,
   onOpenInCode,
 }: {
-  readonly stop: TourStop;
+  readonly step: TourStep;
   readonly current: boolean;
   readonly stateOf: (point: Point) => PointState;
   readonly renderExcerpt: (excerpt: TourExcerpt) => ReactNode;
   readonly onOpenPoint: (point: Point) => void;
-  readonly onOpenInCode: (stop: TourStop, excerpt: TourExcerpt) => void;
+  readonly onOpenInCode: (step: TourStep, excerpt: TourExcerpt) => void;
 }) => {
-  const heading = `${stopAnchor(stop.number)}-title`;
+  const heading = `${stepAnchor(step.number)}-title`;
   return (
     <section
-      id={stopAnchor(stop.number)}
-      data-slot="tour-stop"
+      id={stepAnchor(step.number)}
+      data-slot="tour-step"
       aria-labelledby={heading}
       {...(current ? { "aria-current": "step" as const } : {})}
       className="grid grid-cols-[1.5rem_1fr] gap-x-2.5 border-b py-5 lg:grid-cols-[1.875rem_1fr]"
@@ -310,16 +310,16 @@ const StopSection = ({
           current ? "text-primary" : "text-muted-foreground",
         )}
       >
-        {stop.number}
+        {step.number}
       </span>
       <div className="flex min-w-0 flex-col gap-2.5">
         <h2 id={heading} tabIndex={-1} className="font-semibold text-heading outline-none">
-          <span className="sr-only">Stop {stop.number}: </span>
-          <ModelText text={stop.sentence} />
+          <span className="sr-only">Step {step.number}: </span>
+          <ModelText text={step.sentence} />
         </h2>
-        {stop.points.length > 0 && (
+        {step.points.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            {stop.points.map((point) => (
+            {step.points.map((point) => (
               <PointChip
                 key={point.id}
                 point={point}
@@ -329,7 +329,7 @@ const StopSection = ({
             ))}
           </div>
         )}
-        {stop.excerpts.map((excerpt) => {
+        {step.excerpts.map((excerpt) => {
           const cut = excerpt.path.lastIndexOf("/") + 1;
           return (
             <div
@@ -351,7 +351,7 @@ const StopSection = ({
                   size="sm"
                   className="ml-auto text-primary"
                   aria-label={`Open ${excerpt.path} ${linesLabel(excerpt)} in code`}
-                  onClick={() => onOpenInCode(stop, excerpt)}
+                  onClick={() => onOpenInCode(step, excerpt)}
                 >
                   <CodeIcon aria-hidden="true" />
                   Open in code
@@ -456,7 +456,7 @@ const TourEnd = ({
       )}
       {tour.outside.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <h3 className="font-semibold text-body">Findings and risks outside the stops</h3>
+          <h3 className="font-semibold text-body">Findings and risks outside the steps</h3>
           {tour.outside.map((point) => (
             <PointChip
               key={point.id}
@@ -490,19 +490,19 @@ const TourEnd = ({
   );
 };
 
-/** The stop whose top last passed under the strip, as the window scrolls. */
-const useCurrentStop = (
+/** The step whose top last passed under the strip, as the window scrolls. */
+const useCurrentStep = (
   container: React.RefObject<HTMLDivElement | null>,
   strip: () => HTMLElement | null,
   count: number,
 ) => {
   const [current, setCurrent] = useState<number | null>(count > 0 ? 1 : null);
   const [stuck, setStuck] = useState(false);
-  // A stop the page went to stays current until the reader moves, whatever the geometry says.
+  // A step the page went to stays current until the reader moves, whatever the geometry says.
   const pinned = useRef<number | null>(null);
-  const pin = useCallback((stop: number) => {
-    pinned.current = stop;
-    setCurrent(stop);
+  const pin = useCallback((step: number) => {
+    pinned.current = step;
+    setCurrent(step);
   }, []);
   useEffect(() => {
     const unpin = () => {
@@ -522,7 +522,7 @@ const useCurrentStop = (
       const bar = strip();
       if (root === null || bar === null) return;
       const line = bar.getBoundingClientRect().bottom + 8;
-      const sections = [...root.querySelectorAll<HTMLElement>("[data-slot=tour-stop]")];
+      const sections = [...root.querySelectorAll<HTMLElement>("[data-slot=tour-step]")];
       let passed = sections.length > 0 ? 1 : null;
       sections.forEach((section, at) => {
         if (section.getBoundingClientRect().top <= line) passed = at + 1;
@@ -568,7 +568,7 @@ export const Understand = ({
   onOpenPoint,
   onOpenFile,
   onOpenInCode,
-  onCurrentStop,
+  onCurrentStep,
   landOn = null,
 }: {
   readonly tour: TourView;
@@ -576,20 +576,20 @@ export const Understand = ({
   readonly renderExcerpt: (excerpt: TourExcerpt) => ReactNode;
   readonly onOpenPoint: (point: Point) => void;
   readonly onOpenFile: (path: string) => void;
-  readonly onOpenInCode: (stop: TourStop, excerpt: TourExcerpt) => void;
-  /** Told the stop now current as the window scrolls, to come back to it. */
-  readonly onCurrentStop?: (number: number | null) => void;
-  /** A stop to go to once drawn, as when coming back from the code; 0 for the tour's top. */
-  readonly landOn?: { readonly stop: number; readonly n: number } | null;
+  readonly onOpenInCode: (step: TourStep, excerpt: TourExcerpt) => void;
+  /** Told the step now current as the window scrolls, to come back to it. */
+  readonly onCurrentStep?: (number: number | null) => void;
+  /** A step to go to once drawn, as when coming back from the code; 0 for the tour's top. */
+  readonly landOn?: { readonly step: number; readonly n: number } | null;
 }) => {
   const container = useRef<HTMLDivElement>(null);
   const strip = useCallback(
     () => container.current?.querySelector<HTMLElement>("[data-slot=tour-strip]") ?? null,
     [],
   );
-  const { current, stuck, pin } = useCurrentStop(container, strip, tour.stops.length);
+  const { current, stuck, pin } = useCurrentStep(container, strip, tour.steps.length);
   const narrow = useNarrow();
-  // Going to a stop compacts the strip first, so the stop lands under the strip it'll stay under.
+  // Going to a step compacts the strip first, so the step lands under the strip it'll stay under.
   const [forced, setForced] = useState(false);
   const compact = stuck || narrow || forced;
   useEffect(() => {
@@ -602,8 +602,8 @@ export const Understand = ({
   const [openGroups, setOpenGroups] = useState<ReadonlySet<LedgerGroupId>>(new Set());
   const [flashed, setFlashed] = useState<LedgerGroupId | null>(null);
 
-  const reported = useRef(onCurrentStop);
-  reported.current = onCurrentStop;
+  const reported = useRef(onCurrentStep);
+  reported.current = onCurrentStep;
   useEffect(() => reported.current?.(current), [current]);
 
   /** Scrolls `element` under the strip, instantly: nothing moves on its own. */
@@ -618,20 +618,20 @@ export const Understand = ({
     [strip],
   );
 
-  const [going, setGoing] = useState<{ readonly stop: number; readonly n: number } | null>(null);
-  const goToStop = useCallback((stop: number) => {
+  const [going, setGoing] = useState<{ readonly step: number; readonly n: number } | null>(null);
+  const goToStep = useCallback((step: number) => {
     setForced(true);
-    setGoing((previous) => ({ stop, n: (previous?.n ?? 0) + 1 }));
+    setGoing((previous) => ({ step, n: (previous?.n ?? 0) + 1 }));
   }, []);
-  // Once the strip is compact: the stop at the top under it, focused and current.
+  // Once the strip is compact: the step at the top under it, focused and current.
   useLayoutEffect(() => {
     if (going === null) return;
-    const section = document.getElementById(stopAnchor(going.stop));
+    const section = document.getElementById(stepAnchor(going.step));
     if (section === null) return;
     scrollUnderStrip(section);
     section.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
-    pin(going.stop);
-    // Stops above it take their size once near the window, and would push it down.
+    pin(going.step);
+    // Steps above it take their size once near the window, and would push it down.
     return holdInPlace("[data-slot=understand]", () => scrollUnderStrip(section));
   }, [going, scrollUnderStrip, pin]);
 
@@ -650,14 +650,14 @@ export const Understand = ({
   useEffect(() => {
     if (landOn === null || landed.current === landOn.n) return;
     landed.current = landOn.n;
-    if (landOn.stop > 0) return goToStop(landOn.stop);
+    if (landOn.step > 0) return goToStep(landOn.step);
     const root = container.current;
     if (root === null) return;
     const bar =
       document.querySelector("[data-slot=review-bar]")?.getBoundingClientRect().height ?? 0;
     const top = window.scrollY + root.getBoundingClientRect().top - bar - 8;
     window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
-  }, [landOn, goToStop]);
+  }, [landOn, goToStep]);
 
   return (
     <div ref={container} data-slot="understand" className="flex min-w-0 flex-col">
@@ -665,15 +665,15 @@ export const Understand = ({
         tour={tour}
         current={current}
         compact={compact}
-        onGoToStop={goToStop}
+        onGoToStep={goToStep}
         onGoToGroup={goToGroup}
       />
-      <section className="max-w-[73.75rem]" aria-label="Tour stops">
-        {tour.stops.map((stop) => (
-          <StopSection
-            key={stop.id}
-            stop={stop}
-            current={stop.number === current}
+      <section className="max-w-[73.75rem]" aria-label="Tour steps">
+        {tour.steps.map((step) => (
+          <StepSection
+            key={step.id}
+            step={step}
+            current={step.number === current}
             stateOf={stateOf}
             renderExcerpt={renderExcerpt}
             onOpenPoint={onOpenPoint}
@@ -723,12 +723,12 @@ export const NoTourLine = ({
 /** The landing label's anchor, which Open in code scrolls to. */
 export const TOUR_LANDING = "tour-landing";
 
-/** Over the excerpt's lines in the map: which stop of the tour they are. */
+/** Over the excerpt's lines in the map: which step of the tour they are. */
 export const TourLanding = ({
-  stop,
+  step,
   excerpt,
 }: {
-  readonly stop: TourStop;
+  readonly step: TourStep;
   readonly excerpt: TourExcerpt;
 }) => (
   <p
@@ -737,23 +737,23 @@ export const TourLanding = ({
     className="scroll-mt-24 flex flex-wrap items-center gap-x-1.5 border-b bg-ai-soft px-3 py-1.5 text-ui text-primary"
   >
     <RouteIcon aria-hidden="true" className="size-3.5 shrink-0" />
-    <span className="font-semibold">Tour stop {stop.number}</span>
+    <span className="font-semibold">Tour step {step.number}</span>
     <span aria-hidden="true">·</span>
     <span>{linesLabel(excerpt)}</span>
     <span aria-hidden="true">·</span>
     <span className="text-foreground">
-      <ModelText text={stop.sentence} />
+      <ModelText text={step.sentence} />
     </span>
   </p>
 );
 
-/** The bar's second row in the map, once it was opened from a stop: back to it, or put away. */
+/** The bar's second row in the map, once it was opened from a step: back to it, or put away. */
 export const BackToTour = ({
-  stop,
+  step,
   onBack,
   onDismiss,
 }: {
-  readonly stop: number;
+  readonly step: number;
   readonly onBack: () => void;
   readonly onDismiss: () => void;
 }) => (
@@ -768,7 +768,7 @@ export const BackToTour = ({
       onClick={onBack}
     >
       <ArrowLeftIcon aria-hidden="true" />
-      Back to tour · Stop {stop}
+      Back to tour · Step {step}
     </Button>
     <Button variant="ghost" size="icon-sm" aria-label="Hide Back to tour" onClick={onDismiss}>
       <XIcon aria-hidden="true" />

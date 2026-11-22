@@ -109,7 +109,7 @@ export const structuredCallRequest = (call: StructuredCall): ClaudeCodeRequest =
 
 /**
  * Everything but the effort is the same for every pass of a run, so later passes read the cache.
- * `tour`: the run asked for the tour, so every pass sends the schema with the stops pass's variant.
+ * `tour`: the run asked for the tour, so every pass sends the schema with the steps pass's variant.
  */
 export const passCall = (
   pass: ModelPass,

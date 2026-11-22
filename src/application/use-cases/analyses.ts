@@ -19,7 +19,7 @@ import {
   type PullRequestRef,
   parsePullRequestUrl,
   runOptionOf,
-  STOPS_STAGE,
+  STEPS_STAGE,
   type StageName,
   StageName as StageNames,
   withoutModelRun,
@@ -114,7 +114,7 @@ const newAnalysis = (
     findings: "pending",
     risk: "pending",
     decisions: "pending",
-    stops: "skipped",
+    steps: "skipped",
   },
   filesFetched: null,
   pullRequest,
@@ -134,8 +134,8 @@ const newAnalysis = (
   risk: [],
   decisions: [],
   flows: null,
-  stops: null,
-  stopsError: null,
+  steps: null,
+  stepsError: null,
   warnings: [],
   usage: [],
   modelCalls: [],
@@ -241,7 +241,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     },
 
     /**
-     * Runs the model's passes on a complete analysis, adding to it, and the stops pass beside them
+     * Runs the model's passes on a complete analysis, adding to it, and the steps pass beside them
      * when `tour` asks for the page's tour. A run already going is joined; one that's done or can't
      * run is refused.
      */
@@ -372,8 +372,8 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           ...(MODEL_STAGES.some(unfinished)
             ? { modelError: { stage, code: "interrupted", message } }
             : {}),
-          ...(unfinished(STOPS_STAGE)
-            ? { stopsError: { stage: STOPS_STAGE, code: "interrupted", message } }
+          ...(unfinished(STEPS_STAGE)
+            ? { stepsError: { stage: STEPS_STAGE, code: "interrupted", message } }
             : {}),
           updatedAt: deps.clock.now(),
         });

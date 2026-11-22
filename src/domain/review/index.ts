@@ -37,7 +37,7 @@ export {
   modelRunnable,
   PipelineVersion,
   runStages,
-  STOPS_STAGE,
+  STEPS_STAGE,
   StageName,
   StageStatus,
   withoutModelRun,
@@ -211,16 +211,16 @@ export {
 } from "./risk-rules.ts";
 export { pointSignalKey, postedSignalKey, publishedSignalKey } from "./signal-key.ts";
 export {
-  keptStops,
-  MAX_STOPS,
-  MIN_STOPS,
-  Stop,
-  type StopContext,
-  StopDraft,
-  StopId,
-  type StopProblem,
-  validateStops,
-} from "./stop.ts";
+  keptSteps,
+  MAX_STEPS,
+  MIN_STEPS,
+  Step,
+  type StepContext,
+  StepDraft,
+  StepId,
+  type StepProblem,
+  validateSteps,
+} from "./step.ts";
 export {
   ReviewThread,
   ThreadComment,

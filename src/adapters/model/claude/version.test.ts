@@ -16,7 +16,7 @@ import {
 /**
  * Every pass's full request for a fixture on Haiku 5.5, with feedback: the system prompt,
  * pass instructions, rendering, output schema and request settings all show up in it. Without the
- * tour, the review's four passes; with it, every pass, the stops pass among them.
+ * tour, the review's four passes; with it, every pass, the steps pass among them.
  */
 const fingerprint = (tour = false): string =>
   fnv1a64(

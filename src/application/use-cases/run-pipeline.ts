@@ -14,7 +14,7 @@ import {
   modelFamily,
   type PullRequest,
   raiseByRules,
-  STOPS_STAGE,
+  STEPS_STAGE,
   type StageName,
   type StageStatus,
 } from "../../domain/review/index.ts";
@@ -32,7 +32,7 @@ import {
   runFindings,
   runIntent,
   runRisk,
-  runStops,
+  runSteps,
 } from "./model-passes.ts";
 import { prep } from "./prep.ts";
 import type { CheckoutAt } from "./unchanged-callers.ts";
@@ -284,8 +284,8 @@ const codeStages = async (
  * and the model's risk to it. Collects and preps again from the stored PR first: files come from
  * the file cache, and prep is deterministic. The passes read the reviewer's preferences and the
  * repository's guideline files, which the analysis keeps as the run's guidance. A run that asks for
- * the tour runs the stops pass beside them. A failure of the four is the analysis's `modelError`,
- * and the stops pass's is its `stopsError`; its status stays complete. Never throws.
+ * the tour runs the steps pass beside them. A failure of the four is the analysis's `modelError`,
+ * and the steps pass's is its `stepsError`; its status stays complete. Never throws.
  */
 export const runModel = async (
   deps: AppDeps,
@@ -309,11 +309,11 @@ export const runModel = async (
       modelOption: run.option,
       guidance: null,
       guardrails: null,
-      stops: null,
-      stopsError: null,
+      steps: null,
+      stepsError: null,
       stages: {
         ...mapModelStages(current.stages, () => "pending"),
-        stops: run.tour === true ? "pending" : "skipped",
+        steps: run.tour === true ? "pending" : "skipped",
       },
     }));
     await modelStages(
@@ -393,7 +393,7 @@ const modelStages = async (
     };
 
   for (const stage of MODEL_STAGES) await tracker.setStage(stage, "running");
-  if (tour) await tracker.setStage(STOPS_STAGE, "running");
+  if (tour) await tracker.setStage(STEPS_STAGE, "running");
   // The intent pass writes the PR to the prompt cache; risk and decisions start once it's there, to
   // read it rather than each write it again. A transport that can't tell starts them at its end.
   const { promise: cached, resolve: cacheWritten } = Promise.withResolvers<void>();
@@ -459,7 +459,7 @@ const modelStages = async (
     }),
     // The tour is optional to the run: its failure is its own, never the run's.
     tour
-      ? runStops(
+      ? runSteps(
           model,
           input,
           {
@@ -471,14 +471,14 @@ const modelStages = async (
           deps,
         ).then(async (result) => {
           await tracker.setStage(
-            STOPS_STAGE,
+            STEPS_STAGE,
             result.outcome.ok ? "done" : "failed",
             (analysis) => ({
-              stops: result.outcome.ok ? result.outcome.value : [],
-              stopsError: result.outcome.ok
+              steps: result.outcome.ok ? result.outcome.value : [],
+              stepsError: result.outcome.ok
                 ? null
                 : {
-                    stage: STOPS_STAGE,
+                    stage: STEPS_STAGE,
                     code: "model-error",
                     message: result.outcome.error.message,
                   },

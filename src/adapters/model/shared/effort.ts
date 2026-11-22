@@ -9,5 +9,5 @@ export const PASS_EFFORT: Readonly<Record<ModelPass, Effort>> = {
   findings: "high",
   risk: "low",
   decisions: "high",
-  stops: "medium",
+  steps: "medium",
 };

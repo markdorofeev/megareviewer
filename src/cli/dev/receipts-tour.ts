@@ -1,13 +1,13 @@
 import type { AnalysisInput, AnalysisModel } from "../../application/ports/index.ts";
 import { type PullRequestFixture, smallFeature } from "../../application/testing/index.ts";
-import { pullRequestUrl, type StopDraft } from "../../domain/review/index.ts";
+import { pullRequestUrl, type StepDraft } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
 import { hunkWith, lineOf } from "./receipts-tested.ts";
 
 const ref = { ...smallFeature.pullRequest.ref, number: 106 };
 
 /**
- * small-feature again, on the fake server only, whose stops pass writes a tour: the shared fixture
+ * small-feature again, on the fake server only, whose steps pass writes a tour: the shared fixture
  * is every test's and every eval's, and the fake model writes none of its own.
  */
 export const receiptsTour: PullRequestFixture = {
@@ -22,7 +22,7 @@ export const receiptsTour: PullRequestFixture = {
 };
 
 /** The tour the fake model writes of receipts-tour: the route, the receipt it renders, the config. */
-const stopsOf = (input: AnalysisInput): StopDraft[] => {
+const stepsOf = (input: AnalysisInput): StepDraft[] => {
   const route = hunkWith(input, "src/routes/orders.ts", 'get("/orders/:id/receipt"');
   const receipt = hunkWith(input, "src/services/receipts.ts", "export function renderReceipt");
   const config = hunkWith(input, "config/app.yaml", "currency: USD");
@@ -50,7 +50,7 @@ const stopsOf = (input: AnalysisInput): StopDraft[] => {
   ];
 };
 
-/** The model, but receipts-tour's stops pass answers with its tour, after the model's own time. */
+/** The model, but receipts-tour's steps pass answers with its tour, after the model's own time. */
 export const withTour = (model: AnalysisModel, url: string): AnalysisModel => ({
   version: model.version,
   checkSize: (input) => model.checkSize(input),
@@ -58,9 +58,9 @@ export const withTour = (model: AnalysisModel, url: string): AnalysisModel => ({
   findings: (input, intent, options) => model.findings(input, intent, options),
   risk: (input, options) => model.risk(input, options),
   decisions: (input, options) => model.decisions(input, options),
-  async stops(input, options) {
-    const answer = await model.stops(input, options);
+  async steps(input, options) {
+    const answer = await model.steps(input, options);
     if (!answer.ok || input.pullRequest.url !== url) return answer;
-    return ok({ ...answer.value, value: stopsOf(input) });
+    return ok({ ...answer.value, value: stepsOf(input) });
   },
 });

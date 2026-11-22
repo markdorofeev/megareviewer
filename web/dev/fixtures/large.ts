@@ -158,7 +158,7 @@ export const syntheticAnalysisView = ({
       intent: "skipped",
       risk: "skipped",
       decisions: "skipped",
-      stops: "skipped",
+      steps: "skipped",
     },
     pullRequest,
     files,

@@ -63,7 +63,7 @@ const recording = (model: AnalysisModel) => {
       record("findings", () => model.findings(input, intent, options)),
     risk: (input, options) => record("risk", () => model.risk(input, options)),
     decisions: (input, options) => record("decisions", () => model.decisions(input, options)),
-    stops: (input, options) => record("stops", () => model.stops(input, options)),
+    steps: (input, options) => record("steps", () => model.steps(input, options)),
   };
   return { model: wrapped, passes };
 };
@@ -107,7 +107,7 @@ const result: ModelRecording = {
     findings: pass("findings"),
     risk: pass("risk"),
     decisions: pass("decisions"),
-    ...(passes.has("stops") ? { stops: pass("stops") } : {}),
+    ...(passes.has("steps") ? { steps: pass("steps") } : {}),
   },
 };
 

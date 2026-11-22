@@ -3,7 +3,7 @@ import type {
   ModelError,
   ModelPass,
   ModelUsage,
-  StopDraft,
+  StepDraft,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type {
@@ -21,7 +21,7 @@ export interface PassValues {
   findings: FindingDraft[];
   risk: ModelRisk[];
   decisions: DecisionDraft[];
-  stops: StopDraft[];
+  steps: StepDraft[];
 }
 
 /** A scripted answer to one pass call: a value (valid or not) or an error. */
@@ -53,7 +53,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     findings: [],
     risk: [],
     decisions: [],
-    stops: [],
+    steps: [],
   };
 
   constructor(options: { version?: string; maxInputTokens?: number } = {}) {
@@ -165,12 +165,12 @@ export class FakeAnalysisModel implements AnalysisModel {
     );
   }
 
-  /** Derives no tour: a fake can't follow calls. Tests script the stops they need. */
-  async stops(
+  /** Derives no tour: a fake can't follow calls. Tests script the steps they need. */
+  async steps(
     input: AnalysisInput,
     options?: PassOptions,
-  ): Promise<Result<PassOutput<StopDraft[]>, ModelError>> {
-    return this.answer("stops", input, options, () => []);
+  ): Promise<Result<PassOutput<StepDraft[]>, ModelError>> {
+    return this.answer("steps", input, options, () => []);
   }
 
   private async answer<P extends ModelPass>(

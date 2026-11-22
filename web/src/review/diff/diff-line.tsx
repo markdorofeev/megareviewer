@@ -131,15 +131,15 @@ export type LineLayout = "unified" | "split-old" | "split-new";
 
 // Spelled out because Tailwind only generates the classes it finds whole in the source. The mark
 // is a pseudo-element rather than the cell's background so the landing can draw it down the lines.
-/** What marks a line's number: one of Claude's points, or the tour's stop the map was opened from. */
-export type LineMarkKind = PointKind | "stop";
+/** What marks a line's number: one of Claude's points, or the tour's step the map was opened from. */
+export type LineMarkKind = PointKind | "step";
 
 const POINT_MARK: Readonly<Record<LineMarkKind, string>> = {
   finding:
     "isolate font-medium text-review-changes before:absolute before:inset-0 before:-z-1 before:bg-review-changes-bg before:shadow-[inset_-3px_0_0_var(--review-changes)]",
   risk: "isolate font-medium text-risk-contract before:absolute before:inset-0 before:-z-1 before:bg-risk-contract-bg before:shadow-[inset_-3px_0_0_var(--risk-contract-solid)]",
   decision: "",
-  stop: "isolate font-medium text-primary before:absolute before:inset-0 before:-z-1 before:bg-ai-soft before:shadow-[inset_-3px_0_0_var(--primary)]",
+  step: "isolate font-medium text-primary before:absolute before:inset-0 before:-z-1 before:bg-ai-soft before:shadow-[inset_-3px_0_0_var(--primary)]",
 };
 
 export interface DiffLineProps {

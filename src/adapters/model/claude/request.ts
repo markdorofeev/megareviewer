@@ -39,7 +39,7 @@ type PassRequest = Anthropic.Beta.Messages.MessageCreateParamsStreaming;
 /**
  * The request for one pass. Everything up to and including the PR data block is identical for
  * every pass of a run, so passes after the first read it from the prompt cache. `tour`: the run
- * asked for the tour, so every pass sends the format with the stops pass's variant.
+ * asked for the tour, so every pass sends the format with the steps pass's variant.
  */
 export const passRequest = (
   pass: ModelPass,

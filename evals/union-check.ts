@@ -1,4 +1,4 @@
-// Whether Claude Code and the API accept the answer schema with the stops pass's variant:
+// Whether Claude Code and the API accept the answer schema with the steps pass's variant:
 // node evals/union-check.ts. One small call on each, on Haiku 5.5; spends a little of the plan and
 // the API account, so CI never runs it.
 
@@ -14,7 +14,7 @@ const MODEL = "claude-haiku-5-5";
 const SYSTEM =
   "Answer with JSON matching the given schema, with pass set to the task you're asked to do.";
 const TASK =
-  "Task: stops. This pull request has fewer than 3 hops, so answer the stops task with no stops.";
+  "Task: steps. This pull request has fewer than 3 hops, so answer the steps task with no steps.";
 const print = (text: string) => process.stdout.write(`${text}\n`);
 
 const run = createRunClaude({ timeoutMs: 180_000 });

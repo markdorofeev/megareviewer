@@ -33,8 +33,8 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Checking test | A test in the PR whose assertions check the very behavior a risk names, by its name, lines and what it asserts. The model names it, the server checks it, and it's a mark on the risk, never a reason to show it less |
 | Verdict | What the published review says: approve, request changes or comment. The reviewer picks it |
 | Flow | An entry point a user or caller reaches and the changed code it runs, callers first, found from the call graph by the code; or a supporting step for changes no flow runs. The flows order and label the overview |
-| Tour | The page's tour of a PR: a few stops in call order, which the model writes and the Understand layout shows |
-| Stop | A place on the page's tour: one sentence and the lines of one or two hunks that decide it, in call order. The model writes the stops and the server checks them |
+| Tour | The page's tour of a PR: a few steps in call order, which the model writes and the Understand layout shows |
+| Step | A place on the page's tour: one sentence and the lines of one or two hunks that decide it, in call order. The model writes the steps and the server checks them |
 | Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed |
 | Unchanged caller | Code outside the PR that calls a definition the PR changes, or names it as a type. Read from a checkout |
 | Call site | A use, at a line and column of a part, of a definition the PR changes: where the page shows the code a call runs |

@@ -47,7 +47,7 @@ import {
   fixturePullRequestStatus,
   fixturePullRequests,
   fixtureStatus,
-  fixtureStops,
+  fixtureSteps,
   fixtureSuggestions,
   fixtureThreads,
   guidedAnalysisView,
@@ -201,7 +201,7 @@ export const createMockApi = (
   let fixture = asked(fixtureView.analysis);
   /** The model's stages, stepped through when the reviewer asks Claude in a scenario. */
   let modelStagesDone: number | null = null;
-  /** The run asked for the tour, which the fixture's stops answer once it ends. */
+  /** The run asked for the tour, which the fixture's steps answer once it ends. */
   let tourAsked = false;
 
   let stagesDone = CODE_STAGES;
@@ -231,12 +231,12 @@ export const createMockApi = (
     const ended = afterModelRun(fixtureView.analysis, scenario);
     if (modelStagesDone >= MODEL_STAGES.length) {
       return tourAsked
-        ? { ...ended, stages: { ...ended.stages, stops: "done" as const }, stops: fixtureStops }
+        ? { ...ended, stages: { ...ended.stages, steps: "done" as const }, steps: fixtureSteps }
         : ended;
     }
     const running = analysisInProgress(ended, CODE_STAGES + modelStagesDone);
     return tourAsked
-      ? { ...running, stages: { ...running.stages, stops: "running" as const } }
+      ? { ...running, stages: { ...running.stages, steps: "running" as const } }
       : running;
   };
   const view = (): AnalysisView => ({

@@ -5,13 +5,13 @@ import synthetic from "./claude-code/errors.synthetic.json" with { type: "json" 
 
 /**
  * A run's lines: a pass on small-feature, the suggestion call on the fixture history, or the
- * recording signed out. The findings and stops passes' are synthetic, in the recorded passes'
+ * recording signed out. The findings and steps passes' are synthetic, in the recorded passes'
  * shape, until they're recorded.
  */
 export const recordedLines = (name: ModelPass | "suggest" | "not-signed-in"): string[] =>
   readFileSync(
     new URL(
-      `./claude-code/${name === "findings" || name === "stops" ? `${name}.synthetic` : name}.jsonl`,
+      `./claude-code/${name === "findings" || name === "steps" ? `${name}.synthetic` : name}.jsonl`,
       import.meta.url,
     ),
     "utf8",

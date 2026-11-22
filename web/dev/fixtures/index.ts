@@ -3,7 +3,7 @@ export {
   fixtureAnalysisView,
   fixtureHunks,
   fixtureParts,
-  fixtureStops,
+  fixtureSteps,
   tourAnalysisView,
 } from "./analysis.ts";
 export { fixtureGuidance, guidedAnalysisView } from "./guidance.ts";

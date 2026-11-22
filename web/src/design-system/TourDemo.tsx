@@ -31,8 +31,8 @@ export const TourDemo = () => {
       />
     );
   };
-  const [stop] = tour?.stops ?? [];
-  const [excerpt] = stop?.excerpts ?? [];
+  const [step] = tour?.steps ?? [];
+  const [excerpt] = step?.excerpts ?? [];
   const landed = excerpt === undefined ? undefined : found(excerpt);
   const marks = new Map<string, PointLine>(
     landed === undefined || excerpt === undefined
@@ -40,7 +40,7 @@ export const TourDemo = () => {
       : landed.hunk.lines
           .slice(excerpt.start, excerpt.end)
           .flatMap((line) =>
-            line.newLine === null ? [] : [[`new:${line.newLine}`, { kind: "stop" as const }]],
+            line.newLine === null ? [] : [[`new:${line.newLine}`, { kind: "step" as const }]],
           ),
   );
   return (
@@ -61,10 +61,10 @@ export const TourDemo = () => {
         <NoTourLine>This AI review ran without the tour. Re-run it to get one.</NoTourLine>
         <NoTourLine busy>The tour is being written.</NoTourLine>
       </div>
-      {stop !== undefined && excerpt !== undefined && landed !== undefined && (
+      {step !== undefined && excerpt !== undefined && landed !== undefined && (
         <div className="overflow-hidden rounded-lg border [--review-bar-row:0px]">
-          <BackToTour stop={stop.number} onBack={() => {}} onDismiss={() => {}} />
-          <TourLanding stop={stop} excerpt={excerpt} />
+          <BackToTour step={step.number} onBack={() => {}} onDismiss={() => {}} />
+          <TourLanding step={step} excerpt={excerpt} />
           <HunkCard hunk={landed.hunk} file={landed.file} risk={null} inFile pointLines={marks} />
         </div>
       )}

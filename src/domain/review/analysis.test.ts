@@ -44,7 +44,7 @@ describe("analysisId", () => {
 describe("inProgress", () => {
   const codeStages = { collect: "done", prep: "done" } as const;
   const modelStages = (status: "pending" | "running" | "skipped") =>
-    ({ intent: status, findings: status, risk: status, decisions: status, stops: status }) as const;
+    ({ intent: status, findings: status, risk: status, decisions: status, steps: status }) as const;
   const at = (
     status: Analysis["status"],
     stages: Analysis["stages"],
@@ -77,7 +77,7 @@ describe("following", () => {
     findings: "done",
     risk: "done",
     decisions: "done",
-    stops: "skipped",
+    steps: "skipped",
   } as const;
 
   it("is while the analysis is in progress, or its run's guardrail call runs after the passes", () => {
@@ -93,7 +93,7 @@ describe("following", () => {
   });
 });
 
-describe("the stops pass", () => {
+describe("the steps pass", () => {
   const ran = {
     collect: "done",
     prep: "done",
@@ -104,47 +104,47 @@ describe("the stops pass", () => {
   } as const;
 
   it("keeps the analysis in progress while it runs after the review's four", () => {
-    expect(inProgress({ status: "complete", stages: { ...ran, stops: "running" } })).toBe(true);
-    expect(inProgress({ status: "complete", stages: { ...ran, stops: "done" } })).toBe(false);
+    expect(inProgress({ status: "complete", stages: { ...ran, steps: "running" } })).toBe(true);
+    expect(inProgress({ status: "complete", stages: { ...ran, steps: "done" } })).toBe(false);
   });
 
   it("isn't counted by whether the model can run again", () => {
-    expect(modelRunnable({ status: "complete", stages: { ...ran, stops: "failed" } })).toBe(false);
+    expect(modelRunnable({ status: "complete", stages: { ...ran, steps: "failed" } })).toBe(false);
     expect(
-      modelRunnable({ status: "complete", stages: { ...ran, risk: "failed", stops: "done" } }),
+      modelRunnable({ status: "complete", stages: { ...ran, risk: "failed", steps: "done" } }),
     ).toBe(true);
   });
 
   it("is one of a run's stages only when the run asked for the tour", () => {
-    expect(runStages({ stages: { ...ran, stops: "skipped" } })).toEqual(MODEL_STAGES);
-    expect(runStages({ stages: { ...ran, stops: "pending" } })).toEqual([...MODEL_STAGES, "stops"]);
+    expect(runStages({ stages: { ...ran, steps: "skipped" } })).toEqual(MODEL_STAGES);
+    expect(runStages({ stages: { ...ran, steps: "pending" } })).toEqual([...MODEL_STAGES, "steps"]);
   });
 
-  it("is skipped, with no stops, on an analysis stored before it", () => {
-    const { stops: _, stopsError: __, ...stored } = smallFeatureAnalysis;
-    const { stops: ___, ...stages } = smallFeatureAnalysis.stages;
+  it("is skipped, with no steps, on an analysis stored before it", () => {
+    const { steps: _, stepsError: __, ...stored } = smallFeatureAnalysis;
+    const { steps: ___, ...stages } = smallFeatureAnalysis.stages;
     const parsed = Analysis.parse({ ...stored, stages: { ...stages, tour: "done" } });
-    expect(parsed.stages.stops).toBe("skipped");
+    expect(parsed.stages.steps).toBe("skipped");
     expect(parsed.stages).not.toHaveProperty("tour");
-    expect(parsed.stops).toBeNull();
-    expect(parsed.stopsError).toBeNull();
+    expect(parsed.steps).toBeNull();
+    expect(parsed.stepsError).toBeNull();
   });
 
   it("goes with the run when it's removed", () => {
-    const withStops: Analysis = {
+    const withSteps: Analysis = {
       ...smallFeatureAnalysis,
-      stages: { ...smallFeatureAnalysis.stages, stops: "failed" },
-      stops: [],
-      stopsError: { stage: "stops", code: "model-error", message: "No answer" },
+      stages: { ...smallFeatureAnalysis.stages, steps: "failed" },
+      steps: [],
+      stepsError: { stage: "steps", code: "model-error", message: "No answer" },
     };
     const removed = withoutModelRun(
-      withStops,
+      withSteps,
       { risk: [], warnings: [] },
       smallFeatureAnalysis.updatedAt,
     );
-    expect(removed.stages.stops).toBe("skipped");
-    expect(removed.stops).toBeNull();
-    expect(removed.stopsError).toBeNull();
+    expect(removed.stages.steps).toBe("skipped");
+    expect(removed.steps).toBeNull();
+    expect(removed.stepsError).toBeNull();
   });
 });
 

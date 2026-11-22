@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DecisionDraft, FindingDraft, ModelRisk } from "../../../application/ports/index.ts";
-import { Intent, StopDraft } from "../../../domain/review/index.ts";
+import { Intent, StepDraft } from "../../../domain/review/index.ts";
 
 const REVIEW_VARIANTS = [
   z.object({ pass: z.literal("intent"), intent: Intent }),
@@ -16,13 +16,13 @@ const REVIEW_VARIANTS = [
 export const ReviewPassAnswer = z.object({ answer: z.discriminatedUnion("pass", REVIEW_VARIANTS) });
 
 /**
- * The four and the stops pass, for a run that asks for the tour: every pass of it sends this one.
+ * The four and the steps pass, for a run that asks for the tour: every pass of it sends this one.
  * Answers are parsed with it whichever was sent, since it takes every answer the four's does.
  */
 export const PassAnswer = z.object({
   answer: z.discriminatedUnion("pass", [
     ...REVIEW_VARIANTS,
-    z.object({ pass: z.literal("stops"), stops: z.array(StopDraft) }),
+    z.object({ pass: z.literal("steps"), steps: z.array(StepDraft) }),
   ]),
 });
 export type PassAnswer = z.infer<typeof PassAnswer>;
@@ -90,6 +90,6 @@ export const TOUR_PASS_ANSWER_FORMAT = {
   schema: toStrictJsonSchema(PassAnswer),
 } as const;
 
-/** The format every pass of a run sends: with the stops pass's variant when the run asked for the tour. */
+/** The format every pass of a run sends: with the steps pass's variant when the run asked for the tour. */
 export const passAnswerFormat = (tour: boolean | undefined) =>
   tour === true ? TOUR_PASS_ANSWER_FORMAT : PASS_ANSWER_FORMAT;

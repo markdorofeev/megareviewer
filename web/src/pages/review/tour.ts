@@ -8,20 +8,20 @@ import {
 import {
   type Analysis,
   hasModelRun,
-  MIN_STOPS,
+  MIN_STEPS,
   type Point,
   type PointLines,
   type PointState,
-  type StopId,
+  type StepId,
 } from "../../../../src/domain/review/index.ts";
 import { directoryOf } from "../../review/tree/paths.ts";
 import { type FileOverview, groupKey, type OverviewNode } from "./overview.ts";
 
-// The Understand layout's tour: everything it draws, from the analysis's stops, the overview's
-// directories and Claude's points. The code counts the ledger from the diff; only the stops'
+// The Understand layout's tour: everything it draws, from the analysis's steps, the overview's
+// directories and Claude's points. The code counts the ledger from the diff; only the steps'
 // sentences and lines are the model's.
 
-/** One excerpt of a stop: the rows of its hunk from its first line to its last, both sides. */
+/** One excerpt of a step: the rows of its hunk from its first line to its last, both sides. */
 export interface TourExcerpt {
   readonly key: string;
   readonly path: string;
@@ -37,8 +37,8 @@ export interface TourExcerpt {
   readonly fileChanged: number;
 }
 
-export interface TourStop {
-  readonly id: StopId;
+export interface TourStep {
+  readonly id: StepId;
   readonly number: number;
   readonly sentence: string;
   /** The directories it reaches, by the overview's node keys: one, or two across a process. */
@@ -51,15 +51,15 @@ export interface TourStop {
 export interface TourBox {
   readonly key: string;
   readonly label: string;
-  /** The stops that reach it, by number; none for a box off the tour. */
-  readonly stops: readonly number[];
+  /** The steps that reach it, by number; none for a box off the tour. */
+  readonly steps: readonly number[];
 }
 
-export type LedgerGroupId = "stops" | "tests" | "generated" | "other";
+export type LedgerGroupId = "steps" | "tests" | "generated" | "other";
 
 export interface LedgerFile {
   readonly path: string;
-  /** Its added and removed lines no stop shows. */
+  /** Its added and removed lines no step shows. */
   readonly added: number;
   readonly deleted: number;
 }
@@ -71,26 +71,26 @@ export interface LedgerGroup {
 }
 
 export interface TourView {
-  readonly stops: readonly TourStop[];
-  /** The directories the stops reach, in the order they first reach them. */
+  readonly steps: readonly TourStep[];
+  /** The directories the steps reach, in the order they first reach them. */
   readonly boxes: readonly TourBox[];
-  /** Two neighboring boxes one stop spans, by their keys. */
-  readonly spans: readonly { readonly stop: number; readonly keys: readonly [string, string] }[];
+  /** Two neighboring boxes one step spans, by their keys. */
+  readonly spans: readonly { readonly step: number; readonly keys: readonly [string, string] }[];
   /** The other directories, each with the ledger group of its first file. */
   readonly others: readonly (TourBox & { readonly group: LedgerGroupId | null })[];
   /** What the tour didn't show, a group each, empty ones left out. */
   readonly ledger: readonly LedgerGroup[];
-  /** Claude's findings and risks no stop shows. */
+  /** Claude's findings and risks no step shows. */
   readonly outside: readonly Point[];
   readonly depth: Depth;
-  /** Changed lines: the stops' and the pull request's. */
+  /** Changed lines: the steps' and the pull request's. */
   readonly shown: number;
   readonly total: number;
 }
 
 /**
- * Where to read in the code, by rule: the stops with an open finding or a risk no test checks,
- * and how many findings and risks are outside the stops.
+ * Where to read in the code, by rule: the steps with an open finding or a risk no test checks,
+ * and how many findings and risks are outside the steps.
  */
 export interface Depth {
   readonly read: readonly number[];
@@ -99,7 +99,7 @@ export interface Depth {
 }
 
 const LEDGER_LABELS: Readonly<Record<LedgerGroupId, string>> = {
-  stops: "The rest of the stops' files",
+  steps: "The rest of the steps' files",
   tests: "Tests",
   generated: "Generated and mechanical",
   other: "Other files",
@@ -131,12 +131,12 @@ const overlaps = (a: { start: number; end: number }, b: { start: number; end: nu
 
 /** The tour as Understand draws it, or null when the analysis has none to show. */
 export const tourOf = (
-  analysis: Pick<Analysis, "files" | "stops" | "proofs" | "generated" | "parts">,
+  analysis: Pick<Analysis, "files" | "steps" | "proofs" | "generated" | "parts">,
   overview: FileOverview,
   points: readonly Point[],
   stateOf: (point: Point) => PointState = () => "open",
 ): TourView | null => {
-  if (analysis.stops === null || analysis.stops.length < MIN_STOPS) return null;
+  if (analysis.steps === null || analysis.steps.length < MIN_STEPS) return null;
   const hunks = new Map(
     analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
   );
@@ -152,8 +152,8 @@ export const tourOf = (
     nodes.get(key)?.label ?? (key.startsWith("group:") ? key.slice("group:".length) : key);
   const shownRows = new Set<string>();
 
-  const stops = analysis.stops.map((stop, at): TourStop => {
-    const excerpts = stop.excerpts.flatMap((lines, n): TourExcerpt[] => {
+  const steps = analysis.steps.map((step, at): TourStep => {
+    const excerpts = step.excerpts.flatMap((lines, n): TourExcerpt[] => {
       const hunk = hunks.get(lines.hunkId);
       const file = fileOf.get(lines.hunkId);
       const rows = hunk === undefined ? null : rowsOf(hunk, lines);
@@ -166,7 +166,7 @@ export const tourOf = (
         hunk.id;
       return [
         {
-          key: `${stop.id}:${n}`,
+          key: `${step.id}:${n}`,
           path: file.path,
           hunkId: hunk.id,
           partId: part,
@@ -188,9 +188,9 @@ export const tourOf = (
       );
     });
     return {
-      id: stop.id,
+      id: step.id,
       number: at + 1,
-      sentence: stop.sentence,
+      sentence: step.sentence,
       boxes: [...new Set(excerpts.map((excerpt) => boxOf(excerpt.path)))],
       excerpts,
       points: (["finding", "risk", "decision"] as const).flatMap((kind) =>
@@ -200,30 +200,30 @@ export const tourOf = (
   });
 
   const order: string[] = [];
-  for (const stop of stops) for (const key of stop.boxes) if (!order.includes(key)) order.push(key);
+  for (const step of steps) for (const key of step.boxes) if (!order.includes(key)) order.push(key);
   const boxes = order.map((key) => ({
     key,
     label: labelOf(key),
-    stops: stops.filter((stop) => stop.boxes.includes(key)).map((stop) => stop.number),
+    steps: steps.filter((step) => step.boxes.includes(key)).map((step) => step.number),
   }));
   const grouped = new Set<string>();
-  const spans = stops.flatMap((stop) => {
-    const [a, b] = stop.boxes;
+  const spans = steps.flatMap((step) => {
+    const [a, b] = step.boxes;
     if (a === undefined || b === undefined || grouped.has(a) || grouped.has(b)) return [];
     const [first, second] = [a, b].sort((x, y) => order.indexOf(x) - order.indexOf(y));
     if (first === undefined || second === undefined) return [];
     if (order.indexOf(second) - order.indexOf(first) !== 1) return [];
     grouped.add(first);
     grouped.add(second);
-    return [{ stop: stop.number, keys: [first, second] as const }];
+    return [{ step: step.number, keys: [first, second] as const }];
   });
 
-  // The ledger: every changed line no stop shows, by file, in groups.
-  const stopFiles = new Set(stops.flatMap((stop) => stop.excerpts.map((excerpt) => excerpt.path)));
+  // The ledger: every changed line no step shows, by file, in groups.
+  const stepFiles = new Set(steps.flatMap((step) => step.excerpts.map((excerpt) => excerpt.path)));
   const mechanical = new Set(analysis.proofs.flatMap((proof) => proof.hunkId ?? []));
   const generated = new Set(analysis.generated);
   const groupOf = (path: string, hunksOf: readonly Hunk[]): LedgerGroupId => {
-    if (stopFiles.has(path)) return "stops";
+    if (stepFiles.has(path)) return "steps";
     if (isTestFile(path)) return "tests";
     if (
       generated.has(path) ||
@@ -240,12 +240,12 @@ export const tourOf = (
     const added = file.hunks.reduce((sum, hunk) => sum + notShown(hunk, "add"), 0);
     const deleted = file.hunks.reduce((sum, hunk) => sum + notShown(hunk, "del"), 0);
     const group = groupOf(file.path, file.hunks);
-    // A stop's file is listed for what it didn't show; any other file always, a rename too.
-    return group === "stops" && added + deleted === 0
+    // A step's file is listed for what it didn't show; any other file always, a rename too.
+    return group === "steps" && added + deleted === 0
       ? []
       : [{ group, file: { path: file.path, added, deleted } }];
   });
-  const ledger = (["stops", "tests", "generated", "other"] as const).flatMap((id) => {
+  const ledger = (["steps", "tests", "generated", "other"] as const).flatMap((id) => {
     const files = ledgerFiles.filter((one) => one.group === id).map((one) => one.file);
     return files.length === 0 ? [] : [{ id, label: LEDGER_LABELS[id], files }];
   });
@@ -256,11 +256,11 @@ export const tourOf = (
     .map((node) => ({
       key: node.key,
       label: node.label,
-      stops: [],
+      steps: [],
       group: node.paths.map((path) => groupOfPath.get(path)).find((id) => id !== undefined) ?? null,
     }));
 
-  const chipped = new Set(stops.flatMap((stop) => stop.points.map((point) => point.id)));
+  const chipped = new Set(steps.flatMap((step) => step.points.map((point) => point.id)));
   const outside = points.filter(
     (point) =>
       (point.kind === "finding" || point.kind === "risk") &&
@@ -268,21 +268,21 @@ export const tourOf = (
       !chipped.has(point.id),
   );
   const open = (point: Point) => stateOf(point) !== "dismissed";
-  const read = stops
-    .filter((stop) =>
-      stop.points.some(
+  const read = steps
+    .filter((step) =>
+      step.points.some(
         (point) =>
           open(point) &&
           (point.kind === "finding" || (point.kind === "risk" && point.checkedBy === undefined)),
       ),
     )
-    .map((stop) => stop.number);
+    .map((step) => step.number);
   const total = analysis.files.reduce(
     (sum, file) => sum + file.hunks.reduce((lines, hunk) => lines + changed(hunk), 0),
     0,
   );
   return {
-    stops,
+    steps,
     boxes,
     spans,
     others,
@@ -307,15 +307,15 @@ export type NoTour =
   | { readonly kind: "failed"; readonly message: string };
 
 export const noTourOf = (
-  analysis: Pick<Analysis, "stages" | "stops" | "stopsError" | "usage" | "modelError" | "status">,
+  analysis: Pick<Analysis, "stages" | "steps" | "stepsError" | "usage" | "modelError" | "status">,
 ): NoTour | null => {
-  const stage = analysis.stages.stops;
+  const stage = analysis.stages.steps;
   if (stage === "running" || stage === "pending") return { kind: "writing" };
   if (stage === "failed") {
-    return { kind: "failed", message: analysis.stopsError?.message ?? "The tour pass failed" };
+    return { kind: "failed", message: analysis.stepsError?.message ?? "The tour pass failed" };
   }
   if (stage === "done") {
-    return (analysis.stops ?? []).length < MIN_STOPS ? { kind: "too-small" } : null;
+    return (analysis.steps ?? []).length < MIN_STEPS ? { kind: "too-small" } : null;
   }
   return hasModelRun(analysis) ? { kind: "without-tour" } : { kind: "no-review" };
 };
@@ -328,18 +328,18 @@ export const listOf = (numbers: readonly number[]): string =>
     ? numbers.join("")
     : `${numbers.slice(0, -1).join(", ")} and ${numbers.at(-1)}`;
 
-/** The suggested depth in words: the stops to read, then what's outside them, a zero left out. */
+/** The suggested depth in words: the steps to read, then what's outside them, a zero left out. */
 export const depthText = (depth: Depth): string => {
   const { read, findingsOutside, risksOutside } = depth;
-  const stops =
+  const steps =
     read.length === 0
-      ? "No stop has an open finding or a risk no test checks."
-      : `Read ${read.length === 1 ? "stop" : "stops"} ${listOf(read)} in the code: ${read.length === 1 ? "it has" : "each has"} an open finding or a risk no test checks.`;
+      ? "No step has an open finding or a risk no test checks."
+      : `Read ${read.length === 1 ? "step" : "steps"} ${listOf(read)} in the code: ${read.length === 1 ? "it has" : "each has"} an open finding or a risk no test checks.`;
   const outside = [
     ...(findingsOutside > 0 ? [counted(findingsOutside, "finding")] : []),
     ...(risksOutside > 0 ? [counted(risksOutside, "risk")] : []),
   ];
-  if (outside.length === 0) return stops;
+  if (outside.length === 0) return steps;
   const many = outside.length > 1 || findingsOutside + risksOutside > 1;
-  return `${stops} ${outside.join(" and ")} ${many ? "are" : "is"} outside the stops.`;
+  return `${steps} ${outside.join(" and ")} ${many ? "are" : "is"} outside the steps.`;
 };

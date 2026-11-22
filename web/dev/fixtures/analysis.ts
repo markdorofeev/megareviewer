@@ -22,8 +22,8 @@ import {
   type ModelUsage,
   type PullRequest,
   type RiskAssessment,
-  type Stop,
-  StopId,
+  type Step,
+  StepId,
   type Ticket,
 } from "../../../src/domain/review/index.ts";
 import { callSitesOf } from "./call-sites.ts";
@@ -576,7 +576,7 @@ const analysis: Analysis = {
     findings: "done",
     risk: "done",
     decisions: "done",
-    stops: "skipped",
+    steps: "skipped",
   },
   filesFetched: null,
   pullRequest,
@@ -809,8 +809,8 @@ const analysis: Analysis = {
     ],
     builtBy: "model",
   },
-  stops: null,
-  stopsError: null,
+  steps: null,
+  stepsError: null,
   warnings: [
     "Full file contents omitted for 1 file to fit the model's limit",
     "Couldn't fetch Jira tickets: Jira answered 503",
@@ -844,24 +844,24 @@ export const fixtureAnalysisView: AnalysisView = {
 };
 
 /** Claude's tour of the fixture PR, in call order: the route, the cache, the retry, the formatting. */
-export const fixtureStops: readonly Stop[] = [
+export const fixtureSteps: readonly Step[] = [
   {
-    id: StopId.parse("t1"),
+    id: StepId.parse("t1"),
     sentence: "`GET /orders/:id/receipt` sends an order's receipt as plain text, or a 404",
     excerpts: [{ hunkId: h.receiptRoute, side: "new", startLine: 14, line: 21 }],
   },
   {
-    id: StopId.parse("t2"),
+    id: StepId.parse("t2"),
     sentence: "`cachedReceipt` keeps each order's receipt in memory once it's rendered",
     excerpts: [{ hunkId: h.retryAndCache, side: "new", startLine: 41, line: 50 }],
   },
   {
-    id: StopId.parse("t3"),
+    id: StepId.parse("t3"),
     sentence: "Tax lines are fetched up to 3 times before the receipt fails",
     excerpts: [{ hunkId: h.retryAndCache, side: "new", startLine: 29, line: 39 }],
   },
   {
-    id: StopId.parse("t4"),
+    id: StepId.parse("t4"),
     sentence: "Receipt lines show prices through `formatMoney` and dates through dayjs",
     excerpts: [{ hunkId: h.receiptFormatting, side: "new", startLine: 3, line: 13 }],
   },
@@ -872,7 +872,7 @@ export const tourAnalysisView: AnalysisView = {
   ...fixtureAnalysisView,
   analysis: {
     ...analysis,
-    stages: { ...analysis.stages, stops: "done" },
-    stops: fixtureStops,
+    stages: { ...analysis.stages, steps: "done" },
+    steps: fixtureSteps,
   },
 };

@@ -6,7 +6,7 @@ Recorded with opencode 2.3.0 on macOS, its Anthropic provider from `ANTHROPIC_AP
 |---|---|
 | `models.json`, `providers.json`, `default-model.json` | `node evals/record-opencode.ts`: the server's lists, with free models off |
 | `intent.json` … `decisions.json` | The same script: each pass on small-feature, Claude Haiku 5.5, findings sent the fixture analysis's intent |
-| `stops.synthetic.json` | Synthetic: `decisions.json` with three stops on small-feature as its answer and the task alone as its prompt, until the stops pass is recorded |
+| `steps.synthetic.json` | Synthetic: `decisions.json` with three steps on small-feature as its answer and the task alone as its prompt, until the steps pass is recorded |
 | `provider-error.json` | Stage 53's spike: an agent with `steps: 1`, whose last step's assistant prefill Haiku 5.5 refused with a 400 |
 | `unreachable.json` | The spike: the Anthropic provider's base URL on a local proxy that couldn't forward |
 

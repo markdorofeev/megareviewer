@@ -44,13 +44,13 @@ for (const theme of ["light", "dark"] as const) {
     expect((await run).postDataJSON()).toMatchObject({ tour: true });
 
     // The brief's link opens the tour.
-    await page.getByRole("button", { name: "Tour · 3 stops" }).click();
+    await page.getByRole("button", { name: "Tour · 3 steps" }).click();
     await expect(layout(page)).toHaveAttribute("data-layout", "overview");
-    const stops = page.getByRole("region", { name: "Tour stops" });
-    await expect(stops.getByRole("heading", { level: 2 })).toHaveCount(4);
+    const steps = page.getByRole("region", { name: "Tour steps" });
+    await expect(steps.getByRole("heading", { level: 2 })).toHaveCount(4);
 
-    // The changed lines the stops show and the ledger's add up to the pull request's.
-    const shown = await stops
+    // The changed lines the steps show and the ledger's add up to the pull request's.
+    const shown = await steps
       .locator("[data-slot=tour-card]")
       .evaluateAll((cards) =>
         cards.reduce(
@@ -58,7 +58,7 @@ for (const theme of ["light", "dark"] as const) {
           0,
         ),
       );
-    const ledger = await stops.locator("[data-slot=tour-end] details li").evaluateAll((rows) =>
+    const ledger = await steps.locator("[data-slot=tour-end] details li").evaluateAll((rows) =>
       rows.reduce((sum, row) => {
         const added = /\+(\d+)/.exec(row.textContent ?? "")?.[1] ?? "0";
         const removed = /−(\d+)/.exec(row.textContent ?? "")?.[1] ?? "0";
@@ -70,28 +70,28 @@ for (const theme of ["light", "dark"] as const) {
     const total = added + removed;
     expect(shown + ledger).toBe(total);
 
-    // A box goes to its stop.
-    await page.getByRole("button", { name: /^config\/, stop 3/ }).click();
-    await expect(page.locator(":focus")).toContainText("Stop 3:");
+    // A box goes to its step.
+    await page.getByRole("button", { name: /^config\/, step 3/ }).click();
+    await expect(page.locator(":focus")).toContainText("Step 3:");
 
-    // A comment on a stop's line is a draft of the review, which the map and Publish show.
-    const first = stops.locator("[data-slot=tour-stop]").first();
+    // A comment on a step's line is a draft of the review, which the map and Publish show.
+    const first = steps.locator("[data-slot=tour-step]").first();
     const number = first.getByRole("button", { name: /^Comment on line \d+$/ }).first();
     const line = await number.textContent();
     await number.click();
     await first.getByRole("textbox", { name: `Comment on line ${line}` }).fill("Why here?");
     await first.getByRole("button", { name: "Add to review" }).click();
 
-    // Open in code lands on the lines, and Esc comes back to the stop.
-    await stops.getByRole("button", { name: /^Open src\/services\/receipts\.ts lines/ }).click();
+    // Open in code lands on the lines, and Esc comes back to the step.
+    await steps.getByRole("button", { name: /^Open src\/services\/receipts\.ts lines/ }).click();
     await expect(layout(page)).toHaveAttribute("data-layout", "map");
-    await expect(page.getByRole("button", { name: "Back to tour · Stop 2" })).toBeVisible();
-    await expect(page.locator("[data-slot=tour-landing]")).toContainText("Tour stop 2");
-    await expect(page.locator("[data-point-mark=stop]").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Back to tour · Step 2" })).toBeVisible();
+    await expect(page.locator("[data-slot=tour-landing]")).toContainText("Tour step 2");
+    await expect(page.locator("[data-point-mark=step]").first()).toBeVisible();
     await expect(page.getByLabel("Changes").getByText("Why here?")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(layout(page)).toHaveAttribute("data-layout", "overview");
-    await expect(page.locator(":focus")).toContainText("Stop 2:");
+    await expect(page.locator(":focus")).toContainText("Step 2:");
 
     await page.getByRole("button", { name: /^Publish review…/ }).click();
     await expect(page.getByRole("dialog", { name: "Publish review" })).toContainText("Why here?");

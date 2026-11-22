@@ -79,17 +79,17 @@ For each decision:
 
 Order them by how much they help a reader, most first. At most 8. A small or routine change may have none. With reviewer guidance, the choices in what a look-for preference or a guideline file names come first, and a choice that a dont-flag preference or a guideline file says to leave alone is left out.`,
 
-  stops: `Task: stops.
+  steps: `Task: steps.
 
-Write a short tour of this change: the few places a reader stops at to understand what it does and how, without reading the files. The reviewer reads it in about two minutes, before deciding whether to read the code.
+Write a short tour of this change: a few steps through it that a reader follows to understand what it does and how, without reading the files. The reviewer reads it in about two minutes, before deciding whether to read the code.
 
-Follow the change the way a request or a user action runs through it, from where it's reached (a page, a route, a command, a caller) to what it ends in (a table, a file, an external service), callers before callees. Use the <call_graph> to order the stops: a stop whose code calls another stop's comes before it.
+Follow the change the way a request or a user action runs through it, from where it's reached (a page, a route, a command, a caller) to what it ends in (a table, a file, an external service), callers before callees. Use the <call_graph> to order the steps: a step whose code calls another step's comes before it.
 
-- 3 to 7 stops. When the change has fewer than 3 real hops, answer with no stops. When it has more than 7, merge neighboring hops into one stop.
-- sentence: what happens at this stop, as behavior a caller notices, in present tense, in at most 20 words, with code names in backticks and no period at the end ("A token is verified against the host before it's saved").
-- excerpts: the lines that decide what the sentence says, 4 to 14 of them: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines, so a removed check can be shown), and startLine to line. Use only line numbers the hunk shows, and only hunks sent in full. One excerpt per stop; two only when the hop crosses into another process, such as a client's request and the route that serves it, each in its own file.
-- No stop on a test, a generated file or docs.
-- Nothing that looks wrong and no risk: those are other tasks'. A stop says what the code does.`,
+- 3 to 7 steps. When the change has fewer than 3 real hops, answer with no steps. When it has more than 7, merge neighboring hops into one step.
+- sentence: what happens at this step, as behavior a caller notices, in present tense, in at most 20 words, with code names in backticks and no period at the end ("A token is verified against the host before it's saved").
+- excerpts: the lines that decide what the sentence says, 4 to 14 of them: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines, so a removed check can be shown), and startLine to line. Use only line numbers the hunk shows, and only hunks sent in full. One excerpt per step; two only when the hop crosses into another process, such as a client's request and the route that serves it, each in its own file.
+- No step on a test, a generated file or docs.
+- Nothing that looks wrong and no risk: those are other tasks'. A step says what the code does.`,
 };
 
 const ids = (hunkIds: readonly string[]): string =>

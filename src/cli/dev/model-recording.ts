@@ -14,7 +14,7 @@ import {
   type ModelErrorKind,
   type ModelPass,
   ModelUsage,
-  StopDraft,
+  StepDraft,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 
@@ -40,8 +40,8 @@ export const ModelRecording = z
       findings: RecordedPass,
       risk: RecordedPass,
       decisions: RecordedPass,
-      /** Recordings made before the stops pass have none; a replay then writes no tour. */
-      stops: RecordedPass.optional(),
+      /** Recordings made before the steps pass have none; a replay then writes no tour. */
+      steps: RecordedPass.optional(),
     }),
   })
   .readonly();
@@ -203,12 +203,12 @@ export const createReplayAnalysisModel = (
           hunkIds: ["h_ffffffffffffffff"],
         })),
       ),
-    stops: async (_input, passOptions) =>
-      recording.passes.stops === undefined
+    steps: async (_input, passOptions) =>
+      recording.passes.steps === undefined
         ? ok({
             value: [],
             usage: {
-              pass: "stops",
+              pass: "steps",
               inputTokens: 0,
               cacheReadTokens: 0,
               cacheWriteTokens: 0,
@@ -218,9 +218,9 @@ export const createReplayAnalysisModel = (
             },
           })
         : play(
-            "stops",
+            "steps",
             passOptions,
-            (answer) => parsed(z.array(StopDraft), answer, "stops"),
+            (answer) => parsed(z.array(StepDraft), answer, "steps"),
             () => [],
           ),
   };

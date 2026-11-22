@@ -17,7 +17,7 @@ import {
   type ModelUsage,
   PointLines,
   type PreferenceKind,
-  type StopDraft,
+  type StepDraft,
   type Ticket,
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
@@ -93,7 +93,7 @@ export interface PassOptions {
   readonly onAnswering?: () => void;
   /**
    * The run asked for the tour. Every pass of such a run answers through the schema that has the
-   * stops pass's variant too, so that they share one cache; a run without the tour sends the four.
+   * steps pass's variant too, so that they share one cache; a run without the tour sends the four.
    */
   readonly tour?: boolean;
 }
@@ -159,8 +159,8 @@ export interface AnalysisModel {
     options?: PassOptions,
   ): Promise<Result<PassOutput<DecisionDraft[]>, ModelError>>;
   /** The page's tour, in call order; only a run that asks for the tour calls it. */
-  stops(
+  steps(
     input: AnalysisInput,
     options?: PassOptions,
-  ): Promise<Result<PassOutput<StopDraft[]>, ModelError>>;
+  ): Promise<Result<PassOutput<StepDraft[]>, ModelError>>;
 }

@@ -80,9 +80,9 @@ export const createPassModel = (transport: {
         answer.pass === "decisions" ? answer.decisions : null,
       ),
 
-    stops: (input, options) =>
-      run("stops", input, null, options, (answer) =>
-        answer.pass === "stops" ? answer.stops : null,
+    steps: (input, options) =>
+      run("steps", input, null, options, (answer) =>
+        answer.pass === "steps" ? answer.steps : null,
       ),
   };
 };

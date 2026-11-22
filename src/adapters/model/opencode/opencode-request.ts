@@ -129,7 +129,7 @@ const isSchema = (value: unknown): value is JsonSchema =>
 /**
  * The schema of one pass's answer: its variant of the union, which every other provider enforces
  * whole. Asked for in the prompt, a smaller schema is one the model can follow. It's the same
- * whether the run asked for the tour or not, since the tour only adds the stops pass's variant.
+ * whether the run asked for the tour or not, since the tour only adds the steps pass's variant.
  */
 export const passSchema = (pass: ModelPass): JsonSchema => {
   const answer = TOUR_PASS_ANSWER_FORMAT.schema.properties;

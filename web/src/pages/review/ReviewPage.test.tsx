@@ -103,7 +103,7 @@ const codeOnly: AnalysisView = {
       intent: "skipped",
       risk: "skipped",
       decisions: "skipped",
-      stops: "skipped",
+      steps: "skipped",
     },
     modelError: null,
     modelOption: null,
@@ -1594,7 +1594,7 @@ describe("the tour", () => {
     window.localStorage.setItem("megareviewer:tour", "true");
     window.localStorage.setItem("megareviewer:review-layout", '"overview"');
   };
-  const tourRegion = () => screen.getByRole("region", { name: "Tour stops" });
+  const tourRegion = () => screen.getByRole("region", { name: "Tour steps" });
 
   it("is the Understand layout only while the Tour switch is on", async () => {
     const first = renderReview();
@@ -1611,27 +1611,27 @@ describe("the tour", () => {
     expect(await screen.findByRole("menuitemradio", { name: "Understand" })).toBeTruthy();
   });
 
-  it("shows the stops in order, their points, and what the tour didn't show", async () => {
+  it("shows the steps in order, their points, and what the tour didn't show", async () => {
     withTour();
     renderReview({ view: tourAnalysisView });
     await loaded();
-    const stops = within(await screen.findByRole("region", { name: "Tour stops" }));
-    expect(stops.getAllByRole("heading", { level: 2 }).map((one) => one.textContent)).toEqual([
-      "Stop 1: GET /orders/:id/receipt sends an order's receipt as plain text, or a 404",
-      "Stop 2: cachedReceipt keeps each order's receipt in memory once it's rendered",
-      "Stop 3: Tax lines are fetched up to 3 times before the receipt fails",
-      "Stop 4: Receipt lines show prices through formatMoney and dates through dayjs",
+    const steps = within(await screen.findByRole("region", { name: "Tour steps" }));
+    expect(steps.getAllByRole("heading", { level: 2 }).map((one) => one.textContent)).toEqual([
+      "Step 1: GET /orders/:id/receipt sends an order's receipt as plain text, or a 404",
+      "Step 2: cachedReceipt keeps each order's receipt in memory once it's rendered",
+      "Step 3: Tax lines are fetched up to 3 times before the receipt fails",
+      "Step 4: Receipt lines show prices through formatMoney and dates through dayjs",
       "After the tour",
     ]);
-    expect(stops.getByText("lines 14–21 · 8 of 18 changed lines")).toBeTruthy();
-    const [firstChip] = stops.getAllByRole("button", { name: /^Finding/ });
+    expect(steps.getByText("lines 14–21 · 8 of 18 changed lines")).toBeTruthy();
+    const [firstChip] = steps.getAllByRole("button", { name: /^Finding/ });
     expect(firstChip?.textContent).toContain(
       "Any signed-in user can read every customer's receipt",
     );
-    expect(stops.getByText("Not in the tour")).toBeTruthy();
-    expect(stops.getByText("Suggested depth")).toBeTruthy();
+    expect(steps.getByText("Not in the tour")).toBeTruthy();
+    expect(steps.getByText("Suggested depth")).toBeTruthy();
     const strip = screen.getByRole("group", { name: "Directories on the tour" });
-    expect(within(strip).getByRole("button", { name: /^src\/routes\/, stop 1/ })).toBeTruthy();
+    expect(within(strip).getByRole("button", { name: /^src\/routes\/, step 1/ })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
   });
 
@@ -1639,7 +1639,7 @@ describe("the tour", () => {
     withTour();
     renderReview({ view: tourAnalysisView });
     await loaded();
-    const [chip] = within(await screen.findByRole("region", { name: "Tour stops" })).getAllByRole(
+    const [chip] = within(await screen.findByRole("region", { name: "Tour steps" })).getAllByRole(
       "button",
       { name: /^Finding/ },
     );
@@ -1648,11 +1648,11 @@ describe("the tour", () => {
     await waitFor(() => expect(layoutIs("map")).toBe(true));
   });
 
-  it("keeps a comment on a stop's line as a draft of the review, which the map shows", async () => {
+  it("keeps a comment on a step's line as a draft of the review, which the map shows", async () => {
     withTour();
     renderReview({ view: tourAnalysisView });
     await loaded();
-    const region = await screen.findByRole("region", { name: "Tour stops" });
+    const region = await screen.findByRole("region", { name: "Tour steps" });
     const [number] = within(region).getAllByRole("button", { name: /^Comment on line \d+$/ });
     if (number === undefined) throw new Error("no commentable line");
     const line = Number(number.textContent);
@@ -1672,49 +1672,49 @@ describe("the tour", () => {
     expect(within(mainArea()).getByText("Why here?")).toBeTruthy();
   });
 
-  it("opens a stop in the map, marked and labelled, and comes back to it with Esc", async () => {
+  it("opens a step in the map, marked and labelled, and comes back to it with Esc", async () => {
     withTour();
     renderReview({ view: tourAnalysisView });
     await loaded();
-    const region = await screen.findByRole("region", { name: "Tour stops" });
+    const region = await screen.findByRole("region", { name: "Tour steps" });
     await userEvent.click(
       within(region).getByRole("button", {
         name: "Open src/services/receipts.ts lines 41–50 in code",
       }),
     );
     await waitFor(() => expect(layoutIs("map")).toBe(true));
-    expect(screen.getByRole("button", { name: "Back to tour · Stop 2" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Back to tour · Step 2" })).toBeTruthy();
     const label = document.querySelector("[data-slot=tour-landing]");
-    expect(label?.textContent).toContain("Tour stop 2");
+    expect(label?.textContent).toContain("Tour step 2");
     // The label is what the map scrolls to, not the top of the part it's in.
     expect(scrolledTo().at(-1)).toBe(label?.id);
-    expect(document.querySelectorAll("[data-point-mark=stop]").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll("[data-point-mark=step]").length).toBeGreaterThan(0);
 
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(layoutIs("overview")).toBe(true));
-    expect(document.activeElement?.textContent).toContain("Stop 2:");
-    expect(screen.queryByRole("button", { name: "Back to tour · Stop 2" })).toBeNull();
-    // The stop it came back to is the current one.
-    const current = document.querySelector("[data-slot=tour-stop][aria-current=step]");
+    expect(document.activeElement?.textContent).toContain("Step 2:");
+    expect(screen.queryByRole("button", { name: "Back to tour · Step 2" })).toBeNull();
+    // The step it came back to is the current one.
+    const current = document.querySelector("[data-slot=tour-step][aria-current=step]");
     expect(current?.textContent).toContain("cachedReceipt keeps each order's receipt");
     expect(
-      screen.getByRole("button", { name: /^src\/services\/, stops 2, 3 and 4, current stop$/ }),
+      screen.getByRole("button", { name: /^src\/services\/, steps 2, 3 and 4, current step$/ }),
     ).toBeTruthy();
   });
 
-  it("switches with v between the tour's current stop and its lines in the map", async () => {
+  it("switches with v between the tour's current step and its lines in the map", async () => {
     withTour();
     window.sessionStorage.clear();
     renderReview({ view: tourAnalysisView });
     await loaded();
-    await screen.findByRole("region", { name: "Tour stops" });
-    window.sessionStorage.setItem(`megareviewer:tour-stop:${id}`, "3");
+    await screen.findByRole("region", { name: "Tour steps" });
+    window.sessionStorage.setItem(`megareviewer:tour-step:${id}`, "3");
     await userEvent.keyboard("v");
     await waitFor(() => expect(layoutIs("map")).toBe(true));
-    expect(screen.getByRole("button", { name: "Back to tour · Stop 3" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Back to tour · Step 3" })).toBeTruthy();
     await userEvent.keyboard("v");
     await waitFor(() => expect(layoutIs("overview")).toBe(true));
-    expect(document.activeElement?.textContent).toContain("Stop 3:");
+    expect(document.activeElement?.textContent).toContain("Step 3:");
   });
 
   it("is opened from the brief's link, which shows only with a tour", async () => {
@@ -1722,9 +1722,9 @@ describe("the tour", () => {
     renderReview({ view: tourAnalysisView });
     await loaded();
     expect(layoutIs("map")).toBe(true);
-    await userEvent.click(await screen.findByRole("button", { name: "Tour · 4 stops" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Tour · 4 steps" }));
     await waitFor(() => expect(layoutIs("overview")).toBe(true));
-    expect(screen.getByRole("region", { name: "Tour stops" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Tour steps" })).toBeTruthy();
   });
 
   it("is the overview and a line saying why, without a tour", async () => {
@@ -1991,7 +1991,7 @@ describe("without the model", () => {
         intent: "skipped",
         findings: "skipped",
         decisions: "skipped",
-        stops: "skipped",
+        steps: "skipped",
       },
       pullRequest:
         analysis.pullRequest === null

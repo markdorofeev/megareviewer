@@ -177,7 +177,7 @@ export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisMo
     findings: (input, intent, options) => model.findings(input, intent, options),
     risk: (input, options) => model.risk(input, options),
     decisions: (input, options) => model.decisions(input, options),
-    stops: (input, options) => model.stops(input, options),
+    steps: (input, options) => model.steps(input, options),
   };
 };
 

@@ -13,7 +13,7 @@ import {
   codexVersion,
 } from "./version.ts";
 
-/** The review's four passes, or with the tour every pass, the stops pass among them. */
+/** The review's four passes, or with the tour every pass, the steps pass among them. */
 const requests = (model = "gpt-6-luna", tour = false) =>
   (tour ? ModelPass.options : MODEL_STAGES).map((pass) =>
     codexRequest(

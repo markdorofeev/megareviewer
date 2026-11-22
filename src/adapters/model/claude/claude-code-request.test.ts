@@ -21,7 +21,7 @@ import {
 /** The fingerprint was taken on Haiku 5.5, the model the prompts were tuned on. */
 const HAIKU = "claude-haiku-5-5";
 
-/** The review's four passes, or with the tour every pass, the stops pass among them. */
+/** The review's four passes, or with the tour every pass, the steps pass among them. */
 const requests = (model: string = HAIKU, tour = false) =>
   (tour ? ModelPass.options : MODEL_STAGES).map((pass) =>
     claudeCodeRequest(
@@ -110,11 +110,11 @@ describe("Claude Code request", () => {
     ).toBe(CLAUDE_CODE_TOUR_FINGERPRINT);
   });
 
-  it("sends every pass of a run with the tour the schema with the stops pass's variant", () => {
+  it("sends every pass of a run with the tour the schema with the steps pass's variant", () => {
     const all = requests(HAIKU, true);
     const schemas = new Set(all.map((request) => flag(request.args, "--json-schema")));
     expect(schemas.size).toBe(1);
     expect(JSON.parse([...schemas][0] ?? "")).toEqual(TOUR_PASS_ANSWER_FORMAT.schema);
-    expect(all.at(-1)?.stdin).toMatch(/^Task: stops\./m);
+    expect(all.at(-1)?.stdin).toMatch(/^Task: steps\./m);
   });
 });

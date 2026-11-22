@@ -24,7 +24,7 @@ import {
 
 const haiku = { providerID: "anthropic", id: "claude-haiku-5-5" };
 
-/** The review's four passes, or every pass, the stops pass among them. */
+/** The review's four passes, or every pass, the steps pass among them. */
 const requests = (passes: readonly ModelPass[] = MODEL_STAGES) =>
   passes.map((pass) =>
     opencodeRequest(
@@ -143,11 +143,11 @@ describe("prompt version", () => {
     ).toBe(OPENCODE_FINGERPRINT);
   });
 
-  it("is bumped whenever the stops pass's request changes", () => {
-    const current = fnv1a64(JSON.stringify(requests(["stops"])));
+  it("is bumped whenever the steps pass's request changes", () => {
+    const current = fnv1a64(JSON.stringify(requests(["steps"])));
     expect(
       current,
-      `The stops pass's request changed. Bump OPENCODE_PROMPT_VERSION in version.ts (now ` +
+      `The steps pass's request changed. Bump OPENCODE_PROMPT_VERSION in version.ts (now ` +
         `${OPENCODE_PROMPT_VERSION}) and set OPENCODE_TOUR_FINGERPRINT to "${current}".`,
     ).toBe(OPENCODE_TOUR_FINGERPRINT);
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hunk } from "../../application/testing/index.ts";
 import { type CallGraphHint, type Hunk, type HunkId, PartId } from "../diff/index.ts";
-import { keptStops, type StopContext, type StopDraft, validateStops } from "./index.ts";
+import { keptSteps, type StepContext, type StepDraft, validateSteps } from "./index.ts";
 
 const lines = (count: number, prefix = "+") =>
   Array.from({ length: count }, (_, at) => `${prefix}line ${at + 1}`);
@@ -33,7 +33,7 @@ const call = (from: Hunk | PartId, to: Hunk | PartId, use: CallGraphHint["use"] 
   use,
 });
 
-const context = (overrides: Partial<StopContext> = {}): StopContext => ({
+const context = (overrides: Partial<StepContext> = {}): StepContext => ({
   hunks,
   mechanical: new Set([lockfile.id]),
   parts: [],
@@ -48,71 +48,71 @@ const on = (one: Hunk, startLine: number, line: number, side: "new" | "old" = "n
   line,
 });
 
-const stop = (...excerpts: StopDraft["excerpts"]): StopDraft => ({
+const step = (...excerpts: StepDraft["excerpts"]): StepDraft => ({
   sentence: "A token is saved",
   excerpts,
 });
 
 const tour = [
-  stop(on(client, 1, 8), on(route, 2, 10)),
-  stop(on(keychain, 2, 3)),
-  stop(on(keychain, 6, 6)),
+  step(on(client, 1, 8), on(route, 2, 10)),
+  step(on(keychain, 2, 3)),
+  step(on(keychain, 6, 6)),
 ];
 
-describe("validateStops", () => {
-  it("finds nothing wrong with stops in call order on lines their hunks show", () => {
-    expect(validateStops(tour, context())).toEqual([]);
+describe("validateSteps", () => {
+  it("finds nothing wrong with steps in call order on lines their hunks show", () => {
+    expect(validateSteps(tour, context())).toEqual([]);
   });
 
   it("takes an excerpt of removed lines on the base side", () => {
-    expect(validateStops([stop(on(keychain, 2, 2, "old"))], context())).toEqual([]);
+    expect(validateSteps([step(on(keychain, 2, 2, "old"))], context())).toEqual([]);
   });
 
   it("finds excerpts on an unknown hunk, a proved hunk and lines a hunk doesn't show", () => {
     const stray = { ...on(client, 1, 2), hunkId: "h_0000000000000000" as HunkId };
     expect(
-      validateStops(
+      validateSteps(
         [
-          stop(stray),
-          stop(on(lockfile, 1, 1)),
-          stop(on(client, 9, 11)),
-          stop(on(keychain, 7, 7, "old")),
+          step(stray),
+          step(on(lockfile, 1, 1)),
+          step(on(client, 9, 11)),
+          step(on(keychain, 7, 7, "old")),
         ],
         context(),
       ),
     ).toEqual([
-      { kind: "unknown-hunk", stop: 0, excerpt: 0, hunkId: stray.hunkId },
-      { kind: "mechanical", stop: 1, excerpt: 0, hunkId: lockfile.id },
-      { kind: "lines-outside", stop: 2, excerpt: 0, hunkId: client.id },
-      { kind: "lines-outside", stop: 3, excerpt: 0, hunkId: keychain.id },
+      { kind: "unknown-hunk", step: 0, excerpt: 0, hunkId: stray.hunkId },
+      { kind: "mechanical", step: 1, excerpt: 0, hunkId: lockfile.id },
+      { kind: "lines-outside", step: 2, excerpt: 0, hunkId: client.id },
+      { kind: "lines-outside", step: 3, excerpt: 0, hunkId: keychain.id },
     ]);
   });
 
-  it("finds a stop with both excerpts in one file", () => {
-    expect(validateStops([stop(on(route, 1, 4), on(routeAgain, 53, 53))], context())).toEqual([
-      { kind: "same-file", stop: 0 },
+  it("finds a step with both excerpts in one file", () => {
+    expect(validateSteps([step(on(route, 1, 4), on(routeAgain, 53, 53))], context())).toEqual([
+      { kind: "same-file", step: 0 },
     ]);
   });
 
-  it("finds a stop before the stop whose code calls it", () => {
+  it("finds a step before the step whose code calls it", () => {
     expect(
-      validateStops(
-        [stop(on(keychain, 2, 3)), stop(on(route, 1, 4)), stop(on(client, 1, 4))],
+      validateSteps(
+        [step(on(keychain, 2, 3)), step(on(route, 1, 4)), step(on(client, 1, 4))],
         context(),
       ),
     ).toEqual([
-      { kind: "order", stop: 0, caller: 1 },
-      { kind: "order", stop: 1, caller: 2 },
+      { kind: "order", step: 0, caller: 1 },
+      { kind: "order", step: 1, caller: 2 },
     ]);
   });
 
-  it("leaves alone stops that call each other, and a type use", () => {
+  it("leaves alone steps that call each other, and a type use", () => {
     const both = context({
       callGraph: [call(route, keychain), call(keychain, route), call(client, route, "type")],
     });
     expect(
-      validateStops(
-        [stop(on(keychain, 2, 3)), stop(on(route, 1, 4)), stop(on(client, 1, 4))],
+      validateSteps(
+        [step(on(keychain, 2, 3)), step(on(route, 1, 4)), step(on(client, 1, 4))],
         both,
       ),
     ).toEqual([]);
@@ -128,34 +128,34 @@ describe("validateStops", () => {
       ],
       callGraph: [call(route, write)],
     });
-    expect(validateStops([stop(on(keychain, 2, 3)), stop(on(route, 1, 4))], split)).toEqual([]);
-    expect(validateStops([stop(on(keychain, 6, 6)), stop(on(route, 1, 4))], split)).toEqual([
-      { kind: "order", stop: 0, caller: 1 },
+    expect(validateSteps([step(on(keychain, 2, 3)), step(on(route, 1, 4))], split)).toEqual([]);
+    expect(validateSteps([step(on(keychain, 6, 6)), step(on(route, 1, 4))], split)).toEqual([
+      { kind: "order", step: 0, caller: 1 },
     ]);
   });
 
-  it("finds every stop past the seventh", () => {
-    const many = Array.from({ length: 9 }, () => stop(on(client, 1, 4)));
-    expect(validateStops(many, context())).toEqual([
-      { kind: "too-many", stop: 7 },
-      { kind: "too-many", stop: 8 },
+  it("finds every step past the seventh", () => {
+    const many = Array.from({ length: 9 }, () => step(on(client, 1, 4)));
+    expect(validateSteps(many, context())).toEqual([
+      { kind: "too-many", step: 7 },
+      { kind: "too-many", step: 8 },
     ]);
   });
 });
 
-describe("keptStops", () => {
-  it("numbers the stops in tour order", () => {
-    expect(keptStops(tour, []).map((kept) => kept.id)).toEqual(["t1", "t2", "t3"]);
+describe("keptSteps", () => {
+  it("numbers the steps in tour order", () => {
+    expect(keptSteps(tour, []).map((kept) => kept.id)).toEqual(["t1", "t2", "t3"]);
   });
 
-  it("drops bad excerpts, stops left with none, a second excerpt in one file and stops past seven", () => {
+  it("drops bad excerpts, steps left with none, a second excerpt in one file and steps past seven", () => {
     const many = [
-      stop(on(lockfile, 1, 1), on(client, 1, 4)),
-      stop(on(client, 9, 11)),
-      stop(on(route, 1, 4), on(routeAgain, 53, 53)),
-      ...Array.from({ length: 6 }, () => stop(on(keychain, 2, 3))),
+      step(on(lockfile, 1, 1), on(client, 1, 4)),
+      step(on(client, 9, 11)),
+      step(on(route, 1, 4), on(routeAgain, 53, 53)),
+      ...Array.from({ length: 6 }, () => step(on(keychain, 2, 3))),
     ];
-    const kept = keptStops(many, validateStops(many, context()));
+    const kept = keptSteps(many, validateSteps(many, context()));
     expect(kept.map((one) => one.excerpts)).toEqual([
       [on(client, 1, 4)],
       [on(route, 1, 4)],
@@ -167,8 +167,8 @@ describe("keptStops", () => {
     expect(kept.at(-1)?.id).toBe("t6");
   });
 
-  it("keeps stops out of order", () => {
-    const backwards = [stop(on(keychain, 2, 3)), stop(on(route, 1, 4)), stop(on(client, 1, 4))];
-    expect(keptStops(backwards, validateStops(backwards, context()))).toHaveLength(3);
+  it("keeps steps out of order", () => {
+    const backwards = [step(on(keychain, 2, 3)), step(on(route, 1, 4)), step(on(client, 1, 4))];
+    expect(keptSteps(backwards, validateSteps(backwards, context()))).toHaveLength(3);
   });
 });

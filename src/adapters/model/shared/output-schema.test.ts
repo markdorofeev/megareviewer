@@ -137,13 +137,13 @@ describe("toStrictJsonSchema", () => {
 describe("the answer format of a run with the tour", () => {
   const json = JSON.stringify(TOUR_PASS_ANSWER_FORMAT.schema);
 
-  it("adds the stops pass's variant after the four, which it leaves as they were", () => {
-    expect(json.match(/"const":"(intent|findings|risk|decisions|stops)"/g)).toEqual([
+  it("adds the steps pass's variant after the four, which it leaves as they were", () => {
+    expect(json.match(/"const":"(intent|findings|risk|decisions|steps)"/g)).toEqual([
       '"const":"intent"',
       '"const":"findings"',
       '"const":"risk"',
       '"const":"decisions"',
-      '"const":"stops"',
+      '"const":"steps"',
     ]);
     const variants = (schema: unknown): unknown[] => {
       const answer =
@@ -161,17 +161,17 @@ describe("the answer format of a run with the tour", () => {
     expect(passAnswerFormat(true)).toBe(TOUR_PASS_ANSWER_FORMAT);
   });
 
-  it("parses a stops answer, and every answer of the four", () => {
-    const stop = {
+  it("parses a steps answer, and every answer of the four", () => {
+    const step = {
       sentence: "A token is saved",
       excerpts: [{ hunkId: "h_0123456789abcdef", side: "new", startLine: 1, line: 4 }],
     };
-    expect(PassAnswer.parse({ answer: { pass: "stops", stops: [stop] } }).answer).toEqual({
-      pass: "stops",
-      stops: [stop],
+    expect(PassAnswer.parse({ answer: { pass: "steps", steps: [step] } }).answer).toEqual({
+      pass: "steps",
+      steps: [step],
     });
     expect(
-      PassAnswer.safeParse({ answer: { pass: "stops", stops: [{ ...stop, excerpts: [] }] } })
+      PassAnswer.safeParse({ answer: { pass: "steps", steps: [{ ...step, excerpts: [] }] } })
         .success,
     ).toBe(false);
   });

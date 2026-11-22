@@ -77,9 +77,9 @@ const recordingInput = (model: AnalysisModel) => {
       keep(given);
       return model.decisions(given, options);
     },
-    stops: (given, options) => {
+    steps: (given, options) => {
       keep(given);
-      return model.stops(given, options);
+      return model.steps(given, options);
     },
   };
   return { model: recording, input: () => input };

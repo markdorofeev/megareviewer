@@ -109,5 +109,5 @@ export const withGuardrails = (model: AnalysisModel, url: string): AnalysisModel
   },
   risk: (input, options) => model.risk(input, options),
   decisions: (input, options) => model.decisions(input, options),
-  stops: (input, options) => model.stops(input, options),
+  steps: (input, options) => model.steps(input, options),
 });

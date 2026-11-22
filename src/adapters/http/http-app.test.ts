@@ -1112,7 +1112,7 @@ describe("GET /api/analyses/:id/attachment", () => {
 });
 
 describe("POST /api/analyses/:id/model", () => {
-  it("runs the stops pass only when the body asks for the tour", async () => {
+  it("runs the steps pass only when the body asks for the tour", async () => {
     for (const tour of [undefined, true]) {
       const model = new GatedModel();
       const { call, complete, events } = setupApp({ model });
@@ -1130,7 +1130,7 @@ describe("POST /api/analyses/:id/model", () => {
       });
       model.release();
       await ended;
-      expect(model.callsTo("stops")).toHaveLength(tour === true ? 1 : 0);
+      expect(model.callsTo("steps")).toHaveLength(tour === true ? 1 : 0);
     }
   });
 });

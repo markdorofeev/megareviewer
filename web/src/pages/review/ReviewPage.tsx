@@ -112,7 +112,7 @@ import { parseBoolean, readSession, useStoredState, writeSession } from "./stora
 import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
 import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
-import { type NoTour, noTourOf, type TourExcerpt, type TourStop, tourOf } from "./tour.ts";
+import { type NoTour, noTourOf, type TourExcerpt, type TourStep, tourOf } from "./tour.ts";
 import { BackToTour, NoTourLine, TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
@@ -227,7 +227,7 @@ const noTourText = (reason: NoTour): string => {
     case "writing":
       return "The tour is being written.";
     case "too-small":
-      return "The change is too small for a tour: it has fewer than 3 stops to make.";
+      return "The change is too small for a tour: it has fewer than 3 steps to make.";
     case "failed":
       return `The tour couldn't be written: ${reason.message}`;
   }
@@ -786,41 +786,41 @@ const Review = ({
     }
     setCurrentPoint(id);
   };
-  // The tour's place across the layouts: the stop the map was opened from, which the map marks and
-  // the bar's second row goes back to, and the stop last current, kept per analysis in the tab.
-  const [fromStop, setFromStop] = useState<{
-    readonly stop: TourStop;
+  // The tour's place across the layouts: the step the map was opened from, which the map marks and
+  // the bar's second row goes back to, and the step last current, kept per analysis in the tab.
+  const [fromStep, setFromStep] = useState<{
+    readonly step: TourStep;
     readonly excerpt: TourExcerpt;
   } | null>(null);
-  const [landOn, setLandOn] = useState<{ readonly stop: number; readonly n: number } | null>(null);
-  // Cards above a stop's lines take their size after the map scrolled to it: hold it in place.
+  const [landOn, setLandOn] = useState<{ readonly step: number; readonly n: number } | null>(null);
+  // Cards above a step's lines take their size after the map scrolled to it: hold it in place.
   const [landingHeld, setLandingHeld] = useState(0);
   useEffect(() => {
     if (landingHeld === 0 || layout !== "map") return;
     return holdInView(TOUR_LANDING, "[aria-label=Changes]");
   }, [landingHeld, layout]);
-  const storedStopKey = `tour-stop:${analysisId}`;
-  const readStoredStop = (): number => {
-    const stored = readSession(storedStopKey);
+  const storedStepKey = `tour-step:${analysisId}`;
+  const readStoredStep = (): number => {
+    const stored = readSession(storedStepKey);
     return typeof stored === "number" ? stored : 0;
   };
   const tourReady = tourOn && noTour === null && tour !== null;
-  /** Understand, on stop `stop`, or at its top for 0. */
-  const enterTour = (stop: number) => {
+  /** Understand, on step `step`, or at its top for 0. */
+  const enterTour = (step: number) => {
     setLayout(() => "overview");
     setOpenedFrom(null);
-    setFromStop(null);
+    setFromStep(null);
     setHighlight(new Set());
-    setLandOn((previous) => ({ stop, n: (previous?.n ?? 0) + 1 }));
+    setLandOn((previous) => ({ step, n: (previous?.n ?? 0) + 1 }));
   };
-  const backToTour = () => enterTour(fromStop?.stop.number ?? readStoredStop());
-  /** The map on an excerpt's lines, marked, under a label naming its stop. */
-  const openInCode = (stop: TourStop, excerpt: TourExcerpt) => {
+  const backToTour = () => enterTour(fromStep?.step.number ?? readStoredStep());
+  /** The map on an excerpt's lines, marked, under a label naming its step. */
+  const openInCode = (step: TourStep, excerpt: TourExcerpt) => {
     setLayout(() => "map");
     setOpenedFrom(null);
-    setFromStop({ stop, excerpt });
+    setFromStep({ step, excerpt });
     setFocusedHunkId(excerpt.partId);
-    writeSession(storedStopKey, stop.number);
+    writeSession(storedStepKey, step.number);
     // The label over the excerpt, which can start well below its part's top.
     scrollTo(TOUR_LANDING);
     setLandingHeld((previous) => previous + 1);
@@ -911,15 +911,15 @@ const Review = ({
   };
   const switchLayout = () => {
     if (layout === "map") {
-      // With a tour, to the stop last current; else the overview, on the file in view.
-      if (tourReady) return enterTour(fromStop?.stop.number ?? readStoredStop());
+      // With a tour, to the step last current; else the overview, on the file in view.
+      if (tourReady) return enterTour(fromStep?.step.number ?? readStoredStep());
       return openOverview();
     }
     if (understand) {
-      // To the current stop's lines, as its Open in code.
-      const stop = tour?.stops.find((one) => one.number === readStoredStop());
-      const [excerpt] = stop?.excerpts ?? [];
-      if (stop !== undefined && excerpt !== undefined) return openInCode(stop, excerpt);
+      // To the current step's lines, as its Open in code.
+      const step = tour?.steps.find((one) => one.number === readStoredStep());
+      const [excerpt] = step?.excerpts ?? [];
+      if (step !== undefined && excerpt !== undefined) return openInCode(step, excerpt);
       return setLayout(() => "map");
     }
     const node = [...overview.rows.flat(), ...overview.strip].find(
@@ -1043,7 +1043,7 @@ const Review = ({
   };
   const onEscape = () => {
     if (highlight.size > 0) return setHighlight(new Set());
-    if (layout === "map" && fromStop !== null) return backToTour();
+    if (layout === "map" && fromStep !== null) return backToTour();
     if (layout === "map" && openedFrom !== null) {
       // Back to the overview, on the file the map was opened from.
       setLayout(() => "overview");
@@ -1221,7 +1221,7 @@ const Review = ({
       finding: 0,
       risk: 1,
       decision: 2,
-      stop: 3,
+      step: 3,
     };
     const byPart = new Map<PartId, Map<string, PointLine>>();
     for (const [partId, placed] of places.cards) {
@@ -1256,26 +1256,26 @@ const Review = ({
       ),
     [analysis.files],
   );
-  // The lines of the stop the map was opened from, marked on their numbers where no point is.
-  const stopLines = useMemo(() => {
-    if (fromStop === null) return null;
-    const hunk = hunkFiles.get(fromStop.excerpt.hunkId)?.hunk;
+  // The lines of the step the map was opened from, marked on their numbers where no point is.
+  const stepLines = useMemo(() => {
+    if (fromStep === null) return null;
+    const hunk = hunkFiles.get(fromStep.excerpt.hunkId)?.hunk;
     if (hunk === undefined) return null;
-    const keys = hunk.lines.slice(fromStop.excerpt.start, fromStop.excerpt.end).flatMap((line) => {
+    const keys = hunk.lines.slice(fromStep.excerpt.start, fromStep.excerpt.end).flatMap((line) => {
       const place = commentPlace(line);
       return place === null ? [] : [`${place.side}:${place.line}`];
     });
-    return { hunkId: fromStop.excerpt.hunkId, keys };
-  }, [fromStop, hunkFiles]);
+    return { hunkId: fromStep.excerpt.hunkId, keys };
+  }, [fromStep, hunkFiles]);
   const pointLinesOf = useCallback(
     (id: PartId) => {
       const own = pointLines.get(id);
-      if (stopLines === null || hunkIdOf(id) !== stopLines.hunkId) return own;
+      if (stepLines === null || hunkIdOf(id) !== stepLines.hunkId) return own;
       const merged = new Map<string, PointLine>(own ?? []);
-      for (const key of stopLines.keys) if (!merged.has(key)) merged.set(key, { kind: "stop" });
+      for (const key of stepLines.keys) if (!merged.has(key)) merged.set(key, { kind: "step" });
       return merged;
     },
-    [pointLines, stopLines],
+    [pointLines, stepLines],
   );
   /** A fold of point cards: fresh while it's landing if any of them is new to the page. */
   const fold = (
@@ -1302,8 +1302,8 @@ const Review = ({
     const cards = cardPlaces.underHeader.get(id) ?? NO_POINTS;
     const mentions = places.mentions.get(id) ?? NO_POINTS;
     const label =
-      fromStop !== null && fromStop.excerpt.partId === id ? (
-        <TourLanding stop={fromStop.stop} excerpt={fromStop.excerpt} />
+      fromStep !== null && fromStep.excerpt.partId === id ? (
+        <TourLanding step={fromStep.step} excerpt={fromStep.excerpt} />
       ) : null;
     return label === null ? (
       pointFolds(cards, mentions, id)
@@ -1435,10 +1435,10 @@ const Review = ({
     for (const point of [...cards, ...mentions]) {
       parts.push(landing.fresh(point.id), landingAt(point.id) ?? "");
     }
-    if (stopLines !== null && hunkIdOf(id) === stopLines.hunkId) parts.push(fromStop?.excerpt.key);
+    if (stepLines !== null && hunkIdOf(id) === stepLines.hunkId) parts.push(fromStep?.excerpt.key);
     return parts.join("\u0000");
   };
-  /** A stop's excerpt: its rows, drawn as a part's, with the comment box and the drafts on them. */
+  /** A step's excerpt: its rows, drawn as a part's, with the comment box and the drafts on them. */
   const excerptCard = (excerpt: TourExcerpt): ReactNode => {
     const found = hunkFiles.get(excerpt.hunkId);
     if (found === undefined) return null;
@@ -1542,7 +1542,7 @@ const Review = ({
             stale={view.stale}
             tour={
               tourReady && tour !== null
-                ? { stops: tour.stops.length, onOpen: () => enterTour(0) }
+                ? { steps: tour.steps.length, onOpen: () => enterTour(0) }
                 : null
             }
             onDetails={() => {
@@ -1716,11 +1716,11 @@ const Review = ({
         verdict={verdictLabel(yourVerdict, verdictKnown, publication)}
         hairline={landing.running ? "running" : landing.phase === "landing" ? "finishing" : null}
       />
-      {layout === "map" && fromStop !== null && (
+      {layout === "map" && fromStep !== null && (
         <BackToTour
-          stop={fromStop.stop.number}
+          step={fromStep.step.number}
           onBack={backToTour}
-          onDismiss={() => setFromStop(null)}
+          onDismiss={() => setFromStep(null)}
         />
       )}
 
@@ -1855,8 +1855,8 @@ const Review = ({
           onOpenPoint={openTourPoint}
           onOpenFile={openFileFromTour}
           onOpenInCode={openInCode}
-          onCurrentStop={(stop) => {
-            if (stop !== null) writeSession(storedStopKey, stop);
+          onCurrentStep={(step) => {
+            if (step !== null) writeSession(storedStepKey, step);
           }}
           landOn={landOn}
         />

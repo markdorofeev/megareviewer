@@ -7,8 +7,8 @@
  */
 export const OPENCODE_PROMPT_VERSION = 10;
 export const OPENCODE_FINGERPRINT = "6f77c495527ff5c6";
-/** The same, of the stops pass, which only a run that asks for the tour sends. */
-export const OPENCODE_TOUR_FINGERPRINT = "3a3a1f0c7f2b4374";
+/** The same, of the steps pass, which only a run that asks for the tour sends. */
+export const OPENCODE_TOUR_FINGERPRINT = "a8343a604fe1bce8";
 
 /** Names the model on its provider; an effort for every pass, in place of each pass's own, too. */
 export const opencodeVersion = (providerID: string, model: string, effort?: string): string =>

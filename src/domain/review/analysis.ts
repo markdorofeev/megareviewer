@@ -19,7 +19,7 @@ import { Guidance } from "./preference.ts";
 import { Sha, Timestamp } from "./primitives.ts";
 import { PullRequest, PullRequestRef } from "./pull-request.ts";
 import { RiskAssessment } from "./risk.ts";
-import { Stop } from "./stop.ts";
+import { Step } from "./step.ts";
 
 export const StageName = z.enum([
   "collect",
@@ -28,7 +28,7 @@ export const StageName = z.enum([
   "findings",
   "risk",
   "decisions",
-  "stops",
+  "steps",
 ]);
 export type StageName = z.infer<typeof StageName>;
 
@@ -55,7 +55,7 @@ export const AnalysisKey = z
   .readonly();
 export type AnalysisKey = z.infer<typeof AnalysisKey>;
 
-export const ModelPass = z.enum(["intent", "findings", "risk", "decisions", "stops"]);
+export const ModelPass = z.enum(["intent", "findings", "risk", "decisions", "steps"]);
 export type ModelPass = z.infer<typeof ModelPass>;
 
 /** What a model call of a run was: one of the passes, or the guardrail call after them. */
@@ -135,13 +135,13 @@ const withoutTourPass = (entries: unknown) =>
     : entries;
 
 /**
- * Analyses stored before the findings pass lack its stage, and those stored before the stops pass
+ * Analyses stored before the findings pass lack its stage, and those stored before the steps pass
  * lack that; those from while the model titled the tour have a stage for that, which is left out.
  */
 const currentStages = (stages: unknown) => {
   if (typeof stages !== "object" || stages === null) return stages;
   return Object.fromEntries(
-    Object.entries({ findings: "skipped", stops: "skipped", ...stages }).filter(
+    Object.entries({ findings: "skipped", steps: "skipped", ...stages }).filter(
       ([stage]) => stage !== "tour",
     ),
   );
@@ -218,13 +218,13 @@ export const Analysis = z.preprocess(
       decisions: z.array(Decision).readonly(),
       /** The code's flows from the call graph, which order and label the overview. */
       flows: Flows.nullable(),
-      /** The page's tour, which the stops pass writes; null when no run asked for it. */
-      stops: z.array(Stop).readonly().nullable().default(null),
+      /** The page's tour, which the steps pass writes; null when no run asked for it. */
+      steps: z.array(Step).readonly().nullable().default(null),
       /**
-       * Why a run that asked for the tour has none: the stops pass failed, or its checks left fewer
-       * than three stops. Never the run's `modelError`: the review is there without a tour.
+       * Why a run that asked for the tour has none: the steps pass failed, or its checks left fewer
+       * than three steps. Never the run's `modelError`: the review is there without a tour.
        */
-      stopsError: AnalysisError.nullable().default(null),
+      stepsError: AnalysisError.nullable().default(null),
       warnings: z.array(z.string()).readonly(),
       usage: z.preprocess(withoutTourPass, z.array(ModelUsage)).readonly(),
       /** Defaults for analyses stored before model calls were traced. */
@@ -265,15 +265,15 @@ export const MODEL_STAGES = [
  * The stage of the pass that writes the page's tour. It runs only when a run asks for it, and isn't
  * one of the review's four: they decide whether the run worked, and it never does.
  */
-export const STOPS_STAGE = "stops" as const satisfies StageName;
+export const STEPS_STAGE = "steps" as const satisfies StageName;
 
-const RUN_STAGES = [...MODEL_STAGES, STOPS_STAGE] as const;
+const RUN_STAGES = [...MODEL_STAGES, STEPS_STAGE] as const;
 
-/** The stages a model run counts: the review's four, and the stops pass when it asked for the tour. */
+/** The stages a model run counts: the review's four, and the steps pass when it asked for the tour. */
 export const runStages = (analysis: Pick<Analysis, "stages">): readonly StageName[] =>
-  analysis.stages.stops === "skipped" ? MODEL_STAGES : RUN_STAGES;
+  analysis.stages.steps === "skipped" ? MODEL_STAGES : RUN_STAGES;
 
-/** The stages with each model stage's status, the stops pass's too, replaced by `next` of it. */
+/** The stages with each model stage's status, the steps pass's too, replaced by `next` of it. */
 export const mapModelStages = (
   stages: Analysis["stages"],
   next: (status: StageStatus) => StageStatus,
@@ -283,11 +283,11 @@ export const mapModelStages = (
   findings: next(stages.findings),
   risk: next(stages.risk),
   decisions: next(stages.decisions),
-  stops: next(stages.stops),
+  steps: next(stages.steps),
 });
 
 /**
- * Still changing: the code's stages are running, or the model is, the stops pass among it. Once the
+ * Still changing: the code's stages are running, or the model is, the steps pass among it. Once the
  * code's are done, a model stage is pending only while a run hasn't reached it; when they fail, the
  * model's stay pending and never run.
  */
@@ -329,8 +329,8 @@ export const withoutModelRun = (
   findings: [],
   risk: code.risk,
   decisions: [],
-  stops: null,
-  stopsError: null,
+  steps: null,
+  stepsError: null,
   warnings: code.warnings,
   usage: [],
   modelCalls: [],
