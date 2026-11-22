@@ -11,10 +11,7 @@ const analysis = tourAnalysisView.analysis;
 
 /** The Understand layout on the fixture PR's tour, and the pieces it shows elsewhere. */
 export const TourDemo = () => {
-  const tour = useMemo(
-    () => tourOf(analysis, fileOverview(analysis, analysis.flows?.steps ?? []), pointsOf(analysis)),
-    [],
-  );
+  const tour = useMemo(() => tourOf(analysis, fileOverview(analysis), pointsOf(analysis)), []);
   const found = (excerpt: TourExcerpt) =>
     analysis.files
       .flatMap((file) => file.hunks.map((hunk) => ({ hunk, file })))

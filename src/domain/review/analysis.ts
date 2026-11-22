@@ -11,7 +11,7 @@ import {
 import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
 import { ModelError } from "./errors.ts";
-import { Flows } from "./flows.ts";
+import { Flow, storedFlows } from "./flows.ts";
 import { Intent, Ticket } from "./intent.ts";
 import { ModelRunOption } from "./model-option.ts";
 import { Finding } from "./point.ts";
@@ -173,8 +173,8 @@ export const BeforeModel = z
 export type BeforeModel = z.infer<typeof BeforeModel>;
 
 /**
- * Analyses stored before the code's flows were named so keep them under `tour`, with the same
- * shape and step IDs: read into `flows`, so the cache still serves them.
+ * Analyses stored before the code's flows were named so keep them under `tour`: read into `flows`,
+ * whose own shapes `storedFlows` reads, so the cache still serves them.
  */
 const flowsUnderOldName = (stored: unknown) =>
   typeof stored === "object" && stored !== null && "tour" in stored && !("flows" in stored)
@@ -217,7 +217,7 @@ export const Analysis = z.preprocess(
       risk: z.array(RiskAssessment).readonly(),
       decisions: z.array(Decision).readonly(),
       /** The code's flows from the call graph, which order and label the overview. */
-      flows: Flows.nullable(),
+      flows: z.preprocess(storedFlows, z.array(Flow).readonly().nullable()),
       /** The page's tour, which the steps pass writes; null when no run asked for it. */
       steps: z.array(Step).readonly().nullable().default(null),
       /**

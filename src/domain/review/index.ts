@@ -60,7 +60,7 @@ export {
   TicketError,
   TicketErrorKind,
 } from "./errors.ts";
-export { Flow, FlowId, Flows } from "./flows.ts";
+export { Flow } from "./flows.ts";
 export {
   BUILD_FILE_PATHS,
   CHECK_CONFIG_PATHS,
@@ -246,10 +246,7 @@ export {
 export { extractTicketKeys } from "./ticket-keys.ts";
 export {
   CoverageProblem,
-  type FlowsProblem,
-  partsOfHunks,
   type RiskProblem,
-  validateFlows,
   validateHunkReferences,
   validateRiskCoverage,
 } from "./validation.ts";

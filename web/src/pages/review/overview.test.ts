@@ -7,7 +7,7 @@ import {
   PartId,
   type UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
-import { type Flow, FlowId, type RiskAssessment } from "../../../../src/domain/review/index.ts";
+import type { Flow, RiskAssessment } from "../../../../src/domain/review/index.ts";
 import { directoryOf } from "../../review/tree/paths.ts";
 import {
   type FileOverview,
@@ -56,21 +56,17 @@ const call = (from: number, to: number, symbol = `f${to}`): CallGraphHint => ({
   use: "call",
 });
 
-const step = (
+/** Flow `n`: its title, its hunks and the entries it starts at. */
+const flow = (
   n: number,
   title: string,
   hunks: readonly number[],
   entries: readonly number[] = [],
 ): Flow => ({
-  id: FlowId.parse(`s${n}`),
   title,
-  explanation: "",
   partIds: hunks.map(h),
   kind: entries.length > 0 || n < 90 ? "flow" : "supporting",
-  via: [],
   entries: entries.map(h),
-  codeTitle: null,
-  merged: [],
 });
 
 const input = (files: readonly FileChange[], more: Partial<OverviewInput> = {}): OverviewInput => ({
@@ -81,12 +77,20 @@ const input = (files: readonly FileChange[], more: Partial<OverviewInput> = {}):
   callGraph: [],
   fileLinks: [],
   generated: [],
+  flows: null,
   ...more,
 });
 
-/** Flows reading the files' hunks in the order given, as one step. */
-const tourOf = (files: readonly FileChange[]): Flow[] => [
-  step(
+/** The overview of `analysis` read by `flows`. */
+const overviewOf = (
+  analysis: OverviewInput,
+  flows: readonly Flow[],
+  expanded?: ReadonlySet<string>,
+): FileOverview => fileOverview({ ...analysis, flows }, expanded);
+
+/** One flow reading the files' hunks in the order given. */
+const flowOf = (files: readonly FileChange[]): Flow[] => [
+  flow(
     1,
     "Everything",
     files.flatMap((one) => one.hunks.map((hunk) => Number.parseInt(hunk.id.slice(2), 16))),
@@ -94,10 +98,10 @@ const tourOf = (files: readonly FileChange[]): Flow[] => [
 ];
 
 /** The overview with every directory opened in place, so each file is a node of its own. */
-const opened = (analysis: OverviewInput, steps: readonly Flow[]): FileOverview =>
-  fileOverview(
+const opened = (analysis: OverviewInput, flows: readonly Flow[]): FileOverview =>
+  overviewOf(
     analysis,
-    steps,
+    flows,
     new Set(analysis.files.map((one) => groupKey(directoryOf(one.path)))),
   );
 
@@ -107,7 +111,7 @@ const rowsOf = (overview: FileOverview) =>
 describe("fileOverview with every directory opened", () => {
   it("puts a chain in one row per file, from the file nothing calls", () => {
     const files = [file("c.py", [3]), file("a.py", [1]), file("b.py", [2])];
-    const overview = opened(input(files, { callGraph: [call(1, 2), call(2, 3)] }), tourOf(files));
+    const overview = opened(input(files, { callGraph: [call(1, 2), call(2, 3)] }), flowOf(files));
     expect(rowsOf(overview)).toEqual([["a.py"], ["b.py"], ["c.py"]]);
     expect(overview.edges.map((edge) => [edge.from, edge.to, edge.uses, edge.back])).toEqual([
       ["a.py", "b.py", ["call"], false],
@@ -120,7 +124,7 @@ describe("fileOverview with every directory opened", () => {
     const files = [file("a.py", [1]), file("b.py", [2]), file("c.py", [3]), file("d.py", [4])];
     const overview = opened(
       input(files, { callGraph: [call(1, 2), call(1, 4), call(2, 3), call(3, 4)] }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(rowsOf(overview)).toEqual([["a.py"], ["b.py"], ["c.py"], ["d.py"]]);
   });
@@ -128,20 +132,20 @@ describe("fileOverview with every directory opened", () => {
   it("breaks a cycle at the edge into the file earliest in reading order", () => {
     const files = [file("a.py", [1]), file("b.py", [2]), file("c.py", [3])];
     const callGraph = [call(1, 2), call(2, 3), call(3, 1)];
-    const overview = opened(input(files, { callGraph }), tourOf(files));
+    const overview = opened(input(files, { callGraph }), flowOf(files));
     expect(rowsOf(overview)).toEqual([["a.py"], ["b.py"], ["c.py"]]);
     expect(overview.edges.filter((edge) => edge.back).map((edge) => [edge.from, edge.to])).toEqual([
       ["c.py", "a.py"],
     ]);
     // Read from c first, the cycle opens at c instead.
-    const fromC = opened(input(files, { callGraph }), [step(1, "From c", [3, 1, 2])]);
+    const fromC = opened(input(files, { callGraph }), [flow(1, "From c", [3, 1, 2])]);
     expect(rowsOf(fromC)).toEqual([["c.py"], ["a.py"], ["b.py"]]);
   });
 
   it("orders a row by its callers' positions, so edges cross less", () => {
     // Read in this order, the second row would be y, x; x's caller is left of y's.
     const files = [file("a.py", [1]), file("b.py", [2]), file("y.py", [3]), file("x.py", [4])];
-    const overview = opened(input(files, { callGraph: [call(1, 4), call(2, 3)] }), tourOf(files));
+    const overview = opened(input(files, { callGraph: [call(1, 4), call(2, 3)] }), flowOf(files));
     expect(rowsOf(overview)).toEqual([
       ["a.py", "b.py"],
       ["x.py", "y.py"],
@@ -155,7 +159,7 @@ describe("fileOverview with every directory opened", () => {
         fileLinks: [{ from: "a.py", to: "b.py" }],
         callGraph: [call(1, 2, "run"), { ...call(1, 2, "Thing"), use: "type" }],
       }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(overview.edges).toEqual([
       {
@@ -189,7 +193,7 @@ describe("fileOverview with every directory opened", () => {
           request(4, 3, "GET /api/items"),
         ],
       }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(rowsOf(overview)).toEqual([["setup.tsx"], ["Connections.tsx"], ["routes.py"]]);
     expect(overview.edges[1]).toEqual({
@@ -216,7 +220,7 @@ describe("fileOverview with every directory opened", () => {
       input(files, {
         callGraph: [call(1, 2), call(3, 1), call(3, 4), call(4, 2), call(3, 5)],
       }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(rowsOf(overview)).toEqual([["service.py"], ["store.py"]]);
     const badges = (key: string) => overview.rows.flat().find((node) => node.key === key)?.badges;
@@ -229,7 +233,7 @@ describe("fileOverview with every directory opened", () => {
 
   it("keeps code only tests call as a node, unless its name says it's a helper", () => {
     const files = [file("app/prices.py", [1]), file("tests/test_prices.py", [2])];
-    const overview = opened(input(files, { callGraph: [call(2, 1)] }), tourOf(files));
+    const overview = opened(input(files, { callGraph: [call(2, 1)] }), flowOf(files));
     expect(overview.strip.map((node) => [node.label, node.badges])).toEqual([
       ["prices.py", ["tests/test_prices.py"]],
     ]);
@@ -242,7 +246,7 @@ describe("fileOverview with every directory opened", () => {
         callGraph: [{ ...call(1, 2), use: "type" }],
         generated: ["web/api/schema.d.ts"],
       }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(overview.rows.flat().map((node) => [node.label, node.generated])).toEqual([
       ["Page.tsx", false],
@@ -258,7 +262,7 @@ describe("fileOverview with every directory opened", () => {
       file("web/Guide.tsx", [4]),
       file("web/Guide.test.tsx", [5]),
     ];
-    const overview = opened(input(files, { callGraph: [call(1, 2)] }), tourOf(files));
+    const overview = opened(input(files, { callGraph: [call(1, 2)] }), flowOf(files));
     expect(overview.strip.map((node) => [node.key, node.row])).toEqual([
       ["CONTRIBUTING.md", -1],
       ["web/Guide.tsx", -1],
@@ -271,7 +275,7 @@ describe("fileOverview with every directory opened", () => {
     const proofs: MechanicalProof[] = [
       { hunkId: h(3), path: "pnpm-lock.yaml", kind: "generated", detail: "lockfile" },
     ];
-    const overview = opened(input(files, { proofs, callGraph: [call(1, 2)] }), tourOf(files));
+    const overview = opened(input(files, { proofs, callGraph: [call(1, 2)] }), flowOf(files));
     expect([...overview.placeOf.keys()].sort()).toEqual(["a.py", "b.py"]);
   });
 
@@ -289,7 +293,7 @@ describe("fileOverview with every directory opened", () => {
       },
     ];
     const overview = opened(input(files, { risk, callGraph: [call(1, 3)] }), [
-      step(1, "Second hunk first", [2, 1, 3]),
+      flow(1, "Second hunk first", [2, 1, 3]),
     ]);
     const [a] = overview.rows[0] ?? [];
     expect([a?.added, a?.deleted, a?.risk, a?.partIds]).toEqual([6, 0, "logic", [h(2), h(1)]]);
@@ -315,20 +319,10 @@ describe("fileOverview with every directory opened", () => {
       end: n,
       definitions: [],
     }));
-    const steps = [1, 2].map(
-      (n): Flow => ({
-        id: FlowId.parse(`s${n}`),
-        title: `Route ${n}`,
-        explanation: "",
-        partIds: [part(n)],
-        kind: "flow",
-        via: [],
-        entries: [part(n)],
-        codeTitle: null,
-        merged: [],
-      }),
+    const flows = [1, 2].map(
+      (n): Flow => ({ title: `Route ${n}`, partIds: [part(n)], kind: "flow", entries: [part(n)] }),
     );
-    const overview = opened(input([routes], { parts }), steps);
+    const overview = opened(input([routes], { parts }), flows);
     const [node] = [...overview.rows.flat(), ...overview.strip];
     expect(node?.entries).toEqual(["2 routes"]);
     expect(node?.partIds).toEqual([part(1), part(2)]);
@@ -346,14 +340,14 @@ describe("fileOverview with every directory opened", () => {
       file("tools/cli.py", [5]),
       file("app/service.py", [6]),
     ];
-    const steps = [
-      step(1, "GET /a", [1, 6], [1]),
-      step(2, "/b: PUT, DELETE", [2, 3], [2, 3]),
-      step(3, "Page: Setup", [4], [4]),
-      step(4, "Command: main in cli.py", [5], [5]),
+    const flows = [
+      flow(1, "GET /a", [1, 6], [1]),
+      flow(2, "/b: PUT, DELETE", [2, 3], [2, 3]),
+      flow(3, "Page: Setup", [4], [4]),
+      flow(4, "Command: main in cli.py", [5], [5]),
     ];
     const callGraph = [call(1, 6), call(2, 6), call(4, 6), call(5, 6)];
-    const overview = opened(input(files, { callGraph }), steps);
+    const overview = opened(input(files, { callGraph }), flows);
     const entries = new Map(overview.rows.flat().map((node) => [node.label, node.entries]));
     expect(Object.fromEntries(entries)).toEqual({
       "routes.py": ["GET /a"],
@@ -364,21 +358,13 @@ describe("fileOverview with every directory opened", () => {
     });
   });
 
-  it("reads a page's and a command's entries from the code's title when the model titled them", () => {
-    const files = [
-      file("web/routes/Setup.tsx", [4]),
-      file("tools/cli.py", [5]),
-      file("app/s.py", [6]),
-    ];
-    const titled = (n: number, codeTitle: string, hunks: readonly number[]) => ({
-      ...step(n, "What a user sees", hunks, hunks),
-      codeTitle,
-    });
-    const steps = [titled(3, "Page: Setup", [4]), titled(4, "Command: main in cli.py", [5])];
-    const overview = opened(input(files, { callGraph: [call(4, 6), call(5, 6)] }), steps);
-    const entries = new Map(overview.rows.flat().map((node) => [node.label, node.entries]));
-    expect(entries.get("Setup.tsx")).toEqual(["Page: Setup"]);
-    expect(entries.get("cli.py")).toEqual(["Command: main"]);
+  it("gives a file no flow lists its box all the same, after the flows' files", () => {
+    const files = [file("app/a.py", [1]), file("lib/z.py", [2]), file("lib/b.py", [3])];
+    const overview = overviewOf(input(files), [flow(1, "GET /a", [1], [1])]);
+    const nodes = [...overview.rows.flat(), ...overview.strip];
+    expect(nodes.map((node) => node.label)).toEqual(["app/", "lib/"]);
+    expect(nodes[1]?.partIds).toEqual([h(3), h(2)]);
+    expect(overview.placeOf.get("lib/z.py")).toBe("group:lib");
   });
 
   it("gives two files with one name distinct labels", () => {
@@ -428,7 +414,7 @@ describe("fileOverview with every directory opened", () => {
       const proofs = chosen.flatMap((path, at): MechanicalProof[] =>
         next(5) === 0 ? [{ hunkId: h(at + 1), path, kind: "whitespace", detail: "spaces" }] : [],
       );
-      const overview = fileOverview(input(files, { callGraph, proofs }), tourOf(files));
+      const overview = overviewOf(input(files, { callGraph, proofs }), flowOf(files));
       const proved = new Set(proofs.map((proof) => proof.path));
       const toReview = chosen.filter((path) => !proved.has(path)).sort();
       const asNode = [...overview.rows.flat(), ...overview.strip].flatMap((node) => node.paths);
@@ -470,7 +456,7 @@ describe("fileOverview outside the pull request", () => {
           usedBy(1, "main", ["jobs/sync.py"]),
         ],
       }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(rowsOf(overview)).toEqual([["main.py"], ["store.py"], ["sync.py", "test_sync.py"]]);
     const sync = overview.rows[2]?.[0];
@@ -497,7 +483,7 @@ describe("fileOverview outside the pull request", () => {
     const files = [file("app/store.py", [1])];
     const overview = opened(
       input(files, { unchangedCallers: [usedBy(1, "save", ["jobs/sync.py"])] }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(rowsOf(overview)).toEqual([["store.py"], ["sync.py"]]);
     expect(overview.strip).toEqual([]);
@@ -511,7 +497,7 @@ describe("fileOverview outside the pull request", () => {
     ];
     const overview = opened(
       input(files, { unchangedCallers: [usedBy(1, "save", paths)] }),
-      tourOf(files),
+      flowOf(files),
     );
     const outside = overview.rows[1] ?? [];
     expect(outside.map((node) => [node.key, node.label, node.paths.length, node.uses])).toEqual([
@@ -527,7 +513,7 @@ describe("fileOverview outside the pull request", () => {
         callGraph: [call(2, 1)],
         unchangedCallers: [usedBy(2, "make_store", ["tests/test_other.py"])],
       }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(overview.edges.some((edge) => edge.outside)).toBe(false);
   });
@@ -555,7 +541,7 @@ describe("fileOverview by directory", () => {
       risk: [contract(1)],
       callGraph: [call(1, 3), call(1, 2), call(5, 1)],
     });
-    const overview = fileOverview(analysis, tourOf(files));
+    const overview = overviewOf(analysis, flowOf(files));
     expect(rowsOf(overview)).toEqual([["api/"], ["svc/"]]);
     expect(overview.rows[0]?.[0]).toMatchObject({
       key: "group:api",
@@ -577,7 +563,7 @@ describe("fileOverview by directory", () => {
       file(`${core}/pgo/Profile.java`, [3]),
       file(`${core}/pgo/Recorder.java`, [4]),
     ];
-    const overview = fileOverview(input(files), tourOf(files));
+    const overview = overviewOf(input(files), flowOf(files));
     expect(overview.strip.map((node) => [node.key, node.label])).toEqual([
       [`group:${core}`, "substratevm/src/com.oracle.svm.core/"],
       [`group:${core}/pgo`, "substratevm/src/com.oracle.svm.core/pgo/"],
@@ -591,7 +577,7 @@ describe("fileOverview by directory", () => {
       file("api/routes.py", [3]),
       file("api/models.py", [4]),
     ];
-    const overview = fileOverview(
+    const overview = overviewOf(
       input(files, {
         callGraph: [
           call(1, 2),
@@ -599,7 +585,7 @@ describe("fileOverview by directory", () => {
           { ...call(1, 4, "Item"), use: "type" },
         ],
       }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(overview.edges).toEqual([
       {
@@ -621,27 +607,27 @@ describe("fileOverview by directory", () => {
     ];
     const registers = { from: "http/app.py", to: "http/routes/items.py" };
     // routes calls two files of http; http imports one of routes.
-    const heavier = fileOverview(
+    const heavier = overviewOf(
       input(files, { fileLinks: [registers], callGraph: [call(3, 2), call(3, 1)] }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(rowsOf(heavier)).toEqual([["http/routes/"], ["http/"]]);
     expect(heavier.edges.filter((edge) => edge.back).map((edge) => edge.from)).toEqual([
       "group:http",
     ]);
     // On a tie, the edge into the directory read first points up, as for files.
-    const tied = fileOverview(
+    const tied = overviewOf(
       input(files, { fileLinks: [registers], callGraph: [call(3, 2)] }),
-      tourOf(files),
+      flowOf(files),
     );
     expect(rowsOf(tied)).toEqual([["http/"], ["http/routes/"]]);
   });
 
   it("opens a directory in place to its files", () => {
     const files = [file("api/routes.py", [1]), file("api/models.py", [2]), file("svc/run.py", [3])];
-    const overview = fileOverview(
+    const overview = overviewOf(
       input(files, { callGraph: [call(1, 3), call(2, 3)] }),
-      tourOf(files),
+      flowOf(files),
       new Set([groupKey("api")]),
     );
     expect(overview.rows.flat().map((node) => node.key)).toEqual([

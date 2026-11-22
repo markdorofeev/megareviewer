@@ -12,7 +12,6 @@ export {
   smallFeatureInput,
   smallFeatureIntent,
   smallFeaturePublication,
-  smallFeatureSkeleton,
 } from "./small-feature-analysis.ts";
 export { smallFeatureStatus } from "./small-feature-status.ts";
 export { smallFeatureThreadList, smallFeatureThreads } from "./small-feature-threads.ts";

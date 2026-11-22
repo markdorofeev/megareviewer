@@ -19,7 +19,7 @@ import {
 import {
   classifyByRules,
   codeFlows,
-  type Flows,
+  type Flow,
   joinParts,
   PullRequest,
   type RiskAssessment,
@@ -46,7 +46,7 @@ export interface Measured {
   readonly parts: readonly HunkPart[];
   /** How many candidate parts prep cut, before joining back. */
   readonly candidates: number;
-  readonly flows: Flows;
+  readonly flows: readonly Flow[];
   /** Read from a local checkout at the head commit; none without one. */
   readonly unchangedCallers: readonly UnchangedCallers[];
   /** Files the PR changes that aren't in the cache, so they weren't parsed. */
@@ -140,7 +140,7 @@ export const counts = (measured: Measured) => {
   );
   const calls = callGraph.filter((hint) => hint.use === "call");
   const split = new Set(measured.parts.map((part) => part.hunkId)).size;
-  const placed = flows.steps.flatMap((step) => step.partIds);
+  const placed = flows.flatMap((flow) => flow.partIds);
   const expected = files
     .flatMap((file) => file.hunks)
     .filter((hunk) => !measured.proofs.some((proof) => proof.hunkId === hunk.id))
@@ -151,15 +151,7 @@ export const counts = (measured: Measured) => {
   return {
     largestFlow: Math.max(
       0,
-      ...flows.steps.filter((step) => step.kind === "flow").map((step) => step.partIds.length),
-    ),
-    crossStepReferences: flows.steps.reduce((sum, step) => sum + step.via.length, 0),
-    destinationSummaries: flows.steps.reduce(
-      (sum, step) =>
-        sum +
-        new Set(step.via.map((id) => flows.steps.findIndex((other) => other.partIds.includes(id))))
-          .size,
-      0,
+      ...flows.filter((flow) => flow.kind === "flow").map((flow) => flow.partIds.length),
     ),
     missingParts: expected.filter((id) => !placed.includes(id)).length,
     duplicateParts: placed.length - new Set(placed).size,
@@ -184,8 +176,7 @@ export const counts = (measured: Measured) => {
   };
 };
 
-export const overviewOf = (measured: Measured): FileOverview =>
-  fileOverview(measured, measured.flows.steps);
+export const overviewOf = (measured: Measured): FileOverview => fileOverview(measured);
 
 /** The overview's rows and strip, one line each, with entries, flags and badges. */
 export const overviewLines = ({ rows, strip }: FileOverview): string[] => {
@@ -217,10 +208,9 @@ export const report = (measured: Measured): string => {
     out.push(`  ${file.path}  +${added} -${deleted}  hunks ${risks}`);
   }
   out.push("", "Flows");
-  measured.flows.steps.forEach((step, at) => {
-    const via = step.via.length > 0 ? `, ${step.via.length} via` : "";
-    const hunks = step.partIds.length === 1 ? "1 part" : `${step.partIds.length} parts`;
-    out.push(`  ${at + 1}. [${step.kind}] ${step.title}  (${hunks}${via})`);
+  measured.flows.forEach((flow, at) => {
+    const parts = flow.partIds.length === 1 ? "1 part" : `${flow.partIds.length} parts`;
+    out.push(`  ${at + 1}. [${flow.kind}] ${flow.title}  (${parts})`);
   });
   const pathOfPart = (id: PartId) =>
     measured.files.find((file) => file.hunks.some((hunk) => hunk.id === hunkIdOf(id)))?.path ?? "";

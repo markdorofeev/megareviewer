@@ -10,7 +10,6 @@ import {
   type AnalysisKey,
   analysisId,
   DecisionId,
-  FlowId,
   type PullRequest,
   type RiskAssessment,
 } from "../../../src/domain/review/index.ts";
@@ -189,22 +188,14 @@ export const syntheticAnalysisView = ({
         lines: null,
       },
     ],
-    flows: {
-      steps: directories.map((directory, at) => ({
-        id: FlowId.parse(`s${at + 1}`),
-        title: directory === "" ? "Top level" : directory,
-        explanation: `The functions of ${directory === "" ? "the top level" : directory}.`,
-        partIds: files
-          .filter((file) => directoryOf(file.path) === directory)
-          .flatMap((file) => file.hunks.map((hunk) => hunk.id)),
-        kind: "flow" as const,
-        via: [],
-        entries: [],
-        codeTitle: null,
-        merged: [],
-      })),
-      builtBy: "code",
-    },
+    flows: directories.map((directory) => ({
+      title: directory === "" ? "Top level" : directory,
+      partIds: files
+        .filter((file) => directoryOf(file.path) === directory)
+        .flatMap((file) => file.hunks.map((hunk) => hunk.id)),
+      kind: "flow" as const,
+      entries: [],
+    })),
     warnings: [],
     usage: [],
   };

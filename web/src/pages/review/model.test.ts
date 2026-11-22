@@ -4,13 +4,11 @@ import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fi
 import {
   byTreePath,
   changeTotals,
-  flowSteps,
   gapBetween,
   mapFiles,
   mechanicalCount,
   parseLayout,
   partIndex,
-  partsInPathOrder,
   pointPlaces,
   trailingProofs,
 } from "./model.ts";
@@ -44,40 +42,6 @@ describe("partIndex", () => {
 
   it("skips IDs it doesn't know", () => {
     expect(partIndex({ ...analysis, files: [] }).items([h.dependency])).toEqual([]);
-  });
-});
-
-describe("flowSteps", () => {
-  it("is the flows when they cover every non-mechanical hunk", () => {
-    expect(flowSteps(analysis, partIndex(analysis))).toBe(analysis.flows?.steps);
-  });
-
-  it("adds a step for non-mechanical hunks the flows miss, so none goes unshown", () => {
-    const steps = analysis.flows?.steps ?? [];
-    const partial: Analysis = {
-      ...analysis,
-      flows: { steps: steps.slice(0, 2), builtBy: "model" },
-    };
-    const result = flowSteps(partial, partIndex(partial));
-    expect(result).toHaveLength(3);
-    expect(result[2]).toMatchObject({
-      id: "s3",
-      title: "Changes the flows left out",
-      partIds: [h.receiptFormatting, h.dependency],
-    });
-  });
-});
-
-describe("reading order", () => {
-  it("lists non-mechanical hunks by path, directories first", () => {
-    expect(partsInPathOrder(analysis, partIndex(analysis))).toEqual([
-      h.routeImports,
-      h.receiptRoute,
-      h.receiptFormatting,
-      p.retry,
-      p.cache,
-      h.dependency,
-    ]);
   });
 });
 

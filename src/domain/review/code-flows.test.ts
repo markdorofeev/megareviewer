@@ -10,11 +10,10 @@ import {
 import {
   type CodeFlowsInput,
   codeFlows,
-  Flows,
+  Flow,
   joinParts,
   looksGenerated,
   type RiskAssessment,
-  validateFlows,
 } from "./index.ts";
 
 const h = (n: number): HunkId => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
@@ -75,6 +74,18 @@ const contract = (...ns: number[]): RiskAssessment[] =>
 const all = (files: readonly FileChange[]) =>
   new Set(files.flatMap((f) => f.hunks.map((one) => one.id)));
 
+/** Every part the flows read, sorted: each once when the flows place every part once. */
+const placed = (flows: readonly Flow[]): PartId[] => flows.flatMap((flow) => flow.partIds).sort();
+
+/** The parts of the required hunks, sorted: a hunk that isn't split is one part. */
+const requiredParts = (required: ReadonlySet<HunkId>, parts: readonly HunkPart[]): PartId[] =>
+  [...required]
+    .flatMap((id): PartId[] => {
+      const own = parts.filter((part) => part.hunkId === id).map((part) => part.id);
+      return own.length > 0 ? own : [id];
+    })
+    .sort();
+
 const flowsOf = (files: readonly FileChange[], options: Partial<CodeFlowsInput> = {}) => {
   const required = options.required ?? all(files);
   const flows = codeFlows({
@@ -85,22 +96,14 @@ const flowsOf = (files: readonly FileChange[], options: Partial<CodeFlowsInput> 
     definitions: new Map(),
     ...options,
   });
-  expect(validateFlows(flows, required, options.parts)).toEqual([]);
-  expect(Flows.parse(flows)).toEqual(flows);
-  // `via` only names hunks earlier steps read.
-  flows.steps.forEach((step, at) => {
-    const earlier = new Set(flows.steps.slice(0, at).flatMap((s) => s.partIds));
-    for (const id of step.via) expect(earlier.has(id)).toBe(true);
-  });
+  expect(placed(flows)).toEqual(requiredParts(required, options.parts ?? []));
+  for (const flow of flows) expect(Flow.parse(flow)).toEqual(flow);
   return flows;
 };
 
-/** Each step as its title and hunk numbers. */
-const shape = (flows: Flows) =>
-  flows.steps.map((step) => [
-    step.title,
-    step.partIds.map((id) => Number.parseInt(id.slice(2), 16)),
-  ]);
+/** Each flow as its title and hunk numbers. */
+const shape = (flows: readonly Flow[]) =>
+  flows.map((flow) => [flow.title, flow.partIds.map((id) => Number.parseInt(id.slice(2), 16))]);
 
 const route = (verb: string, path: string) => `@router.${verb}("${path}")`;
 
@@ -113,8 +116,7 @@ describe("codeFlows", () => {
     ];
     const flows = flowsOf(files, { callGraph: [hint(1, 2), hint(2, 3)] });
     expect(shape(flows)).toEqual([["PUT /token", [1, 2, 3]]]);
-    expect(flows.steps[0]?.kind).toBe("flow");
-    expect(flows.steps[0]?.explanation).toBe("Reads routes.py, service.py and store.py.");
+    expect(flows[0]?.kind).toBe("flow");
   });
 
   it("reads the code that registers an entry first in its flow", () => {
@@ -126,7 +128,7 @@ describe("codeFlows", () => {
     const flows = flowsOf(files, { callGraph: [hint(1, 2), hint(2, 3)] });
     expect(shape(flows)).toEqual([["GET /a", [1, 2, 3]]]);
     // The flow starts at the route, not at the code that registers it.
-    expect(flows.steps[0]?.entries).toEqual([h(2)]);
+    expect(flows[0]?.entries).toEqual([h(2)]);
   });
 
   it("reads shared code once before both consuming flows", () => {
@@ -141,10 +143,6 @@ describe("codeFlows", () => {
       ["GET /a", [1]],
       ["GET /b", [2]],
     ]);
-    expect(flows.steps[1]?.via).toEqual([h(3)]);
-    expect(flows.steps[2]?.via).toEqual([h(3)]);
-    expect(flows.steps[0]?.explanation).toBe("Reads shared.py; used by steps 2 and 3.");
-    expect(flows.steps[2]?.explanation).toBe("Reads b.py; passes through step 1.");
   });
 
   it("makes one flow of entry hunks that change the same definition", () => {
@@ -155,7 +153,7 @@ describe("codeFlows", () => {
     ]);
     const flows = flowsOf(files, { definitions });
     expect(shape(flows)).toEqual([["Command: main in cli.py", [1, 2]]]);
-    expect(flows.steps[0]?.entries).toEqual([h(1), h(2)]);
+    expect(flows[0]?.entries).toEqual([h(1), h(2)]);
   });
 
   it("orders flows that reach contract code first, then routes, pages, commands and roots", () => {
@@ -189,7 +187,7 @@ describe("codeFlows", () => {
     const flows = flowsOf(files, { callGraph: [hint(1, 2)] });
     expect(shape(flows)).toEqual([["app/a.py", [1, 2]]]);
     // A root isn't an entry point.
-    expect(flows.steps[0]?.entries).toEqual([]);
+    expect(flows[0]?.entries).toEqual([]);
   });
 
   it("joins a root whose code another flow already read to that flow", () => {
@@ -244,7 +242,7 @@ describe("codeFlows", () => {
     ]);
   });
 
-  it("puts what no flow runs into supporting steps, contract ones first", () => {
+  it("puts what no flow runs into supporting flows, contract ones first", () => {
     const files = [
       one(1, "web/openapi.json"),
       one(2, "web/src/api/schema.d.ts"),
@@ -264,13 +262,9 @@ describe("codeFlows", () => {
       ["Tests", [4]],
       ["Other changes in scripts", [6]],
     ]);
-    expect(
-      flows.steps.every((step) => step.kind === "supporting" && step.entries.length === 0),
-    ).toBe(true);
-    expect(flows.steps[1]?.explanation).toBe(
-      "2 files: openapi.json and schema.d.ts. No flow runs them.",
+    expect(flows.every((flow) => flow.kind === "supporting" && flow.entries.length === 0)).toBe(
+      true,
     );
-    expect(flows.steps[0]?.explanation).toBe("1 file: Guide.tsx. No flow runs it.");
   });
 
   it("keeps a generated file a flow only names as a type with the API schema", () => {
@@ -314,25 +308,11 @@ describe("codeFlows", () => {
     ]);
   });
 
-  it("lists at most three files in an explanation", () => {
-    const files = [
-      one(1, "api/routes.py", route("get", "/a")),
-      ...[2, 3, 4, 5].map((n) => one(n, `app/m${n}.py`)),
-    ];
-    const callGraph = [hint(1, 2), hint(2, 3), hint(3, 4), hint(4, 5)];
-    expect(flowsOf(files, { callGraph }).steps[0]?.explanation).toBe(
-      "Reads routes.py, m2.py, m3.py and 2 more.",
-    );
-  });
-
   it("is empty when nothing is required", () => {
-    expect(flowsOf([one(1, "a.ts")], { required: new Set() })).toEqual({
-      steps: [],
-      builtBy: "code",
-    });
+    expect(flowsOf([one(1, "a.ts")], { required: new Set() })).toEqual([]);
   });
 
-  it("reads a pull request shaped like delphi-code #2 as three flows and supporting steps", () => {
+  it("reads a pull request shaped like delphi-code #2 as three flows and supporting ones", () => {
     const hosts = "app/infrastructure/hosts.py";
     const files = [
       one(1, "app/http_api/app.py"),
@@ -407,13 +387,6 @@ describe("codeFlows", () => {
       ["Other changes in web/src/picker", [19]],
       ["Docs", [18]],
     ]);
-    expect(flows.steps[2]?.via).toEqual([h(6), h(9)]);
-    expect(flows.steps[3]?.via).toEqual([h(2)]);
-    expect(flows.steps[3]?.explanation).toBe(
-      "Reads setup.tsx and ConnectionsSection.tsx; tested in setup.test.tsx; sends" +
-        " GET /api/account-connections (step 2), DELETE /api/account-connections/{domain}/token" +
-        " (step 2) and PUT /api/account-connections/{domain}/token (step 2).",
-    );
   });
 
   it("covers every required hunk exactly once, over random pull requests", () => {
@@ -477,14 +450,9 @@ describe("codeFlows", () => {
       ["GET /a", [1, 7]],
       ["PUT /b", [2]],
     ]);
-    expect(flows.steps[0]?.explanation).toBe(
-      "Reads service.py and store.py; tested in test_service.py; used by steps 3 and 4.",
-    );
-    expect(flows.steps[2]?.via).toEqual(expect.arrayContaining([h(3), h(4), h(6)]));
-    expect(flows.steps[3]?.via).toEqual(expect.arrayContaining([h(3), h(4), h(6)]));
   });
 
-  it("lists a shared section's users in step order, whichever reaches it first", () => {
+  it("reads a shared section first, titled by where the flows enter it", () => {
     const flows = flowsOf(
       [
         one(1, "api/a.py", route("get", "/a")),
@@ -496,9 +464,6 @@ describe("codeFlows", () => {
       { callGraph: [hint(2, 4), hint(3, 4), hint(4, 5), hint(1, 5)] },
     );
     expect(shape(flows)[0]).toEqual(["Shared: app/refresh.py", [4, 5]]);
-    expect(flows.steps[0]?.explanation).toBe(
-      "Reads refresh.py and read.py; used by steps 2, 3 and 4.",
-    );
   });
 
   it("reads a shared call cycle once", () => {
@@ -512,8 +477,8 @@ describe("codeFlows", () => {
       { callGraph: [hint(1, 3), hint(2, 4), hint(3, 4), hint(4, 3)] },
     );
 
-    expect(flows.steps[0]?.partIds).toEqual([h(3), h(4)]);
-    expect(flows.steps[0]?.entries).toEqual([]);
+    expect(flows[0]?.partIds).toEqual([h(3), h(4)]);
+    expect(flows[0]?.entries).toEqual([]);
   });
 });
 
@@ -576,13 +541,12 @@ describe("codeFlows with parts", () => {
   const flows = flowsOf(files, { parts, callGraph });
 
   it("reads each route of a split hunk in its own flow, the router first in the first it registers", () => {
-    expect(flows.steps.map((step) => [step.title, step.partIds])).toEqual([
+    expect(flows.map((flow) => [flow.title, flow.partIds])).toEqual([
       ["GET /items", [p(1, 2), p(3, 1)]],
       ["PUT /items/{id}", [h(2), p(1, 1), p(1, 3), p(3, 2), p(4, 1)]],
       ["DELETE /items/{id}", [p(1, 4), p(3, 3), p(4, 2)]],
     ]);
-    expect(flows.steps.map((step) => step.entries)).toEqual([[p(1, 2)], [p(1, 3)], [p(1, 4)]]);
-    expect(flows.steps[2]?.via).toEqual([p(1, 1)]);
+    expect(flows.map((flow) => flow.entries)).toEqual([[p(1, 2)], [p(1, 3)], [p(1, 4)]]);
   });
 
   describe("requests", () => {
@@ -620,17 +584,12 @@ describe("codeFlows with parts", () => {
     });
 
     it("passes through the routes a flow requests without walking into them", () => {
-      const page = withRequests.steps.find((step) => step.title === "Page: Items");
+      const page = withRequests.find((flow) => flow.title === "Page: Items");
       expect(page?.partIds).toEqual([h(5), h(6)]);
-      expect(page?.via).toEqual([p(1, 2), p(1, 4), p(1, 3)]);
-      expect(page?.explanation).toBe(
-        "Reads Items.tsx and ItemsTable.tsx; sends GET /items (step 1), PUT /items/{id} (step 2)" +
-          " and DELETE /items/{id} (step 3).",
-      );
     });
 
     it("puts a flow after the flows of the routes it requests", () => {
-      expect(withRequests.steps.map((step) => step.title)).toEqual([
+      expect(withRequests.map((flow) => flow.title)).toEqual([
         "GET /items",
         "PUT /items/{id}",
         "DELETE /items/{id}",
@@ -639,7 +598,7 @@ describe("codeFlows with parts", () => {
     });
 
     it("joins a test to the flow of the route it requests, before the code it calls", () => {
-      expect(withRequests.steps[1]?.partIds.at(-1)).toBe(h(7));
+      expect(withRequests[1]?.partIds.at(-1)).toBe(h(7));
     });
 
     it("keeps a request cycle in order", () => {
@@ -648,7 +607,7 @@ describe("codeFlows with parts", () => {
         callGraph: [...requests, request(p(1, 2), h(6), 12, "GET /x")],
         definitions: new Map([[h(5), ["Items"]]]),
       });
-      expect(cycle.steps.map((step) => step.title)).toContain("Page: Items");
+      expect(cycle.map((flow) => flow.title)).toContain("Page: Items");
     });
   });
 
@@ -656,7 +615,7 @@ describe("codeFlows with parts", () => {
     const joined = joinParts(flows, parts, callGraph);
     expect(joined.parts).toEqual(parts);
     expect(joined.flows).toEqual(flows);
-    expect(validateFlows(joined.flows, all(files), joined.parts)).toEqual([]);
+    expect(placed(joined.flows)).toEqual(requiredParts(all(files), joined.parts));
   });
 
   it("doesn't take a part named on a route line, other than the router, for wiring", () => {
@@ -665,12 +624,12 @@ describe("codeFlows with parts", () => {
       call(p(1, 2), p(3, 3), 11, "ItemsResponse"),
       call(p(1, 3), p(3, 3), 13, "ItemsResponse"),
     ];
-    const steps = flowsOf(files, { parts, callGraph: withModel }).steps;
+    const read = flowsOf(files, { parts, callGraph: withModel });
     // ItemsResponse is named on GET's and PUT's route lines, but it's no router: it's code both
     // read, so it's shared, and GET still starts at its route.
-    expect(steps[0]?.title).toMatch(/^Shared: /);
-    expect(steps[0]?.partIds).toContain(p(3, 3));
-    expect(steps.map((step) => [step.title, step.partIds[0]])).toContainEqual([
+    expect(read[0]?.title).toMatch(/^Shared: /);
+    expect(read[0]?.partIds).toContain(p(3, 3));
+    expect(read.map((flow) => [flow.title, flow.partIds[0]])).toContainEqual([
       "GET /items",
       p(1, 2),
     ]);

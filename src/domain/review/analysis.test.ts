@@ -4,6 +4,7 @@ import {
   Analysis,
   type AnalysisKey,
   analysisId,
+  type Flow,
   following,
   inProgress,
   MODEL_STAGES,
@@ -149,12 +150,36 @@ describe("the steps pass", () => {
 });
 
 describe("the code's flows", () => {
-  it("load from an analysis stored with them under `tour`, steps and IDs intact", () => {
-    const { flows, ...rest } = smallFeatureAnalysis;
-    const stored = JSON.parse(JSON.stringify({ ...rest, tour: flows }));
-    const parsed = Analysis.parse(stored);
+  const { flows, ...rest } = smallFeatureAnalysis;
+  /** A flow as the tour pass's analyses stored it: the model's title, the code's kept aside. */
+  const old = (flow: Flow, at: number) => ({
+    id: `s${at + 1}`,
+    title: `The model's title ${at + 1}`,
+    explanation: "Read by the code.",
+    partIds: flow.partIds,
+    kind: flow.kind,
+    via: [],
+    entries: flow.entries,
+    codeTitle: flow.title,
+    merged: [],
+  });
+  const stored = (fields: Record<string, unknown>) =>
+    Analysis.parse(JSON.parse(JSON.stringify({ ...rest, ...fields })));
+
+  it("load from an analysis stored with them under `tour`, titled by the code", () => {
+    const parsed = stored({ tour: { steps: (flows ?? []).map(old), builtBy: "model" } });
     expect(parsed.flows).toEqual(flows);
-    expect(parsed.flows?.steps.map((step) => step.id)).toEqual(flows?.steps.map((step) => step.id));
     expect(parsed).not.toHaveProperty("tour");
+  });
+
+  it("load from `flows` stored as steps, and as the array they are now", () => {
+    const steps = (flows ?? []).map((flow, at) => ({
+      ...old(flow, at),
+      title: flow.title,
+      codeTitle: null,
+    }));
+    expect(stored({ flows: { steps, builtBy: "code" } }).flows).toEqual(flows);
+    expect(stored({ flows }).flows).toEqual(flows);
+    expect(stored({ flows: null }).flows).toBeNull();
   });
 });

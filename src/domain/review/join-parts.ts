@@ -9,10 +9,10 @@ import {
   renameHints,
   type UnchangedCallers,
 } from "../diff/index.ts";
-import type { Flows } from "./flows.ts";
+import type { Flow } from "./flows.ts";
 
 export interface JoinedParts {
-  readonly flows: Flows;
+  readonly flows: readonly Flow[];
   /** The parts left, of the hunks still split. */
   readonly parts: readonly HunkPart[];
   readonly callGraph: readonly CallGraphHint[];
@@ -21,28 +21,28 @@ export interface JoinedParts {
 }
 
 /**
- * Joins consecutive candidate parts of a hunk that the flows put in one step, and makes a hunk whole
+ * Joins consecutive candidate parts of a hunk that the flows put in one flow, and makes a hunk whole
  * again when all of its parts did. Parts left are renumbered, and everything naming them remapped.
  */
 export const joinParts = (
-  flows: Flows,
+  flows: readonly Flow[],
   candidates: readonly HunkPart[],
   callGraph: readonly CallGraphHint[],
   unchangedCallers: readonly UnchangedCallers[] = [],
   callSites: readonly CallSite[] = [],
 ): JoinedParts => {
-  const stepOf = new Map<PartId, number>();
-  flows.steps.forEach((step, at) => {
-    for (const id of step.partIds) if (!stepOf.has(id)) stepOf.set(id, at);
+  const flowOf = new Map<PartId, number>();
+  flows.forEach((flow, at) => {
+    for (const id of flow.partIds) if (!flowOf.has(id)) flowOf.set(id, at);
   });
   const rename = new Map<PartId, PartId>();
   const parts: HunkPart[] = [];
   for (const [hunkId, ofHunk] of partsByHunk(candidates)) {
-    // Runs of consecutive parts in one step, each kept by its first part.
+    // Runs of consecutive parts in one flow, each kept by its first part.
     const groups: { first: HunkPart; last: HunkPart; parts: HunkPart[] }[] = [];
     for (const part of ofHunk) {
       const group = groups.at(-1);
-      if (group !== undefined && stepOf.get(group.first.id) === stepOf.get(part.id)) {
+      if (group !== undefined && flowOf.get(group.first.id) === flowOf.get(part.id)) {
         group.parts.push(part);
         group.last = part;
       } else groups.push({ first: part, last: part, parts: [part] });
@@ -66,15 +66,11 @@ export const joinParts = (
   const renamed = (id: PartId): PartId => rename.get(id) ?? id;
   const each = (ids: readonly PartId[]): PartId[] => [...new Set(ids.map(renamed))];
   return {
-    flows: {
-      ...flows,
-      steps: flows.steps.map((step) => ({
-        ...step,
-        partIds: each(step.partIds),
-        via: each(step.via),
-        entries: each(step.entries),
-      })),
-    },
+    flows: flows.map((flow) => ({
+      ...flow,
+      partIds: each(flow.partIds),
+      entries: each(flow.entries),
+    })),
     parts,
     callGraph: renameHints(callGraph, renamed),
     unchangedCallers: unchangedCallers.map((callers) => ({

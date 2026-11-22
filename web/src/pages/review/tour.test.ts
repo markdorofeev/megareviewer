@@ -11,7 +11,7 @@ import { fileOverview } from "./overview.ts";
 import { depthText, noTourOf, rowsOf, tourOf } from "./tour.ts";
 
 const analysis = tourAnalysisView.analysis;
-const overview = fileOverview(analysis, analysis.flows?.steps ?? []);
+const overview = fileOverview(analysis);
 const points = pointsOf(analysis);
 
 const view = (changes: Partial<Analysis> = {}) => {

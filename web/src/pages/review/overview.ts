@@ -141,7 +141,7 @@ const routesLabel = (routes: readonly Route[]): string => {
  */
 const entryLabels = (
   analysis: OverviewInput,
-  steps: readonly Flow[],
+  flows: readonly Flow[],
 ): ReadonlyMap<string, readonly string[]> => {
   const byHunk = partsByHunk(analysis.parts);
   const located = new Map(
@@ -156,9 +156,9 @@ const entryLabels = (
   };
   // A file's routes are one label, though each may start a flow of its own: where the first was.
   const routesOf = new Map<string, Route[]>();
-  for (const step of steps) {
+  for (const flow of flows) {
     const byFile = new Map<string, PartId[]>();
-    for (const id of step.entries) {
+    for (const id of flow.entries) {
       const path = located.get(id)?.file.path;
       if (path !== undefined) byFile.set(path, [...(byFile.get(path) ?? []), id]);
     }
@@ -173,8 +173,8 @@ const entryLabels = (
         routesOf.set(path, [...(routesOf.get(path) ?? []), ...routes]);
       }
       if (new Set(routes.map(routeKey)).size === ids.length && routes.length > 0) continue;
-      // The code names a flow by its entries; the model's title doesn't.
-      for (const part of (step.codeTitle ?? step.title).split("; ")) {
+      // The code names a flow by its entries.
+      for (const part of flow.title.split("; ")) {
         if (part.startsWith("Page: ")) add(path, part);
         const command = /^Command: (\S+) in (.+)$/.exec(part);
         if (command !== null && command[2] === basename(path)) add(path, `Command: ${command[1]}`);
@@ -266,7 +266,7 @@ const linksBetweenFiles = (
 
 export type OverviewInput = Pick<
   Analysis,
-  "files" | "parts" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated"
+  "files" | "parts" | "proofs" | "risk" | "callGraph" | "fileLinks" | "generated" | "flows"
 > &
   Partial<Pick<Analysis, "unchangedCallers">>;
 
@@ -278,13 +278,19 @@ export type OverviewInput = Pick<
  */
 export const fileOverview = (
   analysis: OverviewInput,
-  steps: readonly Flow[],
   expanded: ReadonlySet<string> = new Set(),
 ): FileOverview => {
   const { mechanical, files, pathOfHunk, links } = linksBetweenFiles(analysis);
-  const tourOrder = [...new Set(steps.flatMap((step) => step.partIds))];
-  const rank = new Map(tourOrder.map((id, at) => [id, at]));
-  const rankOf = (id: PartId) => rank.get(id) ?? tourOrder.length;
+  const flows = analysis.flows ?? [];
+  // The flows' order, then any part no flow lists, in path order, so its file keeps its place.
+  const listed = new Set(flows.flatMap((flow) => flow.partIds));
+  const unlisted = [...files]
+    .sort((a, b) => byTreePath(a.path, b.path))
+    .flatMap((file) => piecesOf(file, partsByHunk(analysis.parts)).map((piece) => piece.id))
+    .filter((id) => !mechanical.has(hunkIdOf(id)) && !listed.has(id));
+  const readingOrder = [...new Set([...listed, ...unlisted])];
+  const rank = new Map(readingOrder.map((id, at) => [id, at]));
+  const rankOf = (id: PartId) => rank.get(id) ?? readingOrder.length;
   const generated = new Set(analysis.generated);
 
   // What the nodes show of each file with a hunk to review.
@@ -530,12 +536,12 @@ export const fileOverview = (
 
   // What each node shows.
   const labels = uniqueLabels(paths);
-  const entries = entryLabels(analysis, steps);
+  const entries = entryLabels(analysis, flows);
   const flowsOf = new Map<string, string[]>();
-  for (const step of steps) {
-    if (step.kind !== "flow") continue;
-    for (const path of new Set(step.partIds.flatMap((id) => pathOfHunk.get(hunkIdOf(id)) ?? []))) {
-      flowsOf.set(path, [...(flowsOf.get(path) ?? []), step.title]);
+  for (const flow of flows) {
+    if (flow.kind !== "flow") continue;
+    for (const path of new Set(flow.partIds.flatMap((id) => pathOfHunk.get(hunkIdOf(id)) ?? []))) {
+      flowsOf.set(path, [...(flowsOf.get(path) ?? []), flow.title]);
     }
   }
   const unique = <T>(items: readonly T[]): T[] => [...new Set(items)];

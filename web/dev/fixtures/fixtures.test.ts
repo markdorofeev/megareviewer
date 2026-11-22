@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { AnalysisView, PullRequestListResponse, StatusResponse } from "../../../contracts/index.ts";
 import { hunkIdOf } from "../../../src/domain/diff/index.ts";
 import {
+  type Analysis,
   pointLinesFit,
-  validateFlows,
   validateHunkReferences,
   validateRiskCoverage,
 } from "../../../src/domain/review/index.ts";
@@ -16,6 +16,10 @@ import {
   largeAnalysisView,
   monorepoAnalysisView,
 } from "./index.ts";
+
+/** The parts the flows read, sorted: each once when every part is placed once. */
+const placed = (flows: Analysis["flows"]): string[] =>
+  (flows ?? []).flatMap((flow) => flow.partIds).sort();
 
 describe("mock fixtures", () => {
   it("match the HTTP API contract", () => {
@@ -87,8 +91,12 @@ describe("the fixture analysis", () => {
   });
 
   it("has 4 flows covering every part of every non-mechanical hunk once", () => {
-    expect(analysis.flows?.steps).toHaveLength(4);
-    expect(validateFlows(analysis.flows ?? { steps: [] }, reviewedIds, analysis.parts)).toEqual([]);
+    expect(analysis.flows).toHaveLength(4);
+    const reviewedParts = [...reviewedIds].flatMap((id) => {
+      const own = analysis.parts.filter((part) => part.hunkId === id).map((part) => part.id);
+      return own.length > 0 ? own : [id];
+    });
+    expect(placed(analysis.flows)).toEqual(reviewedParts.sort());
   });
 
   it("references only hunks that exist", () => {
@@ -135,7 +143,7 @@ describe("the large fixture analysis", () => {
     expect(AnalysisView.parse(largeAnalysisView)).toEqual(largeAnalysisView);
     expect(hunks).toHaveLength(240);
     expect(validateRiskCoverage(analysis.risk, hunkIds)).toEqual([]);
-    expect(analysis.flows && validateFlows(analysis.flows, hunkIds)).toEqual([]);
+    expect(placed(analysis.flows)).toEqual([...hunkIds].sort());
   });
 
   it("puts every call on a line its calling hunk shows", () => {
@@ -156,6 +164,6 @@ describe.each([
     const hunkIds = new Set(view.analysis.files.flatMap((file) => file.hunks.map((h) => h.id)));
     expect(AnalysisView.parse(view)).toEqual(view);
     expect(validateRiskCoverage(view.analysis.risk, hunkIds)).toEqual([]);
-    expect(view.analysis.flows && validateFlows(view.analysis.flows, hunkIds)).toEqual([]);
+    expect(placed(view.analysis.flows)).toEqual([...hunkIds].sort());
   });
 });

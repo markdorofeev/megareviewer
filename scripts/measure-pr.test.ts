@@ -51,7 +51,7 @@ describe("measure-pr", () => {
     expect(read).toEqual(pullRequest);
     const measured = await measure(new FakeCodeParser(), read, cached);
     expect(measured.missing).toEqual([]);
-    expect(measured.flows.builtBy).toBe("code");
+    expect(measured.flows.length).toBeGreaterThan(0);
     const found = counts(measured);
     expect(found.hunks).toBe(measured.files.flatMap((file) => file.hunks).length);
     expect(found.callHints).toBe(measured.callGraph.filter((hint) => hint.use === "call").length);

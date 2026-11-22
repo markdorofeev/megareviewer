@@ -7,8 +7,6 @@ import {
   CommentKey,
   DecisionId,
   FindingId,
-  FlowId,
-  type Flows,
   type Intent,
   type ModelCall,
   type ModelPass,
@@ -205,7 +203,6 @@ export const smallFeatureIntent: Intent = {
 };
 
 const d = DecisionId.parse;
-const s = FlowId.parse;
 
 const answered = (pass: ModelPass, startedAt: string, durationMs: number): ModelCall => ({
   pass,
@@ -341,44 +338,21 @@ export const smallFeatureAnalysis: Analysis = {
       lines: null,
     },
   ],
-  flows: {
-    steps: [
-      {
-        id: s("s1"),
-        title: "The new endpoint",
-        explanation: "Requests for a receipt load the user's order and hand it to the renderer.",
-        partIds: [receiptRouteHunk.id, importHunk.id],
-        kind: "flow",
-        via: [],
-        entries: [receiptRouteHunk.id],
-        codeTitle: "GET /orders/:id/receipt",
-        merged: [],
-      },
-      {
-        id: s("s2"),
-        title: "Rendering and caching receipts",
-        explanation: "The receipt is plain text, cached per order for an hour.",
-        partIds: [receiptServiceHunk.id],
-        kind: "flow",
-        via: [],
-        entries: [],
-        codeTitle: "renderReceipt",
-        merged: [],
-      },
-      {
-        id: s("s3"),
-        title: "Configuration",
-        explanation: "New receipt settings, and an unrelated rate limit change.",
-        partIds: [cacheTtlHunk.id, receiptsConfigHunk.id, rateLimitHunk.id],
-        kind: "supporting",
-        via: [],
-        entries: [],
-        codeTitle: "Other changes in config",
-        merged: [],
-      },
-    ],
-    builtBy: "model",
-  },
+  flows: [
+    {
+      title: "GET /orders/:id/receipt",
+      partIds: [receiptRouteHunk.id, importHunk.id],
+      kind: "flow",
+      entries: [receiptRouteHunk.id],
+    },
+    { title: "renderReceipt", partIds: [receiptServiceHunk.id], kind: "flow", entries: [] },
+    {
+      title: "Other changes in config",
+      partIds: [cacheTtlHunk.id, receiptsConfigHunk.id, rateLimitHunk.id],
+      kind: "supporting",
+      entries: [],
+    },
+  ],
   steps: null,
   stepsError: null,
   warnings: [],
@@ -430,17 +404,6 @@ export const smallFeatureAnalysis: Analysis = {
   createdAt: "2026-10-21T09:00:00Z",
   updatedAt: "2026-10-21T09:01:10Z",
   guidance: null,
-};
-
-/** The code's flows of the small-feature PR, which the fixture analysis's flows title. */
-export const smallFeatureSkeleton: Flows = {
-  steps: (smallFeatureAnalysis.flows?.steps ?? []).map((step) => ({
-    ...step,
-    title: step.codeTitle ?? step.title,
-    explanation: "Read by the code.",
-    codeTitle: null,
-  })),
-  builtBy: "code",
 };
 
 /** A valid publication for the small-feature PR: a summary and one inline comment. */

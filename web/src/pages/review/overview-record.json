@@ -1,0 +1,1206 @@
+{
+  "fixture": {
+    "rows": [
+      [
+        {
+          "key": "group:src/routes",
+          "label": "src/routes/",
+          "entries": ["GET /orders/:id/receipt"],
+          "flows": ["The receipt endpoint"],
+          "partIds": ["h_c4a6e74da528af96", "h_476a276015747bfb"],
+          "row": 0
+        }
+      ],
+      [
+        {
+          "key": "group:src/services",
+          "label": "src/services/",
+          "entries": [],
+          "flows": [
+            "The receipt endpoint",
+            "Retrying the tax service",
+            "Dates and prices on the receipt"
+          ],
+          "partIds": ["h_b72d144cfd1ff546.2", "h_b72d144cfd1ff546.1", "h_99d04498495c7faa"],
+          "row": 1
+        }
+      ],
+      [
+        {
+          "key": "outside:src/jobs/email-receipts.ts",
+          "label": "email-receipts.ts",
+          "entries": [],
+          "flows": [],
+          "partIds": ["h_99d04498495c7faa"],
+          "row": 2
+        },
+        {
+          "key": "outside:test/jobs/email-receipts.test.ts",
+          "label": "email-receipts.test.ts",
+          "entries": [],
+          "flows": [],
+          "partIds": ["h_99d04498495c7faa"],
+          "row": 2
+        }
+      ]
+    ],
+    "strip": [
+      {
+        "key": "group:",
+        "label": "./",
+        "entries": [],
+        "flows": [],
+        "partIds": ["h_6decefd2b26ee87a"],
+        "row": -1
+      }
+    ],
+    "through": {
+      "rows": [
+        [
+          {
+            "label": "routes",
+            "entries": ["GET /orders/:id/receipt"]
+          }
+        ],
+        [
+          {
+            "label": "services",
+            "entries": []
+          }
+        ]
+      ],
+      "linked": true,
+      "more": 1
+    }
+  },
+  "large": {
+    "rows": [
+      [
+        {
+          "key": "group:src/module0",
+          "label": "src/module0/",
+          "entries": [],
+          "flows": ["src/module0"],
+          "partIds": [
+            "h_0f59d261bf948c1b",
+            "h_c42a5f2a536610e2",
+            "h_575fe413359c3a2c",
+            "h_af78cf5ef8f44397",
+            "h_184406af45aec3e8",
+            "h_fa16c4425b0bc4bf",
+            "h_66f2734468d56a24",
+            "h_c55f6300d3080daf",
+            "h_1ce22b8a57aa7de5",
+            "h_d4980589b520e8fb",
+            "h_8d58841d5ebf0679",
+            "h_84bf2b424a5842a3",
+            "h_79883d49f70cc8e5",
+            "h_61f7b3ce48833667",
+            "h_30e4dba68282511b",
+            "h_6cab682ee22ffc02",
+            "h_aa2e9508fe4587ff",
+            "h_1b52300d6125e17d",
+            "h_1f5ef670b05ebcbf",
+            "h_cee1850cdf702fb5",
+            "h_80811850bb4ae2a2",
+            "h_a1b5e08a0b7fbc3b",
+            "h_acae1512d159ac75",
+            "h_c8197ac6049d9a46",
+            "h_d44552f5a4163b83",
+            "h_78a2b943074ecb66",
+            "h_4a71296cc8564c9d",
+            "h_44761d21caaca04e",
+            "h_f56689b6aaf2a6e0",
+            "h_b2423b5860c9e370",
+            "h_a1eec1b46a1a286a",
+            "h_52a9bdb8ef87cf12",
+            "h_3dcab097521e2ed0",
+            "h_9d6009cf29769ed0",
+            "h_268aebe4a144ce9e",
+            "h_1e762900a49dee81",
+            "h_83f5a8e33ac21a38",
+            "h_7e214db3bf28ca56",
+            "h_a2a130eb42e61e72",
+            "h_0e0adde25234bb60"
+          ],
+          "row": 0
+        }
+      ],
+      [
+        {
+          "key": "group:src/module1",
+          "label": "src/module1/",
+          "entries": [],
+          "flows": ["src/module1"],
+          "partIds": [
+            "h_9b85b87287ef8e37",
+            "h_3947b2ce2bbbde78",
+            "h_8fafd7676f48dcc7",
+            "h_cd91f6a9427a34e0",
+            "h_5577594532c7ffae",
+            "h_88c6f133eb59f331",
+            "h_64aa8aace2e8f8d8",
+            "h_51099f174311516f",
+            "h_ae018aaa2335d41b",
+            "h_8cbe759b2a531aa2",
+            "h_1408f0a83199e0fe",
+            "h_d5dbe5a439250779",
+            "h_46b4c67882cd65ff",
+            "h_36c1565620636131",
+            "h_615f2efe8544ccdb",
+            "h_f481977a6005c885",
+            "h_eb348ec027cfbc6f",
+            "h_33fe37b6f82082f2",
+            "h_3daf802dba7864bc",
+            "h_17e0db96d7fdaac5",
+            "h_7a4b2cd57b023474",
+            "h_1bdf7a96f1929821",
+            "h_1d1903e9fa2d8c48",
+            "h_e82d0c69f0c08a2d",
+            "h_92c6819b538c9add",
+            "h_22ebacd863ce7c06",
+            "h_cf144c42d06c5fd5",
+            "h_d822e04a34010966",
+            "h_90201d7214bd73da",
+            "h_1ea383f307f431bf",
+            "h_cb671ef42655dbe7",
+            "h_073c5a2e525d6e80",
+            "h_926c53f462c150f2",
+            "h_78abe4c7fc043c0a",
+            "h_3253304376c68214",
+            "h_debf6e1b15ef7906",
+            "h_1d29ae324bf6f9be",
+            "h_00169dfe9ba49559",
+            "h_c43f993f930815d7",
+            "h_8265e156863f0c2a"
+          ],
+          "row": 1
+        }
+      ],
+      [
+        {
+          "key": "group:src/module2",
+          "label": "src/module2/",
+          "entries": [],
+          "flows": ["src/module2"],
+          "partIds": [
+            "h_b39c0d50964210e9",
+            "h_27de87720504676f",
+            "h_3ede5f61649c202e",
+            "h_df84317d71f410c8",
+            "h_6b32b2380a9bace4",
+            "h_632a8223aea45579",
+            "h_91c1bffea91b360f",
+            "h_33b1aeb7a27337d9",
+            "h_ba30da5ddedbdc2d",
+            "h_70436ffbe88b176b",
+            "h_03081cc71537f9d6",
+            "h_41df241a2661bd0d",
+            "h_49ae88a8377b13d7",
+            "h_e41c1f2997fa438f",
+            "h_1c24415157666f96",
+            "h_a640ac55091358b9",
+            "h_b7391ed75433088f",
+            "h_ac7b08486a80395f",
+            "h_3fd658f6e875ab96",
+            "h_b5d7661e3bf49852",
+            "h_851f16f8a12a6a7e",
+            "h_733cdd87aa0fbc66",
+            "h_2263d73bcdfd5ea7",
+            "h_dfa36e9b68c8372d",
+            "h_9bff952e31d7fa9f",
+            "h_e78f656ef8c26208",
+            "h_e59d70922ed9be26",
+            "h_42191b80039a1e3c",
+            "h_53110e73c528b07c",
+            "h_0cd5cb4b7c205704",
+            "h_73bac4b11febd95d",
+            "h_20060de49c76d02e",
+            "h_096dac9c6b0d99f0",
+            "h_95cfa73818a109c4",
+            "h_fd431026b2a6ed0b",
+            "h_545ba4b894666578",
+            "h_e601da10b8c2f2d2",
+            "h_d202e047eb1b870a",
+            "h_1ecec78a184fd2ef",
+            "h_6f7501e8a647050f"
+          ],
+          "row": 2
+        }
+      ],
+      [
+        {
+          "key": "group:src/module3",
+          "label": "src/module3/",
+          "entries": [],
+          "flows": ["src/module3"],
+          "partIds": [
+            "h_62ceaaf1e3e74ff0",
+            "h_951fc2a8aa6718f6",
+            "h_59c00b57d228b6c3",
+            "h_d3ec5080aaaab0e1",
+            "h_b2676894760f6f31",
+            "h_87a70c5bef1264ea",
+            "h_6dc308a901e8672c",
+            "h_744a89d400e3a753",
+            "h_9386dd4e603e0a23",
+            "h_a6e59e468aa4f974",
+            "h_3863d06d1fce65b3",
+            "h_c4f0528423a20244",
+            "h_ca8e78149a884bf5",
+            "h_421ade8cd0fde735",
+            "h_07e843dced00eca2",
+            "h_fc4b0ecaa4d9b290",
+            "h_a2957d367cd2cb21",
+            "h_f557703baa7f77a6",
+            "h_da1b5d16d0330468",
+            "h_7e3cce3592a8554e",
+            "h_944c3de1bc8d71ef",
+            "h_28a3500aa0443b77",
+            "h_27d5dc4637f20ed6",
+            "h_7e8f4620ebfb8e72",
+            "h_9d30d925d66e1974",
+            "h_7bd8ff2dfe39b3ab",
+            "h_c0986da43b1cf5e7",
+            "h_71b0bba4d644011c",
+            "h_0a7d44c9f2532f54",
+            "h_a541c016bcbd6395",
+            "h_de2b894f70c671c6",
+            "h_8551709126d04da1",
+            "h_0b8b0171fa02fbdc",
+            "h_b81edfbb89eccd9a",
+            "h_37c72c388d363ce9",
+            "h_f7d965297987c473",
+            "h_a00d3de4ae769a20",
+            "h_ac9da3580e7b4405",
+            "h_33550de13ed9159b",
+            "h_292fa147cb64c379"
+          ],
+          "row": 3
+        }
+      ],
+      [
+        {
+          "key": "group:src/module4",
+          "label": "src/module4/",
+          "entries": [],
+          "flows": ["src/module4"],
+          "partIds": [
+            "h_ff409b4da6f6b496",
+            "h_cc7f0220caaf4481",
+            "h_c3a7cf40247cda00",
+            "h_791af57255309eb2",
+            "h_3d35a23f90bdc223",
+            "h_a9c71a64e3e8bb3b",
+            "h_7d3413c580e17fbf",
+            "h_b4a32c4c1cf1048d",
+            "h_4742f19bc7bf9f60",
+            "h_bd6bc4346c2a61f7",
+            "h_bb97ddc8cc607d87",
+            "h_0934e15fb122cdfa",
+            "h_e8f002c8bdbf24b2",
+            "h_c8510e80a4a7c407",
+            "h_91ed1816978b392d",
+            "h_bdb638ae5b02afa6",
+            "h_d0ceb4dc7b34d79b",
+            "h_cf962e39230e0b40",
+            "h_4bb6fc07f867eabb",
+            "h_f736c535884f25ef",
+            "h_7df9d1ace33c1ce1",
+            "h_a2d718b15e5b70d8",
+            "h_26f60c7f57703019",
+            "h_eb7bc06624180647",
+            "h_0f0feb7fab0ee8a2",
+            "h_71d632aac0114b34",
+            "h_a9a199587bdde9a4",
+            "h_7edbe3943b38160e",
+            "h_d78747117f4b93ed",
+            "h_c21fee098589b850",
+            "h_300449be06ae8f34",
+            "h_db4a573d0c409d2b",
+            "h_f7b1a7e059968671",
+            "h_3bf5d0e992971abe",
+            "h_68a85e6da1ea6866",
+            "h_68496061f3bf28b3",
+            "h_432e6cb69b879be4",
+            "h_ee3d65ae27e0b6f9",
+            "h_4ce2459cdba3ab0e",
+            "h_89e27bf5886e5e26"
+          ],
+          "row": 4
+        }
+      ],
+      [
+        {
+          "key": "group:src/module5",
+          "label": "src/module5/",
+          "entries": [],
+          "flows": ["src/module5"],
+          "partIds": [
+            "h_bfa09dfb024db239",
+            "h_3765a12dcf2052e7",
+            "h_8c307c4e74638319",
+            "h_22540b518879d443",
+            "h_81e924d001f31405",
+            "h_07f3eeb1e26f401e",
+            "h_d944fc204d1f4748",
+            "h_0a3a1bd3a55a9e84",
+            "h_47d68addd2267438",
+            "h_284711cb1b9efc48",
+            "h_2f53b16dcc70b55a",
+            "h_5532d82e22f9610b",
+            "h_94149324610bbcc7",
+            "h_981a123afa9aa3c7",
+            "h_f38e3df19502de67",
+            "h_420470b0617caa03",
+            "h_ba5d293a0eb3edb1",
+            "h_5171a693852118cd",
+            "h_bea41911cfda3686",
+            "h_4df17facded5eb6a",
+            "h_743eae3613a96efa",
+            "h_8848c5ee4f8ae232",
+            "h_1e7ef93c5d8b5236",
+            "h_e278d40e9fad02ba",
+            "h_187d1bd5e06fe166",
+            "h_f944dc75c6903df9",
+            "h_a4d43ea0ce0c4e89",
+            "h_51c7b508fdb49729",
+            "h_3878c7f42af94017",
+            "h_79f9cc7d514a6925",
+            "h_53dcf0de8aa9f29b",
+            "h_9603756e8180f60e",
+            "h_708a34b0dd032d8e",
+            "h_1a68306fab468b88",
+            "h_712caa08a85d05b8",
+            "h_d41656ebd2a0a9ac",
+            "h_acc83c16d50ed489",
+            "h_2cdfd309f9dc3366",
+            "h_701314d053e03d82",
+            "h_4b7ef9489c77b9e1"
+          ],
+          "row": 5
+        }
+      ]
+    ],
+    "strip": [],
+    "through": {
+      "rows": [
+        [
+          {
+            "label": "module0",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "module1",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "module2",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "module3",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "module4",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "module5",
+            "entries": []
+          }
+        ]
+      ],
+      "linked": true,
+      "more": 0
+    }
+  },
+  "deep": {
+    "rows": [
+      [
+        {
+          "key": "group:web/src/features/accounts/components/profile/avatar",
+          "label": "web/src/features/accounts/components/profile/avatar/",
+          "entries": [],
+          "flows": ["web/src/features/accounts/components/profile/avatar"],
+          "partIds": ["h_6c83ec6e48b9dcff"],
+          "row": 0
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/accounts/components/profile",
+          "label": "web/src/features/accounts/components/profile/",
+          "entries": [],
+          "flows": ["web/src/features/accounts/components/profile"],
+          "partIds": ["h_828d8ad3737b38d1"],
+          "row": 1
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/accounts/components/security",
+          "label": "web/src/features/accounts/components/security/",
+          "entries": [],
+          "flows": ["web/src/features/accounts/components/security"],
+          "partIds": ["h_9ef44f83f608f0ef"],
+          "row": 2
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/accounts/hooks",
+          "label": "web/src/features/accounts/hooks/",
+          "entries": [],
+          "flows": ["web/src/features/accounts/hooks"],
+          "partIds": ["h_a073d4b73de5ac03"],
+          "row": 3
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/billing/api",
+          "label": "web/src/features/billing/api/",
+          "entries": [],
+          "flows": ["web/src/features/billing/api"],
+          "partIds": ["h_40e15a528e93808e", "h_04f57dbc9a44c488"],
+          "row": 4
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/billing/components/invoices/filters",
+          "label": "web/src/features/billing/components/invoices/filters/",
+          "entries": [],
+          "flows": ["web/src/features/billing/components/invoices/filters"],
+          "partIds": ["h_49d4a680a82dcfca", "h_26ff4776a54066cf"],
+          "row": 5
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/billing/components/invoices",
+          "label": "web/src/features/billing/components/invoices/",
+          "entries": [],
+          "flows": ["web/src/features/billing/components/invoices"],
+          "partIds": ["h_f05b06dc58c598aa", "h_b1f4e04ea99adf3f"],
+          "row": 6
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/billing/components/payment-methods",
+          "label": "web/src/features/billing/components/payment-methods/",
+          "entries": [],
+          "flows": ["web/src/features/billing/components/payment-methods"],
+          "partIds": ["h_a6f1fe053e7d1413", "h_0e3afb1cf3c7376e"],
+          "row": 7
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/billing/hooks",
+          "label": "web/src/features/billing/hooks/",
+          "entries": [],
+          "flows": ["web/src/features/billing/hooks"],
+          "partIds": ["h_179ca6378780ebb1"],
+          "row": 8
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/notifications/components",
+          "label": "web/src/features/notifications/components/",
+          "entries": [],
+          "flows": ["web/src/features/notifications/components"],
+          "partIds": ["h_dac69b7f9544c5cd"],
+          "row": 9
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/notifications/components/preferences",
+          "label": "web/src/features/notifications/components/preferences/",
+          "entries": [],
+          "flows": ["web/src/features/notifications/components/preferences"],
+          "partIds": ["h_7ce82fd859a7c823"],
+          "row": 10
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/notifications/state",
+          "label": "web/src/features/notifications/state/",
+          "entries": [],
+          "flows": ["web/src/features/notifications/state"],
+          "partIds": ["h_d3edbedf53f5bbfe"],
+          "row": 11
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/reports/components/charts/legend",
+          "label": "web/src/features/reports/components/charts/legend/",
+          "entries": [],
+          "flows": ["web/src/features/reports/components/charts/legend"],
+          "partIds": ["h_8f8586e5b85fdc8c"],
+          "row": 12
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/reports/components/charts",
+          "label": "web/src/features/reports/components/charts/",
+          "entries": [],
+          "flows": ["web/src/features/reports/components/charts"],
+          "partIds": ["h_cce2e71e2a05c317"],
+          "row": 13
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/features/reports/utils",
+          "label": "web/src/features/reports/utils/",
+          "entries": [],
+          "flows": ["web/src/features/reports/utils"],
+          "partIds": ["h_ef465ac11600b564"],
+          "row": 14
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/shared/components/forms/inputs",
+          "label": "web/src/shared/components/forms/inputs/",
+          "entries": [],
+          "flows": ["web/src/shared/components/forms/inputs"],
+          "partIds": ["h_33e07dd958f95d57"],
+          "row": 15
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/shared/components/layout/sidebar",
+          "label": "web/src/shared/components/layout/sidebar/",
+          "entries": [],
+          "flows": ["web/src/shared/components/layout/sidebar"],
+          "partIds": ["h_6ec50e77572169a4", "h_7a68207177c6db9c"],
+          "row": 16
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/shared/lib/format",
+          "label": "web/src/shared/lib/format/",
+          "entries": [],
+          "flows": ["web/src/shared/lib/format"],
+          "partIds": ["h_b4f196ad31ecd6a3"],
+          "row": 17
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/shared/lib/http",
+          "label": "web/src/shared/lib/http/",
+          "entries": [],
+          "flows": ["web/src/shared/lib/http"],
+          "partIds": ["h_eaae7a7a91afd2da"],
+          "row": 18
+        }
+      ],
+      [
+        {
+          "key": "group:web/src/shared/lib/http/interceptors",
+          "label": "web/src/shared/lib/http/interceptors/",
+          "entries": [],
+          "flows": ["web/src/shared/lib/http/interceptors"],
+          "partIds": ["h_880613e4fd0f3068"],
+          "row": 19
+        }
+      ],
+      [
+        {
+          "key": "group:web/tests/e2e/accounts",
+          "label": "web/tests/e2e/accounts/",
+          "entries": [],
+          "flows": ["web/tests/e2e/accounts"],
+          "partIds": ["h_b891397724d5dc1a"],
+          "row": 20
+        }
+      ],
+      [
+        {
+          "key": "group:web/tests/e2e/billing",
+          "label": "web/tests/e2e/billing/",
+          "entries": [],
+          "flows": ["web/tests/e2e/billing"],
+          "partIds": ["h_fdad61dcc7e619d7"],
+          "row": 21
+        }
+      ]
+    ],
+    "strip": [],
+    "through": {
+      "rows": [
+        [
+          {
+            "label": "avatar",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "profile",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "security",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "accounts/hooks",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "api",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "filters",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "invoices",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "payment-methods",
+            "entries": []
+          }
+        ]
+      ],
+      "linked": true,
+      "more": 14
+    }
+  },
+  "java": {
+    "rows": [
+      [
+        {
+          "key": "group:",
+          "label": "./",
+          "entries": [],
+          "flows": ["Top level"],
+          "partIds": ["h_8f43c4874630cc64"],
+          "row": 0
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders"],
+          "partIds": ["h_3d2098035aa9e660"],
+          "row": 1
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/config",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/config/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/config"],
+          "partIds": ["h_9c75f0e28a4b89aa", "h_67fc5460d5fb4291"],
+          "row": 2
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/controllers",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/controllers/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/controllers"],
+          "partIds": ["h_a54405a3df2a0d67"],
+          "row": 3
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/controllers/advice",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/controllers/advice/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/controllers/advice"],
+          "partIds": ["h_e81a84e99bb76238"],
+          "row": 4
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/entities",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/entities/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/entities"],
+          "partIds": ["h_99189d9d91a5bc92", "h_f1873de15bf59225", "h_9ff606e084e4bd30"],
+          "row": 5
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/repositories",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/repositories/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/repositories"],
+          "partIds": ["h_d7db445991e6d23c"],
+          "row": 6
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/resources",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/resources/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/resources"],
+          "partIds": ["h_b4007a9374acb774"],
+          "row": 7
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/services",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/services/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/services"],
+          "partIds": ["h_ee60e47c61a9c08e"],
+          "row": 8
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/services/payment",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/services/payment/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/services/payment"],
+          "partIds": ["h_59d70090ce9c0604", "h_3aa4ef374f6a9cbc"],
+          "row": 9
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/services/shipping",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/services/shipping/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/services/shipping"],
+          "partIds": ["h_3181a3e8a20bc059"],
+          "row": 10
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/java/com/acmecorp/fulfillment/orders/values",
+          "label": "src/main/java/com/acmecorp/fulfillment/orders/values/",
+          "entries": [],
+          "flows": ["src/main/java/com/acmecorp/fulfillment/orders/values"],
+          "partIds": ["h_a0762e011fe55060", "h_a71fdad5b26e86e9"],
+          "row": 11
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/resources",
+          "label": "src/main/resources/",
+          "entries": [],
+          "flows": ["src/main/resources"],
+          "partIds": ["h_6938b10cdf1a2d07"],
+          "row": 12
+        }
+      ],
+      [
+        {
+          "key": "group:src/main/resources/db/migration",
+          "label": "src/main/resources/db/migration/",
+          "entries": [],
+          "flows": ["src/main/resources/db/migration"],
+          "partIds": ["h_aa13e70325f6e6b4"],
+          "row": 13
+        }
+      ],
+      [
+        {
+          "key": "group:src/test/java/com/acmecorp/fulfillment/orders/controllers",
+          "label": "src/test/java/com/acmecorp/fulfillment/orders/controllers/",
+          "entries": [],
+          "flows": ["src/test/java/com/acmecorp/fulfillment/orders/controllers"],
+          "partIds": ["h_489ff36ff0e0fffa"],
+          "row": 14
+        }
+      ],
+      [
+        {
+          "key": "group:src/test/java/com/acmecorp/fulfillment/orders/entities",
+          "label": "src/test/java/com/acmecorp/fulfillment/orders/entities/",
+          "entries": [],
+          "flows": ["src/test/java/com/acmecorp/fulfillment/orders/entities"],
+          "partIds": ["h_d9cea1bc82475b90"],
+          "row": 15
+        }
+      ],
+      [
+        {
+          "key": "group:src/test/java/com/acmecorp/fulfillment/orders/services/payment",
+          "label": "src/test/java/com/acmecorp/fulfillment/orders/services/payment/",
+          "entries": [],
+          "flows": ["src/test/java/com/acmecorp/fulfillment/orders/services/payment"],
+          "partIds": ["h_950cc78003b9c8ca"],
+          "row": 16
+        }
+      ],
+      [
+        {
+          "key": "group:src/test/java/com/acmecorp/fulfillment/orders/services/shipping",
+          "label": "src/test/java/com/acmecorp/fulfillment/orders/services/shipping/",
+          "entries": [],
+          "flows": ["src/test/java/com/acmecorp/fulfillment/orders/services/shipping"],
+          "partIds": ["h_11f2827d8c6e6f0a"],
+          "row": 17
+        }
+      ],
+      [
+        {
+          "key": "group:src/test/resources/fixtures",
+          "label": "src/test/resources/fixtures/",
+          "entries": [],
+          "flows": ["src/test/resources/fixtures"],
+          "partIds": ["h_429520e83afbedb9"],
+          "row": 18
+        }
+      ]
+    ],
+    "strip": [],
+    "through": {
+      "rows": [
+        [
+          {
+            "label": ".",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "orders",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "config",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "main/java/com/acmecorp/fulfillment/orders/controllers",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "advice",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "main/java/com/acmecorp/fulfillment/orders/entities",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "repositories",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "orders/resources",
+            "entries": []
+          }
+        ]
+      ],
+      "linked": true,
+      "more": 11
+    }
+  },
+  "mono": {
+    "rows": [
+      [
+        {
+          "key": "group:.changeset",
+          "label": ".changeset/",
+          "entries": [],
+          "flows": [".changeset"],
+          "partIds": ["h_e4f76da9a7d07bf5"],
+          "row": 0
+        },
+        {
+          "key": "group:packages/payments-core/src/intents",
+          "label": "packages/payments-core/src/intents/",
+          "entries": [],
+          "flows": ["packages/payments-core/src/intents"],
+          "partIds": ["h_8fa35b0a70d1c23b"],
+          "row": 0
+        }
+      ],
+      [
+        {
+          "key": "group:apps/admin-dashboard/src/pages/settings",
+          "label": "apps/admin-dashboard/src/pages/settings/",
+          "entries": [],
+          "flows": ["apps/admin-dashboard/src/pages/settings"],
+          "partIds": ["h_cf960963ace07417"],
+          "row": 1
+        },
+        {
+          "key": "group:packages/supabase-js/src",
+          "label": "packages/supabase-js/src/",
+          "entries": [],
+          "flows": ["packages/supabase-js/src"],
+          "partIds": ["h_1320c9d6111a89ef"],
+          "row": 1
+        }
+      ],
+      [
+        {
+          "key": "group:apps/storefront/src/components/checkout",
+          "label": "apps/storefront/src/components/checkout/",
+          "entries": [],
+          "flows": ["apps/storefront/src/components/checkout"],
+          "partIds": ["h_8fd5025cbcc1f111"],
+          "row": 2
+        },
+        {
+          "key": "group:packages/supabase-js/src/lib",
+          "label": "packages/supabase-js/src/lib/",
+          "entries": [],
+          "flows": ["packages/supabase-js/src/lib"],
+          "partIds": ["h_de37a199f6430e06"],
+          "row": 2
+        }
+      ],
+      [
+        {
+          "key": "group:apps/storefront/src/hooks",
+          "label": "apps/storefront/src/hooks/",
+          "entries": [],
+          "flows": ["apps/storefront/src/hooks"],
+          "partIds": ["h_2c4467e8b939ea0e"],
+          "row": 3
+        },
+        {
+          "key": "group:packages/ui-kit/src/components/Button",
+          "label": "packages/ui-kit/src/components/Button/",
+          "entries": [],
+          "flows": ["packages/ui-kit/src/components/Button"],
+          "partIds": ["h_65b138672fef733f", "h_f43dc2eb6de2d501"],
+          "row": 3
+        }
+      ],
+      [
+        {
+          "key": "group:packages/analytics-client/src",
+          "label": "packages/analytics-client/src/",
+          "entries": [],
+          "flows": ["packages/analytics-client/src"],
+          "partIds": ["h_3a5f6893eabfb410"],
+          "row": 4
+        },
+        {
+          "key": "group:",
+          "label": "./",
+          "entries": [],
+          "flows": ["Top level"],
+          "partIds": ["h_e4e06ea6d685d9ef"],
+          "row": 4
+        }
+      ],
+      [
+        {
+          "key": "group:packages/api-client/src/generated/models",
+          "label": "packages/api-client/src/generated/models/",
+          "entries": [],
+          "flows": ["packages/api-client/src/generated/models"],
+          "partIds": ["h_57f18d2b99e16635"],
+          "row": 5
+        },
+        {
+          "key": "group:services/payments-gateway/src/handlers",
+          "label": "services/payments-gateway/src/handlers/",
+          "entries": [],
+          "flows": ["services/payments-gateway/src/handlers"],
+          "partIds": ["h_2f110f3d46f0fdd5"],
+          "row": 5
+        }
+      ],
+      [
+        {
+          "key": "group:packages/api-client/src/generated/services",
+          "label": "packages/api-client/src/generated/services/",
+          "entries": [],
+          "flows": ["packages/api-client/src/generated/services"],
+          "partIds": ["h_7845d30d66635bee"],
+          "row": 6
+        }
+      ],
+      [
+        {
+          "key": "group:packages/auth-js/src",
+          "label": "packages/auth-js/src/",
+          "entries": [],
+          "flows": ["packages/auth-js/src"],
+          "partIds": ["h_95f33245c08814f2"],
+          "row": 7
+        }
+      ],
+      [
+        {
+          "key": "group:packages/auth-js/src/lib",
+          "label": "packages/auth-js/src/lib/",
+          "entries": [],
+          "flows": ["packages/auth-js/src/lib"],
+          "partIds": ["h_baf9d501f05b73d5"],
+          "row": 8
+        }
+      ],
+      [
+        {
+          "key": "group:packages/config-eslint",
+          "label": "packages/config-eslint/",
+          "entries": [],
+          "flows": ["packages/config-eslint"],
+          "partIds": ["h_61f8614841cc483f"],
+          "row": 9
+        }
+      ],
+      [
+        {
+          "key": "group:packages/design-tokens/src",
+          "label": "packages/design-tokens/src/",
+          "entries": [],
+          "flows": ["packages/design-tokens/src"],
+          "partIds": ["h_e753134c1dfe3ee4"],
+          "row": 10
+        }
+      ],
+      [
+        {
+          "key": "group:packages/feature-flags/src",
+          "label": "packages/feature-flags/src/",
+          "entries": [],
+          "flows": ["packages/feature-flags/src"],
+          "partIds": ["h_cd7e1c039075f786"],
+          "row": 11
+        }
+      ],
+      [
+        {
+          "key": "group:packages/i18n/locales/de-DE",
+          "label": "packages/i18n/locales/de-DE/",
+          "entries": [],
+          "flows": ["packages/i18n/locales/de-DE"],
+          "partIds": ["h_ebb12d961c6dc705"],
+          "row": 12
+        }
+      ],
+      [
+        {
+          "key": "group:packages/i18n/locales/en-US",
+          "label": "packages/i18n/locales/en-US/",
+          "entries": [],
+          "flows": ["packages/i18n/locales/en-US"],
+          "partIds": ["h_0dadf590ed8d6c2a"],
+          "row": 13
+        }
+      ],
+      [
+        {
+          "key": "group:packages/logger/src",
+          "label": "packages/logger/src/",
+          "entries": [],
+          "flows": ["packages/logger/src"],
+          "partIds": ["h_81fcb86111fb6ce7"],
+          "row": 14
+        }
+      ]
+    ],
+    "strip": [],
+    "through": {
+      "rows": [
+        [
+          {
+            "label": ".changeset",
+            "entries": []
+          },
+          {
+            "label": "intents",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "settings",
+            "entries": []
+          },
+          {
+            "label": "supabase-js/src",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "checkout",
+            "entries": []
+          },
+          {
+            "label": "supabase-js/src/lib",
+            "entries": []
+          }
+        ],
+        [
+          {
+            "label": "hooks",
+            "entries": []
+          },
+          {
+            "label": "Button",
+            "entries": []
+          }
+        ]
+      ],
+      "linked": true,
+      "more": 13
+    }
+  }
+}

@@ -75,7 +75,6 @@ import { ModelCalls } from "./ModelCalls.tsx";
 import {
   changeTotals,
   commentsInParts,
-  flowSteps,
   type Layout,
   mapFiles,
   mechanicalCount,
@@ -364,7 +363,6 @@ const Review = ({
   const readOnly = publication !== null || !complete;
 
   const index = useMemo(() => partIndex(analysis), [analysis]);
-  const steps = useMemo(() => flowSteps(analysis, index), [analysis, index]);
   const files = useMemo(() => mapFiles(analysis, index), [analysis, index]);
   const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
@@ -500,13 +498,13 @@ const Review = ({
   // Directories the reviewer opened in the overview, to see their files.
   const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([]);
   const overview = useMemo(
-    () => fileOverview(analysis, steps, new Set(expandedGroups)),
-    [analysis, steps, expandedGroups],
+    () => fileOverview(analysis, new Set(expandedGroups)),
+    [analysis, expandedGroups],
   );
   // With the Tour switch on, the overview's layout is Understand: the tour, or the overview and
   // a line saying why there's none. The tour is drawn from the analysis shown; whether it's being
   // written, from the live one.
-  const tourOverview = useMemo(() => fileOverview(analysis, steps), [analysis, steps]);
+  const tourOverview = useMemo(() => fileOverview(analysis), [analysis]);
   const everyPoint = useMemo(() => pointsOf(analysis), [analysis]);
   const noTour = tourOn ? noTourOf(live) : null;
   const tour = useMemo(
@@ -517,8 +515,8 @@ const Review = ({
 
   // The brief's line of directories, from the overview with none opened.
   const through = useMemo(
-    () => (analysis.stages.prep === "done" ? throughOf(fileOverview(analysis, steps)) : null),
-    [analysis, steps],
+    () => (analysis.stages.prep === "done" ? throughOf(fileOverview(analysis)) : null),
+    [analysis],
   );
 
   const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);

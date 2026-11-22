@@ -16,7 +16,6 @@ import {
   pointsOf,
   type StageName,
   type StageStatus,
-  validateFlows,
   validateRiskCoverage,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
@@ -204,6 +203,18 @@ const requiredHunkIds = (analysis: Analysis): Set<HunkId> => {
   return new Set([...allHunkIds(analysis)].filter((id) => !proved.has(id)));
 };
 
+/** The flows place every part of every hunk without a proof once, and nothing else. */
+const placesEveryPartOnce = (analysis: Analysis): void => {
+  const placed = (analysis.flows ?? []).flatMap((flow) => flow.partIds).sort();
+  const required = [...requiredHunkIds(analysis)]
+    .flatMap((id): PartId[] => {
+      const own = analysis.parts.filter((part) => part.hunkId === id).map((part) => part.id);
+      return own.length > 0 ? own : [id];
+    })
+    .sort();
+  expect(placed).toEqual(required);
+};
+
 const firstInput = (model: FakeAnalysisModel, pass: "intent" | "checkSize"): AnalysisInput => {
   const call = model.callsTo(pass)[0];
   if (call === undefined) throw new Error(`no ${pass} call`);
@@ -285,8 +296,7 @@ describe("the analysis pipeline", () => {
       ),
     );
     expect(analysis.decisions.map((decision) => decision.id)).toEqual(["d1", "d2", "d3"]);
-    expect(analysis.flows?.steps.map((step) => step.id)).toEqual(["s1", "s2"]);
-    expect(analysis.flows?.builtBy).toBe("code");
+    expect(analysis.flows).toHaveLength(2);
     expect(analysis.warnings).toEqual([]);
     expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
     // The guardrail call after the passes, since the run has a finding.
@@ -354,7 +364,7 @@ describe("the analysis pipeline", () => {
     const analysis = await analyze(fixture);
     expect(analysis.status).toBe("complete");
     expect(validateRiskCoverage(analysis.risk, allHunkIds(analysis))).toEqual([]);
-    expect(validateFlows(analysis.flows ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
+    placesEveryPartOnce(analysis);
   });
 
   it("proves every refactor-move hunk and still runs the passes with nothing to cover", async () => {
@@ -372,7 +382,7 @@ describe("the analysis pipeline", () => {
     ]);
     expect(analysis.risk.every((risk) => risk.source === "proof")).toBe(true);
     expect(analysis.risk).toHaveLength(4);
-    expect(analysis.flows).toEqual({ steps: [], builtBy: "code" });
+    expect(analysis.flows).toEqual([]);
     expect(analysis.warnings).toEqual([
       "pnpm-lock.yaml changed without a change to package.json or pnpm-workspace.yaml",
     ]);
@@ -1045,7 +1055,7 @@ describe("the analysis pipeline", () => {
       await analyze();
       const afterPrep = store.saves.find((analysis) => analysis.stages.prep === "done");
       expect(afterPrep?.stages.intent).toBe("pending");
-      expect(afterPrep?.flows?.builtBy).toBe("code");
+      expect(afterPrep?.flows).not.toBeNull();
     });
 
     it("keeps the code's flows: the model doesn't title them", async () => {
@@ -1285,8 +1295,8 @@ describe("without the model", () => {
     expect(analysis.risk.map((risk) => [risk.hunkId, risk.source])).toEqual(
       smallFeatureHunks.map((hunkId) => [hunkId, "rule"]),
     );
-    expect(analysis.flows?.builtBy).toBe("code");
-    expect(validateFlows(analysis.flows ?? { steps: [] }, requiredHunkIds(analysis))).toEqual([]);
+    expect(analysis.flows).not.toBeNull();
+    placesEveryPartOnce(analysis);
     expect(emitted.at(-1)?.event).toEqual({ type: "done" });
   });
 
@@ -1303,9 +1313,7 @@ describe("without the model", () => {
           }),
         ),
       );
-      expect(
-        validateFlows(analysis.flows ?? { steps: [] }, requiredHunkIds(analysis), analysis.parts),
-      ).toEqual([]);
+      placesEveryPartOnce(analysis);
       for (const hint of analysis.callGraph) {
         expect([known.has(hint.fromPartId), known.has(hint.toPartId)]).toEqual([true, true]);
       }
@@ -1466,7 +1474,7 @@ describe("runModel", () => {
     expect(after.status).toBe("complete");
     expect(after.intent).not.toBeNull();
     expect(after.decisions).toHaveLength(3);
-    expect(after.flows?.builtBy).toBe("code");
+    expect(after.flows).not.toBeNull();
     expect(Object.values(after.stages)).toEqual([...Array(6).fill("done"), "skipped"]);
     expect(model.callsTo("intent")).toHaveLength(1);
   });

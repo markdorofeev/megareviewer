@@ -10,7 +10,6 @@ import {
   Publication,
   PullRequest,
   Ticket,
-  validateFlows,
   validateHunkReferences,
   validateRiskCoverage,
 } from "../../../domain/review/index.ts";
@@ -107,7 +106,7 @@ describe("small-feature analysis", () => {
     const { flows, risk, decisions, intent, callGraph } = smallFeatureAnalysis;
 
     expect(Analysis.parse(smallFeatureAnalysis)).toEqual(smallFeatureAnalysis);
-    expect(flows && validateFlows(flows, hunkIds)).toEqual([]);
+    expect(new Set(flows?.flatMap((flow) => flow.partIds))).toEqual(hunkIds);
     expect(validateRiskCoverage(risk, hunkIds)).toEqual([]);
     const referenced = [
       ...decisions.flatMap((decision) => decision.hunkIds),
