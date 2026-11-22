@@ -17,7 +17,7 @@ export interface PageToggle {
 
 /**
  * A choice of views a page puts in the header's Display menu, such as the review page's layout,
- * with the page's switch under it. The page owns the values; the menu shows them and reports the
+ * with the page's switches under it. The page owns the values; the menu shows them and reports the
  * reviewer's pick.
  */
 export interface PageDisplay {
@@ -25,7 +25,7 @@ export interface PageDisplay {
   readonly options: readonly { readonly value: string; readonly label: string }[];
   readonly value: string;
   readonly onChange: (value: string) => void;
-  readonly toggle?: PageToggle;
+  readonly toggles?: readonly PageToggle[];
 }
 
 // Two contexts, so a page setting its choice doesn't re-render from its own update.
@@ -49,29 +49,26 @@ export const usePageDisplay = (display: PageDisplay): void => {
   const set = useContext(SetterContext);
   const onChange = useRef(display.onChange);
   onChange.current = display.onChange;
-  const onToggle = useRef(display.toggle?.onChange);
-  onToggle.current = display.toggle?.onChange;
+  const onToggles = useRef((display.toggles ?? []).map((toggle) => toggle.onChange));
+  onToggles.current = (display.toggles ?? []).map((toggle) => toggle.onChange);
   const { label, options, value } = display;
-  const toggleLabel = display.toggle?.label;
-  const checked = display.toggle?.checked ?? false;
-  const shown = useMemo(
-    (): PageDisplay => ({
+  // Strings, so the menu's switches change only when a label or a state does.
+  const labels = (display.toggles ?? []).map((toggle) => toggle.label).join("\n");
+  const checks = (display.toggles ?? []).map((toggle) => (toggle.checked ? "1" : "0")).join("");
+  const shown = useMemo((): PageDisplay => {
+    const toggles = (labels === "" ? [] : labels.split("\n")).map((label, at) => ({
+      label,
+      checked: checks[at] === "1",
+      onChange: (next: boolean) => onToggles.current[at]?.(next),
+    }));
+    return {
       label,
       options,
       value,
       onChange: (next) => onChange.current(next),
-      ...(toggleLabel === undefined
-        ? {}
-        : {
-            toggle: {
-              label: toggleLabel,
-              checked,
-              onChange: (next: boolean) => onToggle.current?.(next),
-            },
-          }),
-    }),
-    [label, options, value, toggleLabel, checked],
-  );
+      ...(toggles.length === 0 ? {} : { toggles }),
+    };
+  }, [label, options, value, labels, checks]);
   useEffect(() => set(shown), [set, shown]);
   useEffect(() => () => set(null), [set]);
 };

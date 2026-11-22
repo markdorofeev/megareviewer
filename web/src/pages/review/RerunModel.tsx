@@ -17,6 +17,7 @@ export const RerunModel = ({
   view,
   family,
   chosen,
+  tour,
   onClose,
   onRestart,
 }: {
@@ -26,6 +27,8 @@ export const RerunModel = ({
   readonly family: string;
   /** The model the new run uses. */
   readonly chosen: ModelOption;
+  /** The Tour switch is on: the new run writes the tour too. */
+  readonly tour: boolean;
   readonly onClose: () => void;
   /** The page starts afresh from this view. */
   readonly onRestart: (view: AnalysisView) => void;
@@ -51,7 +54,10 @@ export const RerunModel = ({
       without = gone.value;
       setRemoved(without);
     }
-    const started = await client.runModel(analysisId, { optionId: chosen.id });
+    const started = await client.runModel(analysisId, {
+      optionId: chosen.id,
+      ...(tour ? { tour: true } : {}),
+    });
     if (!started.ok) {
       setPending(false);
       return setError({ error: started.error, removed: true });

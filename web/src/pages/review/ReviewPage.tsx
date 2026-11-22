@@ -345,6 +345,8 @@ const Review = ({
   const mechanical = mechanicalCount(trailing);
   // Decisions are behind a switch in the Display menu, off until the reviewer turns them on.
   const [decisionsOn, setDecisionsOn] = useStoredState("decisions", false, parseBoolean);
+  // A preview: off, the page and its requests are as they were before the tour.
+  const [tourOn, setTourOn] = useStoredState("tour", false, parseBoolean);
   const points = useMemo(
     () => pointsOf(analysis).filter((point) => decisionsOn || point.kind !== "decision"),
     [analysis, decisionsOn],
@@ -819,11 +821,10 @@ const Review = ({
     onChange: (next) => {
       if (next !== layout) switchLayout();
     },
-    toggle: {
-      label: "Decisions",
-      checked: decisionsOn,
-      onChange: (on) => setDecisionsOn(() => on),
-    },
+    toggles: [
+      { label: "Decisions", checked: decisionsOn, onChange: (on) => setDecisionsOn(() => on) },
+      { label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) },
+    ],
   });
 
   /**
@@ -1383,10 +1384,10 @@ const Review = ({
             onNarrow={narrow}
             onRun={async () => {
               const optionId = modelChoice.chosen?.id;
-              const result = await runModel.run(
-                analysisId,
-                optionId === undefined ? {} : { optionId },
-              );
+              const result = await runModel.run(analysisId, {
+                ...(optionId === undefined ? {} : { optionId }),
+                ...(tourOn ? { tour: true } : {}),
+              });
               if (!result.ok) return;
               follow();
             }}
@@ -1675,6 +1676,7 @@ const Review = ({
           view={view}
           family={family}
           chosen={modelChoice.chosen}
+          tour={tourOn}
           onClose={() => setRerunning(false)}
           onRestart={(seed) => restart(seed)}
         />

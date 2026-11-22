@@ -64,14 +64,17 @@ export const DisplayMenu = () => {
               </DropdownMenuRadioGroup>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {page.toggle !== undefined && (
+            {page.toggles !== undefined && (
               <>
-                <DropdownMenuCheckboxItem
-                  checked={page.toggle.checked}
-                  onCheckedChange={page.toggle.onChange}
-                >
-                  {page.toggle.label}
-                </DropdownMenuCheckboxItem>
+                {page.toggles.map((toggle) => (
+                  <DropdownMenuCheckboxItem
+                    key={toggle.label}
+                    checked={toggle.checked}
+                    onCheckedChange={toggle.onChange}
+                  >
+                    {toggle.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
                 <DropdownMenuSeparator />
               </>
             )}

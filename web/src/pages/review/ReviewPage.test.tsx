@@ -2325,6 +2325,31 @@ describe("the bar's verdicts", () => {
     ).toContain("bg-ai-soft");
   });
 
+  it("asks for the tour with a run only while the Display menu's Tour switch is on", async () => {
+    window.localStorage.removeItem("megareviewer:tour");
+    const { requests } = renderReview({
+      view: codeOnly,
+      respond: (request) =>
+        request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
+    });
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    const tour = await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
+    expect(tour.getAttribute("aria-checked")).toBe("false");
+    await userEvent.click(tour);
+    expect(window.localStorage.getItem("megareviewer:tour")).toBe("true");
+    await userEvent.keyboard("{Escape}");
+
+    const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
+    await waitFor(() => expect(description(button)).toContain("Sonnet 5.5"));
+    await userEvent.click(button);
+    expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
+      optionId: "claude-code/claude-sonnet-5-5",
+      tour: true,
+    });
+    window.localStorage.removeItem("megareviewer:tour");
+  });
+
   it("re-runs Claude after asking: takes the run off and runs the chosen model again", async () => {
     let running = false;
     const { requests } = renderReview({
