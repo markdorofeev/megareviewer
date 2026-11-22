@@ -11,6 +11,7 @@ import type { Point, PointState } from "../../../../src/domain/review/index.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
+import { holdInPlace } from "./heldScroll.ts";
 import { ModelText } from "./IntentLine.tsx";
 import {
   depthText,
@@ -211,13 +212,14 @@ const TourStrip = ({
       role="group"
       aria-label="Directories on the tour"
       className={cn(
-        "sticky top-(--review-bar-h) z-10 -mx-1 flex items-start gap-3 overflow-x-auto border-b bg-background px-1",
+        "sticky top-(--review-bar-h) z-10 -mx-1 flex flex-wrap items-start gap-3 border-b bg-background px-1",
         compact ? "py-2" : "py-3 pb-4",
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{items}</div>
+      {/* The tour's path keeps its width; the directories off it wrap in what's left, or below. */}
+      <div className="flex max-w-full flex-wrap items-center gap-1.5">{items}</div>
       {tour.others.length > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-l pl-3">
+        <div className="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-1.5 border-l pl-3">
           {!compact && (
             <span className="w-full text-caption text-muted-foreground">Not on the tour</span>
           )}
@@ -629,6 +631,8 @@ export const Understand = ({
     scrollUnderStrip(section);
     section.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
     pin(going.stop);
+    // Stops above it take their size once near the window, and would push it down.
+    return holdInPlace("[data-slot=understand]", () => scrollUnderStrip(section));
   }, [going, scrollUnderStrip, pin]);
 
   const goToGroup = (id: LedgerGroupId) => {

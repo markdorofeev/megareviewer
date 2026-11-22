@@ -49,16 +49,14 @@ const HOLD_MS = 2000;
 const MOVES = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
 
 /**
- * Keeps the element `id` at the top of the window while `area` resizes, as cards above it take
- * their real size after a scroll put it there, until the reader moves or a moment passes. Returns
+ * Puts something back where a scroll put it, with `put`, whenever `area` resizes, as cards above
+ * it take their real size after the scroll, until the reader moves or a moment passes. Returns
  * what lets go sooner.
  */
-export const holdInView = (id: string, area: string): (() => void) => {
+export const holdInPlace = (area: string, put: () => void): (() => void) => {
   const observed = document.querySelector(area);
   if (observed === null || typeof ResizeObserver !== "function") return nothing;
-  const observer = new ResizeObserver(() => {
-    document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "instant" });
-  });
+  const observer = new ResizeObserver(put);
   const release = () => {
     observer.disconnect();
     window.clearTimeout(timer);
@@ -69,3 +67,9 @@ export const holdInView = (id: string, area: string): (() => void) => {
   observer.observe(observed);
   return release;
 };
+
+/** Keeps the element `id` at the top of the window while `area` resizes, as `holdInPlace` does. */
+export const holdInView = (id: string, area: string): (() => void) =>
+  holdInPlace(area, () =>
+    document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "instant" }),
+  );
