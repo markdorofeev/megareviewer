@@ -323,6 +323,51 @@ export const evidenceRepo = (
     : null;
 };
 
+/** A comment's words as both sides keep them: Bitbucket's host escapes punctuation, spacing varies. */
+const commentWords = (text: string): string =>
+  text
+    .replace(/\\([!-/:-@[-`{-~])/g, "$1")
+    .trim()
+    .replace(/\s+/g, " ");
+
+const samePullRequest = (a: PullRequestRef, b: PullRequestRef): boolean =>
+  a.number === b.number && sameRepo(a.repo, b.repo);
+
+/**
+ * What one suggestion reads: the signals recorded here and the reviewer's comments its host has,
+ * each comment once. A comment posted from megareviewer is a signal and on the host too, so a
+ * comment signal goes when the host has the same words on the same pull request, and the host's
+ * repeats of a comment on one pull request go after the first. A comment signal on a pull request
+ * the host read didn't reach stays, and a dismissed or raised point is never a repeat: the same
+ * words on another pull request are the repetition a rule rests on.
+ */
+export const mergeEvidence = (
+  signals: readonly ReviewSignal[],
+  comments: readonly PastComment[],
+): { readonly signals: ReviewSignal[]; readonly comments: PastComment[] } => {
+  const kept: PastComment[] = [];
+  for (const comment of comments) {
+    const repeat = kept.some(
+      (other) =>
+        samePullRequest(other.pullRequest, comment.pullRequest) &&
+        commentWords(other.body) === commentWords(comment.body),
+    );
+    if (!repeat) kept.push(comment);
+  }
+  return {
+    signals: signals.filter(
+      (signal) =>
+        signal.kind !== "comment" ||
+        !kept.some(
+          (comment) =>
+            samePullRequest(comment.pullRequest, signal.pullRequest) &&
+            commentWords(comment.body) === commentWords(signal.text),
+        ),
+    ),
+    comments: kept,
+  };
+};
+
 /** Two rules that say the same, whatever their case and spacing. */
 export const sameRule = (
   a: { readonly kind: PreferenceKind; readonly text: string },

@@ -141,6 +141,7 @@ export {
   MAX_EVIDENCE_LINES,
   MAX_GUIDELINE_BYTES,
   MAX_PREFERENCE_TEXT,
+  mergeEvidence,
   PastComment,
   type PointGuidance,
   Preference,

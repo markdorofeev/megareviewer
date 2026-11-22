@@ -13,6 +13,8 @@ import {
   inCreationOrder,
   MAX_ENABLED_PREFERENCES,
   MAX_GUIDELINE_BYTES,
+  mergeEvidence,
+  type PastComment,
   PointId,
   Preference,
   PreferenceId,
@@ -25,6 +27,7 @@ import {
   proposalId,
   publishedSignalKey,
   type RepoRef,
+  type ReviewSignal,
   resolveGuidanceMark,
   sameRule,
   sameScope,
@@ -284,6 +287,77 @@ describe("evidenceRepo", () => {
 
   it("can't tell one name on two hosts apart", () => {
     expect(evidenceRepo(["acme/shop #1"], [shop, { ...shop, host: "bitbucket" }])).toBeNull();
+  });
+});
+
+describe("mergeEvidence", () => {
+  const at = "2026-11-03T10:00:00.000Z";
+  const signal = (
+    kind: ReviewSignal["kind"],
+    text: string,
+    number = 12,
+    repo: RepoRef = shop,
+  ): ReviewSignal => ({
+    kind,
+    at,
+    pullRequest: { repo, number },
+    pointKind: kind === "comment" ? null : "finding",
+    title: kind === "comment" ? "" : text,
+    text,
+    path: "src/cart.ts",
+  });
+  const comment = (body: string, number = 12, repo: RepoRef = shop): PastComment => ({
+    pullRequest: { repo, number },
+    path: "src/cart.ts",
+    body,
+    at,
+  });
+
+  it("sends a comment posted from here once, as the host has it", () => {
+    const merged = mergeEvidence(
+      [signal("comment", "What invalidates   this?")],
+      [comment("What invalidates this?")],
+    );
+    expect(merged).toEqual({ signals: [], comments: [comment("What invalidates this?")] });
+  });
+
+  it("reads Bitbucket's escaped punctuation as the words posted", () => {
+    const merged = mergeEvidence(
+      [signal("comment", "Name it `MAX_RETRIES` (maybe)")],
+      [comment("Name it `MAX\\_RETRIES` \\(maybe\\)")],
+    );
+    expect(merged.signals).toEqual([]);
+  });
+
+  it("keeps a comment signal whose pull request the host read didn't reach", () => {
+    const old = signal("comment", "What invalidates this?", 3);
+    expect(mergeEvidence([old], [comment("What invalidates this?", 12)]).signals).toEqual([old]);
+  });
+
+  it("keeps the same words on two pull requests, since repetition is what a rule rests on", () => {
+    const twice = [comment("Add a test for this", 12), comment("Add a test for this", 13)];
+    expect(mergeEvidence([], twice).comments).toEqual(twice);
+    const elsewhere = {
+      ...comment("Add a test for this", 12),
+      pullRequest: { repo: api, number: 12 },
+    };
+    expect(mergeEvidence([], [comment("Add a test for this"), elsewhere]).comments).toHaveLength(2);
+  });
+
+  it("sends the host's repeat of a comment on one pull request once", () => {
+    expect(
+      mergeEvidence([], [comment("Add a test for this"), comment(" Add a test  for this")])
+        .comments,
+    ).toEqual([comment("Add a test for this")]);
+  });
+
+  it("never takes a dismissed or raised point for a repeat", () => {
+    const points = [
+      signal("dismissed", "Add a test for this"),
+      signal("raised", "Add a test for this"),
+      signal("dismissed", "Add a test for this"),
+    ];
+    expect(mergeEvidence(points, [comment("Add a test for this")]).signals).toEqual(points);
   });
 });
 
