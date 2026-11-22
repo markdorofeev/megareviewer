@@ -33,6 +33,7 @@ const run = (overrides: Partial<ClaudeRun>): ClaudeRun => ({
     findings: "pending",
     risk: "pending",
     decisions: "pending",
+    stops: "skipped",
   },
   modelError: null,
   modelOption: null,
@@ -128,6 +129,7 @@ describe("a long group", () => {
             findings: "skipped",
             risk: "skipped",
             decisions: "skipped",
+            stops: "skipped",
           },
         })}
         choice={withOpencode}
@@ -197,6 +199,7 @@ describe("the model's name on the page", () => {
         findings: "skipped",
         risk: "skipped",
         decisions: "skipped",
+        stops: "skipped",
       },
       modelError: { stage: "intent", code: "model-error", message: "Overloaded" },
       modelOption: other,

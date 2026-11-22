@@ -299,7 +299,7 @@ export const runModel = async (
       modelOption: run.option,
       guidance: null,
       guardrails: null,
-      stages: mapModelStages(current.stages, () => "pending"),
+      stages: { ...mapModelStages(current.stages, () => "pending"), stops: "skipped" },
     }));
     await modelStages(deps, run, host, pullRequest, checkout, tracker);
   } catch (error) {

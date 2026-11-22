@@ -253,7 +253,7 @@ describe("the analysis pipeline", () => {
 
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
-    expect(Object.values(analysis.stages)).toEqual(Array(6).fill("done"));
+    expect(Object.values(analysis.stages)).toEqual([...Array(6).fill("done"), "skipped"]);
     expect(analysis.key.pipelineVersion).toBe("20");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
@@ -691,6 +691,7 @@ describe("the analysis pipeline", () => {
         findings: "done",
         risk: "done",
         decisions: "done",
+        stops: "skipped",
       });
       expect(analysis.modelError).toEqual({
         stage: "intent",
@@ -1275,6 +1276,7 @@ describe("without the model", () => {
       findings: "skipped",
       risk: "skipped",
       decisions: "skipped",
+      stops: "skipped",
     });
     expect(analysis.key.pipelineVersion).toBe("20");
     expect(analysis.intent).toBeNull();
@@ -1465,7 +1467,7 @@ describe("runModel", () => {
     expect(after.intent).not.toBeNull();
     expect(after.decisions).toHaveLength(3);
     expect(after.tour?.builtBy).toBe("code");
-    expect(Object.values(after.stages)).toEqual(Array(6).fill("done"));
+    expect(Object.values(after.stages)).toEqual([...Array(6).fill("done"), "skipped"]);
     expect(model.callsTo("intent")).toHaveLength(1);
   });
 

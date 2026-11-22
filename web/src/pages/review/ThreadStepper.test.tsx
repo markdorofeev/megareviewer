@@ -165,6 +165,7 @@ describe("ClaudeElement with threads", () => {
       findings: stage,
       risk: stage,
       decisions: stage,
+      stops: "skipped",
     },
     modelError: null,
     modelOption: null,

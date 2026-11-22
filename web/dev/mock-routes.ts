@@ -54,7 +54,7 @@ import {
   largeAnalysisView,
   monorepoAnalysisView,
 } from "./fixtures/index.ts";
-import { analysisFailed, analysisInProgress } from "./progress.ts";
+import { analysisFailed, analysisInProgress, CODE_STAGE_COUNT } from "./progress.ts";
 import { afterModelRun, type Scenario, withoutModel } from "./scenarios.ts";
 
 /** The session token the mock accepts; open the UI with `?token=mock`. */
@@ -174,7 +174,7 @@ const issuesOf = (
 ) => issues.map((issue) => `${[where, ...issue.path.map(String)].join(".")}: ${issue.message}`);
 
 /** The code's stages, which run when a PR is opened; Claude's come after them, when asked. */
-const CODE_STAGES = StageName.options.length - MODEL_STAGES.length;
+const CODE_STAGES = CODE_STAGE_COUNT;
 
 /**
  * Every contract route in memory, backed by the fixtures. Starting an analysis replays the
@@ -228,7 +228,7 @@ export const createMockApi = (
     const ended = afterModelRun(fixtureView.analysis, scenario);
     return modelStagesDone >= MODEL_STAGES.length
       ? ended
-      : analysisInProgress(ended, StageName.options.length - MODEL_STAGES.length + modelStagesDone);
+      : analysisInProgress(ended, CODE_STAGES + modelStagesDone);
   };
   const view = (): AnalysisView => ({
     ...fixtureView,

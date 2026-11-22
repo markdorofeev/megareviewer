@@ -228,6 +228,7 @@ export const smallFeatureAnalysis: Analysis = {
     findings: "done",
     risk: "done",
     decisions: "done",
+    stops: "skipped",
   },
   filesFetched: { done: 5, total: 5 },
   pullRequest,
@@ -378,6 +379,8 @@ export const smallFeatureAnalysis: Analysis = {
     ],
     builtBy: "model",
   },
+  stops: null,
+  stopsError: null,
   warnings: [],
   usage: [
     {

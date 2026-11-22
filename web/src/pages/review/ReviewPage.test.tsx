@@ -102,6 +102,7 @@ const codeOnly: AnalysisView = {
       intent: "skipped",
       risk: "skipped",
       decisions: "skipped",
+      stops: "skipped",
     },
     modelError: null,
     modelOption: null,
@@ -1823,6 +1824,7 @@ describe("without the model", () => {
         intent: "skipped",
         findings: "skipped",
         decisions: "skipped",
+        stops: "skipped",
       },
       pullRequest:
         analysis.pullRequest === null

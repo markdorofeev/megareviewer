@@ -250,6 +250,14 @@ A finding the author fixes in one place comes back in another. This slice has me
 
 It's one stage for one agent: the call, the server's check and the line share the guardrail's types and the check configs.
 
+## Seventeenth slice: a tour of the PR
+
+Between the brief's three lines and the files, nothing says what happens and in which order. This slice adds a tour to the second layout, behind a switch in the Display menu: a few stops the model writes, each a sentence and the lines that decide, with a count of what the tour didn't show.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 64 | [A tour of the PR, behind a switch](63-tour.md) | 27, 45, 50, 56, 61 | The `stops` pass and its checks, the Understand layout, the Display menu's switches, the stops' eval scores |
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

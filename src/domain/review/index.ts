@@ -36,6 +36,8 @@ export {
   mapModelStages,
   modelRunnable,
   PipelineVersion,
+  runStages,
+  STOPS_STAGE,
   StageName,
   StageStatus,
   withoutModelRun,
@@ -207,6 +209,17 @@ export {
   ruleReasons,
 } from "./risk-rules.ts";
 export { pointSignalKey, postedSignalKey, publishedSignalKey } from "./signal-key.ts";
+export {
+  keptStops,
+  MAX_STOPS,
+  MIN_STOPS,
+  Stop,
+  type StopContext,
+  StopDraft,
+  StopId,
+  type StopProblem,
+  validateStops,
+} from "./stop.ts";
 export {
   ReviewThread,
   ThreadComment,

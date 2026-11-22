@@ -574,6 +574,7 @@ const analysis: Analysis = {
     findings: "done",
     risk: "done",
     decisions: "done",
+    stops: "skipped",
   },
   filesFetched: null,
   pullRequest,
@@ -806,6 +807,8 @@ const analysis: Analysis = {
     ],
     builtBy: "model",
   },
+  stops: null,
+  stopsError: null,
   warnings: [
     "Full file contents omitted for 1 file to fit the model's limit",
     "Couldn't fetch Jira tickets: Jira answered 503",

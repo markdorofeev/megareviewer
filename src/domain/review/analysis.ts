@@ -18,9 +18,18 @@ import { Guidance } from "./preference.ts";
 import { Sha, Timestamp } from "./primitives.ts";
 import { PullRequest, PullRequestRef } from "./pull-request.ts";
 import { RiskAssessment } from "./risk.ts";
+import { Stop } from "./stop.ts";
 import { Tour } from "./tour.ts";
 
-export const StageName = z.enum(["collect", "prep", "intent", "findings", "risk", "decisions"]);
+export const StageName = z.enum([
+  "collect",
+  "prep",
+  "intent",
+  "findings",
+  "risk",
+  "decisions",
+  "stops",
+]);
 export type StageName = z.infer<typeof StageName>;
 
 /** skipped: a model pass that didn't run because the model is off. */
@@ -126,13 +135,15 @@ const withoutTourPass = (entries: unknown) =>
     : entries;
 
 /**
- * Analyses stored before the findings pass lack its stage; those from while the model titled the
- * tour have a stage for that, which is left out.
+ * Analyses stored before the findings pass lack its stage, and those stored before the stops pass
+ * lack that; those from while the model titled the tour have a stage for that, which is left out.
  */
 const currentStages = (stages: unknown) => {
   if (typeof stages !== "object" || stages === null) return stages;
   return Object.fromEntries(
-    Object.entries({ findings: "skipped", ...stages }).filter(([stage]) => stage !== "tour"),
+    Object.entries({ findings: "skipped", stops: "skipped", ...stages }).filter(
+      ([stage]) => stage !== "tour",
+    ),
   );
 };
 
@@ -192,7 +203,15 @@ export const Analysis = z
     findings: z.array(Finding).readonly().default([]),
     risk: z.array(RiskAssessment).readonly(),
     decisions: z.array(Decision).readonly(),
+    /** The code's tour, which orders and labels the overview. */
     tour: Tour.nullable(),
+    /** The page's tour, which the stops pass writes; null when no run asked for it. */
+    stops: z.array(Stop).readonly().nullable().default(null),
+    /**
+     * Why a run that asked for the tour has none: the stops pass failed, or its checks left fewer
+     * than three stops. Never the run's `modelError`: the review is there without a tour.
+     */
+    stopsError: AnalysisError.nullable().default(null),
     warnings: z.array(z.string()).readonly(),
     usage: z.preprocess(withoutTourPass, z.array(ModelUsage)).readonly(),
     /** Defaults for analyses stored before model calls were traced. */
@@ -228,7 +247,19 @@ export const MODEL_STAGES = [
   "decisions",
 ] as const satisfies readonly StageName[];
 
-/** The stages with each model stage's status replaced by `next` of it. */
+/**
+ * The stage of the pass that writes the page's tour. It runs only when a run asks for it, and isn't
+ * one of the review's four: they decide whether the run worked, and it never does.
+ */
+export const STOPS_STAGE = "stops" as const satisfies StageName;
+
+const RUN_STAGES = [...MODEL_STAGES, STOPS_STAGE] as const;
+
+/** The stages a model run counts: the review's four, and the stops pass when it asked for the tour. */
+export const runStages = (analysis: Pick<Analysis, "stages">): readonly StageName[] =>
+  analysis.stages.stops === "skipped" ? MODEL_STAGES : RUN_STAGES;
+
+/** The stages with each model stage's status, the stops pass's too, replaced by `next` of it. */
 export const mapModelStages = (
   stages: Analysis["stages"],
   next: (status: StageStatus) => StageStatus,
@@ -238,17 +269,18 @@ export const mapModelStages = (
   findings: next(stages.findings),
   risk: next(stages.risk),
   decisions: next(stages.decisions),
+  stops: next(stages.stops),
 });
 
 /**
- * Still changing: the code's stages are running, or the model is. Once the code's are done, a
- * model stage is pending only while a run hasn't reached it; when they fail, the model's stay
- * pending and never run.
+ * Still changing: the code's stages are running, or the model is, the stops pass among it. Once the
+ * code's are done, a model stage is pending only while a run hasn't reached it; when they fail, the
+ * model's stay pending and never run.
  */
 export const inProgress = (analysis: Pick<Analysis, "status" | "stages">): boolean =>
   analysis.status === "running" ||
   (analysis.status === "complete" &&
-    MODEL_STAGES.some(
+    RUN_STAGES.some(
       (stage) => analysis.stages[stage] === "running" || analysis.stages[stage] === "pending",
     ));
 
@@ -283,6 +315,8 @@ export const withoutModelRun = (
   findings: [],
   risk: code.risk,
   decisions: [],
+  stops: null,
+  stopsError: null,
   warnings: code.warnings,
   usage: [],
   modelCalls: [],

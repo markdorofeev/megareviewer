@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { type Analysis, type AnalysisKey, analysisId, following, inProgress } from "./index.ts";
+import { smallFeatureAnalysis } from "../../application/testing/index.ts";
+import {
+  Analysis,
+  type AnalysisKey,
+  analysisId,
+  following,
+  inProgress,
+  MODEL_STAGES,
+  modelRunnable,
+  runStages,
+  withoutModelRun,
+} from "./index.ts";
 
 const key: AnalysisKey = {
   ref: { repo: { host: "github", owner: "acme", repo: "shop" }, number: 101 },
@@ -33,7 +44,7 @@ describe("analysisId", () => {
 describe("inProgress", () => {
   const codeStages = { collect: "done", prep: "done" } as const;
   const modelStages = (status: "pending" | "running" | "skipped") =>
-    ({ intent: status, findings: status, risk: status, decisions: status, tour: status }) as const;
+    ({ intent: status, findings: status, risk: status, decisions: status, stops: status }) as const;
   const at = (
     status: Analysis["status"],
     stages: Analysis["stages"],
@@ -66,6 +77,7 @@ describe("following", () => {
     findings: "done",
     risk: "done",
     decisions: "done",
+    stops: "skipped",
   } as const;
 
   it("is while the analysis is in progress, or its run's guardrail call runs after the passes", () => {
@@ -78,5 +90,60 @@ describe("following", () => {
     for (const guardrails of [null, "done", "failed"] as const) {
       expect(following({ status: "complete", stages: done, guardrails })).toBe(false);
     }
+  });
+});
+
+describe("the stops pass", () => {
+  const ran = {
+    collect: "done",
+    prep: "done",
+    intent: "done",
+    findings: "done",
+    risk: "done",
+    decisions: "done",
+  } as const;
+
+  it("keeps the analysis in progress while it runs after the review's four", () => {
+    expect(inProgress({ status: "complete", stages: { ...ran, stops: "running" } })).toBe(true);
+    expect(inProgress({ status: "complete", stages: { ...ran, stops: "done" } })).toBe(false);
+  });
+
+  it("isn't counted by whether the model can run again", () => {
+    expect(modelRunnable({ status: "complete", stages: { ...ran, stops: "failed" } })).toBe(false);
+    expect(
+      modelRunnable({ status: "complete", stages: { ...ran, risk: "failed", stops: "done" } }),
+    ).toBe(true);
+  });
+
+  it("is one of a run's stages only when the run asked for the tour", () => {
+    expect(runStages({ stages: { ...ran, stops: "skipped" } })).toEqual(MODEL_STAGES);
+    expect(runStages({ stages: { ...ran, stops: "pending" } })).toEqual([...MODEL_STAGES, "stops"]);
+  });
+
+  it("is skipped, with no stops, on an analysis stored before it", () => {
+    const { stops: _, stopsError: __, ...stored } = smallFeatureAnalysis;
+    const { stops: ___, ...stages } = smallFeatureAnalysis.stages;
+    const parsed = Analysis.parse({ ...stored, stages: { ...stages, tour: "done" } });
+    expect(parsed.stages.stops).toBe("skipped");
+    expect(parsed.stages).not.toHaveProperty("tour");
+    expect(parsed.stops).toBeNull();
+    expect(parsed.stopsError).toBeNull();
+  });
+
+  it("goes with the run when it's removed", () => {
+    const withStops: Analysis = {
+      ...smallFeatureAnalysis,
+      stages: { ...smallFeatureAnalysis.stages, stops: "failed" },
+      stops: [],
+      stopsError: { stage: "stops", code: "model-error", message: "No answer" },
+    };
+    const removed = withoutModelRun(
+      withStops,
+      { risk: [], warnings: [] },
+      smallFeatureAnalysis.updatedAt,
+    );
+    expect(removed.stages.stops).toBe("skipped");
+    expect(removed.stops).toBeNull();
+    expect(removed.stopsError).toBeNull();
   });
 });
