@@ -12,7 +12,7 @@ import {
   type RiskClass,
   type TourStep,
 } from "../../../../src/domain/review/index.ts";
-import { byTreePath, directoryOf } from "../../review/tree/paths.ts";
+import { byTreePath, directoryOf, treePath } from "../../review/tree/paths.ts";
 
 // The overview: a layered diagram of the changed files. It imports only domain code, so
 // `pnpm measure` prints its rows with the page's own rules.
@@ -30,7 +30,10 @@ export interface OverviewNode {
   readonly kind: "file" | "group" | "outside";
   /** The files it stands for, in the order the page shows them: one, or a directory's. */
   readonly paths: readonly string[];
-  /** The file's name with as many parent directories as make it unique; a group's directory. */
+  /**
+   * The file's name with as many parent directories as make it unique; a group's directory as the
+   * tree shows it. The box may shorten it further to fit.
+   */
   readonly label: string;
   readonly added: number;
   readonly deleted: number;
@@ -92,6 +95,10 @@ const HELPER_NAME =
 
 /** Up to three leading directories: what a group of files outside the pull request is. */
 const area = (path: string): string => directoryOf(path).split("/").slice(0, 3).join("/");
+/** A directory as the tree shows it, without a Java module's repeat of its name. */
+const directoryLabel = (directory: string): string =>
+  directory === "" ? "." : directoryOf(treePath(`${directory}/x`));
+
 /** A directory's box. */
 export const groupKey = (directory: string): string => `group:${directory}`;
 
@@ -565,7 +572,7 @@ export const fileOverview = (
       key,
       kind: group ? "group" : "file",
       paths: inIt,
-      label: group ? `${key.slice("group:".length) || "."}/` : (labels.get(key) ?? key),
+      label: group ? `${directoryLabel(key.slice("group:".length))}/` : (labels.get(key) ?? key),
       added: facts.reduce((sum, one) => sum + one.added, 0),
       deleted: facts.reduce((sum, one) => sum + one.deleted, 0),
       risk: facts.every((one) => one.risk === "mechanical") ? "mechanical" : "logic",

@@ -1,3 +1,4 @@
+import { shortenName, shortenPath, splitName } from "../../review/tree/names.ts";
 import type { FileOverview, OverviewEdge, OverviewNode } from "./overview.ts";
 
 // The overview's layout.
@@ -10,8 +11,11 @@ const NODE_GAP = 24;
 const PAD = 16;
 const MIN_WIDTH = 120;
 const MAX_WIDTH = 300;
-/** Roughly what a character takes: of the label, of the line under it, of a badge. */
-const LABEL_CHAR = 8.6;
+/**
+ * What a character takes: of the label, in Geist Mono, exactly; roughly, of the line under it and
+ * of a badge.
+ */
+const LABEL_CHAR = 7.2;
 const META_CHAR = 6.6;
 const BADGE_CHAR = 6.7;
 /** The padding beside the label, and the expand button beside a directory's. */
@@ -37,6 +41,26 @@ export const metaText = (
         ...node.entries,
       ].join(" · ");
 
+const labelRoom = (node: OverviewNode): number =>
+  LABEL_ROOM + (node.kind === "group" && node.paths.length > 1 ? EXPAND_ROOM : 0);
+
+/**
+ * The label as its box shows it, fitted to the widest box: a path loses whole directories from its
+ * middle, so where it starts and the directory or file it names stay readable, as in the tree; a
+ * file name still too long loses words from its middle, never its extension.
+ */
+export const shownLabel = (node: OverviewNode): string => {
+  const fits = (text: string) => text.length * LABEL_CHAR + labelRoom(node) <= MAX_FIT;
+  const slash = node.label.endsWith("/") ? "/" : "";
+  const path = node.label.slice(0, node.label.length - slash.length);
+  const short = shortenPath(path, (text) => fits(text + slash));
+  if (slash !== "" || fits(short)) return short + slash;
+  const cut = short.lastIndexOf("/") + 1;
+  const [stem, extension] = splitName(short.slice(cut));
+  const head = short.slice(0, cut);
+  return head + shortenName(stem, (text) => fits(head + text + extension)) + extension;
+};
+
 /**
  * Wider with more lines changed, up to a maximum, and at least wide enough for its label, entries
  * and badges.
@@ -48,9 +72,7 @@ export const nodeWidth = (node: OverviewNode): number => {
   );
   const fit = Math.min(
     Math.max(
-      node.label.length * LABEL_CHAR +
-        LABEL_ROOM +
-        (node.kind === "group" && node.paths.length > 1 ? EXPAND_ROOM : 0),
+      shownLabel(node).length * LABEL_CHAR + labelRoom(node),
       metaText(node).length * META_CHAR + TEXT_ROOM,
       badges + TEXT_ROOM,
     ),

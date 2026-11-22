@@ -15,6 +15,7 @@ import {
   metaText,
   NODE_HEIGHT,
   nodeWidth,
+  shownLabel,
 } from "./overview-layout.ts";
 
 const USE_NAMES = {
@@ -50,6 +51,7 @@ const NodeButton = ({
   readonly onFocus: (node: OverviewNode | null) => void;
 }) => {
   const group = node.kind === "group";
+  const expandable = group && node.paths.length > 1;
   const outside = node.kind === "outside";
   const name = (
     outside
@@ -94,18 +96,24 @@ const NodeButton = ({
         data-key={node.key}
         aria-label={name}
         aria-current={current ? "location" : undefined}
-        title={group ? node.label : node.paths.length === 1 ? node.paths[0] : undefined}
+        title={
+          group
+            ? `${node.key.slice("group:".length)}/`
+            : node.paths.length === 1
+              ? node.paths[0]
+              : undefined
+        }
         onClick={() => onOpen(node)}
         onFocus={() => onFocus(node)}
         onMouseEnter={() => onFocus(node)}
         onMouseLeave={() => onFocus(null)}
       >
-        <span className={cn("flex min-w-0 items-baseline gap-2", group && "pr-6")}>
+        <span className={cn("flex min-w-0 items-baseline gap-2", expandable && "pr-6")}>
           <span
             data-slot="overview-label"
             className="min-w-0 truncate font-mono text-code-compact font-semibold"
           >
-            {node.label}
+            {shownLabel(node)}
           </span>
         </span>
         <span className="truncate">{metaText(node)}</span>
@@ -122,7 +130,7 @@ const NodeButton = ({
           </span>
         )}
       </button>
-      {group && node.paths.length > 1 && (
+      {expandable && (
         <Button
           variant="ghost"
           size="icon-xs"

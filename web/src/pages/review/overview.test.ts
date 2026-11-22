@@ -573,6 +573,21 @@ describe("fileOverview by directory", () => {
     expect(overview.placeOf.get("tests/test_api.py")).toBe("group:api");
   });
 
+  it("labels a Java module's package without the module's name again", () => {
+    const core = "substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core";
+    const files = [
+      file(`${core}/Isolates.java`, [1]),
+      file(`${core}/SubstrateOptions.java`, [2]),
+      file(`${core}/pgo/Profile.java`, [3]),
+      file(`${core}/pgo/Recorder.java`, [4]),
+    ];
+    const overview = fileOverview(input(files), tourOf(files));
+    expect(overview.strip.map((node) => [node.key, node.label])).toEqual([
+      [`group:${core}`, "substratevm/src/com.oracle.svm.core/"],
+      [`group:${core}/pgo`, "substratevm/src/com.oracle.svm.core/pgo/"],
+    ]);
+  });
+
   it("merges the links between two directories into one edge, keeping its request", () => {
     const files = [
       file("web/Page.tsx", [1]),
