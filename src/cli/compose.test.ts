@@ -226,19 +226,6 @@ describe("compose", () => {
     expect(histories({ github: null, bitbucket: null })).toEqual({});
   });
 
-  it("can't read past reviews from a host that isn't configured, which importing says", async () => {
-    const composition = await composed({ ...(await configIn()), github: null });
-    const repo = { host: "github", owner: "acme", repo: "shop" } as const;
-
-    expect(await composition.useCases.importPreferences(repo)).toEqual({
-      ok: false,
-      error: {
-        code: "bad-request",
-        message: "megareviewer can't read past reviews from GitHub",
-      },
-    });
-  });
-
   it("doesn't mount fake mode's control routes", async () => {
     const composition = await composed(await configIn());
     const response = await composition.app(4823).request("/__fake/publications", {

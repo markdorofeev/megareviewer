@@ -126,14 +126,10 @@ test("keeps the scope chosen in the URL, through a reload and Back", async ({ pa
   await expect(shop(page).getByRole("heading", { level: 2 })).toBeFocused();
 });
 
-test("suggests from what the reviewer did, and adds a suggestion", async ({ page }) => {
-  await openPreferences(page);
-  // Nothing is recorded yet, so there's nothing to suggest from, and the button says so.
-  const suggest = page.getByRole("button", { name: "Suggest from my reviews" });
-  await expect(suggest).toHaveAttribute("aria-disabled", "true");
-  await expect(suggest).toHaveAccessibleDescription(/^Nothing new to suggest from/);
-
-  // A dismissed point is something to suggest from.
+test("suggests for a repository from its host's comments and what the reviewer did", async ({
+  page,
+}) => {
+  // A dismissed point is something to suggest from, beside the reviewer's comments on the host.
   await openReview(page, PR.smallFeature, "Add receipt download endpoint");
   await saved(page, "dismissed", () =>
     page
@@ -143,13 +139,22 @@ test("suggests from what the reviewer did, and adds a suggestion", async ({ page
   );
 
   await page.getByRole("link", { name: "Preferences" }).click();
-  await expect(page.getByText("1 action recorded since the last suggestions")).toBeVisible();
-  await expect(suggest).toHaveAccessibleDescription(/^Runs Sonnet 5\.5 through Claude Code/);
+  await expect(everywhere(page)).toBeVisible();
+  const suggest = page.getByRole("button", { name: "Suggest from my reviews" });
+  // Only a repository's panel has it.
+  await expect(suggest).toHaveCount(0);
+  await openScope(page, /^acme\/shop/);
+  await expect(suggest).toHaveAccessibleDescription(
+    /^Reads what you did on its pull requests here and your comments on GitHub, then runs Sonnet 5\.5 through Claude Code/,
+  );
   await suggest.click();
+  // Each suggestion goes to the panel of its scope, and the line says where.
   await expect(
-    page.getByText("2 suggestions from 1 action, 1 for Everywhere and 1 for acme/shop."),
+    shop(page).getByText(
+      "Read 3 comments from 2 pull requests and 1 action recorded here: 2 suggestions, 1 for Everywhere and 1 for acme/shop.",
+    ),
   ).toBeVisible();
-  await expect(proposals(everywhere(page))).toHaveCount(1);
+  await expect(proposals(shop(page))).toHaveCount(1);
 
   await openScope(page, /^Suggestions/);
   await expect(proposals(suggestions(page))).toHaveCount(2);
@@ -172,23 +177,6 @@ test("suggests from what the reviewer did, and adds a suggestion", async ({ page
   await page.reload();
   await expect(preferences(shop(page))).toHaveCount(1);
   await expect(proposals(shop(page))).toHaveCount(0);
-});
-
-test("imports from the reviewer's past reviews of a repository", async ({ page }) => {
-  await openReview(page, PR.smallFeature, "Add receipt download endpoint", false);
-  await page.getByRole("link", { name: "Preferences" }).click();
-  await openScope(page, /^acme\/shop/);
-  // A repository with nothing for it yet offers both runs in its first-run box.
-  await expect(shop(page).locator("[data-slot=first-run]")).toBeVisible();
-  await shop(page).getByRole("button", { name: "Import from my past reviews" }).click();
-  // Each goes to the panel of its scope, and the line says where.
-  await expect(
-    shop(page).getByText(
-      "Read 3 comments from 2 pull requests: 2 suggestions, 1 for Everywhere and 1 for acme/shop.",
-    ),
-  ).toBeVisible();
-  await expect(proposals(shop(page))).toHaveCount(1);
-  await expect(shop(page).locator("[data-slot=first-run]")).toHaveCount(0);
 });
 
 test("switches a guideline file, which the next AI review doesn't read", async ({ page }) => {
@@ -324,7 +312,7 @@ for (const theme of ["light", "dark"] as const) {
       await openReview(page, PR.smallFeature, "Add receipt download endpoint", false);
       await page.getByRole("link", { name: "Preferences" }).click();
       await openScope(page, /^acme\/shop/);
-      await shop(page).getByRole("button", { name: "Import from my past reviews" }).click();
+      await shop(page).getByRole("button", { name: "Suggest from my reviews" }).click();
       await expect(proposals(shop(page))).toHaveCount(1);
       expect(await problems(page)).toEqual([]);
       await openScope(page, /^acme\/storefront/);

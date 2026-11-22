@@ -60,7 +60,7 @@ export const fixtureSuggestions: readonly PreferenceProposal[] = [
   }),
 ];
 
-/** What it proposes from the reviewer's past comments on a repository. */
+/** What it proposed from the reviewer's past comments, as an import did before suggestions read them. */
 export const fixtureImport: PreferenceProposal = proposal(3, {
   kind: "look-for",
   text: "Lookups that aren't scoped to the signed-in user",
@@ -120,7 +120,6 @@ export const fixturePreferencesView: PreferencesView = {
       guidelineNote: "No pull request of this repository has been analyzed yet",
     },
   ],
-  signalsSinceSuggestion: 14,
 };
 
 /** A reviewer who hasn't written a preference or reviewed anything yet. */
@@ -128,5 +127,4 @@ export const emptyPreferencesView: PreferencesView = {
   preferences: [],
   proposals: [],
   repositories: [],
-  signalsSinceSuggestion: 0,
 };

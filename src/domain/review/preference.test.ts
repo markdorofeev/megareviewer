@@ -5,7 +5,6 @@ import {
   CommentKey,
   canEnable,
   checkGuidanceMark,
-  evidenceRepo,
   type Guidance,
   guidanceOf,
   guidelineEnabled,
@@ -246,47 +245,6 @@ describe("resolveGuidanceMark", () => {
       label: "REVIEW.md",
       preferenceId: null,
     });
-  });
-});
-
-describe("evidenceRepo", () => {
-  const apiV2: RepoRef = { host: "github", owner: "acme", repo: "api-v2" };
-
-  it("is the only repository there is, whatever the evidence says", () => {
-    expect(evidenceRepo([], [shop, { ...shop }])).toEqual(shop);
-    expect(evidenceRepo(["Dismissed: Naming"], [shop])).toEqual(shop);
-  });
-
-  it("is the one repository every line names", () => {
-    const evidence = [
-      "Dismissed: Missing JSDoc on `parseConfig`, acme/shop #12",
-      "Dismissed: Missing JSDoc, acme/shop.",
-    ];
-    expect(evidenceRepo(evidence, [shop, api])).toEqual(shop);
-  });
-
-  it("is none when the lines name two repositories, or one names none", () => {
-    expect(
-      evidenceRepo(["Dismissed: A, acme/shop #1", "Raised: B, acme/api #2"], [shop, api]),
-    ).toBeNull();
-    expect(evidenceRepo(["Dismissed: A, acme/shop #1", "Dismissed: B"], [shop, api])).toBeNull();
-    expect(evidenceRepo(["acme/shop and acme/api both"], [shop, api])).toBeNull();
-  });
-
-  it("is none without evidence or without repositories", () => {
-    expect(evidenceRepo([], [shop, api])).toBeNull();
-    expect(evidenceRepo(["acme/shop #1"], [])).toBeNull();
-  });
-
-  it("doesn't take a longer name for the repository it starts with or ends in", () => {
-    expect(evidenceRepo(["Dismissed: A, acme/api-v2 #1"], [api, apiV2])).toEqual(apiV2);
-    expect(evidenceRepo(["Dismissed: A, acme/api.js #1"], [api, shop])).toBeNull();
-    expect(evidenceRepo(["Dismissed: A, big-acme/api #1"], [api, shop])).toBeNull();
-    expect(evidenceRepo(["see github.com/acme/api/pull/3"], [api, shop])).toBeNull();
-  });
-
-  it("can't tell one name on two hosts apart", () => {
-    expect(evidenceRepo(["acme/shop #1"], [shop, { ...shop, host: "bitbucket" }])).toBeNull();
   });
 });
 

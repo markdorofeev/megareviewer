@@ -64,9 +64,7 @@ export const describePreferenceStoreContract = (
       expect(await store.listPreferences()).toEqual([]);
       expect(await store.listProposals()).toEqual([]);
       expect(await store.listSignals(10)).toEqual([]);
-      expect(await store.countSignalsSince(null)).toBe(0);
       expect(await store.getGuidelineSwitches(repo)).toEqual(new Map());
-      expect(await store.getLastSuggestionAt()).toBeNull();
     });
 
     it("lists preferences in the order they were made, whatever order they were saved in", async () => {
@@ -155,6 +153,10 @@ export const describePreferenceStoreContract = (
 
       expect(await store.listSignals(10)).toEqual([raised, comment, signal()]);
       expect(await store.listSignals(2)).toEqual([raised, comment]);
+      // One repository's, newest first, as many as asked for.
+      expect(await store.listSignals(10, otherRepo)).toEqual([comment]);
+      expect(await store.listSignals(1, repo)).toEqual([raised]);
+      expect(await store.listSignals(10, { ...repo, host: "bitbucket" })).toEqual([]);
     });
 
     it("writes a signal once per key, the latest standing", async () => {
@@ -163,27 +165,15 @@ export const describePreferenceStoreContract = (
       await store.recordSignal(key("point:a:f1"), raised);
 
       expect(await store.listSignals(10)).toEqual([raised]);
-      expect(await store.countSignalsSince(null)).toBe(1);
     });
 
     it("removes a signal by its key, and nothing for a key it doesn't have", async () => {
       await store.recordSignal(key("point:a:f1"), signal());
       await store.removeSignal(key("point:a:f2"));
-      expect(await store.countSignalsSince(null)).toBe(1);
+      expect(await store.listSignals(10)).toHaveLength(1);
 
       await store.removeSignal(key("point:a:f1"));
       expect(await store.listSignals(10)).toEqual([]);
-    });
-
-    it("counts the signals recorded after a time, not at it", async () => {
-      await store.recordSignal(key("point:a:f1"), signal({ at: "2026-11-03T10:00:00.000Z" }));
-      await store.recordSignal(key("point:a:f2"), signal({ at: "2026-11-03T10:00:00.500Z" }));
-      await store.recordSignal(key("point:a:f3"), signal({ at: "2026-11-04T10:00:00Z" }));
-
-      expect(await store.countSignalsSince(null)).toBe(3);
-      expect(await store.countSignalsSince("2026-11-03T10:00:00.000Z")).toBe(2);
-      expect(await store.countSignalsSince("2026-11-03T10:00:00.500Z")).toBe(1);
-      expect(await store.countSignalsSince("2026-11-04T10:00:00.000Z")).toBe(0);
     });
 
     it("keeps guideline switches per repository and path, the latest standing", async () => {
@@ -200,13 +190,6 @@ export const describePreferenceStoreContract = (
       );
       expect(await store.getGuidelineSwitches(otherRepo)).toEqual(new Map([["AGENTS.md", true]]));
       expect(await store.getGuidelineSwitches({ ...repo, host: "bitbucket" })).toEqual(new Map());
-    });
-
-    it("remembers when preferences were last suggested", async () => {
-      await store.recordSuggestionAt("2026-11-03T10:00:00.000Z");
-      await store.recordSuggestionAt("2026-11-07T10:00:00.000Z");
-
-      expect(await store.getLastSuggestionAt()).toBe("2026-11-07T10:00:00.000Z");
     });
 
     it("keeps what it was given, not the caller's own array", async () => {

@@ -126,8 +126,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     },
     getPreferences: async () => ok(await useCases.getPreferences()),
     addPreference: ({ body }) => useCases.addPreference(body),
-    suggestPreferences: ({ body }) => useCases.suggestPreferences(body?.optionId),
-    importPreferences: ({ body }) => useCases.importPreferences(body.repo, body.optionId),
+    suggestPreferences: ({ body }) => useCases.suggestPreferences(body.repo, body.optionId),
     setGuidelineSwitch: async ({ body }) => {
       const switched = await useCases.setGuidelineSwitch(body.repo, body.path, body.enabled);
       return switched.ok ? ok({}) : switched;
@@ -160,7 +159,6 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   register(app, routes.getPreferences, handlers.getPreferences);
   register(app, routes.addPreference, handlers.addPreference);
   register(app, routes.suggestPreferences, handlers.suggestPreferences);
-  register(app, routes.importPreferences, handlers.importPreferences);
   // Before the routes that take a preference's id in the same place.
   register(app, routes.setGuidelineSwitch, handlers.setGuidelineSwitch);
   register(app, routes.decideProposal, handlers.decideProposal);

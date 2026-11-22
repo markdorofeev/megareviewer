@@ -151,17 +151,11 @@ const responses: Record<RouteName, unknown> = {
         guidelineNote: "No pull request of this repository has been analyzed yet",
       },
     ],
-    signalsSinceSuggestion: 14,
   },
   addPreference: preference,
   updatePreference: { ...preference, enabled: false },
   deletePreference: {},
-  suggestPreferences: { proposals: [proposal], signals: 14 },
-  importPreferences: {
-    proposals: [{ ...proposal, source: "imported" }],
-    comments: 92,
-    pullRequests: 30,
-  },
+  suggestPreferences: { proposals: [proposal], signals: 14, comments: 92, pullRequests: 30 },
   decideProposal: { preference: { ...preference, source: "learned" } },
   setGuidelineSwitch: {},
 };
@@ -185,7 +179,7 @@ const requests: Partial<Record<RouteName, unknown>> = {
   },
   addPreference: { kind: "dont-flag", text: "Naming", scope: { kind: "repo", repo } },
   updatePreference: { enabled: false },
-  importPreferences: { repo },
+  suggestPreferences: { repo },
   decideProposal: { decision: "accept", text: "Missing JSDoc on helpers" },
   setGuidelineSwitch: { repo, path: "CLAUDE.md", enabled: true },
 };
@@ -206,12 +200,13 @@ describe("routes", () => {
     }
   });
 
-  it("takes a model call's request without a body, as the default option", () => {
-    expect(routes.suggestPreferences.request.safeParse(undefined).success).toBe(true);
-    expect(
-      routes.suggestPreferences.request.safeParse({ optionId: "claude-code/claude-haiku-5-5" })
-        .success,
-    ).toBe(true);
+  it("takes a suggestion's repository, with or without a model option", () => {
+    const { request } = routes.suggestPreferences;
+    expect(request.safeParse({ repo }).success).toBe(true);
+    expect(request.safeParse({ repo, optionId: "claude-code/claude-haiku-5-5" }).success).toBe(
+      true,
+    );
+    expect(request.safeParse(undefined).success).toBe(false);
   });
 
   it("takes a preference's text trimmed, between 1 and 300 characters", () => {

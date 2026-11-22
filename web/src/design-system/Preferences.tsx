@@ -14,7 +14,7 @@ import { type Api, ApiContext, createApiClient } from "../api/index.ts";
 import { ConnectionsProvider } from "../app/connections-context.tsx";
 import { ModelAction } from "../pages/preferences/ModelAction.tsx";
 import { PreferenceForm } from "../pages/preferences/PreferenceForm.tsx";
-import { NOTHING_RECORDED, PreferencesPage } from "../pages/preferences/PreferencesPage.tsx";
+import { PreferencesPage } from "../pages/preferences/PreferencesPage.tsx";
 import { GLOBAL } from "../pages/preferences/rule.tsx";
 import { POINT_GUIDANCE, useDemoChoice } from "./fixtures.ts";
 
@@ -112,34 +112,19 @@ const SuggestStates = () => {
   const locked = useDemoChoice(lockedModelOptions);
   const suggest = {
     label: "Suggest from my reviews",
-    running: "Reading what you did in reviews…",
+    running: "Reading your reviews of acme/shop…",
     icon: <SparklesIcon aria-hidden="true" />,
+    what: "Reads what you did on its pull requests here and your comments on GitHub, then runs",
     run: noRun,
     now,
   };
   return (
     <div className="grid gap-4 rounded-xl bg-surface-subtle p-4 lg:grid-cols-2">
-      <Example title="Something recorded">
-        <ModelAction
-          {...suggest}
-          choice={choice}
-          idle="14 actions recorded since the last suggestions"
-        />
-      </Example>
-      <Example title="Nothing recorded">
-        <ModelAction
-          {...suggest}
-          choice={choice}
-          blocked={NOTHING_RECORDED}
-          idle={NOTHING_RECORDED}
-        />
+      <Example title="Ready">
+        <ModelAction {...suggest} choice={choice} />
       </Example>
       <Example title="No model can run">
-        <ModelAction
-          {...suggest}
-          choice={locked}
-          idle="14 actions recorded since the last suggestions"
-        />
+        <ModelAction {...suggest} choice={locked} />
       </Example>
       <Example title="Running">
         <ModelAction
@@ -164,7 +149,7 @@ const SuggestStates = () => {
           choice={choice}
           initial={{
             is: "done",
-            said: "2 suggestions from 14 actions, 1 for Everywhere and 1 for acme/shop.",
+            said: "Read 92 comments from 30 pull requests and 14 actions recorded here: 2 suggestions, 1 for Everywhere and 1 for acme/shop.",
           }}
         />
       </Example>

@@ -15,8 +15,6 @@ export {
   GuidelineSwitched,
   GuidelineSwitchRequest,
   HostStatus,
-  ImportedPreferences,
-  ImportPreferencesRequest,
   type JsonRoute,
   PreferenceDeleted,
   PreferencesView,

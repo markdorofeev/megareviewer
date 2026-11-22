@@ -40,7 +40,6 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     updatePreference: preferences.updatePreference,
     deletePreference: preferences.deletePreference,
     suggestPreferences: preferences.suggestPreferences,
-    importPreferences: preferences.importPreferences,
     decideProposal: preferences.decideProposal,
     setGuidelineSwitch: preferences.setGuidelineSwitch,
   };

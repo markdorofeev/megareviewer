@@ -5,7 +5,6 @@ import {
   type DecideProposalRequest,
   ErrorResponse,
   type GuidelineSwitchRequest,
-  type ImportPreferencesRequest,
   type JsonRoute,
   type PublicationPreviewRequest,
   type PublishRequest,
@@ -106,9 +105,8 @@ export const createApiClient = (options: ApiClientOptions) => {
     postComment: (id: AnalysisId, body: HunkComment) => send(routes.postComment, { id }, body),
     getPreferences: () => send(routes.getPreferences, {}),
     addPreference: (body: AddPreferenceRequest) => send(routes.addPreference, {}, body),
-    suggestPreferences: (body: SuggestPreferencesRequest = {}) =>
+    suggestPreferences: (body: SuggestPreferencesRequest) =>
       send(routes.suggestPreferences, {}, body),
-    importPreferences: (body: ImportPreferencesRequest) => send(routes.importPreferences, {}, body),
     setGuidelineSwitch: (body: GuidelineSwitchRequest) => send(routes.setGuidelineSwitch, {}, body),
     decideProposal: (proposalId: ProposalId, body: DecideProposalRequest) =>
       send(routes.decideProposal, { proposalId }, body),

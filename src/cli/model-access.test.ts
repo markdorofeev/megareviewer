@@ -306,7 +306,7 @@ describe("createModelCatalog", () => {
       comments: [],
       preferences: [],
       rejected: [],
-      repo: null,
+      repo: { host: "github", owner: "acme", repo: "shop" },
     });
     expect(answered).toEqual({
       ok: true,

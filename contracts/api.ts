@@ -181,8 +181,6 @@ export const PreferencesView = z
     proposals: z.array(PreferenceProposal).readonly(),
     /** The repositories analyzed lately, then the others that have a preference. */
     repositories: z.array(RepositoryPreferences).readonly(),
-    /** Review signals recorded since preferences were last suggested from them. */
-    signalsSinceSuggestion: z.number().int().nonnegative(),
   })
   .readonly();
 export type PreferencesView = z.infer<typeof PreferencesView>;
@@ -211,34 +209,24 @@ export type UpdatePreferenceRequest = z.infer<typeof UpdatePreferenceRequest>;
 export const PreferenceDeleted = z.object({}).readonly();
 export type PreferenceDeleted = z.infer<typeof PreferenceDeleted>;
 
-/** The option to make the call on; the server's default without one, or without a body. */
-export const SuggestPreferencesRequest = RunModelRequest;
+/** The repository to suggest for, and the option to make the call on; the default without one. */
+export const SuggestPreferencesRequest = z
+  .object({ repo: RepoRef, optionId: ModelOptionId.optional() })
+  .readonly();
 export type SuggestPreferencesRequest = z.infer<typeof SuggestPreferencesRequest>;
 
 export const SuggestedPreferences = z
   .object({
     /** The proposals this call added: none when the model had nothing new to say. */
     proposals: z.array(PreferenceProposal).readonly(),
-    /** How many review signals it read. */
+    /** The review signals it read, and the reviewer's comments on the host none of them repeat. */
     signals: z.number().int().nonnegative(),
-  })
-  .readonly();
-export type SuggestedPreferences = z.infer<typeof SuggestedPreferences>;
-
-export const ImportPreferencesRequest = z
-  .object({ repo: RepoRef, optionId: ModelOptionId.optional() })
-  .readonly();
-export type ImportPreferencesRequest = z.infer<typeof ImportPreferencesRequest>;
-
-export const ImportedPreferences = z
-  .object({
-    proposals: z.array(PreferenceProposal).readonly(),
-    /** The reviewer's comments it read, from this many pull requests. */
     comments: z.number().int().nonnegative(),
+    /** The pull requests the comments were read from; 0 for a host it can't read them from. */
     pullRequests: z.number().int().nonnegative(),
   })
   .readonly();
-export type ImportedPreferences = z.infer<typeof ImportedPreferences>;
+export type SuggestedPreferences = z.infer<typeof SuggestedPreferences>;
 
 /** Accepting a proposal, with what the reviewer changed in it, or rejecting it. */
 export const DecideProposalRequest = z
@@ -499,9 +487,10 @@ export const routes = {
     response: Preference,
   },
   /**
-   * Proposes preferences from the review signals recorded here, in one model call on the chosen
-   * option or the default: the response is its result, with no events. Answers bad-request when
-   * no signal is recorded, and model-unavailable, with why, when the option can't run.
+   * Proposes preferences for a repository from the review signals recorded on its pull requests
+   * and the reviewer's own comments on its host, in one model call on the chosen option or the
+   * default: the response is its result, with no events. With nothing to read, no proposals and
+   * no call. Answers model-unavailable, with why, when the option can't run.
    */
   suggestPreferences: {
     method: "POST",
@@ -509,17 +498,6 @@ export const routes = {
     params: NoParams,
     request: SuggestPreferencesRequest,
     response: SuggestedPreferences,
-  },
-  /**
-   * Proposes preferences for a repository from the reviewer's own comments on its recent pull
-   * requests, read from its host, in one model call. No comments is no proposals.
-   */
-  importPreferences: {
-    method: "POST",
-    path: "/api/preferences/imports",
-    params: NoParams,
-    request: ImportPreferencesRequest,
-    response: ImportedPreferences,
   },
   /** Switches a repository's guideline file on or off for the model runs on its pull requests. */
   setGuidelineSwitch: {

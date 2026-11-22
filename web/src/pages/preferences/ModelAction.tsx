@@ -42,16 +42,10 @@ export interface ModelActionProps {
   /** What it says while it runs: "Reading your reviews…". */
   readonly running: string;
   readonly icon: ReactNode;
-  /** The smaller button, for the quieter of two side by side. */
-  readonly size?: "sm" | "default";
   /** The reviewer's choice of model, the same as the review page's. */
   readonly choice: ModelChoice;
-  /** How the tooltip starts, before the model's name. */
+  /** How the tooltip starts, before the model's name: what it reads, then "runs". */
   readonly what?: string;
-  /** Why there's nothing to run it on, whatever the model. */
-  readonly blocked?: string | null;
-  /** What the status line says before it has run. */
-  readonly idle?: ReactNode;
   readonly run: (optionId: ModelOptionId | undefined) => Promise<ModelActionResult>;
   readonly now?: () => number;
   readonly phase: RunPhase;
@@ -64,9 +58,8 @@ const start = async ({ choice, run, now = Date.now, onPhase }: ModelActionProps)
   onPhase(result.ok ? { is: "done", said: result.said } : { is: "failed", ...result });
 };
 
-/** What the button's tooltip and description say: why it can't run, or what runs it. */
-const noteOf = ({ choice, blocked = null, what = "Runs" }: ModelActionProps): string | null =>
-  blocked ??
+/** What the button's tooltip and description say: why no model can run, or what runs it. */
+const noteOf = ({ choice, what = "Runs" }: ModelActionProps): string | null =>
   choice.locked ??
   (choice.chosen === null
     ? null
@@ -74,15 +67,14 @@ const noteOf = ({ choice, blocked = null, what = "Runs" }: ModelActionProps): st
 
 /**
  * A button that makes one model call on the option chosen for Request AI review, with the same
- * arrow beside it to change that choice. Its tooltip says which model and who pays, as that
- * button's does. It can't run twice at once; when it can't run at all it stays focusable and says
- * why. What came of it is `ModelActionStatus`, which the panel places apart from it.
+ * arrow beside it to change that choice. Its tooltip says what it reads, which model and who
+ * pays, as that button's does. It can't run twice at once; when no model can run it stays
+ * focusable and says why. What came of it is `ModelActionStatus`, which the panel places apart.
  */
 export const ModelActionButton = (props: ModelActionProps) => {
   const id = useId();
-  const { label, icon, size = "default", choice, blocked = null, phase } = props;
+  const { label, icon, choice, phase } = props;
   const busy = phase.is === "running";
-  const cannot = blocked ?? choice.locked;
   const note = noteOf(props);
   return (
     <span data-slot="model-action" className="flex shrink-0 items-center">
@@ -91,8 +83,7 @@ export const ModelActionButton = (props: ModelActionProps) => {
           render={
             <Button
               variant="ai-quiet"
-              size={size}
-              disabled={busy || cannot !== null || choice.chosen === null}
+              disabled={busy || choice.locked !== null || choice.chosen === null}
               focusableWhenDisabled
               aria-busy={busy}
               aria-describedby={note === null ? undefined : `${id}-note`}
@@ -103,7 +94,7 @@ export const ModelActionButton = (props: ModelActionProps) => {
         >
           {busy ? (
             <LoaderCircleIcon aria-hidden="true" className={SPIN} />
-          ) : choice.locked !== null && blocked === null ? (
+          ) : choice.locked !== null ? (
             <LockIcon aria-hidden="true" />
           ) : (
             icon
@@ -111,7 +102,7 @@ export const ModelActionButton = (props: ModelActionProps) => {
           {label}
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">
-          {cannot !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
+          {choice.locked !== null && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
           {note}
         </TooltipContent>
       </Tooltip>
@@ -119,7 +110,7 @@ export const ModelActionButton = (props: ModelActionProps) => {
         choice={choice}
         disabled={busy || choice.options.length === 0}
         variant="ai-quiet"
-        size={size}
+        size="default"
       />
       {/* The tooltip is for the eye; a screen reader reads the same words as the description. */}
       {note !== null && (
@@ -131,11 +122,11 @@ export const ModelActionButton = (props: ModelActionProps) => {
   );
 };
 
-/** What a run is doing or came to, with Try again after a failure; before a run, `idle`. */
+/** What a run is doing or came to, with Try again after a failure; nothing before a run. */
 export const ModelActionStatus = (props: ModelActionProps & { readonly className?: string }) => {
-  const { running, idle = null, now = Date.now, phase, className } = props;
+  const { running, now = Date.now, phase, className } = props;
   const elapsed = useElapsed(phase.is === "running" ? phase.since : null, now);
-  if (phase.is === "idle" && idle === null) return null;
+  if (phase.is === "idle") return null;
   return (
     <p
       role={phase.is === "failed" ? "alert" : "status"}
@@ -152,7 +143,7 @@ export const ModelActionStatus = (props: ModelActionProps & { readonly className
         </>
       ) : phase.is === "done" ? (
         phase.said
-      ) : phase.is === "failed" ? (
+      ) : (
         <>
           <span>
             <TriangleAlertIcon aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" />
@@ -166,8 +157,6 @@ export const ModelActionStatus = (props: ModelActionProps & { readonly className
             Try again
           </Button>
         </>
-      ) : (
-        idle
       )}
     </p>
   );

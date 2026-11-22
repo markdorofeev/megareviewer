@@ -126,6 +126,32 @@ export const whereAdded = (
 };
 
 /**
+ * What a suggestion read and came to, as the line under the panel's title says it: the host's
+ * comments and the actions recorded here, then how many suggestions and `where` they went.
+ */
+export const suggestionSaid = (
+  read: { readonly signals: number; readonly comments: number; readonly pullRequests: number },
+  added: number,
+  where: string,
+): string => {
+  const parts = [
+    ...(read.comments > 0
+      ? [`${plural(read.comments, "comment")} from ${plural(read.pullRequests, "pull request")}`]
+      : []),
+    ...(read.signals > 0 ? [`${plural(read.signals, "action")} recorded here`] : []),
+  ];
+  if (parts.length === 0) {
+    return read.pullRequests === 0
+      ? "Found nothing to suggest from: no comment of yours on its pull requests, and nothing you did here."
+      : `Found no comment of yours on its last ${plural(read.pullRequests, "pull request")}, and nothing you did here.`;
+  }
+  const from = `Read ${AND.format(parts)}`;
+  return added === 0
+    ? `${from}: nothing new to suggest.`
+    : `${from}: ${plural(added, "suggestion")}, ${where}.`;
+};
+
+/**
  * What the scope list calls a repository: its name, with its owner only where another repository
  * listed has the same name, since the full name is in its tooltip.
  */

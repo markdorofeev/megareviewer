@@ -1,4 +1,4 @@
-import { GlobeIcon, HistoryIcon, SparklesIcon } from "lucide-react";
+import { GlobeIcon, SparklesIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { PreferencesView } from "../../../../contracts/index.ts";
 import type {
@@ -45,11 +45,11 @@ import type { ProposalActions } from "./Suggested.tsx";
 import {
   listName,
   panelFor,
-  plural,
   preferencesIn,
   failureReason as reason,
   repositoriesOf,
   SUGGESTIONS,
+  suggestionSaid,
   whereAdded,
   withGuidelineSwitch,
   withoutPreference,
@@ -57,9 +57,6 @@ import {
   withPreference,
   withProposals,
 } from "./view.ts";
-
-export const NOTHING_RECORDED =
-  "Nothing new to suggest from: megareviewer records the points you dismiss and raise and the comments you post.";
 
 const LoadingPreferences = () => (
   <div
@@ -229,65 +226,21 @@ export const PreferencesPage = ({
         added,
         scopeOptions(repositoriesOf(withProposals(view, added)).map((one) => one.repo)),
       );
-    const signals = view.signalsSinceSuggestion;
-
-    const suggest: ModelActionProps = {
-      ...run("suggest"),
+    const suggest = (repo: RepoRef): ModelActionProps => ({
+      ...run(repoKey(repo)),
       label: "Suggest from my reviews",
-      running: "Reading what you did in reviews…",
+      running: `Reading your reviews of ${repoName(repo)}…`,
       icon: <SparklesIcon aria-hidden="true" />,
-      blocked: signals === 0 ? NOTHING_RECORDED : null,
-      idle:
-        signals === 0
-          ? NOTHING_RECORDED
-          : `${plural(signals, "action")} recorded since the last suggestions`,
+      what: `Reads what you did on its pull requests here and your comments on ${HOST_NAMES[repo.host]}, then runs`,
       run: async (optionId: ModelOptionId | undefined): Promise<ModelActionResult> => {
-        const result = await client.suggestPreferences(optionId === undefined ? {} : { optionId });
-        if (!result.ok) return { ok: false, message: reason(result.error) };
-        const { proposals: added, signals: read } = result.value;
-        patch((previous) => ({ ...withProposals(previous, added), signalsSinceSuggestion: 0 }));
-        const from = `${plural(added.length, "suggestion")} from ${plural(read, "action")}`;
-        return {
-          ok: true,
-          said:
-            added.length === 0
-              ? `Nothing new to suggest from ${plural(read, "action")}.`
-              : `${from}, ${where(added)}.`,
-        };
-      },
-    };
-
-    const importFrom = (repo: RepoRef): ModelActionProps => ({
-      ...run(`import ${repoKey(repo)}`),
-      label: "Import from my past reviews",
-      running: `Reading your comments on ${repoName(repo)}…`,
-      icon: <HistoryIcon aria-hidden="true" />,
-      what: `Reads your own comments on its recent pull requests on ${HOST_NAMES[repo.host]}, then runs`,
-      run: async (optionId: ModelOptionId | undefined): Promise<ModelActionResult> => {
-        const result = await client.importPreferences({
+        const result = await client.suggestPreferences({
           repo,
           ...(optionId === undefined ? {} : { optionId }),
         });
         if (!result.ok) return { ok: false, message: reason(result.error) };
-        const { proposals: added, comments, pullRequests } = result.value;
+        const { proposals: added, ...read } = result.value;
         patch((previous) => withProposals(previous, added));
-        if (comments === 0) {
-          return {
-            ok: true,
-            said:
-              pullRequests === 0
-                ? `Found no pull request of ${repoName(repo)} that you reviewed.`
-                : `Found no comment of yours on its last ${plural(pullRequests, "pull request")}.`,
-          };
-        }
-        const read = `Read ${plural(comments, "comment")} from ${plural(pullRequests, "pull request")}`;
-        return {
-          ok: true,
-          said:
-            added.length === 0
-              ? `${read}: nothing new to suggest.`
-              : `${read}: ${plural(added.length, "suggestion")}, ${where(added)}.`,
-        };
+        return { ok: true, said: suggestionSaid(read, added.length, where(added)) };
       },
     });
 
@@ -299,7 +252,6 @@ export const PreferencesPage = ({
       add,
       switchGuideline,
       suggest,
-      importFrom,
       heading,
       headingId,
     };

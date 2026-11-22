@@ -9,7 +9,6 @@ import {
   type RepoRef,
   ReviewSignal,
   type SignalKey,
-  Timestamp,
 } from "../../domain/review/index.ts";
 
 const ScopeColumns = {
@@ -51,8 +50,6 @@ const SignalRow = z.object({
   path: z.string().nullable(),
 });
 const SwitchRow = z.object({ path: z.string(), enabled: z.number() });
-const CountRow = z.object({ count: z.number() });
-const SuggestedRow = z.object({ suggested_at: z.string() });
 
 const parseJson = (text: string): unknown => {
   try {
@@ -117,9 +114,9 @@ export const createSqlitePreferenceStore = (db: DatabaseSync, logger: Logger): P
   const selectSignals = db.prepare(
     "SELECT * FROM review_signals ORDER BY julianday(at) DESC, signal_key LIMIT ?",
   );
-  const countSignals = db.prepare("SELECT COUNT(*) AS count FROM review_signals");
-  const countSignalsAfter = db.prepare(
-    "SELECT COUNT(*) AS count FROM review_signals WHERE julianday(at) > julianday(?)",
+  const selectRepoSignals = db.prepare(
+    `SELECT * FROM review_signals WHERE host = ? AND owner = ? AND repo = ?
+     ORDER BY julianday(at) DESC, signal_key LIMIT ?`,
   );
   const selectSwitches = db.prepare(
     "SELECT path, enabled FROM guideline_switches WHERE host = ? AND owner = ? AND repo = ?",
@@ -127,12 +124,6 @@ export const createSqlitePreferenceStore = (db: DatabaseSync, logger: Logger): P
   const upsertSwitch = db.prepare(
     `INSERT INTO guideline_switches (host, owner, repo, path, enabled) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (host, owner, repo, path) DO UPDATE SET enabled = excluded.enabled`,
-  );
-  const selectLastSuggestion = db.prepare(
-    "SELECT suggested_at FROM preference_suggestions ORDER BY julianday(suggested_at) DESC LIMIT 1",
-  );
-  const insertSuggestion = db.prepare(
-    "INSERT INTO preference_suggestions (suggested_at) VALUES (?)",
   );
 
   const parsed = <T>(what: string, id: string, result: z.ZodSafeParseResult<T>): T[] => {
@@ -236,8 +227,12 @@ export const createSqlitePreferenceStore = (db: DatabaseSync, logger: Logger): P
       deleteSignal.run(key);
     },
 
-    async listSignals(limit: number) {
-      return selectSignals.all(limit).flatMap((raw) => {
+    async listSignals(limit: number, repo?: RepoRef) {
+      const rows =
+        repo === undefined
+          ? selectSignals.all(limit)
+          : selectRepoSignals.all(repo.host, repo.owner, repo.repo, limit);
+      return rows.flatMap((raw) => {
         const row = SignalRow.parse(raw);
         return parsed(
           "review signal",
@@ -258,11 +253,6 @@ export const createSqlitePreferenceStore = (db: DatabaseSync, logger: Logger): P
       });
     },
 
-    async countSignalsSince(at: Timestamp | null) {
-      const row = at === null ? countSignals.get() : countSignalsAfter.get(at);
-      return CountRow.parse(row).count;
-    },
-
     async getGuidelineSwitches(repo: RepoRef) {
       return new Map(
         selectSwitches.all(repo.host, repo.owner, repo.repo).map((raw) => {
@@ -274,17 +264,6 @@ export const createSqlitePreferenceStore = (db: DatabaseSync, logger: Logger): P
 
     async setGuidelineSwitch(repo: RepoRef, path: string, enabled: boolean) {
       upsertSwitch.run(repo.host, repo.owner, repo.repo, path, enabled ? 1 : 0);
-    },
-
-    async getLastSuggestionAt() {
-      const row = selectLastSuggestion.get();
-      if (row === undefined) return null;
-      const at = Timestamp.safeParse(SuggestedRow.parse(row).suggested_at);
-      return at.success ? at.data : null;
-    },
-
-    async recordSuggestionAt(at: Timestamp) {
-      insertSuggestion.run(at);
     },
   };
 };

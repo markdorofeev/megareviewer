@@ -5,7 +5,6 @@ import type {
   RepoRef,
   ReviewSignal,
   SignalKey,
-  Timestamp,
 } from "../../domain/review/index.ts";
 
 /**
@@ -26,14 +25,9 @@ export interface PreferenceStore {
   /** Upsert by key, so a retry of what made the signal writes it once. */
   recordSignal(key: SignalKey, signal: ReviewSignal): Promise<void>;
   removeSignal(key: SignalKey): Promise<void>;
-  /** Newest first. */
-  listSignals(limit: number): Promise<ReviewSignal[]>;
-  /** How many signals were recorded after `at`; all of them for null. */
-  countSignalsSince(at: Timestamp | null): Promise<number>;
+  /** Newest first; only those on `repo`'s pull requests when it's given. */
+  listSignals(limit: number, repo?: RepoRef): Promise<ReviewSignal[]>;
   /** The guideline files the reviewer switched on or off for a repository, by path. */
   getGuidelineSwitches(repo: RepoRef): Promise<ReadonlyMap<string, boolean>>;
   setGuidelineSwitch(repo: RepoRef, path: string, enabled: boolean): Promise<void>;
-  /** When preferences were last suggested from the signals; null when never. */
-  getLastSuggestionAt(): Promise<Timestamp | null>;
-  recordSuggestionAt(at: Timestamp): Promise<void>;
 }

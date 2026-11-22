@@ -35,7 +35,7 @@ import {
   smallFeatureAnalysis,
 } from "../testing/index.ts";
 import { createUseCases } from "./index.ts";
-import { IMPORT_PULL_REQUESTS, SUGGESTION_SIGNALS } from "./preferences.ts";
+import { SUGGESTION_PULL_REQUESTS, SUGGESTION_SIGNALS } from "./preferences.ts";
 
 const shop: RepoRef = smallFeature.pullRequest.ref.repo;
 const api: RepoRef = { host: "github", owner: "acme", repo: "api" };
@@ -157,7 +157,6 @@ describe("getPreferences", () => {
       preferences: [],
       proposals: [],
       repositories: [],
-      signalsSinceSuggestion: 0,
     });
   });
 
@@ -273,7 +272,7 @@ describe("getPreferences", () => {
     clock.advance(1000);
     const second = await add("Retries", shop);
     await record(signal());
-    const suggested = await useCases.suggestPreferences();
+    const suggested = await useCases.suggestPreferences(shop);
     if (!suggested.ok) throw new Error(suggested.error.message);
     const [rejected, pending] = suggested.value.proposals;
     if (rejected === undefined) throw new Error("the fake suggests two");
@@ -283,19 +282,6 @@ describe("getPreferences", () => {
 
     expect(view.preferences).toEqual([first, second]);
     expect(view.proposals).toEqual([pending]);
-  });
-
-  it("counts the signals recorded since the last suggestions", async () => {
-    const { useCases, record, clock } = setup();
-    await record(signal({ at: clock.now() }), signal({ at: clock.now() }));
-    expect((await useCases.getPreferences()).signalsSinceSuggestion).toBe(2);
-
-    await useCases.suggestPreferences();
-    expect((await useCases.getPreferences()).signalsSinceSuggestion).toBe(0);
-
-    clock.advance(60_000);
-    await record(signal({ at: clock.now() }));
-    expect((await useCases.getPreferences()).signalsSinceSuggestion).toBe(1);
   });
 });
 
@@ -451,19 +437,17 @@ describe("deletePreference", () => {
 });
 
 describe("suggestPreferences", () => {
-  it("says there's nothing to suggest from without a signal, and calls no model", async () => {
-    const { useCases, suggester } = setup();
+  const comments = [
+    pastComment(7, "Filter by tenant here."),
+    pastComment(9, "This query isn't scoped to the tenant."),
+  ];
 
-    expect(await useCases.suggestPreferences()).toEqual(badRequest(/^Nothing to suggest from yet/));
-    expect(suggester.calls).toEqual([]);
-  });
-
-  it("proposes the model's drafts as learned, pending, from the signals and what's already said", async () => {
-    const { useCases, suggester, preferences, add, record } = setup();
+  it("proposes the model's drafts as learned and pending, for the repository unless a draft says everywhere", async () => {
+    const { useCases, suggester, history, preferences, add, record } = setup({ comments });
     const existing = await add("Retries");
     await record(signal(), signal({ kind: "raised", at: "2026-11-04T10:00:00.000Z" }));
 
-    const suggested = await useCases.suggestPreferences();
+    const suggested = await useCases.suggestPreferences(shop);
 
     expect(suggested).toEqual(
       ok({
@@ -490,30 +474,32 @@ describe("suggestPreferences", () => {
           },
         ],
         signals: 2,
+        comments: 2,
+        pullRequests: 2,
       }),
     );
+    expect(history.calls).toEqual([{ repo: shop, pullRequests: SUGGESTION_PULL_REQUESTS }]);
     expect(suggester.calls).toEqual([
       {
         signals: [signal({ kind: "raised", at: "2026-11-04T10:00:00.000Z" }), signal()],
-        comments: [],
+        comments: [comments[1], comments[0]],
         preferences: [existing],
         rejected: [],
-        repo: null,
+        repo: shop,
       },
     ]);
     expect(await preferences.listProposals()).toEqual(suggested.ok && suggested.value.proposals);
-    expect(await preferences.getLastSuggestionAt()).toBe("2026-11-10T10:00:00.000Z");
     expect(await preferences.listPreferences()).toEqual([existing]);
   });
 
-  it("reads the 200 newest signals", async () => {
+  it("reads only the repository's signals, the 200 newest", async () => {
     const { useCases, suggester, record } = setup();
     const many = Array.from({ length: SUGGESTION_SIGNALS + 5 }, (_, n) =>
       signal({ at: new Date(Date.UTC(2026, 9, 1, 0, n)).toISOString(), title: `Point ${n}` }),
     );
-    await record(...many);
+    await record(...many, signal({ pullRequest: { repo: api, number: 3 }, title: "Elsewhere" }));
 
-    const suggested = await useCases.suggestPreferences();
+    const suggested = await useCases.suggestPreferences(shop);
 
     expect(suggested.ok && suggested.value.signals).toBe(200);
     expect(suggester.calls[0]?.signals.map((one) => one.title)).toEqual(
@@ -524,32 +510,48 @@ describe("suggestPreferences", () => {
     );
   });
 
-  it("scopes a draft to the repository its evidence names, and to everywhere when it can't tell", async () => {
-    const drafts: ProposalDraft[] = [
-      {
-        ...jsdoc,
-        text: "One",
-        evidence: ["Dismissed: A, acme/api #3", "Dismissed: B, acme/api #4"],
-      },
-      {
-        ...jsdoc,
-        text: "Two",
-        evidence: ["Dismissed: A, acme/api #3", "Dismissed: C, acme/shop #12"],
-      },
-      { ...jsdoc, text: "Three", evidence: ["Dismissed: A"] },
-      { ...jsdoc, text: "Four", scope: "global", evidence: ["Dismissed: A, acme/api #3"] },
-    ];
-    const { useCases, record } = setup({ drafts });
-    await record(signal(), signal({ pullRequest: { repo: api, number: 3 } }));
+  it("sends a comment posted from here once, as the host has it", async () => {
+    const { useCases, suggester, record } = setup({ comments });
+    const posted = signal({
+      kind: "comment",
+      pointKind: null,
+      title: "",
+      text: "Filter by tenant  here.",
+      pullRequest: { repo: shop, number: 7 },
+    });
+    const older = signal({
+      ...posted,
+      text: "Name the unit.",
+      pullRequest: { repo: shop, number: 2 },
+    });
+    await record(posted, older);
 
-    const suggested = await useCases.suggestPreferences();
+    const suggested = await useCases.suggestPreferences(shop);
 
-    expect(suggested.ok && suggested.value.proposals.map((one) => [one.text, one.scope])).toEqual([
-      ["One", { kind: "repo", repo: api }],
-      ["Two", { kind: "global" }],
-      ["Three", { kind: "global" }],
-      ["Four", { kind: "global" }],
-    ]);
+    expect(suggested).toMatchObject({ ok: true, value: { signals: 1, comments: 2 } });
+    expect(suggester.calls[0]?.signals).toEqual([older]);
+  });
+
+  it("reads the signals alone where the host has no past reviews to read", async () => {
+    const { useCases, suggester, history, record } = setup({ comments, noHistory: true });
+    await record(signal());
+
+    expect(await useCases.suggestPreferences(shop)).toMatchObject({
+      ok: true,
+      value: { signals: 1, comments: 0, pullRequests: 0 },
+    });
+    expect(history.calls).toEqual([]);
+    expect(suggester.calls).toHaveLength(1);
+  });
+
+  it("answers no proposals with nothing to read, without a model call", async () => {
+    const { useCases, suggester, record } = setup({ comments });
+    await record(signal());
+
+    expect(await useCases.suggestPreferences(api)).toEqual(
+      ok({ proposals: [], signals: 0, comments: 0, pullRequests: 0 }),
+    );
+    expect(suggester.calls).toEqual([]);
   });
 
   it("keeps 5 lines of evidence, without the blank ones", async () => {
@@ -557,7 +559,7 @@ describe("suggestPreferences", () => {
     const { useCases, record } = setup({ drafts: [{ ...tenant, evidence }] });
     await record(signal());
 
-    const suggested = await useCases.suggestPreferences();
+    const suggested = await useCases.suggestPreferences(shop);
 
     expect(suggested.ok && suggested.value.proposals[0]?.evidence).toEqual([
       "one",
@@ -580,14 +582,14 @@ describe("suggestPreferences", () => {
     await add("Retries");
     await record(signal());
 
-    const first = await useCases.suggestPreferences();
-    const again = await useCases.suggestPreferences();
+    const first = await useCases.suggestPreferences(shop);
+    const again = await useCases.suggestPreferences(shop);
 
     expect(first.ok && first.value.proposals.map((one) => one.text)).toEqual([
       "Missing JSDoc on internal helpers",
       "Tenant isolation: every query filters by tenant ID",
     ]);
-    expect(again).toEqual(ok({ proposals: [], signals: 1 }));
+    expect(again).toEqual(ok({ proposals: [], signals: 1, comments: 0, pullRequests: 0 }));
     expect(await preferences.listProposals()).toHaveLength(2);
     expect(
       logger.entries.filter((entry) => entry.message.startsWith("Left out")).map((e) => e.fields),
@@ -597,27 +599,33 @@ describe("suggestPreferences", () => {
   it("never proposes again what the reviewer rejected, and tells the model what that was", async () => {
     const { useCases, suggester, record } = setup({ drafts: [jsdoc] });
     await record(signal());
-    const first = await useCases.suggestPreferences();
+    const first = await useCases.suggestPreferences(shop);
     const proposal = first.ok ? first.value.proposals[0] : undefined;
     if (proposal === undefined) throw new Error("the fake suggests one");
     await useCases.decideProposal(proposal.id, { decision: "reject" });
 
-    expect(await useCases.suggestPreferences()).toEqual(ok({ proposals: [], signals: 1 }));
+    expect(await useCases.suggestPreferences(shop)).toMatchObject({
+      ok: true,
+      value: { proposals: [] },
+    });
     expect(suggester.calls[1]?.rejected).toEqual([{ ...proposal, status: "rejected" }]);
   });
 
   it("proposes again a rule the reviewer accepted and then deleted", async () => {
     const { useCases, record } = setup({ drafts: [tenant] });
     await record(signal());
-    const first = await useCases.suggestPreferences();
+    const first = await useCases.suggestPreferences(shop);
     const proposal = first.ok ? first.value.proposals[0] : undefined;
     if (proposal === undefined) throw new Error("the fake suggests one");
     const accepted = await useCases.decideProposal(proposal.id, { decision: "accept" });
     if (!accepted.ok || accepted.value.preference === null) throw new Error("accepted");
-    expect(await useCases.suggestPreferences()).toEqual(ok({ proposals: [], signals: 1 }));
+    expect(await useCases.suggestPreferences(shop)).toMatchObject({
+      ok: true,
+      value: { proposals: [] },
+    });
 
     await useCases.deletePreference(accepted.value.preference.id);
-    const again = await useCases.suggestPreferences();
+    const again = await useCases.suggestPreferences(shop);
 
     expect(again.ok && again.value.proposals.map((one) => one.text)).toEqual([tenant.text]);
     expect(again.ok && again.value.proposals[0]?.id).not.toBe(proposal.id);
@@ -628,28 +636,29 @@ describe("suggestPreferences", () => {
     const { useCases, record, suggester } = setup({ modelOptions: [fakeModelOption(), opus] });
     await record(signal());
 
-    expect((await useCases.suggestPreferences(opus.id)).ok).toBe(true);
+    expect((await useCases.suggestPreferences(shop, opus.id)).ok).toBe(true);
     expect(suggester.calls).toHaveLength(1);
-    expect(await useCases.suggestPreferences("claude-code/claude-unknown")).toEqual(
+    expect(await useCases.suggestPreferences(shop, "claude-code/claude-unknown")).toEqual(
       badRequest("No model option claude-code/claude-unknown"),
     );
   });
 
-  it("says why when the option can't run, or can't make the call", async () => {
+  it("says why before reading anything when the option can't run, or can't make the call", async () => {
     const down = fakeModelOption({ available: false, reason: "Claude Code isn't signed in" });
-    const signedOut = setup({ modelOptions: [down] });
+    const signedOut = setup({ comments, modelOptions: [down] });
     await signedOut.record(signal());
     const cantSuggest = setup({ suggester: null });
     await cantSuggest.record(signal());
 
-    expect(await signedOut.useCases.suggestPreferences()).toEqual(
+    expect(await signedOut.useCases.suggestPreferences(shop)).toEqual(
       err({
         code: "model-unavailable",
         message: "Sonnet 5.5 through Claude Code can't run: Claude Code isn't signed in",
       }),
     );
     expect(signedOut.suggester.calls).toEqual([]);
-    expect(await cantSuggest.useCases.suggestPreferences()).toEqual(
+    expect(signedOut.history.calls).toEqual([]);
+    expect(await cantSuggest.useCases.suggestPreferences(shop)).toEqual(
       err({
         code: "model-unavailable",
         message: "Sonnet 5.5 through Claude Code can't run: it can't run",
@@ -657,129 +666,37 @@ describe("suggestPreferences", () => {
     );
   });
 
-  it("fails as a model error, proposing nothing and leaving the signals for next time", async () => {
-    const { useCases, suggester, record, preferences } = setup();
-    await record(signal({ at: "2026-11-10T09:00:00.000Z" }));
-    suggester.script(err({ kind: "overloaded", message: "The model is overloaded. Try again." }));
+  it("fails as the host's error, and as the model's, proposing nothing", async () => {
+    const { useCases, history, suggester, record, preferences } = setup({ comments });
+    await record(signal());
+    history.failWith(network);
+    expect(await useCases.suggestPreferences(shop)).toEqual(
+      err({ code: "host-error", message: "socket hang up" }),
+    );
+    expect(suggester.calls).toEqual([]);
 
-    expect(await useCases.suggestPreferences()).toEqual(
+    const fresh = setup({ comments });
+    fresh.suggester.script(
+      err({ kind: "overloaded", message: "The model is overloaded. Try again." }),
+    );
+    expect(await fresh.useCases.suggestPreferences(shop)).toEqual(
       err({ code: "model-error", message: "The model is overloaded. Try again." }),
     );
     expect(await preferences.listProposals()).toEqual([]);
-    expect(await preferences.getLastSuggestionAt()).toBeNull();
-    expect((await useCases.suggestPreferences()).ok).toBe(true);
-  });
-
-  it("makes one model call for two requests at once", async () => {
-    const { useCases, suggester, record, preferences } = setup();
-    await record(signal());
-
-    const [first, second] = await Promise.all([
-      useCases.suggestPreferences(),
-      useCases.suggestPreferences(),
-    ]);
-
-    expect(second).toEqual(first);
-    expect(suggester.calls).toHaveLength(1);
-    expect(await preferences.listProposals()).toHaveLength(2);
-  });
-});
-
-describe("importPreferences", () => {
-  const comments = [
-    pastComment(7, "Filter by tenant here."),
-    pastComment(9, "This query isn't scoped to the tenant."),
-  ];
-
-  it("proposes the model's drafts as imported, for the repository unless a draft says everywhere", async () => {
-    const { useCases, suggester, history } = setup({ comments });
-
-    const imported = await useCases.importPreferences(shop);
-
-    expect(imported).toMatchObject({
-      ok: true,
-      value: {
-        proposals: [
-          {
-            text: jsdoc.text,
-            source: "imported",
-            status: "pending",
-            scope: { kind: "repo", repo: shop },
-          },
-          { text: tenant.text, source: "imported", status: "pending", scope: { kind: "global" } },
-        ],
-        comments: 2,
-        pullRequests: 2,
-      },
-    });
-    expect(history.calls).toEqual([{ repo: shop, pullRequests: IMPORT_PULL_REQUESTS }]);
-    expect(suggester.calls).toEqual([
-      {
-        signals: [],
-        comments: [comments[1], comments[0]],
-        preferences: [],
-        rejected: [],
-        repo: shop,
-      },
-    ]);
-  });
-
-  it("answers no proposals where the reviewer left no comments, without a model call", async () => {
-    const { useCases, suggester } = setup({ comments });
-
-    expect(await useCases.importPreferences(api)).toEqual(
-      ok({ proposals: [], comments: 0, pullRequests: 0 }),
-    );
-    expect(suggester.calls).toEqual([]);
-  });
-
-  it("doesn't count an import as suggestions from the signals", async () => {
-    const { useCases, preferences } = setup({ comments });
-    await useCases.importPreferences(shop);
-    expect(await preferences.getLastSuggestionAt()).toBeNull();
-  });
-
-  it("refuses a host whose past reviews it can't read", async () => {
-    const { useCases } = setup({ comments, noHistory: true });
-    expect(await useCases.importPreferences(shop)).toEqual(
-      badRequest("megareviewer can't read past reviews from GitHub"),
-    );
-  });
-
-  it("fails as the host's error, and as the model's", async () => {
-    const { useCases, history, suggester } = setup({ comments });
-    history.failWith(network);
-    expect(await useCases.importPreferences(shop)).toEqual(
-      err({ code: "host-error", message: "socket hang up" }),
-    );
-    suggester.script(err({ kind: "refusal", message: "The model refused." }));
-    expect(await useCases.importPreferences(shop)).toEqual(
-      err({ code: "model-error", message: "The model refused." }),
-    );
-  });
-
-  it("says why before reading the host when the option can't run", async () => {
-    const down = fakeModelOption({ available: false, reason: "Claude Code isn't signed in" });
-    const { useCases, history } = setup({ comments, modelOptions: [down] });
-
-    expect(await useCases.importPreferences(shop)).toMatchObject({
-      ok: false,
-      error: { code: "model-unavailable" },
-    });
-    expect(history.calls).toEqual([]);
+    expect((await fresh.useCases.suggestPreferences(shop)).ok).toBe(true);
   });
 
   it("makes one read and one model call for two requests for a repository at once", async () => {
     const { useCases, history, suggester } = setup({ comments });
 
     const [first, second, other] = await Promise.all([
-      useCases.importPreferences(shop),
-      useCases.importPreferences(shop),
-      useCases.importPreferences(api),
+      useCases.suggestPreferences(shop),
+      useCases.suggestPreferences(shop),
+      useCases.suggestPreferences(api),
     ]);
 
     expect(second).toEqual(first);
-    expect(other).toEqual(ok({ proposals: [], comments: 0, pullRequests: 0 }));
+    expect(other).toEqual(ok({ proposals: [], signals: 0, comments: 0, pullRequests: 0 }));
     expect(history.calls).toHaveLength(2);
     expect(suggester.calls).toHaveLength(1);
   });
@@ -789,7 +706,7 @@ describe("decideProposal", () => {
   const proposed = async (drafts: readonly ProposalDraft[] = [jsdoc]) => {
     const made = setup({ drafts });
     await made.record(signal());
-    const suggested = await made.useCases.suggestPreferences();
+    const suggested = await made.useCases.suggestPreferences(shop);
     const proposal = suggested.ok ? suggested.value.proposals[0] : undefined;
     if (proposal === undefined) throw new Error("the fake suggests one");
     made.clock.advance(60_000);

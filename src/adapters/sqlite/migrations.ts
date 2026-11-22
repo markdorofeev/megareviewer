@@ -164,6 +164,10 @@ export const MIGRATIONS: readonly string[] = [
     used_at TEXT NOT NULL
   );
   `,
+  // A suggestion reads one repository's signals whenever it's asked for, so nothing counts since.
+  `
+  DROP TABLE preference_suggestions;
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

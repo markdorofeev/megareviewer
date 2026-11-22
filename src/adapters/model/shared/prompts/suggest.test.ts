@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { importInput, suggestionInput } from "../fixtures/suggestion.ts";
+import { suggestionInput } from "../fixtures/suggestion.ts";
 import {
   MAX_TEXT_CHARS,
   renderSuggestionInput,
@@ -30,7 +30,15 @@ describe("the suggestion prompt", () => {
     }
   });
 
-  it("asks for evidence that ends with its pull request, which is how a repository is found", () => {
+  it("says signals and the host's comments are one repository's, each comment given once", () => {
+    expect(SUGGEST_SYSTEM_PROMPT).toContain("all of it from the one repository");
+    expect(SUGGEST_SYSTEM_PROMPT).toContain(
+      'A comment that is also a "comment" signal is given once, as the signal or here, never both.',
+    );
+    expect(SUGGEST_SYSTEM_PROMPT).toContain("Signals and past comments count together");
+  });
+
+  it("asks for evidence that ends with its pull request", () => {
     expect(SUGGEST_SYSTEM_PROMPT).toContain(
       'then the pull request exactly as its pr writes it ("Dismissed: Missing JSDoc on `parseConfig`, acme/api #12")',
     );
@@ -66,11 +74,11 @@ describe("renderSuggestionInput", () => {
     expect(text).toContain(
       "<rejected_proposals>\nlook-for (acme/api): Missing tests for new endpoints\n</rejected_proposals>",
     );
-    expect(text).not.toContain("<past_comments>");
   });
 
-  it("writes an import's comments with their pull request, and leaves out the empty blocks", () => {
-    expect(renderSuggestionInput(importInput)).toBe(
+  it("writes the host's comments with their pull request, and leaves out the empty blocks", () => {
+    const comments = { ...suggestionInput, signals: [], preferences: [], rejected: [] };
+    expect(renderSuggestionInput(comments)).toBe(
       [
         "<review_history>",
         "<past_comments>",
@@ -109,8 +117,11 @@ describe("renderSuggestionInput", () => {
 
   it("cuts a text past the limit and marks it, as the prompt says", () => {
     const text = renderSuggestionInput({
-      ...importInput,
-      comments: importInput.comments.map((comment) => ({ ...comment, body: "é".repeat(5_000) })),
+      ...suggestionInput,
+      comments: suggestionInput.comments.map((comment) => ({
+        ...comment,
+        body: "é".repeat(5_000),
+      })),
     });
     expect(text).toContain(`\n${"é".repeat(MAX_TEXT_CHARS)}…\n</comment>`);
     expect(text).not.toContain("é".repeat(MAX_TEXT_CHARS + 1));
@@ -119,14 +130,11 @@ describe("renderSuggestionInput", () => {
 });
 
 describe("suggestMessage", () => {
-  it("puts the task after the data, and names the repository an import reads", () => {
-    const learned = suggestMessage(suggestionInput);
-    expect(learned.startsWith("<review_history>\n<signals>\n")).toBe(true);
-    expect(learned).toMatch(
-      /<\/review_history>\n\nTask: suggest\.\n\nPropose preferences from what/,
-    );
-    expect(suggestMessage(importInput)).toMatch(
-      /the reviewer's past comments on acme\/api, in <review_history>\. Every comment is from that repository, so "repo" means it\.$/,
+  it("puts the task after the data, and names the repository it reads", () => {
+    const message = suggestMessage(suggestionInput);
+    expect(message.startsWith("<review_history>\n<signals>\n")).toBe(true);
+    expect(message).toMatch(
+      /<\/review_history>\n\nTask: suggest\.\n\nPropose preferences from what the reviewer did on the pull requests of acme\/api and their past comments on them, in <review_history>\. Everything there is from acme\/api, so "repo" means it\.$/,
     );
   });
 });

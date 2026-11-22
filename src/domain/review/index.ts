@@ -125,7 +125,6 @@ export {
   canEnable,
   checkGuidanceMark,
   DEFAULT_GUIDELINE_PATH,
-  evidenceRepo,
   GUIDELINE_PATHS,
   Guidance,
   GuidanceEffect,

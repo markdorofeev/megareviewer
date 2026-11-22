@@ -55,27 +55,13 @@ describe("createFakeApp", () => {
     expect(list.items.map((item) => item.url)).toContain(intentFailsOnce.pullRequest.url);
   });
 
-  it("starts without preferences, and proposes two from the reviewer's three past comments", async () => {
-    const { call } = await setup();
+  it("starts without preferences, and proposes two from the reviewer's past comments and a signal", async () => {
+    const { fake, call } = await setup();
     const { repo } = smallFeature.pullRequest.ref;
     const view = routes.getPreferences.response.parse(
       await (await call("/api/preferences")).json(),
     );
-    expect(view).toMatchObject({ preferences: [], proposals: [], signalsSinceSuggestion: 0 });
-
-    const imported = routes.importPreferences.response.parse(
-      await (await call("/api/preferences/imports", { method: "POST", body: { repo } })).json(),
-    );
-
-    expect(imported).toMatchObject({ comments: 3, pullRequests: 2 });
-    expect(imported.proposals.map((one) => [one.text, one.source, one.scope])).toEqual([
-      [fakeProposalDrafts[0]?.text, "imported", { kind: "repo", repo }],
-      [fakeProposalDrafts[1]?.text, "imported", { kind: "global" }],
-    ]);
-  });
-
-  it("proposes the same two from a recorded signal", async () => {
-    const { fake, call } = await setup();
+    expect(view).toMatchObject({ preferences: [], proposals: [] });
     await fake.preferences.recordSignal(SignalKey.parse("point:a:f1"), {
       kind: "dismissed",
       at: "2026-10-21T10:00:00.000Z",
@@ -87,13 +73,14 @@ describe("createFakeApp", () => {
     });
 
     const suggested = routes.suggestPreferences.response.parse(
-      await (await call("/api/preferences/suggestions", { method: "POST" })).json(),
+      await (await call("/api/preferences/suggestions", { method: "POST", body: { repo } })).json(),
     );
 
-    expect(suggested.signals).toBe(1);
-    expect(suggested.proposals.map((one) => [one.text, one.source])).toEqual(
-      fakeProposalDrafts.map((draft) => [draft.text, "learned"]),
-    );
+    expect(suggested).toMatchObject({ signals: 1, comments: 3, pullRequests: 2 });
+    expect(suggested.proposals.map((one) => [one.text, one.source, one.scope])).toEqual([
+      [fakeProposalDrafts[0]?.text, "learned", { kind: "repo", repo }],
+      [fakeProposalDrafts[1]?.text, "learned", { kind: "global" }],
+    ]);
   });
 
   it("lists what the fake hosts received", async () => {

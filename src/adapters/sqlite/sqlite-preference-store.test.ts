@@ -68,7 +68,6 @@ describe("the SQLite preference store", () => {
     await first.savePreference(preference);
     await first.recordSignal(SignalKey.parse("point:a:f1"), signal);
     await first.setGuidelineSwitch(repo, "CLAUDE.md", true);
-    await first.recordSuggestionAt("2026-11-04T10:00:00.000Z");
     first.close();
 
     const second = openStore(path);
@@ -76,7 +75,6 @@ describe("the SQLite preference store", () => {
     expect(await second.listPreferences()).toEqual([preference]);
     expect(await second.listSignals(10)).toEqual([signal]);
     expect(await second.getGuidelineSwitches(repo)).toEqual(new Map([["CLAUDE.md", true]]));
-    expect(await second.getLastSuggestionAt()).toBe("2026-11-04T10:00:00.000Z");
   });
 
   it("leaves out rows that no longer parse, and logs each", async () => {
@@ -93,13 +91,11 @@ describe("the SQLite preference store", () => {
        'pending', '2026-11-02T10:00:00.000Z')`);
     db.exec(`INSERT INTO review_signals VALUES
       ('point:a:f2', 'raised', 'yesterday', 'github', 'acme', 'shop', 12, 'finding', 'T', '', NULL)`);
-    db.exec("INSERT INTO preference_suggestions (suggested_at) VALUES ('9999-not-a-time')");
     db.close();
 
     expect(await store.listPreferences()).toEqual([preference]);
     expect(await store.listProposals()).toEqual([]);
     expect(await store.listSignals(10)).toEqual([signal]);
-    expect(await store.getLastSuggestionAt()).toBeNull();
     expect(
       logger.entries.filter((entry) => entry.level === "warn").map((entry) => entry.message),
     ).toEqual([

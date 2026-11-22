@@ -9,7 +9,6 @@ import {
 } from "../../../../domain/review/index.ts";
 
 const api: RepoRef = { host: "github", owner: "acme", repo: "api" };
-const shop: RepoRef = { host: "github", owner: "acme", repo: "shop" };
 
 const signal = (
   kind: ReviewSignal["kind"],
@@ -29,7 +28,10 @@ const signal = (
   path,
 });
 
-/** Three dismissals of one sort, three signals about tenant filters, and one that stands alone. */
+/**
+ * One repository's history: two dismissals of one sort, three signals and two of the reviewer's
+ * comments on the host about tenant filters.
+ */
 export const suggestionInput: SuggestionInput = {
   signals: [
     signal(
@@ -77,26 +79,21 @@ export const suggestionInput: SuggestionInput = {
       "Query on orders has no tenant filter",
       "`findOrders` selects by status alone, so it returns every tenant's orders.",
     ),
-    signal(
-      "dismissed",
-      "finding",
-      shop,
-      3,
-      "src/retry.ts",
-      "No doc comment on `retryDelay`",
-      "`retryDelay` has no JSDoc describing its unit.",
-    ),
-    signal(
-      "dismissed",
-      "decision",
-      shop,
-      3,
-      "src/receipts.ts",
-      "Why cache receipts in memory",
-      "Rendering is slow and receipts rarely change.",
-    ),
   ],
-  comments: [],
+  comments: [
+    {
+      pullRequest: { repo: api, number: 9 },
+      path: "src/orders/queries.ts",
+      body: "Filter by tenant here too.",
+      at: "2026-10-20T10:00:00.000Z",
+    },
+    {
+      pullRequest: { repo: api, number: 7 },
+      path: null,
+      body: "Same as last time: this reads across tenants.",
+      at: "2026-10-12T10:00:00.000Z",
+    },
+  ],
   preferences: [
     {
       id: PreferenceId.parse("pref_00000000000000a1"),
@@ -121,32 +118,13 @@ export const suggestionInput: SuggestionInput = {
       createdAt: "2026-11-02T09:00:00.000Z",
     },
   ],
-  repo: null,
-};
-
-/** The reviewer's own comments on one repository's past pull requests, as an import reads them. */
-export const importInput: SuggestionInput = {
-  signals: [],
-  comments: [
-    {
-      pullRequest: { repo: api, number: 9 },
-      path: "src/orders/queries.ts",
-      body: "Filter by tenant here too.",
-      at: "2026-10-20T10:00:00.000Z",
-    },
-    {
-      pullRequest: { repo: api, number: 7 },
-      path: null,
-      body: "Same as last time: this reads across tenants.",
-      at: "2026-10-12T10:00:00.000Z",
-    },
-  ],
-  preferences: [],
-  rejected: [],
   repo: api,
 };
 
-/** What Sonnet 5.5 answered for `suggestionInput` through Claude Code, as its recording has it. */
+/**
+ * What Sonnet 5.5 answered through Claude Code, as its recording has it, for this history when a
+ * suggestion read every repository's signals: it had two of acme/shop's too, and no comments.
+ */
 export const suggestedDrafts: readonly ProposalDraft[] = [
   {
     kind: "dont-flag",

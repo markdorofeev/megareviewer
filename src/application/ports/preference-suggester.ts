@@ -12,21 +12,21 @@ import {
 import type { Result } from "../../domain/shared/index.ts";
 
 export interface SuggestionInput {
-  /** What the reviewer did here, newest first; empty when importing. */
+  /** What the reviewer did here on `repo`'s pull requests, newest first. */
   readonly signals: readonly ReviewSignal[];
-  /** The reviewer's past comments on `repo`, newest first; empty when suggesting from signals. */
+  /** The reviewer's past comments on `repo`'s host, newest first, none a signal already has. */
   readonly comments: readonly PastComment[];
   /** Every preference the reviewer has, so none is proposed again. */
   readonly preferences: readonly Preference[];
   /** Proposals the reviewer rejected, so none is proposed again. */
   readonly rejected: readonly PreferenceProposal[];
-  /** The repository an import reads; null when suggesting from signals. */
-  readonly repo: RepoRef | null;
+  /** The repository every signal and comment is from. */
+  readonly repo: RepoRef;
 }
 
 /**
  * A preference as the model proposes it. Model output is untrusted input: the adapter parses it
- * with this, and the use case decides the repository a "repo" scope means, or falls back to global.
+ * with this, and "repo" means the repository the call read.
  */
 export const ProposalDraft = z
   .object({
@@ -44,7 +44,7 @@ export interface SuggestionOutput {
   readonly usage: Omit<ModelUsage, "pass">;
 }
 
-/** One model call that turns review signals or past comments into proposed preferences. */
+/** One model call that turns review signals and past comments into proposed preferences. */
 export interface PreferenceSuggester {
   suggest(input: SuggestionInput): Promise<Result<SuggestionOutput, ModelError>>;
 }

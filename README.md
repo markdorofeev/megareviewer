@@ -4,7 +4,7 @@ Turns a GitHub or Bitbucket Cloud pull request into a guided review. Changes are
 
 On any review, the Request AI review button adds what the PR was asked to do next to what the code actually does, plain-language titles for the tour's steps, and its points on the code: what looks wrong, as a draft comment under its line you can add to your review as it is; contract changes that deserve a hard look, as a note under their lines; and why the code makes its choices, as footnotes you can hide. Saying nothing means it's fine. You pick the verdict when you publish.
 
-An AI review follows your preferences, kept on your machine: rules you write on the Preferences page, “Look for” or “Don't flag”, for every repository or for one, and a repository's guideline files such as `REVIEW.md` that you switch on. megareviewer also proposes rules from the points you dismiss and raise, and on request from your own past review comments on the host; none is used until you accept it. A point says which preference shaped it, and one a “Don't flag” rule covers is folded to a line, not hidden.
+An AI review follows your preferences, kept on your machine: rules you write on the Preferences page, “Look for” or “Don't flag”, for every repository or for one, and a repository's guideline files such as `REVIEW.md` that you switch on. On request, megareviewer also proposes rules for a repository from the points you dismissed and raised there and your own review comments on its host; none is used until you accept it. A point says which preference shaped it, and one a “Don't flag” rule covers is folded to a line, not hidden.
 
 ## Run
 

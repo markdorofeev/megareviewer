@@ -215,6 +215,8 @@ export const createMockApi = (
   let replies = 0;
   let preferences = options.preferences ?? fixturePreferencesView;
   const rejected: PreferenceProposal[] = [];
+  /** The points dismissed or raised here, which a suggestion reads as signals. */
+  let signals = 0;
   const listeners = new Set<(event: MockEvent) => void>();
 
   const analysis = () => {
@@ -425,12 +427,7 @@ export const createMockApi = (
       const saved: PointReview = { pointId, ...request.data, updatedAt: now() };
       pointReviews.set(pointId, saved);
       // What the reviewer does with a point is what suggestions are made from.
-      if (saved.state !== "open") {
-        preferences = {
-          ...preferences,
-          signalsSinceSuggestion: preferences.signalsSinceSuggestion + 1,
-        };
-      }
+      if (saved.state !== "open") signals += 1;
       return success(saved);
     },
     previewPublication: ({ id }, body) => {
@@ -624,27 +621,26 @@ export const createMockApi = (
       };
       return success({});
     },
-    suggestPreferences: () => {
-      const signals = preferences.signalsSinceSuggestion;
-      if (signals === 0) {
-        return failure(
-          "bad-request",
-          "Nothing to suggest from yet: megareviewer records the points you dismiss and raise and the comments you post",
-        );
-      }
-      const proposals = propose(fixtureSuggestions);
-      preferences = { ...preferences, signalsSinceSuggestion: 0 };
-      return success({ proposals, signals });
-    },
-    importPreferences: (_, body) => {
-      const request = routes.importPreferences.request.safeParse(body);
+    suggestPreferences: (_, body) => {
+      const request = routes.suggestPreferences.request.safeParse(body);
       if (!request.success) return invalid(request.error.issues);
       const { repo } = request.data;
-      if (repo.host !== "github") {
-        return failure("bad-request", "megareviewer can't read past reviews from Bitbucket");
-      }
-      const proposals = propose([{ ...fixtureImport, scope: { kind: "repo", repo } }]);
-      return success({ proposals, comments: 92, pullRequests: 30 });
+      // Only GitHub's past reviews are read here, so a Bitbucket repository has the signals alone.
+      const read =
+        repo.host === "github"
+          ? { signals, comments: 92, pullRequests: 30 }
+          : { signals, comments: 0, pullRequests: 0 };
+      if (read.signals === 0 && read.comments === 0) return success({ proposals: [], ...read });
+      const proposals = propose(
+        [...fixtureSuggestions, fixtureImport].map(
+          (draft): PreferenceProposal => ({
+            ...draft,
+            source: "learned",
+            scope: draft.scope.kind === "global" ? draft.scope : { kind: "repo", repo },
+          }),
+        ),
+      );
+      return success({ proposals, ...read });
     },
     setGuidelineSwitch: (_, body) => {
       const request = routes.setGuidelineSwitch.request.safeParse(body);

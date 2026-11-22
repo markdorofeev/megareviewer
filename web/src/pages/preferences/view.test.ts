@@ -18,6 +18,7 @@ import {
   repositoriesOf,
   SUGGESTIONS,
   sentence,
+  suggestionSaid,
   whereAdded,
   withGuidelineSwitch,
   withoutPreference,
@@ -130,6 +131,25 @@ describe("the panels", () => {
     expect(whereAdded([jsdoc, fixtureImport], options)).toBe("for acme/shop");
     expect(whereAdded([jsdoc, cached, fixtureImport], options)).toBe(
       "1 for Everywhere and 2 for acme/shop",
+    );
+  });
+
+  it("says what a suggestion read, and what it came to", () => {
+    const read = { signals: 14, comments: 92, pullRequests: 30 };
+    expect(suggestionSaid(read, 2, "1 for Everywhere and 1 for acme/shop")).toBe(
+      "Read 92 comments from 30 pull requests and 14 actions recorded here: 2 suggestions, 1 for Everywhere and 1 for acme/shop.",
+    );
+    expect(suggestionSaid({ ...read, comments: 0, pullRequests: 0 }, 0, "")).toBe(
+      "Read 14 actions recorded here: nothing new to suggest.",
+    );
+    expect(suggestionSaid({ signals: 0, comments: 1, pullRequests: 1 }, 1, "for acme/shop")).toBe(
+      "Read 1 comment from 1 pull request: 1 suggestion, for acme/shop.",
+    );
+    expect(suggestionSaid({ signals: 0, comments: 0, pullRequests: 30 }, 0, "")).toBe(
+      "Found no comment of yours on its last 30 pull requests, and nothing you did here.",
+    );
+    expect(suggestionSaid({ signals: 0, comments: 0, pullRequests: 0 }, 0, "")).toMatch(
+      /^Found nothing to suggest from/,
     );
   });
 

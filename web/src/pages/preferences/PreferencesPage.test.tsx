@@ -17,7 +17,7 @@ import { testApi } from "../../testing/api.tsx";
 import { fakeFetch, jsonResponse, type RecordedRequest } from "../../testing/fetch.ts";
 import { TooltipProvider } from "../../ui/tooltip.tsx";
 import { tooLong } from "./PreferenceForm.tsx";
-import { NOTHING_RECORDED, PreferencesPage } from "./PreferencesPage.tsx";
+import { PreferencesPage } from "./PreferencesPage.tsx";
 
 type Respond = (request: RecordedRequest) => Response | Promise<Response>;
 
@@ -235,13 +235,19 @@ describe("PreferencesPage", () => {
     ]);
   });
 
-  it("says nothing's suggested yet only where Suggest's own line doesn't", async () => {
-    renderPage({ preferences: { ...emptyPreferencesView, signalsSinceSuggestion: 3 } });
-    const section = await everywhere();
+  it("offers Suggest from my reviews on a repository's panel alone, and says so where there's none", async () => {
+    renderPage({ preferences: { ...fixturePreferencesView, proposals: [] } });
+    await everywhere();
+    expect(screen.queryByRole("button", { name: "Suggest from my reviews" })).toBeNull();
+    await userEvent.click(within(scopes()).getByRole("button", { name: /^Suggestions/ }));
+    const section = await panel("Suggestions");
+    expect(screen.queryByRole("button", { name: "Suggest from my reviews" })).toBeNull();
     expect(section.textContent).toContain(
-      "No suggestions yet. megareviewer suggests preferences from the points you raise or dismiss and the comments you post.",
+      "No suggestions yet. Suggest from my reviews, on a repository's panel, proposes rules from what you did on its pull requests and your comments on them.",
     );
-    expect(section.textContent).toContain("3 actions recorded since the last suggestions");
+    await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/shop/ }));
+    await panel("acme/shop");
+    expect(screen.getAllByRole("button", { name: "Suggest from my reviews" })).toHaveLength(1);
   });
 
   it("says what a preference is, with the form, when there's none", async () => {
@@ -250,9 +256,6 @@ describe("PreferencesPage", () => {
     expect(section.textContent).toContain(
       "No preferences for every repository yet. A preference is one rule for AI reviews: Look for something to look for, or Don't flag something not to flag.",
     );
-    // Nothing is recorded, so Suggest's line says where suggestions come from, once.
-    expect(section.textContent).toContain(NOTHING_RECORDED);
-    expect(section.textContent).not.toContain("No suggestions yet.");
     expect(within(section).queryByRole("region", { name: /^Preferences/ })).toBeNull();
     expect(within(section).queryByRole("region", { name: /^Suggestions/ })).toBeNull();
     // The form is always open, so there's nothing to open it with or to cancel.
@@ -525,89 +528,107 @@ describe("PreferencesPage's suggestions", () => {
 describe("PreferencesPage's Suggest from my reviews", () => {
   const suggest = () => screen.getByRole("button", { name: "Suggest from my reviews" });
   const withoutProposals = { ...fixturePreferencesView, proposals: [] };
+  const ready = async (path = SHOP) => {
+    const section = await panel(path === SHOP ? "acme/shop" : "acme/api");
+    await waitFor(() => expect(suggest().getAttribute("aria-disabled")).not.toBe("true"));
+    return section;
+  };
 
-  it("says which model runs it and who pays, and what's recorded", async () => {
-    renderPage({ preferences: withoutProposals });
-    await everywhere();
-    await waitFor(() =>
-      expect(description(suggest())).toBe("Runs Sonnet 5.5 through Claude Code, on your Pro plan"),
+  it("says what it reads, which model runs it and who pays, and nothing under it before a run", async () => {
+    renderPage({ preferences: withoutProposals, path: SHOP });
+    const section = await ready();
+    expect(description(suggest())).toBe(
+      "Reads what you did on its pull requests here and your comments on GitHub, then runs Sonnet 5.5 through Claude Code, on your Pro plan",
     );
-    expect(screen.getByText("14 actions recorded since the last suggestions")).toBeTruthy();
+    expect(section.querySelector("[data-slot=model-action-status]")).toBeNull();
   });
 
-  it("says it's running and how long, can't run twice, then where its suggestions went", async () => {
+  it("says it's running and how long, can't run twice, then what it read and where its suggestions went", async () => {
     const pending = held();
     let nowMs = 1_000_000;
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { sent } = renderPage({
       preferences: withoutProposals,
+      path: SHOP,
       overrides: { "POST /api/preferences/suggestions": pending.respond },
       now: () => nowMs,
     });
-    await everywhere();
-    await waitFor(() => expect(suggest().getAttribute("aria-disabled")).not.toBe("true"));
+    const section = await ready();
     await userEvent.click(suggest());
     expect(suggest().getAttribute("aria-busy")).toBe("true");
     expect(suggest().getAttribute("aria-disabled")).toBe("true");
-    const status = () =>
-      screen.getByText(/^Reading what you did in reviews/, { selector: "[role=status]" });
-    expect(status().textContent).toBe("Reading what you did in reviews… 0:00");
+    const status = () => section.querySelector("[data-slot=model-action-status]") ?? section;
+    expect(status().textContent).toBe("Reading your reviews of acme/shop… 0:00");
     nowMs += 12_000;
     await act(async () => vi.advanceTimersByTime(1_000));
-    expect(status().textContent).toBe("Reading what you did in reviews… 0:12");
+    expect(status().textContent).toBe("Reading your reviews of acme/shop… 0:12");
     await userEvent.click(suggest());
     expect(sent("POST", "/api/preferences/suggestions")).toHaveLength(1);
     expect(sent("POST", "/api/preferences/suggestions")[0]?.body).toEqual({
+      repo: { host: "github", owner: "acme", repo: "shop" },
       optionId: fixtureStatus.model.defaultId,
     });
 
     await act(async () =>
       pending.release(
-        jsonResponse(200, { proposals: fixturePreferencesView.proposals, signals: 14 }),
+        jsonResponse(200, {
+          proposals: fixturePreferencesView.proposals,
+          signals: 14,
+          comments: 92,
+          pullRequests: 30,
+        }),
       ),
     );
     expect(
-      await screen.findByText(
-        "2 suggestions from 14 actions, 1 for Everywhere and 1 for acme/shop.",
+      await within(section).findByText(
+        "Read 92 comments from 30 pull requests and 14 actions recorded here: 2 suggestions, 1 for Everywhere and 1 for acme/shop.",
       ),
     ).toBeTruthy();
-    expect(proposalRows(await everywhere())).toHaveLength(1);
+    expect(proposalRows(section)).toHaveLength(1);
     expect(within(scopes()).getByRole("button", { name: "Suggestions, 2 waiting" })).toBeTruthy();
-    // Nothing's new since, so it can't run again until something is recorded.
-    expect(suggest().getAttribute("aria-disabled")).toBe("true");
-    expect(description(suggest())).toBe(NOTHING_RECORDED);
+    expect(suggest().getAttribute("aria-disabled")).not.toBe("true");
   });
 
-  it("keeps what a run came to on every panel that offers it", async () => {
-    renderPage({ preferences: withoutProposals });
-    await everywhere();
-    await waitFor(() => expect(suggest().getAttribute("aria-disabled")).not.toBe("true"));
+  it("keeps what a run came to on its repository's panel, and only there", async () => {
+    renderPage({ preferences: withoutProposals, path: SHOP });
+    await ready();
     await userEvent.click(suggest());
-    const said = "2 suggestions from 14 actions, 1 for Everywhere and 1 for acme/shop.";
+    const said = /^Read 92 comments from 30 pull requests: 3 suggestions, /;
     expect(await screen.findByText(said)).toBeTruthy();
+    await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/api/ }));
+    await panel("acme/api");
+    expect(screen.queryByText(said)).toBeNull();
     await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/shop/ }));
     await panel("acme/shop");
     expect(screen.getByText(said)).toBeTruthy();
   });
 
-  it("runs on the model chosen beside it, which every model button shares", async () => {
+  it("says when there was nothing to suggest from", async () => {
+    renderPage({ preferences: withoutProposals, path: API });
+    await ready(API);
+    await userEvent.click(suggest());
+    expect(
+      await screen.findByText(
+        "Found nothing to suggest from: no comment of yours on its pull requests, and nothing you did here.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("runs on the model chosen beside it, which Request AI review shares", async () => {
     const { sent } = renderPage({ preferences: withoutProposals, path: SHOP });
-    const section = await panel("acme/shop");
-    const [arrow] = await within(section).findAllByRole("button", { name: "Model: Sonnet 5.5" });
-    await userEvent.click(arrow as HTMLElement);
+    const section = await ready();
+    await userEvent.click(within(section).getByRole("button", { name: "Model: Sonnet 5.5" }));
     await userEvent.click(
       within(await screen.findByRole("menu")).getAllByRole("menuitemradio", {
         name: "Opus 5.5",
       })[0] as HTMLElement,
     );
     await waitFor(() =>
-      expect(description(suggest())).toBe("Runs Opus 5.5 through Claude Code, on your Pro plan"),
+      expect(description(suggest())).toMatch(/runs Opus 5\.5 through Claude Code/),
     );
-    // Import's arrow beside it says the same choice.
-    expect(within(section).getAllByRole("button", { name: "Model: Opus 5.5" })).toHaveLength(2);
     await userEvent.click(suggest());
     await waitFor(() => expect(sent("POST", "/api/preferences/suggestions")).toHaveLength(1));
-    expect(sent("POST", "/api/preferences/suggestions")[0]?.body).toEqual({
+    expect(sent("POST", "/api/preferences/suggestions")[0]?.body).toMatchObject({
       optionId: "claude-code/claude-opus-5-5",
     });
     // The same per-browser choice as Request AI review's.
@@ -616,54 +637,43 @@ describe("PreferencesPage's Suggest from my reviews", () => {
     );
   });
 
-  it("is disabled but focusable with nothing recorded, and says what's recorded", async () => {
-    const { sent } = renderPage({
-      preferences: { ...withoutProposals, signalsSinceSuggestion: 0 },
-    });
-    await everywhere();
-    expect(suggest().getAttribute("aria-disabled")).toBe("true");
-    expect(suggest().hasAttribute("disabled")).toBe(false);
-    expect(description(suggest())).toBe(NOTHING_RECORDED);
-    expect(screen.getByText(NOTHING_RECORDED, { selector: "[role=status]" })).toBeTruthy();
-    // The model's arrow stays, since the choice is Import's and Request AI review's too.
-    const arrow = await screen.findByRole("button", { name: "Model: Sonnet 5.5" });
-    expect(arrow.hasAttribute("disabled")).toBe(false);
-    suggest().focus();
-    expect(document.activeElement).toBe(suggest());
-    await userEvent.click(suggest());
-    expect(sent("POST", "/api/preferences/suggestions")).toHaveLength(0);
-  });
-
-  it("says why no model can run it", async () => {
+  it("says why no model can run it, in its description and nowhere else", async () => {
     const locked: StatusResponse = { ...fixtureStatus, model: lockedModelOptions };
-    renderPage({
+    const { sent } = renderPage({
       preferences: withoutProposals,
+      path: SHOP,
       overrides: { "GET /api/status": () => jsonResponse(200, locked) },
     });
-    await everywhere();
+    const section = await panel("acme/shop");
     await waitFor(() => expect(description(suggest())).toMatch(/Claude Code isn't signed in/));
     expect(suggest().getAttribute("aria-disabled")).toBe("true");
+    expect(suggest().hasAttribute("disabled")).toBe(false);
+    expect(section.querySelector("[data-slot=model-action-status]")).toBeNull();
+    await userEvent.click(suggest());
+    expect(sent("POST", "/api/preferences/suggestions")).toHaveLength(0);
   });
 
   it("shows the reason under the title when it fails, with Try again", async () => {
     let fail = true;
     const { sent } = renderPage({
       preferences: withoutProposals,
+      path: SHOP,
       overrides: {
         "POST /api/preferences/suggestions": () =>
           fail
-            ? failure(502, "model-error", "The model is overloaded")
-            : jsonResponse(200, { proposals: [], signals: 14 }),
+            ? failure(502, "host-error", "GitHub is down")
+            : jsonResponse(200, { proposals: [], signals: 2, comments: 0, pullRequests: 0 }),
       },
     });
-    await everywhere();
-    await waitFor(() => expect(suggest().getAttribute("aria-disabled")).not.toBe("true"));
+    await ready();
     await userEvent.click(suggest());
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("The model call failed: The model is overloaded.");
+    expect(alert.textContent).toContain("GitHub is down");
     fail = false;
     await userEvent.click(within(alert).getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("Nothing new to suggest from 14 actions.")).toBeTruthy();
+    expect(
+      await screen.findByText("Read 2 actions recorded here: nothing new to suggest."),
+    ).toBeTruthy();
     expect(sent("POST", "/api/preferences/suggestions")).toHaveLength(2);
   });
 });
@@ -740,62 +750,7 @@ describe("PreferencesPage's repositories", () => {
     expect(api.textContent).toContain("No pull request of this repository has been analyzed yet.");
   });
 
-  it("imports from past reviews, and says what it read and where its suggestions went", async () => {
-    const { sent } = renderPage({ path: SHOP });
-    const section = await panel("acme/shop");
-    const button = within(section).getByRole("button", { name: "Import from my past reviews" });
-    await waitFor(() =>
-      expect(description(button)).toBe(
-        "Reads your own comments on its recent pull requests on GitHub, then runs Sonnet 5.5 through Claude Code, on your Pro plan",
-      ),
-    );
-    await userEvent.click(button);
-    expect(
-      await within(section).findByText(
-        "Read 92 comments from 30 pull requests: 1 suggestion, for acme/shop.",
-      ),
-    ).toBeTruthy();
-    expect(sent("POST", "/api/preferences/imports")[0]?.body).toEqual({
-      repo: { host: "github", owner: "acme", repo: "shop" },
-      optionId: fixtureStatus.model.defaultId,
-    });
-    expect(proposalRows(section)).toHaveLength(2);
-
-    // Again, there's nothing it hasn't proposed already.
-    await userEvent.click(button);
-    expect(
-      await within(section).findByText(
-        "Read 92 comments from 30 pull requests: nothing new to suggest.",
-      ),
-    ).toBeTruthy();
-  });
-
-  it("says when an import found no comments, and why one failed", async () => {
-    renderPage({
-      path: SHOP,
-      overrides: {
-        "POST /api/preferences/imports": (request) =>
-          JSON.stringify(request.body).includes("bitbucket")
-            ? failure(400, "bad-request", "megareviewer can't read past reviews from Bitbucket")
-            : jsonResponse(200, { proposals: [], comments: 0, pullRequests: 30 }),
-      },
-    });
-    const section = await panel("acme/shop");
-    const button = within(section).getByRole("button", { name: "Import from my past reviews" });
-    await waitFor(() => expect(button.getAttribute("aria-disabled")).not.toBe("true"));
-    await userEvent.click(button);
-    expect(
-      await within(section).findByText("Found no comment of yours on its last 30 pull requests."),
-    ).toBeTruthy();
-    await userEvent.click(within(scopes()).getByRole("button", { name: /^acme\/api/ }));
-    const api = await panel("acme/api");
-    await userEvent.click(within(api).getByRole("button", { name: /^Import/ }));
-    expect((await within(api).findByRole("alert")).textContent).toContain(
-      "megareviewer can't read past reviews from Bitbucket.",
-    );
-  });
-
-  it("says what a preference is on a repository with nothing yet, and offers both runs there once", async () => {
+  it("says what a preference is on a repository with nothing yet", async () => {
     const ledger: RepoRef = { host: "github", owner: "acme", repo: "ledger" };
     renderPage({
       path: "/preferences?scope=github/acme/ledger",
@@ -811,18 +766,13 @@ describe("PreferencesPage's repositories", () => {
     expect(section.textContent).toContain(
       "No preferences for this repository yet. A preference is one rule for AI reviews here: Look for something to look for, or Don't flag something not to flag. Rules for Everywhere still apply.",
     );
-    const box = section.querySelector<HTMLElement>("[data-slot=first-run]");
-    if (box === null) throw new Error("the first run has its box");
-    expect(within(box).getByRole("button", { name: "Suggest from my reviews" })).toBeTruthy();
-    expect(within(box).getByRole("button", { name: "Import from my past reviews" })).toBeTruthy();
     expect(
       within(section).getAllByRole("button", { name: "Suggest from my reviews" }),
     ).toHaveLength(1);
-    expect(within(box).getByText("14 actions recorded since the last suggestions")).toBeTruthy();
     expect(within(section).getByRole("form", { name: "Add a preference" })).toBeTruthy();
     // Its first preference ends the first run.
     await userEvent.type(within(section).getByRole("textbox"), "Ledger entries balance{Enter}");
-    await waitFor(() => expect(section.querySelector("[data-slot=first-run]")).toBeNull());
+    await waitFor(() => expect(section.textContent).not.toContain("No preferences for"));
     expect(
       within(section).getAllByRole("button", { name: "Suggest from my reviews" }),
     ).toHaveLength(1);

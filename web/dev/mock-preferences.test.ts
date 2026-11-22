@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   ErrorResponse,
-  ImportedPreferences,
   PreferencesView,
   ProposalDecided,
   SuggestedPreferences,
@@ -74,35 +73,36 @@ describe("the mock API's preferences", () => {
     );
   });
 
-  it("proposes from what the reviewer did, once, and only with something recorded", () => {
-    const { send, view } = mock({ ...emptyPreferencesView, signalsSinceSuggestion: 3 });
-    const first = SuggestedPreferences.parse(send("POST", "/api/preferences/suggestions").body);
-    expect(first).toMatchObject({ signals: 3 });
-    expect(first.proposals).toHaveLength(2);
-    expect(view()).toMatchObject({ proposals: first.proposals, signalsSinceSuggestion: 0 });
-    expect(message(send("POST", "/api/preferences/suggestions"))).toMatch(/^Nothing to suggest/);
-
-    // A dismissed point is something to suggest from; what's waiting isn't proposed again.
-    const id = fixtureAnalysisView.analysis.id;
-    send("PUT", `/api/analyses/${id}/points/f1`, { state: "dismissed" });
-    send("PUT", `/api/analyses/${id}/points/f1`, { state: "open" });
-    expect(view().signalsSinceSuggestion).toBe(1);
-    const again = SuggestedPreferences.parse(send("POST", "/api/preferences/suggestions").body);
-    expect(again).toEqual({ proposals: [], signals: 1 });
+  it("proposes for a repository from its host's comments and what the reviewer did, once each", () => {
+    const { send, view } = mock(emptyPreferencesView);
+    const suggest = (repo: unknown) =>
+      SuggestedPreferences.parse(send("POST", "/api/preferences/suggestions", { repo }).body);
+    const first = suggest(shop);
+    expect(first).toMatchObject({ signals: 0, comments: 92, pullRequests: 30 });
+    expect(first.proposals.map((one) => [one.source, one.scope.kind])).toEqual([
+      ["learned", "repo"],
+      ["learned", "global"],
+      ["learned", "repo"],
+    ]);
+    expect(view().proposals).toEqual(first.proposals);
+    expect(suggest(shop).proposals).toEqual([]);
+    expect(send("POST", "/api/preferences/suggestions", {}).status).toBe(400);
   });
 
-  it("imports from a repository's past reviews on GitHub", () => {
-    const { send } = mock();
-    const imported = ImportedPreferences.parse(
-      send("POST", "/api/preferences/imports", { repo: shop }).body,
-    );
-    expect(imported).toMatchObject({ comments: 92, pullRequests: 30 });
-    expect(imported.proposals[0]).toMatchObject({ source: "imported", scope: { repo: shop } });
+  it("reads a Bitbucket repository's signals alone, and nothing without one", () => {
+    const { send } = mock(emptyPreferencesView);
     const bitbucket = { host: "bitbucket", owner: "acme", repo: "api" };
-    expect(message(send("POST", "/api/preferences/imports", { repo: bitbucket }))).toBe(
-      "megareviewer can't read past reviews from Bitbucket",
-    );
-    expect(send("POST", "/api/preferences/imports", {}).status).toBe(400);
+    const suggest = () =>
+      SuggestedPreferences.parse(
+        send("POST", "/api/preferences/suggestions", { repo: bitbucket }).body,
+      );
+    expect(suggest()).toEqual({ proposals: [], signals: 0, comments: 0, pullRequests: 0 });
+
+    // A dismissed point is something to suggest from.
+    const id = fixtureAnalysisView.analysis.id;
+    send("PUT", `/api/analyses/${id}/points/f1`, { state: "dismissed" });
+    expect(suggest()).toMatchObject({ signals: 1, comments: 0, pullRequests: 0 });
+    expect(suggest().proposals).toEqual([]);
   });
 
   it("accepts a proposal as a preference, with the reviewer's changes, or rejects it for good", () => {
@@ -129,8 +129,13 @@ describe("the mock API's preferences", () => {
     const rejected = send("PUT", `/api/preferences/proposals/${second.id}`, { decision: "reject" });
     expect(ProposalDecided.parse(rejected.body).preference).toBeNull();
     expect(view().proposals).toEqual([]);
-    const again = SuggestedPreferences.parse(send("POST", "/api/preferences/suggestions").body);
-    expect(again.proposals.map((proposal) => proposal.text)).toEqual([first.text]);
+    const again = SuggestedPreferences.parse(
+      send("POST", "/api/preferences/suggestions", { repo: shop }).body,
+    );
+    expect(again.proposals.map((proposal) => proposal.text)).toEqual([
+      first.text,
+      "Lookups that aren't scoped to the signed-in user",
+    ]);
   });
 
   it("leaves a proposal too long for a preference until it's edited", () => {

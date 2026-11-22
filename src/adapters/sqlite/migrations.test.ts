@@ -32,7 +32,6 @@ describe("migrate", () => {
       "last_model_option",
       "point_reviews",
       "preference_proposals",
-      "preference_suggestions",
       "preferences",
       "publications",
       "published_comments",

@@ -1,6 +1,5 @@
 import {
   canEnable,
-  evidenceRepo,
   GUIDELINE_PATHS,
   type GuidelineFile,
   GuidelinePath,
@@ -9,6 +8,7 @@ import {
   MAX_EVIDENCE_LINES,
   MAX_PREFERENCE_TEXT,
   type ModelOptionId,
+  mergeEvidence,
   type PastComment,
   Preference,
   type PreferenceId,
@@ -28,15 +28,14 @@ import { chooseOption } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { readRootFiles } from "./guidance.ts";
-import { hostName } from "./hosts.ts";
 import { mapLimit } from "./text.ts";
 
 /** The analyses whose repositories the page lists, the most recently updated. */
 export const LISTED_ANALYSES = 50;
-/** The signals one suggestion reads, the newest. */
+/** The signals of a repository one suggestion reads, the newest. */
 export const SUGGESTION_SIGNALS = 200;
-/** The pull requests an import reads the reviewer's comments from, the most recently updated. */
-export const IMPORT_PULL_REQUESTS = 30;
+/** The pull requests a suggestion reads the reviewer's comments from, the most recently updated. */
+export const SUGGESTION_PULL_REQUESTS = 30;
 /** Repositories whose guideline files are read at once, each one request to its host at most. */
 const GUIDELINE_READS = 6;
 
@@ -55,8 +54,6 @@ export interface PreferencesView {
   readonly proposals: readonly PreferenceProposal[];
   /** The repositories analyzed lately, the latest first, then the others that have a preference. */
   readonly repositories: readonly RepositoryPreferences[];
-  /** Signals recorded since preferences were last suggested from them. */
-  readonly signalsSinceSuggestion: number;
 }
 
 export interface NewPreference {
@@ -82,10 +79,11 @@ export interface ProposalDecision {
   readonly scope?: PreferenceScope | undefined;
 }
 
-/** What one model call proposed, and how much it read: signals, or comments of pull requests. */
-interface Proposed {
+/** What one suggestion proposed, and what it read: signals, and comments of pull requests. */
+export interface Suggested {
   readonly proposals: readonly PreferenceProposal[];
-  readonly read: number;
+  readonly signals: number;
+  readonly comments: number;
   readonly pullRequests: number;
 }
 
@@ -104,7 +102,7 @@ const tooMany = (scope: PreferenceScope): UseCaseError =>
 export const createPreferenceUseCases = (deps: AppDeps) => {
   const store = deps.preferences;
   /** The model calls running: a second request for one joins it, so nothing is proposed twice. */
-  const proposing = new Map<string, Promise<Result<Proposed, UseCaseError>>>();
+  const proposing = new Map<string, Promise<Result<Suggested, UseCaseError>>>();
 
   /** A preference of these fields, or why they don't make one. */
   const preferenceOf = (fields: Preference): Result<Preference, UseCaseError> => {
@@ -136,17 +134,17 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
     chooseOption(deps, optionId, (option) => deps.models.suggester(option));
 
   /**
-   * One model call, whose drafts become pending proposals. A blank draft, or one that says what a
-   * preference or an undecided or rejected proposal already says, is left out.
+   * One model call, whose drafts become pending proposals for `repo`, or for every repository
+   * where a draft says so. A blank draft, or one that says what a preference or an undecided or
+   * rejected proposal already says, is left out.
    */
   const propose = async (
     suggester: PreferenceSuggester,
     read: {
       readonly signals: readonly ReviewSignal[];
       readonly comments: readonly PastComment[];
-      readonly repo: RepoRef | null;
+      readonly repo: RepoRef;
     },
-    source: PreferenceProposal["source"],
   ): Promise<Result<PreferenceProposal[], UseCaseError>> => {
     const [preferences, existing] = await Promise.all([
       store.listPreferences(),
@@ -159,19 +157,15 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
     });
     if (!answered.ok) return err(appError("model-error", answered.error.message));
     const { value: drafts, usage } = answered.value;
-    deps.logger.info("Preferences suggested", { source, drafts: drafts.length, ...usage });
+    deps.logger.info("Preferences suggested", { drafts: drafts.length, ...usage });
 
     const said: { kind: PreferenceKind; text: string }[] = [
       ...preferences,
       ...existing.filter((proposal) => proposal.status !== "accepted"),
     ];
     const taken = new Set<string>(existing.map((proposal) => proposal.id));
-    const signalRepos = read.signals.map((signal) => signal.pullRequest.repo);
-    const scopeOf = (draft: ProposalDraft): PreferenceScope => {
-      if (draft.scope === "global") return { kind: "global" };
-      const repo = read.repo ?? evidenceRepo(draft.evidence, signalRepos);
-      return repo === null ? { kind: "global" } : { kind: "repo", repo };
-    };
+    const scopeOf = (draft: ProposalDraft): PreferenceScope =>
+      draft.scope === "global" ? { kind: "global" } : { kind: "repo", repo: read.repo };
     const createdAt = deps.clock.now();
     const proposals: PreferenceProposal[] = [];
     for (const draft of drafts) {
@@ -182,7 +176,8 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
       const proposal: PreferenceProposal = {
         id: proposalId(fields, taken),
         ...fields,
-        source,
+        // What the reviewer did here and their comments on the host are both their reviews.
+        source: "learned",
         evidence: draft.evidence
           .map((line) => line.trim())
           .filter((line) => line !== "")
@@ -201,7 +196,7 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
     return ok(proposals);
   };
 
-  const once = (key: string, run: () => Promise<Result<Proposed, UseCaseError>>) => {
+  const once = (key: string, run: () => Promise<Result<Suggested, UseCaseError>>) => {
     const running = proposing.get(key);
     if (running !== undefined) return running;
     const started = run().finally(() => proposing.delete(key));
@@ -210,52 +205,25 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
   };
 
   const suggest = async (
-    optionId: ModelOptionId | undefined,
-  ): Promise<Result<Proposed, UseCaseError>> => {
-    const signals = await store.listSignals(SUGGESTION_SIGNALS);
-    if (signals.length === 0) {
-      return err(
-        appError(
-          "bad-request",
-          "Nothing to suggest from yet: megareviewer records the points you dismiss and raise and the comments you post",
-        ),
-      );
-    }
-    const chosen = await suggesterFor(optionId);
-    if (!chosen.ok) return chosen;
-    const proposals = await propose(
-      chosen.value.runner,
-      { signals, comments: [], repo: null },
-      "learned",
-    );
-    if (!proposals.ok) return proposals;
-    await store.recordSuggestionAt(deps.clock.now());
-    return ok({ proposals: proposals.value, read: signals.length, pullRequests: 0 });
-  };
-
-  const importFrom = async (
     repo: RepoRef,
     optionId: ModelOptionId | undefined,
-  ): Promise<Result<Proposed, UseCaseError>> => {
-    const history = deps.history[repo.host];
-    if (history === undefined) {
-      return err(
-        appError("bad-request", `megareviewer can't read past reviews from ${hostName(repo.host)}`),
-      );
-    }
+  ): Promise<Result<Suggested, UseCaseError>> => {
     const chosen = await suggesterFor(optionId);
     if (!chosen.ok) return chosen;
-    const read = await history.getReviewerComments(repo, { pullRequests: IMPORT_PULL_REQUESTS });
+    const history = deps.history[repo.host];
+    const [recorded, read] = await Promise.all([
+      store.listSignals(SUGGESTION_SIGNALS, repo),
+      history === undefined
+        ? Promise.resolve(ok({ comments: [], pullRequests: 0 }))
+        : history.getReviewerComments(repo, { pullRequests: SUGGESTION_PULL_REQUESTS }),
+    ]);
     if (!read.ok) return err(fromHostError(read.error));
-    const { comments, pullRequests } = read.value;
-    if (comments.length === 0) return ok({ proposals: [], read: 0, pullRequests });
-    const proposals = await propose(
-      chosen.value.runner,
-      { signals: [], comments, repo },
-      "imported",
-    );
-    if (!proposals.ok) return proposals;
-    return ok({ proposals: proposals.value, read: comments.length, pullRequests });
+    const { pullRequests } = read.value;
+    const { signals, comments } = mergeEvidence(recorded, read.value.comments);
+    const counts = { signals: signals.length, comments: comments.length, pullRequests };
+    if (signals.length === 0 && comments.length === 0) return ok({ proposals: [], ...counts });
+    const proposals = await propose(chosen.value.runner, { signals, comments, repo });
+    return proposals.ok ? ok({ proposals: proposals.value, ...counts }) : proposals;
   };
 
   /** A repository's guideline files at the base commit of its latest analysis. */
@@ -284,10 +252,9 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
 
   return {
     async getPreferences(): Promise<PreferencesView> {
-      const [preferences, proposals, lastSuggestionAt, recent] = await Promise.all([
+      const [preferences, proposals, recent] = await Promise.all([
         store.listPreferences(),
         store.listProposals(),
-        store.getLastSuggestionAt(),
         deps.store.listRecent(LISTED_ANALYSES),
       ]);
       // By repository, with the base commit of its latest analysis that has one.
@@ -312,7 +279,6 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
         repositories: await mapLimit([...repositories.values()], GUIDELINE_READS, (one) =>
           repositoryOf(one.repo, one.baseSha),
         ),
-        signalsSinceSuggestion: await store.countSignalsSince(lastSuggestionAt),
       };
     },
 
@@ -362,37 +328,16 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
     },
 
     /**
-     * Proposes preferences from the review signals recorded here, in one model call on the chosen
-     * option or the default. Its proposals wait for the reviewer: none is used until accepted.
+     * Proposes preferences for a repository, in one model call on the chosen option or the
+     * default, from what the reviewer did on its pull requests here and their own comments on its
+     * recent pull requests, read from its host when megareviewer can, each comment once. Nothing
+     * to read is no proposals, and no model call.
      */
-    async suggestPreferences(
-      optionId?: ModelOptionId,
-    ): Promise<
-      Result<{ proposals: readonly PreferenceProposal[]; signals: number }, UseCaseError>
-    > {
-      const proposed = await once("signals", () => suggest(optionId));
-      return proposed.ok
-        ? ok({ proposals: proposed.value.proposals, signals: proposed.value.read })
-        : proposed;
-    },
-
-    /**
-     * Proposes preferences for a repository from the reviewer's own comments on its recent pull
-     * requests, read from its host. No comments is no proposals, and no model call.
-     */
-    async importPreferences(
+    suggestPreferences(
       repo: RepoRef,
       optionId?: ModelOptionId,
-    ): Promise<
-      Result<
-        { proposals: readonly PreferenceProposal[]; comments: number; pullRequests: number },
-        UseCaseError
-      >
-    > {
-      const proposed = await once(`import:${repoKey(repo)}`, () => importFrom(repo, optionId));
-      if (!proposed.ok) return proposed;
-      const { proposals, read: comments, pullRequests } = proposed.value;
-      return ok({ proposals, comments, pullRequests });
+    ): Promise<Result<Suggested, UseCaseError>> {
+      return once(repoKey(repo), () => suggest(repo, optionId));
     },
 
     /** Accepting makes a preference of the proposal's source, with what the reviewer changed. */

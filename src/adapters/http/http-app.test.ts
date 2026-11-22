@@ -893,7 +893,6 @@ describe("the preference routes", () => {
       preferences: [added.body],
       proposals: [],
       repositories: [{ repo, guidelineFiles: [], guidelineNote: null }],
-      signalsSinceSuggestion: 0,
     });
 
     const changed = await call("updatePreference", {
@@ -936,14 +935,12 @@ describe("the preference routes", () => {
     });
   });
 
-  it("suggest preferences from the signals, then accept one with an edit and reject the next", async () => {
+  it("suggest a repository's preferences from its signals and the host's comments, then accept one with an edit and reject the next", async () => {
     const { call, preferences, suggester } = setupApp();
-    expect((await call("suggestPreferences")).error?.code).toBe("bad-request");
     await preferences.recordSignal(SignalKey.parse("point:a:f1"), dismissed);
-    expect((await call("getPreferences")).body?.signalsSinceSuggestion).toBe(1);
 
     const suggested = await call("suggestPreferences", {
-      body: { optionId: fakeModelOption().id },
+      body: { repo, optionId: fakeModelOption().id },
     });
     expect(suggested.body).toMatchObject({
       proposals: [
@@ -954,12 +951,14 @@ describe("the preference routes", () => {
         },
       ],
       signals: 1,
+      comments: 1,
+      pullRequests: 1,
     });
+    expect(suggester.calls.map((input) => [input.signals.length, input.comments.length])).toEqual([
+      [1, 1],
+    ]);
     const proposalId = suggested.body?.proposals[0]?.id ?? "";
-    expect((await call("getPreferences")).body).toMatchObject({
-      proposals: suggested.body?.proposals,
-      signalsSinceSuggestion: 0,
-    });
+    expect((await call("getPreferences")).body?.proposals).toEqual(suggested.body?.proposals);
 
     const accepted = await call("decideProposal", {
       params: { proposalId },
@@ -983,7 +982,8 @@ describe("the preference routes", () => {
       ok: true,
       value: [{ kind: "look-for", text: "Retries without backoff", scope: "global", evidence: [] }],
     });
-    const next = await call("suggestPreferences");
+    const next = await call("suggestPreferences", { body: { repo } });
+    expect(next.body?.proposals[0]?.scope).toEqual({ kind: "global" });
     const rejected = await call("decideProposal", {
       params: { proposalId: next.body?.proposals[0]?.id ?? "" },
       body: { decision: "reject" },
@@ -991,38 +991,30 @@ describe("the preference routes", () => {
     expect(rejected.body).toEqual({ preference: null });
   });
 
-  it("answer model-unavailable, with why, when the option can't run", async () => {
-    const { call, preferences } = setupApp({ modelAvailable: false });
-    await preferences.recordSignal(SignalKey.parse("point:a:f1"), dismissed);
+  it("read the signals alone where the host has no past reviews, and call no model for nothing", async () => {
+    const { call, preferences, suggester } = setupApp();
+    const payments = { host: "bitbucket", owner: "acme", repo: "payments" } as const;
+    await preferences.recordSignal(SignalKey.parse("point:b:f1"), {
+      ...dismissed,
+      pullRequest: { repo: payments, number: 4 },
+    });
 
-    const suggested = await call("suggestPreferences");
-    const imported = await call("importPreferences", { body: { repo } });
+    const signalsOnly = await call("suggestPreferences", { body: { repo: payments } });
+    const nothing = await call("suggestPreferences", { body: { repo: { ...repo, repo: "api" } } });
+
+    expect(signalsOnly.body).toMatchObject({ signals: 1, comments: 0, pullRequests: 0 });
+    expect(nothing.body).toEqual({ proposals: [], signals: 0, comments: 0, pullRequests: 0 });
+    expect(suggester.calls).toHaveLength(1);
+  });
+
+  it("answer model-unavailable, with why, when the option can't run", async () => {
+    const { call } = setupApp({ modelAvailable: false });
+
+    const suggested = await call("suggestPreferences", { body: { repo } });
 
     expect(suggested.error).toEqual({
       code: "model-unavailable",
       message: "Sonnet 5.5 through Claude Code can't run: Not signed in",
-    });
-    expect(imported.error?.code).toBe("model-unavailable");
-  });
-
-  it("import proposals from the reviewer's past comments on a repository", async () => {
-    const { call } = setupApp();
-
-    const imported = await call("importPreferences", { body: { repo } });
-    const none = await call("importPreferences", { body: { repo: { ...repo, repo: "api" } } });
-    const unread = await call("importPreferences", {
-      body: { repo: { host: "bitbucket", owner: "acme", repo: "payments" } },
-    });
-
-    expect(imported.body).toMatchObject({
-      proposals: [{ source: "imported", status: "pending" }],
-      comments: 1,
-      pullRequests: 1,
-    });
-    expect(none.body).toEqual({ proposals: [], comments: 0, pullRequests: 0 });
-    expect(unread.error).toEqual({
-      code: "bad-request",
-      message: "megareviewer can't read past reviews from Bitbucket Cloud",
     });
   });
 
@@ -1060,8 +1052,8 @@ describe("the preference routes", () => {
         params: { proposalId: "prop_0123456789abcdef" },
         body: { decision: "maybe" },
       }),
-      await call("importPreferences", { body: {} }),
-      await call("suggestPreferences", { body: { optionId: "not an option" } }),
+      await call("suggestPreferences", { body: {} }),
+      await call("suggestPreferences", { body: { repo, optionId: "not an option" } }),
       await call("setGuidelineSwitch", { body: { repo, path: "docs/STYLE.md", enabled: true } }),
     ];
     expect(bad.map((one) => one.error?.code)).toEqual(bad.map(() => "bad-request"));

@@ -7,7 +7,7 @@ import {
   type RepoRef,
   type ReviewSignal,
   type SignalKey,
-  type Timestamp,
+  sameRepo,
 } from "../../domain/review/index.ts";
 import type { PreferenceStore } from "../ports/index.ts";
 
@@ -19,7 +19,6 @@ export class InMemoryPreferenceStore implements PreferenceStore {
   private readonly proposals = new Map<ProposalId, PreferenceProposal>();
   private readonly signals = new Map<SignalKey, ReviewSignal>();
   private readonly switches = new Map<string, Map<string, boolean>>();
-  private lastSuggestionAt: Timestamp | null = null;
 
   async listPreferences(): Promise<Preference[]> {
     return inCreationOrder(structuredClone([...this.preferences.values()]));
@@ -49,20 +48,15 @@ export class InMemoryPreferenceStore implements PreferenceStore {
     this.signals.delete(key);
   }
 
-  async listSignals(limit: number): Promise<ReviewSignal[]> {
+  async listSignals(limit: number, repo?: RepoRef): Promise<ReviewSignal[]> {
     return [...this.signals]
+      .filter(([, signal]) => repo === undefined || sameRepo(signal.pullRequest.repo, repo))
       .sort(
         ([aKey, a], [bKey, b]) =>
           Date.parse(b.at) - Date.parse(a.at) || (aKey < bKey ? -1 : aKey > bKey ? 1 : 0),
       )
       .slice(0, limit)
       .map(([, signal]) => structuredClone(signal));
-  }
-
-  async countSignalsSince(at: Timestamp | null): Promise<number> {
-    return [...this.signals.values()].filter(
-      (signal) => at === null || Date.parse(signal.at) > Date.parse(at),
-    ).length;
   }
 
   async getGuidelineSwitches(repo: RepoRef): Promise<ReadonlyMap<string, boolean>> {
@@ -73,13 +67,5 @@ export class InMemoryPreferenceStore implements PreferenceStore {
     const switches = this.switches.get(repoKey(repo)) ?? new Map<string, boolean>();
     switches.set(path, enabled);
     this.switches.set(repoKey(repo), switches);
-  }
-
-  async getLastSuggestionAt(): Promise<Timestamp | null> {
-    return this.lastSuggestionAt;
-  }
-
-  async recordSuggestionAt(at: Timestamp): Promise<void> {
-    this.lastSuggestionAt = at;
   }
 }
