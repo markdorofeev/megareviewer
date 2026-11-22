@@ -129,6 +129,80 @@ describe("a point's guidance", () => {
   });
 });
 
+describe("a point's guardrail", () => {
+  const rule = {
+    is: "rule" as const,
+    tool: "biome" as const,
+    rule: "noFloatingPromises",
+    configPath: "biome.json",
+  };
+  const suggested = {
+    is: "suggested" as const,
+    kind: "architecture-rule" as const,
+    engine: "ArchUnit",
+    does: "Services never import a controller.",
+  };
+  const line = (container: HTMLElement) =>
+    container.querySelector<HTMLElement>("[data-slot=guardrail]");
+
+  it("names a verified rule on a finding: its tool and the config that doesn't turn it on", () => {
+    const { container } = render(
+      <FindingCard point={{ ...finding, guardrail: rule }} {...actions} {...findingProps} />,
+    );
+    expect(line(container)?.textContent).toBe(
+      "A check could catch this: noFloatingPromises in Biome, which biome.json doesn't turn on.",
+    );
+    expect(
+      [...(line(container)?.querySelectorAll("code") ?? [])].map((code) => code.textContent),
+    ).toEqual(["noFloatingPromises", "biome.json"]);
+    expect(line(container)?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("says a suggested check on a risk is the model's, by the run's family", () => {
+    const { container } = render(
+      <RiskNote point={{ ...risk, guardrail: suggested }} {...actions} family="GPT" />,
+    );
+    expect(line(container)?.textContent).toBe(
+      "This looks checkable: an architecture rule in ArchUnit. Services never import a controller. Suggested by GPT, not checked.",
+    );
+    expect(line(container)?.dataset.guardrail).toBe("suggested");
+  });
+
+  it("says nothing on a point without one, nor on one folded, and shows it once a left-out one is", async () => {
+    const { container, rerender } = render(
+      <FindingCard point={finding} {...actions} {...findingProps} />,
+    );
+    expect(line(container)).toBeNull();
+    rerender(
+      <FindingCard
+        point={{ ...finding, guardrail: rule }}
+        {...actions}
+        {...findingProps}
+        state="dismissed"
+      />,
+    );
+    expect(line(container)).toBeNull();
+    const leftOut = { ...finding, guardrail: rule, guidance: leftOutByPreference };
+    rerender(<FindingCard point={leftOut} {...actions} {...findingProps} leftOut />);
+    expect(line(container)).toBeNull();
+    rerender(<FindingCard point={leftOut} {...actions} {...findingProps} leftOut={false} />);
+    expect(line(container)).not.toBeNull();
+  });
+
+  it("renders the model's words as text", () => {
+    const does = "<b>x</b>";
+    const { container } = render(
+      <FindingCard
+        point={{ ...finding, guardrail: { ...suggested, does } }}
+        {...actions}
+        {...findingProps}
+      />,
+    );
+    expect(line(container)?.textContent).toContain(does);
+    expect(container.querySelector("b")).toBeNull();
+  });
+});
+
 describe("a point a preference left out", () => {
   const leftOut = { ...finding, guidance: leftOutByPreference };
 

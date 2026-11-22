@@ -22,6 +22,7 @@ import {
   FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
+  FakeGuardrailAdvisor,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakePreferenceSuggester,
@@ -79,6 +80,7 @@ const setupApp = (
       },
     ],
   });
+  const advisor = new FakeGuardrailAdvisor();
   const history = new FakeReviewHistory({
     host: "github",
     comments: [
@@ -99,6 +101,7 @@ const setupApp = (
       models: new FakeModelCatalog({
         model: options.model ?? new FakeAnalysisModel(),
         suggester,
+        advisor,
         ...(options.modelAvailable === false
           ? { options: [fakeModelOption({ available: false, reason: "Not signed in" })] }
           : {}),
@@ -190,6 +193,7 @@ const setupApp = (
     store,
     preferences,
     suggester,
+    advisor,
     events,
     logger,
     useCases,
@@ -1173,6 +1177,19 @@ describe("GET /api/analyses/:id/events", () => {
       expect(await response.text()).toBe("event: done\ndata: {}\n\n");
       expect(counting.active()).toBe(0);
     }
+  });
+
+  it("stays open while a run's guardrail call runs after its passes, and ends with it", async () => {
+    const counting = countingEvents();
+    const { request, store, events } = setupApp({ events: counting.events });
+    await store.saveAnalysis({ ...smallFeatureAnalysis, guardrails: "running" });
+
+    const response = request(eventsPath(id));
+    await vi.waitFor(() => expect(counting.active()).toBe(1));
+    events.emit(id, { type: "done" });
+
+    expect(await (await response).text()).toBe("event: done\ndata: {}\n\n");
+    expect(counting.active()).toBe(0);
   });
 
   it("rejects a malformed ID and reports an unknown one, without staying subscribed", async () => {

@@ -823,6 +823,7 @@ const analysis: Analysis = {
   },
   guidance: null,
   beforeModel: null,
+  guardrails: null,
   createdAt: "2026-10-21T09:42:10Z",
   updatedAt: "2026-10-21T09:43:02Z",
 };

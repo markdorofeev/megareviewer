@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { fileChange, hunk, smallFeatureAnalysis } from "../../application/testing/index.ts";
 import { type FileChange, HunkId } from "../diff/index.ts";
 import {
-  type Finding,
+  Finding,
   FindingId,
   type Guidance,
   MismatchId,
   PreferenceId,
   pointsOf,
+  type RiskAssessment,
   strippable,
   validateFindings,
 } from "./index.ts";
@@ -73,6 +74,7 @@ describe("pointsOf", () => {
         { ref: "p2", id: naming, kind: "dont-flag", text: "Naming", scope: { kind: "global" } },
       ],
       guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
+      checks: [],
     };
     const contractRisk = smallFeatureAnalysis.risk[0];
     if (contractRisk === undefined) throw new Error("small-feature has risks");
@@ -206,6 +208,43 @@ describe("pointsOf", () => {
     expect(onNew).toMatchObject({ severity: "blocking", suggestion: ["x();"], mismatch: null });
     const onOld = { ...suggested, lines: { ...suggested.lines, side: "old" as const } };
     expect(pointsOf({ ...smallFeatureAnalysis, findings: [onOld] })[0]?.suggestion).toBeNull();
+  });
+
+  it("carries a finding's guardrail, and nothing on one without", () => {
+    const guardrail = {
+      is: "rule",
+      tool: "biome",
+      rule: "noFloatingPromises",
+      configPath: "biome.json",
+    } as const;
+    const [marked, plain] = pointsOf({
+      ...smallFeatureAnalysis,
+      findings: [
+        { ...finding(), guardrail },
+        { ...finding(), id: FindingId.parse("f2") },
+      ],
+    });
+    expect(marked?.guardrail).toEqual(guardrail);
+    expect(plain && "guardrail" in plain).toBe(false);
+  });
+
+  it("reads a finding stored with an earlier version's guardrail or repetition without it", () => {
+    for (const stored of [
+      { guardrail: { tool: "biome", rule: "noFloatingPromises", configPath: "biome.json" } },
+      {
+        guardrail: {
+          is: "configured",
+          tool: "biome",
+          rule: "noFloatingPromises",
+          configPath: "biome.json",
+        },
+      },
+      { repeated: { says: "Promises nobody awaits", pullRequests: 3, guardrail: null } },
+    ]) {
+      const parsed = Finding.parse({ ...finding(), ...stored });
+      expect(parsed.guardrail).toBeUndefined();
+      expect("repeated" in parsed).toBe(false);
+    }
   });
 
   it("puts a decision on its own line when one of its hunks shows it, else its hunk's", () => {
@@ -363,24 +402,42 @@ describe("a risk's checking test", () => {
     checks: "A PUT from another origin gets 403.",
     lines: { hunkId: testHunk.id, side: "new" as const, startLine: 2, line: 2 },
   };
+  const analysisRisk: RiskAssessment[] = [
+    {
+      hunkId: routeHunk.id,
+      riskClass: "contract",
+      reason: "Another site could overwrite a saved token.",
+      source: "model",
+      lines: null,
+      checkedBy,
+      guidance: null,
+    },
+  ];
   const riskOf = (files: readonly FileChange[]) =>
-    pointsOf({
-      files,
+    pointsOf({ files, intent: null, findings: [finding()], decisions: [], risk: analysisRisk });
+
+  it("carries a risk's guardrail beside its checking test", () => {
+    const guardrail = {
+      is: "suggested",
+      kind: "ci-check",
+      engine: "oasdiff",
+      does: "Fails a change that breaks the API's contract.",
+    } as const;
+    const [routeRisk] = analysisRisk;
+    if (routeRisk === undefined) throw new Error("unreachable: a risk");
+    const points = pointsOf({
+      files: [routes, tests, ...smallFeatureAnalysis.files],
       intent: null,
-      findings: [finding()],
+      findings: [],
       decisions: [],
-      risk: [
-        {
-          hunkId: routeHunk.id,
-          riskClass: "contract",
-          reason: "Another site could overwrite a saved token.",
-          source: "model",
-          lines: null,
-          checkedBy,
-          guidance: null,
-        },
-      ],
+      risk: [{ ...routeRisk, guardrail }],
     });
+    expect(points[0]).toMatchObject({
+      kind: "risk",
+      guardrail,
+      checkedBy: { test: checkedBy.test },
+    });
+  });
 
   it("is on its risk with the test's file, and the risk keeps its place after the findings", () => {
     const points = riskOf([routes, tests, ...smallFeatureAnalysis.files]);

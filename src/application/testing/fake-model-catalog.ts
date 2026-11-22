@@ -4,8 +4,14 @@ import {
   type ModelOptions,
   modelOptionId,
 } from "../../domain/review/index.ts";
-import type { AnalysisModel, ModelCatalog, PreferenceSuggester } from "../ports/index.ts";
+import type {
+  AnalysisModel,
+  GuardrailAdvisor,
+  ModelCatalog,
+  PreferenceSuggester,
+} from "../ports/index.ts";
 import { FakeAnalysisModel } from "./fake-analysis-model.ts";
+import { FakeGuardrailAdvisor } from "./fake-guardrail-advisor.ts";
 import { FakePreferenceSuggester } from "./fake-preference-suggester.ts";
 
 /** Sonnet 5.5 on Claude Code, available: the catalog's one option unless given others. */
@@ -28,13 +34,15 @@ export const fakeModelOption = (overrides: Partial<ModelOption> = {}): ModelOpti
 };
 
 /**
- * Serves `model` and `suggester` for every available option, and the options as given. The default
- * is the first available option on `defaultModel`, else the first available, else the first.
- * `asked` counts calls to `options()`. A null `suggester` is a provider that can't suggest.
+ * Serves `model`, `suggester` and `advisor` for every available option, and the options as given.
+ * The default is the first available option on `defaultModel`, else the first available, else the
+ * first. `asked` counts calls to `options()`. A null `suggester` or `advisor` is a provider that
+ * can't make that call.
  */
 export class FakeModelCatalog implements ModelCatalog {
   readonly model: (optionId: ModelOptionId) => AnalysisModel | null;
   readonly suggester: (optionId: ModelOptionId) => PreferenceSuggester | null;
+  readonly advisor: (optionId: ModelOptionId) => GuardrailAdvisor | null;
   asked = 0;
   private current: readonly ModelOption[];
   private readonly defaultModel: string | null;
@@ -43,6 +51,7 @@ export class FakeModelCatalog implements ModelCatalog {
     options: {
       readonly model?: AnalysisModel;
       readonly suggester?: PreferenceSuggester | null;
+      readonly advisor?: GuardrailAdvisor | null;
       readonly options?: readonly ModelOption[];
       readonly defaultModel?: string;
     } = {},
@@ -56,6 +65,8 @@ export class FakeModelCatalog implements ModelCatalog {
       this.current.some((option) => option.id === optionId && option.available);
     this.model = (optionId) => (runs(optionId) ? model : null);
     this.suggester = (optionId) => (runs(optionId) ? suggester : null);
+    const advisor = options.advisor === undefined ? new FakeGuardrailAdvisor() : options.advisor;
+    this.advisor = (optionId) => (runs(optionId) ? advisor : null);
   }
 
   /** Replaces the options, as signing in or out would. */

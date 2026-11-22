@@ -1,4 +1,7 @@
 import {
+  checkConfigPathsFor,
+  checkConfigsOf,
+  type FoundCheckConfigs,
   GUIDELINE_PATHS,
   type Guidance,
   type GuidelinePath,
@@ -22,17 +25,18 @@ const MAX_CACHED_BYTES = 1024 * 1024;
 const utf8 = new TextEncoder();
 
 /**
- * A repository's guideline files at a commit, by path, null for one that isn't there: from the
- * file cache, and the rest from the host in one request, which then go into the cache.
+ * Files at a repository's root at a commit, guideline files and check configs, by path, null for
+ * one that isn't there: from the file cache, and the rest from the host in one request, which then
+ * go into the cache.
  */
-export const readGuidelines = async (
+export const readRootFiles = async <P extends string>(
   deps: Pick<AppDeps, "fileCache" | "hosts">,
   repo: RepoRef,
   sha: string,
-  paths: readonly GuidelinePath[],
-): Promise<Result<ReadonlyMap<GuidelinePath, string | null>, UseCaseError>> => {
-  const contents = new Map<GuidelinePath, string | null>();
-  const missing: GuidelinePath[] = [];
+  paths: readonly P[],
+): Promise<Result<ReadonlyMap<P, string | null>, UseCaseError>> => {
+  const contents = new Map<P, string | null>();
+  const missing: P[] = [];
   for (const path of paths) {
     const cached = await deps.fileCache.get(repo, { sha, path });
     if (cached === null) missing.push(path);
@@ -56,6 +60,17 @@ export const readGuidelines = async (
   return ok(contents);
 };
 
+/** The linter and type-checker configs at a repository's root, for the tools of the changed files. */
+export const readCheckConfigs = async (
+  deps: Pick<AppDeps, "fileCache" | "hosts">,
+  repo: RepoRef,
+  sha: string,
+  changedPaths: readonly string[],
+): Promise<Result<FoundCheckConfigs, UseCaseError>> => {
+  const read = await readRootFiles(deps, repo, sha, checkConfigPathsFor(changedPaths));
+  return read.ok ? ok(checkConfigsOf(read.value)) : read;
+};
+
 const kilobytes = (bytes: number): string => `${Math.ceil(bytes / 1024)} KB`;
 
 export interface RunGuidance {
@@ -68,8 +83,8 @@ export interface RunGuidance {
 
 /**
  * What a model run on a pull request reads beside the code: the reviewer's enabled preferences for
- * its repository, and the repository's guideline files they switched on, at the PR's base commit,
- * so a PR can't rewrite the rules it's reviewed by. A file that can't be read or is too large is a
+ * its repository and the repository's guideline files they switched on, at the PR's base commit, so
+ * a PR can't rewrite the rules it's reviewed by. A file that can't be read or is too large is a
  * warning, and the run goes on without it.
  */
 export const runGuidance = async (
@@ -82,13 +97,15 @@ export const runGuidance = async (
     deps.preferences.getGuidelineSwitches(repo),
   ]);
   const paths = GUIDELINE_PATHS.filter((path) => guidelineEnabled(path, switches));
-  const read = await readGuidelines(deps, repo, pullRequest.baseSha, paths);
+  const read = await readRootFiles(deps, repo, pullRequest.baseSha, paths);
   const warnings: string[] = [];
   const sent: { path: GuidelinePath; bytes: number; content: string }[] = [];
   if (!read.ok) {
-    warnings.push(
-      `Couldn't read the repository's guideline files, so the AI review ran without them: ${read.error.message}`,
-    );
+    if (paths.length > 0) {
+      warnings.push(
+        `Couldn't read the repository's guideline files, so the AI review ran without them: ${read.error.message}`,
+      );
+    }
   } else {
     for (const path of paths) {
       const content = read.value.get(path) ?? null;

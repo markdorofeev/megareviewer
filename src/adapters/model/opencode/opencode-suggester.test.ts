@@ -9,8 +9,8 @@ import {
   recorded,
   sessionWith,
 } from "./fixtures/fake-opencode-client.ts";
+import { createOpencodeSuggester } from "./opencode-one-call.ts";
 import { opencodeConfig, SUGGEST_AGENT } from "./opencode-request.ts";
-import { createOpencodeSuggester } from "./opencode-suggester.ts";
 
 /** Synthetic: the recorded intent session, its answer's text replaced. */
 const saying = (text: string, ...also: Record<string, unknown>[]) =>

@@ -1,5 +1,6 @@
 import type { ModelOptionId, ModelOptions } from "../../domain/review/index.ts";
 import type { AnalysisModel } from "./analysis-model.ts";
+import type { GuardrailAdvisor } from "./guardrail-advisor.ts";
 import type { PreferenceSuggester } from "./preference-suggester.ts";
 
 /** Every model option the reviewer's machine can or could run, and the passes on one of them. */
@@ -16,4 +17,6 @@ export interface ModelCatalog {
   model(optionId: ModelOptionId): AnalysisModel | null;
   /** The call that proposes preferences on one option, as `model`; null too when it can't make it. */
   suggester(optionId: ModelOptionId): PreferenceSuggester | null;
+  /** The call that asks whether a check could catch a comment, as `suggester`. */
+  advisor(optionId: ModelOptionId): GuardrailAdvisor | null;
 }

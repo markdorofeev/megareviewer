@@ -49,6 +49,14 @@ export type AnalysisKey = z.infer<typeof AnalysisKey>;
 export const ModelPass = z.enum(["intent", "findings", "risk", "decisions"]);
 export type ModelPass = z.infer<typeof ModelPass>;
 
+/** What a model call of a run was: one of the passes, or the guardrail call after them. */
+export const ModelCallName = z.enum([...ModelPass.options, "guardrails"]);
+export type ModelCallName = z.infer<typeof ModelCallName>;
+
+/** The guardrail call of a model run: running after the passes, then what came of it. */
+export const GuardrailCallStatus = z.enum(["running", "done", "failed"]);
+export type GuardrailCallStatus = z.infer<typeof GuardrailCallStatus>;
+
 const TokenCount = z.number().int().nonnegative();
 
 /** Who pays for the tokens: the reviewer's API account, or nobody per call on their Claude plan. */
@@ -57,7 +65,7 @@ export type ModelBilling = z.infer<typeof ModelBilling>;
 
 export const ModelUsage = z
   .object({
-    pass: ModelPass,
+    pass: ModelCallName,
     inputTokens: TokenCount,
     cacheReadTokens: TokenCount,
     cacheWriteTokens: TokenCount,
@@ -83,7 +91,7 @@ export type ModelCallOutcome = z.infer<typeof ModelCallOutcome>;
 /** One call of a pass, kept to trace a run: when it ran, and why it was retried or failed. */
 export const ModelCall = z
   .object({
-    pass: ModelPass,
+    pass: ModelCallName,
     /** 2 for the retry the checks' problems asked for. */
     attempt: z.number().int().positive(),
     startedAt: Timestamp,
@@ -205,6 +213,8 @@ export const Analysis = z
      * removing the run puts them back. Null without a run, and where a run started before it was kept.
      */
     beforeModel: BeforeModel.nullable().default(null),
+    /** The run's guardrail call; null when it didn't make one. Never a stage: the review lands without it. */
+    guardrails: GuardrailCallStatus.nullable().default(null),
     createdAt: Timestamp,
     updatedAt: Timestamp,
   })
@@ -242,6 +252,10 @@ export const inProgress = (analysis: Pick<Analysis, "status" | "stages">): boole
       (stage) => analysis.stages[stage] === "running" || analysis.stages[stage] === "pending",
     ));
 
+/** Whether its events still stream: it's in progress, or its run's guardrail call is running. */
+export const following = (analysis: Pick<Analysis, "status" | "stages" | "guardrails">): boolean =>
+  inProgress(analysis) || analysis.guardrails === "running";
+
 /** Whether the model can be asked to run: the code's analysis is complete and the model isn't running or done. */
 export const modelRunnable = (analysis: Pick<Analysis, "status" | "stages">): boolean =>
   analysis.status === "complete" &&
@@ -276,6 +290,7 @@ export const withoutModelRun = (
   modelOption: null,
   guidance: null,
   beforeModel: null,
+  guardrails: null,
   updatedAt,
 });
 

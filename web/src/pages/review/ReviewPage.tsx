@@ -62,6 +62,7 @@ import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks, checkingTestPayload } from "./calls.tsx";
 import { Dialog } from "./Dialog.tsx";
+import { DraftGuardrail } from "./Guardrail.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { barButtons, verdictAfter, verdictLabel } from "./header-buttons.ts";
 import { IntentLine } from "./IntentLine.tsx";
@@ -111,6 +112,7 @@ import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
 import { useLanding } from "./useLanding.ts";
+import { useMarksHeld } from "./useMarksHeld.ts";
 import { usePoints } from "./usePoints.ts";
 import { usePullRequestStatus } from "./usePullRequestStatus.ts";
 import { useThreads } from "./useThreads.ts";
@@ -330,7 +332,8 @@ const Review = ({
   const modelRunning = complete && inProgress(live);
   // The code, the tree and the receipt stay as they were until Claude's run ends; only the
   // header follows it.
-  const analysis = useSettled(live, modelRunning);
+  // A guardrail call's marks, after the landing, don't move the code being read either.
+  const analysis = useMarksHeld(useSettled(live, modelRunning));
   const runModel = useMutation(client.runModel);
   const readOnly = publication !== null || !complete;
 
@@ -1062,6 +1065,7 @@ const Review = ({
         key={point.id}
         point={point}
         {...actionsOf(point)}
+        family={family}
         linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
         inReview={inReview}
         removed={
@@ -1078,6 +1082,7 @@ const Review = ({
       key={point.id}
       point={point}
       {...actionsOf(point)}
+      family={family}
       linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
       test={testPeeks.get(point.id) ?? null}
     />
@@ -1225,6 +1230,22 @@ const Review = ({
   // A rule saved from a point is for its repository unless the reviewer chooses everywhere.
   const repo = analysis.key.ref.repo;
   const ruleScopes = useMemo(() => scopeOptions([repo]).reverse(), [repo]);
+  /**
+   * The raised point a draft was made from, with a guardrail: its card is on the draft's part, and
+   * the draft is on the line its Add to review or Comment put it.
+   */
+  const guardedPointOf = (id: PartId, comment: LineComment): Point | undefined => {
+    const found = index.parts.get(id);
+    if (found === undefined) return undefined;
+    const firstChanged = found.hunk.lines.find((one) => one.kind !== "context");
+    const fallback = firstChanged === undefined ? null : commentPlace(firstChanged);
+    return points.find((point) => {
+      if (point.guardrail === undefined || places.cardPart.get(point.id) !== id) return false;
+      if (pointStates.stateOf(point.id) !== "raised") return false;
+      const place = point.lines === null ? fallback : point.lines;
+      return place !== null && place.side === comment.side && place.line === comment.line;
+    });
+  };
   const signatureOf = (id: PartId): string => {
     const parts: unknown[] = [
       epochOf(analysis),
@@ -1259,6 +1280,18 @@ const Review = ({
     // Line comments stay open once a review is published: they go with the next, or post now.
     onComment: complete ? writeComment : undefined,
     ...(complete ? { onCommentNow: postCommentNow } : {}),
+    // Under a saved draft a point with a guardrail made: the check, with Add to comment.
+    draftNote: (id, comment, edit) => {
+      const point = guardedPointOf(id, comment);
+      return point?.guardrail === undefined ? null : (
+        <DraftGuardrail
+          guardrail={point.guardrail}
+          family={family}
+          body={comment.body}
+          onEdit={edit}
+        />
+      );
+    },
     onFocusHunk: focusHunk,
     marksOf,
     pointsOn,

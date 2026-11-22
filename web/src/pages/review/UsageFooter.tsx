@@ -1,17 +1,18 @@
 import { useId } from "react";
 import {
   type Guidance,
-  type ModelPass,
+  type ModelCallName,
   type ModelRunOption,
   type ModelUsage,
   planOf,
 } from "../../../../src/domain/review/index.ts";
 
-const PASS_NAMES: Readonly<Record<ModelPass, string>> = {
+const PASS_NAMES: Readonly<Record<ModelCallName, string>> = {
   intent: "Intent",
   findings: "Findings",
   risk: "Risk",
   decisions: "Decisions",
+  guardrails: "Guardrails",
 };
 
 /** "182k" for counts in the thousands, so the totals read at a glance. */

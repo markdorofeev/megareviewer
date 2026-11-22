@@ -32,6 +32,7 @@ import {
 } from "../../ui/dropdown-menu.tsx";
 import { PreferenceForm, type RuleFields } from "../preferences/PreferenceForm.tsx";
 import type { ScopeOption } from "../preferences/rule.tsx";
+import { GuardrailLine } from "./Guardrail.tsx";
 
 export const pointAnchor = (id: PointId): string => `point-${id}`;
 
@@ -416,8 +417,11 @@ export const FindingCard = memo(function FindingCard({
   removed,
   language,
   linesAbove = 0,
+  family = "Claude",
 }: PointActions & {
   readonly point: Point;
+  /** Who suggests a guardrail, as the bar names the run's model. */
+  readonly family?: string;
   /** The lines of code above the card that it rests on, which going to it keeps in view. */
   readonly linesAbove?: number;
   /** A draft on its lines holds it now, so it folds to a line above the draft. */
@@ -527,6 +531,9 @@ export const FindingCard = memo(function FindingCard({
         </p>
       )}
       {point.guidance !== undefined && <GuidanceLine guidance={point.guidance} />}
+      {point.guardrail !== undefined && (
+        <GuardrailLine guardrail={point.guardrail} family={family} />
+      )}
       {point.suggestion !== null && (
         <SuggestionDiff
           title="Suggested change"
@@ -648,8 +655,11 @@ export const RiskNote = memo(function RiskNote({
   onRule,
   linesAbove = 0,
   test = null,
+  family = "Claude",
 }: PointActions & {
   readonly point: Point;
+  /** Who suggests a guardrail, as the bar names the run's model. */
+  readonly family?: string;
   /** The lines of code above the note that it's about, which going to it keeps in view. */
   readonly linesAbove?: number;
   /** Where the checking test's name opens its code; null shows the name alone. */
@@ -747,6 +757,9 @@ export const RiskNote = memo(function RiskNote({
       )}
       {point.guidance !== undefined && (
         <GuidanceLine guidance={point.guidance} className="pb-0.5" />
+      )}
+      {point.guardrail !== undefined && (
+        <GuardrailLine guardrail={point.guardrail} family={family} className="pb-0.5" />
       )}
       {rule.writing && (
         <div className="py-1.5 pr-2">

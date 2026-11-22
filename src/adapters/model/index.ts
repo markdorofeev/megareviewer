@@ -8,6 +8,12 @@ export {
   estimateTokens,
 } from "./claude/claude-code-analysis-model.ts";
 export { runStructuredCall, type StructuredAnswer } from "./claude/claude-code-call.ts";
+export {
+  type ClaudeCodeOneCallOptions,
+  createClaudeCodeAdvisor,
+  createClaudeCodeOneCall,
+  createClaudeCodeSuggester,
+} from "./claude/claude-code-one-call.ts";
 export type { StructuredCall } from "./claude/claude-code-request.ts";
 export {
   type ClaudeCodeStatus,
@@ -17,10 +23,11 @@ export {
   planName,
 } from "./claude/claude-code-status.ts";
 export {
-  type ClaudeCodeSuggesterOptions,
-  createClaudeCodeSuggester,
-} from "./claude/claude-code-suggester.ts";
-export { type ClaudeSuggesterOptions, createClaudeSuggester } from "./claude/claude-suggester.ts";
+  type ClaudeOneCallOptions,
+  createClaudeAdvisor,
+  createClaudeOneCall,
+  createClaudeSuggester,
+} from "./claude/claude-one-call.ts";
 export {
   CLAUDE_MODELS,
   type ClaudeModel,
@@ -39,6 +46,12 @@ export {
   createCodexAnalysisModel,
   runCodexCall,
 } from "./codex/codex-analysis-model.ts";
+export {
+  type CodexOneCallOptions,
+  createCodexAdvisor,
+  createCodexOneCall,
+  createCodexSuggester,
+} from "./codex/codex-one-call.ts";
 export { codexRequest } from "./codex/codex-request.ts";
 export {
   type CodexCatalogModel,
@@ -46,7 +59,6 @@ export {
   codexStatus,
   MIN_CODEX_VERSION,
 } from "./codex/codex-status.ts";
-export { type CodexSuggesterOptions, createCodexSuggester } from "./codex/codex-suggester.ts";
 export { CODEX_MODELS, type CodexModel, codexModel, DEFAULT_CODEX_MODEL } from "./codex/models.ts";
 export { type CodexRun, createRunCodex, type RunCodex } from "./codex/run-codex.ts";
 export {
@@ -59,6 +71,12 @@ export {
   type OpencodeClient,
   type OpencodeFetch,
 } from "./opencode/opencode-client.ts";
+export {
+  createOpencodeAdvisor,
+  createOpencodeOneCall,
+  createOpencodeSuggester,
+  type OpencodeOneCallOptions,
+} from "./opencode/opencode-one-call.ts";
 export { opencodeRequest } from "./opencode/opencode-request.ts";
 export {
   createOpencodeServer,
@@ -71,10 +89,9 @@ export {
   type OpencodeStatus,
   opencodeStatus,
 } from "./opencode/opencode-status.ts";
-export {
-  createOpencodeSuggester,
-  type OpencodeSuggesterOptions,
-} from "./opencode/opencode-suggester.ts";
 export { createRunOpencode, type RunOpencode } from "./opencode/run-opencode.ts";
 export { EFFORTS, type Effort } from "./shared/effort.ts";
+export { advisorOn } from "./shared/guardrail-call.ts";
+export type { RunOneCall } from "./shared/one-call.ts";
 export { renderInput } from "./shared/render-input.ts";
+export { suggesterOn } from "./shared/suggestion.ts";

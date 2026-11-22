@@ -1,7 +1,7 @@
-import type { Analysis, ModelPass } from "../src/domain/review/index.ts";
+import type { Analysis, ModelCallName } from "../src/domain/review/index.ts";
 
 export interface PassTime {
-  readonly pass: ModelPass;
+  readonly pass: ModelCallName;
   /** Its calls added up, a retry's included. */
   readonly seconds: number;
   readonly calls: number;

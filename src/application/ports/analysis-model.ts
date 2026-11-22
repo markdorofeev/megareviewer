@@ -122,8 +122,8 @@ export const ModelRisk = z
   .readonly();
 export type ModelRisk = z.infer<typeof ModelRisk>;
 
-/** A finding as the model writes it; the server numbers them. */
-export const FindingDraft = Finding.unwrap().omit({ id: true }).readonly();
+/** A finding as the model writes it; the server numbers them, and the guardrail call marks them. */
+export const FindingDraft = Finding.unwrap().omit({ id: true, guardrail: true }).readonly();
 export type FindingDraft = z.infer<typeof FindingDraft>;
 
 export const DecisionDraft = Decision.unwrap().omit({ id: true }).readonly();

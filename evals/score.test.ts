@@ -375,6 +375,7 @@ describe("scoreCase", () => {
         },
       ],
       guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
+      checks: [],
     };
     // Expected findings: 0 rate limit, 1 unbounded cache, 2 hard-coded TTL (all must-have), 3 stale.
     const guided: CaseLabels = {
@@ -508,7 +509,7 @@ describe("scoreCase", () => {
       if (lookFor === undefined) throw new Error("unreachable: the guidance has preferences");
       const only: Analysis = {
         ...marked({ 1: raisedBy("p1") }),
-        guidance: { preferences: [lookFor], guidelines: [] },
+        guidance: { preferences: [lookFor], guidelines: [], checks: [] },
       };
       const asked: CaseLabels = {
         ...labels,

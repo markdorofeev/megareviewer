@@ -35,6 +35,7 @@ export {
 } from "./fake-analysis-model.ts";
 export { type CodeParserMethod, FakeCodeParser } from "./fake-code-parser.ts";
 export { FakeGitHost, type GitHostMethod, type PublishAttempt } from "./fake-git-host.ts";
+export { FakeGuardrailAdvisor } from "./fake-guardrail-advisor.ts";
 export {
   type CheckoutCommits,
   FakeLocalCheckout,

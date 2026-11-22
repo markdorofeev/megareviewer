@@ -24,6 +24,12 @@ export interface HunkDeps {
   readonly onComment?: (id: PartId, comment: LineComment) => void;
   /** Posts a comment on its own, now; without it, comments only go with the review. */
   readonly onCommentNow?: (id: PartId, comment: LineComment) => Promise<string | null>;
+  /** Under a saved draft of a part, e.g. that the reviewer said it before. */
+  readonly draftNote?: (
+    id: PartId,
+    comment: LineComment,
+    edit: (body: string) => void,
+  ) => ReactNode;
   readonly onFocusHunk: (id: PartId) => void;
   /** Claude's point cards and links that go under a part's header. */
   readonly pointsOn: (id: PartId) => ReactNode;
@@ -85,6 +91,12 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       {...(deps.onCancelComment === undefined ? {} : { onCancelComment: deps.onCancelComment })}
       onComment={deps.onComment}
       {...(deps.onCommentNow === undefined ? {} : { onCommentNow: deps.onCommentNow })}
+      {...(deps.draftNote === undefined
+        ? {}
+        : {
+            draftNote: (comment: LineComment, edit: (body: string) => void) =>
+              deps.draftNote?.(id, comment, edit),
+          })}
       afterHeader={deps.pointsOn(id)}
       {...(deps.pointLinesOf(id) === undefined ? {} : { pointLines: deps.pointLinesOf(id) })}
       threadsAt={(place) => deps.threadsAt(id, place)}

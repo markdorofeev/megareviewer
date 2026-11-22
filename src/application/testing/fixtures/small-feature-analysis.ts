@@ -423,6 +423,7 @@ export const smallFeatureAnalysis: Analysis = {
     family: "Claude",
   },
   beforeModel: null,
+  guardrails: null,
   createdAt: "2026-10-21T09:00:00Z",
   updatedAt: "2026-10-21T09:01:10Z",
   guidance: null,

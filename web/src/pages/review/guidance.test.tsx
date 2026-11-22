@@ -281,7 +281,7 @@ describe("what a run read", () => {
   });
 
   it("says nothing new for a run without guidance", () => {
-    const none = { preferences: [], guidelines: [] };
+    const none = { preferences: [], guidelines: [], checks: [] };
     expect([guidanceRead(null), guidanceRead(none)]).toEqual([null, null]);
     expect(runLine(modelOption, none)).toBe("Sonnet 5.5 through Claude Code");
     render(<UsageFooter usage={usage} option={modelOption} guidance={none} />);
@@ -293,7 +293,7 @@ describe("what a run read", () => {
   it("counts the preferences and names each guideline file", () => {
     const [first] = fixtureGuidance.preferences;
     if (first === undefined) throw new Error("the fixture has preferences");
-    expect(guidanceRead({ preferences: [first], guidelines: [] })).toBe("1 preference");
+    expect(guidanceRead({ preferences: [first], guidelines: [], checks: [] })).toBe("1 preference");
     expect(
       guidanceRead({
         ...fixtureGuidance,
@@ -332,7 +332,7 @@ describe("what a run read", () => {
       <ModelCalls
         calls={modelCalls}
         option={modelOption}
-        guidance={{ preferences: [], guidelines: [] }}
+        guidance={{ preferences: [], guidelines: [], checks: [] }}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Run details…" }));

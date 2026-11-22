@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { fnv1a64 } from "../shared/index.ts";
+import { ReadCheckConfig } from "./guardrail.ts";
 import { PointKind } from "./point-kind.ts";
 import { Timestamp } from "./primitives.ts";
 import { PullRequestRef, RepoRef } from "./pull-request.ts";
@@ -164,6 +165,8 @@ export const Guidance = z
           .readonly(),
       )
       .readonly(),
+    /** The check configs and build files the guardrail call read. */
+    checks: z.array(ReadCheckConfig).readonly().default([]),
   })
   .readonly();
 export type Guidance = z.infer<typeof Guidance>;
@@ -236,6 +239,7 @@ export const guidelineFile = (
 export const guidanceOf = (
   preferences: readonly Preference[],
   guidelines: readonly { readonly path: string; readonly bytes: number }[],
+  checks: readonly ReadCheckConfig[] = [],
 ): Guidance => ({
   preferences: preferences.map(({ id, kind, text, scope }, index) => ({
     ref: `p${index + 1}`,
@@ -245,6 +249,7 @@ export const guidanceOf = (
     scope,
   })),
   guidelines: guidelines.map(({ path, bytes }, index) => ({ ref: `g${index + 1}`, path, bytes })),
+  checks,
 });
 
 /** What a checked mark says on a point: the preference's text, or the guideline file's path. */

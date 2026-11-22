@@ -140,6 +140,7 @@ const newAnalysis = (
   modelOption: null,
   guidance: null,
   beforeModel: null,
+  guardrails: null,
   createdAt,
   updatedAt: deps.clock.now(),
 });
@@ -280,7 +281,11 @@ export const createAnalysisRunner = (deps: AppDeps) => {
         host.value,
         analysis,
         pullRequest,
-        { model: chosen.value.runner, option: runOptionOf(chosen.value.option) },
+        {
+          model: chosen.value.runner,
+          option: runOptionOf(chosen.value.option),
+          advisor: deps.models.advisor(chosen.value.option.id),
+        },
         checkout?.at ?? null,
       )
         .catch((error: unknown) => {
@@ -352,6 +357,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           stages: mapModelStages(analysis.stages, (status) =>
             status === "running" ? "failed" : status === "pending" ? "skipped" : status,
           ),
+          ...(analysis.guardrails === "running" ? { guardrails: "failed" as const } : {}),
           modelError: {
             stage,
             code: "interrupted",
@@ -380,7 +386,19 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           updatedAt: deps.clock.now(),
         });
       }
-      const count = interrupted.length + stopped.length;
+      // A run stopped during its guardrail call: the passes had ended, so only the call failed.
+      const calling = recent.filter(
+        (analysis) =>
+          analysis.guardrails === "running" && !inProgress(analysis) && !inFlight.has(analysis.id),
+      );
+      for (const analysis of calling) {
+        await deps.store.saveAnalysis({
+          ...analysis,
+          guardrails: "failed",
+          updatedAt: deps.clock.now(),
+        });
+      }
+      const count = interrupted.length + stopped.length + calling.length;
       if (count > 0) deps.logger.info("Marked interrupted analyses as failed", { count });
       return count;
     },

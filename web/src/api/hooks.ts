@@ -7,7 +7,7 @@ import type {
 } from "../../../contracts/index.ts";
 import {
   type AnalysisId,
-  inProgress,
+  following,
   type ReviewActivity,
 } from "../../../src/domain/review/index.ts";
 import type { Result } from "../../../src/domain/shared/index.ts";
@@ -110,7 +110,7 @@ export const useAnalysisView = (id: AnalysisId, seed: AnalysisView | null = null
   // Only the newest request may update the state, so responses can't land out of order.
   const latest = useRef(0);
   const lastView = useRef<AnalysisView | null>(seed);
-  const seeded = useRef(seed !== null && !inProgress(seed.analysis) ? seed.analysis.id : null);
+  const seeded = useRef(seed !== null && !following(seed.analysis) ? seed.analysis.id : null);
   // Following again, after a model run starts on an analysis whose stream had ended.
   const [round, setRound] = useState(0);
   const followed = useRef<AnalysisId | null>(null);
@@ -149,9 +149,9 @@ export const useAnalysisView = (id: AnalysisId, seed: AnalysisView | null = null
         return;
       }
       // A view that already shows the end needs no refetch: opening a complete analysis
-      // gets `done` straight away.
+      // gets `done` straight away. The end is the guardrail call's, after the passes.
       const shown = lastView.current;
-      if (shown !== null && !inProgress(shown.analysis)) return;
+      if (shown !== null && !following(shown.analysis)) return;
       void refetch();
     });
     return () => {

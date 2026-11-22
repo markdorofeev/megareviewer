@@ -5,7 +5,7 @@ import type { ModelErrorKind } from "../../../domain/review/index.ts";
 import { suggestedDrafts, suggestionInput } from "../shared/fixtures/suggestion.ts";
 import { SUGGEST_SYSTEM_PROMPT } from "../shared/prompts/suggest.ts";
 import { SUGGESTION_ANSWER_FORMAT } from "../shared/suggestion.ts";
-import { createClaudeSuggester } from "./claude-suggester.ts";
+import { createClaudeSuggester } from "./claude-one-call.ts";
 import {
   createAnthropicFetch,
   type FixtureAnswer,

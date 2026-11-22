@@ -289,9 +289,11 @@ describe("the analysis pipeline", () => {
     expect(analysis.tour?.builtBy).toBe("code");
     expect(analysis.warnings).toEqual([]);
     expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
+    // The guardrail call after the passes, since the run has a finding.
     expect(analysis.usage.map((usage) => usage.pass).sort()).toEqual([
       "decisions",
       "findings",
+      "guardrails",
       "intent",
       "risk",
     ]);
@@ -324,6 +326,8 @@ describe("the analysis pipeline", () => {
       "decisions:done",
       // Last: a finding takes the intent's mismatch on its hunk, so it waits for the intent.
       "findings:done",
+      // The passes' end, announced as an update while the guardrail call runs; its end is done.
+      "decisions:done",
       "done",
     ]);
     for (const { event, savedStages } of emitted) {
@@ -453,7 +457,9 @@ describe("the analysis pipeline", () => {
     const started = clock.now();
     // The parallel passes are saved as they finish, in no set order.
     const order = (call: ModelCall) => `${call.pass}/${call.attempt}`;
-    const calls = analysis.modelCalls.filter((call) => call.pass !== "intent");
+    const calls = analysis.modelCalls.filter(
+      (call) => call.pass !== "intent" && call.pass !== "guardrails",
+    );
     expect([...calls].sort((a, b) => order(a).localeCompare(order(b)))).toEqual([
       {
         pass: "decisions",
@@ -1705,6 +1711,7 @@ describe("a model run's guidance", () => {
         { ref: "p2", id: naming.id, kind: "dont-flag", text: naming.text, scope: naming.scope },
       ],
       guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 31 }],
+      checks: [],
     });
     expect(analysis.warnings).toEqual([]);
     // Only the files switched on are asked for.
@@ -1719,7 +1726,7 @@ describe("a model run's guidance", () => {
     const analysis = await analyze();
 
     expect(firstInput(model, "intent").guidance).toEqual({ preferences: [], guidelines: [] });
-    expect(analysis.guidance).toEqual({ preferences: [], guidelines: [] });
+    expect(analysis.guidance).toEqual({ preferences: [], guidelines: [], checks: [] });
     expect(analysis.warnings).toEqual([]);
   });
 

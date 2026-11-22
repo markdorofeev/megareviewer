@@ -5,8 +5,8 @@ import { suggestedDrafts, suggestionInput } from "../shared/fixtures/suggestion.
 import { SUGGEST_SYSTEM_PROMPT } from "../shared/prompts/suggest.ts";
 import { SUGGESTION_ANSWER_FORMAT } from "../shared/suggestion.ts";
 import { NOT_SIGNED_IN } from "./claude-code-errors.ts";
+import { createClaudeCodeSuggester } from "./claude-code-one-call.ts";
 import { SYSTEM_PROMPT_FILE } from "./claude-code-request.ts";
-import { createClaudeCodeSuggester } from "./claude-code-suggester.ts";
 import {
   createFakeRunClaude,
   recordedLines,

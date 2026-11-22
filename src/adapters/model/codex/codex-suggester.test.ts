@@ -5,8 +5,8 @@ import { suggestedDrafts, suggestionInput } from "../shared/fixtures/suggestion.
 import { SUGGEST_SYSTEM_PROMPT } from "../shared/prompts/suggest.ts";
 import { SUGGESTION_ANSWER_FORMAT } from "../shared/suggestion.ts";
 import { NOT_SIGNED_IN } from "./codex-errors.ts";
+import { createCodexSuggester } from "./codex-one-call.ts";
 import { DISABLED_FEATURES, INSTRUCTIONS_FILE, SCHEMA_FILE } from "./codex-request.ts";
-import { createCodexSuggester } from "./codex-suggester.ts";
 import {
   createFakeRunCodex,
   type RecordedRun,

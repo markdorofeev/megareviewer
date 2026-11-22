@@ -70,7 +70,13 @@ export interface Composition {
   close(): Promise<void>;
 }
 
-export const systemClock: Clock = { now: () => new Date().toISOString() };
+export const systemClock: Clock = {
+  now: () => new Date().toISOString(),
+  wait: (ms) =>
+    new Promise((resolve) => {
+      setTimeout(resolve, ms).unref();
+    }),
+};
 
 /** 32 random bytes: the UI's tab gets it in its URL, nothing else on the machine knows it. */
 export const newSessionToken = (): string => randomBytes(32).toString("base64url");

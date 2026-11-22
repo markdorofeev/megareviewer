@@ -4,13 +4,13 @@ import { type AnalysisUpdatedEvent, analysisEventsRoute } from "../../../contrac
 import type { AnalysisEvent, AnalysisEvents } from "../../application/events/index.ts";
 import type { Logger } from "../../application/ports/index.ts";
 import type { UseCases } from "../../application/use-cases/index.ts";
-import { inProgress } from "../../domain/review/index.ts";
+import { following } from "../../domain/review/index.ts";
 import { errorResponse, summarizeIssues } from "./api-routes.ts";
 
 /** Keeps idle connections from being closed by anything in between. */
 const HEARTBEAT_MS = 15_000;
 
-/** Forwards an analysis's events as server-sent events until it is complete or failed. */
+/** Forwards an analysis's events as server-sent events until it is complete or failed, and its guardrail call has ended. */
 export const registerEventsRoute = (
   app: Hono,
   deps: { readonly useCases: UseCases; readonly events: AnalysisEvents; readonly logger: Logger },
@@ -36,7 +36,7 @@ export const registerEventsRoute = (
       unsubscribe();
       return errorResponse(c, view.error);
     }
-    if (!inProgress(view.value.analysis)) queue.push({ type: "done" });
+    if (!following(view.value.analysis)) queue.push({ type: "done" });
 
     return streamSSE(c, async (stream) => {
       stream.onAbort(() => wake?.());

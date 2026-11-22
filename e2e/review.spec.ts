@@ -652,6 +652,49 @@ test("posts a comment now, and it comes back as a thread", async ({ page }) => {
   await expect(thread.getByText("Why this, and not a config value?")).toBeVisible();
 });
 
+test("says on a finding which check could catch it, and adds it to the comment made from it", async ({
+  page,
+}) => {
+  await openReview(page, PR.receiptsChecked, `${SMALL_FEATURE_TITLE}, in a repository with Biome`);
+  const changes = page.getByRole("region", { name: "Changes" });
+  const rule =
+    "A check could catch this: noMisusedPromises in Biome, which biome.json doesn't turn on.";
+
+  // The run's guardrail call marks Claude's finding after the review has landed. With the card
+  // above the window, the line it adds doesn't move the code being read.
+  const finding = changes.locator("[data-slot=point][data-kind=finding]");
+  await expect(finding.locator("[data-slot=guardrail]")).toHaveCount(0);
+  await page.evaluate(() => {
+    const card = document.querySelector("[data-slot=point][data-kind=finding]");
+    if (card === null) throw new Error("no finding");
+    window.scrollBy({ top: card.getBoundingClientRect().bottom + 40, behavior: "instant" });
+  });
+  // The bar sticks once the page has scrolled, before anything is measured.
+  await page.waitForTimeout(200);
+  const before = await page.evaluate(() => {
+    const reading = document.elementFromPoint(400, 260);
+    if (reading === null) throw new Error("nothing under the point");
+    reading.setAttribute("data-reading", "");
+    return reading.getBoundingClientRect().top;
+  });
+  await expect(finding.locator("[data-slot=guardrail]")).toHaveText(rule);
+  const after = await page
+    .locator("[data-reading]")
+    .evaluate((element) => element.getBoundingClientRect().top);
+  expect(Math.abs(after - before)).toBeLessThan(1);
+  await expect(page.locator("[data-slot=repeated-chip]")).toHaveCount(0);
+
+  // The draft Add to review makes from it says the same, and adds the check to its words.
+  await finding.getByRole("button", { name: "Add to review" }).click();
+  const draft = changes.locator("[data-slot=draft-guardrail]");
+  await expect(draft.locator("[data-slot=guardrail]")).toContainText(rule);
+  await draft.getByRole("button", { name: "Add to comment" }).click();
+  await expect(draft.getByText("Added to the comment")).toBeVisible();
+  await expect(changes.locator("[data-slot=line-comment]")).toContainText(
+    "A check could catch this next time: noMisusedPromises in Biome.",
+  );
+});
+
 test.describe("without the model", () => {
   test.use({ ai: false });
 

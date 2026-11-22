@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type FileChange, type Hunk, HunkId, hunkHasLine } from "../diff/index.ts";
 import type { Decision } from "./decision.ts";
+import { Guardrail, StoredGuardrail } from "./guardrail.ts";
 import { type Intent, IntentMismatchKind } from "./intent.ts";
 import { PointKind } from "./point-kind.ts";
 import { PointLines } from "./point-lines.ts";
@@ -51,6 +52,8 @@ export const Finding = z
     mismatch: MismatchId.nullable().default(null),
     /** The preference or guideline file that raised it or says to leave it out, as the model marks it. */
     guidance: GuidanceMark.nullable().default(null),
+    /** A check that could catch its kind, as the guardrail call marked it. */
+    guardrail: StoredGuardrail,
   })
   .readonly();
 export type Finding = z.infer<typeof Finding>;
@@ -97,6 +100,8 @@ export const Point = z
       .object({ effect: GuidanceEffect, label: z.string(), preferenceId: PreferenceId.nullable() })
       .readonly()
       .optional(),
+    /** On a finding or a risk: a check that could catch its kind. */
+    guardrail: Guardrail.optional(),
   })
   .readonly();
 export type Point = z.infer<typeof Point>;
@@ -186,6 +191,7 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         suggestion: finding.lines.side === "new" ? finding.suggestion : null,
         mismatch,
         ...marked(finding.guidance),
+        ...(finding.guardrail === undefined ? {} : { guardrail: finding.guardrail }),
       },
     ];
   });
@@ -229,6 +235,7 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
           ? {}
           : { checkedBy: { ...checked, path: test.path } }),
         ...marked(risk.guidance),
+        ...(risk.guardrail === undefined ? {} : { guardrail: risk.guardrail }),
       },
     ];
   });
@@ -294,7 +301,7 @@ export const strippable = (problem: FindingProblem): boolean =>
  * card shows in full anyway.
  */
 export const validateFindings = (
-  findings: readonly Omit<Finding, "id">[],
+  findings: readonly Omit<Finding, "id" | "guardrail">[],
   hunks: ReadonlyMap<HunkId, Hunk>,
   mismatches = 0,
 ): FindingProblem[] =>

@@ -126,7 +126,10 @@ const main = async (): Promise<void> => {
     username: email,
     password: apiToken,
     workspace: null,
-    clock: { now: () => new Date().toISOString() },
+    clock: {
+      now: () => new Date().toISOString(),
+      wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref()),
+    },
     logger: { debug: () => {}, info: log, warn: log, error: log },
     fetch: recordingFetch,
   });

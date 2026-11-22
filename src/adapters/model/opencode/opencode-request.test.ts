@@ -105,7 +105,7 @@ describe("variantFor", () => {
 });
 
 describe("opencodeConfig", () => {
-  it("defines the passes' agent and the suggestion's, each denying every tool last", () => {
+  it("defines the passes' agent, the suggestion's and the guardrail call's, each denying every tool last", () => {
     const config = opencodeConfig();
     expect(config.agents).toEqual({
       megareviewer: expect.objectContaining({
@@ -116,6 +116,11 @@ describe("opencodeConfig", () => {
       "megareviewer-suggest": expect.objectContaining({
         mode: "primary",
         system: expect.stringContaining("You help a code reviewer write down"),
+        permissions: [{ action: "*", resource: "*", effect: "deny" }],
+      }),
+      "megareviewer-guardrails": expect.objectContaining({
+        mode: "primary",
+        system: expect.stringContaining("could be caught by a check instead"),
         permissions: [{ action: "*", resource: "*", effect: "deny" }],
       }),
     });

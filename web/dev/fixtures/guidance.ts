@@ -35,6 +35,7 @@ export const fixtureGuidance: Guidance = {
     },
   ],
   guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 1_240 }],
+  checks: [],
 };
 
 const MARKS: Readonly<Record<string, GuidanceMark>> = {

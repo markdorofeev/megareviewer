@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Analysis, type AnalysisKey, analysisId, inProgress } from "./index.ts";
+import { type Analysis, type AnalysisKey, analysisId, following, inProgress } from "./index.ts";
 
 const key: AnalysisKey = {
   ref: { repo: { host: "github", owner: "acme", repo: "shop" }, number: 101 },
@@ -55,5 +55,28 @@ describe("inProgress", () => {
   it("isn't once the code's stages failed, though the model's never left pending", () => {
     const stages = { collect: "done", prep: "failed", ...modelStages("pending") } as const;
     expect(inProgress(at("failed", stages))).toBe(false);
+  });
+});
+
+describe("following", () => {
+  const done = {
+    collect: "done",
+    prep: "done",
+    intent: "done",
+    findings: "done",
+    risk: "done",
+    decisions: "done",
+  } as const;
+
+  it("is while the analysis is in progress, or its run's guardrail call runs after the passes", () => {
+    expect(following({ status: "running", stages: done, guardrails: null })).toBe(true);
+    expect(following({ status: "complete", stages: done, guardrails: "running" })).toBe(true);
+    expect(inProgress({ status: "complete", stages: done })).toBe(false);
+  });
+
+  it("isn't once the call has ended, or when the run made none", () => {
+    for (const guardrails of [null, "done", "failed"] as const) {
+      expect(following({ status: "complete", stages: done, guardrails })).toBe(false);
+    }
   });
 });

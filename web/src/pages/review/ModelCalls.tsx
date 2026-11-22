@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   type Guidance,
   type ModelCall,
-  type ModelPass,
+  type ModelCallName,
   type ModelRunOption,
   modelFamily,
 } from "../../../../src/domain/review/index.ts";
@@ -15,11 +15,12 @@ import { formatBytes } from "../preferences/view.ts";
 import { Dialog } from "./Dialog.tsx";
 import { formatDuration, guidanceRead, runName } from "./UsageFooter.tsx";
 
-const PASS_NAMES: Readonly<Record<ModelPass, string>> = {
+const PASS_NAMES: Readonly<Record<ModelCallName, string>> = {
   intent: "Intent",
   findings: "Findings",
   risk: "Risk",
   decisions: "Decisions",
+  guardrails: "Guardrails",
 };
 
 /** "+1:05" from the run's first call, so parallel passes and waits read at a glance. */

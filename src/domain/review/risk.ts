@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { HunkId } from "../diff/index.ts";
 import { CheckingTest } from "./checking-test.ts";
+import { StoredGuardrail } from "./guardrail.ts";
 import { PointLines } from "./point-lines.ts";
 import { GuidanceMark } from "./preference.ts";
 
@@ -26,6 +27,8 @@ export const RiskAssessment = z
     checkedBy: CheckingTest.optional(),
     /** The preference or guideline file the model says shaped a contract hunk's risk. */
     guidance: GuidanceMark.nullable().default(null),
+    /** A check that could catch a contract hunk's risk's kind, as the guardrail call marked it. */
+    guardrail: StoredGuardrail,
   })
   .readonly();
 export type RiskAssessment = z.infer<typeof RiskAssessment>;

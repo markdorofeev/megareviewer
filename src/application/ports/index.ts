@@ -25,6 +25,13 @@ export type {
 export type { FileCache } from "./file-cache.ts";
 export type { FileAt, GitHost, PublishOptions } from "./git-host.ts";
 export {
+  AdviceDraft,
+  type AdviceInput,
+  type AdviceOutput,
+  type AdvicePoint,
+  type GuardrailAdvisor,
+} from "./guardrail-advisor.ts";
+export {
   type CheckoutError,
   type CheckoutFile,
   type LocalCheckout,

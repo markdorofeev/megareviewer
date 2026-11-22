@@ -160,6 +160,11 @@ export interface HunkCardProps {
    * it's posted. Without it, comments only go with the review.
    */
   readonly onCommentNow?: (id: PartId, comment: LineComment) => Promise<string | null>;
+  /**
+   * Under a saved draft the reviewer can still edit, e.g. that they said it before; `edit` replaces
+   * the draft's text.
+   */
+  readonly draftNote?: (comment: LineComment, edit: (body: string) => void) => ReactNode;
   /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
   readonly afterHeader?: ReactNode;
   /** The host's threads on a line, shown under it. */
@@ -207,6 +212,7 @@ export const HunkCard = memo(function HunkCard({
   onCancelComment,
   onComment,
   onCommentNow,
+  draftNote,
   afterHeader,
   threadsAt,
   rangeNote,
@@ -437,6 +443,13 @@ export const HunkCard = memo(function HunkCard({
                               }),
                           })}
                       pinned={inFile}
+                      {...(draftNote === undefined ||
+                      comment === undefined ||
+                      onComment === undefined
+                        ? {}
+                        : {
+                            note: draftNote(comment, (body) => onComment(id, { ...comment, body })),
+                          })}
                     />
                   )}
                 {threads !== null && (
@@ -487,6 +500,7 @@ const CommentRow = ({
   onCancel,
   onPostNow,
   pinned,
+  note,
 }: {
   readonly place: LinePlace;
   readonly comment: LineComment | undefined;
@@ -505,6 +519,8 @@ const CommentRow = ({
   readonly onPostNow?: (draft: CommentDraft) => Promise<string | null>;
   /** On a file's card, where the lines scroll sideways and the box stays in view. */
   readonly pinned: boolean;
+  /** Under the saved draft's text, before its buttons. */
+  readonly note?: ReactNode;
 }) => {
   const row = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -632,6 +648,7 @@ const CommentRow = ({
               <ThreadBody blocks={parseBody(body).blocks} suggestion={preview} />
             )}
             {suggestion !== undefined && preview(suggestion)}
+            {onChange !== undefined && note}
             {onChange !== undefined && (
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" onClick={onEdit}>

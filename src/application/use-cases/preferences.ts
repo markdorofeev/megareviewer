@@ -27,7 +27,7 @@ import type { PreferenceSuggester, ProposalDraft } from "../ports/index.ts";
 import { chooseOption } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
-import { readGuidelines } from "./guidance.ts";
+import { readRootFiles } from "./guidance.ts";
 import { hostName } from "./hosts.ts";
 import { mapLimit } from "./text.ts";
 
@@ -269,7 +269,7 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
     }
     const [switches, files] = await Promise.all([
       store.getGuidelineSwitches(repo),
-      readGuidelines(deps, repo, baseSha, GUIDELINE_PATHS),
+      readRootFiles(deps, repo, baseSha, GUIDELINE_PATHS),
     ]);
     if (!files.ok) return unread(`Couldn't read its guideline files: ${files.error.message}`);
     return {

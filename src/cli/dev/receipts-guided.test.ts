@@ -106,7 +106,7 @@ describe("receipts-guided", () => {
     const { analysis } = await reviewed(async (fake) => {
       await fake.preferences.setGuidelineSwitch(repo, "REVIEW.md", false);
     });
-    expect(analysis.guidance).toEqual({ preferences: [], guidelines: [] });
+    expect(analysis.guidance).toEqual({ preferences: [], guidelines: [], checks: [] });
     expect(marks(analysis)).toEqual([
       ["finding", null, null],
       ["finding", null, null],

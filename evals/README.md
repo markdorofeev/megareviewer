@@ -51,6 +51,19 @@ The summary ends with how many of each rating the judge gave, so a change in noi
 
 A case whose analysis fails or times out, or whose judge fails, is reported as an error and left out of the scores.
 
+## The guardrail call
+
+```bash
+node evals/run-guardrails.ts
+```
+
+The call a model run makes after its passes, which marks each finding and risk a check could catch, has a golden set of its own in [guardrail-cases.ts](guardrail-cases.ts): a case is the call's input, the run's points with their code, the check configs and the build files, with the pull request's changed paths and a label for every point, the guardrails it accepts or none. Add `--yes` to run it on the signed-in Claude Code with Sonnet 5.5, one call a case. The answer goes through the server's own checks, `guardrailOf` with the case's configs and changed paths, the first mark on a point that exists standing, and what they keep is scored without a judge ([guardrail-score.ts](guardrail-score.ts)); the passes' cases don't run, since the call changes nothing they read.
+
+| Metric | Measures | Target |
+|---|---|---|
+| `guardrailRight` | Labeled guardrails a point got as one its label accepts: a verified rule of its tool with a listed name, or a suggested check of a listed kind | ≥ 90% |
+| `guardrailWrong` | Marks on points labeled none, and verified rules no accepted guardrail of their point lists, out of all marks kept | none |
+
 ## Add a case
 
 1. Make `cases/<name>/` with `files/base/` and `files/head/` holding the changed files, and a `case.ts` with the PR's metadata (copy one). Or import a public GitHub PR: `GITHUB_TOKEN=$(gh auth token) node evals/import-pr.ts <url> <name>`.

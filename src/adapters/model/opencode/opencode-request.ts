@@ -1,14 +1,22 @@
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
+import { GUARDRAIL_CALL } from "../shared/guardrail-call.ts";
+import type { OneCall } from "../shared/one-call.ts";
 import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
-import { SUGGEST_SYSTEM_PROMPT } from "../shared/prompts/suggest.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
-import { SUGGESTION_ANSWER_FORMAT, SUGGESTION_EFFORT } from "../shared/suggestion.ts";
+import { SUGGESTION_CALL } from "../shared/suggestion.ts";
 
 /** The agent megareviewer defines in the server's config and runs every pass as. */
 export const AGENT = "megareviewer";
 /** The agent the suggestion call runs as: an agent's system prompt is fixed in the config. */
 export const SUGGEST_AGENT = "megareviewer-suggest";
+/** The agent the guardrail call runs as, for the same reason. */
+export const GUARDRAILS_AGENT = "megareviewer-guardrails";
+
+const AGENT_OF: Readonly<Record<OneCall<unknown>["name"], string>> = {
+  suggestion: SUGGEST_AGENT,
+  guardrails: GUARDRAILS_AGENT,
+};
 /** Given at creation, so opencode doesn't spend a call naming the session. */
 export const SESSION_TITLE = "megareviewer";
 /** The session instruction entries that hold the PR, in order: `pull-request-00`, `-01`… */
@@ -29,7 +37,7 @@ const agent = (description: string, system: string) => ({
 
 /**
  * The config megareviewer passes in `OPENCODE_CONFIG_CONTENT`, on top of the reviewer's own: an
- * agent for the passes and one for the suggestion call, each with our instructions and
+ * agent for the passes and one for each call of its own, each with our instructions and
  * permissions that end by denying everything, the last match winning, and none of opencode's own
  * background work.
  */
@@ -38,7 +46,11 @@ export const opencodeConfig = (): Record<string, unknown> => ({
     [AGENT]: agent("One pass of megareviewer's analysis of a pull request", SYSTEM_PROMPT),
     [SUGGEST_AGENT]: agent(
       "megareviewer's proposals of review preferences from a reviewer's history",
-      SUGGEST_SYSTEM_PROMPT,
+      SUGGESTION_CALL.systemPrompt,
+    ),
+    [GUARDRAILS_AGENT]: agent(
+      "megareviewer's marks of the checks that could catch a review's findings and risks",
+      GUARDRAIL_CALL.systemPrompt,
     ),
   },
   share: "disabled",
@@ -213,23 +225,24 @@ export const opencodeRequest = (
   };
 };
 
-/** The suggestion call's prompt: the task, then the schema of its answer, as for a pass. */
-export const suggestionText = (message: string): string =>
+/** A call of its own's prompt: the task, then the schema of its answer, as for a pass. */
+export const oneCallText = (call: OneCall<unknown>, message: string): string =>
   `${message}
 
 Answer with one JSON object and nothing else: no prose before or after it, no code fence. It must match this JSON schema:
-${JSON.stringify(SUGGESTION_ANSWER_FORMAT.schema)}`;
+${JSON.stringify(call.format.schema)}`;
 
-/** The suggestion call: a session as the agent with its instructions, and no PR to read. */
-export const opencodeSuggestionRequest = (
+/** A call of its own: a session as its agent, with its instructions, and no PR to read. */
+export const opencodeOneCallRequest = (
+  call: OneCall<unknown>,
   message: string,
   model: OpencodeModelRef,
   variants: readonly string[] = [],
 ): OpencodeRequest => {
-  const variant = variantFor(variants, SUGGESTION_EFFORT);
+  const variant = variantFor(variants, call.effort);
   return {
     session: {
-      agent: SUGGEST_AGENT,
+      agent: AGENT_OF[call.name],
       title: SESSION_TITLE,
       model: {
         providerID: model.providerID,
@@ -238,6 +251,6 @@ export const opencodeSuggestionRequest = (
       },
     },
     entries: [],
-    prompt: suggestionText(message),
+    prompt: oneCallText(call, message),
   };
 };

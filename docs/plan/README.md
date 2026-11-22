@@ -240,6 +240,16 @@ Stage 55 is the bottleneck on purpose, as stage 02 was: it fixes the types, port
 |---|---|---|---|
 | 62 | [Code and file tree typography](62-code-and-tree-type.md) | 14, 60, 61 | The code and tree fonts, the type scale, the syntax palette and its roles, the light diff tints and their contrast pairs |
 
+## Sixteenth slice: a check instead of a fix
+
+A finding the author fixes in one place comes back in another. This slice has megareviewer say, on a finding or a risk a check could catch, which check: a rule of the repository's own tools, or one somebody would write.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 63 | [A check instead of a fix](63-check-instead-of-fix.md) | 45, 55, 56, 58, 59 | `src/domain/review/guardrail.ts`, the `GuardrailAdvisor` port, a model run's guardrail call, the guardrail's line on a finding, a risk and a draft made from one, the guardrail call's evals |
+
+It's one stage for one agent: the call, the server's check and the line share the guardrail's types and the check configs.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

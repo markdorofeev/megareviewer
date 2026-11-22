@@ -132,17 +132,23 @@ export const passOf = (request: RecordedRequest): ModelPass | null => {
   return pass.success ? pass.data : null;
 };
 
-/** Whether a request is the suggestion call, from the task that ends it. */
-const isSuggestion = (request: RecordedRequest): boolean =>
-  /^Task: suggest\.$/m.test(request.body.messages.at(-1)?.content.at(-1)?.text ?? "");
+/** Which call of its own a request is, from the task that ends it, or null for a pass. */
+const callOf = (request: RecordedRequest): "suggestion" | "guardrails" | null => {
+  const task = /^Task: (suggest|guardrails)\.$/m.exec(
+    request.body.messages.at(-1)?.content.at(-1)?.text ?? "",
+  )?.[1];
+  return task === "suggest" ? "suggestion" : task === "guardrails" ? "guardrails" : null;
+};
 
 /**
  * A fetch for the SDK client. Messages requests are answered per pass, the suggestion call from
- * `suggestion`, token counting from `countTokens`. Anything else fails the test.
+ * `suggestion` and the guardrail call from `guardrails`, token counting from `countTokens`. Anything
+ * else fails the test.
  */
 export const createAnthropicFetch = (answers: {
   readonly passes?: Partial<Readonly<Record<ModelPass, FixtureAnswer>>>;
   readonly suggestion?: FixtureAnswer;
+  readonly guardrails?: FixtureAnswer;
   readonly countTokens?: FixtureAnswer | TokenCount;
 }) => {
   const requests: RecordedRequest[] = [];
@@ -163,11 +169,9 @@ export const createAnthropicFetch = (answers: {
     }
     if (pathname === "/v1/messages") {
       const pass = passOf(recorded);
-      const answer = isSuggestion(recorded)
-        ? answers.suggestion
-        : pass === null
-          ? undefined
-          : answers.passes?.[pass];
+      const call = callOf(recorded);
+      const answer =
+        call !== null ? answers[call] : pass === null ? undefined : answers.passes?.[pass];
       if (answer === undefined) throw new Error(`No answer in the fixture for pass ${pass}`);
       return respond(answer);
     }

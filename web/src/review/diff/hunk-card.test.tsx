@@ -273,6 +273,41 @@ describe("HunkCard", () => {
     expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
   });
 
+  it("puts a note under a saved draft, which can change its text, and none while editing", async () => {
+    const user = userEvent.setup();
+    const onComment = vi.fn();
+    const draftNote = vi.fn((comment: { body: string }, edit: (body: string) => void) => (
+      <button type="button" onClick={() => edit(`${comment.body} Again.`)}>
+        Said before
+      </button>
+    ));
+    const props = {
+      cards: [second],
+      comments: [draft],
+      onOpenComment: vi.fn(),
+      onComment,
+      draftNote,
+    };
+    const { rerender } = renderWith(<Cards {...props} />);
+    await user.click(screen.getByRole("button", { name: "Said before" }));
+    expect(onComment).toHaveBeenLastCalledWith(second.hunk.id, {
+      ...draft,
+      body: "Name it `count`. Again.",
+    });
+    rerender(
+      <HighlighterContext.Provider value={pendingHighlighter()}>
+        <Cards {...props} openComment={draft} />
+      </HighlighterContext.Provider>,
+    );
+    expect(screen.queryByRole("button", { name: "Said before" })).toBeNull();
+    rerender(
+      <HighlighterContext.Provider value={pendingHighlighter()}>
+        <Cards {...props} onComment={undefined} />
+      </HighlighterContext.Provider>,
+    );
+    expect(screen.queryByRole("button", { name: "Said before" })).toBeNull();
+  });
+
   it("puts back the draft as it was when the box opened on Cancel or Esc", async () => {
     const user = userEvent.setup();
     const onOpenComment = vi.fn();

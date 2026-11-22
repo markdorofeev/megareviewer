@@ -1,10 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
+import type { OneCall } from "../shared/one-call.ts";
 import { PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
-import { SUGGEST_SYSTEM_PROMPT } from "../shared/prompts/suggest.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
-import { SUGGESTION_ANSWER_FORMAT, SUGGESTION_EFFORT } from "../shared/suggestion.ts";
 import { claudeModel, DEFAULT_MODEL, effortFor } from "./models.ts";
 
 /** The model a run uses when none is chosen. */
@@ -76,10 +75,11 @@ export const countTokensRequest = (
 };
 
 /**
- * The suggestion call: its own instructions and schema, the reviewer's history in one message.
- * It shares nothing with the passes, so nothing in it is cached.
+ * A call of its own, the suggestion or the guardrail call: its own instructions and schema, its data in
+ * one message. It shares nothing with the passes, so nothing in it is cached.
  */
-export const suggestionRequest = (
+export const oneCallRequest = (
+  call: OneCall<unknown>,
   message: string,
   model: string = MODEL,
 ): Omit<PassRequest, "stream"> => ({
@@ -87,9 +87,9 @@ export const suggestionRequest = (
   max_tokens: apiLimits(model).maxTokens,
   thinking: { type: "adaptive" },
   output_config: {
-    effort: effortFor(claudeModel(model), SUGGESTION_EFFORT),
-    format: SUGGESTION_ANSWER_FORMAT,
+    effort: effortFor(claudeModel(model), call.effort),
+    format: call.format,
   },
-  system: SUGGEST_SYSTEM_PROMPT,
+  system: call.systemPrompt,
   messages: [{ role: "user", content: [{ type: "text", text: message }] }],
 });

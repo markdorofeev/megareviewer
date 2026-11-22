@@ -21,7 +21,10 @@ import { type Analysis, inProgress, modelRunnable } from "../src/domain/review/i
 import { err, ok, type Result } from "../src/domain/shared/index.ts";
 import { type CaseGuidance, giveGuidance } from "./guidance.ts";
 
-export const systemClock = { now: () => new Date().toISOString() };
+export const systemClock = {
+  now: () => new Date().toISOString(),
+  wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref()),
+};
 
 export const quietLogger = (onProblem: (line: string) => void = () => {}): Logger => ({
   debug: () => {},

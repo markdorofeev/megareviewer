@@ -196,6 +196,7 @@ describe("guidanceOf", () => {
         { ref: "p2", id: dontFlag.id, kind: "dont-flag", text: "Naming", scope: dontFlag.scope },
       ],
       guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
+      checks: [],
     });
   });
 });

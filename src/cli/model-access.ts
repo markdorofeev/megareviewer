@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig as loadAnthropicConfig } from "@anthropic-ai/sdk/core/credentials";
 import {
+  advisorOn,
   CLAUDE_MODELS,
   type ClaudeCodeStatus,
   CODEX_MODELS,
@@ -11,14 +12,14 @@ import {
   compareVersions,
   createClaudeAnalysisModel,
   createClaudeCodeAnalysisModel,
-  createClaudeCodeSuggester,
-  createClaudeSuggester,
+  createClaudeCodeOneCall,
+  createClaudeOneCall,
   createCodexAnalysisModel,
-  createCodexSuggester,
+  createCodexOneCall,
   createOpencodeAnalysisModel,
   createOpencodeClient,
+  createOpencodeOneCall,
   createOpencodeServer,
-  createOpencodeSuggester,
   createRunCodex,
   createRunOpencode,
   DEFAULT_CODEX_MODEL,
@@ -33,14 +34,11 @@ import {
   planName,
   type RunClaude,
   type RunCodex,
+  type RunOneCall,
   type RunOpencode,
+  suggesterOn,
 } from "../adapters/model/index.ts";
-import type {
-  AnalysisModel,
-  Logger,
-  ModelCatalog,
-  PreferenceSuggester,
-} from "../application/ports/index.ts";
+import type { AnalysisModel, Logger, ModelCatalog } from "../application/ports/index.ts";
 import {
   type ModelBilling,
   type ModelOption,
@@ -172,8 +170,8 @@ export interface CatalogProvider {
 interface Provider extends CatalogProvider {
   probe(): Promise<ProviderStatus>;
   model(model: string, status: ProviderStatus & { available: true }): AnalysisModel;
-  /** The one call that proposes preferences, on `model`. */
-  suggester(model: string, status: ProviderStatus & { available: true }): PreferenceSuggester;
+  /** The calls of their own, the suggestion and the advice, on `model`. */
+  oneCall(model: string, status: ProviderStatus & { available: true }): RunOneCall;
 }
 
 /** A provider's answer, or that it didn't give one in time. Never rejects. */
@@ -355,8 +353,8 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
       },
       model: (model, status) =>
         createClaudeCodeAnalysisModel({ run: runClaude, billing: status.billing, model, logger }),
-      suggester: (model, status) =>
-        createClaudeCodeSuggester({ run: runClaude, billing: status.billing, model, logger }),
+      oneCall: (model, status) =>
+        createClaudeCodeOneCall({ run: runClaude, billing: status.billing, model, logger }),
     },
     {
       id: "anthropic-api",
@@ -372,7 +370,7 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
             };
       },
       model: (model) => createClaudeAnalysisModel({ client, logger, model }),
-      suggester: (model) => createClaudeSuggester({ client, logger, model }),
+      oneCall: (model) => createClaudeOneCall({ client, logger, model }),
     },
     {
       id: "codex",
@@ -399,8 +397,8 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
           logger,
         });
       },
-      suggester: (model, status) =>
-        createCodexSuggester({
+      oneCall: (model, status) =>
+        createCodexOneCall({
           run: runCodex,
           billing: status.billing,
           model,
@@ -441,9 +439,9 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
           logger,
         });
       },
-      suggester: (model) => {
+      oneCall: (model) => {
         const offered = opencodeOffer(model);
-        return createOpencodeSuggester({
+        return createOpencodeOneCall({
           client: opencodeClient,
           providerID: offered.providerID,
           model: offered.id,
@@ -505,7 +503,12 @@ export const createModelCatalog = (options: ModelCatalogOptions): ModelCatalog =
 
     suggester(optionId) {
       const runs = running(optionId);
-      return runs === null ? null : runs.provider.suggester(runs.modelId, runs.status);
+      return runs === null ? null : suggesterOn(runs.provider.oneCall(runs.modelId, runs.status));
+    },
+
+    advisor(optionId) {
+      const runs = running(optionId);
+      return runs === null ? null : advisorOn(runs.provider.oneCall(runs.modelId, runs.status));
     },
   };
 };

@@ -109,7 +109,10 @@ const main = async (): Promise<void> => {
     createGitHubHost({
       token,
       version: "fixture-recorder",
-      clock: { now: () => new Date().toISOString() },
+      clock: {
+        now: () => new Date().toISOString(),
+        wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref()),
+      },
       logger,
       fetch: recordingFetch,
     }),

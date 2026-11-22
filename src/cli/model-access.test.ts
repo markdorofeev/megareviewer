@@ -331,7 +331,7 @@ describe("createModelCatalog", () => {
     expect(catalog.suggester("nobody/claude-opus-5-5")).toBeNull();
   });
 
-  it("has a suggester on every option whose provider can run, and on no other", async () => {
+  it("has a suggester and an advisor on every option whose provider can run, and on no other", async () => {
     const { catalog } = catalogWith([signedOut], [true], undefined, codexSignedIn, opencodeRunning);
     const { options } = await catalog.options();
     expect(options.some((option) => option.available)).toBe(true);
@@ -341,6 +341,65 @@ describe("createModelCatalog", () => {
     expect(options.map((option) => [option.id, catalog.suggester(option.id) !== null])).toEqual(
       options.map((option) => [option.id, option.available]),
     );
+    expect(options.map((option) => [option.id, catalog.advisor(option.id) !== null])).toEqual(
+      options.map((option) => [option.id, option.available]),
+    );
+  });
+
+  it("runs the advice call through Claude Code on the chosen model, locked down", async () => {
+    const calls: (readonly string[])[] = [];
+    const runClaude: RunClaude = async (args, options = {}) => {
+      calls.push(args);
+      const lines = [
+        JSON.stringify({
+          type: "system",
+          subtype: "init",
+          tools: ["StructuredOutput"],
+          mcp_servers: [],
+          apiKeySource: "none",
+          claude_code_version: "2.1.303",
+          model: "claude-opus-5-5",
+        }),
+        JSON.stringify({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          result: "",
+          structured_output: { marks: [] },
+          total_cost_usd: 0.01,
+          usage: {
+            input_tokens: 3,
+            output_tokens: 5,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+          },
+        }),
+      ];
+      for (const line of lines) options.onLine?.(line);
+      return { code: 0, started: true, lines, stderr: "", killed: null };
+    };
+    const { catalog } = catalogWith(
+      [signedIn],
+      [false],
+      undefined,
+      undefined,
+      undefined,
+      runClaude,
+    );
+    expect(catalog.advisor("claude-code/claude-opus-5-5")).toBeNull();
+    await catalog.options();
+
+    const answered = await catalog.advisor("claude-code/claude-opus-5-5")?.advise({
+      repo: { host: "github", owner: "acme", repo: "api" },
+      points: [],
+      configs: [],
+      buildFiles: [],
+    });
+
+    expect(answered?.ok && answered.value.value).toEqual({ marks: [] });
+    const [args = []] = calls;
+    expect(args[args.indexOf("--model") + 1]).toBe("claude-opus-5-5");
+    expect(args[args.indexOf("--tools") + 1]).toBe("");
   });
 
   it("runs the API's options on the API, on their model", async () => {

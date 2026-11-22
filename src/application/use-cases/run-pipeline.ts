@@ -18,10 +18,11 @@ import {
   type StageStatus,
 } from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
-import type { AnalysisModel, GitHost } from "../ports/index.ts";
+import type { AnalysisModel, GitHost, GuardrailAdvisor } from "../ports/index.ts";
 import { type Collected, collect, type OnFilesFetched } from "./collect.ts";
 import type { AppDeps } from "./deps.ts";
 import type { UseCaseError } from "./errors.ts";
+import { askable, type GuardrailCall, runGuardrailCall } from "./guardrails.ts";
 import { runGuidance } from "./guidance.ts";
 import { buildAnalysisInput, fitToModel } from "./model-input.ts";
 import { runDecisions, runFindings, runIntent, runRisk } from "./model-passes.ts";
@@ -60,7 +61,11 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
     await save({ status: error === null ? "complete" : "failed", error });
     deps.events.emit(analysis.id, { type: "done" });
   };
-  /** Ends a model run. Passes it didn't reach go back to not run; the analysis stays complete. */
+  /**
+   * Ends a model run's passes. Passes it didn't reach go back to not run; the analysis stays
+   * complete. While its guardrail call runs, the events go on, so the page lands the review now
+   * and reads the call's marks when it ends.
+   */
   const finishModel = async (modelError: AnalysisError | null) => {
     await save((current) => ({
       modelError,
@@ -68,17 +73,47 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
         status === "pending" ? "skipped" : status,
       ),
     }));
+    deps.events.emit(
+      analysis.id,
+      analysis.guardrails === "running"
+        ? { type: "updated", stage: "decisions", status: analysis.stages.decisions }
+        : { type: "done" },
+    );
+  };
+  /** Ends a run's guardrail call, with what came of it, or as failed when the run crashed. */
+  const finishGuardrails = async (call: GuardrailCall | null) => {
+    if (analysis.guardrails !== "running") return;
+    await save((current) => ({
+      guardrails: call?.ok === true ? "done" : "failed",
+      ...(call === null
+        ? {}
+        : {
+            ...(call.ok ? { findings: call.findings, risk: call.risk } : {}),
+            ...(current.guidance === null
+              ? {}
+              : { guidance: { ...current.guidance, checks: call.checks } }),
+            ...adding({
+              warnings: call.warnings.filter((warning) => !current.warnings.includes(warning)),
+              usage: call.usage,
+              modelCalls: call.modelCalls,
+            })(current),
+          }),
+    }));
     deps.events.emit(analysis.id, { type: "done" });
   };
   return {
     get lastStage() {
       return lastStage;
     },
+    get current() {
+      return analysis;
+    },
     save,
     setStage,
     setFilesFetched,
     finish,
     finishModel,
+    finishGuardrails,
     fail: async (stage: StageName, failure: UseCaseError) => {
       await setStage(stage, "failed");
       await finish({ stage, ...failure });
@@ -248,7 +283,12 @@ export const runModel = async (
   host: GitHost,
   analysis: Analysis,
   pullRequest: PullRequest,
-  run: { readonly model: AnalysisModel; readonly option: ModelRunOption },
+  run: {
+    readonly model: AnalysisModel;
+    readonly option: ModelRunOption;
+    /** The option's guardrail call; null when its provider can't make it. */
+    readonly advisor: GuardrailAdvisor | null;
+  },
   checkout: CheckoutAt | null = null,
 ): Promise<void> => {
   const tracker = createTracker(deps, analysis);
@@ -258,15 +298,17 @@ export const runModel = async (
       modelError: null,
       modelOption: run.option,
       guidance: null,
+      guardrails: null,
       stages: mapModelStages(current.stages, () => "pending"),
     }));
-    await modelStages(deps, run.model, host, pullRequest, checkout, tracker);
+    await modelStages(deps, run, host, pullRequest, checkout, tracker);
   } catch (error) {
     deps.logger.error("The model run crashed", { analysisId: analysis.id, error });
     await tracker.failModel(tracker.lastStage, {
       code: "internal",
       message: `megareviewer hit an internal error while ${modelFamily(run.option)} analyzed the pull request`,
     });
+    await tracker.finishGuardrails(null);
   }
 };
 
@@ -274,7 +316,7 @@ const noProgress: OnFilesFetched = async () => {};
 
 const modelStages = async (
   deps: AppDeps,
-  model: AnalysisModel,
+  { model, advisor }: { readonly model: AnalysisModel; readonly advisor: GuardrailAdvisor | null },
   host: GitHost,
   pullRequest: PullRequest,
   checkout: CheckoutAt | null,
@@ -313,6 +355,18 @@ const modelStages = async (
     files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
   );
   const knownHunks = new Set<HunkId>(hunks.keys());
+  // The last pass to end says, in the same write, whether the guardrail call runs, so the passes'
+  // end is never announced as the run's.
+  let ended = 0;
+  const ending =
+    (patch: (analysis: Analysis) => Partial<Analysis>) =>
+    (analysis: Analysis): Partial<Analysis> => {
+      const changes = patch(analysis);
+      ended += 1;
+      if (advisor === null || ended < MODEL_STAGES.length) return changes;
+      const next = { ...analysis, ...changes };
+      return askable(next.findings, next.risk) ? { ...changes, guardrails: "running" } : changes;
+    };
 
   for (const stage of MODEL_STAGES) await tracker.setStage(stage, "running");
   // The intent pass writes the PR to the prompt cache; risk and decisions start once it's there, to
@@ -320,45 +374,62 @@ const modelStages = async (
   const { promise: cached, resolve: cacheWritten } = Promise.withResolvers<void>();
   const intentRun = runIntent(model, input, knownHunks, deps, cacheWritten).then(async (result) => {
     cacheWritten();
-    await tracker.setStage("intent", result.outcome.ok ? "done" : "failed", (analysis) => ({
-      ...(result.outcome.ok ? { intent: result.outcome.value } : {}),
-      ...adding(result)(analysis),
-    }));
+    await tracker.setStage(
+      "intent",
+      result.outcome.ok ? "done" : "failed",
+      ending((analysis) => ({
+        ...(result.outcome.ok ? { intent: result.outcome.value } : {}),
+        ...adding(result)(analysis),
+      })),
+    );
     return result.outcome;
   });
   await Promise.race([cached, intentRun]);
-  const [intent, findings, risk, decisions] = await Promise.all([
-    intentRun,
-    // Findings read the intent's mismatches, to name the one a finding shows, so they wait for it.
-    intentRun.then(async (intent) => {
-      const result = await runFindings(
-        model,
-        input,
-        intent.ok ? intent.value : null,
-        hunks,
-        deps,
-        guidance,
-      );
-      await tracker.setStage("findings", result.outcome.ok ? "done" : "failed", (analysis) => ({
+  // Findings read the intent's mismatches, to name the one a finding shows, so they wait for it.
+  const findingsRun = intentRun.then(async (intent) => {
+    const result = await runFindings(
+      model,
+      input,
+      intent.ok ? intent.value : null,
+      hunks,
+      deps,
+      guidance,
+    );
+    await tracker.setStage(
+      "findings",
+      result.outcome.ok ? "done" : "failed",
+      ending((analysis) => ({
         ...(result.outcome.ok ? { findings: result.outcome.value } : {}),
         ...adding(result)(analysis),
-      }));
-      return result.outcome;
-    }),
+      })),
+    );
+    return result.outcome;
+  });
+  const [intent, findings, risk, decisions] = await Promise.all([
+    intentRun,
+    findingsRun,
     runRisk(model, input, prepared.required, hunks, deps, guidance).then(async (result) => {
-      await tracker.setStage("risk", result.outcome.ok ? "done" : "failed", (analysis) => ({
-        ...(result.outcome.ok
-          ? { risk: [...proofRisk, ...raiseByRules(result.outcome.value, ruleRisk)] }
-          : {}),
-        ...adding(result)(analysis),
-      }));
+      await tracker.setStage(
+        "risk",
+        result.outcome.ok ? "done" : "failed",
+        ending((analysis) => ({
+          ...(result.outcome.ok
+            ? { risk: [...proofRisk, ...raiseByRules(result.outcome.value, ruleRisk)] }
+            : {}),
+          ...adding(result)(analysis),
+        })),
+      );
       return result.outcome;
     }),
     runDecisions(model, input, hunks, deps).then(async (result) => {
-      await tracker.setStage("decisions", result.outcome.ok ? "done" : "failed", (analysis) => ({
-        ...(result.outcome.ok ? { decisions: result.outcome.value } : {}),
-        ...adding(result)(analysis),
-      }));
+      await tracker.setStage(
+        "decisions",
+        result.outcome.ok ? "done" : "failed",
+        ending((analysis) => ({
+          ...(result.outcome.ok ? { decisions: result.outcome.value } : {}),
+          ...adding(result)(analysis),
+        })),
+      );
       return result.outcome;
     }),
   ]);
@@ -373,5 +444,19 @@ const modelStages = async (
     failure === undefined || failure.outcome.ok
       ? null
       : { stage: failure.stage, code: "model-error", message: failure.outcome.error.message },
+  );
+  const passed = tracker.current;
+  if (advisor === null || passed.guardrails !== "running") return;
+  // The call reads the risks too, so it starts once the passes have ended.
+  await tracker.finishGuardrails(
+    await runGuardrailCall(
+      deps,
+      advisor,
+      pullRequest,
+      files.map((file) => file.path),
+      hunks,
+      passed.findings,
+      passed.risk,
+    ),
   );
 };

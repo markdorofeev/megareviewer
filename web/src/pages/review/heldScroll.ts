@@ -12,8 +12,9 @@ const topLine = (box: DOMRect): Element | null => {
   for (let y = TOP; y < Math.min(window.innerHeight, LOOK); y += STEP) {
     const found = document.elementFromPoint(x, y);
     if (found === null || found.closest("[data-slot=file-card-header]") !== null) continue;
-    const row = found.closest("[role=row]");
-    if (row !== null) return row;
+    // A line of code, whole in the window: a fold, a header or a card's row isn't one.
+    const row = found.closest("[role=row][data-line]");
+    if (row !== null && row.getBoundingClientRect().top >= 0) return row;
   }
   return null;
 };

@@ -43,6 +43,7 @@ import { err } from "../../domain/shared/index.ts";
 import { allowedHosts, assemble, type Composition, systemClock } from "../compose.ts";
 import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
 import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./model-recording.ts";
+import { checkedAdvisor, receiptsChecked, withGuardrails } from "./receipts-checked.ts";
 import { receiptsGuided, withGuidance } from "./receipts-guided.ts";
 import { receiptsTested, withCheckingTests } from "./receipts-tested.ts";
 
@@ -68,6 +69,7 @@ export const fakeFixtures: readonly PullRequestFixture[] = [
   intentFailsOnce,
   receiptsTested,
   receiptsGuided,
+  receiptsChecked,
 ];
 
 const FAKE_MODELS = [
@@ -130,6 +132,7 @@ const fakeModels = (model: AnalysisModel, available: boolean): FakeModelCatalog 
   new FakeModelCatalog({
     model,
     suggester: new FakePreferenceSuggester({ drafts: fakeProposalDrafts }),
+    advisor: checkedAdvisor(),
     defaultModel: "claude-sonnet-5-5",
     options: [
       ...FAKE_MODELS.map(([id, modelName]) =>
@@ -307,14 +310,17 @@ export const createFakeApp = async (options: {
         tickets: fakeFixtures.flatMap((fixture) => fixture.tickets),
       }),
       models: fakeModels(
-        withGuidance(
-          withCheckingTests(
-            options.scenario === undefined
-              ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
-              : createReplayAnalysisModel(recording, { scenario: options.scenario }),
-            receiptsTested.pullRequest.url,
+        withGuardrails(
+          withGuidance(
+            withCheckingTests(
+              options.scenario === undefined
+                ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+                : createReplayAnalysisModel(recording, { scenario: options.scenario }),
+              receiptsTested.pullRequest.url,
+            ),
+            receiptsGuided.pullRequest.url,
           ),
-          receiptsGuided.pullRequest.url,
+          receiptsChecked.pullRequest.url,
         ),
         options.modelAvailable !== false,
       ),
