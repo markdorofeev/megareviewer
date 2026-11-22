@@ -1,4 +1,4 @@
-import { CircleCheckIcon } from "lucide-react";
+import { CircleCheckIcon, Undo2Icon } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
 import {
@@ -980,6 +980,18 @@ const Review = ({
     prStatus.reload();
     void refetch();
   };
+  const revoke = useMutation(client.revokeApproval);
+  const revokeNow = async () => {
+    const result = await revoke.run(analysisId);
+    if (result.ok) prStatus.reload();
+  };
+  // Read from the host, so an approval given on the host's own page counts too.
+  const approved =
+    view.currentUserId !== null &&
+    (prStatus.status?.reviewers.some(
+      (reviewer) => reviewer.id === view.currentUserId && reviewer.verdict === "approved",
+    ) ??
+      false);
 
   // What publishing will post on the code: the reviewer's comments, raised points among them.
   const toPost = hunkComments.length;
@@ -989,6 +1001,7 @@ const Review = ({
     pending: toPost,
     isAuthor: view.isAuthor,
     stale: view.stale,
+    approved,
   });
   const totals = useMemo(() => changeTotals(analysis.files), [analysis.files]);
   const failureTitle =
@@ -1370,7 +1383,20 @@ const Review = ({
           canPublish && (
             <>
               {bar.order.map((which) =>
-                which === "approve" ? (
+                which === "approve" && bar.approve.revoke ? (
+                  <Button
+                    key="approve"
+                    variant="outline"
+                    data-slot="revoke-approval-button"
+                    disabled={revoke.pending}
+                    onClick={() => void revokeNow()}
+                  >
+                    <Undo2Icon aria-hidden="true" />
+                    <span className="max-sm:sr-only">
+                      {revoke.pending ? "Revoking…" : "Revoke approval"}
+                    </span>
+                  </Button>
+                ) : which === "approve" ? (
                   <Tooltip key="approve" disabled={bar.approve.disabledReason === null}>
                     <TooltipTrigger
                       render={
@@ -1463,6 +1489,17 @@ const Review = ({
         >
           <p>Couldn't approve. {errorMessage(approve.error)}</p>
           <Button variant="ghost" size="sm" onClick={approve.reset}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+      {revoke.error !== null && (
+        <div
+          className={cn(DANGER, "flex flex-wrap items-center justify-between gap-2")}
+          role="alert"
+        >
+          <p>Couldn't revoke the approval. {errorMessage(revoke.error)}</p>
+          <Button variant="ghost" size="sm" onClick={revoke.reset}>
             Dismiss
           </Button>
         </div>

@@ -58,4 +58,9 @@ export interface GitHost {
     publication: Publication,
     options: PublishOptions,
   ): Promise<Result<PublicationReceipt, HostError>>;
+  /**
+   * Takes back the current user's approval of the PR. With none to take back it does nothing, so
+   * a retry after a lost answer is harmless.
+   */
+  revokeApproval(ref: PullRequestRef): Promise<Result<null, HostError>>;
 }

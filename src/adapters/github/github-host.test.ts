@@ -744,3 +744,46 @@ describe("createGitHubHost", () => {
     });
   });
 });
+
+describe("revokeApproval", () => {
+  const user = exchange("GET", `${API}/user`, 200, { login: "markd6v", name: null });
+  const reviews = (body: unknown) => exchange("GET", `${PR_URL}/reviews?per_page=100`, 200, body);
+  const approval = (id: number, login = "markd6v", state = "APPROVED") => ({
+    id,
+    state,
+    user: { login },
+  });
+
+  it("dismisses the reviewer's standing approval, saying so", async () => {
+    const result = await hostWith([
+      user,
+      reviews([approval(1), approval(2, "someone-else"), approval(3, "markd6v", "COMMENTED")]),
+      exchange("PUT", `${PR_URL}/reviews/1/dismissals`, 200, approval(1, "markd6v", "DISMISSED"), {
+        requestBody: { message: "Approval revoked.", event: "DISMISS" },
+      }),
+    ]).revokeApproval(pr);
+
+    expect(result).toEqual({ ok: true, value: null });
+  });
+
+  it("does nothing when the reviewer's latest verdict isn't an approval", async () => {
+    const result = await hostWith([
+      user,
+      reviews([approval(1), approval(2, "markd6v", "CHANGES_REQUESTED")]),
+    ]).revokeApproval(pr);
+
+    expect(result).toEqual({ ok: true, value: null });
+  });
+
+  it("fails with GitHub's reason when it won't dismiss the review", async () => {
+    const result = await hostWith([
+      user,
+      reviews([approval(1)]),
+      exchange("PUT", `${PR_URL}/reviews/1/dismissals`, 403, {
+        message: "Must have admin rights to Repository.",
+      }),
+    ]).revokeApproval(pr);
+
+    expect(result.ok).toBe(false);
+  });
+});

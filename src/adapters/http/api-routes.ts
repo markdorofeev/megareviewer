@@ -110,6 +110,10 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
         allowStale: body.allowStale,
         ...reviewInput(body),
       }),
+    revokeApproval: async ({ params }) => {
+      const revoked = await useCases.revokeApproval(params.id);
+      return revoked.ok ? ok({}) : revoked;
+    },
     getThreads: ({ params }) => useCases.getThreads(params.id),
     getPullRequestStatus: ({ params }) => useCases.getPullRequestStatus(params.id),
     replyToThread: ({ params, body }) =>
@@ -147,6 +151,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   register(app, routes.putPointState, handlers.putPointState);
   register(app, routes.previewPublication, handlers.previewPublication);
   register(app, routes.publish, handlers.publish);
+  register(app, routes.revokeApproval, handlers.revokeApproval);
   register(app, routes.getThreads, handlers.getThreads);
   register(app, routes.getPullRequestStatus, handlers.getPullRequestStatus);
   register(app, routes.replyToThread, handlers.replyToThread);

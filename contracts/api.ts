@@ -91,6 +91,8 @@ export const AnalysisView = z
     publication: PublicationReceipt.nullable(),
     /** The current user opened the PR, so the review can only comment, not approve. */
     isAuthor: z.boolean(),
+    /** The current user's ID on the host, as its reviewers are named; null when unknown. */
+    currentUserId: z.string().nullable(),
     /** The PR has new commits since this analysis. */
     stale: z.boolean(),
   })
@@ -152,6 +154,9 @@ export type ReplyRequest = z.infer<typeof ReplyRequest>;
 /** What posting one comment on its own answers: nothing; the threads are read again. */
 export const CommentPosted = z.object({}).readonly();
 export type CommentPosted = z.infer<typeof CommentPosted>;
+
+export const ApprovalRevoked = z.object({}).readonly();
+export type ApprovalRevoked = z.infer<typeof ApprovalRevoked>;
 
 export const ResolveRequest = z.object({ resolved: z.boolean() }).readonly();
 export type ResolveRequest = z.infer<typeof ResolveRequest>;
@@ -415,6 +420,17 @@ export const routes = {
     params: AnalysisParams,
     request: PublishRequest,
     response: PublicationReceipt,
+  },
+  /**
+   * Takes back the reviewer's approval of the PR on its host, at once; never retried. Nothing to
+   * take back answers the same.
+   */
+  revokeApproval: {
+    method: "DELETE",
+    path: "/api/analyses/:id/approval",
+    params: AnalysisParams,
+    request: null,
+    response: ApprovalRevoked,
   },
   /** The PR's review threads, live from the host: not part of the analysis. */
   getThreads: {

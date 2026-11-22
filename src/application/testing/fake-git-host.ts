@@ -21,7 +21,8 @@ export type GitHostMethod =
   | "getFiles"
   | "listPullRequests"
   | "getOpenPullRequests"
-  | "publish";
+  | "publish"
+  | "revokeApproval";
 
 export interface PublishAttempt {
   readonly ref: PullRequestRef;
@@ -72,6 +73,8 @@ export class FakeGitHost implements GitHost {
   private permanentFailure: HostError | null = null;
   private commentFailure: { n: number; error: HostError } | null = null;
   private nextCommentId = 1;
+  /** PRs the current user approved and hasn't taken back. */
+  private readonly approved = new Set<string>();
 
   /** Fixtures for other hosts are skipped, so the same list can seed every host. */
   constructor(options: {
@@ -232,11 +235,25 @@ export class FakeGitHost implements GitHost {
       postedCommentIds[key] = hostCommentId;
     }
     this.publishAttempts.push(attempt("published"));
+    if (publication.verdict === "approve") this.approved.add(prKey(ref));
     return ok({
       url: `${pullRequest.url}#review-${this.publishAttempts.length}`,
       publishedAt: this.clock.now(),
       postedCommentIds,
     });
+  }
+
+  /** Whether the current user's approval of `ref` stands. */
+  approves(ref: PullRequestRef): boolean {
+    return this.approved.has(prKey(ref));
+  }
+
+  async revokeApproval(ref: PullRequestRef): Promise<Result<null, HostError>> {
+    const failure = this.fail("revokeApproval");
+    if (failure !== null) return failure;
+    if (!this.pullRequests.has(prKey(ref))) return err(notFound(`pull request ${prKey(ref)}`));
+    this.approved.delete(prKey(ref));
+    return ok(null);
   }
 
   private fail(method: GitHostMethod): Result<never, HostError> | null {

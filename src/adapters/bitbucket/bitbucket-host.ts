@@ -26,6 +26,7 @@ import {
   BitbucketPage,
   BitbucketParticipant,
   BitbucketPullRequest,
+  BitbucketPullRequestStatus,
   BitbucketPullRequestWithState,
   BitbucketRepository,
 } from "./schemas.ts";
@@ -368,6 +369,26 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
         publishedAt: clock.now(),
         postedCommentIds: Object.fromEntries(posted),
       });
+    },
+
+    async revokeApproval(ref) {
+      const [user, pullRequest] = await Promise.all([
+        currentUser(),
+        client.json("the pull request", BitbucketPullRequestStatus, pullRequestApiUrl(ref)),
+      ]);
+      if (!user.ok) return user;
+      if (!pullRequest.ok) return pullRequest;
+      const approves = pullRequest.value.participants.some(
+        (participant) =>
+          participant.user?.uuid === user.value.id &&
+          (participant.approved || participant.state === "approved"),
+      );
+      if (!approves) return ok(null);
+      const revoked = await client.send(`${pullRequestApiUrl(ref)}/approve`, {
+        method: "DELETE",
+        call: "publish",
+      });
+      return revoked.ok ? ok(null) : revoked;
     },
   };
 };

@@ -1,8 +1,10 @@
-import type {
-  HostError,
-  HostKind,
-  PullRequestRef,
-  PullRequestStatus,
+import {
+  type HostError,
+  type HostKind,
+  type PullRequestRef,
+  type PullRequestStatus,
+  type Reviewer,
+  reviewStatusOf,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { PullRequestStatusSource } from "../ports/index.ts";
@@ -26,8 +28,12 @@ export class FakePullRequestStatusSource implements PullRequestStatusSource {
   /** Every head SHA asked about, in order. */
   readonly asked: string[] = [];
 
-  constructor(options: { host: HostKind }) {
+  /** Who approves `ref` now, joined to its reviewers: a fake host's approvals, say. */
+  private readonly approver: ((ref: PullRequestRef) => Reviewer | null) | undefined;
+
+  constructor(options: { host: HostKind; approver?: (ref: PullRequestRef) => Reviewer | null }) {
     this.host = options.host;
+    this.approver = options.approver;
   }
 
   /** The status of `ref`; one never set reads as OPEN_STATUS. */
@@ -47,6 +53,10 @@ export class FakePullRequestStatusSource implements PullRequestStatusSource {
     this.asked.push(headSha);
     const failure = this.failures.shift();
     if (failure !== undefined) return err(failure);
-    return ok(structuredClone(this.statuses.get(prKey(ref)) ?? OPEN_STATUS));
+    const status = structuredClone(this.statuses.get(prKey(ref)) ?? OPEN_STATUS);
+    const approver = this.approver?.(ref) ?? null;
+    if (approver === null) return ok(status);
+    const reviewers = [...status.reviewers.filter((one) => one.id !== approver.id), approver];
+    return ok({ ...status, reviewers, reviewStatus: reviewStatusOf(reviewers) });
   }
 }

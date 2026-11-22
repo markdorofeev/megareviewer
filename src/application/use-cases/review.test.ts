@@ -112,6 +112,7 @@ describe("getAnalysisView", () => {
         pointReviews: [review],
         publication: null,
         isAuthor: false,
+        currentUserId: "lee-park",
         stale: false,
       }),
     );
@@ -609,6 +610,40 @@ describe("publishing", () => {
     expect(await useCases.publishReview(id, first("", approval))).toEqual(
       err({ code: "host-error", message: "socket hang up" }),
     );
+  });
+});
+
+describe("revokeApproval", () => {
+  const approve = (verdict: PublicationVerdict) => ({
+    publicationId: firstId,
+    summary: "",
+    allowStale: false,
+    hunkComments: [],
+    verdict,
+  });
+
+  it("takes back the reviewer's approval on the host", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    expect((await useCases.publishReview(id, approve("approve"))).ok).toBe(true);
+    expect(github.approves(ref)).toBe(true);
+
+    expect(await useCases.revokeApproval(id)).toEqual(ok(null));
+    expect(github.approves(ref)).toBe(false);
+  });
+
+  it("passes on the host's refusal, without retrying it", async () => {
+    const { useCases, github, seeded } = setup();
+    await seeded;
+    github.failNext("revokeApproval", network);
+    expect(await useCases.revokeApproval(id)).toEqual(
+      err({ code: "host-error", message: "socket hang up" }),
+    );
+  });
+
+  it("returns not-found for an unknown analysis", async () => {
+    const { useCases } = setup();
+    expect((await useCases.revokeApproval(missingId)).ok).toBe(false);
   });
 });
 

@@ -222,6 +222,7 @@ const Verdicts = ({
     pending,
     isAuthor,
     stale,
+    approved: false,
   });
   return bar.order.map((which) =>
     which === "approve" ? (

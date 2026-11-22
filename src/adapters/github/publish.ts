@@ -4,7 +4,7 @@ import {
   type PublicationComment,
   type PublicationVerdict,
 } from "../../domain/review/index.ts";
-import type { GitHubReviewComment } from "./schemas.ts";
+import type { GitHubReviewComment, GitHubReviewState } from "./schemas.ts";
 
 type Side = "LEFT" | "RIGHT";
 
@@ -101,4 +101,22 @@ export const matchComments = (
     paired.add(pair);
     return [comment.key, String(pair.id)] as const;
   });
+};
+
+/** What GitHub writes beside a dismissed review, which it requires. */
+export const REVOKE_MESSAGE = "Approval revoked.";
+
+/**
+ * The review that holds `login`'s approval: their latest that approves or requests changes, as
+ * GitHub counts them, when it approves. null when they have no approval standing.
+ */
+export const approvalOf = (reviews: readonly GitHubReviewState[], login: string): number | null => {
+  const latest = reviews
+    .filter(
+      (review) =>
+        review.user?.login === login &&
+        (review.state === "APPROVED" || review.state === "CHANGES_REQUESTED"),
+    )
+    .at(-1);
+  return latest?.state === "APPROVED" ? latest.id : null;
 };

@@ -7,6 +7,7 @@ const state = (overrides: Partial<BarState> = {}): BarState => ({
   pending: 0,
   isAuthor: false,
   stale: false,
+  approved: false,
   ...overrides,
 });
 
@@ -53,5 +54,17 @@ describe("barButtons", () => {
     expect(barButtons(state({ aiDone: true, stale: true })).approve.disabledReason).toBe(STALE_PR);
     expect(filled(state({ aiDone: true, stale: true }))).toEqual([]);
     expect(filled(state({ stale: true, pending: 1 }))).toEqual(["publish"]);
+  });
+
+  it("turns Approve into Revoke approval, never filled, once the reviewer has approved", () => {
+    const buttons = barButtons(state({ aiDone: true, approved: true }));
+    expect(buttons.approve).toEqual({ filled: false, disabledReason: null, revoke: true });
+    expect(filled(state({ aiDone: true, approved: true }))).toEqual([]);
+    expect(buttons.order).toEqual(["approve", "publish"]);
+    expect(filled(state({ approved: true, pending: 2 }))).toEqual(["publish"]);
+  });
+
+  it("lets the reviewer revoke an approval while the PR has new commits", () => {
+    expect(barButtons(state({ approved: true, stale: true })).approve.disabledReason).toBeNull();
   });
 });

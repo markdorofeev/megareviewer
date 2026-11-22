@@ -35,16 +35,21 @@ export interface AnalysisView {
   readonly publication: PublicationReceipt | null;
   /** The current user opened the PR, so the review can only comment, not approve. */
   readonly isAuthor: boolean;
+  /** The current user's ID on the host, as its reviewers are named; null when unknown. */
+  readonly currentUserId: string | null;
   /** The PR has new commits since this complete analysis. */
   readonly stale: boolean;
 }
 
-/** False when unsure: the host decides anyway, and a wrong "true" would hide the verdict. */
-const isAuthorOf = async (host: GitHost | undefined, analysis: Analysis): Promise<boolean> => {
-  if (host === undefined || analysis.pullRequest === null) return false;
+const currentUserIdOf = async (host: GitHost | undefined): Promise<string | null> => {
+  if (host === undefined) return null;
   const user = await host.currentUser();
-  return user.ok && user.value.id === analysis.pullRequest.author.id;
+  return user.ok ? user.value.id : null;
 };
+
+/** False when unsure: the host decides anyway, and a wrong "true" would hide the verdict. */
+const isAuthorOf = (currentUserId: string | null, analysis: Analysis): boolean =>
+  currentUserId !== null && currentUserId === analysis.pullRequest?.author.id;
 
 /** A file at a commit: null when it isn't there. */
 export interface FileContent {
@@ -128,7 +133,10 @@ export const createReviewUseCases = (deps: AppDeps) => {
       buildPublication({
         analysis,
         summary,
-        isAuthor: await isAuthorOf(deps.hosts[analysis.key.ref.repo.host], analysis),
+        isAuthor: isAuthorOf(
+          await currentUserIdOf(deps.hosts[analysis.key.ref.repo.host]),
+          analysis,
+        ),
         hunkComments: review.hunkComments,
         verdict: review.verdict,
       }),
@@ -243,14 +251,21 @@ export const createReviewUseCases = (deps: AppDeps) => {
       const analysis = await getAnalysis(id);
       if (!analysis.ok) return analysis;
       const host = deps.hosts[analysis.value.key.ref.repo.host];
-      const [pointReviews, publications, isAuthor, stale] = await Promise.all([
+      const [pointReviews, publications, currentUserId, stale] = await Promise.all([
         deps.store.getPointReviews(id),
         deps.store.getPublications(id),
-        isAuthorOf(host, analysis.value),
+        currentUserIdOf(host),
         isStale(analysis.value),
       ]);
       const publication = publications.at(-1)?.receipt ?? null;
-      return ok({ analysis: analysis.value, pointReviews, publication, isAuthor, stale });
+      return ok({
+        analysis: analysis.value,
+        pointReviews,
+        publication,
+        isAuthor: isAuthorOf(currentUserId, analysis.value),
+        currentUserId,
+        stale,
+      });
     },
 
     async recordPointState(
@@ -311,6 +326,20 @@ export const createReviewUseCases = (deps: AppDeps) => {
         });
       publishing.set(id, { publicationId: input.publicationId, attempt });
       return attempt;
+    },
+
+    /**
+     * Takes back the reviewer's approval on the host, however it was given. Not retried: a write
+     * that failed on the network may have landed, and the reviewer can send it again harmlessly.
+     */
+    async revokeApproval(id: AnalysisId): Promise<Result<null, UseCaseError>> {
+      const analysis = await getAnalysis(id);
+      if (!analysis.ok) return analysis;
+      const { ref } = analysis.value.key;
+      const host = hostFor(deps, ref.repo.host);
+      if (!host.ok) return host;
+      const revoked = await host.value.revokeApproval(ref);
+      return revoked.ok ? revoked : err(fromHostError(revoked.error));
     },
   };
 };

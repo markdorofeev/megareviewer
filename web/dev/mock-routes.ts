@@ -208,6 +208,8 @@ export const createMockApi = (
   /** The reviews published, by the ID the page chose; the view shows the latest. */
   const publications = new Map<string, PublicationReceipt>();
   let publication: PublicationReceipt | null = null;
+  /** The reviewer approved, from the bar or the dialog, and hasn't taken it back. */
+  let approved = false;
   let threads: ReviewThread[] = structuredClone([...fixtureThreads.threads]);
   let replies = 0;
   let preferences = options.preferences ?? fixturePreferencesView;
@@ -476,10 +478,29 @@ export const createMockApi = (
         ),
       };
       publications.set(request.data.publicationId, publication);
+      if (published.verdict === "approve") approved = true;
       return success(publication);
     },
+    revokeApproval: ({ id }) => {
+      const missing = findAnalysis(id);
+      if (missing !== null) return missing;
+      approved = false;
+      return success({});
+    },
     getThreads: ({ id }) => findAnalysis(id) ?? success({ threads }),
-    getPullRequestStatus: ({ id }) => findAnalysis(id) ?? success(fixturePullRequestStatus),
+    getPullRequestStatus: ({ id }) =>
+      findAnalysis(id) ??
+      success(
+        approved
+          ? {
+              ...fixturePullRequestStatus,
+              reviewers: [
+                ...fixturePullRequestStatus.reviewers.filter((one) => one.id !== "lee-park"),
+                { id: "lee-park", name: "Lee Park", team: false, verdict: "approved" },
+              ],
+            }
+          : fixturePullRequestStatus,
+      ),
     replyToThread: (params, body) => {
       const missing = findAnalysis(params.id);
       if (missing !== null) return missing;

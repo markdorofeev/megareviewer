@@ -833,3 +833,42 @@ describe("createBitbucketHost", () => {
     });
   });
 });
+
+describe("revokeApproval", () => {
+  const me = { uuid: "{me}", display_name: "Me" };
+  const user = exchange("GET", `${API}/user`, 200, me);
+  const pullRequest = (approved: boolean) =>
+    exchange("GET", PR_URL, 200, {
+      state: "OPEN",
+      author: { uuid: "{author}", display_name: "Author" },
+      participants: [
+        { user: { uuid: "{other}", display_name: "Other" }, role: "REVIEWER", approved: true },
+        { user: me, role: "REVIEWER", approved, state: approved ? "approved" : null },
+      ],
+    });
+
+  it("deletes the reviewer's approval", async () => {
+    const { fetch, requests } = recordingFetch([
+      user,
+      pullRequest(true),
+      exchange("DELETE", `${PR_URL}/approve`, 204, null),
+    ]);
+    const host = createBitbucketHost({
+      username: "e",
+      password: "t",
+      workspace: null,
+      clock: new FixedClock(),
+      logger: new RecordingLogger(),
+      fetch,
+    });
+
+    expect(await host.revokeApproval(pr)).toEqual({ ok: true, value: null });
+    expect(requests.map((request) => request.url)).toContain(`${PR_URL}/approve`);
+  });
+
+  it("does nothing when the reviewer hasn't approved, though someone else has", async () => {
+    const result = await hostWith([user, pullRequest(false)]).revokeApproval(pr);
+
+    expect(result).toEqual({ ok: true, value: null });
+  });
+});

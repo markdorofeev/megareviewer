@@ -19,7 +19,7 @@ import {
   toPullRequest,
   toSummaries,
 } from "./map.ts";
-import { matchComments, planReview, SUMMARY } from "./publish.ts";
+import { approvalOf, matchComments, planReview, REVOKE_MESSAGE, SUMMARY } from "./publish.ts";
 import {
   GitHubBlobs,
   GitHubCommit,
@@ -28,6 +28,7 @@ import {
   GitHubPullRequest,
   GitHubReview,
   GitHubReviewComment,
+  GitHubReviewState,
   GitHubSearchResult,
   GitHubText,
   GitHubUser,
@@ -113,18 +114,19 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
 
   let cachedUser: HostUser | null = null;
 
+  const currentUser = async (): Promise<Result<HostUser, HostError>> => {
+    if (cachedUser !== null) return ok(cachedUser);
+    const user = await read("the current user", GitHubUser, async (request) => {
+      return (await octokit.request("GET /user", { request })).data;
+    });
+    if (!user.ok) return user;
+    cachedUser = toHostUser(user.value);
+    return ok(cachedUser);
+  };
+
   return {
     host: "github",
-
-    async currentUser() {
-      if (cachedUser !== null) return ok(cachedUser);
-      const user = await read("the current user", GitHubUser, async (request) => {
-        return (await octokit.request("GET /user", { request })).data;
-      });
-      if (!user.ok) return user;
-      cachedUser = toHostUser(user.value);
-      return ok(cachedUser);
-    },
+    currentUser,
 
     async getPullRequest(ref) {
       const { owner, repo } = ref.repo;
@@ -356,6 +358,39 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
         publishedAt: review.value.submitted_at ?? clock.now(),
         postedCommentIds: Object.fromEntries(posted),
       });
+    },
+
+    // GitHub has no way to take an approval back but to dismiss the review that gave it.
+    async revokeApproval(ref) {
+      const user = await currentUser();
+      if (!user.ok) return user;
+      const { owner, repo } = ref.repo;
+      const pull_number = ref.number;
+      const reviews = await read("the reviews", z.array(GitHubReviewState), (request) =>
+        octokit.paginate(octokit.rest.pulls.listReviews, {
+          owner,
+          repo,
+          pull_number,
+          per_page: 100,
+          request,
+        }),
+      );
+      if (!reviews.ok) return reviews;
+      const review_id = approvalOf(reviews.value, user.value.id);
+      if (review_id === null) return ok(null);
+      const dismissed = await read(
+        "the dismissed review",
+        z.unknown(),
+        async () =>
+          (
+            await octokit.request(
+              "PUT /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/dismissals",
+              { owner, repo, pull_number, review_id, message: REVOKE_MESSAGE, event: "DISMISS" },
+            )
+          ).data,
+        { deadline: false },
+      );
+      return dismissed.ok ? ok(null) : dismissed;
     },
   };
 };

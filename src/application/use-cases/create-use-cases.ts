@@ -25,6 +25,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     recordPointState: review.recordPointState,
     previewPublication: review.previewPublication,
     publishReview: review.publishReview,
+    revokeApproval: review.revokeApproval,
     listPullRequests: status.listPullRequests,
     getStatus: status.getStatus,
     getReviewActivity: status.getReviewActivity,

@@ -415,6 +415,7 @@ describe("GET /api/analyses/:id", () => {
       pointReviews: [],
       publication: null,
       isAuthor: false,
+      currentUserId: "lee-park",
       stale: false,
     });
   });
@@ -579,6 +580,16 @@ describe("POST /api/analyses/:id/publication", () => {
       "comment",
       "approve",
     ]);
+  });
+
+  it("revokes the approval at DELETE /approval", async () => {
+    const { call, github } = await seeded();
+    await call("publish", { params: { id }, body: { ...publish, verdict: "approve" } });
+    expect(github.approves(smallFeature.pullRequest.ref)).toBe(true);
+
+    const revoked = await call("revokeApproval", { params: { id } });
+    expect(revoked).toMatchObject({ body: {}, error: null });
+    expect(github.approves(smallFeature.pullRequest.ref)).toBe(false);
   });
 
   it("refuses a stale analysis unless allowed", async () => {

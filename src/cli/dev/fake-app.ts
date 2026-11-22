@@ -21,6 +21,7 @@ import {
   FakeReviewThreads,
   FakeTicketSource,
   fakeModelOption,
+  fixtureReviewers,
   InMemoryAnalysisStore,
   InMemoryFileCache,
   InMemoryPreferenceStore,
@@ -30,9 +31,12 @@ import {
   smallFeatureThreadList,
 } from "../../application/testing/index.ts";
 import {
+  type HostUser,
   type PastComment,
+  type PullRequestRef,
   parsePullRequestUrl,
   pullRequestUrl,
+  type Reviewer,
   Sha,
 } from "../../domain/review/index.ts";
 import { err } from "../../domain/shared/index.ts";
@@ -277,9 +281,20 @@ export const createFakeApp = async (options: {
   };
   // small-feature has a conversation on its code; the other fixtures have none.
   threads.github.setThreads(smallFeature.pullRequest.ref, smallFeatureThreadList);
+  // An approval from the page shows in the status, as the host would show it.
+  const approverOn =
+    (host: FakeGitHost, user: HostUser) =>
+    (ref: PullRequestRef): Reviewer | null =>
+      host.approves(ref) ? { ...user, team: false, verdict: "approved" } : null;
   const statuses = {
-    github: new FakePullRequestStatusSource({ host: "github" }),
-    bitbucket: new FakePullRequestStatusSource({ host: "bitbucket" }),
+    github: new FakePullRequestStatusSource({
+      host: "github",
+      approver: approverOn(github, fixtureReviewers.github),
+    }),
+    bitbucket: new FakePullRequestStatusSource({
+      host: "bitbucket",
+      approver: approverOn(bitbucket, fixtureReviewers.bitbucket),
+    }),
   };
   statuses.github.setStatus(smallFeature.pullRequest.ref, smallFeatureStatus);
   const preferences = new InMemoryPreferenceStore();

@@ -103,6 +103,15 @@ export const GitHubReview = z.object({
   submitted_at: Timestamp.nullable(),
 });
 
+/** A review as `GET /pulls/{n}/reviews` lists it, oldest first. */
+export const GitHubReviewState = z.object({
+  id: z.number().int(),
+  state: z.string(),
+  /** null when the reviewer's account was deleted. */
+  user: Account.nullable(),
+});
+export type GitHubReviewState = z.infer<typeof GitHubReviewState>;
+
 export const GitHubReviewComment = z.object({
   id: z.number().int(),
   path: z.string(),

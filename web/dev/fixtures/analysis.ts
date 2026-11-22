@@ -833,5 +833,6 @@ export const fixtureAnalysisView: AnalysisView = {
   pointReviews: [],
   publication: null,
   isAuthor: false,
+  currentUserId: "lee-park",
   stale: false,
 };

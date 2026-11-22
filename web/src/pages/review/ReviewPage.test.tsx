@@ -2192,6 +2192,63 @@ describe("the bar's verdicts", () => {
     );
   });
 
+  it("turns Approve into Revoke approval while the reviewer's approval stands, and back", async () => {
+    // Approved on the host's own page, on an analysis since outdated: it can still be taken back.
+    let approved = true;
+    const { requests } = renderReview({
+      view: { ...fixture, stale: true },
+      respond: (request) => {
+        if (request.method === "DELETE" && request.url === `${viewPath}/approval`) {
+          approved = false;
+          return jsonResponse(200, {});
+        }
+        if (request.url !== statusPath || !approved) return undefined;
+        return jsonResponse(200, {
+          ...fixturePullRequestStatus,
+          reviewers: [
+            ...fixturePullRequestStatus.reviewers,
+            { id: "lee-park", name: "Lee Park", team: false, verdict: "approved" },
+          ],
+        });
+      },
+    });
+    await loaded();
+    const revoke = await within(reviewBar()).findByRole("button", { name: "Revoke approval" });
+    expect(revoke.getAttribute("aria-disabled")).toBeNull();
+    expect(revoke.className).not.toContain("bg-review-approved");
+
+    await userEvent.click(revoke);
+    const approve = await within(reviewBar()).findByRole("button", { name: "Approve" });
+    expect(approve.getAttribute("aria-disabled")).toBe("true");
+    expect(
+      requests.filter(
+        (request) => request.method === "DELETE" && request.url === `${viewPath}/approval`,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("says why an approval couldn't be revoked", async () => {
+    renderReview({
+      respond: (request) => {
+        if (request.method === "DELETE") {
+          return failure(502, "host-error", "Must have admin rights.");
+        }
+        if (request.url !== statusPath) return undefined;
+        return jsonResponse(200, {
+          ...fixturePullRequestStatus,
+          reviewers: [{ id: "lee-park", name: "Lee Park", team: false, verdict: "approved" }],
+        });
+      },
+    });
+    await loaded();
+    await userEvent.click(
+      await within(reviewBar()).findByRole("button", { name: "Revoke approval" }),
+    );
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Couldn't revoke the approval. The git host returned an error: Must have admin rights.",
+    );
+  });
+
   it("disables Approve on the reviewer's own PR and says why", async () => {
     const { requests } = renderReview({ view: { ...fixture, isAuthor: true } });
     await loaded();
