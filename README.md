@@ -27,10 +27,18 @@ npx megareviewer doctor
 To have `megareviewer` as a command instead of `npx megareviewer`:
 
 ```bash
+npm install -g megareviewer
+```
+
+Running it again updates it.
+
+**With the script.** It checks your Node first, and installs into `~/.local` when npm's global folder needs root:
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/markdorofeev/megareviewer/main/install.sh | sh
 ```
 
-The script checks your Node and installs the npm package globally, or into `~/.local` when npm's global folder needs root. `MEGAREVIEWER_VERSION=0.2.9` before `sh` pins a version.
+`MEGAREVIEWER_VERSION=0.2.9` before `sh` pins a version.
 
 **Without npm.** Where npm is blocked or holds new versions back, install the same package from its GitHub release:
 
