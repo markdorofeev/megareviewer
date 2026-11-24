@@ -1110,7 +1110,8 @@ const Review = ({
     const result = await approve.run(analysisId, {
       publicationId: approveId.current,
       summary: "",
-      allowStale: false,
+      // Nothing is anchored on a line, so new commits don't keep the reviewer from approving.
+      allowStale: true,
       hunkComments: [],
       verdict: "approve",
     });

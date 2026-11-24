@@ -743,7 +743,7 @@ describe("header", () => {
     expect(await screen.findByText("3 warnings")).toBeTruthy();
   });
 
-  it("re-analyzes the PR from the bar when it has new commits, and won't approve until then", async () => {
+  it("re-analyzes the PR from the bar when it has new commits", async () => {
     const { requests } = renderReview({
       view: { ...fixture, stale: true },
       respond: (request) =>
@@ -754,11 +754,6 @@ describe("header", () => {
     await loaded();
     expect(document.querySelector("[data-slot=ai-status]")?.textContent).toContain(
       "new commits since",
-    );
-    const approve = within(reviewBar()).getByRole("button", { name: "Approve" });
-    expect(approve.getAttribute("aria-disabled")).toBe("true");
-    expect(description(approve)).toBe(
-      "The PR has new commits since the analysis: re-analyze to approve them.",
     );
     await userEvent.click(
       within(reviewBar()).getByRole("button", { name: "Re-analyze · new commits" }),
@@ -2336,10 +2331,25 @@ describe("the bar's verdicts", () => {
     expect(requests.find((request) => request.url === `${viewPath}/publication`)?.body).toEqual({
       publicationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       summary: "",
-      allowStale: false,
+      allowStale: true,
       hunkComments: [],
       verdict: "approve",
     });
+  });
+
+  it("approves a PR with new commits at once, from an outline button", async () => {
+    const { requests } = renderReview({ view: { ...fixture, stale: true } });
+    await loaded();
+    expect(approveButton().getAttribute("aria-disabled")).not.toBe("true");
+    expect(approveButton().className).not.toContain("bg-review-approved");
+
+    await userEvent.click(approveButton());
+    expect(
+      await within(reviewBar()).findByRole("button", { name: "Revoke approval" }),
+    ).toBeTruthy();
+    expect(
+      requests.find((request) => request.url === `${viewPath}/publication`)?.body,
+    ).toMatchObject({ allowStale: true, hunkComments: [], verdict: "approve" });
   });
 
   it("fills Publish while comments wait, and approving leaves them for the next review", async () => {
@@ -2393,7 +2403,7 @@ describe("the bar's verdicts", () => {
 
     await userEvent.click(revoke);
     const approve = await within(reviewBar()).findByRole("button", { name: "Approve" });
-    expect(approve.getAttribute("aria-disabled")).toBe("true");
+    expect(approve.getAttribute("aria-disabled")).not.toBe("true");
     expect(verdict()).toBeNull();
     expect(within(reviewBar()).getByRole("button", { name: /^Publish review…/ })).toBeTruthy();
     expect(

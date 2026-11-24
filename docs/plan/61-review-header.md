@@ -39,7 +39,7 @@ Read first: ARCHITECTURE.md's Review page section, DESIGN.md's decisions on the 
 - None pending, after a finished AI run: Approve filled green and rightmost; Publish outline.
 - Otherwise, before a run, while it runs or after one that failed: nothing filled; the AI tint is the strongest thing on the row.
 - The reviewer's own PR: Approve disabled, focusable, with why in a tooltip, as the dialog's verdict is.
-- New commits since the analysis: Approve disabled with why, since the server refuses to approve code the reviewer hasn't read; Re-analyze is the way on.
+- New commits since the analysis: Approve outline, still approving at once. It was disabled with why first; whether a push needs another analysis is the reviewer's call.
 
 AI controls are never filled: tint before a run, outline after, strong tint on new commits.
 

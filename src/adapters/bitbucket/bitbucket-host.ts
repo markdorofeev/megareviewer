@@ -305,22 +305,25 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
     },
 
     async publish(ref, publication, { headSha, alreadyPosted, onPosted }) {
+      const inline = publication.comments.filter((comment) => !alreadyPosted.has(comment.key));
       // Bitbucket anchors inline comments on the PR's current diff, not on a commit, so lines
       // from an older head would land in the wrong place.
-      const current = await client.json(
-        "the pull request",
-        BitbucketPullRequest,
-        pullRequestApiUrl(ref),
-      );
-      if (!current.ok) return current;
-      const currentHead = current.value.source.commit?.hash;
-      if (currentHead === undefined || !headSha.startsWith(currentHead)) {
-        return err({
-          kind: "rejected",
-          message:
-            "The pull request has new commits since it was analyzed. Reopen it to review the new ones.",
-          retryAfterSeconds: null,
-        });
+      if (inline.length > 0) {
+        const current = await client.json(
+          "the pull request",
+          BitbucketPullRequest,
+          pullRequestApiUrl(ref),
+        );
+        if (!current.ok) return current;
+        const currentHead = current.value.source.commit?.hash;
+        if (currentHead === undefined || !headSha.startsWith(currentHead)) {
+          return err({
+            kind: "rejected",
+            message:
+              "The pull request has new commits since it was analyzed. Reopen it to review the new ones.",
+            retryAfterSeconds: null,
+          });
+        }
       }
 
       const commentsUrl = `${pullRequestApiUrl(ref)}/comments`;
@@ -343,8 +346,7 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
 
       // One call per comment, each recorded as soon as it's posted, so a retry after a
       // failure posts only the rest.
-      for (const comment of publication.comments) {
-        if (alreadyPosted.has(comment.key)) continue;
+      for (const comment of inline) {
         const result = await post(comment.key, inlineComment(comment));
         if (!result.ok) return result;
       }

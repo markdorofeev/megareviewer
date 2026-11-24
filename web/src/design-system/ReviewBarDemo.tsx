@@ -365,7 +365,7 @@ export const ReviewBarStates = (): ReactNode => (
       pending={2}
     />
     <BarDemo
-      label="New commits since the analysis: Re-analyze, and Approve says why it waits"
+      label="New commits since the analysis: Re-analyze, and Approve in outline"
       start={PointId.parse("f1")}
       stale
     />

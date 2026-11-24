@@ -5,7 +5,6 @@ import type {
 } from "../../../../src/domain/review/index.ts";
 
 export const OWN_PR = "You opened this pull request, and its author can't approve it.";
-export const STALE_PR = "The PR has new commits since the analysis: re-analyze to approve them.";
 
 export interface BarState {
   /** Claude's run finished, every pass done. */
@@ -37,11 +36,11 @@ export interface BarButtons {
 /**
  * Which buttons show and which is filled, at most one. Publish is filled while comments wait for
  * it; Approve once Claude's run is done and nothing waits, unless the reviewer already approved
- * or requested changes, when approving isn't the next step; neither before Claude's run, when the
- * AI tint is the strongest thing on the row. Once the reviewer has approved, Approve is Revoke
- * approval, never filled, and Publish shows only with comments to post: an approval is the whole
- * review until there's something more to say. Taking an approval back needs neither a fresh
- * analysis nor someone else's PR.
+ * or requested changes, or the PR has new commits, when approving isn't the next step; neither
+ * before Claude's run, when the AI tint is the strongest thing on the row. Once the reviewer has
+ * approved, Approve is Revoke approval, never filled, and Publish shows only with comments to
+ * post: an approval is the whole review until there's something more to say. Taking an approval
+ * back needs neither a fresh analysis nor someone else's PR.
  */
 export const barButtons = ({
   aiDone,
@@ -52,7 +51,7 @@ export const barButtons = ({
   verdict,
 }: BarState): BarButtons => {
   const approved = verdict === "approved";
-  const disabledReason = approved ? null : isAuthor ? OWN_PR : stale ? STALE_PR : null;
+  const disabledReason = !approved && isAuthor ? OWN_PR : null;
   const publish = { filled: pending > 0, count: pending };
   if (approved) {
     return {
@@ -66,6 +65,7 @@ export const barButtons = ({
     aiDone &&
     !running &&
     disabledReason === null &&
+    !stale &&
     verdict !== "changes-requested";
   return {
     approve: { filled: fillApprove, disabledReason, revoke: false },

@@ -755,7 +755,7 @@ describe("createBitbucketHost", () => {
       }).publish(pr, publication, retry);
 
       expect(result.ok && result.value.postedCommentIds).toEqual({});
-      expect(requests.map((request) => request.url)).toEqual([PR_URL, `${PR_URL}/request-changes`]);
+      expect(requests.map((request) => request.url)).toEqual([`${PR_URL}/request-changes`]);
     });
 
     it("approves with the approve endpoint, and a plain comment calls neither", async () => {
@@ -776,10 +776,8 @@ describe("createBitbucketHost", () => {
       await host.publish(pr, { verdict: "comment", summary: "ok", comments: [] }, options());
 
       expect(requests.map((request) => request.url)).toEqual([
-        PR_URL,
         COMMENTS_URL,
         `${PR_URL}/approve`,
-        PR_URL,
         COMMENTS_URL,
       ]);
     });
@@ -795,7 +793,28 @@ describe("createBitbucketHost", () => {
       expect(recorded.posted).toEqual([]);
     });
 
-    it("refuses when the PR has new commits since the analysis", async () => {
+    it("approves a PR with new commits, and posts a summary, when no comment is on a line", async () => {
+      const approve = exchange("POST", `${PR_URL}/approve`, 200, { approved: true });
+      const posted = exchange(
+        "POST",
+        COMMENTS_URL,
+        201,
+        { id: 1 },
+        { requestBody: { content: { raw: "Looks right." } } },
+      );
+      for (const summary of ["", "Looks right."]) {
+        const recorded = options();
+        const result = await hostWith([...readExchanges, approve, posted]).publish(
+          pr,
+          { verdict: "approve", summary, comments: [] },
+          { ...recorded, headSha: "c".repeat(40) },
+        );
+        expect(result.ok).toBe(true);
+        expect(recorded.posted).toHaveLength(summary === "" ? 0 : 1);
+      }
+    });
+
+    it("refuses line comments when the PR has new commits since the analysis", async () => {
       const recorded = options();
       const result = await hostWith(readExchanges).publish(pr, publication, {
         ...recorded,

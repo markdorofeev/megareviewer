@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  type BarState,
-  barButtons,
-  OWN_PR,
-  STALE_PR,
-  verdictAfter,
-  verdictLabel,
-} from "./header-buttons.ts";
+import { type BarState, barButtons, OWN_PR, verdictAfter, verdictLabel } from "./header-buttons.ts";
 
 const state = (overrides: Partial<BarState> = {}): BarState => ({
   aiDone: false,
@@ -57,10 +50,13 @@ describe("barButtons", () => {
     expect(filled(state({ aiDone: true, isAuthor: true }))).toEqual([]);
   });
 
-  it("disables Approve while the PR has commits the analysis hasn't read", () => {
-    expect(barButtons(state({ aiDone: true, stale: true })).approve.disabledReason).toBe(STALE_PR);
+  it("lets the reviewer approve a PR with new commits, without filling Approve", () => {
+    const buttons = barButtons(state({ aiDone: true, stale: true }));
+    expect(buttons.approve.disabledReason).toBeNull();
+    expect(buttons.order).toEqual(["approve", "publish"]);
     expect(filled(state({ aiDone: true, stale: true }))).toEqual([]);
     expect(filled(state({ stale: true, pending: 1 }))).toEqual(["publish"]);
+    expect(barButtons(state({ stale: true, isAuthor: true })).approve.disabledReason).toBe(OWN_PR);
   });
 
   it("shows only Revoke approval once the reviewer has approved and nothing waits", () => {

@@ -501,7 +501,7 @@ test("Claude's failure leaves the review, says why, and tries again", async ({ p
   await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
 });
 
-test("a PR with new commits offers Re-analyze, and publishing asks first", async ({
+test("a PR with new commits offers Re-analyze, publishing asks first, and Approve approves", async ({
   page,
   server,
 }) => {
@@ -518,22 +518,21 @@ test("a PR with new commits offers Re-analyze, and publishing asks first", async
   await page.goto(`/review/${analysisId}`);
   const bar = page.locator("[data-slot=review-bar]");
   await expect(bar.getByRole("button", { name: "Re-analyze · new commits" })).toBeVisible();
-  // Approving at once would vouch for code the analysis hasn't read; the dialog asks first.
-  await expect(bar.getByRole("button", { name: "Approve" })).toHaveAttribute(
-    "aria-disabled",
-    "true",
-  );
 
   await page.getByRole("button", { name: /^Publish review…/ }).click();
   const dialog = page.getByRole("dialog", { name: "Publish review" });
-  await dialog.getByRole("button", { name: "Approve", exact: true }).click();
-  await dialog.getByRole("button", { name: "Publish and approve" }).click();
+  await dialog.getByRole("textbox", { name: "Summary" }).fill("One question.");
+  await dialog.getByRole("button", { name: "Publish the summary" }).click();
   await expect(dialog.getByRole("alert")).toContainText("Publish anyway?");
   expect(await publishAttempts(server)).toEqual([]);
 
   await dialog.getByRole("button", { name: "Publish anyway" }).click();
   await expect(dialog).toBeHidden();
   expect(await publishAttempts(server)).toHaveLength(1);
+
+  await bar.getByRole("button", { name: "Approve" }).click();
+  await expect(bar.getByRole("button", { name: "Revoke approval" })).toBeVisible();
+  expect(await publishAttempts(server)).toHaveLength(2);
 });
 
 test("the header says where the PR stands, and its checks open and close with Esc", async ({
