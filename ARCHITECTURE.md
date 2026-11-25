@@ -270,6 +270,27 @@ The model's drafts become pending proposals, `learned`, each with at most 5 line
 
 **The routes.** `GET /api/preferences` answers the preferences, the pending proposals, and a section per repository: those of the 50 most recently updated analyses, then the others that have a preference. A repository's guideline files are looked for at the base commit of its latest analysis, all five paths in one request the first time and from the cache after; one never analyzed, or a read that fails, has no list and the reason instead. `POST /api/preferences`, and `PUT` and `DELETE /api/preferences/:id`, write a preference, `PUT /api/preferences/proposals/:id` accepts or rejects a proposal, and `PUT /api/preferences/guidelines` switches one of the five paths for a repository. A preference's and a proposal's ID is a hash of what it says and when it was made, as an analysis's is of its key, with a counter when that one's taken, so the server needs no source of randomness.
 
+## Harness
+
+The guideline files at a PR's base commit and the files they link. [DESIGN.md](DESIGN.md) says what's in it and why. `src/domain/review/harness.ts` reads links and plans what a run uses, `loadHarness` finds and stores one.
+
+**Links.** `harnessLinks` reads one file's: an `@path` after a space or at a line's start, as Claude Code reads an import; an inline or reference Markdown link; and any other path in prose. An import and a Markdown link are relative to their file, a Markdown link with a leading slash to the root, as both hosts render one. A path in prose can mean two files, since `docs/plan/README.md` in a root file and in `docs/notes.md` usually mean the same one, so it's tried against its file and then the root, and the first that's there is the link; trying only its file would lose most of a docs folder's, and taking both would add files nobody named. A URL, a path under `~`, an absolute one and one that leaves the repository aren't links. The patterns are linear in a file's size, which a test holds on a megabyte of brackets, backticks and dots.
+
+**The walk** goes breadth-first from the five roots: 5 hops, 200 files, no file over 1 MB, and 400 paths asked for without knowing they exist, since a host that can't list answers one request per path and a page of dead links would spend the reviewer's rate limit. A harness cut by a limit says which, the last as `files`, and a file that's there but too large or not text is named with why. Each file keeps its links to the others. The first file that links it and the strongest kind, the first design's only record, can't say whether a file is still reached once that one root is off, nor what a file imports.
+
+**Sources.** `HarnessSource` is the only way a harness file is found or fetched. It lists a commit's files with git's blob hashes, reads some, or says which paths changed between two commits, and answers null for what its host can't do. A refusal is an error, never an empty commit. How to save requests is the use case's, so a new source, a checkout among them, brings no logic of its own:
+
+1. The store has the commit's harness: no request.
+2. The source lists: only blobs the store doesn't have are read.
+3. The source says what changed since the repository's latest harness: only changed paths are read. The harness keeps the paths it looked for and didn't find, so an unchanged dead link isn't asked for again; working them out again from the files' links was the alternative, which a limit or a path in prose with two meanings makes unsure.
+4. Otherwise, one read per hop.
+
+`AppDeps.harnessSource(repo)` picks a repository's source, its host's today. A port of its own, apart from `GitHost`, for the reason threads have theirs.
+
+**Loading** starts with an analysis, new or cached, once the PR's base commit is known. Loads of one repository and commit join, whoever starts them, by the store they write into. A map in the analysis runner, as analyses are joined, was the alternative: a model run and the preferences routes join loads too. Nothing is stored until a walk ends, so a source that fails halfway leaves the store as it was. A store that can't be written costs the next load its requests, and not this one its harness.
+
+**Stored** per commit as a list, with contents once per git blob hash, so a file that didn't change between two base commits is fetched and stored once. Rebuilding the list from the file cache was considered; its rows are by commit, so every move of the target branch refetched every file. Reading a blob counts as using it. Harnesses loaded, and blobs last used, more than 30 days ago are dropped when megareviewer starts.
+
 ## Guardrails
 
 A guardrail is a check that would catch a kind of problem before review, in any code. [DESIGN.md](DESIGN.md) says why megareviewer names one, and where.
@@ -419,10 +440,13 @@ SQLite at `~/.megareviewer/db.sqlite`:
 | `review_signals` | what made it (its key), kind (dismissed / raised / comment), time, PR, the point's kind, title, text, file |
 | `guideline_switches` | host, owner, repo, path, enabled |
 | `last_model_option` | the model option the last model call used, and when |
+| `harnesses` | host, owner, repo, commit SHA, loaded time, the limit that cut it, the files skipped with why, the paths that weren't there |
+| `harness_files` | a harness's files in order: path, blob hash, bytes, lines, how it was found, the first file that links it, headings, its links to the others |
+| `harness_blobs` | host, owner, repo, blob hash, content, last used time |
 
 The pipeline version changes whenever prompts or schemas change, which invalidates cached analyses.
 
-The four preference tables don't reference `analyses`: a preference is for every pull request, and a signal outlives its analysis.
+The four preference tables and the harness's don't reference `analyses`: a preference is for every pull request, a signal outlives its analysis, and a harness is for every pull request on its base commit.
 
 `file_contents` keeps every file fetched from a host. A file at a commit never changes, so an analysis that failed partway, or another analysis of the same commits, doesn't fetch it again. Rows older than 30 days are dropped when megareviewer starts. A file over 1 MB isn't kept, because the analysis doesn't use it.
 

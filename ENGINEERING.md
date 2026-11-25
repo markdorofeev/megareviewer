@@ -55,7 +55,9 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Preference | A rule of the reviewer's for an AI review, one sentence: *look for* or *don't flag*, for every repository or for one, written, learned or imported, with a switch |
 | Preference proposal | A preference megareviewer proposes from review signals or past comments, with the evidence it rests on. Not used until the reviewer accepts it |
 | Review signal | Something the reviewer did that says what they value: a point dismissed or raised, or a line comment posted, with its text as it was |
-| Guideline file | A file at a repository's root that says how its code is written or reviewed, such as `REVIEW.md`. A model run reads the ones the reviewer switched on, at the PR's base commit |
+| Guideline file | A file at a repository's root that says how its code is written or reviewed, such as `REVIEW.md`: a root of the harness. A model run reads the ones the reviewer switched on, at the PR's base commit |
+| Harness | The guideline files at a repository's root and the files they link, at a PR's base commit |
+| Harness file | One of the harness's files, with how it was found: a root, or by an import, a link or a mention, and the file that names it |
 | Guidance | What one model run was given beside the code: the enabled preferences and the guideline files, numbered, and kept on the analysis so a point can say which one shaped it, with the check configs and build files its guardrail call read |
 | Guardrail | A check that would catch a kind of problem before review, in any code: a named rule of a tool whose config megareviewer read, which the config doesn't turn on, or a kind of check and an engine the model suggests. A mark on a finding or a risk. megareviewer names it and never turns it on |
 | Check config | A tool's configuration file at a repository's root, read at the PR's base commit to know which rules the repository has |
