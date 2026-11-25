@@ -91,7 +91,7 @@ Each prints what it would make and stops without `--yes`.
 
 ### Proposals
 
-Made: the intent pass has no line asking it to read and is told guidance isn't what was asked for (`b81f71b`), and refs stay out of what the reviewer reads, by the prompt and by the server (`c454738`). Both are in the pass's own message, on a run with any guidance, preferences alone among them, which the cases here don't run: `preference-look-for`, `preference-dont-flag` and `guideline-file` are to be run again.
+Made: the intent pass has no line asking it to read and is told guidance isn't what was asked for (`b81f71b`), and refs stay out of what the reviewer reads, by the prompt and by the server (`c454738`). Both are in the pass's own message, on a run with any guidance, preferences alone among them, which the cases here don't run. `preference-look-for`, `preference-dont-flag` and `guideline-file` ran again after, three times each, and the second report has them: no point or mark changed, and one run of three still had the tenant leak as a mismatch.
 
 Open:
 

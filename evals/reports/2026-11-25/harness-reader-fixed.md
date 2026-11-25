@@ -50,6 +50,31 @@ All 24 runs scored again, the 96 passes on their first call. Three runs each, so
 - **Time and tokens are the same.** The intent pass took 6.0 s on `linked-section` (6.9 before), with one call of 8.8 s that read nothing, and 5.8 s on `asks-for-file` (6.1); the run took 14.6 s (14.5) and 13.5 s (14.2), still 2 to 4 s more than without the reader. Calls that don't read vary from 3.5 to 10.8 s, so three runs can't show the line's removal saving time.
 - **Nothing else moved beyond the noise.** The targets missed: `riskNoise` in A and B and `riskAccuracy` in B, by `unrelated-harness`'s hunk, `coverageWrong` in B by its test, `decisionNoise` in A and B, and `findingRecall` and `guidanceFollowed` without the reader, as they should.
 
+## The cases with preferences or a guideline file alone
+
+Both fixes change what these send, and no set above has them, so they ran after, three times each, at `f70d4b6` on the same p15: `2026-11-25T16-43-57.505Z`, $0.51 for the passes and $0.34 for the judge, all nine scored, every pass on its first call. Beside them, [stage 77's runs](imported-guideline.md) on p13 and [2026-11-17's](../2026-11-17/guidance.md) on p11. The prompts between differ in more than these fixes, plain words for findings, risks and decisions among it, so a difference isn't proof of cause.
+
+| | p11, three runs (the first on labels since changed) | p13, three runs | p15, three runs |
+|---|---|---|---|
+| `guidanceFollowed`: look-for, guideline-file | 3/3, 3/3 | 3/3, 3/3 | 3/3, 3/3 |
+| `leftOutRight`: dont-flag, guideline-file | 9/9, 9/9 | 9/9, 9/9 | 9/9, 9/9 |
+| `guidanceWrong`: look-for, dont-flag, guideline-file | 0/15 in all | 0/6, 0/3, 0/6 | 0/6, 0/3, 0/6 |
+| `findingRecall`: look-for, dont-flag, guideline-file | 9/9 in all | 3/3, 3/3, 3/3 | 3/3, 3/3, 3/3 |
+| `contractRecall` | 12/12 | 12/12 | 12/12 |
+| `riskNoise` | 2/14 | 0/12 | 0/12 |
+| `decisionNoise`: look-for, dont-flag, guideline-file | 4/25 in all | 1/4, 2/7, 3/12 | 0/4, 4/9, 3/9 |
+| Tenant leak as a mismatch, look-for (false) | 3/3 | 3/3 | 1/3 |
+| `console.log` as a mismatch, dont-flag | 3/3 | 2/3 | 3/3 |
+| … and in the brief's watch line | 3/3 | 2/3 | 3/3 |
+| Partial index as a mismatch, guideline-file (false) | 2/3 | 2/3 | 3/3 |
+| Runs with a ref in their prose | not counted | 1 (p1) | 0 |
+
+- **Every point and mark is as before.** All fifteen marks came back where the labels put them, every must-have finding was found, every contract hunk raised.
+- **The tenant leak is the false mismatch the sentence was for, and one run of three still has it,** as "unrequested". On `linked-section` and `imported-guideline`, whose rules are in a file, it's none in nine runs.
+- **`console.log` and the partial index are as they were,** within a run of what each showed. Neither is a rule a preference or a guideline file states, so the sentence says nothing of them: `console.log` is what a Don't flag preference covers, and the sentence for that, proposed on 2026-11-17, was left out on purpose.
+- **`decisionNoise` is 7/22 here against 6/23 on p13,** which is the same. Two of the seven are the 404 for a cancelled subscription, a requests-change in two runs of three here and in two of three on p13.
+- **Nothing got worse in a way the fix plausibly caused.**
+
 ## What wasn't measured
 
-The sentence about preferences: no case in these sets has one, and the runs with guidance but no files to read, `preference-look-for`, `preference-dont-flag` and `guideline-file`, now send it unmeasured. So do all four transports' other models: Claude Code and Sonnet alone ran.
+Models other than Sonnet and transports other than Claude Code, all of which share the changed words; a pull request over 11 KB of shared text; and a run with both a preference and a file that contradict each other.
