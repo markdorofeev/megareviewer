@@ -22,6 +22,8 @@ import * as featureLessThanTicket from "./feature-less-than-ticket/case.ts";
 import { labels as featureLessThanTicketLabels } from "./feature-less-than-ticket/labels.ts";
 import * as guidelineFile from "./guideline-file/case.ts";
 import { labels as guidelineFileLabels } from "./guideline-file/labels.ts";
+import * as importedGuideline from "./imported-guideline/case.ts";
+import { labels as importedGuidelineLabels } from "./imported-guideline/labels.ts";
 import * as largeRetryAfter from "./large-retry-after/case.ts";
 import { labels as largeRetryAfterLabels } from "./large-retry-after/labels.ts";
 import * as migration from "./migration-non-null-column/case.ts";
@@ -172,6 +174,15 @@ export const evalCases: readonly EvalCase[] = [
     fixture: guidelineFile.fixture,
     guidance: guidelineFile.guidance,
     labels: guidelineFileLabels,
+  },
+  {
+    name: "imported-guideline",
+    source: "synthetic",
+    tests:
+      "A rule only a file CLAUDE.md imports states: access taken away without recording it, marked on that file",
+    fixture: importedGuideline.fixture,
+    guidance: importedGuideline.guidance,
+    labels: importedGuidelineLabels,
   },
   {
     name: "large-retry-after",

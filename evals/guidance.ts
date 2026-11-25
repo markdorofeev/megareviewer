@@ -1,5 +1,9 @@
 import type { PreferenceStore } from "../src/application/ports/index.ts";
-import type { FakeGitHost, PullRequestFixture } from "../src/application/testing/index.ts";
+import type {
+  FakeGitHost,
+  FakeHarnessSource,
+  PullRequestFixture,
+} from "../src/application/testing/index.ts";
 import {
   type GuidelinePath,
   type PreferenceKind,
@@ -11,7 +15,7 @@ import {
 /**
  * What a run of a case reads beside the PR. Both lists are in the order a run numbers them, which
  * the labels' refs name: preferences p1, p2, … with everywhere's before the repository's, guideline
- * files g1, … in GUIDELINE_PATHS order.
+ * files g1, … in GUIDELINE_PATHS order and then the files they import.
  */
 export interface CaseGuidance {
   /** The reviewer's enabled preferences. */
@@ -22,18 +26,25 @@ export interface CaseGuidance {
   }[];
   /** The repository's guideline files at the PR's base commit, which the diff doesn't touch. */
   readonly guidelines: readonly { readonly path: GuidelinePath; readonly content: string }[];
+  /** The files the guideline files import, breadth-first in the order they're written. */
+  readonly imported?: readonly { readonly path: string; readonly content: string }[];
 }
 
 const FIRST_MADE_AT = Date.parse("2026-01-01T00:00:00.000Z");
 
 /**
  * Puts a case's guidance where a model run looks for it: the preferences in the reviewer's store,
- * the guideline files on the host at the PR's base commit, each switched on.
+ * the guideline files on the host at the PR's base commit, each switched on, and in the repository's
+ * harness with the files they import.
  */
 export const giveGuidance = async (
   guidance: CaseGuidance,
   fixture: PullRequestFixture,
-  to: { readonly host: FakeGitHost; readonly preferences: PreferenceStore },
+  to: {
+    readonly host: FakeGitHost;
+    readonly harnessSource: FakeHarnessSource;
+    readonly preferences: PreferenceStore;
+  },
 ): Promise<void> => {
   const { repo } = fixture.pullRequest.ref;
   const taken = new Set<string>();
@@ -52,11 +63,11 @@ export const giveGuidance = async (
       updatedAt: madeAt,
     });
   }
-  to.host.setFiles(
-    repo,
-    fixture.pullRequest.baseSha,
-    Object.fromEntries(guidance.guidelines.map(({ path, content }) => [path, content])),
-  );
+  const { baseSha } = fixture.pullRequest;
+  const files = [...guidance.guidelines, ...(guidance.imported ?? [])];
+  const contents = Object.fromEntries(files.map(({ path, content }) => [path, content]));
+  to.host.setFiles(repo, baseSha, contents);
+  to.harnessSource.setFiles(repo, baseSha, contents);
   for (const { path } of guidance.guidelines) {
     await to.preferences.setGuidelineSwitch(repo, path, true);
   }

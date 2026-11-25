@@ -7,6 +7,7 @@ import type {
 } from "../src/application/ports/index.ts";
 import {
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakeTicketSource,
@@ -101,9 +102,10 @@ export const analyzeCase = async (
   const recorded = recordingInput(options.model);
   const store = new InMemoryAnalysisStore();
   const preferences = new InMemoryPreferenceStore();
+  const harnessSource = new FakeHarnessSource({ host });
   const gitHost = new FakeGitHost({ host, fixtures: [fixture], clock: systemClock });
   if (options.guidance !== undefined) {
-    await giveGuidance(options.guidance, fixture, { host: gitHost, preferences });
+    await giveGuidance(options.guidance, fixture, { host: gitHost, harnessSource, preferences });
   }
   const events = createAnalysisEvents();
   const useCases = createUseCases(
@@ -119,7 +121,7 @@ export const analyzeCase = async (
       preferences,
       history: {},
       checkouts: new FakeLocalCheckouts(),
-      harnessSource: () => null,
+      harnessSource: () => harnessSource,
       harnessStore: new InMemoryHarnessStore(),
       threads: {},
       statuses: {},

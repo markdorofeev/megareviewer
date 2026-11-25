@@ -14,6 +14,7 @@ import {
 } from "../src/domain/review/index.ts";
 import { evalCases } from "./cases/index.ts";
 import { gitDiff } from "./git-diff.ts";
+import type { CaseGuidance } from "./guidance.ts";
 import { analyzeCase, quietLogger } from "./harness.ts";
 
 let parser: CodeParser;
@@ -50,8 +51,9 @@ it("has a case for each kind of guidance, each labeled with what its guidance sh
   const kinds = guided.flatMap(({ guidance }) => [
     ...(guidance?.preferences.map((preference) => preference.kind) ?? []),
     ...(guidance?.guidelines.map(() => "guideline") ?? []),
+    ...(guidance?.imported?.map(() => "imported") ?? []),
   ]);
-  expect([...new Set(kinds)].sort()).toEqual(["dont-flag", "guideline", "look-for"]);
+  expect([...new Set(kinds)].sort()).toEqual(["dont-flag", "guideline", "imported", "look-for"]);
   for (const { name, labels } of guided) expect(labels.guidance ?? [], name).not.toEqual([]);
   const effects = guided.flatMap((c) => c.labels.guidance?.map((label) => label.effect) ?? []);
   expect([...new Set(effects)].sort()).toEqual(["left-out", "raised"]);
@@ -175,7 +177,7 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
       });
 
       it("give a run the case's guidance, numbered in the order the case lists it", () => {
-        const given = evalCase.guidance ?? { preferences: [], guidelines: [] };
+        const given: CaseGuidance = evalCase.guidance ?? { preferences: [], guidelines: [] };
         expect(
           analysis.guidance?.preferences.map(({ ref, kind, text, scope }) => ({
             ref,
@@ -185,7 +187,10 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
           })),
         ).toEqual(given.preferences.map((preference, i) => ({ ref: `p${i + 1}`, ...preference })));
         expect(analysis.guidance?.guidelines.map(({ ref, path }) => ({ ref, path }))).toEqual(
-          given.guidelines.map(({ path }, i) => ({ ref: `g${i + 1}`, path })),
+          [...given.guidelines, ...(given.imported ?? [])].map(({ path }, i) => ({
+            ref: `g${i + 1}`,
+            path,
+          })),
         );
       });
 
