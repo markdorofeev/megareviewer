@@ -2,7 +2,7 @@
 
 Planned and committed as stage 66.
 
-**Status:** Not started
+**Status:** In progress (branch claude/harness-second-8cfed6)
 **Depends on:** 75
 **Owns:** `HarnessSource` in `src/adapters/github/` and `src/adapters/bitbucket/`, their fixtures and recorder scripts, their wiring in `src/cli/compose.ts`
 
