@@ -367,13 +367,38 @@ describe("harnessEnabled", () => {
       ]);
     });
 
-    it("keeps its own default when a file that isn't a root imports it", () => {
-      const through = harness(
-        file("AGENTS.md"),
-        file("CLAUDE.md", [["docs/all.md", "import"]]),
-        file("docs/all.md", [["AGENTS.md", "import"]]),
+    const through = (first: HarnessLinkKind, second: HarnessLinkKind) =>
+      harness(
+        file("AGENTS.md", [["docs/a.md", "link"]]),
+        file("CLAUDE.md", [["docs/all.md", first]]),
+        file("docs/all.md", [["AGENTS.md", second]]),
+        file("docs/a.md"),
       );
-      expect(used(through, on("CLAUDE.md"))).toEqual(["CLAUDE.md", "docs/all.md"]);
+
+    it("is on through a chain of imports, whatever files are in it", () => {
+      const all = ["AGENTS.md", "CLAUDE.md", "docs/all.md", "docs/a.md"];
+      expect(used(through("import", "import"), on("CLAUDE.md"))).toEqual(all);
+      expect(used(through("import", "import"), new Map())).toEqual([]);
+    });
+
+    it.each([
+      ["link", "import"],
+      ["mention", "import"],
+      ["import", "link"],
+      ["import", "mention"],
+    ] as const)("keeps its own default through a chain of a %s and a %s", (first, second) => {
+      expect(used(through(first, second), on("CLAUDE.md"))).toEqual(["CLAUDE.md", "docs/all.md"]);
+    });
+
+    it("is off through a chain with a file that's off, and when it's off itself", () => {
+      const chain = through("import", "import");
+      expect(used(chain, new Map([...on("CLAUDE.md"), ...off("docs/all.md")]))).toEqual([
+        "CLAUDE.md",
+      ]);
+      expect(used(chain, new Map([...on("CLAUDE.md"), ...off("AGENTS.md")]))).toEqual([
+        "CLAUDE.md",
+        "docs/all.md",
+      ]);
     });
 
     it("is on through a root that's on only by an import itself", () => {

@@ -43,7 +43,7 @@ Follow the existing patterns for IDs, timestamps and schemas (Zod, `readonly`).
 - Pure functions:
   - `harnessLinks(path, content)`: the paths a file links, resolved and normalized, each with its kind, in the order they appear, each once.
   - `harnessOutline(content)`: its headings with their 1-based lines, and its line count.
-  - `harnessEnabled(path, harness, switches)`: whether a run may use a file. A root is on by `guidelineEnabled`, or with an enabled root that imports it unless its own switch is off. Any other file is on unless its own switch is off, and only when an enabled root reaches it through enabled files.
+  - `harnessEnabled(path, harness, switches)`: whether a run may use a file. A root is on by `guidelineEnabled`, or, unless its own switch is off, when an enabled root reaches it through imports alone. Any other file is on unless its own switch is off, and only when an enabled root reaches it through enabled files.
   - `harnessPlan(harness, switches)`: the enabled files in two lists. `inPrompt`: the enabled roots in `GUIDELINE_PATHS` order, then the files they import breadth-first in the order written, each taken while it fits what's left of `MAX_INLINE_BYTES`, a file that doesn't fit passed over and the next tried. `onRequest`: every other enabled file, nearest a root first. Stage 77 sends the first, stage 79 serves the second.
 - The `guideline_switches` table already takes any path. The route that sets one accepts only the five until stage 78.
 
@@ -119,7 +119,7 @@ Two calls for one repository and commit join, as two starts of one analysis do. 
 ### For 77
 
 - Join a load with `loadHarness(deps, repo, baseSha)`. `contents` holds every file's text by path.
-- **Decided since: a root that an enabled root imports with `@` is used with it,** unless the reviewer switched that file off. One only linked or mentioned, or imported by a file that isn't a root, keeps its own switch and default. The first version left every root to its own switch, and a `CLAUDE.md` that is only `@AGENTS.md` brought nothing.
+- **Decided since: a root that an enabled root reaches through `@` imports alone, at any depth, is used with it,** unless the reviewer switched that file off. One with a link or a mention on the way keeps its own switch and default. The first version left every root to its own switch, and a `CLAUDE.md` that is only `@AGENTS.md` brought nothing.
 - A file passed over for its size still has its imports followed, and a root over the budget is in `onRequest`.
 
 ### For 78
