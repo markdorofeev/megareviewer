@@ -32,13 +32,13 @@ A run on any transport, Codex included, reads the root files that are switched o
 
 ## Definition of done
 
-- [ ] `runGuidance` gives the roots and their imports as `harnessPlan` orders them, with tests for the order, a file passed over for its size with a smaller one after it taken, a root switched off taking its imports with it, and an import switched off alone.
-- [ ] A failed harness load falls back to the roots, with one warning.
-- [ ] `renderGuidance` writes `linked_from` and the block's line only with a linked file. The hash of a run without guidance, and of the guided fixture with roots only, are what they were.
-- [ ] A point marked from a linked file shows "From ENGINEERING.md"; `checkGuidanceMark` needs no change, and a test says so.
-- [ ] The usage line reads "with 2 preferences, CLAUDE.md and 3 files it imports".
-- [ ] One eval case: a rule stated only in a file a root imports, broken by the PR. Run three times on Sonnet 5.5 through Claude Code with the three guidance cases; the report says whether the mark came back on the imported file's ref.
-- [ ] Live on megareviewer's own repository with `CLAUDE.md` switched on: the files given, the prompt's size, and whether each later pass read them from the cache, in the notes.
+- [x] `runGuidance` gives the roots and their imports as `harnessPlan` orders them, with tests for the order, a file passed over for its size with a smaller one after it taken, a root switched off taking its imports with it, and an import switched off alone.
+- [x] A failed harness load falls back to the roots, with one warning.
+- [x] `renderGuidance` writes `linked_from` and the block's line only with a linked file. The hash of a run without guidance, and of the guided fixture with roots only, are what they were.
+- [x] A point marked from a linked file shows "From ENGINEERING.md"; `checkGuidanceMark` needs no change, and a test says so.
+- [x] The usage line reads "with 2 preferences, CLAUDE.md and 3 files it imports".
+- [x] One eval case: a rule stated only in a file a root imports, broken by the PR. Run three times on Sonnet 5.5 through Claude Code with the three guidance cases; the report says whether the mark came back on the imported file's ref.
+- [x] Live on megareviewer's own repository with `CLAUDE.md` switched on: the files given, the prompt's size, and whether each later pass read them from the cache, in the notes.
 
 ## Out of scope
 
@@ -47,4 +47,25 @@ A run on any transport, Codex included, reads the root files that are switched o
 
 ## Notes for later stages
 
-None yet.
+### Where the code differs from the contract above
+
+- **`MAX_INLINE_BYTES` is in `preference.ts`,** since `guidelineFile`'s `tooLarge` needs it and `harness.ts` imports that module. It's exported from the same entry point.
+- **`HarnessPlan` gained `passedOver`,** the roots and imports of `onRequest` that don't fit, so a run can name them. The budget itself is `fitInPrompt`, which the roots read without a harness go through too.
+- **`linkedFrom` is the file that imports it,** the first of those a run loads, not the harness's `linkedFrom`, which is the first file of any kind and may be a root that's off.
+- **The warning is one line for everything left out:** files that didn't fit, and roots and imports the walk skipped as over 1 MB or not text. A file only linked or mentioned isn't one a run always reads, so it isn't named.
+- **Without a source the roots are read as before and nothing is said;** a load that failed is a warning only when the repository has a guideline file that's on.
+- **With several roots the usage line says "they import",** and without one, when the root itself didn't fit, "3 files imported".
+
+### Changed outside what this stage owns
+
+`MAX_GUIDELINE_BYTES` going took `GuidelineFiles.tsx`'s limit to 64 KB, with the fixtures that show a file too large (`web/dev/fixtures/preferences.ts`, the two preferences tests and `receipts-guided.ts`). `tooLarge` is wrong in one way until 68: a root over 64 KB has no switch on the page, so the files it imports can't be switched on there.
+
+### For 69
+
+- Codex aside, the warning's passed-over files go when the transport reads them: `passedOver` says which.
+- ARCHITECTURE.md's "Preferences" still says 32 KB, whole or not at all, and that only roots are read, and DESIGN.md that a file over 32 KB is left out. Both are to fold in with 69's text.
+
+### For 72
+
+- The intent task calls a broken guideline a mismatch, 3 runs of 3 on the new case; [the report](../../evals/reports/2026-11-25/imported-guideline.md) has it with the decisions' noise. The passes ran on p13; `main` has changed the prompts since this branch was cut, so a comparison has to run both sides again.
+- A file the code never loads through GitHub yet: the live run used the fake source over this repository's own files, since no host has one until 66. To be repeated once it does.
