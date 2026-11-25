@@ -2,7 +2,7 @@
 
 Planned and committed as stage 70.
 
-**Status:** Not started
+**Status:** In progress (branch claude/harness-core-4b758f)
 **Depends on:** 79
 **Owns:** the API transport in `src/adapters/model/claude/` (`request.ts`, `claude-analysis-model.ts`, `message.ts`, their fixtures), `evals/claude-live-check.ts`
 
