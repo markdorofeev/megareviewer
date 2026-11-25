@@ -46,7 +46,7 @@ Each has a harness at its base commit: a root that imports one file and links ot
 
 ## Notes for later stages
 
-The first three sets below ran on 2026-11-25, on `c8b4aff`: [the report](../../evals/reports/2026-11-25/harness-reader.md). The kill on case 4's file has only ever run through a stand-in for `claude` with canned answers, since no pass of the live runs asked for the file.
+The first three sets below ran on 2026-11-25, on `c8b4aff`: [the report](../../evals/reports/2026-11-25/harness-reader.md), and again on `c454738` after its first two proposals were made: [the second](../../evals/reports/2026-11-25/harness-reader-fixed.md). The kill on case 4's file has only ever run through a stand-in for `claude` with canned answers, since no pass of the live runs asked for the file.
 
 ### The line that asks a pass to read
 
@@ -69,7 +69,7 @@ Case 1's root imports two files and links none, which the list of cases asks for
 
 - **`harnessRead` is a score of its own:** the labeled reads that happened. The doc expects a read of case 2 by the findings pass and lists no score for it.
 - **`harnessFollowed` is of imported and linked files;** a root's marks stay with `guidanceFollowed`. `harnessWrong` is of every guideline file's marks, a root's too, since in case 3 no file speaks to the PR.
-- **"The 14 cases" are 15:** every case without guidance, `test-named-coverage` having come after the count. Their scores without the harness are run again, since `evals/baseline.json` was measured on p11 and the prompts are on p14.
+- **"The 14 cases" are 15:** every case without guidance, `test-named-coverage` having come after the count. Their scores without the harness are run again, since `evals/baseline.json` was measured on p11 and the prompts have moved since.
 - **The judge reads a linked file as its rule,** and an attached harness not at all, so `JUDGE_VERSION` stays 5 and a case is judged by one prompt whichever the reader.
 - **Cost isn't comparable between runs close together,** which read each other's cache; the report prints fresh and cached tokens apart.
 - **Case 4's file stays in `/tmp`** after a run: one made-up line, written over by the next.
@@ -91,10 +91,12 @@ Each prints what it would make and stops without `--yes`.
 
 ### Proposals
 
-None is made. The first two change `src/adapters/model/shared/`, so the prompt versions and fingerprints move with them, and the guidance cases, `imported-guideline` and `linked-section` are the ones to run again.
+Made: the intent pass has no line asking it to read and is told guidance isn't what was asked for (`b81f71b`), and refs stay out of what the reviewer reads, by the prompt and by the server (`c454738`). Both are in the pass's own message, on a run with any guidance, preferences alone among them, which the cases here don't run: `preference-look-for`, `preference-dont-flag` and `guideline-file` are to be run again.
 
-- **The intent pass: no line asking it to read, and a rule isn't intent.** Every intent pass that read reported the broken rule as a mismatch, and its reading is what delays the run. Leave `READ_FIRST` off the intent's message, and add to its mismatches: "A rule of a guideline file, or of a document one links, isn't what was asked for: code that breaks one is a finding, never a mismatch." One change can also make the wording [2026-11-17's report](../../evals/reports/2026-11-17/guidance.md) proposes for preferences. Leaving the line off isn't enough alone: with the index alone one intent pass of three read, and made the mismatch.
-- **No refs in what the reviewer reads.** Beside the index and the guideline files: "A ref belongs in guidance only; in a text the reviewer reads, name the document."
+Open:
+
+- **A true mismatch came back less,** `unrelated-harness`'s empty string, 1 of 3 against 3 of 3, with the new sentence and a large index; with the sentence and no index it stayed 3 of 3. The second report says what it costs the reviewer.
+- **The index asks every pass to read before answering,** so the intent pass still reads in 4 of 9 runs. Wording the index for the passes that judge the code would need the index to differ by pass, which the shared cached text can't.
 - **Every pass keeps the reader,** the risk pass among them. The tool is before the system prompt, so a pass without it wouldn't read the prefix the others cached, and a pass that doesn't read costs the index's tokens and no time that shows. Risk, at low effort, read the right section in all three runs with the line.
 - **The line stays on findings, risk and decisions.** On `linked-section` it added only the intent's and risk's reads; on the large PRs it was written for, it hasn't been measured.
 - **The numbers stay:** 64 KB in the prompt, 8 rounds and 8 KB of headings. The runs used 1 round and 7.2 KB, and nothing near 64 KB, so they're unchallenged rather than confirmed.
@@ -103,5 +105,5 @@ None is made. The first two change `src/adapters/model/shared/`, so the prompt v
 ### Sets D to F
 
 - **D, the four cases on Haiku 5.5: worth running.** 16 passes. Haiku is in the menu, and the refusal and the kill have yet to meet a model that tries.
-- **E and F as planned: not worth it.** One run each of 15 cases can't tell a target the large harness lost from one two runs of the same requests lose by themselves. For the same 120 passes, five cases three times with it and three times without would: `migration-non-null-column`, `auth-middleware`, `test-named-coverage`, `large-retry-after` and `delphi-account-connections`, after the intent's wording changes.
+- **E and F as planned: not worth it.** One run each of 15 cases can't tell a target the large harness lost from one two runs of the same requests lose by themselves. For the same 120 passes, five cases three times with it and three times without would: `migration-non-null-column`, `auth-middleware`, `test-named-coverage`, `large-retry-after` and `delphi-account-connections`, now that the intent's wording has changed.
 - **Missing: a rule in a linked file on a large PR,** with the line and with the index alone, three runs each, 24 passes. It's what the line is for. It needs a case: a rule `large-retry-after`'s PR breaks, in a linked document.
