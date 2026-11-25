@@ -112,7 +112,7 @@ No test touches the network: the remote is a bare repository in a temporary fold
 
 ## Definition of done
 
-- [ ] The check above, recorded.
+- [x] The check above, recorded.
 - [ ] Contract change commit, with the stage 02 change log line.
 - [ ] Tasks above, with the tests. Coverage holds for `domain` and `application`.
 - [ ] On delphi-code #2, the real server with `--no-search`, started outside a clone, downloads the repository and shows the same six callers as stage 30's notes, on the analysis that opened without them. On oracle/graal #15134, the time from opening the PR to the callers, written into the notes.
@@ -120,8 +120,16 @@ No test touches the network: the remote is a bare repository in a temporary fold
 
 ## Open issues
 
-_None yet._
+- **Tokens not checked.** GitHub was checked with the GitHub CLI's OAuth token (`repo` scope) only: no fine-grained or classic personal access token was on the machine. A fine-grained one needs Contents: read, which megareviewer's API calls need anyway. A real Bitbucket app password couldn't be checked: Atlassian removed them in July 2026.
+- **Private forks not checked,** on either host: every fork tried was public.
 
 ## Notes for later stages
 
-_None yet._
+### The check, 2026-11-25
+
+With git 2.50.1 (Apple's), no system or global config, HTTPS only, no credential helper, no redirects, the credentials as an `http.<origin>/.extraHeader` in the environment, `git fetch --depth 1 --no-tags <url> <sha>` into an empty bare repository:
+
+1. **GitHub, a private repository: works.** As `x-access-token:<token>`, its newest commit in 1.0 s and an older one in 0.7 s. The three sources end in one field of the config, so the one token on the machine, from `gh auth token`, stands for them; see the open issue. Without a token, or with a wrong one, git says `could not read Username … terminal prompts disabled`; for a repository the token can't see, `Repository not found`; for a commit that isn't there, `upload-pack: not our ref`.
+2. **GitHub, a PR from a fork: works** from the base repository by its SHA, on 4 of 4: open (cli/cli #15111), merged and closed (sindresorhus/got #2458 and #2445), and closed with the fork deleted (got #2456).
+3. **Bitbucket, a private repository: works with the scoped API token,** not with the user megareviewer's API calls send. `x-bitbucket-api-token-auth:<token>`, the user's Bitbucket username and `x-token-auth` download; the email gets `could not read Username`. The token here is in `BITBUCKET_USERNAME` and `BITBUCKET_APP_PASSWORD`, an email and an `ATAT…` token, which the API takes, so what decides the user for git is whether the username is an email, not which variables it came from.
+4. **Bitbucket, a PR from a fork: works** from the destination repository for every PR megareviewer can open. Of 23 PRs from public forks in three public repositories, 17 have their head commit in the destination, by the API and by git, and all 17 downloaded, signed in, in 1.1 to 1.8 s. The other 6 answer 404 to the API's commit and diff in the destination, so megareviewer can't open them at all, and git says `not our ref`. The fork's name isn't needed. One fork that's gone (aws-s3-deploy #48) downloads from the destination and not from the fork.
