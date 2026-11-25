@@ -208,7 +208,9 @@ describe("ClaudeCodeAnalysisModel", () => {
       const [made] = calls;
       expect(made?.options.files?.["work/harness/docs/rules.md"]).toBe("# Rules\n");
       expect(made?.options.files?.[SYSTEM_PROMPT_FILE]).toContain("<readable_files>");
-      expect(made?.options.stdin).toContain("First go through <readable_files>");
+      expect(made?.options.stdin).not.toContain("First go through <readable_files>");
+      await model.decisions(reading);
+      expect(calls[1]?.options.stdin).toContain("First go through <readable_files>");
     });
 
     it("sends what a run without a harness does when run without the reader", async () => {

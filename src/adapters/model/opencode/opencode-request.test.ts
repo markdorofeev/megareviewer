@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
 import { MODEL_STAGES, ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
+import { withHarness } from "../shared/fixtures/guidance.ts";
 import { passSchema } from "../shared/prompted-answer.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
@@ -166,7 +167,7 @@ describe("prompt version", () => {
       opencodeRequest(
         pass,
         renderInput(smallFeatureInput),
-        passMessage(pass, null, undefined, true),
+        passMessage(pass, null, undefined, withHarness(smallFeatureInput)),
         haiku,
         { harness },
       ),

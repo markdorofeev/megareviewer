@@ -52,7 +52,7 @@ The first three sets below ran on 2026-11-25, on `c8b4aff`: [the report](../../e
 
 "First go through <readable_files> in the reviewer's guidance and open the parts that speak of the code this change touches, with the tool that reads them. Then answer."
 
-It's `READ_FIRST` in `src/adapters/model/shared/prompts/passes.ts`. `passMessage` writes it in the pass's own message, two lines after the task and before what was wrong with an earlier answer, on a pass that has files to read and no other. On Claude Code that message is stdin, after the system prompt that holds the instructions, the index and the PR, so it's outside the shared, cached text. `--reader index-alone` takes exactly that text out of the message, whatever it is by then: the evals read it from `passMessage`, and fail if it isn't after the task any more.
+It's `READ_FIRST` in `src/adapters/model/shared/prompts/passes.ts`. `passMessage` writes it in the pass's own message, two lines after the task and before what was wrong with an earlier answer, on a pass that has files to read, the intent aside, and no other. On Claude Code that message is stdin, after the system prompt that holds the instructions, the index and the PR, so it's outside the shared, cached text. `--reader index-alone` takes exactly that text out of the message, whatever it is by then: the evals read it from `passMessage`, and fail if it isn't after the task any more.
 
 ### The cases
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
 import { MODEL_STAGES, ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
+import { withHarness } from "../shared/fixtures/guidance.ts";
 import { PASS_ANSWER_FORMAT, TOUR_PASS_ANSWER_FORMAT } from "../shared/output-schema.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
@@ -117,7 +118,12 @@ describe("Claude Code request", () => {
       claudeCodeRequest(
         pass,
         renderInput(smallFeatureInput),
-        passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"], true),
+        passMessage(
+          pass,
+          pass === "findings" ? smallFeatureIntent : null,
+          ["problem"],
+          withHarness(smallFeatureInput),
+        ),
         HAIKU,
         false,
         readable,
@@ -144,9 +150,10 @@ describe("Claude Code request", () => {
       expect(new Set(reading.map(({ files }) => files[SYSTEM_PROMPT_FILE])).size).toBe(1);
     });
 
-    it("asks each pass to read first, after its task", () => {
+    it("asks each pass but the intent to read first, after its task", () => {
       for (const [index, { stdin }] of reading.entries()) {
-        expect(stdin).toContain("First go through <readable_files>");
+        const asks = stdin.includes("First go through <readable_files>");
+        expect(asks).toBe(MODEL_STAGES[index] !== "intent");
         expect(requests()[index]?.stdin).not.toContain("readable_files");
       }
     });

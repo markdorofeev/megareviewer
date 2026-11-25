@@ -3,6 +3,7 @@ import type { AnalysisInput } from "../../../application/ports/index.ts";
 import { smallFeatureInput, smallFeatureIntent } from "../../../application/testing/index.ts";
 import { MODEL_STAGES, type ModelPass } from "../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
+import { withHarness } from "../shared/fixtures/guidance.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import { passRequest } from "./request.ts";
@@ -31,7 +32,7 @@ const fingerprint = (
         passRequest(
           pass,
           renderInput(input),
-          passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"], reads),
+          passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"], input),
           "claude-haiku-5-5",
           reads,
         ),
@@ -61,22 +62,7 @@ describe("prompt version", () => {
   });
 
   it("is bumped whenever a run with something to read sends something else", () => {
-    const current = fingerprint(MODEL_STAGES, {
-      ...smallFeatureInput,
-      harness: {
-        files: [
-          {
-            ref: "g1",
-            path: "harness/docs/rules.md",
-            bytes: 8,
-            lines: 1,
-            linkedFrom: "CLAUDE.md",
-            headings: [],
-          },
-        ],
-        contents: new Map([["harness/docs/rules.md", "# Rules\n"]]),
-      },
-    });
+    const current = fingerprint(MODEL_STAGES, withHarness(smallFeatureInput));
     expect(
       current,
       `A run with something to read sends something else. Bump PROMPT_VERSION in version.ts (now ` +

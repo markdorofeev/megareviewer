@@ -68,7 +68,7 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
       const request = passRequest(
         "intent",
         renderInput(input),
-        passMessage("intent", null, undefined, input.harness !== null),
+        passMessage("intent", null, undefined, input),
         model,
         input.harness !== null,
       );
@@ -92,7 +92,7 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
       const request = passRequest(
         pass,
         renderInput(input),
-        passMessage(pass, intent, passOptions?.feedback, harness !== null),
+        passMessage(pass, intent, passOptions?.feedback, input),
         model,
         harness !== null,
       );

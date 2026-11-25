@@ -17,10 +17,16 @@ export type Reader = (typeof READERS)[number];
 export const parseReader = (value: string): Reader | null =>
   READERS.find((reader) => reader === value) ?? null;
 
+const ROOT = { ref: "g1", path: "CLAUDE.md", linkedFrom: null, content: "" };
+
 /** What a pass that can read is asked after its task, taken from the prompts so it can't drift. */
 export const readFirstLine = (): string => {
-  const task = passMessage("risk", null, undefined);
-  const asked = passMessage("risk", null, undefined, true);
+  const guidance = { preferences: [], guidelines: [ROOT] };
+  const task = passMessage("risk", null, undefined, { guidance, harness: null });
+  const asked = passMessage("risk", null, undefined, {
+    guidance,
+    harness: { files: [], contents: new Map() },
+  });
   if (!asked.startsWith(task) || asked === task) {
     throw new Error("the line that asks a pass to read isn't after its task any more");
   }

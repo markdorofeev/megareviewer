@@ -67,7 +67,7 @@ export const createClaudeCodeAnalysisModel = (
 
     async checkSize(input) {
       const inputTokens = estimateTokens(
-        claudeCodeSystemPrompt(renderInput(input)) + passMessage("intent", null, undefined),
+        claudeCodeSystemPrompt(renderInput(input)) + passMessage("intent", null, undefined, input),
       );
       logger.debug("Estimated the input", { inputTokens, maxInputTokens });
       return inputTokens > maxInputTokens
@@ -80,7 +80,7 @@ export const createClaudeCodeAnalysisModel = (
       const call = passCall(
         pass,
         renderInput(input),
-        passMessage(pass, intent, passOptions?.feedback, input.harness !== null),
+        passMessage(pass, intent, passOptions?.feedback, input),
         model,
         effort,
         passOptions?.tour,

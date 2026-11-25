@@ -39,5 +39,23 @@ export const linkedGuidance: InputGuidance = {
 
 export const withGuidance = (input: AnalysisInput): AnalysisInput => ({ ...input, guidance });
 
+/** One file for the passes to read, and nothing else of guidance. */
+export const withHarness = (input: AnalysisInput): AnalysisInput => ({
+  ...input,
+  harness: {
+    files: [
+      {
+        ref: "g1",
+        path: "harness/docs/rules.md",
+        bytes: 8,
+        lines: 1,
+        linkedFrom: "CLAUDE.md",
+        headings: [],
+      },
+    ],
+    contents: new Map([["harness/docs/rules.md", "# Rules\n"]]),
+  },
+});
+
 /** How the guidance block starts, right before the PR's. */
 export const GUIDANCE_BLOCK = /<reviewer_guidance>\n<preferences>\np1 look-for \(everywhere\): /;

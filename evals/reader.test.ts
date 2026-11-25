@@ -71,12 +71,13 @@ describe("the ways to read the harness", () => {
   it("send what the product sends when on, and only that line less when the index is alone", async () => {
     for (const pass of MODEL_STAGES) {
       for (const feedback of [undefined, ["a problem"]]) {
-        const asked = passMessage(pass, null, feedback, true);
+        const asked = passMessage(pass, null, feedback, input);
         const { sent, run } = noting();
         await runnerFor("on", run)([], { stdin: asked });
         await runnerFor("off", run)([], { stdin: asked });
         await runnerFor("index-alone", run)([], { stdin: asked });
-        expect(sent).toEqual([asked, asked, passMessage(pass, null, feedback)]);
+        const alone = passMessage(pass, null, feedback, { ...input, harness: null });
+        expect(sent).toEqual([asked, asked, alone]);
       }
     }
   });

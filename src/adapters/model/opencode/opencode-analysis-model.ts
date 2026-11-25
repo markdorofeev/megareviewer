@@ -239,7 +239,8 @@ export const createOpencodeAnalysisModel = (
 
     async checkSize(input) {
       const inputTokens = estimateTokens(
-        prEntry(renderInput(input)) + passText("intent", passMessage("intent", null, undefined)),
+        prEntry(renderInput(input)) +
+          passText("intent", passMessage("intent", null, undefined, input)),
       );
       logger.debug("Estimated the input", { inputTokens, maxInputTokens });
       return inputTokens > maxInputTokens
@@ -255,7 +256,7 @@ export const createOpencodeAnalysisModel = (
           opencodeRequest(
             pass,
             renderInput(input),
-            passMessage(pass, intent, passOptions?.feedback, harness !== null),
+            passMessage(pass, intent, passOptions?.feedback, input),
             ref,
             {
               ...(options.variants === undefined ? {} : { variants: options.variants }),

@@ -614,6 +614,8 @@ describe("ClaudeAnalysisModel", () => {
       expect(requests[0]?.body.tools).toEqual([READ_FILE]);
       for (const request of requests) {
         expect(prefix(request)).toBe(prefix(requests[0] ?? request));
+      }
+      for (const request of requests.slice(1)) {
         const task = request.body.messages[2]?.content[0]?.text ?? "";
         expect(task.split("First go through <readable_files>")).toHaveLength(2);
         expect(task.indexOf("First go through")).toBeGreaterThan(task.indexOf("Task: "));
