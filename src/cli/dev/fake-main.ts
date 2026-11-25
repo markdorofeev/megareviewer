@@ -18,6 +18,7 @@ const { values } = parseArgs({
     static: { type: "string" },
     "no-ai": { type: "boolean" },
     scenario: { type: "string" },
+    download: { type: "boolean" },
   },
 });
 
@@ -35,6 +36,7 @@ const fake = await createFakeApp({
   version: `${packageJson.version}-fake`,
   staticDir: values.static ?? null,
   modelAvailable: values["no-ai"] !== true,
+  download: values.download === true,
   ...(scenario === undefined ? {} : { scenario }),
   ...(values.token !== undefined && { sessionToken: values.token }),
 });

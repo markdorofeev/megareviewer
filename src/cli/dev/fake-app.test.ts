@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   ErrorResponse,
@@ -21,6 +21,7 @@ import {
   fakeProposalDrafts,
   intentFailsOnce,
 } from "./fake-app.ts";
+import { receiptsDownloaded } from "./receipts-downloaded.ts";
 
 const PORT = 4823;
 const HOST = `127.0.0.1:${PORT}`;
@@ -28,8 +29,9 @@ const TOKEN = "fake-token";
 const NEW_HEAD = "f".repeat(40);
 const Publications = z.object({ attempts: z.array(z.object({ outcome: z.string() })) });
 
-const setup = async () => {
+const setup = async (options: { download?: boolean } = {}) => {
   const fake = await createFakeApp({
+    ...options,
     parser: new FakeCodeParser(),
     logger: new RecordingLogger(),
     version: "1.2.3-fake",
@@ -81,6 +83,25 @@ describe("createFakeApp", () => {
       [fakeProposalDrafts[0]?.text, "learned", { kind: "repo", repo }],
       [fakeProposalDrafts[1]?.text, "learned", { kind: "global" }],
     ]);
+  });
+
+  it("adds a PR's callers once its download is released, and only with downloads on", async () => {
+    const { fake, call } = await setup({ download: true });
+    await call("/__fake/hold-downloads", { method: "POST" });
+    const { useCases } = fake.composition;
+    const { url } = receiptsDownloaded.pullRequest;
+    const checkoutOf = async (of: typeof useCases) => {
+      const started = await of.startAnalysis(url);
+      if (!started.ok) throw new Error(started.error.message);
+      const view = await of.getAnalysisView(started.value.analysisId);
+      return view.ok ? view.value.analysis.checkout : null;
+    };
+    await vi.waitFor(async () => expect(await checkoutOf(useCases)).toBe("downloading"));
+    await call("/__fake/release-downloads", { method: "POST" });
+    await vi.waitFor(async () => expect(await checkoutOf(useCases)).toBe("read"));
+
+    const off = (await setup()).fake.composition.useCases;
+    await vi.waitFor(async () => expect(await checkoutOf(off)).toBe("none"));
   });
 
   it("lists what the fake hosts received", async () => {

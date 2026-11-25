@@ -31,6 +31,44 @@ describe("useMarksHeld", () => {
     expect(result.current).toBe(done);
   });
 
+  it.each(["read", "download-failed"] as const)(
+    "holds it when a download ends with the checkout %s",
+    (checkout) => {
+      const downloading: Analysis = { ...base, checkout: "downloading", unchangedCallers: [] };
+      const { result, rerender } = renderHook(({ analysis }) => useMarksHeld(analysis), {
+        initialProps: { analysis: downloading },
+      });
+      const done: Analysis = { ...downloading, checkout };
+
+      rerender({ analysis: done });
+
+      expect(hold).toHaveBeenCalledTimes(1);
+      expect(restore).toHaveBeenCalledTimes(1);
+      expect(result.current).toBe(done);
+    },
+  );
+
+  it("leaves it to the landing when a run ends with the download", () => {
+    const downloading: Analysis = {
+      ...base,
+      checkout: "downloading",
+      stages: { ...base.stages, findings: "skipped" },
+    };
+    const { result, rerender } = renderHook(({ analysis }) => useMarksHeld(analysis), {
+      initialProps: { analysis: downloading },
+    });
+    const done: Analysis = {
+      ...downloading,
+      checkout: "read",
+      stages: { ...base.stages, findings: "done" },
+    };
+
+    rerender({ analysis: done });
+
+    expect(result.current).toBe(done);
+    expect(hold).not.toHaveBeenCalled();
+  });
+
   it("shows any other change at once, holding nothing", () => {
     const { result, rerender } = renderHook(({ analysis }) => useMarksHeld(analysis), {
       initialProps: { analysis: base },

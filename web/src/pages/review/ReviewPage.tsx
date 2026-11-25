@@ -259,7 +259,7 @@ const NoteCode = ({ children }: { readonly children: ReactNode }) => (
 const shortFolder = (dir: string, home: string | null): string =>
   home !== null && dir.startsWith(`${home}/`) ? `~${dir.slice(home.length)}` : dir;
 
-/** Why callers outside the pull request aren't shown, when no checkout was read. */
+/** Why callers outside the pull request aren't shown, or aren't yet, when no checkout was read. */
 const CheckoutNote = ({
   analysis,
   searched,
@@ -268,21 +268,37 @@ const CheckoutNote = ({
   /** The folder searched for clones, null when that's off; undefined until the status is read. */
   readonly searched: string | null | undefined;
 }) => {
-  const { checkout, checkoutDir, pullRequest } = analysis;
+  const { checkout, checkoutDir, checkoutError, pullRequest } = analysis;
   if (checkout === "read" || pullRequest === null) return null;
   const { ref, headSha } = pullRequest;
+  if (checkout === "downloading") {
+    return (
+      <p data-slot="checkout-note" className="text-muted-foreground">
+        Downloading {ref.repo.owner}/{ref.repo.repo} to find the code that calls what this pull
+        request changes. It shows on the changes when the download ends.
+      </p>
+    );
+  }
+  const folder =
+    checkoutDir === null ? "it" : <NoteCode>{shortFolder(checkoutDir, searched ?? null)}</NoteCode>;
   return (
     <p data-slot="checkout-note" className="text-muted-foreground">
       Code outside the pull request that calls what it changes isn't shown:{" "}
-      {checkout === "missing-commit" ? (
+      {checkout === "download-failed" ? (
+        <>
+          the repository couldn't be downloaded. {checkoutError} Open the pull request again to try
+          again
+          {checkoutDir !== null && (
+            <>
+              , or run <NoteCode>git fetch</NoteCode> in {folder} first
+            </>
+          )}
+          .
+        </>
+      ) : checkout === "missing-commit" ? (
         <>
           the clone on this machine doesn't have the head commit{" "}
-          <NoteCode>{headSha.slice(0, 7)}</NoteCode>. Run <NoteCode>git fetch</NoteCode> in{" "}
-          {checkoutDir === null ? (
-            "it"
-          ) : (
-            <NoteCode>{shortFolder(checkoutDir, searched ?? null)}</NoteCode>
-          )}
+          <NoteCode>{headSha.slice(0, 7)}</NoteCode>. Run <NoteCode>git fetch</NoteCode> in {folder}
           {ref.repo.host === "github" && (
             <>
               , or <NoteCode>git fetch origin pull/{ref.number}/head</NoteCode> for a pull request
