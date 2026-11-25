@@ -89,14 +89,26 @@ describe("following", () => {
   } as const;
 
   it("is while the analysis is in progress, or its run's guardrail call runs after the passes", () => {
-    expect(following({ status: "running", stages: done, guardrails: null })).toBe(true);
-    expect(following({ status: "complete", stages: done, guardrails: "running" })).toBe(true);
+    expect(following({ status: "running", stages: done, guardrails: null, checkout: "none" })).toBe(
+      true,
+    );
+    expect(
+      following({ status: "complete", stages: done, guardrails: "running", checkout: "read" }),
+    ).toBe(true);
     expect(inProgress({ status: "complete", stages: done })).toBe(false);
   });
 
-  it("isn't once the call has ended, or when the run made none", () => {
+  it("is while the commit its callers are read from downloads, and the analysis isn't in progress", () => {
+    const downloading = { stages: done, guardrails: null, checkout: "downloading" } as const;
+    expect(following({ status: "complete", ...downloading })).toBe(true);
+    expect(following({ status: "failed", ...downloading })).toBe(false);
+  });
+
+  it("isn't once the call and the download have ended, or when there were none", () => {
     for (const guardrails of [null, "done", "failed"] as const) {
-      expect(following({ status: "complete", stages: done, guardrails })).toBe(false);
+      for (const checkout of ["read", "none", "missing-commit", "download-failed"] as const) {
+        expect(following({ status: "complete", stages: done, guardrails, checkout })).toBe(false);
+      }
     }
   });
 });

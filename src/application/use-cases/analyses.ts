@@ -129,6 +129,7 @@ const newAnalysis = (
   generated: [],
   checkout: checkout.status,
   checkoutDir: checkout.dir,
+  checkoutError: null,
   unchangedCallers: [],
   intent: null,
   findings: [],

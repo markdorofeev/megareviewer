@@ -240,6 +240,7 @@ export const smallFeatureAnalysis: Analysis = {
   generated: [],
   checkout: "none",
   checkoutDir: null,
+  checkoutError: null,
   unchangedCallers: [],
   intent: smallFeatureIntent,
   findings: [

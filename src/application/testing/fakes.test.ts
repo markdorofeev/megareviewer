@@ -22,6 +22,7 @@ import {
   describeLocalCheckoutContract,
   describeLocalCheckoutsContract,
   describePreferenceStoreContract,
+  describeRepositoryCopiesContract,
   describeReviewHistoryContract,
   describeTicketSourceContract,
   FakeAnalysisModel,
@@ -31,6 +32,7 @@ import {
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakePreferenceSuggester,
+  FakeRepositoryCopies,
   FakeReviewHistory,
   FakeTicketSource,
   FixedClock,
@@ -154,6 +156,23 @@ describeLocalCheckoutsContract("fake", async () => {
     clone: clone.dir,
     namesake: namesake.dir,
     sha,
+  };
+});
+
+describeRepositoryCopiesContract("fake", async () => {
+  const clock = new FixedClock("2026-11-25T10:00:00.000Z");
+  const sha = "c".repeat(40);
+  const later = "d".repeat(40);
+  const commits = { [sha]: { "a.ts": "1" }, [later]: { "a.ts": "2" } };
+  return {
+    copies: new FakeRepositoryCopies({ commits, downloadFolder: "/copies", clock }),
+    off: new FakeRepositoryCopies({ commits, clock }),
+    clock,
+    repo: { host: "github", owner: "acme", repo: "shop" },
+    other: { host: "bitbucket", owner: "acme", repo: "shop" },
+    sha,
+    later,
+    path: "a.ts",
   };
 });
 
