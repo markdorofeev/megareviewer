@@ -129,3 +129,12 @@ Two calls for one repository and commit join, as two starts of one analysis do. 
 ### Checked
 
 Over 16 commits of this repository's own history, 25 apart, a source that lists, one that diffs and one that does neither gave the same harness and contents. At the last, 81 files and 1 MB in three hops, not cut; with `CLAUDE.md` on, `harnessPlan` puts `CLAUDE.md`, `MISSION.md`, `DESIGN.md` and `ENGINEERING.md` in the prompt, 42 KB, and 77 files on request. No real host was asked: 76 brings them.
+
+### A clone-backed source, as the ports now stand
+
+Not built. [Stage 65](65-clone-on-this-machine.md) finds clones; this is what a `HarnessSource` over `LocalCheckout` would still need:
+
+- **Blob hashes.** `LocalCheckout` no longer lists: `filesMentioning` replaced `listFiles`, and answered paths alone before that. `readFiles` runs `cat-file --batch`, whose header has the hash, and drops it. A listing with hashes is one `git ls-tree -r -z <sha>`, where links (mode 120000) and submodules (160000) have to be left out; `cat-file` calls a link a blob and would give its target as text. With a listing, `changedPaths` is never asked.
+- **The base commit.** `hasCommit` takes any commit, and so in effect does `lookUpCheckout`, whose parameter is only named for the head. But an analysis looks the head up, and a folder that has it need not have the base: a full clone does, since the base is the merge base, and a shallow one may not. A partial clone can have the commit and lack its trees or contents, which `GIT_NO_LAZY_FETCH` keeps from being fetched, so a read that fails there has to go to the host.
+- **Choosing by commit.** `AppDeps.harnessSource(repo)` is told no commit and answers at once, and finding a clone is neither. The clone's source would stand in front of the host's: for each commit asked about, look for a folder that has it, and ask the host when there's none or the clone fails. Mixing the two in one walk is safe, since both key contents by git's hash. A `CheckoutError` has no place in the port's `HostError`, so it would be that step back to the host, not an error.
+- **Stage 66's copy leaves the base out.** It downloads "only the head commit", at depth 1, and says nothing reads the base from a checkout; a copy made that way doesn't have it (tried on a throwaway repository). It would fetch the base too, with a ref of its own, or the harness would come from the host. And the copy arrives after the analysis opens, while the harness's load starts with it, so on a repository's first pull request the host is asked either way.

@@ -301,7 +301,7 @@ The measurements behind the transport decisions are the spike's, `evals/spikes/h
 
 megareviewer may later read a repository from a clone of its own, or from the reviewer's checkout, in place of the host's API. The slice is built so that this is one more implementation and no redesign:
 
-- **`HarnessSource` is the only way a file is found or fetched.** It lists paths with their blob hashes, reads contents and says which paths changed between two commits, and a source that can't do one of them says so. `LocalCheckout` already lists and reads at a commit, so a checkout-backed source is an adapter over it, chosen in the one function that picks a repository's source (stage 75).
+- **`HarnessSource` is the only way a file is found or fetched.** It lists paths with their blob hashes, reads contents and says which paths changed between two commits, and a source that can't do one of them says so. `LocalCheckout` reads at a commit, so a checkout-backed source is an adapter over it, chosen in the one function that picks a repository's source (stage 75, whose notes say what it lacks).
 - **The blob hash is git's own.** A source that reads git's object store keys content the way the store already does, and the harness tables need no change.
 - **A pass's directory has a root per kind of content.** Harness files go under `harness/`, and the tool's reads are recorded by the path the model used. Code at the PR's head commit would be a second root beside it, with no change to the harness's paths, its index or the record of reads (stage 79).
 - **The base commit rule doesn't depend on the source.** Rules stay the base commit's whatever is added later; code context would be the head commit's and stays untrusted data.
