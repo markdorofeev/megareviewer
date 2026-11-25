@@ -18,6 +18,7 @@ describe("claudeEnv", () => {
       CLAUDECODE: "1",
       CLAUDE_CODE_ENTRYPOINT: "sdk",
       CLAUDE_CODE_USE_BEDROCK: "1",
+      CLAUDE_CODE_DISABLE_FILE_MENTIONS: "0",
       CLAUDE_CONFIG_DIR: "/home/me/.claude-work",
     });
     expect(env).toEqual({
@@ -25,7 +26,16 @@ describe("claudeEnv", () => {
       HOME: "/home/me",
       CLAUDE_CONFIG_DIR: "/home/me/.claude-work",
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+      CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1",
     });
+  });
+
+  it("turns off @ mentions, which read files off the stream, whatever the server's environment", () => {
+    expect(claudeEnv({})).toHaveProperty("CLAUDE_CODE_DISABLE_FILE_MENTIONS", "1");
+    expect(claudeEnv({ CLAUDE_CODE_DISABLE_FILE_MENTIONS: "" })).toHaveProperty(
+      "CLAUDE_CODE_DISABLE_FILE_MENTIONS",
+      "1",
+    );
   });
 });
 

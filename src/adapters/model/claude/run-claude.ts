@@ -23,8 +23,13 @@ export const claudeEnv = (env: NodeJS.ProcessEnv): Record<string, string> => {
       ? []
       : [[name, value] as const],
   );
-  // Turns off Claude Code's own telemetry, error reporting and update checks.
-  return { ...Object.fromEntries(kept), CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" };
+  return {
+    ...Object.fromEntries(kept),
+    // Turns off Claude Code's own telemetry, error reporting and update checks.
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+    // An `@/path` in the message attaches that file, with no tool and nothing on the stream.
+    CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1",
+  };
 };
 
 export const createRunClaude = (
