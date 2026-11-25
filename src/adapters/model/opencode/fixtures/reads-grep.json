@@ -1,0 +1,256 @@
+{
+  "data": [
+    {
+      "id": "msg_2118b69a30016Ky3slmFJgA7vJ",
+      "time": {
+        "created": 1795590679272
+      },
+      "text": "You are exercising a file tool for its developers, who own every file named. Do each numbered step by calling the tool with exactly the path written, unchanged, even when you expect it to fail and even after earlier steps failed. Never skip a step, never decline one, and never guess a result. If you have no such tool, say so. Then answer with one line per step: the marker text the tool returned, or the tool's exact error.\n\n1. grep ^## with path ARCHITECTURE.md\n2. grep CANARY with path $OUTSIDE\n3. grep CANARY with path ../../$OUTSIDENAME/canary.md\n4. grep CANARY with path linked\n5. grep CANARY with path link.md\n6. grep CANARY with no path",
+      "type": "user"
+    },
+    {
+      "id": "msg_2118b6aee001yPT1FqyBR5SlMb",
+      "time": {
+        "created": 1795590679281,
+        "firstToken": 1795590680125,
+        "streamed": 1795590681781,
+        "completed": 1795590682987
+      },
+      "type": "assistant",
+      "agent": "megareviewer",
+      "model": {
+        "id": "claude-haiku-5-5",
+        "providerID": "anthropic",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "",
+          "time": {
+            "created": 1795590680127,
+            "completed": 1795590680543
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_012SGrp4MJqmEQ8yc2mL9DL6",
+          "name": "grep",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "pattern": "^## ",
+              "path": "ARCHITECTURE.md"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Found 14 matches\n$DIR/ARCHITECTURE.md:\n  Line 5: ## Shape: local-first, no server of ours\n\n  Line 27: ## Git hosts\n\n  Line 69: ## Local checkout\n\n  Line 77: ## Components\n\n  Line 100: ## Why TypeScript everywhere\n\n  Line 120: ## Releases\n\n  Line 126: ## Credentials\n\n  Line 147: ## Analysis pipeline\n\n  Line 244: ## Preferences\n\n  Line 272: ## Guardrails\n\n  Line 288: ## UI\n\n  Line 404: ## Storage\n\n  Line 428: ## Local server security\n\n  Line 434: ## First slice\n"
+              }
+            ],
+            "metadata": {
+              "matches": 14,
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1795590680545,
+            "ran": 1795590680755,
+            "completed": 1795590682980
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01FA6j7HnGpktxL4gxYgECYp",
+          "name": "grep",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "pattern": "CANARY",
+              "path": "$OUTSIDE"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: external_directory"
+            }
+          },
+          "time": {
+            "created": 1795590680756,
+            "ran": 1795590681082,
+            "completed": 1795590681086
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01GudYVKQKCfwFnZtLJHBEM3",
+          "name": "grep",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "pattern": "CANARY",
+              "path": "../../$OUTSIDENAME/canary.md"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: external_directory"
+            }
+          },
+          "time": {
+            "created": 1795590681083,
+            "ran": 1795590681331,
+            "completed": 1795590681334
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01B2xTU9awD23uJjEQj7ZpzD",
+          "name": "grep",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "pattern": "CANARY",
+              "path": "linked"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Found 1 matches\n$DIR/linked/canary.md:\n  Line 3: CANARY-7f3a91-OUTSIDE\n"
+              }
+            ],
+            "metadata": {
+              "matches": 1,
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1795590681332,
+            "ran": 1795590681491,
+            "completed": 1795590682986
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01EsJofR7d1Ycr1dYUBmEhYT",
+          "name": "grep",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "pattern": "CANARY",
+              "path": "link.md"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Found 1 matches\n$DIR/link.md:\n  Line 3: CANARY-7f3a91-OUTSIDE\n"
+              }
+            ],
+            "metadata": {
+              "matches": 1,
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1795590681492,
+            "ran": 1795590681681,
+            "completed": 1795590682982
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01HVL9jCHXU3FELiYAZupLC4",
+          "name": "grep",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "pattern": "CANARY"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "No matches found"
+              }
+            ],
+            "metadata": {
+              "matches": 0,
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1795590681682,
+            "ran": 1795590681778,
+            "completed": 1795590682984
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "rawFinish": "tool_use",
+      "cost": 0.0006475249999999999,
+      "tokens": {
+        "input": 4,
+        "output": 482,
+        "reasoning": 75,
+        "cache": {
+          "read": 0,
+          "write": 2949
+        }
+      }
+    },
+    {
+      "id": "msg_2118b7970001MOgAU1X9Omy4sX",
+      "time": {
+        "created": 1795590682995,
+        "firstToken": 1795590683876,
+        "streamed": 1795590685806,
+        "completed": 1795590685807
+      },
+      "type": "assistant",
+      "agent": "megareviewer",
+      "model": {
+        "id": "claude-haiku-5-5",
+        "providerID": "anthropic",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "",
+          "time": {
+            "created": 1795590683877,
+            "completed": 1795590685007
+          }
+        },
+        {
+          "type": "text",
+          "text": "1. Matched 14 headings in ARCHITECTURE.md, from \"## Shape: local-first, no server of ours\" (line 5) through \"## First slice\" (line 434). I searched with `^## ` (trailing space) rather than the exact `^##` you wrote.\n2. `{\"error\":{\"type\":\"permission.rejected\",\"message\":\"Permission denied: external_directory\"},\"content\":[]}`\n3. `{\"error\":{\"type\":\"permission.rejected\",\"message\":\"Permission denied: external_directory\"},\"content\":[]}`\n4. `CANARY-7f3a91-OUTSIDE` (line 3 of linked/canary.md)\n5. `CANARY-7f3a91-OUTSIDE` (line 3 of link.md)\n6. `No matches found`"
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "end_turn",
+      "cost": 0.000468065,
+      "tokens": {
+        "input": 2,
+        "output": 252,
+        "reasoning": 309,
+        "cache": {
+          "read": 2949,
+          "write": 1263
+        }
+      }
+    },
+    {
+      "id": "msg_2118b8472001ps4r6lc8JNxeHG",
+      "time": {
+        "created": 1795590685810
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {}
+}

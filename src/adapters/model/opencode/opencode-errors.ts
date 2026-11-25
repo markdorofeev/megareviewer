@@ -6,12 +6,15 @@ import type { OpencodeError, OpencodeTurn } from "./opencode-output.ts";
 export const NOT_INSTALLED =
   "opencode isn't installed. Install it (https://opencode.ai), connect a provider with `opencode auth login`, then try again.";
 
-/** A tool ran, or was asked for: the answer is discarded. */
+/** The session did more than answer: its answer is discarded. */
 export const usedTool = (tools: readonly string[]): ModelError =>
   modelError(
     "unexpected",
     `The session used a tool (${tools.join(", ")}), so the pass was stopped and its answer discarded.`,
   );
+
+/** A failure of the reading, after which the pass is run again without the reader. */
+export const readerFailed = (message: string): ModelError => modelError("reader", message);
 
 /** The server couldn't be reached or started, or answered a request with an error. */
 export const fromHttpError = (error: OpencodeHttpError): ModelError => {

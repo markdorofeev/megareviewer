@@ -9,6 +9,7 @@ Recorded with opencode 2.3.0 on macOS, its Anthropic provider from `ANTHROPIC_AP
 | `steps.synthetic.json` | Synthetic: `decisions.json` with three steps on small-feature as its answer and the task alone as its prompt, until the steps pass is recorded |
 | `provider-error.json` | Stage 53's spike: an agent with `steps: 1`, whose last step's assistant prefill Haiku 5.5 refused with a 400 |
 | `unreachable.json` | The spike: the Anthropic provider's base URL on a local proxy that couldn't forward |
+| `reads-answer.json`, `reads-grep.json`, `reads-nested.json`, `reads-range.json`, `reads-refused.json` | Stage 79's spike, `evals/spikes/harness-read-tool/opencode.ts` on 2026-11-25: its cases `structured`, `grep`, `nested`, `range` and `confine-files`, on Haiku 5.5, in the order `order=asc` gives. Their directories are `$DIR`, `$OUTSIDE` and `$OUTSIDENAME`, which the tests put paths in place of |
 
 Tool calls, shells, skills, second steps and the providers' other errors are written into these in the tests, so they're synthetic; the model never called its one tool in the spike.
 

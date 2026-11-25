@@ -5,6 +5,7 @@ import type { OneCall } from "../shared/one-call.ts";
 import { passText } from "../shared/prompted-answer.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 import { SUGGESTION_CALL } from "../shared/suggestion.ts";
+import type { PassHarness } from "./opencode-output.ts";
 
 /** The agent megareviewer defines in the server's config and runs every pass as. */
 export const AGENT = "megareviewer";
@@ -147,6 +148,15 @@ export interface OpencodeModelRef {
   readonly id: string;
 }
 
+/**
+ * What a session with a harness is given beside its agent: its directory, and the agent's denials
+ * followed by leave to `read` each file megareviewer wrote there, and nothing else.
+ */
+const harnessSession = ({ directory, files }: PassHarness) => ({
+  location: { directory },
+  permissions: [...files].map((resource) => ({ action: "read", resource, effect: "allow" })),
+});
+
 export interface OpencodeRequest {
   readonly session: Record<string, unknown>;
   readonly entries: readonly InstructionEntry[];
@@ -167,6 +177,8 @@ export const opencodeRequest = (
     readonly variants?: readonly string[];
     /** One for every pass, only to measure it. */
     readonly effort?: Effort;
+    /** The files the pass can read; none without. */
+    readonly harness?: PassHarness | null;
   } = {},
 ): OpencodeRequest => {
   const variant = variantFor(options.variants ?? [], options.effort ?? PASS_EFFORT[pass]);
@@ -179,6 +191,7 @@ export const opencodeRequest = (
         id: model.id,
         ...(variant === null ? {} : { variant }),
       },
+      ...(options.harness == null ? {} : harnessSession(options.harness)),
     },
     entries: prEntries(renderedInput),
     prompt: passText(pass, message),

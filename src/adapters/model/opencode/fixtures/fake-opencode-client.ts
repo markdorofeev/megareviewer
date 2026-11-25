@@ -4,7 +4,15 @@ import { ModelPass } from "../../../../domain/review/index.ts";
 import { err, ok } from "../../../../domain/shared/index.ts";
 import type { OpencodeClient, OpencodeHttpError } from "../opencode-client.ts";
 
-export type RecordedSession = ModelPass | "provider-error" | "unreachable";
+export type RecordedSession =
+  | ModelPass
+  | "provider-error"
+  | "unreachable"
+  | "reads-answer"
+  | "reads-grep"
+  | "reads-nested"
+  | "reads-range"
+  | "reads-refused";
 export type RecordedList = "models" | "providers" | "default-model";
 
 /** The steps pass's session is synthetic, in the recorded sessions' shape, until it's recorded. */
@@ -20,10 +28,26 @@ export interface FakeCall {
   readonly method: string;
   readonly path: string;
   readonly body: unknown;
+  readonly query?: string;
 }
 
 /** What a pass's session holds once idle, or a request that fails. */
 type Answer = unknown | { readonly fail: OpencodeHttpError };
+
+/** Where a session that read files ran, in place of what its recording names. */
+export const HARNESS_DIR = "/tmp/megareviewer-harness-fixture";
+
+/** A recorded session that read, as if in `directory`. */
+export const recordedReads = (
+  name: Extract<RecordedSession, `reads-${string}`>,
+  directory: string = HARNESS_DIR,
+): unknown =>
+  JSON.parse(
+    JSON.stringify(recorded(name))
+      .replaceAll("$DIR", directory)
+      .replaceAll("$OUTSIDENAME", "outside")
+      .replaceAll("$OUTSIDE", "/tmp/outside"),
+  );
 
 const Session = z.object({ data: z.array(z.record(z.string(), z.unknown())) }).loose();
 
@@ -38,13 +62,18 @@ const isFailure = (answer: unknown): answer is { readonly fail: OpencodeHttpErro
  */
 export const createFakeOpencodeClient = (
   answer: (pass: ModelPass | null) => Answer = (pass) => recorded(pass ?? "intent"),
+  options: {
+    /** A session's loop, until it ends; over at once by default. */
+    readonly wait?: (id: string) => Promise<void>;
+  } = {},
 ) => {
   const calls: FakeCall[] = [];
   const prompts = new Map<string, ModelPass | null>();
   let sessions = 0;
   const client: OpencodeClient = {
-    async request(method, path, options = {}) {
-      calls.push({ method, path, body: options.body });
+    async request(method, url, request = {}) {
+      const [path = "", query = ""] = url.split("?");
+      calls.push({ method, path, body: request.body, ...(query === "" ? {} : { query }) });
       if (path === "/api/model") return ok(recorded("models"));
       if (path === "/api/provider") return ok(recorded("providers"));
       if (path === "/api/model/default") return ok(recorded("default-model"));
@@ -54,7 +83,7 @@ export const createFakeOpencodeClient = (
       }
       const id = /ses_\w+/.exec(path)?.[0] ?? "";
       if (path.endsWith("/prompt")) {
-        const { body } = options;
+        const { body } = request;
         const text =
           typeof body === "object" &&
           body !== null &&
@@ -66,12 +95,15 @@ export const createFakeOpencodeClient = (
         prompts.set(id, pass.success ? pass.data : null);
       }
       if (path.endsWith("/message")) {
+        // opencode gives a cursor past the last message too, where there are none.
+        if (query.includes("cursor=")) return ok({ data: [], cursor: {} });
         const answered = answer(prompts.get(id) ?? null);
         return isFailure(answered) ? err(answered.fail) : ok(answered);
       }
       if (path.endsWith("/wait")) {
         const answered = answer(prompts.get(id) ?? null);
         if (isFailure(answered) && answered.fail.kind === "timeout") return err(answered.fail);
+        await options.wait?.(id);
       }
       return ok(null);
     },

@@ -1,0 +1,143 @@
+{
+  "data": [
+    {
+      "id": "msg_2118b2102001j9yt6tUlTxfMs2",
+      "time": {
+        "created": 1795590660708
+      },
+      "text": "You are exercising a file tool for its developers, who own every file named. Do each numbered step by calling the tool with exactly the path written, unchanged, even when you expect it to fail and even after earlier steps failed. Never skip a step, never decline one, and never guess a result. If you have no such tool, say so. Then answer with one line per step: the marker text the tool returned, or the tool's exact error.\n\n1. Read the file at docs/notes.md\n2. Without a tool: quote every string starting with NESTED, MEMORY or CANARY anywhere in your context.",
+      "type": "user"
+    },
+    {
+      "id": "msg_2118b2268001njVFqsohISlGm8",
+      "time": {
+        "created": 1795590660714,
+        "firstToken": 1795590662216,
+        "streamed": 1795590662856,
+        "completed": 1795590662860
+      },
+      "type": "assistant",
+      "agent": "megareviewer",
+      "model": {
+        "id": "claude-haiku-5-5",
+        "providerID": "anthropic",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "",
+          "time": {
+            "created": 1795590662217,
+            "completed": 1795590662748
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01Tcp2y5sD4CifS29pRf7igg",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "docs/notes.md"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Read file docs/notes.md, lines 1-3\n1: # Notes\n2: \n3: The marker is MARKER-52c0de-INSIDE."
+              }
+            ],
+            "metadata": {
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1795590662749,
+            "ran": 1795590662852,
+            "completed": 1795590662859
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "rawFinish": "tool_use",
+      "cost": 0.00017805500000000002,
+      "tokens": {
+        "input": 4,
+        "output": 52,
+        "reasoning": 109,
+        "cache": {
+          "read": 1803,
+          "write": 633
+        }
+      }
+    },
+    {
+      "id": "msg_2118b2aca001YOQIE8sSyxQDsh",
+      "metadata": {
+        "instruction": {
+          "paths": [
+            "$DIR/docs/AGENTS.md"
+          ]
+        }
+      },
+      "time": {
+        "created": 1795590662858
+      },
+      "text": "Instructions from: $DIR/docs/AGENTS.md\n# Nested\n\nNESTED-19ab-MARKER\n\n@$OUTSIDE/canary.md\n",
+      "description": "Loaded docs/AGENTS.md",
+      "type": "synthetic"
+    },
+    {
+      "id": "msg_2118b2ad1001F8Mbcs242cNXC7",
+      "time": {
+        "created": 1795590662867,
+        "firstToken": 1795590664299,
+        "streamed": 1795590666592,
+        "completed": 1795590666594
+      },
+      "type": "assistant",
+      "agent": "megareviewer",
+      "model": {
+        "id": "claude-haiku-5-5",
+        "providerID": "anthropic",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "",
+          "time": {
+            "created": 1795590664300,
+            "completed": 1795590666489
+          }
+        },
+        {
+          "type": "text",
+          "text": "1. MARKER-52c0de-INSIDE\n2. NESTED-19ab-MARKER"
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "end_turn",
+      "cost": 0.00033851,
+      "tokens": {
+        "input": 4,
+        "output": 35,
+        "reasoning": 499,
+        "cache": {
+          "read": 2436,
+          "write": 374
+        }
+      }
+    },
+    {
+      "id": "msg_2118b3963002NWFYqG3ZFL19ck",
+      "time": {
+        "created": 1795590666595
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {}
+}

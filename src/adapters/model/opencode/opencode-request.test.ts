@@ -16,6 +16,7 @@ import {
 import {
   OPENCODE_FINGERPRINT,
   OPENCODE_PROMPT_VERSION,
+  OPENCODE_READER_FINGERPRINT,
   OPENCODE_TOUR_FINGERPRINT,
   opencodeVersion,
 } from "./version.ts";
@@ -52,6 +53,23 @@ describe("opencodeRequest", () => {
       expect(prompt).toMatch(/Answer with one JSON object and nothing else/);
       expect(prompt.endsWith(JSON.stringify(passSchema(pass)))).toBe(true);
     }
+  });
+
+  it("gives a session with a harness its directory and leave to read each file, after the agent's denials", () => {
+    const files = new Set(["harness/CLAUDE.md", "harness/docs/a.md"]);
+    const request = opencodeRequest("risk", "", "Task: risk.", haiku, {
+      harness: { directory: "/tmp/run", files },
+    });
+    expect(request.session).toEqual({
+      agent: "megareviewer",
+      title: "megareviewer",
+      model: { providerID: "anthropic", id: "claude-haiku-5-5" },
+      location: { directory: "/tmp/run" },
+      permissions: [
+        { action: "read", resource: "harness/CLAUDE.md", effect: "allow" },
+        { action: "read", resource: "harness/docs/a.md", effect: "allow" },
+      ],
+    });
   });
 
   it("leaves the variant out for a model without any", () => {
@@ -140,6 +158,25 @@ describe("prompt version", () => {
       `The steps pass's request changed. Bump OPENCODE_PROMPT_VERSION in version.ts (now ` +
         `${OPENCODE_PROMPT_VERSION}) and set OPENCODE_TOUR_FINGERPRINT to "${current}".`,
     ).toBe(OPENCODE_TOUR_FINGERPRINT);
+  });
+
+  it("is bumped whenever a request with something to read changes", () => {
+    const harness = { directory: "/tmp/run", files: new Set(["harness/CLAUDE.md"]) };
+    const reading = MODEL_STAGES.map((pass) =>
+      opencodeRequest(
+        pass,
+        renderInput(smallFeatureInput),
+        passMessage(pass, null, undefined, true),
+        haiku,
+        { harness },
+      ),
+    );
+    const current = fnv1a64(JSON.stringify(reading));
+    expect(
+      current,
+      `A request with something to read changed. Bump OPENCODE_PROMPT_VERSION in version.ts (now ` +
+        `${OPENCODE_PROMPT_VERSION}) and set OPENCODE_READER_FINGERPRINT to "${current}".`,
+    ).toBe(OPENCODE_READER_FINGERPRINT);
   });
 
   it("names the provider and model, and an effort for every pass", () => {
