@@ -35,9 +35,10 @@ Each has a harness at its base commit: a root that imports one file and links ot
 ## Definition of done
 
 - [x] The four cases, with labels, and the scoring above with tests.
-- [ ] Three runs each on Sonnet 5.5 through Claude Code, and one on Haiku 5.5; the 14 cases once with a harness attached.
-- [ ] A report under `evals/reports/`, with a proposal for each number: the prompt's budget, the cap on rounds, the headings' budget, and whether the risk pass, at low effort, keeps the reader.
-- [ ] The proposals that change code are listed in this doc's notes for the stage that owns the code; this stage changes only `evals/`.
+- [x] Three runs each on Sonnet 5.5 through Claude Code.
+- [ ] One on Haiku 5.5; the 14 cases once with a harness attached.
+- [x] A report under `evals/reports/`, with a proposal for each number: the prompt's budget, the cap on rounds, the headings' budget, and whether the risk pass, at low effort, keeps the reader.
+- [x] The proposals that change code are listed in this doc's notes for the stage that owns the code; this stage changes only `evals/`.
 
 ## Out of scope
 
@@ -45,7 +46,7 @@ Each has a harness at its base commit: a root that imports one file and links ot
 
 ## Notes for later stages
 
-Nothing has been run on a model yet. Every way of reading, the kill on case 4's file and the report were run through a stand-in for `claude` with canned answers, whose results files aren't kept. What's built, and how to run it:
+The first three sets below ran on 2026-11-25, on `c8b4aff`: [the report](../../evals/reports/2026-11-25/harness-reader.md). The kill on case 4's file has only ever run through a stand-in for `claude` with canned answers, since no pass of the live runs asked for the file.
 
 ### The line that asks a pass to read
 
@@ -86,4 +87,21 @@ Each prints what it would make and stops without `--yes`.
 | The cases without guidance, the large harness attached | `--with-harness --yes` | 15 × 1 × 4 = 60 | 15 |
 | The same without it | `--case small-feature --case refactor-move --case bitbucket-bugfix --case prompt-injection --case dependency-bump-signature --case migration-non-null-column --case auth-middleware --case feature-less-than-ticket --case description-contradicts --case unrequested-behavior --case python-indentation-logic --case env-var-config --case test-named-coverage --case large-retry-after --case delphi-account-connections --yes` | 15 × 1 × 4 = 60 | 15 |
 
-232 model runs and 58 of the judge, retries and second runs without the reader aside. Then `node evals/harness-report.ts` with the six results files.
+232 model runs and 58 of the judge, retries and second runs without the reader aside. Then `node evals/harness-report.ts` with the six results files. The last three haven't run.
+
+### Proposals
+
+None is made. The first two change `src/adapters/model/shared/`, so the prompt versions and fingerprints move with them, and the guidance cases, `imported-guideline` and `linked-section` are the ones to run again.
+
+- **The intent pass: no line asking it to read, and a rule isn't intent.** Every intent pass that read reported the broken rule as a mismatch, and its reading is what delays the run. Leave `READ_FIRST` off the intent's message, and add to its mismatches: "A rule of a guideline file, or of a document one links, isn't what was asked for: code that breaks one is a finding, never a mismatch." One change can also make the wording [2026-11-17's report](../../evals/reports/2026-11-17/guidance.md) proposes for preferences. Leaving the line off isn't enough alone: with the index alone one intent pass of three read, and made the mismatch.
+- **No refs in what the reviewer reads.** Beside the index and the guideline files: "A ref belongs in guidance only; in a text the reviewer reads, name the document."
+- **Every pass keeps the reader,** the risk pass among them. The tool is before the system prompt, so a pass without it wouldn't read the prefix the others cached, and a pass that doesn't read costs the index's tokens and no time that shows. Risk, at low effort, read the right section in all three runs with the line.
+- **The line stays on findings, risk and decisions.** On `linked-section` it added only the intent's and risk's reads; on the large PRs it was written for, it hasn't been measured.
+- **The numbers stay:** 64 KB in the prompt, 8 rounds and 8 KB of headings. The runs used 1 round and 7.2 KB, and nothing near 64 KB, so they're unchallenged rather than confirmed.
+- **`unrelated-harness`'s labels,** in `evals/`: the empty string as an expected "unrequested" mismatch, and the hunk as "either".
+
+### Sets D to F
+
+- **D, the four cases on Haiku 5.5: worth running.** 16 passes. Haiku is in the menu, and the refusal and the kill have yet to meet a model that tries.
+- **E and F as planned: not worth it.** One run each of 15 cases can't tell a target the large harness lost from one two runs of the same requests lose by themselves. For the same 120 passes, five cases three times with it and three times without would: `migration-non-null-column`, `auth-middleware`, `test-named-coverage`, `large-retry-after` and `delphi-account-connections`, after the intent's wording changes.
+- **Missing: a rule in a linked file on a large PR,** with the line and with the index alone, three runs each, 24 passes. It's what the line is for. It needs a case: a rule `large-retry-after`'s PR breaks, in a linked document.
