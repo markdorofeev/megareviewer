@@ -9,6 +9,7 @@ Each JSON file is a list of exchanges in the format of `createFixtureFetch` (`sr
 | `publish.synthetic.json` | Written from Bitbucket's API docs for creating PR comments and requesting changes, against #26's diff. Recording would post real comments. |
 | `resolved-threads.json` | Recorded from [atlassian/trigger-pipeline#56](https://bitbucket.org/atlassian/trigger-pipeline/pull-requests/56), a public PR with four resolved threads, one resolved by someone other than its author. The comments list twice: with `fields` asking for `resolution.user` and `resolution.created_on`, as the adapter asks, and without, where every resolution is `{}`. Bodies keep only the fields the adapter reads; names and account IDs are replaced with `user-<uuid prefix>` and `account-<uuid prefix>`, and comment text with `Comment N.` |
 | `history.synthetic.ts` | Written from Bitbucket's API docs and from the shapes of live answers, for the made-up `acme` workspace: the PR list asked for its participants, on two pages, the comments of the three PRs the user acted on, a repository with nothing reviewed, and the 404 for one the credentials can't see. Recording would capture the credentials' owner's own comments; `record-history.ts` records a read with every comment's text, every name and the owner's UUID replaced, from a public repository. |
+| `harness.json` | Recorded with `record-harness.ts` from [atlassian/bitbucket-upload-file](https://bitbucket.org/atlassian/bitbucket-upload-file), at #26's commits: two files, a missing one, a directory, whose listing is emptied, and the diffstat between the commits. Then the two-page diffstat between two releases of [atlassian/aui](https://bitbucket.org/atlassian/aui), with the first five files of each page and every renamed one kept. Bodies keep only the fields the adapter reads. |
 | `unauthorized.synthetic.json` | A 401 for every method, shaped like the live 401 (empty `text/html` body). |
 | `rate-limited.synthetic.json` | A 429 copied from one seen live on an anonymous request: `text/plain` body, `x-ratelimit-reset` in seconds, no `retry-after`. |
 
@@ -33,3 +34,9 @@ BITBUCKET_EMAIL=you@example.com BITBUCKET_API_TOKEN=... node src/adapters/bitbuc
 ```
 
 The repo is public, so any valid token works.
+
+To re-record `harness.json`, from repos that are public too:
+
+```bash
+BITBUCKET_EMAIL=you@example.com BITBUCKET_API_TOKEN=... node src/adapters/bitbucket/fixtures/record-harness.ts
+```

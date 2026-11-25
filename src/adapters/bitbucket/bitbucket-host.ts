@@ -47,7 +47,7 @@ export interface BitbucketHostOptions {
 /** Repositories scanned for PRs to review: Bitbucket has no cross-repo reviewer search. */
 const SCANNED_REPOS = 50;
 const SCAN_CONCURRENCY = 5;
-const FILE_CONCURRENCY = 8;
+export const FILE_CONCURRENCY = 8;
 const PAGE_SIZE = 50;
 
 /** Failures that say a PR asked about is gone or hidden from the user, so it's left out. */
@@ -61,16 +61,19 @@ const FATAL: ReadonlySet<HostError["kind"]> = new Set([
   "network",
 ]);
 
-const segment = encodeURIComponent;
-const repoUrl = ({ owner, repo }: RepoRef): string =>
+export const segment = encodeURIComponent;
+export const repoUrl = ({ owner, repo }: RepoRef): string =>
   `${API}/repositories/${segment(owner)}/${segment(repo)}`;
 const pullRequestApiUrl = (ref: PullRequestRef): string =>
   `${repoUrl(ref.repo)}/pullrequests/${ref.number}`;
-const withQuery = (url: string, query: Record<string, string>): string =>
+export const withQuery = (url: string, query: Record<string, string>): string =>
   `${url}?${new URLSearchParams(query)}`;
 
+export const fileUrl = (repo: RepoRef, sha: string, path: string): string =>
+  `${repoUrl(repo)}/src/${sha}/${path.split("/").map(segment).join("/")}`;
+
 /** Runs `task` over `items`, at most `limit` at a time, keeping the order. */
-const mapLimit = async <T, R>(
+export const mapLimit = async <T, R>(
   items: readonly T[],
   limit: number,
   task: (item: T) => Promise<R>,
@@ -242,8 +245,7 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
     async getFiles(repo, files) {
       // Bitbucket has no batch read, so files come one request each, a few at a time.
       const contents = await mapLimit(files, FILE_CONCURRENCY, async ({ sha, path }) => {
-        const encodedPath = path.split("/").map(segment).join("/");
-        const content = await client.text(`${repoUrl(repo)}/src/${sha}/${encodedPath}`, "*/*");
+        const content = await client.text(fileUrl(repo, sha, path), "*/*");
         if (
           !content.ok &&
           (content.error.kind === "not-found" || content.error.kind === "too-large")

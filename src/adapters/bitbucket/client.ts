@@ -48,6 +48,12 @@ export interface BitbucketClient {
   ): Promise<Result<T, HostError>>;
   /** A raw response (a diff, a file), decoded as UTF-8. */
   text(url: string, accept: string): Promise<Result<string, HostError>>;
+  /** A raw response as it came; `bytes` null when it's longer than `maxBytes`. */
+  raw(
+    url: string,
+    accept: string,
+    maxBytes: number,
+  ): Promise<Result<{ contentType: string; bytes: Uint8Array | null }, HostError>>;
   /** Every item of a paginated list, following `next` for at most MAX_PAGES pages. */
   pages<T>(what: string, item: z.ZodType<T>, url: string): Promise<Result<T[], HostError>>;
   /** A write whose answer has no body worth reading: its Location header, if any. */
@@ -189,6 +195,17 @@ export const createBitbucketClient = (options: ClientOptions): BitbucketClient =
       call(url, "application/json", request, async (response) => {
         await response.arrayBuffer();
         return ok(response.headers.get("location"));
+      }),
+
+    raw: (url, accept, maxBytes) =>
+      call(url, accept, {}, async (response) => {
+        const contentType = response.headers.get("content-type") ?? "";
+        if (Number(response.headers.get("content-length") ?? 0) > maxBytes) {
+          await response.body?.cancel();
+          return ok({ contentType, bytes: null });
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        return ok({ contentType, bytes: bytes.byteLength > maxBytes ? null : bytes });
       }),
 
     text: (url, accept) =>
