@@ -1,7 +1,7 @@
 import { basename, join, relative, sep } from "node:path";
 import type { Clock, Logger } from "../../application/ports/index.ts";
 import type { RepoRef } from "../../domain/review/index.ts";
-import { type FolderEntry, type Folders, nodeFolders } from "./folders.ts";
+import { type Folders, nodeFolders } from "./folders.ts";
 import { reposOfConfig, sameRepo } from "./remotes.ts";
 import { foldersNamed, type RunSpotlight, runSpotlight } from "./spotlight.ts";
 
@@ -48,11 +48,8 @@ const SKIPPED_AT_TOP = new Set([
 const opens = (name: string, depth: number): boolean =>
   !name.startsWith(".") && !SKIPPED.has(name) && !(depth === 0 && SKIPPED_AT_TOP.has(name));
 
-const byName = (a: FolderEntry, b: FolderEntry): number =>
-  a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
-
 /** Folders opened at once. */
-const BATCH = 64;
+const AT_ONCE = 64;
 
 const cloneAt = async (dir: string, folders: Folders): Promise<Clone> => {
   const config = await folders.readText(join(dir, ".git", "config"));
@@ -65,47 +62,57 @@ const cloneAt = async (dir: string, folders: Folders): Promise<Clone> => {
  * some keep their settings in a repository there.
  */
 const walk = async (home: string, folders: Folders, clock: Clock): Promise<Walk> => {
-  const clones: Clone[] = [];
-  const state: { stopped: Walk["stopped"] } = { stopped: null };
-  const visit = async (): Promise<void> => {
-    let level: readonly string[] = [home];
-    for (let depth = 0; depth <= MAX_DEPTH; depth += 1) {
-      const below: string[] = [];
-      for (let start = 0; start < level.length; start += BATCH) {
-        const visited = await Promise.all(
-          level.slice(start, start + BATCH).map(async (dir) => {
-            const entries = [...(await folders.list(dir))].sort(byName);
-            const git = depth === 0 ? undefined : entries.find((entry) => entry.name === ".git");
-            return {
-              clone: git?.kind === "folder" ? await cloneAt(dir, folders) : null,
-              below:
-                git === undefined
-                  ? entries.flatMap(({ name, kind }) =>
-                      kind === "folder" && opens(name, depth) ? [join(dir, name)] : [],
-                    )
-                  : [],
-            };
-          }),
-        );
-        for (const one of visited) {
-          if (state.stopped !== null) return;
-          if (one.clone !== null && clones.length === MAX_CLONES) {
-            state.stopped = "clones";
-            return;
-          }
-          if (one.clone !== null) clones.push(one.clone);
-          below.push(...one.below);
+  const found: { readonly clone: Clone; readonly depth: number }[] = [];
+  const queue: { readonly dir: string; readonly depth: number }[] = [{ dir: home, depth: 0 }];
+  let stopped: Walk["stopped"] = null;
+
+  const open = async ({ dir, depth }: { dir: string; depth: number }): Promise<void> => {
+    const entries = await folders.list(dir);
+    const git = depth === 0 ? undefined : entries.find((entry) => entry.name === ".git");
+    if (git === undefined) {
+      for (const { name, kind } of depth === MAX_DEPTH ? [] : entries) {
+        if (kind === "folder" && opens(name, depth)) {
+          queue.push({ dir: join(dir, name), depth: depth + 1 });
         }
       }
-      level = below;
+      return;
     }
+    if (git.kind !== "folder") return;
+    const clone = await cloneAt(dir, folders);
+    if (stopped !== null) return;
+    if (found.length === MAX_CLONES) stopped = "clones";
+    else found.push({ clone, depth });
   };
-  // Raced, so a folder that never answers, as on a server that's gone, can't hold it past the cap.
-  const expired = clock.wait(MAX_WALK_MS).then(() => {
-    state.stopped ??= "time";
+
+  // Not a level at a time: a folder that never answers, as on a server that's gone, holds up only
+  // what's in it.
+  const all = new Promise<void>((resolve) => {
+    let opening = 0;
+    let next = 0;
+    const openNext = (): void => {
+      while (stopped === null && opening < AT_ONCE && next < queue.length) {
+        const folder = queue[next];
+        next += 1;
+        if (folder === undefined) continue;
+        opening += 1;
+        void open(folder).then(() => {
+          opening -= 1;
+          openNext();
+        });
+      }
+      if (opening === 0) resolve();
+    };
+    openNext();
   });
-  await Promise.race([visit(), expired]);
-  return { clones: [...clones], stopped: state.stopped };
+  const expired = clock.wait(MAX_WALK_MS).then(() => {
+    stopped ??= "time";
+  });
+  await Promise.race([all, expired]);
+
+  const clones = found
+    .toSorted((a, b) => a.depth - b.depth || (a.clone.dir < b.clone.dir ? -1 : 1))
+    .map(({ clone }) => clone);
+  return { clones, stopped };
 };
 
 export const createCloneSearch = (options: {

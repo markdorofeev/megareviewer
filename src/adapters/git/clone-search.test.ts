@@ -204,25 +204,33 @@ describe("the walk", () => {
     ]);
   });
 
-  it("stops after 2 seconds, with what it found, even when a folder never answers", async () => {
+  it("stops after 2 seconds, with what it found, when a folder never answers", async () => {
     const home = newHome();
-    clone(home, "shop");
+    const shop = clone(home, "shop");
+    const app = clone(home, "work/app");
     folder(home, "server");
-    folder(home, "work");
-    clone(home, "work/app");
+    const { promise: rest, resolve: openedRest } = Promise.withResolvers<void>();
+    const unread = new Set([shop, app].map((dir) => join(dir, ".git", "config")));
     const { search, clock } = setup(home, {
       folders: {
-        list: (dir) => (dir === join(home, "work") ? new Promise(() => {}) : nodeFolders.list(dir)),
-        readText: nodeFolders.readText,
+        list: (dir) =>
+          dir === join(home, "server") ? new Promise(() => {}) : nodeFolders.list(dir),
+        async readText(path) {
+          const text = await nodeFolders.readText(path);
+          unread.delete(path);
+          if (unread.size === 0) openedRest();
+          return text;
+        },
       },
     });
     const walking = search.walked();
-    // The first level is done, and the folder that never answers is being opened.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await rest;
+    // Both configs are read; let the walk take them in.
+    await new Promise((resolve) => setImmediate(resolve));
     clock.advance(MAX_WALK_MS);
     const walk = await walking;
     expect(walk.stopped).toBe("time");
-    expect(walk.clones).toEqual([]);
+    expect(walk.clones.map(({ dir }) => dir)).toEqual([shop, app]);
     expect(stoppedReason(walk)).toBe("it took 2 seconds");
   });
 

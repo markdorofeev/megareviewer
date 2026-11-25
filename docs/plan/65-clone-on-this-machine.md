@@ -1,6 +1,6 @@
 # Stage 65: A clone found on this machine
 
-**Status:** In progress (branch claude/full-repo-checkout-feasibility-c87b42)
+**Status:** Done (branch claude/full-repo-checkout-feasibility-c87b42, no PR)
 **Depends on:** 30
 **Unblocks:** 66
 **Owns:** the `LocalCheckouts` and `LocalCheckout` ports and their fake and contract suite, a `KnownCheckouts` port, `src/adapters/git/`, the `known_checkouts` table in `src/adapters/sqlite/`, `lookUpCheckout` and `readUnchangedCallers` in `src/application/use-cases/unchanged-callers.ts` and their callers in `analyses.ts`, `checkoutDir` on the analysis and in `contracts/`, the `--no-search` flag, the startup summary and `doctor`'s checkout check in `src/cli/`, the checkout note in `web/src/pages/review/ReviewPage.tsx`, and "Local checkout" in ARCHITECTURE.md
@@ -111,10 +111,10 @@ The Details dialog's note, in [ReviewPage.tsx](../../web/src/pages/review/Review
 
 ## Definition of done
 
-- [ ] Contract change commit, with the stage 02 change log line.
-- [ ] Tasks above, with the tests. Coverage holds for `domain` and `application`.
-- [ ] On delphi-code #2, the real server started in a folder that isn't a clone and without `--checkout` reads the clone it finds: the same six callers as stage 30's notes. Started again, it reads the remembered folder without searching. With `--no-search` in a store that remembers nothing, the note says no clone was found.
-- [ ] ARCHITECTURE.md: "Local checkout" says the order, what the search reads and skips, and the alternatives rejected; "Storage" lists `known_checkouts`. The CLI's usage text and the README say `--no-search`.
+- [x] Contract change commit, with the stage 02 change log line.
+- [x] Tasks above, with the tests. Coverage holds for `domain` and `application`.
+- [x] On delphi-code #2, the real server started in a folder that isn't a clone and without `--checkout` reads the clone it finds: the same six callers as stage 30's notes. Started again, it reads the remembered folder without searching. With `--no-search` in a store that remembers nothing, the note says no clone was found.
+- [x] ARCHITECTURE.md: "Local checkout" says the order, what the search reads and skips, and the alternatives rejected; "Storage" lists `known_checkouts`. The CLI's usage text and the README say `--no-search`.
 
 ## Open issues
 
@@ -122,4 +122,14 @@ _None yet._
 
 ## Notes for later stages
 
-_None yet._
+Where the code differs from or adds to this doc:
+
+- **Live check on delphi-code #2,** 2026-11-25, the built server started in a folder that isn't a clone, without `--checkout`, on an empty store: the summary said 20 clones were found (the walk took 0.04 s), the analysis read `~/Projects/work/delphi-code` in 5.4 s, and the callers are stage 30's six: `create_app` in `server.py:16`, `export_openapi.py:12` and `test_front_end_contract.py:73`, `clone_credentials` in `sources.py:169`, `FakeHost` in `e2e_server.py:19`, `CredentialsGuide` in `ServiceStep.tsx:29`. Started again with the analysis removed from the store, it read the remembered folder; so it did with `--no-search`, where there's no search to fall back on. On an empty store with `--no-search` the analysis is `none`, and the page's note says no clone was found and that the home folder wasn't searched. The clone's `.git` had the same files, sizes and times after as before. Spotlight alone, with the walk's results hidden, found the clone in 0.16 s.
+- **Contract.** `pointedAt(repo)` and `at(dir, repo)` take the repository, since each answers whether a remote names it. `LocalCheckouts.searchFolder` and the status response's `cloneSearchFolder` say which folder is searched, null when the search is off: the note needs it, and shows a folder in it by `~`. `filesMentioning` replaces `listFiles`, which nothing else called, so listing a commit's files (1.1 s on graal) went with it. `KnownCheckouts` is `foldersRead`, `rememberFolder`, `forgetFolder` and `knownCheckouts`, the last for `doctor`. `LocalCheckouts` has a contract suite of its own.
+- **A folder read before counts as one that names the repository,** whatever its remotes say, so a push the delphi-code clone hasn't fetched says to run `git fetch` there rather than that no clone was found.
+- **Opening a PR again brings a complete analysis's `checkout` and `checkoutDir` up to date,** in `startFor`, so the note says what's on the machine now; analyses stored before this stage would otherwise say no clone was found. Nothing else on the analysis changes, and a run in flight is left alone. Stage 66's "callers added in place" is the larger form of it.
+- **No lazy fetching.** A partial clone fetches what it lacks when a command asks for it, which would write into a clone megareviewer found. `runGit` sets `GIT_NO_LAZY_FETCH` and, for a git before 2.45, refuses every protocol. Stage 66's download can't use that environment, and needs a runner of its own. A partial clone's missing files are a warning on the analysis.
+- **The walk** doesn't look inside a worktree either, and the home folder itself is never taken for a clone, since some keep their settings in a repository there. It's raced against the clock, so a folder that never answers can't hold it past 2 seconds.
+- **Spotlight is asked within the home folder only** (`-onlyin`), since that's what the summary says is searched. Both the walk again and Spotlight run when the walk found no clone that could be the repository's, not when the ones it found lack the commit.
+- **`doctor` takes `--no-search` too,** so it doesn't search what the reviewer turned off. Its `openStore` is async and answers the remembered folders. The startup summary is `startSummary` in `src/cli/summary.ts`, so it can be tested.
+- For stage 66: `lookUpCheckout(deps, repo, headSha)` answers `{ status, dir, at }`, and `createGitCheckout` reads a bare repository as it is (`git grep` and `cat-file` were tried on one). A copy under megareviewer's home is never found by the walk, which skips dot-folders and bare repositories.
