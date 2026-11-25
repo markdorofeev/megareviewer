@@ -10,6 +10,7 @@ import {
   allFixtures,
   FakeCodeParser,
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakeTicketSource,
@@ -17,6 +18,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryPreferenceStore,
   RecordingLogger,
   smallFeatureAnalysis,
@@ -26,6 +28,7 @@ import {
   type Composition,
   compose,
   createReviewHistories,
+  harnessSourceIn,
   newSessionToken,
 } from "./compose.ts";
 import type { Config } from "./config.ts";
@@ -65,6 +68,8 @@ const fakeComposition = () => {
       preferences: new InMemoryPreferenceStore(),
       history: {},
       checkouts: new FakeLocalCheckouts(),
+      harnessSource: () => null,
+      harnessStore: new InMemoryHarnessStore(),
       threads: {},
       statuses: {},
       parser: new FakeCodeParser(),
@@ -122,6 +127,8 @@ describe("assemble and serve", () => {
         preferences: new InMemoryPreferenceStore(),
         history: {},
         checkouts: new FakeLocalCheckouts(),
+        harnessSource: () => null,
+        harnessStore: new InMemoryHarnessStore(),
         threads: {},
         statuses: {},
         parser: new FakeCodeParser(),
@@ -144,6 +151,8 @@ describe("assemble and serve", () => {
         preferences: new InMemoryPreferenceStore(),
         history: {},
         checkouts: new FakeLocalCheckouts(),
+        harnessSource: () => null,
+        harnessStore: new InMemoryHarnessStore(),
         threads: {},
         statuses: {},
         parser: new FakeCodeParser(),
@@ -224,6 +233,14 @@ describe("compose", () => {
     ]);
     expect(Object.keys(histories({ ...config, github: null }))).toEqual(["bitbucket"]);
     expect(histories({ github: null, bitbucket: null })).toEqual({});
+  });
+
+  it("reads a repository's harness from its host's source, or from none", () => {
+    const github = new FakeHarnessSource({ host: "github" });
+    const harnessSource = harnessSourceIn({ github });
+
+    expect(harnessSource({ host: "github", owner: "acme", repo: "shop" })).toBe(github);
+    expect(harnessSource({ host: "bitbucket", owner: "acme", repo: "shop" })).toBeNull();
   });
 
   it("doesn't mount fake mode's control routes", async () => {

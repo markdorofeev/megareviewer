@@ -13,6 +13,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryPreferenceStore,
   type PullRequestFixture,
 } from "../src/application/testing/index.ts";
@@ -118,6 +119,8 @@ export const analyzeCase = async (
       preferences,
       history: {},
       checkouts: new FakeLocalCheckouts(),
+      harnessSource: () => null,
+      harnessStore: new InMemoryHarnessStore(),
       threads: {},
       statuses: {},
       parser: options.parser,

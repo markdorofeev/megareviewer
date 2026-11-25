@@ -1,4 +1,4 @@
-import type { HostKind } from "../../domain/review/index.ts";
+import type { HostKind, RepoRef } from "../../domain/review/index.ts";
 import type { AnalysisEvents } from "../events/index.ts";
 import type {
   AnalysisStore,
@@ -6,6 +6,8 @@ import type {
   CodeParser,
   FileCache,
   GitHost,
+  HarnessSource,
+  HarnessStore,
   LocalCheckouts,
   Logger,
   ModelCatalog,
@@ -32,6 +34,9 @@ export interface AppDeps {
   /** The reviewer's past comments, for the hosts that can read them. */
   readonly history: Partial<Record<HostKind, ReviewHistory>>;
   readonly fileCache: FileCache;
+  /** Where a repository's harness is read from; null for one whose host can't give it. */
+  readonly harnessSource: (repo: RepoRef) => HarnessSource | null;
+  readonly harnessStore: HarnessStore;
   readonly parser: CodeParser;
   /** Where unchanged callers are read from, when a checkout of the PR's repository is found. */
   readonly checkouts: LocalCheckouts;

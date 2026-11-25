@@ -27,6 +27,7 @@ import {
   FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckout,
   FakeLocalCheckouts,
   FakeModelCatalog,
@@ -35,6 +36,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryPreferenceStore,
   type PullRequestFixture,
   promptInjection,
@@ -43,7 +45,7 @@ import {
   smallFeature,
   smallFeatureFiles,
 } from "../testing/index.ts";
-import { createUseCases } from "./index.ts";
+import { createUseCases, loadHarness } from "./index.ts";
 
 class RecordingStore extends InMemoryAnalysisStore {
   readonly saves: Analysis[] = [];
@@ -73,6 +75,7 @@ const setup = (
     /** The catalog's options; Sonnet 5.5 on Claude Code, available, unless given. */
     modelOptions?: readonly ModelOption[];
     checkouts?: FakeLocalCheckouts;
+    harnessSource?: FakeHarnessSource;
     clock?: FixedClock;
     /** The PRs GitHub has; every fixture unless given. */
     fixtures?: readonly PullRequestFixture[];
@@ -96,6 +99,7 @@ const setup = (
   const store = new RecordingStore();
   const preferences = new InMemoryPreferenceStore();
   const fileCache = options.fileCache ?? new InMemoryFileCache();
+  const harnessStore = new InMemoryHarnessStore(clock);
   const parser = options.parser ?? new FakeCodeParser();
   const logger = new RecordingLogger();
 
@@ -122,6 +126,8 @@ const setup = (
       models,
       store,
       fileCache,
+      harnessSource: () => options.harnessSource ?? null,
+      harnessStore,
       preferences,
       history: {},
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
@@ -178,6 +184,7 @@ const setup = (
     store,
     preferences,
     fileCache,
+    harnessStore,
     logger,
     emitted,
     useCases,
@@ -1170,6 +1177,75 @@ describe("starting analyses", () => {
     expect(again.status).toBe("complete");
     expect(model.callsTo("intent")).toHaveLength(2);
     expect(await store.getAnalysis(complete.id)).toEqual(complete);
+  });
+});
+
+describe("loading the repository's harness", () => {
+  const { ref, baseSha, url } = smallFeature.pullRequest;
+  const networkError: HostError = {
+    kind: "network",
+    message: "socket hang up",
+    retryAfterSeconds: null,
+  };
+  const sourceWith = (files: Readonly<Record<string, string>>) => {
+    const source = new FakeHarnessSource();
+    source.setFiles(ref.repo, baseSha, files);
+    return source;
+  };
+  /** What's stored once the load already running ends: without a source, this starts none. */
+  const loaded = async (harnessStore: InMemoryHarnessStore) => {
+    const logger = new RecordingLogger();
+    await loadHarness({ harnessSource: () => null, harnessStore, logger }, ref.repo, baseSha);
+    return harnessStore.getHarness(ref.repo, baseSha);
+  };
+
+  it("starts with a new analysis, which doesn't wait for it", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "@docs/rules.md", "docs/rules.md": "" });
+    const release = harnessSource.hold();
+    const { analyze, harnessStore } = setup({ harnessSource, modelEnabled: false });
+
+    const analysis = await analyze();
+    expect(analysis.status).toBe("complete");
+    expect(await harnessStore.getHarness(ref.repo, baseSha)).toBeNull();
+
+    release();
+    const harness = await loaded(harnessStore);
+    expect(harness?.files.map((file) => file.path)).toEqual(["CLAUDE.md", "docs/rules.md"]);
+  });
+
+  it("asks the source for nothing when the commit's harness is stored", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "" });
+    const { analyze, harnessStore, useCases } = setup({ harnessSource, modelEnabled: false });
+    await analyze();
+    expect(await loaded(harnessStore)).toMatchObject({ baseSha });
+
+    await useCases.startAnalysis(url);
+    expect(harnessSource.calls.listFiles).toEqual([baseSha]);
+  });
+
+  it("starts again for a complete analysis whose harness hadn't loaded", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "" });
+    harnessSource.failNext("listFiles", networkError);
+    const { analyze, harnessStore, useCases, preps } = setup({
+      harnessSource,
+      modelEnabled: false,
+    });
+    await analyze();
+    expect(await harnessStore.getHarness(ref.repo, baseSha)).toBeNull();
+
+    await useCases.startAnalysis(url);
+    expect(await loaded(harnessStore)).toMatchObject({ baseSha });
+    expect(preps()).toBe(1);
+  });
+
+  it("completes the analysis, without a warning on it, when the load fails", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "" });
+    harnessSource.failAlways(networkError);
+    const { analyze } = setup({ harnessSource });
+
+    const analysis = await analyze();
+    expect(analysis).toMatchObject({ status: "complete", error: null, modelError: null });
+    expect(analysis.warnings.filter((warning) => warning.includes("hang up"))).toEqual([]);
   });
 });
 

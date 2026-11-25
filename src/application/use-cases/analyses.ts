@@ -28,6 +28,7 @@ import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { GitHost } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
+import { loadHarness } from "./harness.ts";
 import { hostFor } from "./hosts.ts";
 import { pipelineVersion } from "./pipeline-version.ts";
 import { codeFields, runModel, runPipeline } from "./run-pipeline.ts";
@@ -173,6 +174,8 @@ export const createAnalysisRunner = (deps: AppDeps) => {
   const inFlight = new Map<AnalysisId, Promise<void>>();
 
   const startFor = async (host: GitHost, pullRequest: PullRequest): Promise<AnalysisId> => {
+    // Not awaited: an AI review joins it, and the analysis doesn't need it.
+    void loadHarness(deps, pullRequest.ref.repo, pullRequest.baseSha);
     const checkout = await lookUpCheckout(
       deps.checkouts,
       pullRequest.ref.repo,

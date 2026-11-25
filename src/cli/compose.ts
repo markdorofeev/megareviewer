@@ -25,6 +25,7 @@ import { createAnalysisEvents } from "../application/events/index.ts";
 import type {
   Clock,
   GitHost,
+  HarnessSource,
   Logger,
   PullRequestStatusSource,
   ReviewHistory,
@@ -182,6 +183,12 @@ export const createReviewHistories = (
   };
 };
 
+/** Where a repository's harness is read from: its host's source, if the host has one. */
+export const harnessSourceIn =
+  (sources: Partial<Record<HostKind, HarnessSource>>): AppDeps["harnessSource"] =>
+  (repo) =>
+    sources[repo.host] ?? null;
+
 export const createTicketSource = (config: Pick<Config, "jira">, logger: Logger): TicketSource =>
   config.jira === null
     ? createUnconfiguredTicketSource()
@@ -272,6 +279,8 @@ export const compose = async (
           preferences: store,
           history: createReviewHistories(config, { version: options.version, clock, logger }),
           fileCache: store,
+          harnessSource: harnessSourceIn({}),
+          harnessStore: store,
           checkouts: createGitCheckouts({ dir: options.checkoutDir }),
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),
           clock,
