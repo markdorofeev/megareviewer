@@ -64,6 +64,10 @@ import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks, checkingTestPayload } from "./calls.tsx";
 import { Dialog } from "./Dialog.tsx";
+import { FlowBowTie } from "./FlowBowTie.tsx";
+import { FlowLanes } from "./FlowLanes.tsx";
+import { FlowRows } from "./FlowRows.tsx";
+import { flowPaths } from "./flow-paths.ts";
 import { DraftGuardrail } from "./Guardrail.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { barButtons, verdictAfter, verdictLabel } from "./header-buttons.ts";
@@ -78,7 +82,9 @@ import {
   type Layout,
   mapFiles,
   mechanicalCount,
+  OVERVIEW_FORMS,
   parseLayout,
+  parseOverviewForm,
   partIndex,
   pointPlaces,
   trailingProofs,
@@ -369,8 +375,8 @@ const Review = ({
   const mechanical = mechanicalCount(trailing);
   // Decisions are behind a switch in the Display menu, off until the reviewer turns them on.
   const [decisionsOn, setDecisionsOn] = useStoredState("decisions", false, parseBoolean);
-  // A preview: off, the page and its requests are as they were before the tour.
-  const [tourOn, setTourOn] = useStoredState("tour", false, parseBoolean);
+  // On until the reviewer turns it off: off, a run asks for no tour and the layout is the overview.
+  const [tourOn, setTourOn] = useStoredState("tour", true, parseBoolean);
   const points = useMemo(
     () => pointsOf(analysis).filter((point) => decisionsOn || point.kind !== "decision"),
     [analysis, decisionsOn],
@@ -520,6 +526,24 @@ const Review = ({
   );
 
   const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);
+  // The overview as its directories, or as one of the previews of the pull request's flow paths.
+  const [overviewForm, setOverviewForm] = useStoredState(
+    "overview-form",
+    "directories",
+    parseOverviewForm,
+  );
+  const flow = useMemo(
+    () => (overviewForm === "directories" ? null : flowPaths(analysis)),
+    [overviewForm, analysis],
+  );
+  // The directories the bow tie shows as their files, and the cells the lanes show whole.
+  const [flowOpened, setFlowOpened] = useState<ReadonlySet<string>>(new Set());
+  const toggleFlow = (key: string) =>
+    setFlowOpened((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const understand = layout === "overview" && noTour === null && tour !== null;
   const filePaths = useMemo(() => files.map((group) => group.file.path), [files]);
   const fileInView = useFileInView(filePaths, layout === "map" && analysis.stages.prep === "done");
@@ -907,6 +931,13 @@ const Review = ({
     if (path === undefined) showHunk(first, "map");
     else scrollTo(fileAnchor(path));
   };
+  /** Opens a part from a flow path in the map; Esc comes back to its file's stop. */
+  const openFlowPart = (id: PartId, path: string | null) => {
+    setLayout(() => "map");
+    setOpenedFrom(path ?? index.parts.get(id)?.file.path ?? null);
+    setFocusedHunkId(id);
+    showHunk(id, "map");
+  };
   const switchLayout = () => {
     if (layout === "map") {
       // With a tour, to the step last current; else the overview, on the file in view.
@@ -937,6 +968,12 @@ const Review = ({
       { label: "Decisions", checked: decisionsOn, onChange: (on) => setDecisionsOn(() => on) },
       { label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) },
     ],
+    more: {
+      label: "Overview (preview)",
+      options: OVERVIEW_FORMS,
+      value: overviewForm,
+      onChange: (next) => setOverviewForm((previous) => parseOverviewForm(next) ?? previous),
+    },
   });
 
   /**
@@ -1864,20 +1901,47 @@ const Review = ({
           {noTour !== null && (
             <NoTourLine busy={noTour.kind === "writing"}>{noTourText(noTour)}</NoTourLine>
           )}
-          <Overview
-            overview={overview}
-            focusKey={overviewFocus}
-            currentPath={fileInView}
-            onOpen={openNode}
-            onExpand={(key) => setExpandedGroups((previous) => [...previous, key])}
-            expandedGroups={expandedGroups}
-            onCollapse={(key) =>
-              setExpandedGroups((previous) => previous.filter((other) => other !== key))
-            }
-            onFocusNode={(key) => {
-              overviewAt.current = key;
-            }}
-          />
+          {flow === null ? (
+            <Overview
+              overview={overview}
+              focusKey={overviewFocus}
+              currentPath={fileInView}
+              onOpen={openNode}
+              onExpand={(key) => setExpandedGroups((previous) => [...previous, key])}
+              expandedGroups={expandedGroups}
+              onCollapse={(key) =>
+                setExpandedGroups((previous) => previous.filter((other) => other !== key))
+              }
+              onFocusNode={(key) => {
+                overviewAt.current = key;
+              }}
+            />
+          ) : overviewForm === "lanes" ? (
+            <FlowLanes
+              flow={flow}
+              opened={flowOpened}
+              onToggle={toggleFlow}
+              focusKey={overviewFocus}
+              onOpenPart={openFlowPart}
+              onOpenFile={openFileFromTour}
+            />
+          ) : overviewForm === "bow-tie" ? (
+            <FlowBowTie
+              flow={flow}
+              opened={flowOpened}
+              onToggle={toggleFlow}
+              focusKey={overviewFocus}
+              onOpenPart={openFlowPart}
+              onOpenFile={openFileFromTour}
+            />
+          ) : (
+            <FlowRows
+              flow={flow}
+              focusKey={overviewFocus}
+              onOpenPart={openFlowPart}
+              onOpenFile={openFileFromTour}
+            />
+          )}
         </div>
       )}
 

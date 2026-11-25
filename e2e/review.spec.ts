@@ -707,7 +707,7 @@ test.describe("without the model", () => {
 
     // A click on the route's directory in the overview opens its first file in the map.
     await page.getByRole("button", { name: "Display" }).click();
-    await page.getByRole("menuitemradio", { name: "Overview" }).click();
+    await page.getByRole("menuitemradio", { name: "Understand" }).click();
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
     await overview.getByRole("button", { name: /^src\/routes\/, / }).click();
     await expect(page.locator("[data-slot=review-page]")).toHaveAttribute("data-layout", "map");
@@ -738,6 +738,61 @@ test.describe("without the model", () => {
   });
 });
 
+const FLOW_FORMS = [
+  { name: "Lanes", region: "Flow paths of the pull request, by directory" },
+  {
+    name: "Bow tie",
+    region: "Where the change is reached, what it runs through and what it ends in",
+  },
+  { name: "Flow rows", region: "Flow paths of the pull request" },
+] as const;
+
+/** Shows the overview in one of its preview forms, from the Display menu. */
+const showForm = async (page: Page, form: (typeof FLOW_FORMS)[number]) => {
+  await page.getByRole("button", { name: "Display" }).click();
+  await page.getByRole("menuitemradio", { name: form.name, exact: true }).click();
+  // The menu stays open, to compare the forms.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  return page.getByRole("region", { name: form.region, exact: true });
+};
+
+test("shows the overview in each preview form, whose stops open the map", async ({ page }) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+  await page.getByRole("button", { name: "Display" }).click();
+  await page.getByRole("menuitemradio", { name: "Understand" }).click();
+  for (const form of FLOW_FORMS) {
+    const view = await showForm(page, form);
+    const stop = view.getByRole("button", { name: /^receipts, / }).first();
+    await expect(stop).toBeVisible();
+    await expect(view.getByRole("region", { name: "Also changed" })).toContainText("app.yaml");
+    await stop.click();
+    const review = page.locator("[data-slot=review-page]");
+    await expect(review).toHaveAttribute("data-layout", "map");
+    await page.keyboard.press("Escape");
+    await expect(review).toHaveAttribute("data-layout", "overview");
+    await expect(stop).toBeFocused();
+  }
+});
+
+for (const width of [375, 768, 1024]) {
+  test(`the overview's preview forms stay within the viewport at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(() =>
+      window.localStorage.setItem("megareviewer:review-layout", '"overview"'),
+    );
+    await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+    for (const form of FLOW_FORMS) {
+      const view = await showForm(page, form);
+      await expect(view.getByRole("button", { name: /^receipts, / }).first()).toBeVisible();
+      expect(
+        await page.evaluate("document.documentElement.scrollWidth > window.innerWidth"),
+        form.name,
+      ).toBe(false);
+    }
+  });
+}
+
 for (const width of [720, 1024, 1440]) {
   test(`review stays within the viewport at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -747,7 +802,7 @@ for (const width of [720, 1024, 1440]) {
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeInViewport();
     await page.getByRole("button", { name: "Display" }).click();
-    await page.getByRole("menuitemradio", { name: "Overview" }).click();
+    await page.getByRole("menuitemradio", { name: "Understand" }).click();
     await expect(page.locator("[data-slot=overview-scroll]")).toBeVisible();
     expect(await overflows()).toBe(false);
   });

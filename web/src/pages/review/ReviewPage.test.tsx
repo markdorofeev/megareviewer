@@ -336,6 +336,7 @@ describe("ReviewPage states", () => {
     await userEvent.click(button);
     expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
       optionId: "claude-code/claude-sonnet-5-5",
+      tour: true,
     });
     // Following the analysis again loads it again, without leaving the page.
     await waitFor(() => expect(loads()).toBe(before + 1));
@@ -375,10 +376,13 @@ describe("ReviewPage states", () => {
     });
     await loaded();
     const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
-    await waitFor(() => expect(button.getAttribute("aria-disabled")).toBe("true"));
-    expect(description(button)).toBe(
-      "Claude Code isn't signed in: run `claude` and sign in; or No Anthropic API credentials: set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API",
+    // Disabled before the status is read too, so the reason is what's waited for.
+    await waitFor(() =>
+      expect(description(button)).toBe(
+        "Claude Code isn't signed in: run `claude` and sign in; or No Anthropic API credentials: set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API",
+      ),
     );
+    expect(button.getAttribute("aria-disabled")).toBe("true");
     // Still focusable, so the keyboard reaches the reason too.
     expect(button.hasAttribute("disabled")).toBe(false);
 
@@ -422,6 +426,7 @@ describe("ReviewPage states", () => {
     await userEvent.click(button);
     expect(first.requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
       optionId: "claude-code/claude-opus-5-5",
+      tour: true,
     });
     first.unmount();
 
@@ -1455,7 +1460,7 @@ describe("points", () => {
 
 const openOverview = async () => {
   await userEvent.click(screen.getByRole("button", { name: "Display" }));
-  await userEvent.click(await screen.findByRole("menuitemradio", { name: "Overview" }));
+  await userEvent.click(await screen.findByRole("menuitemradio", { name: "Understand" }));
   return overviewBox();
 };
 /** The diagram's file nodes by row, as their labels. */
@@ -1582,28 +1587,80 @@ describe("overview", () => {
     await userEvent.click(screen.getByRole("button", { name: "Collapse src/module1/" }));
     expect(nodeOf("group:src/module1")).toBeTruthy();
   }, 30_000);
+
+  it("takes the form chosen in the Display menu, and keeps it", async () => {
+    renderReview();
+    await loaded();
+    await openOverview();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    const forms = within(await screen.findByRole("group", { name: "Overview (preview)" }));
+    expect(
+      forms.getAllByRole("menuitemradio").map((item) => [item.textContent, item.ariaChecked]),
+    ).toEqual([
+      ["Directories", "true"],
+      ["Lanes", "false"],
+      ["Bow tie", "false"],
+      ["Flow rows", "false"],
+    ]);
+    await userEvent.click(forms.getByRole("menuitemradio", { name: "Flow rows" }));
+    await userEvent.keyboard("{Escape}");
+    expect(window.localStorage.getItem("megareviewer:overview-form")).toBe('"rows"');
+    expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
+    const rows = within(screen.getByRole("region", { name: "Flow paths of the pull request" }));
+    // A file outside the pull request that uses its code starts a path; a test outside doesn't.
+    const labels = [...document.querySelectorAll("[data-slot=flow-path-label]")].map(
+      (label) => label.textContent,
+    );
+    expect(labels.some((label) => label?.startsWith("email-receipts.ts"))).toBe(true);
+    expect(labels.some((label) => label?.includes("email-receipts.test.ts"))).toBe(false);
+    // Proved-mechanical files are listed apart, never a stop on a path.
+    const also = within(rows.getByRole("region", { name: "Also changed" }));
+    expect(also.getByRole("button", { name: "pnpm-lock.yaml" })).toBeTruthy();
+    expect(rows.queryByRole("button", { name: /^pnpm-lock, / })).toBeNull();
+
+    const [stop] = rows.getAllByRole("button", { name: /, (changed|new file)/ });
+    if (stop === undefined) throw new Error("the fixture has a flow path");
+    const path = stop.dataset.path;
+    await userEvent.click(stop);
+    expect(layoutIs("map")).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(layoutIs("overview")).toBe(true);
+    expect((document.activeElement as HTMLElement | null)?.dataset.path).toBe(path);
+  });
+
+  it.each([
+    ["lanes", "Flow paths of the pull request, by directory"],
+    ["bow-tie", "Where the change is reached, what it runs through and what it ends in"],
+  ])("draws the stored form %s", async (form, name) => {
+    window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
+    renderReview();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    await userEvent.click(await screen.findByRole("menuitemradio", { name: "Understand" }));
+    expect(screen.getByRole("region", { name })).toBeTruthy();
+  });
 });
 
 describe("the tour", () => {
   const withTour = () => {
-    window.localStorage.setItem("megareviewer:tour", "true");
     window.localStorage.setItem("megareviewer:review-layout", '"overview"');
   };
   const tourRegion = () => screen.getByRole("region", { name: "Tour steps" });
 
-  it("is the Understand layout only while the Tour switch is on", async () => {
+  it("is the Understand layout unless the Tour switch is off", async () => {
     const first = renderReview();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    expect(await screen.findByRole("menuitemradio", { name: "Understand" })).toBeTruthy();
+    expect(screen.queryByRole("menuitemradio", { name: "Overview" })).toBeNull();
+    first.unmount();
+
+    window.localStorage.setItem("megareviewer:tour", "false");
+    renderReview();
     await loaded();
     await userEvent.click(screen.getByRole("button", { name: "Display" }));
     expect(await screen.findByRole("menuitemradio", { name: "Overview" })).toBeTruthy();
     expect(screen.queryByRole("menuitemradio", { name: "Understand" })).toBeNull();
-    first.unmount();
-
-    window.localStorage.setItem("megareviewer:tour", "true");
-    renderReview();
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    expect(await screen.findByRole("menuitemradio", { name: "Understand" })).toBeTruthy();
   });
 
   it("shows the steps in order, their points, and what the tour didn't show", async () => {
@@ -1713,7 +1770,6 @@ describe("the tour", () => {
   });
 
   it("is opened from the brief's link, which shows only with a tour", async () => {
-    window.localStorage.setItem("megareviewer:tour", "true");
     renderReview({ view: tourAnalysisView });
     await loaded();
     expect(layoutIs("map")).toBe(true);
@@ -1759,14 +1815,16 @@ describe("layouts", () => {
     await userEvent.click(display);
     const map = await screen.findByRole("menuitemradio", { name: "Map" });
     expect(map.getAttribute("aria-checked")).toBe("true");
-    await userEvent.click(screen.getByRole("menuitemradio", { name: "Overview" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Understand" }));
     expect(overviewBox()).toBeTruthy();
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
     // The overview takes the focus to the file in view; closing doesn't hand it back to the menu.
     expect(document.activeElement).not.toBe(display);
     await userEvent.click(display);
     expect(
-      (await screen.findByRole("menuitemradio", { name: "Overview" })).getAttribute("aria-checked"),
+      (await screen.findByRole("menuitemradio", { name: "Understand" })).getAttribute(
+        "aria-checked",
+      ),
     ).toBe("true");
   });
 
@@ -2502,8 +2560,7 @@ describe("the bar's verdicts", () => {
     ).toContain("bg-ai-soft");
   });
 
-  it("asks for the tour with a run only while the Display menu's Tour switch is on", async () => {
-    window.localStorage.removeItem("megareviewer:tour");
+  it("asks for no tour with a run once the Display menu's Tour switch is off", async () => {
     const { requests } = renderReview({
       view: codeOnly,
       respond: (request) =>
@@ -2512,9 +2569,9 @@ describe("the bar's verdicts", () => {
     await loaded();
     await userEvent.click(screen.getByRole("button", { name: "Display" }));
     const tour = await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
-    expect(tour.getAttribute("aria-checked")).toBe("false");
+    expect(tour.getAttribute("aria-checked")).toBe("true");
     await userEvent.click(tour);
-    expect(window.localStorage.getItem("megareviewer:tour")).toBe("true");
+    expect(window.localStorage.getItem("megareviewer:tour")).toBe("false");
     await userEvent.keyboard("{Escape}");
 
     const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
@@ -2522,9 +2579,7 @@ describe("the bar's verdicts", () => {
     await userEvent.click(button);
     expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
       optionId: "claude-code/claude-sonnet-5-5",
-      tour: true,
     });
-    window.localStorage.removeItem("megareviewer:tour");
   });
 
   it("re-runs Claude after asking: takes the run off and runs the chosen model again", async () => {
@@ -2550,7 +2605,7 @@ describe("the bar's verdicts", () => {
     expect(await within(reviewBar()).findByRole("button", { name: /^Reviewing · / })).toBeTruthy();
     const model = requests.filter((request) => request.url === `${viewPath}/model`);
     expect(model.map((request) => request.method)).toEqual(["DELETE", "POST"]);
-    expect(model[1]?.body).toEqual({ optionId: "claude-code/claude-sonnet-5-5" });
+    expect(model[1]?.body).toEqual({ optionId: "claude-code/claude-sonnet-5-5", tour: true });
     expect(screen.queryByRole("status", { name: "Loading the analysis" })).toBeNull();
   });
 });

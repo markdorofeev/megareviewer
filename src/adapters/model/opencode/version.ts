@@ -5,8 +5,8 @@
  * OPENCODE_FINGERPRINT to the value the request test prints. The version is part of the analysis
  * cache key.
  */
-export const OPENCODE_PROMPT_VERSION = 10;
-export const OPENCODE_FINGERPRINT = "6f77c495527ff5c6";
+export const OPENCODE_PROMPT_VERSION = 11;
+export const OPENCODE_FINGERPRINT = "76348cab00accff5";
 /** The same, of the steps pass, which only a run that asks for the tour sends. */
 export const OPENCODE_TOUR_FINGERPRINT = "a8343a604fe1bce8";
 

@@ -21,6 +21,7 @@ const layout = (page: Page) => page.locator("[data-slot=review-page]");
 test("with the Tour switch off, a run asks for no tour and the layout is Overview", async ({
   page,
 }) => {
+  await page.addInitScript(() => window.localStorage.setItem("megareviewer:tour", "false"));
   const run = page.waitForRequest((request) => /\/model$/.test(request.url()));
   await openReview(page, PR.receiptsTour, TITLE);
   expect((await run).postDataJSON()).not.toHaveProperty("tour");
@@ -36,7 +37,6 @@ test("with the Tour switch off, a run asks for no tour and the layout is Overvie
 test("scrolling the tour moves its steps by what was scrolled, under a compact strip", async ({
   page,
 }) => {
-  await page.addInitScript(() => window.localStorage.setItem("megareviewer:tour", "true"));
   await openReview(page, PR.receiptsTour, TITLE);
   await page.getByRole("button", { name: "Tour · 3 steps" }).click();
   await expect(page.locator("[data-slot=tour-step]").first()).toBeVisible();
@@ -69,7 +69,6 @@ test("scrolling the tour moves its steps by what was scrolled, under a compact s
 for (const theme of ["light", "dark"] as const) {
   test(`walks the tour and back to the code, in ${theme}`, async ({ page }) => {
     await page.addInitScript((chosen) => {
-      window.localStorage.setItem("megareviewer:tour", "true");
       window.localStorage.setItem("megareviewer:theme", JSON.stringify(chosen));
     }, theme);
     const run = page.waitForRequest((request) => /\/model$/.test(request.url()));

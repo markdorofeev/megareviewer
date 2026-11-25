@@ -1,6 +1,10 @@
 import type { Intent, ModelPass } from "../../../../domain/review/index.ts";
 import { escapeText } from "../render-input.ts";
 
+/** Shared by the findings, risk and decisions tasks, whose words the reviewer reads or posts. */
+const EXACT_TERMS = `- Keep a technical term only when it's the exact name of the thing and a plain word would be vaguer (deadlock, primary key, HTTP 403). Don't name the class of problem in place of what happens ("violates least privilege"), coin compound words ("request-scoped"), or use a symbol, code or jargon as a verb ("callocs", "no-ops").`;
+const STILL_EXACT = "Plain isn't vague: still name the exact function, value, input and result.";
+
 /** What each pass asks for. Sent after the cached PR data, so changing one doesn't cost a cache. */
 export const PASS_INSTRUCTIONS: Readonly<Record<ModelPass, string>> = {
   intent: `Task: intent.
@@ -23,7 +27,12 @@ Find what looks wrong in this code: bugs, security holes, regressions, data loss
 
 The reviewer reads every finding, and a wrong one costs them more than a missed one, so list only what the code in the data shows. Prefer no finding over a speculative one. A small or routine change usually has none.
 
-Each finding is a draft comment the reviewer can add to their review as it is, so write it to the author:
+Each finding is a draft comment the reviewer can add to their review as it is, so write it to the author, in plain words: the ones you'd use telling a colleague, understood on one reading by someone new to this code whose first language isn't English.
+- Say what happens, in everyday words: "Two requests at once can overwrite each other's change", not "Non-atomic read-modify-write permits lost updates under concurrency".
+${EXACT_TERMS}
+- Short sentences, one fact each: what the code does, when that goes wrong, what happens then. No asides in parentheses.
+${STILL_EXACT}
+
 - title: what is wrong, as its consequence, in at most 80 characters ("Retries a charge after it succeeded", not "Possible issue in retry logic").
 - explanation: why, pointing at the code, in at most 300 characters. Put code names in backticks.
 - lines: the hunk it rests on (hunkId) and the lines in that hunk that show it, startLine to line (startLine equal to line for one line). side is "new" for numbers on "+" and unchanged lines, "old" for numbers on "-" lines. Use only line numbers the hunk shows.
@@ -64,7 +73,12 @@ Judge a test only by what its assertions compare, never by its name, its comment
 - startLine to line: the "+" or unchanged lines of that hunk holding its assertions about this behavior, at most 40.
 - checks: what those assertions check, and nothing more, in one sentence of at most 15 words ("a PUT from another origin gets 403 and saves nothing"), so the reviewer sees what they leave unchecked.
 
-guidance: null, unless the reviewer's guidance decides how the hunk is shown; then its ref ("p1", "g1") and the effect. "raised": a look-for preference or a guideline file names the area the hunk changes ("any change to billing"), which makes the hunk contract when the reason can still say what could break outside this pull request. "left-out": a dont-flag preference or a guideline file covers the hunk. Classify it by the code all the same, and mark it only when it's contract.`,
+guidance: null, unless the reviewer's guidance decides how the hunk is shown; then its ref ("p1", "g1") and the effect. "raised": a look-for preference or a guideline file names the area the hunk changes ("any change to billing"), which makes the hunk contract when the reason can still say what could break outside this pull request. "left-out": a dont-flag preference or a guideline file covers the hunk. Classify it by the code all the same, and mark it only when it's contract.
+
+Once everything above is decided, word reason and checks in plain words: the ones you'd use telling a colleague, understood on one reading by someone new to this code whose first language isn't English. The wording never changes what was decided.
+${EXACT_TERMS}
+- No asides in parentheses.
+${STILL_EXACT}`,
 
   decisions: `Task: decisions.
 
@@ -76,6 +90,11 @@ For each decision:
 - whyItMatters: the answer, in one or two sentences, from what the code, the description or the tickets show. Don't guess at a reason they don't show.
 - hunkIds: the hunks the decision rests on.
 - lines: the line that makes the choice, in the first of those hunks: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines), and startLine and line, equal for one line. Use only line numbers the hunk shows.
+
+Choose the decisions first, as above, then word the title and whyItMatters in plain words: the ones you'd use telling a colleague, understood on one reading by someone new to this code whose first language isn't English. The wording never changes which choice a decision is about, or drops its reason.
+${EXACT_TERMS}
+- Short sentences, and no asides in parentheses.
+${STILL_EXACT}
 
 Order them by how much they help a reader, most first. At most 8. A small or routine change may have none. With reviewer guidance, the choices in what a look-for preference or a guideline file names come first, and a choice that a dont-flag preference or a guideline file says to leave alone is left out.`,
 

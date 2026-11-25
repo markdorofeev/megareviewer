@@ -78,6 +78,24 @@ export const DisplayMenu = () => {
                 <DropdownMenuSeparator />
               </>
             )}
+            {page.more !== undefined && (
+              <>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>{page.more.label}</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={page.more.value}
+                    onValueChange={page.more.onChange}
+                  >
+                    {page.more.options.map((option) => (
+                      <DropdownMenuRadioItem key={option.value} value={option.value}>
+                        {option.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+              </>
+            )}
           </>
         )}
         <DropdownMenuGroup>
