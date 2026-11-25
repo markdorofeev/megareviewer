@@ -5,10 +5,13 @@ export {
   describeGitHostContract,
   type GitHostContractSetup,
 } from "./contracts/git-host-contract.ts";
+export { describeKnownCheckoutsContract } from "./contracts/known-checkouts-contract.ts";
 export {
   CHECKOUT_CONTRACT_FILES,
   describeLocalCheckoutContract,
+  describeLocalCheckoutsContract,
   type LocalCheckoutContractSetup,
+  type LocalCheckoutsContractSetup,
 } from "./contracts/local-checkout-contract.ts";
 export { describePreferenceStoreContract } from "./contracts/preference-store-contract.ts";
 export {
@@ -55,5 +58,6 @@ export { createFixtureFetch, type RecordedExchange } from "./fixture-fetch.ts";
 export * from "./fixtures/index.ts";
 export { InMemoryAnalysisStore } from "./in-memory-analysis-store.ts";
 export { InMemoryFileCache } from "./in-memory-file-cache.ts";
+export { InMemoryKnownCheckouts } from "./in-memory-known-checkouts.ts";
 export { InMemoryPreferenceStore } from "./in-memory-preference-store.ts";
 export { type LogEntry, RecordingLogger } from "./recording-logger.ts";

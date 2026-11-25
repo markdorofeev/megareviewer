@@ -1367,11 +1367,16 @@ describe("with a local checkout", () => {
     async (modelEnabled) => {
       const { analyze } = setup({
         modelEnabled,
-        checkouts: new FakeLocalCheckouts({ checkout: checkout(), namesRepo: true }),
+        checkouts: new FakeLocalCheckouts({
+          checkout: checkout(),
+          dir: "/src/shop",
+          namesRepo: true,
+        }),
       });
       const analysis = await analyze();
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
+      expect(analysis.checkoutDir).toBe("/src/shop");
       expect(analysis.key.pipelineVersion).toBe("20+checkout");
       expect(analysis.unchangedCallers).toEqual([
         {
@@ -1392,28 +1397,39 @@ describe("with a local checkout", () => {
   );
 
   it("parses only unchanged files in the PR's languages that name a changed definition", async () => {
-    const reader = checkout({ "scripts/tool.py": "ordersRouter = 1", "src/other.ts": "x" });
+    const reader = checkout({
+      "scripts/tool.py": "ordersRouter = 1",
+      "src/other.ts": "x",
+      "src/long.ts": "ordersRouters",
+    });
     const parser = new FakeCodeParser();
     const { analyze } = setup({
       modelEnabled: false,
       parser,
-      checkouts: new FakeLocalCheckouts({ checkout: reader, namesRepo: true }),
+      checkouts: new FakeLocalCheckouts({ checkout: reader, dir: "/src/shop", namesRepo: true }),
     });
     await analyze();
-    expect(reader.reads).toEqual([["src/admin.ts", "src/app.ts", "src/other.ts"]]);
+    expect(reader.reads).toEqual([["src/admin.ts", "src/app.ts", "src/long.ts"]]);
     const parsed = parser.calls
       .filter((call) => call.method === "symbols")
       .map((call) => call.source);
     expect(parsed).toContain(appLines.join("\n"));
     expect(parsed).not.toContain("x");
+    expect(parsed).not.toContain("ordersRouters");
   });
 
   it("warns about files too large to read, and about a checkout it can't read", async () => {
-    const big = "x".repeat(1024 * 1024 + 1);
+    const big = `ordersRouter ${"x".repeat(1024 * 1024)}`;
     const { analyze } = setup({
       modelEnabled: false,
       checkouts: new FakeLocalCheckouts({
-        checkout: checkout({ "src/big.ts": big, "src/huge.ts": big }),
+        checkout: checkout({
+          "src/big.ts": big,
+          "src/huge.ts": big,
+          // Names nothing the PR changes, so no caller in it could be missing.
+          "src/other.ts": "x".repeat(1024 * 1024 + 1),
+        }),
+        dir: "/src/shop",
         namesRepo: true,
       }),
     });
@@ -1422,17 +1438,15 @@ describe("with a local checkout", () => {
     );
 
     const failing = checkout();
-    failing.listFiles = async () => err({ kind: "failed", message: "git ls-tree failed: boom" });
+    failing.filesMentioning = async () => err({ kind: "failed", message: "git grep failed: boom" });
     const second = setup({
       modelEnabled: false,
-      checkouts: new FakeLocalCheckouts({ checkout: failing, namesRepo: true }),
+      checkouts: new FakeLocalCheckouts({ checkout: failing, dir: "/src/shop", namesRepo: true }),
     });
     const analysis = await second.analyze();
     expect(analysis.status).toBe("complete");
     expect(analysis.unchangedCallers).toEqual([]);
-    expect(analysis.warnings).toContain(
-      "Couldn't read the local checkout: git ls-tree failed: boom",
-    );
+    expect(analysis.warnings).toContain("Couldn't read the local checkout: git grep failed: boom");
   });
 
   it.each([
@@ -1444,10 +1458,11 @@ describe("with a local checkout", () => {
       const reader = new FakeLocalCheckout({ ["0".repeat(40)]: smallFeature.headFiles });
       const { analyze } = setup({
         modelEnabled: false,
-        checkouts: new FakeLocalCheckouts({ checkout: reader, namesRepo }),
+        checkouts: new FakeLocalCheckouts({ checkout: reader, dir: "/src/shop", namesRepo }),
       });
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
+      expect(analysis.checkoutDir).toBe(namesRepo ? "/src/shop" : null);
       expect(analysis.key.pipelineVersion).toBe("20");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);

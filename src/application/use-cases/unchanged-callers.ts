@@ -26,13 +26,19 @@ export const lookUpCheckout = async (
   checkouts: LocalCheckouts,
   repo: RepoRef,
   headSha: string,
-): Promise<{ readonly status: CheckoutStatus; readonly at: CheckoutAt | null }> => {
-  const found = await checkouts.find(repo);
-  if (found === null) return { status: "none", at: null };
+): Promise<{
+  readonly status: CheckoutStatus;
+  readonly dir: string | null;
+  readonly at: CheckoutAt | null;
+}> => {
+  const found = await checkouts.pointedAt(repo);
+  if (found === null) return { status: "none", dir: null, at: null };
   if (await found.checkout.hasCommit(headSha)) {
-    return { status: "read", at: { checkout: found.checkout, sha: headSha } };
+    return { status: "read", dir: found.dir, at: { checkout: found.checkout, sha: headSha } };
   }
-  return { status: found.namesRepo ? "missing-commit" : "none", at: null };
+  return found.namesRepo
+    ? { status: "missing-commit", dir: found.dir, at: null }
+    : { status: "none", dir: null, at: null };
 };
 
 /** Files read per `git cat-file --batch`, so a large repository isn't held in memory at once. */
@@ -50,24 +56,24 @@ export const readUnchangedCallers = async (
   generated: ReadonlySet<string>,
 ): Promise<{ readonly unchangedCallers: UnchangedCallers[]; readonly warnings: string[] }> => {
   if (changed.length === 0) return { unchangedCallers: [], warnings: [] };
-  const listed = await at.checkout.listFiles(at.sha);
-  if (!listed.ok) {
+  const names = new Set(changed.map((definition) => definition.name));
+  const mentioning = await at.checkout.filesMentioning(at.sha, [...names]);
+  if (!mentioning.ok) {
     return {
       unchangedCallers: [],
-      warnings: [`Couldn't read the local checkout: ${listed.error.message}`],
+      warnings: [`Couldn't read the local checkout: ${mentioning.error.message}`],
     };
   }
   const changedPaths = new Set(files.map((file) => file.path));
   const families = new Set(
     files.flatMap((file) => (file.language === null ? [] : [languageFamily(file.language)])),
   );
-  const candidates = listed.value.flatMap((path) => {
+  const candidates = mentioning.value.flatMap((path) => {
     const language = changedPaths.has(path) ? null : parser.languageFor(path);
     return language !== null && resolvesImports(language) && families.has(languageFamily(language))
       ? [{ path, language }]
       : [];
   });
-  const names = new Set(changed.map((definition) => definition.name));
 
   const unchanged: UnchangedFile[] = [];
   let tooLarge = 0;
@@ -87,6 +93,7 @@ export const readUnchangedCallers = async (
       const candidate = batch[index];
       if (candidate === undefined) continue;
       if (file.kind === "too-large") tooLarge += 1;
+      // The checkout may answer a file that holds a name only within a longer one.
       if (file.kind !== "text" || !mentionsAny(file.content, names)) continue;
       const symbols = await parser.symbols(file.content, candidate.language);
       if (symbols.ok)

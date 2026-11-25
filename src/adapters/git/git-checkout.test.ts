@@ -60,10 +60,13 @@ describe("createGitCheckouts", () => {
       { "src/a.ts": "export const a = 1;\n" },
       { origin: "git@github.com:Acme/Shop.git", upstream: "https://github.com/other/shop" },
     );
-    const found = await createGitCheckouts({ dir: join(dir, "src") }).find(repo);
+    const found = await createGitCheckouts({ dir: join(dir, "src") }).pointedAt(repo);
     expect(found?.namesRepo).toBe(true);
     expect(await found?.checkout.hasCommit(sha)).toBe(true);
-    expect(await found?.checkout.listFiles(sha)).toEqual({ ok: true, value: ["src/a.ts"] });
+    expect(await found?.checkout.filesMentioning(sha, ["a"])).toEqual({
+      ok: true,
+      value: ["src/a.ts"],
+    });
   });
 
   it("finds a fork's checkout, whose remotes don't name the repository", async () => {
@@ -71,7 +74,7 @@ describe("createGitCheckouts", () => {
       { "a.ts": "" },
       { origin: "https://github.com/someone/shop.git" },
     );
-    const found = await createGitCheckouts({ dir }).find(repo);
+    const found = await createGitCheckouts({ dir }).pointedAt(repo);
     expect(found?.namesRepo).toBe(false);
     expect(await found?.checkout.hasCommit(sha)).toBe(true);
   });
@@ -79,13 +82,13 @@ describe("createGitCheckouts", () => {
   it("finds none outside a git checkout", async () => {
     const dir = mkdtempSync(join(tmpdir(), "megareviewer-plain-"));
     made.push(dir);
-    expect(await createGitCheckouts({ dir }).find(repo)).toBeNull();
+    expect(await createGitCheckouts({ dir }).pointedAt(repo)).toBeNull();
     expect(await inspectCheckout(dir)).toBeNull();
   });
 
   it("finds none when git can't run", async () => {
     const run = async () => ({ code: null, stdout: Buffer.alloc(0), stderr: "missing" });
-    expect(await createGitCheckouts({ dir: "/", run }).find(repo)).toBeNull();
+    expect(await createGitCheckouts({ dir: "/", run }).pointedAt(repo)).toBeNull();
   });
 });
 
@@ -110,7 +113,7 @@ describe("createGitCheckout", () => {
     const { dir } = repository({ "a.ts": "" });
     const checkout = createGitCheckout({ dir });
     expect(await checkout.hasCommit("--help")).toBe(false);
-    expect((await checkout.listFiles("--all")).ok).toBe(false);
+    expect((await checkout.filesMentioning("--all", ["a"])).ok).toBe(false);
   });
 
   it("reads a path with a newline as unreadable", async () => {
@@ -135,9 +138,9 @@ describe("createGitCheckout", () => {
         : { code: 128, stdout: Buffer.alloc(0), stderr: "fatal: broken" };
     const checkout = createGitCheckout({ dir: "/", run });
     const sha = "a".repeat(40);
-    expect(await checkout.listFiles(sha)).toEqual({
+    expect(await checkout.filesMentioning(sha, ["a"])).toEqual({
       ok: false,
-      error: { kind: "failed", message: "git ls-tree failed: fatal: broken" },
+      error: { kind: "failed", message: "git grep failed: fatal: broken" },
     });
     expect(await checkout.readFiles(sha, ["a.ts"])).toEqual({
       ok: false,

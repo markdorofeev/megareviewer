@@ -3,6 +3,7 @@ import { err, ok, type Result } from "../../domain/shared/index.ts";
 import {
   type CheckoutError,
   type CheckoutFile,
+  type FoundCheckout,
   type LocalCheckout,
   type LocalCheckouts,
   MAX_CHECKOUT_FILE_BYTES,
@@ -26,9 +27,18 @@ export class FakeLocalCheckout implements LocalCheckout {
     return Object.hasOwn(this.commits, sha);
   }
 
-  async listFiles(sha: string): Promise<Result<readonly string[], CheckoutError>> {
+  async filesMentioning(
+    sha: string,
+    names: readonly string[],
+  ): Promise<Result<readonly string[], CheckoutError>> {
     const files = this.files(sha);
-    return files.ok ? ok(Object.keys(files.value).sort()) : files;
+    if (!files.ok) return files;
+    return ok(
+      Object.entries(files.value)
+        .filter(([, content]) => names.some((name) => content.includes(name)))
+        .map(([path]) => path)
+        .sort(),
+    );
   }
 
   async readFiles(
@@ -57,17 +67,41 @@ export class FakeLocalCheckout implements LocalCheckout {
   }
 }
 
-/** Finds one checkout, or none, whatever the repository. */
+/** Finds what it's given, whatever the repository, and records what it was asked. */
 export class FakeLocalCheckouts implements LocalCheckouts {
-  private readonly found: Awaited<ReturnType<LocalCheckouts["find"]>>;
+  readonly searchFolder: string | null;
+  /** "pointedAt", "at <folder>" and "search", in the order asked. */
+  readonly asked: string[] = [];
+
+  private readonly pointed: FoundCheckout | null;
+  private readonly clones: readonly FoundCheckout[];
 
   constructor(
-    found: { readonly checkout: LocalCheckout; readonly namesRepo: boolean } | null = null,
+    pointed: FoundCheckout | null = null,
+    options: {
+      /** The clones on the machine, which `at` finds by folder and the search answers in order. */
+      readonly clones?: readonly FoundCheckout[];
+      /** Null turns the search off. */
+      readonly searchFolder?: string | null;
+    } = {},
   ) {
-    this.found = found;
+    this.pointed = pointed;
+    this.clones = options.clones ?? [];
+    this.searchFolder = options.searchFolder === undefined ? "/home/lee" : options.searchFolder;
   }
 
-  async find(_repo: RepoRef) {
-    return this.found;
+  async pointedAt(_repo: RepoRef): Promise<FoundCheckout | null> {
+    this.asked.push("pointedAt");
+    return this.pointed;
+  }
+
+  async at(dir: string, _repo: RepoRef): Promise<FoundCheckout | null> {
+    this.asked.push(`at ${dir}`);
+    return this.clones.find((clone) => clone.dir === dir) ?? null;
+  }
+
+  async search(_repo: RepoRef): Promise<readonly FoundCheckout[]> {
+    this.asked.push("search");
+    return this.searchFolder === null ? [] : this.clones;
   }
 }

@@ -209,6 +209,11 @@ export const Analysis = z.preprocess(
       /** Paths whose first lines say a tool wrote them. Grouped and faded, never hidden. */
       generated: z.array(z.string()).readonly(),
       checkout: CheckoutStatus,
+      /**
+       * The folder the checkout is in: the one read, or the one that lacks the PR's head commit. Null
+       * when none was found, and on analyses stored before it was kept.
+       */
+      checkoutDir: z.string().nullable().default(null),
       /** Read from the checkout: uses outside the PR of the definitions it changes. */
       unchangedCallers: z.array(UnchangedCallers).readonly(),
       intent: Intent.nullable(),

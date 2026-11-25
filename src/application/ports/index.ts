@@ -31,9 +31,11 @@ export {
   type AdvicePoint,
   type GuardrailAdvisor,
 } from "./guardrail-advisor.ts";
+export type { KnownCheckout, KnownCheckouts } from "./known-checkouts.ts";
 export {
   type CheckoutError,
   type CheckoutFile,
+  type FoundCheckout,
   type LocalCheckout,
   type LocalCheckouts,
   MAX_CHECKOUT_FILE_BYTES,

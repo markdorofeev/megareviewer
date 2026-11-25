@@ -105,6 +105,7 @@ const STATUS: StatusResponse = {
   hosts: { github: user("Mina Ito"), bitbucket: user("mina-ito") },
   jira: { configured: true },
   model: MODEL,
+  cloneSearchFolder: "/home/mina",
 };
 const withHosts = (
   hosts: Partial<StatusResponse["hosts"]>,

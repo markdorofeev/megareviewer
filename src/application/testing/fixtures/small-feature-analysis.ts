@@ -239,6 +239,7 @@ export const smallFeatureAnalysis: Analysis = {
   fileLinks: [{ from: "src/routes/orders.ts", to: "src/services/receipts.ts" }],
   generated: [],
   checkout: "none",
+  checkoutDir: null,
   unchangedCallers: [],
   intent: smallFeatureIntent,
   findings: [

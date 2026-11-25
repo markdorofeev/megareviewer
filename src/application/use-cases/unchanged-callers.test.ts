@@ -32,13 +32,18 @@ describe("lookUpCheckout", () => {
   it("reads a checkout with the head commit, whatever its remotes", async () => {
     const checkout = new FakeLocalCheckout({ [SHA]: {} });
     expect(
-      await lookUpCheckout(new FakeLocalCheckouts({ checkout, namesRepo: false }), repo, SHA),
-    ).toEqual({ status: "read", at: { checkout, sha: SHA } });
+      await lookUpCheckout(
+        new FakeLocalCheckouts({ checkout, dir: "/src/shop", namesRepo: false }),
+        repo,
+        SHA,
+      ),
+    ).toEqual({ status: "read", dir: "/src/shop", at: { checkout, sha: SHA } });
   });
 
   it("finds none without a checkout", async () => {
     expect(await lookUpCheckout(new FakeLocalCheckouts(), repo, SHA)).toEqual({
       status: "none",
+      dir: null,
       at: null,
     });
   });
@@ -61,7 +66,9 @@ describe("readUnchangedCallers", () => {
   });
 
   it("counts one file too large to read", async () => {
-    const checkout = new FakeLocalCheckout({ [SHA]: { "src/b.ts": "x".repeat(1024 * 1024 + 1) } });
+    const checkout = new FakeLocalCheckout({
+      [SHA]: { "src/b.ts": `save ${"x".repeat(1024 * 1024)}` },
+    });
     expect((await read(checkout)).warnings).toEqual([
       "1 file in the local checkout is over 1 MB, so callers in it aren't shown.",
     ]);

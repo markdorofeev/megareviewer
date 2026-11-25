@@ -18,7 +18,9 @@ import {
   describeAnalysisStoreContract,
   describeFileCacheContract,
   describeGitHostContract,
+  describeKnownCheckoutsContract,
   describeLocalCheckoutContract,
+  describeLocalCheckoutsContract,
   describePreferenceStoreContract,
   describeReviewHistoryContract,
   describeTicketSourceContract,
@@ -26,6 +28,7 @@ import {
   FakeCodeParser,
   FakeGitHost,
   FakeLocalCheckout,
+  FakeLocalCheckouts,
   FakeModelCatalog,
   FakePreferenceSuggester,
   FakeReviewHistory,
@@ -34,6 +37,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   RecordingLogger,
   smallFeature,
@@ -131,6 +135,29 @@ describeLocalCheckoutContract("fake", async () => {
   const sha = "c".repeat(40);
   return { checkout: new FakeLocalCheckout({ [sha]: CHECKOUT_CONTRACT_FILES }), sha };
 });
+
+describeLocalCheckoutsContract("fake", async () => {
+  const sha = "c".repeat(40);
+  const checkout = new FakeLocalCheckout({ [sha]: {} });
+  const clone = { checkout, dir: "/home/lee/code/shop", namesRepo: true };
+  const namesake = {
+    checkout: new FakeLocalCheckout({}),
+    dir: "/home/lee/old/shop",
+    namesRepo: false,
+  };
+  return {
+    checkouts: new FakeLocalCheckouts(
+      { checkout, dir: "/src/shop", namesRepo: true },
+      { clones: [clone, namesake] },
+    ),
+    pointedAt: "/src/shop",
+    clone: clone.dir,
+    namesake: namesake.dir,
+    sha,
+  };
+});
+
+describeKnownCheckoutsContract("in-memory", (clock) => new InMemoryKnownCheckouts(clock));
 
 describeAnalysisModelContract("fake", () => new FakeAnalysisModel());
 

@@ -101,7 +101,7 @@ const newAnalysis = (
   deps: AppDeps,
   key: AnalysisKey,
   pullRequest: PullRequest,
-  checkout: CheckoutStatus,
+  checkout: { readonly status: CheckoutStatus; readonly dir: string | null },
   createdAt: string,
 ): Analysis => ({
   id: analysisId(key),
@@ -127,7 +127,8 @@ const newAnalysis = (
   callSites: [],
   fileLinks: [],
   generated: [],
-  checkout,
+  checkout: checkout.status,
+  checkoutDir: checkout.dir,
   unchangedCallers: [],
   intent: null,
   findings: [],
@@ -192,7 +193,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
       deps,
       key,
       pullRequest,
-      checkout.status,
+      checkout,
       existing?.createdAt ?? deps.clock.now(),
     );
     runCode(host, analysis, pullRequest, checkout.at);

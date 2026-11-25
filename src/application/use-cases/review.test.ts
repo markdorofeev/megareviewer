@@ -757,6 +757,7 @@ describe("getStatus", () => {
       },
       jira: { configured: true },
       model: { options: [fakeModelOption()], defaultId: fakeModelOption().id },
+      cloneSearchFolder: "/home/lee",
     });
   });
 

@@ -1,6 +1,7 @@
 import type {
   CheckoutError,
   CheckoutFile,
+  FoundCheckout,
   LocalCheckout,
   LocalCheckouts,
 } from "../../application/ports/index.ts";
@@ -18,8 +19,8 @@ const failed = (message: string): CheckoutError => ({ kind: "failed", message })
 const decoder = new TextDecoder("utf-8");
 
 /**
- * A LocalCheckout on the `git` command: `cat-file -e` for commits, `ls-tree` for files and one
- * `cat-file --batch` for many files. Nothing it runs fetches, checks out or writes.
+ * A LocalCheckout on the `git` command: `cat-file -e` for commits, `grep` for the files that mention
+ * names and one `cat-file --batch` for many files. Nothing it runs fetches, checks out or writes.
  */
 export const createGitCheckout = (options: {
   readonly dir: string;
@@ -42,11 +43,40 @@ export const createGitCheckout = (options: {
   return {
     hasCommit,
 
-    listFiles: (sha) =>
+    filesMentioning: (sha, names) =>
       atCommit(sha, async () => {
-        const listed = await run(dir, ["ls-tree", "-r", "-z", "--name-only", sha]);
-        if (listed.code !== 0) return err(failed(`git ls-tree failed: ${listed.stderr}`));
-        const paths = decoder.decode(listed.stdout).split("\0").filter(Boolean);
+        // git grep reads an empty pattern as one that matches everything.
+        const patterns = names.filter((name) => name !== "" && !name.includes("\n"));
+        if (patterns.length === 0) return ok([]);
+        const found = await run(
+          dir,
+          [
+            "grep",
+            "--files-with-matches",
+            "--null",
+            "--fixed-strings",
+            // Files an attribute or a NUL makes binary are searched too, whatever git's config says.
+            "--text",
+            "--no-color",
+            "--no-recurse-submodules",
+            "--full-name",
+            // The names come on stdin: there can be more than a command line holds.
+            "-f",
+            "-",
+            sha,
+            "--",
+          ],
+          patterns.map((name) => `${name}\n`).join(""),
+        );
+        // 1: no file matched. A file git can't read, as in a partial clone, is only on stderr.
+        if ((found.code !== 0 && found.code !== 1) || /^(?:error|fatal):/m.test(found.stderr)) {
+          return err(failed(`git grep failed: ${found.stderr}`));
+        }
+        const paths = decoder
+          .decode(found.stdout)
+          .split("\0")
+          .filter(Boolean)
+          .map((name) => name.slice(sha.length + 1));
         return ok(paths.sort());
       }),
 
@@ -146,21 +176,33 @@ export const inspectCheckout = async (
   };
 };
 
+const foundIn = async (
+  dir: string,
+  repo: RepoRef,
+  run: RunGit | undefined,
+): Promise<FoundCheckout | null> => {
+  const info = await inspectCheckout(dir, run);
+  return info === null
+    ? null
+    : {
+        checkout: createGitCheckout({ dir: info.root, run }),
+        dir: info.root,
+        namesRepo: info.repos.some((known) => sameRepo(known, repo)),
+      };
+};
+
 /**
- * The checkout at `dir`, for any repository: a commit pins a file's content, so a checkout that has
- * the PR's head commit can be read whatever its remotes say, such as a fork's, or one cloned
- * before its owner was renamed. The remotes say whether a missing commit is worth a `git fetch`.
+ * Checkouts for any repository: a commit pins a file's content, so a checkout that has the PR's
+ * head commit can be read whatever its remotes say, such as a fork's, or one cloned before its owner
+ * was renamed. The remotes say whether a missing commit is worth a `git fetch`.
  */
 export const createGitCheckouts = (options: {
+  /** Where megareviewer was pointed at. */
   readonly dir: string;
   readonly run?: RunGit;
 }): LocalCheckouts => ({
-  async find(repo) {
-    const info = await inspectCheckout(options.dir, options.run);
-    if (info === null) return null;
-    return {
-      checkout: createGitCheckout({ dir: info.root, run: options.run }),
-      namesRepo: info.repos.some((known) => sameRepo(known, repo)),
-    };
-  },
+  searchFolder: null,
+  pointedAt: (repo) => foundIn(options.dir, repo, options.run),
+  at: (dir, repo) => foundIn(dir, repo, options.run),
+  search: async () => [],
 });

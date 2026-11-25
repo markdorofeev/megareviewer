@@ -25,8 +25,14 @@ export type CheckoutFile =
  */
 export interface LocalCheckout {
   hasCommit(sha: string): Promise<boolean>;
-  /** Every file's path at the commit, sorted. */
-  listFiles(sha: string): Promise<Result<readonly string[], CheckoutError>>;
+  /**
+   * The paths of the files at the commit whose text holds any of the names, sorted. It may answer
+   * files that hold a name only as part of a longer one, and never leaves out a file that holds one.
+   */
+  filesMentioning(
+    sha: string,
+    names: readonly string[],
+  ): Promise<Result<readonly string[], CheckoutError>>;
   /** Files at the commit, in the order of `paths`. */
   readFiles(
     sha: string,
@@ -34,13 +40,26 @@ export interface LocalCheckout {
   ): Promise<Result<readonly CheckoutFile[], CheckoutError>>;
 }
 
-/** Finds the local checkout a pull request's repository can be read from. */
+/** A checkout found on this machine. */
+export interface FoundCheckout {
+  readonly checkout: LocalCheckout;
+  /** The folder it's in, in full. */
+  readonly dir: string;
+  /** Whether one of its remotes names the repository asked about. */
+  readonly namesRepo: boolean;
+}
+
+/** Finds the local checkouts a pull request's repository can be read from. */
 export interface LocalCheckouts {
+  /** The folder searched for clones, in full, or null when the search is off. */
+  readonly searchFolder: string | null;
+  /** The checkout megareviewer was pointed at, whatever its repository; null when there's none. */
+  pointedAt(repo: RepoRef): Promise<FoundCheckout | null>;
+  /** The checkout in a folder read before; null when it's gone. */
+  at(dir: string, repo: RepoRef): Promise<FoundCheckout | null>;
   /**
-   * The checkout megareviewer was pointed at, and whether one of its remotes names `repo`; null
-   * when there's none.
+   * The clones on this machine that could be the repository's, those whose remotes name it first.
+   * None when the search is off.
    */
-  find(
-    repo: RepoRef,
-  ): Promise<{ readonly checkout: LocalCheckout; readonly namesRepo: boolean } | null>;
+  search(repo: RepoRef): Promise<readonly FoundCheckout[]>;
 }
