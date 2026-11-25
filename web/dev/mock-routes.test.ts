@@ -242,8 +242,8 @@ describe("mock API", () => {
       ),
     ).toEqual([
       ["f1", "raised"],
+      ["f2", "raised"],
       ["f3", "left-out"],
-      [`r:${fixtureHunks.dependency}`, "raised"],
     ]);
   });
 

@@ -19,7 +19,6 @@ export {
   type HunkItem,
   type LineComment,
   type LinePlace,
-  LineRow,
   PINNED,
   type PointLine,
 } from "./diff/hunk-card.tsx";

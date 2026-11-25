@@ -15,7 +15,6 @@ import {
   modelFamily,
   modelRunnable,
   type Point,
-  type PointKind,
   runStages,
 } from "../../../../src/domain/review/index.ts";
 
@@ -25,24 +24,20 @@ export type ClaudeRun = Pick<
   "status" | "stages" | "modelError" | "modelOption" | "usage"
 >;
 
-import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
+import { FINDING_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import { ModelMenu } from "./ModelMenu.tsx";
 import type { ModelChoice } from "./model-choice.ts";
 
-const KIND_WORDS: Readonly<Record<PointKind, [string, string]>> = {
-  finding: ["finding", "findings"],
-  risk: ["risk", "risks"],
-  decision: ["decision", "decisions"],
-};
+/** What a chip has the stepper walk: Claude's findings, or the PR's threads. */
+export type Narrowing = "finding" | "thread";
 
-/** What the stepper walks when a chip narrows it: a kind of Claude's points, or the PR's threads. */
-export type Narrowing = PointKind | "thread";
+const FINDING_WORDS = ["finding", "findings"] as const;
 
 /**
- * A count, a toggle that narrows the stepper: to a kind of point, or to the threads. Landing, it
+ * A count, a toggle for what the stepper walks: the findings, or the threads. Landing, it
  * rises in at its place among the chips, its count rolling up from zero (globals.css); the number
  * is in the text for screen readers, and drawn for the eye. Below 1280px the word gives way to the
  * glyph and count, leaving the stepper room for its title.
@@ -67,7 +62,7 @@ const Chip = ({
   readonly label?: string;
 }) => {
   const [one, many] = words;
-  const Icon = kind === "thread" ? MessageSquareIcon : POINT_ICON[kind];
+  const Icon = kind === "thread" ? MessageSquareIcon : FINDING_STATUS.icon;
   return (
     <button
       type="button"
@@ -83,7 +78,7 @@ const Chip = ({
         "flex min-h-6 shrink-0 items-center gap-1.5 rounded-full border px-2 text-caption font-medium aria-pressed:border-current aria-pressed:ring-1 aria-pressed:ring-current",
         kind === "thread"
           ? "border-border bg-background text-foreground"
-          : POINT_STATUS[kind].className,
+          : FINDING_STATUS.className,
       )}
     >
       <Icon aria-hidden="true" className="size-3.5" />
@@ -206,8 +201,8 @@ export interface Reanalyze {
 }
 
 /**
- * The AI review in the bar. First what it found, a chip per kind of point with its count, which
- * narrows the stepper that follows to its kind, and one for the PR's threads; then the stepper,
+ * The AI review in the bar. First what it found, a chip with the findings' count, and one for the
+ * PR's threads, each a toggle for what the stepper that follows walks; then the stepper,
  * through the points or the threads; then, after a divider, the AI review's split button: Request
  * AI review before a run, with a line of what it would do; Reviewing while it runs; Re-run after
  * it; Try again after a run that didn't finish; Re-analyze when the PR has new commits.
@@ -270,16 +265,13 @@ export const ClaudeElement = ({
   const runnable = modelRunnable(analysis);
   const failed = analysis.modelError;
 
-  const counts = (["finding", "risk", "decision"] as const)
-    .map((kind) => [kind, points.filter((point) => point.kind === kind).length] as const)
-    .filter(([, count]) => count > 0);
   const receipt = !running && points.length > 0;
   // What follows the chips lands after the last of them.
-  const chips = receipt ? counts.length + (threads === null ? 0 : 1) : 0;
+  const chips = receipt ? 1 + (threads === null ? 0 : 1) : 0;
   const after = (at: number) =>
     receipt ? { "data-land": "rise", style: cssVars({ "--landing-i": chips + at }) } : {};
 
-  // The run's passes: four, or five when it asked for the tour.
+  // The run's passes: two, or three when it asked for the tour.
   const passes = runStages(analysis);
   const done = passes.filter((stage) => analysis.stages[stage] === "done").length;
   const split = running ? (
@@ -359,8 +351,7 @@ export const ClaudeElement = ({
       <span className="font-semibold text-foreground">No AI review yet</span>
       {filesChanged !== null && filesChanged > 0 && (
         <span className="truncate max-xl:hidden">
-          Find bugs, risks and decisions across {filesChanged}{" "}
-          {filesChanged === 1 ? "file" : "files"}
+          Find bugs across {filesChanged} {filesChanged === 1 ? "file" : "files"}
         </span>
       )}
     </span>
@@ -389,24 +380,21 @@ export const ClaudeElement = ({
 
   const left = receipt ? (
     <span data-slot="claude-receipt" className="flex min-w-0 items-center gap-1.5">
-      {counts.map(([kind, count], at) => (
-        <Chip
-          key={kind}
-          kind={kind}
-          count={count}
-          words={KIND_WORDS[kind]}
-          at={at}
-          pressed={narrowed === kind}
-          onPressed={(pressed) => onNarrow(pressed ? kind : null)}
-        />
-      ))}
+      <Chip
+        kind="finding"
+        count={points.length}
+        words={FINDING_WORDS}
+        at={0}
+        pressed={narrowed === "finding"}
+        onPressed={(pressed) => onNarrow(pressed ? "finding" : null)}
+      />
       {threads !== null && (
         <Chip
           kind="thread"
           count={threads.count}
           words={threads.words}
           label={threads.label}
-          at={counts.length}
+          at={1}
           pressed={narrowed === "thread"}
           onPressed={(pressed) => onNarrow(pressed ? "thread" : null)}
         />

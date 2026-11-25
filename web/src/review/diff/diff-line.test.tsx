@@ -80,11 +80,11 @@ describe("a point's mark", () => {
 
   it("is on the number beside the code, and no other cell", () => {
     const { container } = render(
-      <DiffLine line={line({ kind: "context", oldNo: 6, newNo: 7 })} pointKind="risk" />,
+      <DiffLine line={line({ kind: "context", oldNo: 6, newNo: 7 })} pointKind="step" />,
     );
     const [old, current] = cells(container);
     expect(marked(container)).toEqual([current]);
-    expect(current?.dataset.pointMark).toBe("risk");
+    expect(current?.dataset.pointMark).toBe("step");
     expect(old?.dataset.pointMark).toBeUndefined();
   });
 
@@ -97,11 +97,6 @@ describe("a point's mark", () => {
       />,
     );
     expect(marked(container).map((cell) => cell.textContent)).toEqual(["6"]);
-  });
-
-  it("isn't on a decision's lines", () => {
-    const { container } = render(<DiffLine line={line()} pointKind="decision" />);
-    expect(marked(container)).toEqual([]);
   });
 
   it("leaves the edge bar to the focus and the open comment box", () => {

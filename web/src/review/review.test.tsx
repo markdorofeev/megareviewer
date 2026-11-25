@@ -81,7 +81,7 @@ describe("FileTree", () => {
       additions: 1,
       deletions: 1,
       threads: 2,
-      points: { finding: 2, risk: 1, decision: 3 },
+      findings: 2,
     },
     { path: "src/auth/session.ts", status: "deleted", additions: 0, deletions: 9 },
     { path: "src/http/backoff.ts", status: "added", additions: 7, deletions: 0 },
@@ -113,7 +113,7 @@ describe("FileTree", () => {
     expect(screen.getByText("4 files")).toBeTruthy();
   });
 
-  it("narrows to the files with findings or risks, counting them", () => {
+  it("narrows to the files with findings, counting them", () => {
     render(<FileTree files={files} activePath={null} onSelect={() => undefined} />);
     fireEvent.click(screen.getByRole("button", { name: "Findings 1" }));
     expect(screen.getByText("1 of 4 files")).toBeTruthy();
@@ -123,7 +123,7 @@ describe("FileTree", () => {
     fireEvent.click(screen.getByRole("button", { name: "All" }));
     expect(screen.getByText("4 files")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "auth" } });
-    fireEvent.click(screen.getByRole("button", { name: "Risks 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Findings 1" }));
     fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
     expect(screen.getByText("4 files")).toBeTruthy();
   });
@@ -132,13 +132,11 @@ describe("FileTree", () => {
     render(<FileTree files={files} activePath="src/http/retry.ts" onSelect={() => undefined} />);
     const modified = row("src/http/retry.ts");
     expect(modified.getAttribute("aria-label")).toBe(
-      "retry.ts, TypeScript, modified, 1 line added, 1 line removed, 2 open threads, 2 findings, 1 risk, in src/http",
+      "retry.ts, TypeScript, modified, 1 line added, 1 line removed, 2 open threads, 2 findings, in src/http",
     );
     expect(modified.getAttribute("aria-selected")).toBe("true");
     expect(modified.querySelector("[data-slot=file-stem]")?.className).toBe("");
-    expect(modified.querySelector("[data-kind=finding]")?.textContent).toBe("2");
-    expect(modified.querySelector("[data-kind=risk]")?.textContent).toBe("");
-    expect(modified.querySelector("[data-kind=decision]")).toBeNull();
+    expect(modified.querySelector("[data-slot=finding-count]")?.textContent).toBe("2");
 
     const added = row("src/http/backoff.ts");
     expect(added.querySelector("[data-slot=file-stem]")?.className).toContain("text-diff-add-fg");
@@ -231,14 +229,7 @@ describe("KeyHint", () => {
 
 describe("ReviewSubmitPanel", () => {
   it("offers only a comment on the author's own PR", () => {
-    render(
-      <ReviewSubmitPanel
-        pending={[]}
-        decided={[0, 1]}
-        canApprove={false}
-        onSubmit={() => undefined}
-      />,
-    );
+    render(<ReviewSubmitPanel pending={[]} canApprove={false} onSubmit={() => undefined} />);
     fireEvent.click(screen.getByRole("button", { name: /Publish/ }));
     expect(screen.getAllByText("Not on your own pull request.")).toHaveLength(2);
   });

@@ -1,28 +1,10 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Point, PointId, PointKind, PointState } from "../../../../src/domain/review/index.ts";
-import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
+import type { Point, PointId, PointState } from "../../../../src/domain/review/index.ts";
+import { FINDING_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { stepFrom, stepperPlace } from "./stepper.ts";
-
-const KIND_PLURALS: Readonly<Record<PointKind, string>> = {
-  finding: "findings",
-  risk: "risks",
-  decision: "decisions",
-};
-
-/** The icon's color, as its chip's text. */
-const KIND_TEXT: Readonly<Record<PointKind, string>> = {
-  finding: "text-review-changes",
-  risk: "text-risk-contract",
-  decision: "text-muted-foreground",
-};
-
-const KindIcon = ({ kind }: { readonly kind: PointKind }) => {
-  const Icon = POINT_ICON[kind];
-  return <Icon aria-hidden="true" className={cn("size-3.5 shrink-0", KIND_TEXT[kind])} />;
-};
 
 /**
  * Previous and Next round a set of steps, the position that opens the whole list, and after them
@@ -100,14 +82,13 @@ export const STEPPER_TITLE =
 
 /**
  * Previous and Next through Claude's points, round from the last to the first, with the position
- * that opens the whole list and the current point's kind and title, which goes back to its card.
+ * that opens the whole list and the current point's title, which goes back to its card.
  * Before the first step, the position is a count.
  */
 export const PointStepper = ({
   points,
   current,
   stateOf,
-  kind,
   onGo,
   onOpenList,
 }: {
@@ -115,18 +96,13 @@ export const PointStepper = ({
   /** The point last gone to, by the stepper, the list, a mention or Raise. */
   readonly current: PointId | null;
   readonly stateOf: (id: PointId) => PointState;
-  /** The kind a chip narrowed the steps to, or null for every point. */
-  readonly kind: PointKind | null;
   readonly onGo: (id: PointId) => void;
   readonly onOpenList: () => void;
 }) => {
-  const place = stepperPlace(points, kind, current);
+  const place = stepperPlace(points, current);
   const { steps, at } = place;
   const point = at === null ? undefined : steps[at];
-  const count =
-    kind === null || steps.length === 1
-      ? `${steps.length} ${steps.length === 1 ? "point" : "points"}`
-      : `${steps.length} ${KIND_PLURALS[kind]}`;
+  const { label, icon: Icon } = FINDING_STATUS;
   const dismissed = point !== undefined && stateOf(point.id) === "dismissed";
 
   return (
@@ -135,7 +111,7 @@ export const PointStepper = ({
       noun="point"
       total={steps.length}
       at={at}
-      count={count}
+      count={`${steps.length} ${steps.length === 1 ? "point" : "points"}`}
       onStep={(direction) => {
         const to = stepFrom(place, direction);
         if (to !== null) onGo(to);
@@ -146,12 +122,11 @@ export const PointStepper = ({
           <button
             type="button"
             data-slot="stepper-title"
-            data-kind={point.kind}
             className={STEPPER_TITLE}
-            aria-label={`Go to ${POINT_STATUS[point.kind].label.toLowerCase()}: ${point.title}`}
+            aria-label={`Go to ${label.toLowerCase()}: ${point.title}`}
             onClick={() => onGo(point.id)}
           >
-            <KindIcon kind={point.kind} />
+            <Icon aria-hidden="true" className="size-3.5 shrink-0 text-review-changes" />
             <span
               className={cn("min-w-0 truncate", dismissed && "text-muted-foreground line-through")}
             >
@@ -164,7 +139,7 @@ export const PointStepper = ({
       status={
         point === undefined || at === null
           ? ""
-          : `${POINT_STATUS[point.kind].label} ${at + 1} of ${steps.length}: ${point.title}${
+          : `${label} ${at + 1} of ${steps.length}: ${point.title}${
               dismissed ? " (dismissed)" : ""
             }`
       }

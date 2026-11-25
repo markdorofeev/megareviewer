@@ -251,7 +251,7 @@ export const TREE_FILES: readonly FileEntry[] = [
     status: "modified",
     additions: 4,
     deletions: 2,
-    points: { finding: 1, decision: 2 },
+    findings: 1,
   },
   { path: "src/http/client.ts", status: "modified", additions: 12, deletions: 3 },
   {
@@ -259,7 +259,7 @@ export const TREE_FILES: readonly FileEntry[] = [
     status: "modified",
     additions: 8,
     deletions: 8,
-    points: { risk: 1 },
+    findings: 2,
   },
   { path: "src/util/sleep.ts", status: "renamed", additions: 0, deletions: 0 },
   { path: "src/http/legacy-retry.ts", status: "deleted", additions: 0, deletions: 41 },
@@ -287,7 +287,7 @@ const java = (directory: string, status: FileEntry["status"], changes: readonly 
       status,
       additions,
       deletions,
-      ...(findings > 0 ? { points: { finding: findings } } : {}),
+      ...(findings > 0 ? { findings } : {}),
       ...(threads > 0 ? { threads } : {}),
     }),
   );
@@ -314,7 +314,7 @@ export const SUBSTRATEVM_FILES: readonly FileEntry[] = [
     status: "modified",
     additions: 60,
     deletions: 3,
-    points: { risk: 1 },
+    findings: 1,
     threads: 1,
   },
   ...java(`${CORE}thread/`, "modified", [
@@ -541,7 +541,7 @@ export const THREADS = {
 /** The hunk the points below rest on: the retry file's first. */
 const HUNK_ID = RETRY_FILE.hunks[0]?.id ?? HunkId.parse("h_0123456789abcdef");
 
-/** One of Claude's points of each kind, on the retry file's first hunk. */
+/** Two of Claude's points on the retry file's first hunk: a finding, and a mismatch none names. */
 export const POINTS: readonly Point[] = [
   {
     id: PointId.parse("f1"),
@@ -557,25 +557,12 @@ export const POINTS: readonly Point[] = [
     mismatch: null,
   },
   {
-    id: PointId.parse("r:h_0123456789abcdef"),
-    kind: "risk",
-    title: "Raises the default attempts from 3 to 5 for every caller.",
-    explanation: "",
+    id: PointId.parse("m1"),
+    kind: "finding",
+    title: "Raises the default attempts from 3 to 5 for every caller",
+    explanation: "Done, not asked for.",
     path: "src/http/retry.ts",
     lines: { hunkId: HUNK_ID, side: "new", startLine: 14, line: 14 },
-    hunkIds: [HUNK_ID],
-    severity: null,
-    suggestion: null,
-    mismatch: null,
-  },
-  {
-    id: PointId.parse("d1"),
-    kind: "decision",
-    title: "Why back off exponentially",
-    explanation:
-      "A flaky link gets more time to recover with each attempt, as the comment above the delay says.",
-    path: "src/http/retry.ts",
-    lines: { hunkId: HUNK_ID, side: "new", startLine: 22, line: 22 },
     hunkIds: [HUNK_ID],
     severity: null,
     suggestion: null,

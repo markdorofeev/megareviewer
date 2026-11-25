@@ -7,11 +7,11 @@ import {
   PreferenceId,
   pullRequestUrl,
 } from "../../../src/domain/review/index.ts";
-import { fixtureAnalysisView, fixtureHunks } from "./analysis.ts";
+import { fixtureAnalysisView } from "./analysis.ts";
 
 // The fixture PR after a run that read the reviewer's guidance: its first finding was raised by a
-// preference, its third is one a preference says not to flag, and the dependency's risk comes from
-// the repository's REVIEW.md.
+// preference, its second by the repository's REVIEW.md, and its third is one a preference says not
+// to flag.
 
 const { analysis } = fixtureAnalysisView;
 const ref = { ...analysis.key.ref, number: 904 };
@@ -40,6 +40,7 @@ export const fixtureGuidance: Guidance = {
 
 const MARKS: Readonly<Record<string, GuidanceMark>> = {
   f1: { ref: "p1", effect: "raised" },
+  f2: { ref: "g1", effect: "raised" },
   f3: { ref: "p2", effect: "left-out" },
 };
 
@@ -58,10 +59,5 @@ export const guidedAnalysisView: AnalysisView = {
       ...finding,
       guidance: MARKS[finding.id] ?? null,
     })),
-    risk: analysis.risk.map((risk) =>
-      risk.source === "model" && risk.hunkId === fixtureHunks.dependency
-        ? { ...risk, guidance: { ref: "g1", effect: "raised" as const } }
-        : risk,
-    ),
   },
 };

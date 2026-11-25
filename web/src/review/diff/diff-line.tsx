@@ -1,6 +1,5 @@
 import { BugIcon } from "lucide-react";
 import { Fragment, type MouseEvent, memo, type ReactNode } from "react";
-import type { PointKind } from "../../../../src/domain/review/index.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import type { CharRange } from "./intra-line.ts";
 import type { LineKind, ViewLine } from "./rows.ts";
@@ -132,13 +131,11 @@ export type LineLayout = "unified" | "split-old" | "split-new";
 // Spelled out because Tailwind only generates the classes it finds whole in the source. The mark
 // is a pseudo-element rather than the cell's background so the landing can draw it down the lines.
 /** What marks a line's number: one of Claude's points, or the tour's step the map was opened from. */
-export type LineMarkKind = PointKind | "step";
+export type LineMarkKind = "finding" | "step";
 
 const POINT_MARK: Readonly<Record<LineMarkKind, string>> = {
   finding:
     "isolate font-medium text-review-changes before:absolute before:inset-0 before:-z-1 before:bg-review-changes-bg before:shadow-[inset_-3px_0_0_var(--review-changes)]",
-  risk: "isolate font-medium text-risk-contract before:absolute before:inset-0 before:-z-1 before:bg-risk-contract-bg before:shadow-[inset_-3px_0_0_var(--risk-contract-solid)]",
-  decision: "",
   step: "isolate font-medium text-primary before:absolute before:inset-0 before:-z-1 before:bg-ai-soft before:shadow-[inset_-3px_0_0_var(--primary)]",
 };
 
@@ -154,8 +151,8 @@ export interface DiffLineProps {
   /** A line an open comment box is on, marked by a bar at its edge. */
   readonly marked?: boolean;
   /**
-   * A line one of Claude's points rests on: the number beside the code takes the kind's tint and
-   * color, with a rail on its code side. A decision's lines take none.
+   * A line one of Claude's points rests on: the number beside the code takes the mark's tint
+   * and color, with a rail on its code side.
    */
   readonly pointKind?: LineMarkKind | null;
   /**
@@ -184,8 +181,6 @@ export interface DiffLineProps {
   readonly marks?: readonly LineMark[];
   /** A finding's card is under this line: a bug in the new number's cell. */
   readonly flagged?: boolean;
-  /** After the code, e.g. a decision's chip; a new element each render re-renders the row. */
-  readonly end?: ReactNode;
 }
 
 export interface PointLanding {
@@ -213,7 +208,6 @@ export const DiffLine = memo(function DiffLine({
   cellRole = "gridcell",
   marks = NO_MARKS,
   flagged = false,
-  end,
 }: DiffLineProps) {
   const kind = KIND[line.kind];
   const number = line.newNo ?? line.oldNo;
@@ -224,9 +218,7 @@ export const DiffLine = memo(function DiffLine({
     <span
       role={cellRole}
       onClick={onGutterClick === undefined ? undefined : (event) => onGutterClick(line, event)}
-      data-point-mark={
-        pointKind !== null && pointKind !== "decision" && side === markSide ? pointKind : undefined
-      }
+      data-point-mark={pointKind !== null && side === markSide ? pointKind : undefined}
       className={cn(
         "tabular relative w-12 shrink-0 select-none text-right",
         GUTTER_SIZE[density],
@@ -372,7 +364,6 @@ export const DiffLine = memo(function DiffLine({
             {note}
           </span>
         ))}
-        {end}
       </span>
     </div>
   );

@@ -52,7 +52,7 @@ const COLOR_GROUPS: readonly { readonly title: string; readonly tokens: readonly
   },
   {
     title: "Risk",
-    tokens: ["contract", "logic", "mechanical"].flatMap((risk) =>
+    tokens: ["logic", "mechanical"].flatMap((risk) =>
       ["", "-bg", "-border", "-solid"].map((part) => `risk-${risk}${part}`),
     ),
   },
@@ -301,7 +301,7 @@ const LANDING_MOTION = [
   { name: "--landing-at-code", use: "When the code's points start" },
   { name: "--landing-step-code", use: "Between points in view" },
   { name: "--landing-bar", use: "A point's mark drawing down its lines' numbers" },
-  { name: "--landing-wash", use: "The kind's wash passing over the lines" },
+  { name: "--landing-wash", use: "The wash passing over the lines" },
   { name: "--landing-unfold", use: "A card unfolding under its lines" },
   { name: "--landing-total", use: "The landing, for one point in view" },
 ] as const;

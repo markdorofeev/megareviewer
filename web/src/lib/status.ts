@@ -1,8 +1,7 @@
-import { BugIcon, type LucideIcon, ScanEyeIcon, SignpostIcon } from "lucide-react";
+import { BugIcon, type LucideIcon } from "lucide-react";
 import type { FileStatus } from "../../../src/domain/diff/index.ts";
 import type {
   CheckState,
-  PointKind,
   PullRequestState,
   ReviewerVerdict,
   ReviewStatus,
@@ -19,31 +18,12 @@ export interface StatusStyle {
   readonly className: string;
 }
 
-/** A point's kind: its glyph and word go everywhere its tint does. */
-export const POINT_STATUS: Readonly<Record<PointKind, StatusStyle>> = {
-  finding: {
-    label: "Finding",
-    glyph: "⚠",
-    className: "text-review-changes bg-review-changes-bg border-review-changes/25",
-  },
-  risk: {
-    label: "Risk",
-    glyph: "▲",
-    className: "text-risk-contract bg-risk-contract-bg border-risk-contract-border",
-  },
-  // The quietest kind: a footnote, never a request, so it takes no hue.
-  decision: {
-    label: "Decision",
-    glyph: "◇",
-    className: "text-muted-foreground bg-muted border-border",
-  },
-};
-
-/** A point's kind as an icon, beside its word: a bug, a scan, a signpost. */
-export const POINT_ICON: Readonly<Record<PointKind, LucideIcon>> = {
-  finding: BugIcon,
-  risk: ScanEyeIcon,
-  decision: SignpostIcon,
+/** A finding: its icon and word go everywhere its tint does. */
+export const FINDING_STATUS: StatusStyle & { readonly icon: LucideIcon } = {
+  label: "Finding",
+  glyph: "⚠",
+  className: "text-review-changes bg-review-changes-bg border-review-changes/25",
+  icon: BugIcon,
 };
 
 /** The verdict a published review carries, and the marks the design system still shows. */
@@ -67,12 +47,10 @@ export const VERDICT_STATUS: Readonly<Record<ReviewMark, StatusStyle>> = {
   },
 };
 
-export const RISK_STATUS: Readonly<Record<RiskClass, StatusStyle>> = {
-  contract: {
-    label: "Contract",
-    glyph: "▲",
-    className: "text-risk-contract bg-risk-contract-bg border-risk-contract-border",
-  },
+/** The risk classes the page shows: contract only orders the flows. */
+export type ShownRisk = Exclude<RiskClass, "contract">;
+
+export const RISK_STATUS: Readonly<Record<ShownRisk, StatusStyle>> = {
   logic: {
     label: "Logic",
     glyph: "●",

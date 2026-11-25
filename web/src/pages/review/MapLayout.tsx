@@ -210,7 +210,7 @@ export const MapLayout = ({
   readonly analysis: Analysis;
   readonly files: readonly FileGroup[];
   readonly deps: HunkDeps;
-  /** Shown before the first file, e.g. decisions on no hunk. */
+  /** Shown before the first file, e.g. points on no hunk. */
   readonly before: ReactNode;
   /** Shown after the last file, e.g. threads on files without a card. */
   readonly after?: ReactNode;
@@ -225,15 +225,14 @@ export const MapLayout = ({
     const target = document.getElementById(scrollRequest.id);
     if (target === null) return;
     // A part's lines or collapsed row take the focus, so a, r and c act on what's shown.
-    // A part's place holds its card or its collapsed row; a file card or a decision is itself.
+    // A part's place holds its card or its collapsed row; a file card is itself.
     const focusable =
       (target.dataset.hunkId === undefined
         ? null
         : target.querySelector<HTMLElement>(
             "[data-slot=hunk-card], [data-slot=mechanical-toggle]",
           )) ?? target;
-    const decision = target.dataset.slot === "decision";
-    target.scrollIntoView({ block: decision ? "center" : "start" });
+    target.scrollIntoView({ block: "start" });
     focusable.focus({ preventScroll: true });
   }, [scrollRequest]);
 

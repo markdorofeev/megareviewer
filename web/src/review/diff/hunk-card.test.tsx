@@ -45,7 +45,7 @@ const card = (index: number, riskClass: RiskClass, reason = `${riskClass} reason
 };
 
 const first = card(0, "contract", "Changes the response shape.");
-const second = card(1, "logic");
+const second = card(1, "logic", "Adds a line.");
 const firstName = "src/routes/orders.ts, lines 12–14";
 const secondName = "src/routes/orders.ts, lines 40–42";
 
@@ -79,12 +79,14 @@ afterEach(() => {
 });
 
 describe("HunkCard", () => {
-  it("shows the file, the section heading, its counts and its risk in the header, and no status for a modified file", () => {
+  it("shows the file, the section heading, its counts and its risk in the header, but never contract", () => {
     renderWith(<Cards />);
     const header = screen.getByRole("region", { name: firstName }).querySelector("header");
     expect(header?.textContent).toBe(
-      "src/routes/orders.tsexport const ordersRouter = Router();+1 −1▲Contract: Changes the response shape.",
+      "src/routes/orders.tsexport const ordersRouter = Router();+1 −1",
     );
+    const other = screen.getByRole("region", { name: secondName }).querySelector("header");
+    expect(other?.textContent).toBe("src/routes/orders.ts+1 −0●Logic: Adds a line.");
   });
 
   it("shows old and new line numbers, a spoken kind and the code on each line", () => {

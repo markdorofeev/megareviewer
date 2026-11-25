@@ -20,16 +20,15 @@ import { ClaudeElement, type ClaudeRun, type Narrowing } from "../pages/review/C
 import { barButtons } from "../pages/review/header-buttons.ts";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
-import { narrowTo } from "../pages/review/stepper.ts";
 import { ThreadStepper, threadChip } from "../pages/review/ThreadStepper.tsx";
 import { type ThreadScope, threadScopeOf, threadSteps } from "../pages/review/thread-steps.ts";
 import { Button } from "../ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip.tsx";
 import { DESIGN_RUN, POINTS, PULL_REQUEST, THREADS, useDemoChoice } from "./fixtures.ts";
 
-/** The point card's points and a second finding, so a chip has more than one to walk. */
+/** The point card's points and a second finding, so the stepper has more than one to walk. */
 const MORE_POINTS: readonly Point[] = [
-  ...POINTS,
+  ...POINTS.slice(0, 1),
   {
     id: PointId.parse("f2"),
     kind: "finding",
@@ -42,6 +41,7 @@ const MORE_POINTS: readonly Point[] = [
     suggestion: null,
     mismatch: null,
   },
+  ...POINTS.slice(1),
 ];
 
 /** The PR's threads in the page's order: two open, one resolved, across two files. */
@@ -149,8 +149,7 @@ const BarDemo = ({
                   if (thread === null && first !== undefined) setThread(first.id);
                   return;
                 }
-                const to = narrowTo(points, kind, current);
-                if (to !== null) setCurrent(to);
+                if (kind !== null && current === null) setCurrent(points[0]?.id ?? null);
               }}
               onRun={() => {}}
               onRerun={() => {}}
@@ -162,7 +161,6 @@ const BarDemo = ({
                   points={points}
                   current={current}
                   stateOf={stateOf}
-                  kind={narrowed}
                   onGo={setCurrent}
                   onOpenList={() => {}}
                 />
@@ -295,21 +293,17 @@ export const ReviewBarStates = (): ReactNode => (
       hairline="running"
     />
     <BarDemo label="Before the first step: the count" />
-    <BarDemo label="Mid-list" start={PointId.parse("r:h_0123456789abcdef")} />
-    <BarDemo
-      label="Narrowed to findings by their chip"
-      narrowedAt="finding"
-      start={PointId.parse("f2")}
-    />
-    <BarDemo label="On a dismissed point" start={PointId.parse("d1")} dismissed={["d1"]} />
+    <BarDemo label="Mid-list" start={PointId.parse("f2")} />
+    <BarDemo label="The findings' chip pressed" narrowedAt="finding" start={PointId.parse("f2")} />
+    <BarDemo label="On a dismissed point" start={PointId.parse("f2")} dismissed={["f2"]} />
     <BarDemo label="One point" points={POINTS.slice(0, 1)} start={PointId.parse("f1")} />
     <BarDemo
       label="What's missing, and why"
       run={{
         ...RAN,
-        stages: { ...RAN.stages, risk: "failed", decisions: "skipped" },
+        stages: { ...RAN.stages, findings: "failed" },
         modelError: {
-          stage: "risk",
+          stage: "findings",
           code: "model-error",
           message: "Your Claude plan's usage limit is reached. It resets at 18:00.",
         },
