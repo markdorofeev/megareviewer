@@ -1,6 +1,7 @@
 import type { PassError } from "../../../application/ports/index.ts";
 import type { HarnessRead, ModelError } from "../../../domain/review/index.ts";
 import { err, ok, type Result } from "../../../domain/shared/index.ts";
+import { readerFailed, readTooMuch, roundsUsedUp } from "../shared/errors.ts";
 import { fromClaudeCodeRun, lockdownProblem, notLockedDown } from "./claude-code-errors.ts";
 import { type ClaudeCodeResult, parseClaudeCodeStream, parseInit } from "./claude-code-output.ts";
 import { parseReads, readOutside } from "./claude-code-reads.ts";
@@ -26,8 +27,6 @@ export interface StructuredAnswer {
   readonly reads: readonly HarnessRead[];
 }
 
-const readerFailed = (message: string): ModelError => ({ kind: "reader", message });
-
 /** A failure that's the reading's, which the pass can be run again without. */
 const readingFailure = (
   failure: ModelError,
@@ -35,10 +34,10 @@ const readingFailure = (
   reads: readonly HarnessRead[],
 ): ModelError | null => {
   if (failure.kind === "invalid-output" && subtype === "error_max_turns") {
-    return readerFailed("It used up its rounds of reading before it answered.");
+    return roundsUsedUp();
   }
   if (failure.kind === "too-large" && reads.length > 0) {
-    return readerFailed("What it read didn't fit in the model's context window.");
+    return readTooMuch();
   }
   return null;
 };
