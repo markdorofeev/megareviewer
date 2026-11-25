@@ -1,6 +1,6 @@
 # Stage 68: A type on every finding
 
-**Status:** Not started
+**Status:** In progress (branch claude/risk-findings-severity-type-b3302c)
 **Depends on:** 30, 66, 67
 **Owns:** `FindingType` and a finding's `type` in `src/domain/review/`; the unchanged callers in the model's input, in `AnalysisInput`, `model-input.ts` and `src/adapters/model/shared/render-input.ts`; the findings task in `src/adapters/model/shared/prompts/`; the order of points in `pointsOf`; a finding's type and severity on its card, its lines' marks, the bar's chips and the stepper's list, in `web/src/`, with their tokens and contrast pairs; the fake server's fixtures in `src/cli/dev/`; the findings' labels, cases and metrics in `evals/`; `PIPELINE_VERSION`; the feature's text in DESIGN.md, ARCHITECTURE.md, ENGINEERING.md and `evals/README.md`
 
