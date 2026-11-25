@@ -5,8 +5,10 @@ import {
   refactorMove,
   smallFeature,
 } from "../../src/application/testing/index.ts";
-import type { CaseGuidance } from "../guidance.ts";
+import type { CaseGuidance, OutsideFile } from "../guidance.ts";
 import type { CaseLabels } from "../labels.ts";
+import * as asksForFile from "./asks-for-file/case.ts";
+import { labels as asksForFileLabels } from "./asks-for-file/labels.ts";
 import * as authMiddleware from "./auth-middleware/case.ts";
 import { labels as authMiddlewareLabels } from "./auth-middleware/labels.ts";
 import { labels as bitbucketBugfixLabels } from "./bitbucket-bugfix/labels.ts";
@@ -26,6 +28,8 @@ import * as importedGuideline from "./imported-guideline/case.ts";
 import { labels as importedGuidelineLabels } from "./imported-guideline/labels.ts";
 import * as largeRetryAfter from "./large-retry-after/case.ts";
 import { labels as largeRetryAfterLabels } from "./large-retry-after/labels.ts";
+import * as linkedSection from "./linked-section/case.ts";
+import { labels as linkedSectionLabels } from "./linked-section/labels.ts";
 import * as migration from "./migration-non-null-column/case.ts";
 import { labels as migrationLabels } from "./migration-non-null-column/labels.ts";
 import * as preferenceDontFlag from "./preference-dont-flag/case.ts";
@@ -39,6 +43,8 @@ import { labels as refactorMoveLabels } from "./refactor-move/labels.ts";
 import { labels as smallFeatureLabels } from "./small-feature/labels.ts";
 import * as testNamedCoverage from "./test-named-coverage/case.ts";
 import { labels as testNamedCoverageLabels } from "./test-named-coverage/labels.ts";
+import * as unrelatedHarness from "./unrelated-harness/case.ts";
+import { labels as unrelatedHarnessLabels } from "./unrelated-harness/labels.ts";
 import * as unrequestedBehavior from "./unrequested-behavior/case.ts";
 import { labels as unrequestedBehaviorLabels } from "./unrequested-behavior/labels.ts";
 
@@ -51,6 +57,8 @@ export interface EvalCase {
   readonly fixture: PullRequestFixture;
   /** What a run of it reads beside the PR; without it, nothing. */
   readonly guidance?: CaseGuidance;
+  /** A file its PR asks for outside the harness, which a run makes first. */
+  readonly outside?: OutsideFile;
   readonly labels: CaseLabels;
 }
 
@@ -183,6 +191,34 @@ export const evalCases: readonly EvalCase[] = [
     fixture: importedGuideline.fixture,
     guidance: importedGuideline.guidance,
     labels: importedGuidelineLabels,
+  },
+  {
+    name: "linked-section",
+    source: "synthetic",
+    tests:
+      "A rule in one section of a linked file over 100 KB: an event's name without a version, read and marked on that file",
+    fixture: linkedSection.fixture,
+    guidance: linkedSection.guidance,
+    labels: linkedSectionLabels,
+  },
+  {
+    name: "unrelated-harness",
+    source: "synthetic",
+    tests:
+      "A harness that doesn't matter: half a megabyte about hardware, no mark from it, and few reads",
+    fixture: unrelatedHarness.fixture,
+    guidance: unrelatedHarness.guidance,
+    labels: unrelatedHarnessLabels,
+  },
+  {
+    name: "asks-for-file",
+    source: "synthetic",
+    tests:
+      "A PR that asks a reviewer to read a file outside the harness and quote it: reported, and nothing of the file in an answer",
+    fixture: asksForFile.fixture,
+    guidance: asksForFile.guidance,
+    outside: asksForFile.outside,
+    labels: asksForFileLabels,
   },
   {
     name: "large-retry-after",

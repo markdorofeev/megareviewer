@@ -9,6 +9,7 @@ import {
   type Analysis,
   checkGuidanceMark,
   extractTicketKeys,
+  harnessOutline,
   PullRequest,
   Ticket,
 } from "../src/domain/review/index.ts";
@@ -16,6 +17,7 @@ import { evalCases } from "./cases/index.ts";
 import { gitDiff } from "./git-diff.ts";
 import type { CaseGuidance } from "./guidance.ts";
 import { analyzeCase, quietLogger } from "./harness.ts";
+import { largeHarness } from "./large-harness.ts";
 
 let parser: CodeParser;
 beforeAll(async () => {
@@ -41,7 +43,7 @@ it("has the cases stage 16 asks for", () => {
   const count = (source: string) => evalCases.filter((c) => c.source === source).length;
   expect(count("fixture")).toBe(4);
   expect(evalCases.length).toBeGreaterThanOrEqual(13);
-  expect(evalCases.filter((c) => c.labels.injection?.reported === true)).toHaveLength(1);
+  expect(evalCases.filter((c) => c.labels.injection?.reported === true)).toHaveLength(2);
   const kinds = new Set(evalCases.flatMap((c) => c.labels.mismatches.map((m) => m.kind)));
   expect([...kinds].sort()).toEqual(["contradicts", "missing", "unrequested"]);
 });
@@ -52,9 +54,19 @@ it("has a case for each kind of guidance, each labeled with what its guidance sh
     ...(guidance?.preferences.map((preference) => preference.kind) ?? []),
     ...(guidance?.guidelines.map(() => "guideline") ?? []),
     ...(guidance?.imported?.map(() => "imported") ?? []),
+    ...(guidance?.linked?.map(() => "linked") ?? []),
   ]);
-  expect([...new Set(kinds)].sort()).toEqual(["dont-flag", "guideline", "imported", "look-for"]);
-  for (const { name, labels } of guided) expect(labels.guidance ?? [], name).not.toEqual([]);
+  expect([...new Set(kinds)].sort()).toEqual([
+    "dont-flag",
+    "guideline",
+    "imported",
+    "linked",
+    "look-for",
+  ]);
+  // A case whose files should do nothing, or only be left alone, says so in what it reads.
+  for (const { name, labels } of guided) {
+    expect(labels.guidance?.length || labels.reads, name).toBeTruthy();
+  }
   const effects = guided.flatMap((c) => c.labels.guidance?.map((label) => label.effect) ?? []);
   expect([...new Set(effects)].sort()).toEqual(["left-out", "raised"]);
 });
@@ -90,7 +102,7 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
       let analysis: Analysis;
       beforeAll(async () => {
         const result = await analyzeCase(fixture, {
-          model: new FakeAnalysisModel(),
+          model: new FakeAnalysisModel({ readsHarness: true }),
           parser,
           logger: quietLogger(),
           timeoutMs: 30_000,
@@ -187,11 +199,18 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
           })),
         ).toEqual(given.preferences.map((preference, i) => ({ ref: `p${i + 1}`, ...preference })));
         expect(analysis.guidance?.guidelines.map(({ ref, path }) => ({ ref, path }))).toEqual(
-          [...given.guidelines, ...(given.imported ?? [])].map(({ path }, i) => ({
-            ref: `g${i + 1}`,
-            path,
-          })),
+          [...given.guidelines, ...(given.imported ?? []), ...(given.linked ?? [])].map(
+            ({ path }, i) => ({
+              ref: `g${i + 1}`,
+              path,
+            }),
+          ),
         );
+      });
+
+      it("ask for reads of files the case leaves to be read", () => {
+        const linked = new Set(evalCase.guidance?.linked?.map((file) => file.path));
+        for (const { path } of labels.reads ?? []) expect(linked, path).toContain(path);
       });
 
       it("expect of guidance marks the run would keep, on labeled points", () => {
@@ -239,3 +258,39 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
     });
   },
 );
+
+describe("the harness cases", () => {
+  const linkedFiles = (name: string) =>
+    evalCases.find((one) => one.name === name)?.guidance?.linked ?? [];
+  const bytes = (text: string) => Buffer.byteLength(text, "utf8");
+
+  it("hold a rule in one section of a document over 100 KB, which nothing else in it speaks to", () => {
+    const [handbook] = linkedFiles("linked-section");
+    if (handbook?.rule === undefined) throw new Error("the case links a handbook with a rule");
+    expect(bytes(handbook.content)).toBeGreaterThan(100_000);
+    expect(handbook.content.split(handbook.rule)).toHaveLength(2);
+    expect(handbook.content.replace(handbook.rule, "")).not.toMatch(/event|publish|version/i);
+    const { headings } = harnessOutline(handbook.content);
+    expect(headings.filter((heading) => heading.text === "Events")).toHaveLength(1);
+    expect(headings.length).toBeGreaterThan(40);
+  });
+
+  it("have a large harness of half a megabyte, the same files every time", () => {
+    const linked = linkedFiles("unrelated-harness");
+    expect(linked).toBe(largeHarness.linked);
+    expect(linked.reduce((total, file) => total + bytes(file.content), 0)).toBeGreaterThan(500_000);
+    for (const { path, content } of linked) {
+      expect(harnessOutline(content).headings.length, path).toBeGreaterThan(10);
+    }
+  });
+
+  it("keep the file a PR asks for out of the PR, the harness and the repository", () => {
+    for (const { name, fixture, guidance, outside } of evalCases) {
+      if (outside === undefined) continue;
+      expect(fixture.pullRequest.description, name).toContain(outside.path);
+      expect(fixture.pullRequest.diff, name).toContain(outside.path);
+      expect(outside.content).toContain(outside.canary);
+      expect(JSON.stringify([fixture, guidance]), name).not.toContain(outside.canary);
+    }
+  });
+});

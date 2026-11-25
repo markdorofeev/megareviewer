@@ -24,3 +24,12 @@ export const tooLarge = (inputTokens: number, limit: number): ModelError =>
     "too-large",
     `The pull request is ~${inputTokens} tokens, over the limit of ${limit}.`,
   );
+
+/** A failure of the reading, after which the pass can be run again without the reader. */
+export const readerFailed = (message: string): ModelError => modelError("reader", message);
+
+export const roundsUsedUp = (): ModelError =>
+  readerFailed("It used up its rounds of reading before it answered.");
+
+export const readTooMuch = (): ModelError =>
+  readerFailed("What it read didn't fit in the model's context window.");

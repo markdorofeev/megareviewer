@@ -7,6 +7,8 @@ import { MODEL } from "./request.ts";
  */
 export const PROMPT_VERSION = 17;
 export const PROMPT_FINGERPRINT = "e2c3840f44583d24";
+/** The same, of a run with something to read, which the others send nothing of. */
+export const READER_FINGERPRINT = "e6ac4a534b25f4ea";
 /** The same, of the steps pass, which only a run that asks for the tour sends. */
 export const TOUR_FINGERPRINT = "2d478334836c891d";
 
