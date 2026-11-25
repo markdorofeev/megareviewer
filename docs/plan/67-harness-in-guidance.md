@@ -1,6 +1,6 @@
 # Stage 67: A run reads the linked files the author always loads
 
-**Status:** In progress (branch claude/harness-core-4b758f)
+**Status:** Done on `claude/harness-core-4b758f` (`e93704f`, `30929b7`, `ddf7d9c`). `pnpm check`: 205 test files, 3,948 passed, 6 skipped, no dependency violations.
 **Depends on:** 65
 **Owns:** `src/application/use-cases/guidance.ts`; `InputGuidance` in `src/application/ports/analysis-model.ts`; the guideline fields of `Guidance` in `src/domain/review/preference.ts`; the guidance block in `src/adapters/model/shared/render-input.ts` and its fixtures; the guidance cases of `evals/`; the usage line's words on guideline files in `web/src/pages/review/UsageFooter.tsx`
 
@@ -68,4 +68,4 @@ A run on any transport, Codex included, reads the root files that are switched o
 ### For 72
 
 - The intent task calls a broken guideline a mismatch, 3 runs of 3 on the new case; [the report](../../evals/reports/2026-11-25/imported-guideline.md) has it with the decisions' noise. The passes ran on p13; `main` has changed the prompts since this branch was cut, so a comparison has to run both sides again.
-- A file the code never loads through GitHub yet: the live run used the fake source over this repository's own files, since no host has one until 66. To be repeated once it does.
+- The live run used the fake source over this repository's own files, since no host has one until 66. It's to be repeated through a real one.
