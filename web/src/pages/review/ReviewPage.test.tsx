@@ -336,6 +336,7 @@ describe("ReviewPage states", () => {
     await userEvent.click(button);
     expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
       optionId: "claude-code/claude-sonnet-5-5",
+      tour: true,
     });
     // Following the analysis again loads it again, without leaving the page.
     await waitFor(() => expect(loads()).toBe(before + 1));
@@ -422,6 +423,7 @@ describe("ReviewPage states", () => {
     await userEvent.click(button);
     expect(first.requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
       optionId: "claude-code/claude-opus-5-5",
+      tour: true,
     });
     first.unmount();
 
@@ -1455,7 +1457,7 @@ describe("points", () => {
 
 const openOverview = async () => {
   await userEvent.click(screen.getByRole("button", { name: "Display" }));
-  await userEvent.click(await screen.findByRole("menuitemradio", { name: "Overview" }));
+  await userEvent.click(await screen.findByRole("menuitemradio", { name: "Understand" }));
   return overviewBox();
 };
 /** The diagram's file nodes by row, as their labels. */
@@ -1586,24 +1588,24 @@ describe("overview", () => {
 
 describe("the tour", () => {
   const withTour = () => {
-    window.localStorage.setItem("megareviewer:tour", "true");
     window.localStorage.setItem("megareviewer:review-layout", '"overview"');
   };
   const tourRegion = () => screen.getByRole("region", { name: "Tour steps" });
 
-  it("is the Understand layout only while the Tour switch is on", async () => {
+  it("is the Understand layout unless the Tour switch is off", async () => {
     const first = renderReview();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    expect(await screen.findByRole("menuitemradio", { name: "Understand" })).toBeTruthy();
+    expect(screen.queryByRole("menuitemradio", { name: "Overview" })).toBeNull();
+    first.unmount();
+
+    window.localStorage.setItem("megareviewer:tour", "false");
+    renderReview();
     await loaded();
     await userEvent.click(screen.getByRole("button", { name: "Display" }));
     expect(await screen.findByRole("menuitemradio", { name: "Overview" })).toBeTruthy();
     expect(screen.queryByRole("menuitemradio", { name: "Understand" })).toBeNull();
-    first.unmount();
-
-    window.localStorage.setItem("megareviewer:tour", "true");
-    renderReview();
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    expect(await screen.findByRole("menuitemradio", { name: "Understand" })).toBeTruthy();
   });
 
   it("shows the steps in order, their points, and what the tour didn't show", async () => {
@@ -1713,7 +1715,6 @@ describe("the tour", () => {
   });
 
   it("is opened from the brief's link, which shows only with a tour", async () => {
-    window.localStorage.setItem("megareviewer:tour", "true");
     renderReview({ view: tourAnalysisView });
     await loaded();
     expect(layoutIs("map")).toBe(true);
@@ -1759,14 +1760,16 @@ describe("layouts", () => {
     await userEvent.click(display);
     const map = await screen.findByRole("menuitemradio", { name: "Map" });
     expect(map.getAttribute("aria-checked")).toBe("true");
-    await userEvent.click(screen.getByRole("menuitemradio", { name: "Overview" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Understand" }));
     expect(overviewBox()).toBeTruthy();
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
     // The overview takes the focus to the file in view; closing doesn't hand it back to the menu.
     expect(document.activeElement).not.toBe(display);
     await userEvent.click(display);
     expect(
-      (await screen.findByRole("menuitemradio", { name: "Overview" })).getAttribute("aria-checked"),
+      (await screen.findByRole("menuitemradio", { name: "Understand" })).getAttribute(
+        "aria-checked",
+      ),
     ).toBe("true");
   });
 
@@ -2502,8 +2505,7 @@ describe("the bar's verdicts", () => {
     ).toContain("bg-ai-soft");
   });
 
-  it("asks for the tour with a run only while the Display menu's Tour switch is on", async () => {
-    window.localStorage.removeItem("megareviewer:tour");
+  it("asks for no tour with a run once the Display menu's Tour switch is off", async () => {
     const { requests } = renderReview({
       view: codeOnly,
       respond: (request) =>
@@ -2512,9 +2514,9 @@ describe("the bar's verdicts", () => {
     await loaded();
     await userEvent.click(screen.getByRole("button", { name: "Display" }));
     const tour = await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
-    expect(tour.getAttribute("aria-checked")).toBe("false");
+    expect(tour.getAttribute("aria-checked")).toBe("true");
     await userEvent.click(tour);
-    expect(window.localStorage.getItem("megareviewer:tour")).toBe("true");
+    expect(window.localStorage.getItem("megareviewer:tour")).toBe("false");
     await userEvent.keyboard("{Escape}");
 
     const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
@@ -2522,9 +2524,7 @@ describe("the bar's verdicts", () => {
     await userEvent.click(button);
     expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
       optionId: "claude-code/claude-sonnet-5-5",
-      tour: true,
     });
-    window.localStorage.removeItem("megareviewer:tour");
   });
 
   it("re-runs Claude after asking: takes the run off and runs the chosen model again", async () => {
@@ -2550,7 +2550,7 @@ describe("the bar's verdicts", () => {
     expect(await within(reviewBar()).findByRole("button", { name: /^Reviewing · / })).toBeTruthy();
     const model = requests.filter((request) => request.url === `${viewPath}/model`);
     expect(model.map((request) => request.method)).toEqual(["DELETE", "POST"]);
-    expect(model[1]?.body).toEqual({ optionId: "claude-code/claude-sonnet-5-5" });
+    expect(model[1]?.body).toEqual({ optionId: "claude-code/claude-sonnet-5-5", tour: true });
     expect(screen.queryByRole("status", { name: "Loading the analysis" })).toBeNull();
   });
 });

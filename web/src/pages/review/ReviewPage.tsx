@@ -369,8 +369,8 @@ const Review = ({
   const mechanical = mechanicalCount(trailing);
   // Decisions are behind a switch in the Display menu, off until the reviewer turns them on.
   const [decisionsOn, setDecisionsOn] = useStoredState("decisions", false, parseBoolean);
-  // A preview: off, the page and its requests are as they were before the tour.
-  const [tourOn, setTourOn] = useStoredState("tour", false, parseBoolean);
+  // On until the reviewer turns it off: off, a run asks for no tour and the layout is the overview.
+  const [tourOn, setTourOn] = useStoredState("tour", true, parseBoolean);
   const points = useMemo(
     () => pointsOf(analysis).filter((point) => decisionsOn || point.kind !== "decision"),
     [analysis, decisionsOn],

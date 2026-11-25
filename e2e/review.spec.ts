@@ -707,7 +707,7 @@ test.describe("without the model", () => {
 
     // A click on the route's directory in the overview opens its first file in the map.
     await page.getByRole("button", { name: "Display" }).click();
-    await page.getByRole("menuitemradio", { name: "Overview" }).click();
+    await page.getByRole("menuitemradio", { name: "Understand" }).click();
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
     await overview.getByRole("button", { name: /^src\/routes\/, / }).click();
     await expect(page.locator("[data-slot=review-page]")).toHaveAttribute("data-layout", "map");
@@ -747,7 +747,7 @@ for (const width of [720, 1024, 1440]) {
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeInViewport();
     await page.getByRole("button", { name: "Display" }).click();
-    await page.getByRole("menuitemradio", { name: "Overview" }).click();
+    await page.getByRole("menuitemradio", { name: "Understand" }).click();
     await expect(page.locator("[data-slot=overview-scroll]")).toBeVisible();
     expect(await overflows()).toBe(false);
   });
