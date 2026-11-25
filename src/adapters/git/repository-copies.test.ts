@@ -366,6 +366,22 @@ describe("a download", () => {
     });
   });
 
+  it("says how to get past a lock a killed download left", async () => {
+    const { url, sha, later } = shared();
+    const { copies, dir } = setup(() => ({ url, user }));
+    await copies.download(repo, sha);
+    const copy = join(dir, "github", "acme", "shop.git");
+    writeFileSync(join(copy, "shallow.lock"), "");
+    expect(await copies.download(repo, later)).toEqual({
+      ok: false,
+      error: {
+        kind: "failed",
+        message: `Another download into ${copy} is going, or was cut off. If none is, delete that folder.`,
+      },
+    });
+    expect(await copies.find(repo, sha)).not.toBeNull();
+  });
+
   it("never repeats the credentials, should git print them", async () => {
     const basic = Buffer.from(`${user.name}:${user.password}`).toString("base64");
     const { copies, logger } = setup(() => ({ url: "file:///nowhere", user }), {

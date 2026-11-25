@@ -75,9 +75,16 @@ const REFUSED_FIX: Readonly<Record<HostKind, string>> = {
 };
 
 /** Why git didn't download the commit, from what it printed. */
-const failureOf = (repo: RepoRef, sha: string, stderr: string): DownloadError => {
+const failureOf = (repo: RepoRef, sha: string, dir: string, stderr: string): DownloadError => {
   const host = HOST_NAMES[repo.host];
   const name = `${repo.owner}/${repo.repo}`;
+  if (/\.lock': File exists/.test(stderr)) {
+    // Another megareviewer's download, or one that was killed and couldn't take its lock away.
+    return {
+      kind: "failed",
+      message: `Another download into ${dir} is going, or was cut off. If none is, delete that folder.`,
+    };
+  }
   if (/not our ref|couldn't find remote ref/.test(stderr)) {
     return {
       kind: "missing-commit",
@@ -256,7 +263,7 @@ export const createRepositoryCopies = (options: {
         message: `Downloading ${repo.owner}/${repo.repo} took longer than 10 minutes, so it was stopped. Clone the repository and start megareviewer in the clone instead.`,
       });
     }
-    return err(failureOf(repo, sha, withoutCredentials(fetched.stderr, remote)));
+    return err(failureOf(repo, sha, dir, withoutCredentials(fetched.stderr, remote)));
   };
 
   /** Packs its downloads together, once there are more than a few. */
@@ -285,7 +292,11 @@ export const createRepositoryCopies = (options: {
       const result = await fetchCommit(repo, sha, dir, remote);
       const durationMs = Date.parse(clock.now()) - from;
       if (result.ok) logger.info("Downloaded a commit", { ...fields, durationMs });
-      else logger.warn("Couldn't download a commit", { ...fields, durationMs, ...result.error });
+      else {
+        const { kind, message: reason } = result.error;
+        const log = kind === "stopped" ? logger.info : logger.warn;
+        log.call(logger, "Couldn't download a commit", { ...fields, durationMs, kind, reason });
+      }
       return result;
     } catch (error) {
       // The folder can't be written: a full disk, or permissions.

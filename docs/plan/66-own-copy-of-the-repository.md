@@ -1,6 +1,6 @@
 # Stage 66: megareviewer's own copy of the repository
 
-**Status:** In progress (branch claude/full-repo-checkout-feasibility-c87b42)
+**Status:** Done (branch claude/full-repo-checkout-feasibility-c87b42, no PR)
 **Depends on:** 65
 **Owns:** a `RepositoryCopies` port with its fake and contract suite, the download in `src/adapters/git/`, the copies under megareviewer's home folder, callers added to a complete analysis in `src/application/use-cases/`, `Analysis.checkout`'s new states in `src/domain/review/analysis.ts` and `contracts/`, the `--no-download` flag, the startup summary and `doctor` in `src/cli/`, the checkout note and the callers' arrival in `web/src/pages/review/`, and "Local checkout" in ARCHITECTURE.md and DESIGN.md
 
@@ -113,10 +113,10 @@ No test touches the network: the remote is a bare repository in a temporary fold
 ## Definition of done
 
 - [x] The check above, recorded.
-- [ ] Contract change commit, with the stage 02 change log line.
-- [ ] Tasks above, with the tests. Coverage holds for `domain` and `application`.
-- [ ] On delphi-code #2, the real server with `--no-search`, started outside a clone, downloads the repository and shows the same six callers as stage 30's notes, on the analysis that opened without them. On oracle/graal #15134, the time from opening the PR to the callers, written into the notes.
-- [ ] ARCHITECTURE.md: "Local checkout" says where the copies are, how they're downloaded and locked down, when they're removed, and the alternatives rejected; "Analysis pipeline" says the key no longer names the checkout and how callers are added; "Later" item 1 says what's left. DESIGN.md says why megareviewer downloads without being asked and what turns it off. The CLI's usage text and the README say `--no-download`.
+- [x] Contract change commit, with the stage 02 change log line.
+- [x] Tasks above, with the tests. Coverage holds for `domain` and `application`.
+- [x] On delphi-code #2, the real server with `--no-search`, started outside a clone, downloads the repository and shows the same six callers as stage 30's notes, on the analysis that opened without them. On oracle/graal #15134, the time from opening the PR to the callers, written into the notes.
+- [x] ARCHITECTURE.md: "Local checkout" says where the copies are, how they're downloaded and locked down, when they're removed, and the alternatives rejected; "Analysis pipeline" says the key no longer names the checkout and how callers are added; "Later" item 1 says what's left. DESIGN.md says why megareviewer downloads without being asked and what turns it off. The CLI's usage text and the README say `--no-download`.
 
 ## Open issues
 
@@ -133,3 +133,28 @@ With git 2.50.1 (Apple's), no system or global config, HTTPS only, no credential
 2. **GitHub, a PR from a fork: works** from the base repository by its SHA, on 4 of 4: open (cli/cli #15111), merged and closed (sindresorhus/got #2458 and #2445), and closed with the fork deleted (got #2456).
 3. **Bitbucket, a private repository: works with the scoped API token,** not with the user megareviewer's API calls send. `x-bitbucket-api-token-auth:<token>`, the user's Bitbucket username and `x-token-auth` download; the email gets `could not read Username`. The token here is in `BITBUCKET_USERNAME` and `BITBUCKET_APP_PASSWORD`, an email and an `ATAT…` token, which the API takes, so what decides the user for git is whether the username is an email, not which variables it came from.
 4. **Bitbucket, a PR from a fork: works** from the destination repository for every PR megareviewer can open. Of 23 PRs from public forks in three public repositories, 17 have their head commit in the destination, by the API and by git, and all 17 downloaded, signed in, in 1.1 to 1.8 s. The other 6 answer 404 to the API's commit and diff in the destination, so megareviewer can't open them at all, and git says `not our ref`. The fork's name isn't needed. One fork that's gone (aws-s3-deploy #48) downloads from the destination and not from the fork.
+
+### Live checks, 2026-11-25
+
+The built server in a folder that isn't a clone, on an empty store, with `--no-search`:
+
+- **delphi-code #2:** the review was complete 3.5 s after the open answered, saying `downloading`, and 0.8 s later had stage 30's six callers under the same ID: `create_app` in `server.py:16`, `export_openapi.py:12` and `test_front_end_contract.py:73`, `clone_credentials` in `sources.py:169`, `FakeHost` in `e2e_server.py:19`, `CredentialsGuide` in `ServiceStep.tsx:29`. The download took 1.3 s and the copy is 324 KB. No file of megareviewer's home held the token, plain or encoded. Started again with `--no-download`, the analysis was served as it was; with the analysis removed from the store, the copy was read by the code's stages.
+- **oracle/graal #15134:** the review 6.6 s after the open answered (8.7 s after it was asked), the callers of 20 definitions 17.2 s after that, 25.9 s from asking. The download was 13.0 s of it, reading the callers 4.2. Stopped with SIGTERM with a half-made pack on disk, megareviewer exited in 16 ms and left no copy; the next start said `none`, and opening the PR downloaded again and added the callers to the same analysis.
+- **Bitbucket:** a public fork PR (tutorials/markdowndemo #157, 1.4 s) and a private repository's PR (3.1 s), with the API token.
+
+### Where the code differs from or adds to this doc
+
+- **Contract.** `RepositoryCopies` also has `find(repo, sha)`, the copy that has the commit already, which is the last place `lookUpCheckout` looks, and `downloadFolder`, null when downloads are off. A copy is read with downloads off. `DownloadError` also has `missing-commit`, `stopped` and `failed`. The contract suite checks the fake and git.
+- **The ref is made by the fetch,** with the refspec `+<sha>:refs/megareviewer/<sha>`, rather than by a second command, so objects never sit in a copy without it but after a kill.
+- **`git gc` runs after the download has answered,** so nobody waits for it.
+- **A found clone is waited for.** Opening a complete analysis without callers, when a clone has the commit, adds them before the open answers, since nothing would tell the page of them otherwise: a state between would have been a third. A model run started meanwhile isn't waited for.
+- **`checkoutError` is written too,** beside the four fields, and `checkoutDir` keeps the clone that lacks the commit while it downloads and after a download that failed, so the note can say to run `git fetch` there.
+- **`runModel` and `removeModelRun` read the analysis again once nothing else can write it.** They saved the snapshot they had read before their checks, which would have put an analysis back to before its callers. A run's end is announced with `following`, in one place, so it's an update while a download goes on.
+- **git 2.32 is the oldest used,** the first with `GIT_CONFIG_GLOBAL`; `doctor` says so.
+- **A killed download's lock** (`shallow.lock`, after a kill -9 or a power cut) makes every later download into that copy fail. The note says to delete the folder; a second megareviewer downloading into the same copy shows the same.
+- **Outside "Owns":** `src/domain/review/analysis.ts` and the ports, by the contract commit; `prep.ts` (the checkout's warnings apart from the rest), `run-pipeline.ts`, `create-use-cases.ts` and `deps.ts`; `useMarksHeld.ts`; ENGINEERING.md's terms (Copy); the fake server's `--download`, with `/__fake/hold-downloads` and `/__fake/release-downloads`, and its own pull request, receipts-downloaded (#107), since small-feature's own changes call nothing with the real parser.
+
+### Left
+
+- **A PR that has no callers to find still downloads.** Docs only, or only languages whose imports aren't read: `readUnchangedCallers` would answer none without reading a file. Skipping the download there needs prep's changed definitions before it, and is worth doing.
+- **Bitbucket fork PRs whose head isn't in the destination** (6 of 23 sampled) answer 404 to the API calls `getPullRequest` makes, so they can't be opened at all. The API and git have them in the fork.
