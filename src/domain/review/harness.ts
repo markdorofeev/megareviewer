@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GUIDELINE_PATHS, guidelineEnabled } from "./preference.ts";
+import { GUIDELINE_PATHS, guidelineEnabled, MAX_INLINE_BYTES } from "./preference.ts";
 import { Sha } from "./primitives.ts";
 
 /** Git's own hash of a file's content, which names it whatever commit or path it's at. */
@@ -66,8 +66,6 @@ export const MAX_HARNESS_FILES = 200;
 /** Paths one walk asks a source for without knowing whether they exist. */
 export const MAX_HARNESS_LOOKUPS = 400;
 export const MAX_HARNESS_FILE_BYTES = 1_048_576;
-/** What the files put in every pass's prompt can add up to. */
-export const MAX_INLINE_BYTES = 65_536;
 
 /** A path in prose can mean two files: the first of `paths` that's one is the one it links. */
 export interface HarnessLink {
@@ -328,7 +326,27 @@ export interface HarnessPlan {
   readonly inPrompt: readonly HarnessFile[];
   /** The other enabled files, nearest a root first. */
   readonly onRequest: readonly HarnessFile[];
+  /** Of `onRequest`, the roots and imports that don't fit the prompt. */
+  readonly passedOver: readonly HarnessFile[];
 }
+
+/** The files that fit in a prompt, in order: one that doesn't is passed over and the next tried. */
+export const fitInPrompt = <T extends { readonly bytes: number }>(
+  files: readonly T[],
+): { readonly fitting: T[]; readonly passedOver: T[] } => {
+  const fitting: T[] = [];
+  const passedOver: T[] = [];
+  let left = MAX_INLINE_BYTES;
+  for (const file of files) {
+    if (file.bytes > left) {
+      passedOver.push(file);
+      continue;
+    }
+    fitting.push(file);
+    left -= file.bytes;
+  }
+  return { fitting, passedOver };
+};
 
 /** How a run uses each enabled file. One that doesn't fit the prompt is passed over, never cut. */
 export const harnessPlan = (
@@ -340,16 +358,11 @@ export const harnessPlan = (
     GUIDELINE_PATHS,
     (file, kind) => (kind === "root" || kind === "import") && switchedOn(file, switches),
   );
-  const inPrompt: HarnessFile[] = [];
-  let left = MAX_INLINE_BYTES;
-  for (const file of always) {
-    if (file.bytes > left) continue;
-    inPrompt.push(file);
-    left -= file.bytes;
-  }
-  const given = new Set(inPrompt.map((file) => file.path));
+  const { fitting, passedOver } = fitInPrompt(always);
+  const given = new Set(fitting.map((file) => file.path));
   return {
-    inPrompt,
+    inPrompt: fitting,
     onRequest: enabledFiles(harness, switches).filter((file) => !given.has(file.path)),
+    passedOver,
   };
 };

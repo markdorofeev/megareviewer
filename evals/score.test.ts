@@ -374,7 +374,7 @@ describe("scoreCase", () => {
           scope: { kind: "global" },
         },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, bytes: 120 }],
       checks: [],
     };
     // Expected findings: 0 rate limit, 1 unbounded cache, 2 hard-coded TTL (all must-have), 3 stale.

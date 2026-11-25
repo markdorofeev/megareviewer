@@ -20,7 +20,7 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
-import type { AnalysisInput, CodeParser, PassOptions } from "../ports/index.ts";
+import type { AnalysisInput, CodeParser, HarnessSourceFile, PassOptions } from "../ports/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
@@ -1890,7 +1890,7 @@ describe("a model run's guidance", () => {
   const guidelines = withGuidelines({
     "REVIEW.md": "Migrations must be reversible.\n",
     "AGENTS.md": "Use pnpm.\n",
-    "CLAUDE.md": "x".repeat(40_000),
+    "CLAUDE.md": "x".repeat(70_000),
   });
   const added = smallFeatureFiles
     .flatMap((file) => file.hunks)
@@ -1926,7 +1926,14 @@ describe("a model run's guidance", () => {
         { ref: "p1", kind: "look-for", text: "Tenant isolation", scope: "global" },
         { ref: "p2", kind: "dont-flag", text: "Naming of test helpers", scope: "repo" },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Migrations must be reversible.\n" }],
+      guidelines: [
+        {
+          ref: "g1",
+          path: "REVIEW.md",
+          linkedFrom: null,
+          content: "Migrations must be reversible.\n",
+        },
+      ],
     };
     for (const pass of ["checkSize", "intent", "findings", "risk", "decisions"] as const) {
       expect(model.callsTo(pass).map((call) => call.input.guidance)).toEqual([guidance]);
@@ -1942,7 +1949,7 @@ describe("a model run's guidance", () => {
         },
         { ref: "p2", id: naming.id, kind: "dont-flag", text: naming.text, scope: naming.scope },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 31 }],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, bytes: 31 }],
       checks: [],
     });
     expect(analysis.warnings).toEqual([]);
@@ -1976,12 +1983,14 @@ describe("a model run's guidance", () => {
     const analysis = await analyze();
 
     expect(firstInput(model, "intent").guidance.guidelines).toEqual([
-      { ref: "g1", path: "AGENTS.md", content: "Use pnpm.\n" },
+      { ref: "g1", path: "AGENTS.md", linkedFrom: null, content: "Use pnpm.\n" },
     ]);
-    expect(analysis.guidance?.guidelines).toEqual([{ ref: "g1", path: "AGENTS.md", bytes: 10 }]);
+    expect(analysis.guidance?.guidelines).toEqual([
+      { ref: "g1", path: "AGENTS.md", linkedFrom: null, bytes: 10 },
+    ]);
   });
 
-  it("doesn't send a guideline file over 32 KB, and says so, once however often the run is tried", async () => {
+  it("doesn't send a guideline file that doesn't fit, and says so, once however often the run is tried", async () => {
     const model = new FakeAnalysisModel();
     model.script("intent", err(modelError("overloaded")));
     const { analyze, runModel, preferences } = setup({ fixtures: [guidelines], model });
@@ -1991,10 +2000,12 @@ describe("a model run's guidance", () => {
     const analysis = await runModel(failed.id);
 
     const warning =
-      "CLAUDE.md is 40 KB, over the 32 KB a guideline file can be, so the AI review ran without it";
+      "The AI review ran without some guideline files: CLAUDE.md is 69 KB and didn't fit in the 64 KB they can add up to";
     expect(failed.warnings).toEqual([warning]);
     expect(analysis.warnings).toEqual([warning]);
-    expect(analysis.guidance?.guidelines).toEqual([{ ref: "g1", path: "REVIEW.md", bytes: 31 }]);
+    expect(analysis.guidance?.guidelines).toEqual([
+      { ref: "g1", path: "REVIEW.md", linkedFrom: null, bytes: 31 },
+    ]);
     expect(model.callsTo("findings")[0]?.input.guidance.guidelines.map((one) => one.path)).toEqual([
       "REVIEW.md",
     ]);
@@ -2025,6 +2036,197 @@ describe("a model run's guidance", () => {
       guidelines: [],
     });
     expect(analysis.guidance?.guidelines).toEqual([]);
+  });
+
+  describe("with a harness", () => {
+    const source = (files: Readonly<Record<string, string | HarnessSourceFile>>) => {
+      const harnessSource = new FakeHarnessSource();
+      harnessSource.setFiles(repo, baseSha, files);
+      return harnessSource;
+    };
+    const given = (analysis: Analysis) =>
+      analysis.guidance?.guidelines.map(({ ref, path, linkedFrom }) => [ref, path, linkedFrom]);
+    const FILES = {
+      "REVIEW.md": "Migrations must be reversible.\n",
+      "CLAUDE.md": "See docs/plan.md.\n\n@docs/rules.md\n@docs/naming.md\n",
+      "docs/rules.md": "# Rules\n\n@style.md\n",
+      "docs/naming.md": "# Naming\n",
+      "docs/style.md": "# Style\n",
+      "docs/plan.md": "# Plan\n",
+    };
+
+    it("gives the enabled roots and then the files they import, with what imports each", async () => {
+      const { analyze, model, preferences, github } = setup({ harnessSource: source(FILES) });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+      const analysis = await analyze();
+
+      expect(firstInput(model, "intent").guidance.guidelines).toEqual([
+        { ref: "g1", path: "REVIEW.md", linkedFrom: null, content: FILES["REVIEW.md"] },
+        { ref: "g2", path: "CLAUDE.md", linkedFrom: null, content: FILES["CLAUDE.md"] },
+        {
+          ref: "g3",
+          path: "docs/rules.md",
+          linkedFrom: "CLAUDE.md",
+          content: FILES["docs/rules.md"],
+        },
+        {
+          ref: "g4",
+          path: "docs/naming.md",
+          linkedFrom: "CLAUDE.md",
+          content: FILES["docs/naming.md"],
+        },
+        {
+          ref: "g5",
+          path: "docs/style.md",
+          linkedFrom: "docs/rules.md",
+          content: FILES["docs/style.md"],
+        },
+      ]);
+      expect(analysis.guidance?.guidelines[2]).toEqual({
+        ref: "g3",
+        path: "docs/rules.md",
+        linkedFrom: "CLAUDE.md",
+        bytes: 19,
+      });
+      expect(analysis.warnings).toEqual([]);
+      // Nothing is asked of the host's files: the harness has them.
+      expect(github.getFilesCalls.flat().filter(({ path }) => path.endsWith(".md"))).toEqual([]);
+    });
+
+    it("leaves out a root that's off with what it imports, and an import that's off alone", async () => {
+      const { analyze, preferences } = setup({ harnessSource: source(FILES) });
+      expect(given(await analyze())).toEqual([["g1", "REVIEW.md", null]]);
+
+      const other = setup({ harnessSource: source(FILES) });
+      await other.preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      await other.preferences.setGuidelineSwitch(repo, "docs/naming.md", false);
+      expect(given(await other.analyze())?.map(([, path]) => path)).toEqual([
+        "REVIEW.md",
+        "CLAUDE.md",
+        "docs/rules.md",
+        "docs/style.md",
+      ]);
+      expect(await preferences.getGuidelineSwitches(repo)).toEqual(new Map());
+    });
+
+    it("passes over an import that doesn't fit, takes a smaller one after it, and names what it left out", async () => {
+      const { analyze, preferences } = setup({
+        harnessSource: source({
+          "CLAUDE.md": "@large.md @small.md @huge.md @image.txt @off.txt\n\n[See](link.txt)",
+          "large.md": "x".repeat(70_000),
+          "small.md": "Small.\n",
+          "huge.md": { kind: "skipped", reason: "too-large" },
+          "image.txt": { kind: "skipped", reason: "unreadable" },
+          "off.txt": { kind: "skipped", reason: "unreadable" },
+          "link.txt": { kind: "skipped", reason: "unreadable" },
+        }),
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      await preferences.setGuidelineSwitch(repo, "off.txt", false);
+
+      const analysis = await analyze();
+
+      expect(given(analysis)).toEqual([
+        ["g1", "CLAUDE.md", null],
+        ["g2", "small.md", "CLAUDE.md"],
+      ]);
+      // A file only linked isn't one a run always reads, so leaving it out says nothing.
+      expect(analysis.warnings).toEqual([
+        "The AI review ran without some guideline files: large.md is 69 KB and didn't fit in the 64 KB they can add up to; huge.md is over 1 MB; image.txt couldn't be read as text",
+      ]);
+    });
+
+    it("names the file that imports one, not the first that mentions it", async () => {
+      const { analyze, preferences } = setup({
+        harnessSource: source({
+          "REVIEW.md": "As rules.md says.",
+          "CLAUDE.md": "@rules.md",
+          "rules.md": "",
+        }),
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      expect(given(await analyze())?.at(-1)).toEqual(["g3", "rules.md", "CLAUDE.md"]);
+    });
+
+    it("waits for the load the analysis started, making no other", async () => {
+      const harnessSource = source(FILES);
+      const release = harnessSource.hold();
+      const { analyze, runModel, model, preferences } = setup({
+        harnessSource,
+        modelEnabled: false,
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      const { id } = await analyze();
+      const running = runModel(id);
+      release();
+      expect(given(await running)).toHaveLength(5);
+      expect(harnessSource.calls.listFiles).toEqual([baseSha]);
+      expect(model.callsTo("intent")).toHaveLength(1);
+    });
+
+    it("reads the roots alone when the harness can't be loaded, with one warning", async () => {
+      const harnessSource = source(FILES);
+      harnessSource.failAlways(hostError("rate-limited"));
+      const { analyze, preferences } = setup({
+        harnessSource,
+        fixtures: [withGuidelines(FILES)],
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+      const analysis = await analyze();
+
+      expect(given(analysis)).toEqual([
+        ["g1", "REVIEW.md", null],
+        ["g2", "CLAUDE.md", null],
+      ]);
+      expect(analysis.warnings).toEqual([
+        "Couldn't load the files the repository's guideline files import, so the AI review ran without them: rate-limited from host",
+      ]);
+    });
+
+    it("warns once when neither the harness nor the roots can be read", async () => {
+      const harnessSource = source(FILES);
+      harnessSource.failAlways(hostError("network"));
+      const { analyze, runModel, github } = setup({ harnessSource, modelEnabled: false });
+      const { id } = await analyze();
+      github.failNext("getFiles", hostError("network"));
+      expect((await runModel(id)).warnings).toEqual([
+        "Couldn't read the repository's guideline files, so the AI review ran without them: network from host",
+      ]);
+    });
+
+    it("says nothing of a harness that can't be loaded for a repository without guideline files", async () => {
+      const harnessSource = source({});
+      harnessSource.failAlways(hostError("network"));
+      expect((await setup({ harnessSource }).analyze()).warnings).toEqual([]);
+    });
+
+    it("loads nothing for the run when every root is off", async () => {
+      const harnessSource = source(FILES);
+      const { analyze, runModel, preferences, harnessStore } = setup({
+        harnessSource,
+        modelEnabled: false,
+      });
+      await preferences.setGuidelineSwitch(repo, "REVIEW.md", false);
+      const { id } = await analyze();
+      await harnessStore.dropUnusedSince("2027-01-01T00:00:00Z");
+      const ran = await runModel(id);
+      expect(ran.guidance?.guidelines).toEqual([]);
+      expect(harnessSource.calls.listFiles).toHaveLength(1);
+    });
+
+    it("shows a point's mark as from the imported file the rule is in", async () => {
+      const model = new FakeAnalysisModel();
+      model.script("findings", ok([findingOn(0, { ref: "g3", effect: "raised" })]));
+      const { analyze, preferences } = setup({ harnessSource: source(FILES), model });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      expect(pointsOf(await analyze())[0]?.guidance).toEqual({
+        effect: "raised",
+        label: "docs/rules.md",
+        preferenceId: null,
+      });
+    });
   });
 
   it("keeps the marks that check out and drops the others, never their points", async () => {

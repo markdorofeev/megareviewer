@@ -36,16 +36,29 @@ export const runName = (option: ModelRunOption | null): string | null =>
 
 const AND = new Intl.ListFormat("en", { type: "conjunction" });
 
+/** "3 files it imports", for the files a run's roots import; null for none. */
+const importedRead = (roots: number, imported: number): string | null => {
+  if (imported === 0) return null;
+  const files = imported === 1 ? "1 file" : `${imported} files`;
+  // No root: the one that imports them didn't fit.
+  return roots === 0
+    ? `${files} imported`
+    : `${files} ${roots === 1 ? "it imports" : "they import"}`;
+};
+
 /**
- * "6 preferences and REVIEW.md": what a run read beside the code, as the analysis recorded it.
- * Null for a run that read nothing, or stored before runs read any.
+ * "6 preferences, CLAUDE.md and 3 files it imports": what a run read beside the code, as the
+ * analysis recorded it. Null for a run that read nothing, or stored before runs read any.
  */
 export const guidanceRead = (guidance: Guidance | null): string | null => {
   if (guidance === null) return null;
   const count = guidance.preferences.length;
+  const roots = guidance.guidelines.filter((file) => file.linkedFrom === null);
+  const imported = importedRead(roots.length, guidance.guidelines.length - roots.length);
   const read = [
     ...(count === 0 ? [] : [`${count} ${count === 1 ? "preference" : "preferences"}`]),
-    ...guidance.guidelines.map((file) => file.path),
+    ...roots.map((file) => file.path),
+    ...(imported === null ? [] : [imported]),
   ];
   return read.length === 0 ? null : AND.format(read);
 };

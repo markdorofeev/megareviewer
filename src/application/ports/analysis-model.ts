@@ -72,6 +72,8 @@ export interface InputGuidance {
   readonly guidelines: readonly {
     readonly ref: GuidanceRef;
     readonly path: string;
+    /** The file that imports it; null for a root. */
+    readonly linkedFrom: string | null;
     readonly content: string;
   }[];
 }

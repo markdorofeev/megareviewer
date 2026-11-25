@@ -48,7 +48,7 @@ const withGuidelines: PullRequestFixture = {
   baseFiles: {
     ...smallFeature.baseFiles,
     "REVIEW.md": "Migrations must be reversible.\n",
-    "CLAUDE.md": "x".repeat(40_000),
+    "CLAUDE.md": "x".repeat(70_000),
     ".github/copilot-instructions.md": "Prefer early returns.\n",
   },
 };
@@ -175,7 +175,7 @@ describe("getPreferences", () => {
         repo: shop,
         guidelineFiles: [
           { path: "REVIEW.md", bytes: 31, enabled: true, tooLarge: false },
-          { path: "CLAUDE.md", bytes: 40_000, enabled: false, tooLarge: true },
+          { path: "CLAUDE.md", bytes: 70_000, enabled: false, tooLarge: true },
           { path: ".github/copilot-instructions.md", bytes: 22, enabled: true, tooLarge: false },
         ],
         guidelineNote: null,

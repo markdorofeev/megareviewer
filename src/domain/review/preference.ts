@@ -121,8 +121,11 @@ export type GuidelinePath = z.infer<typeof GuidelinePath>;
 
 /** On unless switched off; the others are about writing code and can be long, so they're off. */
 export const DEFAULT_GUIDELINE_PATH: GuidelinePath = "REVIEW.md";
-/** A larger file isn't sent: cutting it would drop rules without saying which. */
-export const MAX_GUIDELINE_BYTES = 32_768;
+/**
+ * What the files put in every pass's prompt can add up to. One that doesn't fit isn't cut, which
+ * would drop rules without saying which.
+ */
+export const MAX_INLINE_BYTES = 65_536;
 /** Per scope: everywhere, and each repository. */
 export const MAX_ENABLED_PREFERENCES = 50;
 
@@ -132,7 +135,7 @@ export const GuidelineFile = z
     path: GuidelinePath,
     bytes: z.number().int().nonnegative(),
     enabled: z.boolean(),
-    /** Over MAX_GUIDELINE_BYTES: never sent, whatever `enabled` says. */
+    /** Over MAX_INLINE_BYTES: never put in a prompt, whatever `enabled` says. */
     tooLarge: z.boolean(),
   })
   .readonly();
@@ -161,7 +164,13 @@ export const Guidance = z
     guidelines: z
       .array(
         z
-          .object({ ref: GuidanceRef, path: z.string(), bytes: z.number().int().nonnegative() })
+          .object({
+            ref: GuidanceRef,
+            path: z.string(),
+            bytes: z.number().int().nonnegative(),
+            /** The file that imports it; null for a root. */
+            linkedFrom: z.string().nullable().default(null),
+          })
           .readonly(),
       )
       .readonly(),
@@ -231,14 +240,18 @@ export const guidelineFile = (
     path,
     bytes,
     enabled: guidelineEnabled(path, switches),
-    tooLarge: bytes > MAX_GUIDELINE_BYTES,
+    tooLarge: bytes > MAX_INLINE_BYTES,
   };
 };
 
 /** Numbers what a run reads, in the order it's sent. */
 export const guidanceOf = (
   preferences: readonly Preference[],
-  guidelines: readonly { readonly path: string; readonly bytes: number }[],
+  guidelines: readonly {
+    readonly path: string;
+    readonly bytes: number;
+    readonly linkedFrom: string | null;
+  }[],
   checks: readonly ReadCheckConfig[] = [],
 ): Guidance => ({
   preferences: preferences.map(({ id, kind, text, scope }, index) => ({
@@ -248,7 +261,12 @@ export const guidanceOf = (
     text,
     scope,
   })),
-  guidelines: guidelines.map(({ path, bytes }, index) => ({ ref: `g${index + 1}`, path, bytes })),
+  guidelines: guidelines.map(({ path, bytes, linkedFrom }, index) => ({
+    ref: `g${index + 1}`,
+    path,
+    bytes,
+    linkedFrom,
+  })),
   checks,
 });
 

@@ -109,7 +109,7 @@ export const fixturePreferencesView: PreferencesView = {
       repo: shop,
       guidelineFiles: [
         { path: "REVIEW.md", bytes: 1_240, enabled: true, tooLarge: false },
-        { path: "CLAUDE.md", bytes: 48_900, enabled: false, tooLarge: true },
+        { path: "CLAUDE.md", bytes: 98_300, enabled: false, tooLarge: true },
         { path: "CONTRIBUTING.md", bytes: 6_020, enabled: false, tooLarge: false },
       ],
       guidelineNote: null,

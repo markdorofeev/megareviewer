@@ -4,7 +4,7 @@ import {
   GUIDELINE_PATHS,
   type GuidelineFile,
   type GuidelinePath,
-  MAX_GUIDELINE_BYTES,
+  MAX_INLINE_BYTES,
 } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
@@ -34,7 +34,7 @@ const File = ({
       </span>
       {file.tooLarge ? (
         <span className="ml-auto text-caption text-muted-foreground">
-          Too large to send: a guideline file can be {formatBytes(MAX_GUIDELINE_BYTES)}
+          Too large to send: a guideline file can be {formatBytes(MAX_INLINE_BYTES)}
         </span>
       ) : (
         <span className="ml-auto flex items-center gap-2">

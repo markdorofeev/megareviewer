@@ -322,8 +322,12 @@ describe("harnessReach", () => {
 
 describe("harnessPlan", () => {
   const plan = (files: Harness, switches: ReadonlyMap<string, boolean>) => {
-    const { inPrompt, onRequest } = harnessPlan(files, switches);
-    return { inPrompt: paths(inPrompt), onRequest: paths(onRequest) };
+    const { inPrompt, onRequest, passedOver } = harnessPlan(files, switches);
+    return {
+      inPrompt: paths(inPrompt),
+      onRequest: paths(onRequest),
+      passedOver: paths(passedOver),
+    };
   };
 
   it("puts the enabled roots and then their imports in the prompt, breadth-first as written", () => {
@@ -345,8 +349,13 @@ describe("harnessPlan", () => {
     expect(plan(imports, on("CLAUDE.md"))).toEqual({
       inPrompt: ["REVIEW.md", "CLAUDE.md", "r.md", "a.md", "b.md", "deep.md"],
       onRequest: ["see-also.md", "from-link.md", "mentioned.md"],
+      passedOver: [],
     });
-    expect(plan(imports, new Map())).toEqual({ inPrompt: ["REVIEW.md", "r.md"], onRequest: [] });
+    expect(plan(imports, new Map())).toEqual({
+      inPrompt: ["REVIEW.md", "r.md"],
+      onRequest: [],
+      passedOver: [],
+    });
   });
 
   it("passes over a file that doesn't fit, and takes a smaller one after it and what it imports", () => {
@@ -366,6 +375,7 @@ describe("harnessPlan", () => {
     expect(plan(large, on("CLAUDE.md"))).toEqual({
       inPrompt: ["CLAUDE.md", "fits.md", "small.md"],
       onRequest: ["large.md"],
+      passedOver: ["large.md"],
     });
   });
 
@@ -374,7 +384,11 @@ describe("harnessPlan", () => {
       file("CLAUDE.md", [["a.md", "import"]], MAX_INLINE_BYTES + 1),
       file("a.md"),
     );
-    expect(plan(large, on("CLAUDE.md"))).toEqual({ inPrompt: ["a.md"], onRequest: ["CLAUDE.md"] });
+    expect(plan(large, on("CLAUDE.md"))).toEqual({
+      inPrompt: ["a.md"],
+      onRequest: ["CLAUDE.md"],
+      passedOver: ["CLAUDE.md"],
+    });
   });
 
   it("gives a file off, or behind one that's off, to neither list", () => {
@@ -386,6 +400,7 @@ describe("harnessPlan", () => {
     expect(plan(behind, new Map([...on("CLAUDE.md"), ...off("a.md")]))).toEqual({
       inPrompt: ["CLAUDE.md"],
       onRequest: [],
+      passedOver: [],
     });
   });
 });

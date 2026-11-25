@@ -297,10 +297,34 @@ describe("what a run read", () => {
     expect(
       guidanceRead({
         ...fixtureGuidance,
-        guidelines: [...fixtureGuidance.guidelines, { ref: "g2", path: "AGENTS.md", bytes: 2_000 }],
+        guidelines: [
+          ...fixtureGuidance.guidelines,
+          { ref: "g2", path: "AGENTS.md", linkedFrom: null, bytes: 2_000 },
+        ],
       }),
     ).toBe("2 preferences, REVIEW.md, and AGENTS.md");
     expect(runLine(null, fixtureGuidance)).toBe("With 2 preferences and REVIEW.md");
+  });
+
+  it("counts the files the guideline files import, and names the ones that import them", () => {
+    const given = (...files: readonly (readonly [string, string | null])[]) =>
+      guidanceRead({
+        ...fixtureGuidance,
+        guidelines: files.map(([path, linkedFrom], index) => ({
+          ref: `g${index + 1}`,
+          path,
+          linkedFrom,
+          bytes: 100,
+        })),
+      });
+    const imported = ["a.md", "b.md", "c.md"].map((path) => [path, "CLAUDE.md"] as const);
+    expect(given(["CLAUDE.md", null], ...imported)).toBe(
+      "2 preferences, CLAUDE.md, and 3 files it imports",
+    );
+    expect(given(["REVIEW.md", null], ["CLAUDE.md", null], ["a.md", "CLAUDE.md"])).toBe(
+      "2 preferences, REVIEW.md, CLAUDE.md, and 1 file they import",
+    );
+    expect(given(["a.md", "CLAUDE.md"])).toBe("2 preferences and 1 file imported");
   });
 
   it("is listed in Run details, with how many points were left out", async () => {

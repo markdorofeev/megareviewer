@@ -76,7 +76,9 @@ describe("analyzeCase", () => {
         { ref: "p1", kind: "look-for", text: "Unbounded caches", scope: "global" },
         { ref: "p2", kind: "dont-flag", text: "Naming of test helpers", scope: "repo" },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Receipts are plain text.\n" }],
+      guidelines: [
+        { ref: "g1", path: "REVIEW.md", linkedFrom: null, content: "Receipts are plain text.\n" },
+      ],
     });
     expect(result.value.analysis.guidance?.preferences.map((p) => [p.ref, p.scope.kind])).toEqual([
       ["p1", "global"],

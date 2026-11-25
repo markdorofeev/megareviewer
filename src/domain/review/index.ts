@@ -87,6 +87,7 @@ export {
 } from "./guardrail.ts";
 export {
   BlobHash,
+  fitInPrompt,
   Harness,
   HarnessFile,
   HarnessHeading,
@@ -103,7 +104,6 @@ export {
   MAX_HARNESS_FILE_BYTES,
   MAX_HARNESS_FILES,
   MAX_HARNESS_LOOKUPS,
-  MAX_INLINE_BYTES,
   strongerLink,
 } from "./harness.ts";
 export {
@@ -162,7 +162,7 @@ export {
   inCreationOrder,
   MAX_ENABLED_PREFERENCES,
   MAX_EVIDENCE_LINES,
-  MAX_GUIDELINE_BYTES,
+  MAX_INLINE_BYTES,
   MAX_PREFERENCE_TEXT,
   mergeEvidence,
   PastComment,

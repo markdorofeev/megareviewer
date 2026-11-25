@@ -107,6 +107,10 @@ const byPath = (a: AnalysisInputFile, b: AnalysisInputFile): number =>
 
 const SCOPE = { global: "everywhere", repo: "this repository" } as const;
 
+/** Written only beside a linked file, so a run whose roots import nothing reads what it always did. */
+const NOT_GIVEN =
+  "A guideline file may link files that aren't here. They weren't given, so assume nothing about what they say.";
+
 /**
  * What the reviewer and the repository ask of the passes. Nothing without any, so a run without
  * guidance reads the PR as it always did. A preference is one line, whatever its text holds.
@@ -124,8 +128,9 @@ const renderGuidance = ({ preferences, guidelines }: InputGuidance): string[] =>
                   `${ref} ${kind} (${SCOPE[scope]}): ${escapeText(text.replace(/\s+/g, " ").trim())}`,
               ),
             )),
-        ...guidelines.flatMap(({ ref, path, content }) => [
-          `<guideline_file${attributes({ ref, path })}>`,
+        ...(guidelines.some(({ linkedFrom }) => linkedFrom !== null) ? [NOT_GIVEN] : []),
+        ...guidelines.flatMap(({ ref, path, linkedFrom, content }) => [
+          `<guideline_file${attributes({ ref, path, linked_from: linkedFrom })}>`,
           escapeText(content),
           "</guideline_file>",
         ]),

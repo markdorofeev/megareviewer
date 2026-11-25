@@ -689,7 +689,7 @@ describe("PreferencesPage's repositories", () => {
     expect(guidelines.textContent).toContain("read at each pull request's base commit");
     expect(files(guidelines)).toEqual([
       "REVIEW.md1.2 KBFollowed by AI reviews",
-      "CLAUDE.md48 KBToo large to send: a guideline file can be 32 KB",
+      "CLAUDE.md96 KBToo large to send: a guideline file can be 64 KB",
       "CONTRIBUTING.md5.9 KBIgnored",
     ]);
     const switches = within(guidelines).getAllByRole("switch");
