@@ -228,7 +228,7 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   await expect(leftOut).toHaveAttribute("data-left-out", "true");
   await expect(leftOut).toContainText("Left out by your preference: Naming");
   await expect(chips(page)).toHaveText([/^ƒ\s*1\s*logic$/, /^◆\s*1\s*contract$/]);
-  const marks = page.locator("[data-point-mark=finding]");
+  const marks = page.locator("[data-point-mark]");
   const marked = await marks.count();
 
   await page.getByRole("button", { name: "Run details…" }).click();
