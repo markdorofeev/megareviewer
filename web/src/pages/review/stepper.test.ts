@@ -9,6 +9,7 @@ const point = (id: string): Point => ({
   hunkIds: [],
   path: null,
   lines: null,
+  type: null,
   severity: null,
   suggestion: null,
   mismatch: null,

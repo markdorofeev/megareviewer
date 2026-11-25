@@ -4,6 +4,7 @@ import {
   hunkIdOf,
   type MechanicalProof,
   renameHints,
+  type UnchangedCallers,
 } from "../../domain/diff/index.ts";
 import type { ModelError, PullRequest, Ticket } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
@@ -28,6 +29,7 @@ export const buildAnalysisInput = (input: {
   readonly files: readonly FileChange[];
   readonly headContents: ReadonlyMap<string, string | null>;
   readonly prepared: Prepared;
+  readonly unchangedCallers: readonly UnchangedCallers[];
   /** What the reviewer and the repository ask of the passes; none when left out. */
   readonly guidance?: InputGuidance;
 }): AnalysisInput => {
@@ -70,6 +72,12 @@ export const buildAnalysisInput = (input: {
       prepared.callGraph.filter((hint) => hint.use === "call"),
       hunkIdOf,
     ),
+    unchangedCallers: input.unchangedCallers.map(({ symbol, partId, uses, more }) => ({
+      symbol,
+      hunkId: hunkIdOf(partId),
+      uses,
+      more,
+    })),
     guidance: input.guidance ?? NO_GUIDANCE,
   };
 };
@@ -81,9 +89,13 @@ const mechanicalHunk = (hunk: Hunk, proof: MechanicalProof) => ({
   deletions: hunk.lines.filter((line) => line.kind === "del").length,
 });
 
+const CALLERS_LEFT_OUT =
+  "The code outside the pull request that uses what it changes was left out to fit the model's limit";
+
 /**
  * Checks the input fits the model. If it doesn't, drops full file contents, largest first, as
- * few as it can. Hunks are never dropped: when they alone don't fit, the analysis fails.
+ * few as it can, then the code outside the PR, which only adds to it. Hunks are never dropped:
+ * when they alone don't fit, the analysis fails.
  */
 export const fitToModel = async (
   model: AnalysisModel,
@@ -114,9 +126,20 @@ export const fitToModel = async (
         ? `The pull request is too large to analyze, even without full file contents: ${error.message}`
         : error.message,
     );
-  if (largestFirst.length === 0) return err(failure(first.error));
+  const withoutCallers = async () => {
+    if (input.unchangedCallers.length === 0) return null;
+    const left = await fitToModel(model, { ...input, unchangedCallers: [] });
+    return left.ok
+      ? ok({ ...left.value, warnings: [CALLERS_LEFT_OUT, ...left.value.warnings] })
+      : left;
+  };
+  if (largestFirst.length === 0) return (await withoutCallers()) ?? err(failure(first.error));
   const all = await model.checkSize(without(largestFirst.length));
-  if (!all.ok) return err(failure(all.error));
+  if (!all.ok) {
+    return (
+      (all.error.kind === "too-large" ? await withoutCallers() : null) ?? err(failure(all.error))
+    );
+  }
 
   // Dropping fewer files never fits better, so a binary search finds the fewest that do.
   let fits = largestFirst.length;

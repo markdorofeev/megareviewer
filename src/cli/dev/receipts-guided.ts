@@ -113,6 +113,7 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
         startLine: lineOf(receipts, "cache.get(order.id)"),
         line: lineOf(receipts, "return cached.text"),
       },
+      type: "logic",
       severity: "major",
       suggestion: null,
       mismatch: null,
@@ -123,6 +124,7 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
       explanation:
         "Every client can now send 600 requests a minute, and nothing says how that was load tested.",
       lines: { hunkId: limit.id, side: "new", startLine: perMinute, line: perMinute },
+      type: "logic",
       severity: "major",
       suggestion: null,
       mismatch: null,
@@ -137,6 +139,7 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
         startLine: lineOf(receipts, "const lines = "),
         line: lineOf(receipts, "const lines = "),
       },
+      type: "logic",
       severity: "minor",
       suggestion: null,
       mismatch: null,

@@ -114,6 +114,7 @@ export class FakeAnalysisModel implements AnalysisModel {
           title: `Check ${file.path}`,
           explanation: "Derived by the fake model.",
           lines,
+          type: "logic" as const,
           severity: "major" as const,
           suggestion: null,
           mismatch: null,

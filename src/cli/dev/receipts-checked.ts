@@ -87,6 +87,7 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
       explanation:
         "Express 4 ignores the promise an `async` handler returns, so when `findOrder` rejects, nothing answers the request.",
       lines: { hunkId: route.id, side: "new", startLine: line, line },
+      type: "logic",
       severity: "major",
       suggestion: null,
       mismatch: null,

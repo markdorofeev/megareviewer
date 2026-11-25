@@ -176,6 +176,7 @@ describe("ClaudeElement with threads", () => {
     hunkIds: [],
     path: null,
     lines: null,
+    type: "logic",
     severity: "major",
     suggestion: null,
     mismatch: null,

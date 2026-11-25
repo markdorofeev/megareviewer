@@ -573,6 +573,7 @@ const PointStates = () => {
           id: PointId.parse("f10"),
           title: "`attempt` could be `tries`",
           explanation: "The loop counts tries from zero; `attempt + 1` reads as an off-by-one.",
+          type: "logic",
           severity: "minor",
           suggestion: null,
           guidance: {
@@ -594,6 +595,7 @@ const PointStates = () => {
           id: PointId.parse("f11"),
           title: "Retries a request that isn't idempotent",
           explanation: "A payment whose answer was lost is taken again.",
+          type: "logic",
           severity: "blocking",
           suggestion: null,
           guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null },

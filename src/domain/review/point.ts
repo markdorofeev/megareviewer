@@ -35,6 +35,14 @@ export type MismatchId = z.infer<typeof MismatchId>;
 export const Severity = z.enum(["minor", "major", "blocking"]);
 export type Severity = z.infer<typeof Severity>;
 
+/**
+ * What a finding is about. logic: the code does the wrong thing. contract: the change breaks or
+ * exposes something outside the PR. architecture: it's built in the wrong place or the wrong way
+ * for the code the PR shows. Not a hunk's risk class, which a path rule or a proof decides.
+ */
+export const FindingType = z.enum(["logic", "contract", "architecture"]);
+export type FindingType = z.infer<typeof FindingType>;
+
 /** Something in the code that looks wrong, on the lines it rests on: a draft comment. */
 export const Finding = z
   .object({
@@ -42,6 +50,8 @@ export const Finding = z
     title: z.string().min(1),
     explanation: z.string(),
     lines: PointLines,
+    /** Logic for a finding stored before findings had a type, when that's all there was. */
+    type: FindingType.default("logic"),
     severity: Severity.default("major"),
     /** The new-side lines that replace the ones it rests on; null when it suggests none. */
     suggestion: z.array(z.string()).readonly().nullable().default(null),
@@ -77,6 +87,8 @@ export const Point = z
     lines: PointLines.nullable(),
     /** Every hunk the point rests on, `lines`' first. */
     hunkIds: z.array(HunkId).readonly(),
+    /** A finding's; null for a mismatch no finding names. */
+    type: FindingType.nullable(),
     /** A finding's severity; null for a mismatch no finding names. */
     severity: Severity.nullable(),
     /** A finding's suggested lines, in place of `lines`. */
@@ -133,9 +145,11 @@ export interface PointsInput {
   readonly guidance?: Guidance | null;
 }
 
+const RANK: Readonly<Record<Severity, number>> = { blocking: 0, major: 1, minor: 2 };
+
 /**
- * The model's points on an analysis, in order: the findings, then the intent's mismatches no
- * finding names, each in the model's own order.
+ * The model's points on an analysis, in order: the findings by severity, blocking first, then the
+ * intent's mismatches no finding names, each in the model's own order.
  */
 export const pointsOf = (analysis: PointsInput): Point[] => {
   const hunks = new Map(
@@ -161,7 +175,8 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     return found === undefined ? null : { kind: found.kind, description: found.description };
   };
   const named = new Set<string>();
-  const findings = analysis.findings.flatMap((finding): Point[] => {
+  const ranked = [...analysis.findings].sort((a, b) => RANK[a.severity] - RANK[b.severity]);
+  const findings = ranked.flatMap((finding): Point[] => {
     const hunk = hunks.get(finding.lines.hunkId);
     if (hunk === undefined) return [];
     const mismatch = mismatchOf(finding.mismatch);
@@ -174,6 +189,7 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         path: hunk.path,
         lines: finding.lines,
         hunkIds: [hunk.id],
+        type: finding.type,
         severity: finding.severity,
         suggestion: finding.lines.side === "new" ? finding.suggestion : null,
         mismatch,
@@ -193,6 +209,7 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
         title: mismatch.description,
         explanation: MISMATCH_EXPLANATION[mismatch.kind],
         ...landing(mismatch.hunkIds),
+        type: null,
         severity: null,
         suggestion: null,
         mismatch: null,

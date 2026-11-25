@@ -118,6 +118,7 @@ describe("pointPlaces", () => {
     path: null,
     lines: null,
     hunkIds,
+    type: null,
     severity: null,
     suggestion: null,
     mismatch: null,

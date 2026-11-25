@@ -68,6 +68,7 @@ describe("the answer format", () => {
       title: "Serves another tenant's receipt",
       explanation: "The query has no tenant filter.",
       lines: { hunkId: "h_0123456789abcdef", side: "new", startLine: 4, line: 4 },
+      type: "contract",
       severity: "blocking",
       suggestion: null,
       mismatch: null,
@@ -91,6 +92,33 @@ describe("the answer format", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("asks for a finding's type, and reads one from before there were any as logic", () => {
+    const findings = objects(schema).filter(
+      (node) => isObject(node.properties) && "severity" in node.properties,
+    );
+    expect(findings.length).toBeGreaterThan(0);
+    for (const node of findings) {
+      expect(isObject(node.properties) && node.properties.type).toEqual({
+        type: "string",
+        enum: ["logic", "contract", "architecture"],
+      });
+      expect(node.required).toContain("type");
+    }
+    const parsed = PassAnswer.parse({
+      answer: {
+        pass: "findings",
+        findings: [
+          {
+            title: "Skips the first page",
+            explanation: "",
+            lines: { hunkId: "h_0123456789abcdef", side: "new", startLine: 4, line: 4 },
+          },
+        ],
+      },
+    });
+    expect(parsed.answer.pass === "findings" && parsed.answer.findings[0]?.type).toBe("logic");
   });
 
   it("closes every object and drops keywords structured outputs don't support", () => {

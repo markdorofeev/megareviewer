@@ -79,6 +79,7 @@ const inputFrom = (fixture: PullRequestFixture): AnalysisInput => {
       };
     }),
     callGraph: [],
+    unchangedCallers: [],
     guidance: NO_GUIDANCE,
   };
   return input;

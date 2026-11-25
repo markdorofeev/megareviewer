@@ -36,6 +36,7 @@ const MORE_POINTS: readonly Point[] = [
     path: "src/http/retry.ts",
     lines: null,
     hunkIds: [],
+    type: "logic",
     severity: "minor",
     suggestion: null,
     mismatch: null,

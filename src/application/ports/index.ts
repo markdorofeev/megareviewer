@@ -4,6 +4,7 @@ export {
   type AnalysisModel,
   FindingDraft,
   type InputGuidance,
+  type InputUnchangedCallers,
   NO_GUIDANCE,
   type PassOptions,
   type PassOutput,

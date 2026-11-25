@@ -21,6 +21,7 @@ const finding: Point = {
   path: file.path,
   lines: { hunkId: hunk.id, side: "new", startLine: shown.newLine, line: shown.newLine },
   hunkIds: [hunk.id],
+  type: "logic",
   severity: "minor",
   suggestion: null,
   mismatch: null,

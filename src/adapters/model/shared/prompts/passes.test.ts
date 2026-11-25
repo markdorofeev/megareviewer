@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { smallFeatureIntent } from "../../../../application/testing/index.ts";
-import { InferredIntent } from "../../../../domain/review/index.ts";
+import { FindingType, InferredIntent } from "../../../../domain/review/index.ts";
 import { PASS_INSTRUCTIONS, passMessage } from "./passes.ts";
 import { SYSTEM_PROMPT } from "./system.ts";
 
@@ -26,6 +26,30 @@ describe("plain words", () => {
     expect(PASS_INSTRUCTIONS.findings).toContain(
       "Plain isn't vague: still name the exact function, value, input and result.",
     );
+  });
+});
+
+describe("a finding's types", () => {
+  it("are each asked for, with what counts and what doesn't", () => {
+    for (const type of FindingType.options) {
+      expect(PASS_INSTRUCTIONS.findings).toMatch(
+        new RegExp(`^- "${type}": .+\\n {2}Counts: .+ Doesn't: .+`, "m"),
+      );
+    }
+    expect(PASS_INSTRUCTIONS.findings).toMatch(/^- type: "logic", "contract" or "architecture"/m);
+  });
+
+  it("hold every finding to what the data shows", () => {
+    expect(PASS_INSTRUCTIONS.findings).toContain("list only what the code in the data shows");
+    expect(PASS_INSTRUCTIONS.findings).toContain("Prefer no finding over a speculative one");
+    expect(PASS_INSTRUCTIONS.findings).toContain(
+      "When you can't name what breaks, there is no finding.",
+    );
+    expect(PASS_INSTRUCTIONS.findings).toContain("Not style, not naming, not missing tests");
+  });
+
+  it("read the code outside the pull request, which the system prompt explains", () => {
+    expect(SYSTEM_PROMPT).toContain("- <unchanged_callers>, when it's there, is code this pull");
   });
 });
 

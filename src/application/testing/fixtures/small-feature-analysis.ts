@@ -156,13 +156,14 @@ export const smallFeatureInput: AnalysisInput = {
       use: "call",
     },
   ],
+  unchangedCallers: [],
   guidance: NO_GUIDANCE,
 };
 
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "21",
+  pipelineVersion: "22",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -245,6 +246,7 @@ export const smallFeatureAnalysis: Analysis = {
       explanation:
         "The cache is keyed by order ID alone, so a refund or an edited item still shows the receipt rendered before it until the entry expires.",
       lines: { hunkId: receiptServiceHunk.id, side: "new", startLine: 9, line: 11 },
+      type: "logic",
       severity: "major",
       suggestion: null,
       mismatch: null,

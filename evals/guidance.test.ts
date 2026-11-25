@@ -44,6 +44,7 @@ const answered = async (
         title: finding.description.slice(0, 80),
         explanation: finding.description,
         lines: { hunkId: HunkId.parse(place.hunkId), side: place.side, startLine: line, line },
+        type: "logic",
         severity: "major",
         suggestion: null,
         mismatch: null,

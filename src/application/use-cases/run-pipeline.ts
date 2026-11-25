@@ -319,7 +319,6 @@ export const runModel = async (
     readonly advisor: GuardrailAdvisor | null;
     readonly tour?: boolean;
   },
-  checkout: CheckoutAt | null = null,
 ): Promise<void> => {
   const tracker = createTracker(deps, analysis);
   try {
@@ -342,7 +341,6 @@ export const runModel = async (
       run.tour === true,
       host,
       pullRequest,
-      checkout,
       tracker,
     );
   } catch (error) {
@@ -363,12 +361,12 @@ const modelStages = async (
   tour: boolean,
   host: GitHost,
   pullRequest: PullRequest,
-  checkout: CheckoutAt | null,
   tracker: Tracker,
 ): Promise<void> => {
   const collected = await collect(deps, host, pullRequest, noProgress);
   if (!collected.ok) return tracker.failModel("intent", collected.error);
-  const { prepared } = await prepare(deps, collected.value, checkout);
+  // The analysis holds what the checkout gave it, so it isn't read again.
+  const { prepared } = await prepare(deps, collected.value, null);
   const { files } = collected.value;
 
   const read = await runGuidance(deps, pullRequest);
@@ -388,6 +386,7 @@ const modelStages = async (
       files,
       headContents: collected.value.headContents,
       prepared,
+      unchangedCallers: tracker.current.unchangedCallers,
       guidance: read.input,
     }),
   );

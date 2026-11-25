@@ -647,6 +647,7 @@ const analysis: Analysis = {
       explanation:
         "`findOrderById` takes the ID alone, and order IDs are sequential. The route below it scopes the order by `req.user.id`; this one doesn't.",
       lines: { hunkId: h.receiptRoute, side: "new", startLine: 15, line: 15 },
+      type: "logic",
       severity: "blocking",
       suggestion: ["  const order = await findOrder(req.user.id, req.params.id);"],
       mismatch: MismatchId.parse("m1"),
@@ -658,6 +659,7 @@ const analysis: Analysis = {
       explanation:
         "`receiptCache` is keyed by order ID and never cleared, so after a refund or an edited item the old receipt is served until the process restarts.",
       lines: { hunkId: h.retryAndCache, side: "new", startLine: 45, line: 46 },
+      type: "logic",
       severity: "major",
       suggestion: null,
       mismatch: null,
@@ -669,6 +671,7 @@ const analysis: Analysis = {
       explanation:
         "Three attempts with no delay triple the load on a tax service that's already failing.",
       lines: { hunkId: h.retryAndCache, side: "new", startLine: 32, line: 37 },
+      type: "logic",
       severity: "minor",
       suggestion: null,
       mismatch: null,

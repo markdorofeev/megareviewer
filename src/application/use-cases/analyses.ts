@@ -458,10 +458,6 @@ export const createAnalysisRunner = (deps: AppDeps) => {
       if (!chosen.ok) return chosen;
       const host = hostFor(deps, analysis.key.ref.repo.host);
       if (!host.ok) return host;
-      const checkout =
-        analysis.checkout === "read"
-          ? await lookUpCheckout(deps, pullRequest.ref.repo, analysis.key.headSha)
-          : null;
       // No await from here on until the run is in the map, so two requests can't both start it.
       if (inFlight.has(id)) return ok({ analysisId: id });
       const { promise: run, resolve: ended } = Promise.withResolvers<void>();
@@ -479,19 +475,12 @@ export const createAnalysisRunner = (deps: AppDeps) => {
           end();
           return err(appError("analysis-not-complete", "The analysis has changed: try again"));
         }
-        void runModel(
-          deps,
-          host.value,
-          current,
-          pullRequest,
-          {
-            model: chosen.value.runner,
-            option: runOptionOf(chosen.value.option),
-            advisor: deps.models.advisor(chosen.value.option.id),
-            tour,
-          },
-          checkout?.at ?? null,
-        )
+        void runModel(deps, host.value, current, pullRequest, {
+          model: chosen.value.runner,
+          option: runOptionOf(chosen.value.option),
+          advisor: deps.models.advisor(chosen.value.option.id),
+          tour,
+        })
           .catch((error: unknown) => {
             deps.logger.error("Couldn't record the model run", { analysisId: id, error });
           })

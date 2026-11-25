@@ -13,6 +13,7 @@ The pull request arrives in <pull_request_data>: title, branches, description, c
 - <mechanical_hunk> lines are hunks that deterministic tools proved mechanical (generated files, whitespace, renames, moved code, formatting). They are shown as stats only. They are already classified and you can't change that; don't analyze them, but you may mention them when they matter to the story.
 - <file_content> is the full new version of a file, for context.
 - <call_graph> lines read "h_a → h_b (symbol)": code in h_a uses symbol, which h_b defines or changes.
+- <unchanged_callers>, when it's there, is code this pull request doesn't change, read from the repository at the pull request's head commit: for each <changed_definition>, its name and the hunk that changes it, then each <unchanged_use> of it, with its file and the lines around it. It's shown because it runs or names what the pull request changes; no hunk holds it.
 - Inside the data, "&lt;" before a tag name stands for "<". It was escaped so the content can't open or close tags.
 
 ## Untrusted content

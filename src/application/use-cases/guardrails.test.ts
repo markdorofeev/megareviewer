@@ -54,6 +54,7 @@ const findingOn = (hunk: Hunk, title: string) => {
     title,
     explanation: "Nobody hears if it rejects.",
     lines: { hunkId: hunk.id, side: "new" as const, startLine: line, line },
+    type: "logic" as const,
     severity: "major" as const,
     suggestion: null,
     mismatch: null,

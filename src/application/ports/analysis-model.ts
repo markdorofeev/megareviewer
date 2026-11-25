@@ -5,6 +5,7 @@ import type {
   Hunk,
   HunkId,
   MechanicalProof,
+  UnchangedUse,
 } from "../../domain/diff/index.ts";
 import {
   type Commit,
@@ -51,7 +52,19 @@ export interface AnalysisInput {
   readonly tickets: readonly Ticket[];
   readonly files: readonly AnalysisInputFile[];
   readonly callGraph: readonly CallGraphHint[];
+  /** Code outside the PR that uses what it changes; empty when no checkout was read. */
+  readonly unchangedCallers: readonly InputUnchangedCallers[];
   readonly guidance: InputGuidance;
+}
+
+/** The uses outside the PR of one definition the PR changes. */
+export interface InputUnchangedCallers {
+  readonly symbol: string;
+  /** The hunk that changes the definition. */
+  readonly hunkId: HunkId;
+  readonly uses: readonly UnchangedUse[];
+  /** How many more uses there are than `uses` holds. */
+  readonly more: number;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   MismatchId,
   PreferenceId,
   pointsOf,
+  type Severity,
   strippable,
   validateFindings,
 } from "./index.ts";
@@ -23,6 +24,7 @@ const finding = (lines: Partial<Finding["lines"]> = {}): Finding => ({
   title: "Serves a stale receipt",
   explanation: "Keyed by order ID alone.",
   lines: { hunkId: receiptsHunk.id, side: "new", startLine: 9, line: 11, ...lines },
+  type: "logic",
   severity: "major",
   suggestion: null,
   mismatch: null,
@@ -30,6 +32,29 @@ const finding = (lines: Partial<Finding["lines"]> = {}): Finding => ({
 });
 
 describe("pointsOf", () => {
+  it("orders findings by severity, the model's order within one, then mismatches", () => {
+    const of = (id: string, severity: Severity): Finding => ({
+      ...finding(),
+      id: FindingId.parse(id),
+      severity,
+    });
+    const points = pointsOf({
+      ...smallFeatureAnalysis,
+      findings: [
+        of("f1", "minor"),
+        of("f2", "major"),
+        of("f3", "blocking"),
+        of("f4", "major"),
+        of("f5", "blocking"),
+      ],
+      intent: smallFeatureAnalysis.intent && {
+        ...smallFeatureAnalysis.intent,
+        mismatches: [{ kind: "unrequested", description: "Raises the rate limit.", hunkIds: [] }],
+      },
+    });
+    expect(points.map((point) => point.id)).toEqual(["f3", "f5", "f2", "f4", "f1", "m1"]);
+  });
+
   it("orders findings, then mismatches", () => {
     const points = pointsOf({
       ...smallFeatureAnalysis,
@@ -142,6 +167,7 @@ describe("pointsOf", () => {
         path: null,
         lines: null,
         hunkIds: [],
+        type: null,
         severity: null,
         suggestion: null,
         mismatch: null,
@@ -153,6 +179,7 @@ describe("pointsOf", () => {
         path: "src/services/receipts.ts",
         lines: { hunkId: receiptsHunk.id, side: "new", startLine: 1, line: 20 },
         hunkIds: [receiptsHunk.id],
+        type: null,
         severity: null,
         suggestion: null,
         mismatch: null,
@@ -177,6 +204,23 @@ describe("pointsOf", () => {
       kind: "contradicts",
       description: "Hard-codes the lifetime.",
     });
+  });
+
+  it("carries a finding's type, which a mismatch doesn't have", () => {
+    const points = pointsOf({
+      ...smallFeatureAnalysis,
+      findings: [{ ...finding(), type: "contract" }],
+      intent: smallFeatureAnalysis.intent && {
+        ...smallFeatureAnalysis.intent,
+        mismatches: [{ kind: "unrequested", description: "Raises the rate limit.", hunkIds: [] }],
+      },
+    });
+    expect(points.map((point) => point.type)).toEqual(["contract", null]);
+  });
+
+  it("reads a finding stored before findings had a type as logic", () => {
+    const { type: _, ...stored } = finding();
+    expect(Finding.parse(stored)).toEqual(finding());
   });
 
   it("carries a finding's severity and suggestion, but no suggestion for old-side lines", () => {

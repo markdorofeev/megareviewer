@@ -63,6 +63,9 @@ interface Emitted {
   readonly savedStages: Readonly<Record<StageName, StageStatus>> | undefined;
 }
 
+/** As the fake model counts them. */
+const inputTokens = (input: AnalysisInput) => Math.ceil(JSON.stringify(input).length / 4);
+
 const setup = (
   options: {
     model?: FakeAnalysisModel;
@@ -98,6 +101,7 @@ const setup = (
   });
   const store = new RecordingStore();
   const preferences = new InMemoryPreferenceStore();
+  const knownCheckouts = new InMemoryKnownCheckouts();
   const fileCache = options.fileCache ?? new InMemoryFileCache();
   const parser = options.parser ?? new FakeCodeParser();
   const logger = new RecordingLogger();
@@ -128,7 +132,7 @@ const setup = (
       preferences,
       history: {},
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
-      knownCheckouts: new InMemoryKnownCheckouts(),
+      knownCheckouts,
       copies: options.copies ?? new FakeRepositoryCopies(),
       threads: {},
       statuses: {},
@@ -183,6 +187,7 @@ const setup = (
     store,
     preferences,
     fileCache,
+    knownCheckouts,
     logger,
     emitted,
     useCases,
@@ -260,7 +265,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual([...Array(4).fill("done"), "skipped"]);
-    expect(analysis.key.pipelineVersion).toBe("21");
+    expect(analysis.key.pipelineVersion).toBe("22");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
@@ -444,6 +449,7 @@ describe("the analysis pipeline", () => {
       title: "Serves a stale receipt",
       explanation: "Keyed by order ID alone.",
       lines: { hunkId: unknownHunk, side: "new" as const, startLine: 1, line: 1 },
+      type: "logic" as const,
       severity: "major" as const,
       suggestion: null,
       mismatch: null,
@@ -556,8 +562,6 @@ describe("the analysis pipeline", () => {
   });
 
   describe("size", () => {
-    const inputTokens = (input: AnalysisInput) => Math.ceil(JSON.stringify(input).length / 4);
-
     const fullInput = async () => {
       const { analyze, model } = setup();
       await analyze();
@@ -737,6 +741,7 @@ describe("the analysis pipeline", () => {
       title: "Serves a stale receipt",
       explanation: "Keyed by order ID alone.",
       lines: { hunkId: hunk.id, side, startLine: added, line: added },
+      type: "logic" as const,
       severity: "major" as const,
       suggestion: ["fixed();"],
       mismatch: null,
@@ -1075,7 +1080,7 @@ describe("without the model", () => {
       findings: "skipped",
       steps: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("21");
+    expect(analysis.key.pipelineVersion).toBe("22");
     expect(analysis.intent).toBeNull();
     expect(analysis.usage).toEqual([]);
     expect(analysis.risk.map((risk) => [risk.hunkId, risk.source])).toEqual(
@@ -1163,7 +1168,7 @@ describe("with a local checkout", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
       expect(analysis.checkoutDir).toBe("/src/shop");
-      expect(analysis.key.pipelineVersion).toBe("21");
+      expect(analysis.key.pipelineVersion).toBe("22");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1181,6 +1186,59 @@ describe("with a local checkout", () => {
       ]);
     },
   );
+
+  it("gives the model the callers the analysis has, by the hunk that changes the definition", async () => {
+    const { analyze, model } = setup({
+      checkouts: new FakeLocalCheckouts({
+        checkout: checkout(),
+        dir: "/src/shop",
+        namesRepo: true,
+      }),
+    });
+    const analysis = await analyze();
+    for (const pass of ["intent", "findings"] as const) {
+      expect(model.callsTo(pass).map((call) => call.input.unchangedCallers)).toEqual([
+        [
+          {
+            symbol: "ordersRouter",
+            hunkId: ordersHunk,
+            uses: analysis.unchangedCallers[0]?.uses,
+            more: 0,
+          },
+        ],
+      ]);
+    }
+  });
+
+  it("gives the model no callers without a checkout", async () => {
+    const { analyze, model } = setup();
+    await analyze();
+    expect(model.callsTo("findings")[0]?.input.unchangedCallers).toEqual([]);
+  });
+
+  it("leaves the callers out, saying so, when the hunks fit only without them", async () => {
+    const checkouts = () =>
+      new FakeLocalCheckouts({ checkout: checkout(), dir: "/src/shop", namesRepo: true });
+    const whole = setup({ checkouts: checkouts() });
+    await whole.analyze();
+    const full = whole.model.callsTo("intent")[0]?.input;
+    if (full === undefined) throw new Error("the model wasn't called");
+    const bare = {
+      ...full,
+      files: full.files.map((file) => ({ ...file, headContent: null })),
+      unchangedCallers: [],
+    };
+    const tooSmall = setup({
+      checkouts: checkouts(),
+      model: new FakeAnalysisModel({ maxInputTokens: inputTokens(bare) }),
+    });
+    const analysis = await tooSmall.analyze();
+    expect(analysis.warnings).toEqual([
+      "The code outside the pull request that uses what it changes was left out to fit the model's limit",
+      "Full file contents omitted for 3 files to fit the model's limit",
+    ]);
+    expect(tooSmall.model.callsTo("intent")[0]?.input).toEqual(bare);
+  });
 
   it("parses only unchanged files in the PR's languages that name a changed definition", async () => {
     const reader = checkout({
@@ -1249,7 +1307,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
       expect(analysis.checkoutDir).toBe(namesRepo ? "/src/shop" : null);
-      expect(analysis.key.pipelineVersion).toBe("21");
+      expect(analysis.key.pipelineVersion).toBe("22");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },
@@ -1282,13 +1340,17 @@ describe("with a local checkout", () => {
   it("reads a clone found after the folder pointed at, and remembers it for the next start", async () => {
     const clone = { checkout: checkout(), dir: "/src/shop", namesRepo: true };
     const checkouts = new FakeLocalCheckouts(null, { clones: [clone] });
-    const { analyze, runModel } = setup({ modelEnabled: false, checkouts });
+    const { analyze, runModel, knownCheckouts } = setup({ modelEnabled: false, checkouts });
     const analysis = await analyze();
     expect(analysis.checkout).toBe("read");
     expect(analysis.checkoutDir).toBe("/src/shop");
     expect(checkouts.asked).toEqual(["pointedAt", "search"]);
+    // The analysis holds what it gave, so a model run doesn't look for it again.
     await runModel(analysis.id);
-    expect(checkouts.asked.slice(2)).toEqual(["pointedAt", "at /src/shop"]);
+    expect(checkouts.asked).toHaveLength(2);
+    expect(await knownCheckouts.foldersRead(smallFeature.pullRequest.ref.repo)).toEqual([
+      "/src/shop",
+    ]);
   });
 });
 
@@ -2119,6 +2181,7 @@ describe("a model run's guidance", () => {
       title: `Finding ${at}`,
       explanation: "",
       lines,
+      type: "logic" as const,
       severity: "major" as const,
       suggestion: null,
       mismatch: null,

@@ -103,6 +103,7 @@ export {
   Finding,
   FindingId,
   type FindingProblem,
+  FindingType,
   MismatchId,
   Point,
   PointId,

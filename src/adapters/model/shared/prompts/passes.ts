@@ -19,9 +19,18 @@ The reviewer reads this first, before any code, to build a picture of the change
 
   findings: `Task: findings.
 
-Find what looks wrong in this code: bugs, security holes, regressions, data loss, races, broken error handling, behavior that contradicts the stated intent. Not style, not naming, not missing tests, not "consider adding": only what you'd stop the merge for or would want the author to answer.
+Find what looks wrong in this change: only what you'd stop the merge for or would want the author to answer. Not style, not naming, not missing tests, not "consider adding", whatever its type. Each finding has one of three types:
 
-The reviewer reads every finding, and a wrong one costs them more than a missed one, so list only what the code in the data shows. Prefer no finding over a speculative one. A small or routine change usually has none.
+- "logic": the code does the wrong thing: bugs, regressions, data loss, races, broken error handling, behavior that contradicts the stated intent.
+  Counts: "Page 1 skips the first 50 rows: \`offset\` is \`page * size\`, and pages count from 1". Doesn't: "\`parse\` might throw on unusual input", with no such input in the data.
+- "contract": the change breaks or exposes something outside this pull request: a caller, stored data, a security boundary, a user or another service, a dependency or its configuration. Say which one breaks or is exposed, and how, from code in the data: an unchanged caller that still relies on the old behavior, a value written before this change that the new code can't read, a route that loses its check. A removed or weakened check on a security boundary, or a secret or personal data sent where others can read it, is a contract finding, "blocking" when it exposes data.
+  Counts: "\`exportInvoices\` in billing/export.ts still reads \`total\`, which \`listOrders\` no longer returns". Doesn't: "This changes the response shape", "Existing clients may break", "Deployments must set the new variable", or a change that was asked for and that everything in the data follows. When you can't name what breaks, there is no finding.
+- "architecture": the change is built in the wrong place or the wrong way for the code the data shows. Only three things count, and the finding names the other code: a dependency that points the wrong way between files in the data; a layer the other code in the data goes through and this code skips; logic written again that code in the data already has.
+  Counts: "The refund route runs its own SQL; every other route here goes through \`OrderService\`". Doesn't: "This belongs in a service", when the data shows no service that does it, or a few similar lines that could be shared.
+
+A finding that fits two types is "contract" when it breaks or exposes something outside the pull request, otherwise "logic" when the code does the wrong thing. Looking for three types doesn't mean finding one of each.
+
+The reviewer reads every finding, and a wrong one costs them more than a missed one, so list only what the code in the data shows. Prefer no finding over a speculative one. A small or routine change usually has none, and neither does one that only touches an API, a credential or a setting.
 
 Each finding is a draft comment the reviewer can add to their review as it is, so write it to the author, in plain words: the ones you'd use telling a colleague, understood on one reading by someone new to this code whose first language isn't English.
 - Say what happens, in everyday words: "Two requests at once can overwrite each other's change", not "Non-atomic read-modify-write permits lost updates under concurrency".
@@ -32,6 +41,7 @@ Plain isn't vague: still name the exact function, value, input and result.
 - title: what is wrong, as its consequence, in at most 80 characters ("Retries a charge after it succeeded", not "Possible issue in retry logic").
 - explanation: why, pointing at the code, in at most 300 characters. Put code names in backticks.
 - lines: the hunk it rests on (hunkId) and the lines in that hunk that show it, startLine to line (startLine equal to line for one line). side is "new" for numbers on "+" and unchanged lines, "old" for numbers on "-" lines. Use only line numbers the hunk shows.
+- type: "logic", "contract" or "architecture", as above.
 - severity: "blocking" when it must be fixed before merging (data exposed or lost, a security hole, a crash on a normal path), "major" when it's wrong but bounded, "minor" when it's worth fixing but the change works without it.
 - suggestion: when the fix is a change to those same lines, the lines that replace startLine to line, whole, with their indentation; only for side "new". null when the fix is elsewhere, longer than a few lines, or you aren't sure of it.
 - mismatch: when the finding is one of the intent's mismatches shown in the code, its ID ("m1"), so the reviewer reads it once. Otherwise null.
