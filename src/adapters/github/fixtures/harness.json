@@ -1,0 +1,304 @@
+[
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.github.com/repos/sindresorhus/is/git/trees/e9c026c611c1160eaad50da00be4e676b626018f?recursive=1"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": "4991",
+        "x-ratelimit-reset": "1795609742",
+        "x-ratelimit-resource": "core",
+        "x-ratelimit-used": "9"
+      },
+      "body": {
+        "truncated": false,
+        "tree": [
+          {
+            "path": ".editorconfig",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "1c6314a31833395fd5ff016a6506bdd51860657c"
+          },
+          {
+            "path": ".gitattributes",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "6313b56c57848efce05faa7aa7e901ccfc2886ea"
+          },
+          {
+            "path": ".github",
+            "mode": "040000",
+            "type": "tree",
+            "sha": "e5f9d2d7520795f8639cfbdd6e539066acb7cf41"
+          },
+          {
+            "path": ".github/security.md",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "34a527ba6b8ef13393330073af5ec736b2e7393a"
+          },
+          {
+            "path": ".github/workflows",
+            "mode": "040000",
+            "type": "tree",
+            "sha": "f615a2fca053051f1c0a82fdef0d21cd67ea8b5b"
+          },
+          {
+            "path": ".github/workflows/main.yml",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "33db2341787feaf16ef04754065fd6d5a928c87d"
+          },
+          {
+            "path": ".gitignore",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "eb99a216c72231aed4756cf99d429de7d2022fa3"
+          },
+          {
+            "path": ".npmrc",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "43c97e719a5a824700932f72e6e7e6748ce45d01"
+          },
+          {
+            "path": "AGENTS.md",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "2996cf5a36aab4c3067cd8bd0f8286229759f1dd"
+          },
+          {
+            "path": "CLAUDE.md",
+            "mode": "120000",
+            "type": "blob",
+            "sha": "47dc3e3d863cfb5727b87d785d09abf9743c0a72"
+          },
+          {
+            "path": "header.gif",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "f957944126b13c7521f3e2df3cdfa5097ecfeb2b"
+          },
+          {
+            "path": "license",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "fa7ceba3eb4a9657a9db7f3ffca4e4e97a9019de"
+          },
+          {
+            "path": "package.json",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "d7a386f1d2e7d3b4a02634e83e81feb502803750"
+          },
+          {
+            "path": "readme.md",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "509f75fc162053037b834ddb86c12a674a31619a"
+          },
+          {
+            "path": "source",
+            "mode": "040000",
+            "type": "tree",
+            "sha": "85ff1ccf5985105c5870f8f0e672fd376920ced1"
+          },
+          {
+            "path": "source/index.ts",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "6c2f42892e01d7d72b97c3d779fe0d23323de25c"
+          },
+          {
+            "path": "source/types.ts",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "92550724c9de6f190a78836110b3b65bda7a61e5"
+          },
+          {
+            "path": "source/utilities.ts",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "686edb134216bc3a770d63716a73a9d21d8af43d"
+          },
+          {
+            "path": "test",
+            "mode": "040000",
+            "type": "tree",
+            "sha": "43b3998ea688566c3ec8a8c25ee0f1fe52e55d72"
+          },
+          {
+            "path": "test/test.ts",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "2f98bfb24c8c7c91bc13af51ba10d56a3c8d0132"
+          },
+          {
+            "path": "test/tsconfig.json",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "1f492d315db44c498dd50edb645ef3f3ad7822c5"
+          },
+          {
+            "path": "test/type-tests.ts",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "f08fa25f25acc8f289f788c380fef96855bd88a7"
+          },
+          {
+            "path": "tsconfig.json",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "46013a6301e6ab180770daeea8a1d9917af52cc0"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.github.com/repos/torvalds/linux/git/trees/adc218676eef25575469234709c2d87185ca223a?recursive=1"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": "4990",
+        "x-ratelimit-reset": "1795609742",
+        "x-ratelimit-resource": "core",
+        "x-ratelimit-used": "10"
+      },
+      "body": {
+        "truncated": true,
+        "tree": [
+          {
+            "path": ".clang-format",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "fe1aa1a30d40267b71a2c90b23e16f7cfe473eea"
+          },
+          {
+            "path": ".cocciconfig",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "43967c6b20151ee126db08e24758e3c789bcb844"
+          },
+          {
+            "path": ".editorconfig",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "29a30ccfc07bf2019cc05613c67ed35e02af6490"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://api.github.com/graphql",
+      "body": {
+        "query": "query ($owner: String!, $repo: String!, $e0: String!, $e1: String!, $e2: String!, $e3: String!, $e4: String!) {\n  repository(owner: $owner, name: $repo) {\n    f0: object(expression: $e0) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n    f1: object(expression: $e1) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n    f2: object(expression: $e2) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n    f3: object(expression: $e3) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n    f4: object(expression: $e4) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n  }\n}",
+        "variables": {
+          "owner": "sindresorhus",
+          "repo": "is",
+          "e0": "e9c026c611c1160eaad50da00be4e676b626018f:megareviewer-missing-file.txt",
+          "e1": "e9c026c611c1160eaad50da00be4e676b626018f:readme.md",
+          "e2": "e9c026c611c1160eaad50da00be4e676b626018f:AGENTS.md",
+          "e3": "e9c026c611c1160eaad50da00be4e676b626018f:.github/security.md",
+          "e4": "e9c026c611c1160eaad50da00be4e676b626018f:source"
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": "4995",
+        "x-ratelimit-reset": "1795609183",
+        "x-ratelimit-resource": "graphql",
+        "x-ratelimit-used": "5"
+      },
+      "body": {
+        "data": {
+          "repository": {
+            "f0": null,
+            "f1": {
+              "__typename": "Blob",
+              "text": "# is\n\n> Type check values\n\nFor example, `is.string('🦄') //=> true`\n\n<img src=\"header.gif\" width=\"182\" align=\"right\">\n\n## Highlights\n\n- Written in TypeScript\n- [Extensive use of type guards](#type-guards)\n- [Supports type assertions](#type-assertions)\n- [Aware of generic type parameters](#generic-type-parameters) (use with caution)\n- Actively maintained\n- ![Millions of downloads per week](https://img.shields.io/npm/dw/@sindresorhus/is)\n\n## Install\n\n```sh\nnpm install @sindresorhus/is\n```\n\n## Usage\n\n```js\nimport is from '@sindresorhus/is';\n\nis('🦄');\n//=> 'string'\n\nis(new Map());\n//=> 'Map'\n\nis.number(6);\n//=> true\n```\n\n[Assertions](#type-assertions) perform the same type checks, but throw an error if the type does not match.\n\n```js\nimport {assert} from '@sindresorhus/is';\n\nassert.string(2);\n//=> Error: Expected value which is `string`, received value of type `number`.\n```\n\nAssertions (except `assertAll` and `assertAny`) also support an optional custom error message.\n\n```js\nimport {assert} from '@sindresorhus/is';\n\nassert.nonEmptyString(process.env.API_URL, 'The API_URL environment variable is required.');\n//=> Error: The API_URL environment variable is required.\n```\n\nAnd with TypeScript:\n\n```ts\nimport {assert} from '@sindresorhus/is';\n\nassert.string(foo);\n// `foo` is now typed as a `string`.\n```\n\n### Named exports\n\nNamed exports allow tooling to perform tree-shaking, potentially reducing bundle size by including only code from the methods that are used.\n\nEvery method listed below is available as a named export. Each method is prefixed by either `is` or `assert` depending on usage.\n\nFor example:\n\n```js\nimport {assertNull, isUndefined} from '@sindresorhus/is';\n```\n\n## API\n\n### is(value)\n\nReturns the type of `value`.\n\nPrimitives are lowercase and object types are camelcase.\n\nExample:\n\n- `'undefined'`\n- `'null'`\n- `'string'`\n- `'symbol'`\n- `'Array'`\n- `'Function'`\n- `'Object'`\n\nThis method is also exported as `detect`. You can import it like this:\n\n```js\nimport {detect} from '@sindresorhus/is';\n```\n\nNote: It will throw an error if you try to feed it object-wrapped primitives, as that's a bad practice. For example `new String('foo')`.\n\n### is.{method}\n\nAll the below methods accept a value and return a boolean for whether the value is of the desired type.\n\n#### Primitives\n\n##### .undefined(value)\n##### .null(value)\n\n##### .string(value)\n##### .number(value)\n\nNote: `is.number(NaN)` returns `false`. This intentionally deviates from `typeof` behavior to increase user-friendliness of `is` type checks.\n\n##### .boolean(value)\n##### .symbol(value)\n##### .bigint(value)\n\n#### Built-in types\n\n##### .array(value, assertion?)\n\nReturns true if `value` is an array and all of its items match the assertion (if provided).\n\n```js\nis.array(value); // Validate `value` is an array.\nis.array(value, is.number); // Validate `value` is an array and all of its items are numbers.\n```\n\n##### .arrayOf(predicate)\n\nReturns a type guard that checks if `value` is an array where every item matches the predicate. Useful for composing with other methods.\n\n```js\nconst isStringArray = is.arrayOf(is.string);\n\nisStringArray(['a', 'b']); //=> true\nisStringArray(['a', 1]); //=> false\n```\n\n##### .function(value)\n\n##### .buffer(value)\n\n> [!NOTE]\n> [Prefer using `Uint8Array` instead of `Buffer`.](https://sindresorhus.com/blog/goodbye-nodejs-buffer)\n\n##### .blob(value)\n##### .object(value)\n\nKeep in mind that [functions are objects too](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions).\n\n##### .numericString(value)\n\nReturns `true` for a string that represents a number satisfying `is.number`, for example, `'42'` and `'-8.3'`.\n\nNote: `'NaN'` returns `false`, but `'Infinity'` and `'-Infinity'` return `true`.\n\n##### .regExp(value)\n##### .date(value)\n##### .error(value)\n##### .nativePromise(value)\n##### .promise(value)\n\nReturns `true` for any object with a `.then()` and `.catch()` method. Prefer this one over `.nativePromise()` as you usually want to allow userland promise implementations too.\n\n##### .generator(value)\n\nReturns `true` for any object that implements its own `.next()` and `.throw()` methods and has a function definition for `Symbol.iterator`.\n\n##### .generatorFunction(value)\n\n##### .asyncFunction(value)\n\nReturns `true` for any `async` function that can be called with the `await` operator.\n\n```js\nis.asyncFunction(async () => {});\n//=> true\n\nis.asyncFunction(() => {});\n//=> false\n```\n\n##### .asyncGenerator(value)\n\n```js\nis.asyncGenerator(\n\t(async function * () {\n\t\tyield 4;\n\t})()\n);\n//=> true\n\nis.asyncGenerator(\n\t(function * () {\n\t\tyield 4;\n\t})()\n);\n//=> false\n```\n\n##### .asyncGeneratorFunction(value)\n\n```js\nis.asyncGeneratorFunction(async function * () {\n\tyield 4;\n});\n//=> true\n\nis.asyncGeneratorFunction(function * () {\n\tyield 4;\n});\n//=> false\n```\n\n##### .boundFunction(value)\n\nReturns `true` for any `bound` function.\n\n```js\nis.boundFunction(() => {});\n//=> true\n\nis.boundFunction(function () {}.bind(null));\n//=> true\n\nis.boundFunction(function () {});\n//=> false\n```\n\n##### .map(value)\n##### .set(value)\n##### .weakMap(value)\n##### .weakSet(value)\n##### .weakRef(value)\n\n#### Typed arrays\n\n##### .int8Array(value)\n##### .uint8Array(value)\n##### .uint8ClampedArray(value)\n##### .int16Array(value)\n##### .uint16Array(value)\n##### .int32Array(value)\n##### .uint32Array(value)\n##### .float32Array(value)\n##### .float64Array(value)\n##### .bigInt64Array(value)\n##### .bigUint64Array(value)\n\n#### Structured data\n\n##### .arrayBuffer(value)\n##### .sharedArrayBuffer(value)\n##### .dataView(value)\n\n##### .enumCase(value, enum)\n\nTypeScript-only. Returns `true` if `value` is a member of `enum`.\n\n```ts\nenum Direction {\n\tAscending = 'ascending',\n\tDescending = 'descending'\n}\n\nis.enumCase('ascending', Direction);\n//=> true\n\nis.enumCase('other', Direction);\n//=> false\n```\n\n#### Emptiness\n\n##### .emptyString(value)\n\nReturns `true` if the value is a `string` and the `.length` is 0.\n\n##### .emptyStringOrWhitespace(value)\n\nReturns `true` if `is.emptyString(value)` or if it's a `string` that is all whitespace.\n\n##### .nonEmptyString(value)\n\nReturns `true` if the value is a `string` and the `.length` is more than 0.\n\n##### .nonEmptyStringAndNotWhitespace(value)\n\nReturns `true` if the value is a `string` that is not empty and not whitespace.\n\n```js\nconst values = ['property1', '', null, 'property2', '    ', undefined];\n\nvalues.filter(is.nonEmptyStringAndNotWhitespace);\n//=> ['property1', 'property2']\n```\n\n##### .emptyArray(value)\n\nReturns `true` if the value is an `Array` and the `.length` is 0.\n\n##### .nonEmptyArray(value)\n\nReturns `true` if the value is an `Array` and the `.length` is more than 0.\n\n##### .emptyObject(value)\n\nReturns `true` if the value is an `Object` and `Object.keys(value).length` is 0.\n\nPlease note that `Object.keys` returns only own enumerable properties. Hence something like this can happen:\n\n```js\nconst object1 = {};\n\nObject.defineProperty(object1, 'property1', {\n\tvalue: 42,\n\twritable: true,\n\tenumerable: false,\n\tconfigurable: true\n});\n\nis.emptyObject(object1);\n//=> true\n```\n\n##### .nonEmptyObject(value)\n\nReturns `true` if the value is an `Object` and `Object.keys(value).length` is more than 0.\n\n##### .emptySet(value)\n\nReturns `true` if the value is a `Set` and the `.size` is 0.\n\n##### .nonEmptySet(Value)\n\nReturns `true` if the value is a `Set` and the `.size` is more than 0.\n\n##### .emptyMap(value)\n\nReturns `true` if the value is a `Map` and the `.size` is 0.\n\n##### .nonEmptyMap(value)\n\nReturns `true` if the value is a `Map` and the `.size` is more than 0.\n\n#### Miscellaneous\n\n##### .directInstanceOf(value, class)\n\nReturns `true` if `value` is a direct instance of `class`.\n\n```js\nis.directInstanceOf(new Error(), Error);\n//=> true\n\nclass UnicornError extends Error {}\n\nis.directInstanceOf(new UnicornError(), Error);\n//=> false\n```\n\n##### .urlInstance(value)\n\nReturns `true` if `value` is an instance of the [`URL` class](https://developer.mozilla.org/en-US/docs/Web/API/URL).\n\n```js\nconst url = new URL('https://example.com');\n\nis.urlInstance(url);\n//=> true\n```\n\n##### .urlString(value)\n\nReturns `true` if `value` is a URL string.\n\nNote: this only does basic checking using the [`URL` class](https://developer.mozilla.org/en-US/docs/Web/API/URL) constructor.\n\n```js\nconst url = 'https://example.com';\n\nis.urlString(url);\n//=> true\n\nis.urlString(new URL(url));\n//=> false\n```\n\n##### .truthy(value)\n\nReturns `true` for all values that evaluate to true in a boolean context:\n\n```js\nis.truthy('🦄');\n//=> true\n\nis.truthy(undefined);\n//=> false\n```\n\n##### .falsy(value)\n\nReturns `true` if `value` is one of: `false`, `0`, `''`, `null`, `undefined`, `NaN`.\n\n##### .nan(value)\n##### .nullOrUndefined(value)\n##### .primitive(value)\n\nJavaScript primitives are as follows:\n\n- `null`\n- `undefined`\n- `string`\n- `number`\n- `boolean`\n- `symbol`\n- `bigint`\n\n##### .integer(value)\n\n##### .safeInteger(value)\n\nReturns `true` if `value` is a [safe integer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/isSafeInteger).\n\n##### .plainObject(value)\n\nAn object is plain if it's created by either `{}`, `new Object()`, or `Object.create(null)`.\n\n##### .iterable(value)\n##### .asyncIterable(value)\n##### .class(value)\n\nReturns `true` if the value is a class constructor.\n\n##### .typedArray(value)\n\n##### .arrayLike(value)\n\nA `value` is array-like if it is not a function and has a `value.length` that is a safe integer greater than or equal to 0.\n\n```js\nis.arrayLike(document.forms);\n//=> true\n\nfunction foo() {\n\tis.arrayLike(arguments);\n\t//=> true\n}\nfoo();\n```\n\n##### .tupleLike(value, guards)\n\nA `value` is tuple-like if it matches the provided `guards` array both in `.length` and in types.\n\n```js\nis.tupleLike([1], [is.number]);\n//=> true\n```\n\n```js\nfunction foo() {\n\tconst tuple = [1, '2', true];\n\tif (is.tupleLike(tuple, [is.number, is.string, is.boolean])) {\n\t\ttuple // [number, string, boolean]\n\t}\n}\n\nfoo();\n```\n\n##### .finiteNumber(value)\n\nCheck if `value` is a number and is finite. Excludes `Infinity` and `-Infinity`.\n\n##### .positiveNumber(value)\n\nCheck if `value` is a number and is more than 0.\n\n##### .negativeNumber(value)\n\nCheck if `value` is a number and is less than 0.\n\n##### .nonNegativeNumber(value)\n\nCheck if `value` is a number and is 0 or more.\n\n##### .positiveInteger(value)\n\nCheck if `value` is an integer and is more than 0.\n\n##### .negativeInteger(value)\n\nCheck if `value` is an integer and is less than 0.\n\n##### .nonNegativeInteger(value)\n\nCheck if `value` is an integer and is 0 or more.\n\n##### .inRange(value, range)\n\nCheck if `value` (number) is in the given `range`. The range is an array of two values, lower bound and upper bound, in no specific order.\n\n```js\nis.inRange(3, [0, 5]);\nis.inRange(3, [5, 0]);\nis.inRange(0, [-2, 2]);\n```\n\n##### .inRange(value, upperBound)\n\nCheck if `value` (number) is in the range of `0` to `upperBound`.\n\n```js\nis.inRange(3, 10);\n```\n\n##### .htmlElement(value)\n\nReturns `true` if `value` is an [HTMLElement](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement).\n\n##### .nodeStream(value)\n\nReturns `true` if `value` is a Node.js [stream](https://nodejs.org/api/stream.html).\n\n```js\nimport fs from 'node:fs';\n\nis.nodeStream(fs.createReadStream('unicorn.png'));\n//=> true\n```\n\n##### .observable(value)\n\nReturns `true` if `value` is an `Observable`.\n\n```js\nimport {Observable} from 'rxjs';\n\nis.observable(new Observable());\n//=> true\n```\n\n##### .infinite(value)\n\nCheck if `value` is `Infinity` or `-Infinity`.\n\n##### .evenInteger(value)\n\nReturns `true` if `value` is an even integer.\n\n##### .oddInteger(value)\n\nReturns `true` if `value` is an odd integer.\n\n##### .propertyKey(value)\n\nReturns `true` if `value` can be used as an object property key (either `string`, `number`, or `symbol`).\n\n##### .formData(value)\n\nReturns `true` if `value` is an instance of the [`FormData` class](https://developer.mozilla.org/en-US/docs/Web/API/FormData).\n\n```js\nconst data = new FormData();\n\nis.formData(data);\n//=> true\n```\n\n##### .urlSearchParams(value)\n\nReturns `true` if `value` is an instance of the [`URLSearchParams` class](https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams).\n\n```js\nconst searchParams = new URLSearchParams();\n\nis.urlSearchParams(searchParams);\n//=> true\n```\n\n##### .any(predicate | predicate[], ...values)\n\nUsing a single `predicate` argument, returns `true` if **any** of the input `values` returns true in the `predicate`:\n\n```js\nis.any(is.string, {}, true, '🦄');\n//=> true\n\nis.any(is.boolean, 'unicorns', [], new Map());\n//=> false\n```\n\nUsing an array of `predicate[]`, returns `true` if **any** of the input `values` returns true for **any** of the `predicates` provided in an array:\n\n```js\nis.any([is.string, is.number], {}, true, '🦄');\n//=> true\n\nis.any([is.boolean, is.number], 'unicorns', [], new Map());\n//=> false\n```\n\n##### .any(predicate[])\n\nUsing an array of `predicate[]` without values, returns a combined type guard that checks if a value matches **any** of the predicates:\n\n```js\nconst isStringOrNumber = is.any([is.string, is.number]);\n\nisStringOrNumber('hello');\n//=> true\n\nisStringOrNumber(123);\n//=> true\n\nisStringOrNumber(true);\n//=> false\n```\n\nThis is useful for composing with other methods like `is.optional`:\n\n```js\nis.optional(value, is.any([is.string, is.number]));\n```\n\nAn empty predicate array currently returns a predicate that always returns `false`. This will throw in the next major release.\n\n##### .all(predicate, ...values)\n\nReturns `true` if **all** of the input `values` returns true in the `predicate`:\n\n```js\nis.all(is.object, {}, new Map(), new Set());\n//=> true\n\nis.all(is.string, '🦄', [], 'unicorns');\n//=> false\n```\n\n##### .all(predicate[])\n\nUsing an array of `predicate[]` without values, returns a combined type guard that checks if a value matches **all** of the predicates:\n\n```js\nconst isArrayAndNonEmpty = is.all([is.array, is.nonEmptyArray]);\n\nisArrayAndNonEmpty(['hello']);\n//=> true\n\nisArrayAndNonEmpty([]);\n//=> false\n```\n\nThis is useful for composing with other methods like `is.optional`:\n\n```js\nis.optional(value, is.all([is.object, is.plainObject]));\n```\n\nAn empty predicate array currently returns a predicate that always returns `true`. This will throw in the next major release.\n\n##### .optional(value, predicate)\n\nReturns `true` if `value` is `undefined` or satisfies the given `predicate`.\n\n```js\nis.optional(undefined, is.string);\n//=> true\n\nis.optional('🦄', is.string);\n//=> true\n\nis.optional(123, is.string);\n//=> false\n```\n\n##### .oneOf(values)\n\nReturns a type guard that checks if `value` is one of the given `values`. Best used with `as const` for precise type narrowing.\n\n```ts\nconst isDirection = is.oneOf(['north', 'south', 'east', 'west'] as const);\n\nisDirection('north'); //=> true\nisDirection('up'); //=> false\n```\n\n##### .validDate(value)\n\nReturns `true` if the value is a valid date.\n\nAll [`Date`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/Date) objects have an internal timestamp value which is the number of milliseconds since the [Unix epoch](https://developer.mozilla.org/en-US/docs/Glossary/Unix_time). When a new `Date` is constructed with bad inputs, no error is thrown. Instead, a new `Date` object is returned. But the internal timestamp value is set to `NaN`, which is an `'Invalid Date'`. Bad inputs can be an non-parsable date string, a non-numeric value or a number that is outside of the expected range for a date value.\n\n```js\nconst valid = new Date('2000-01-01');\n\nis.date(valid);\n//=> true\nvalid.getTime();\n//=> 946684800000\nvalid.toUTCString();\n//=> 'Sat, 01 Jan 2000 00:00:00 GMT'\nis.validDate(valid);\n//=> true\n\nconst invalid = new Date('Not a parsable date string');\n\nis.date(invalid);\n//=> true\ninvalid.getTime();\n//=> NaN\ninvalid.toUTCString();\n//=> 'Invalid Date'\nis.validDate(invalid);\n//=> false\n```\n\n##### .validLength(value)\n\nReturns `true` if the value is a safe integer that is greater than or equal to zero.\n\nThis can be useful to confirm that a value is a valid count of something, ie. 0 or more.\n\n##### .whitespaceString(value)\n\nReturns `true` if the value is a string with only whitespace characters.\n\n## Type guards\n\nWhen using `is` together with TypeScript, [type guards](http://www.typescriptlang.org/docs/handbook/advanced-types.html#type-guards-and-differentiating-types) are being used extensively to infer the correct type inside if-else statements.\n\n```ts\nimport is from '@sindresorhus/is';\n\nconst padLeft = (value: string, padding: string | number) => {\n\tif (is.number(padding)) {\n\t\t// `padding` is typed as `number`\n\t\treturn Array(padding + 1).join(' ') + value;\n\t}\n\n\tif (is.string(padding)) {\n\t\t// `padding` is typed as `string`\n\t\treturn padding + value;\n\t}\n\n\tthrow new TypeError(`Expected 'padding' to be of type 'string' or 'number', got '${is(padding)}'.`);\n}\n\npadLeft('🦄', 3);\n//=> '   🦄'\n\npadLeft('🦄', '🌈');\n//=> '🌈🦄'\n```\n\n## Type assertions\n\nThe type guards are also available as [type assertions](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-7.html#assertion-functions), which throw an error for unexpected types. It is a convenient one-line version of the often repetitive \"if-not-expected-type-throw\" pattern.\n\n```ts\nimport {assert} from '@sindresorhus/is';\n\nconst handleMovieRatingApiResponse = (response: unknown) => {\n\tassert.plainObject(response);\n\t// `response` is now typed as a plain `object` with `unknown` properties.\n\n\tassert.number(response.rating);\n\t// `response.rating` is now typed as a `number`.\n\n\tassert.string(response.title);\n\t// `response.title` is now typed as a `string`.\n\n\treturn `${response.title} (${response.rating * 10})`;\n};\n\nhandleMovieRatingApiResponse({rating: 0.87, title: 'The Matrix'});\n//=> 'The Matrix (8.7)'\n\n// This throws an error.\nhandleMovieRatingApiResponse({rating: '🦄'});\n```\n\n### Negative assertion\n\nAsserts that `value` is not the specified type. Only exact, type-safe negative assertions are exposed.\n\nSupported assertions:\n\n- `assert.not.undefined(value)`\n- `assert.not.null(value)`\n- `assert.not.nullOrUndefined(value)`\n- `assert.not.string(value)`\n- `assert.not.boolean(value)`\n- `assert.not.symbol(value)`\n- `assert.not.bigint(value)`\n- `assert.not.primitive(value)`\n\nThis intentionally excludes checks that cannot produce a safe TypeScript complement: `number` because `is.number` rejects `NaN`, refinements such as `integer` and `validDate`, and branded structural object checks such as `map` and `date`. Broad object checks such as `object` are also excluded to keep negative assertions limited to primitive and nullish types.\n\n```ts\nimport {assert} from '@sindresorhus/is';\n\nconst value: string | undefined = getValue();\n\nassert.not.undefined(value);\n// Throws if `value` is `undefined`. Otherwise, `value` is now typed as `string`.\n```\n\nFor `unknown` input, exact negative assertions narrow to the remaining representable type:\n\n```ts\nconst value: unknown = getValue();\n\nassert.not.nullOrUndefined(value);\n// `value` is now typed as non-nullish.\n\nassert.not.primitive(value);\n// `value` is now typed as `object`.\n```\n\n### Optional assertion\n\nAsserts that `value` is `undefined` or satisfies the provided `assertion`.\n\n```ts\nimport {assert} from '@sindresorhus/is';\n\nassert.optional(undefined, assert.string);\n// Passes without throwing\n\nassert.optional('🦄', assert.string);\n// Passes without throwing\n\nassert.optional(123, assert.string);\n// Throws: Expected value which is `string`, received value of type `number`\n```\n\n## Generic type parameters\n\nThe type guards and type assertions are aware of [generic type parameters](https://www.typescriptlang.org/docs/handbook/generics.html), such as `Promise<T>` and `Map<Key, Value>`. The default is `unknown` for most cases, since `is` cannot check them at runtime. If the generic type is known at compile-time, either implicitly (inferred) or explicitly (provided), `is` propagates the type so it can be used later.\n\nUse generic type parameters with caution. They are only checked by the TypeScript compiler, and not checked by `is` at runtime. This can lead to unexpected behavior, where the generic type is _assumed_ at compile-time, but actually is something completely different at runtime. It is best to use `unknown` (default) and type-check the value of the generic type parameter at runtime with `is` or `assert`.\n\n```ts\nimport {assert} from '@sindresorhus/is';\n\nasync function badNumberAssumption(input: unknown) {\n\t// Bad assumption about the generic type parameter fools the compile-time type system.\n\tassert.promise<number>(input);\n\t// `input` is a `Promise` but only assumed to be `Promise<number>`.\n\n\tconst resolved = await input;\n\t// `resolved` is typed as `number` but was not actually checked at runtime.\n\n\t// Multiplication will return NaN if the input promise did not actually contain a number.\n\treturn 2 * resolved;\n}\n\nasync function goodNumberAssertion(input: unknown) {\n\tassert.promise(input);\n\t// `input` is typed as `Promise<unknown>`\n\n\tconst resolved = await input;\n\t// `resolved` is typed as `unknown`\n\n\tassert.number(resolved);\n\t// `resolved` is typed as `number`\n\n\t// Uses runtime checks so only numbers will reach the multiplication.\n\treturn 2 * resolved;\n}\n\nbadNumberAssumption(Promise.resolve('An unexpected string'));\n//=> NaN\n\n// This correctly throws an error because of the unexpected string value.\ngoodNumberAssertion(Promise.resolve('An unexpected string'));\n```\n\n## FAQ\n\n### Why yet another type checking module?\n\nThere are hundreds of type checking modules on npm, unfortunately, I couldn't find any that fit my needs:\n\n- Includes both type methods and ability to get the type\n- Types of primitives returned as lowercase and object types as camelcase\n- Covers all built-ins\n- Unsurprising behavior\n- Well-maintained\n- Comprehensive test suite\n\nFor the ones I found, pick 3 of these.\n\nThe most common mistakes I noticed in these modules was using `instanceof` for type checking, forgetting that functions are objects, and omitting `symbol` as a primitive.\n\n### Why not just use `instanceof` instead of this package?\n\n`instanceof` does not work correctly for all types and it does not work across [realms](https://stackoverflow.com/a/49832343/64949). Examples of realms are iframes, windows, web workers, and the `vm` module in Node.js.\n\n## Related\n\n- [environment](https://github.com/sindresorhus/environment) - Check which JavaScript environment your code is running in at runtime\n- [is-stream](https://github.com/sindresorhus/is-stream) - Check if something is a Node.js stream\n- [is-observable](https://github.com/sindresorhus/is-observable) - Check if a value is an Observable\n- [file-type](https://github.com/sindresorhus/file-type) - Detect the file type of a Buffer/Uint8Array\n- [is-ip](https://github.com/sindresorhus/is-ip) - Check if a string is an IP address\n- [is-array-sorted](https://github.com/sindresorhus/is-array-sorted) - Check if an Array is sorted\n- [is-error-constructor](https://github.com/sindresorhus/is-error-constructor) - Check if a value is an error constructor\n- [is-empty-iterable](https://github.com/sindresorhus/is-empty-iterable) - Check if an Iterable is empty\n- [is-blob](https://github.com/sindresorhus/is-blob) - Check if a value is a Blob - File-like object of immutable, raw data\n- [has-emoji](https://github.com/sindresorhus/has-emoji) - Check whether a string has any emoji\n\n## Maintainers\n\n- [Sindre Sorhus](https://github.com/sindresorhus)\n- [Giora Guttsait](https://github.com/gioragutt)\n- [Brandon Smith](https://github.com/brandon93s)\n",
+              "isBinary": false,
+              "isTruncated": false,
+              "oid": "509f75fc162053037b834ddb86c12a674a31619a",
+              "byteSize": 23604
+            },
+            "f2": {
+              "__typename": "Blob",
+              "text": "# Notes\n\n## Branded types for type guards\n\nTypeScript type guards narrow in both branches. If `is.integer(n)` returns `value is number` and the input is `number`, the false branch computes `Exclude<number, number>` = `never`. This makes common patterns like `if (!is.integer(n)) throw; use(n)` fail because `n` becomes `never` after the guard.\n\nTo avoid this, type guard predicates use branded types (e.g., `number & {readonly __brand: 'Integer'}`, `string & {readonly __brand: 'UrlString'}`). A branded subtype ensures the false branch stays the original type (e.g., `Exclude<number, Integer>` = `number`).\n\nAssert functions (`asserts value is T`) don't need branded types since they throw on failure and have no false branch. They use plain types like `asserts value is number`.\n",
+              "isBinary": false,
+              "isTruncated": false,
+              "oid": "2996cf5a36aab4c3067cd8bd0f8286229759f1dd",
+              "byteSize": 781
+            },
+            "f3": {
+              "__typename": "Blob",
+              "text": "# Security Policy\n\nTo report a security vulnerability, please submit it [here](https://github.com/sindresorhus/is/security/advisories/new).\n\nNo AI slop will be accepted.\n",
+              "isBinary": false,
+              "isTruncated": false,
+              "oid": "34a527ba6b8ef13393330073af5ec736b2e7393a",
+              "byteSize": 170
+            },
+            "f4": {
+              "__typename": "Tree"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://api.github.com/graphql",
+      "body": {
+        "query": "query ($owner: String!, $repo: String!, $e0: String!) {\n  repository(owner: $owner, name: $repo) {\n    f0: object(expression: $e0) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n  }\n}",
+        "variables": {
+          "owner": "sindresorhus",
+          "repo": "is",
+          "e0": "e9c026c611c1160eaad50da00be4e676b626018f:header.gif"
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": "4994",
+        "x-ratelimit-reset": "1795609183",
+        "x-ratelimit-resource": "graphql",
+        "x-ratelimit-used": "6"
+      },
+      "body": {
+        "data": {
+          "repository": {
+            "f0": {
+              "__typename": "Blob",
+              "text": null,
+              "isBinary": true,
+              "isTruncated": true,
+              "oid": "f957944126b13c7521f3e2df3cdfa5097ecfeb2b",
+              "byteSize": 936246
+            }
+          }
+        }
+      }
+    }
+  }
+]
