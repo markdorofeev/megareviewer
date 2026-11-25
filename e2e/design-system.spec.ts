@@ -33,7 +33,7 @@ const open = async (page: Page, { theme, palette }: Pick<Combination, "theme" | 
 
 for (const combination of COMBINATIONS) {
   test(`meets the accessibility checks, ${combination.name}`, async ({ page }) => {
-    // The focus walk presses Tab through every stop on the page, about 500 of them: CI, running
+    // The focus walk presses Tab through every stop on the page, about 600 of them: CI, running
     // the four at once, has taken 2.5 to over 3 minutes.
     test.setTimeout(360_000);
     await open(page, combination);
@@ -61,7 +61,14 @@ for (const combination of COMBINATIONS) {
       await expect(card.locator('[class*="text-syntax-"]').first()).toBeVisible();
     }
     await page.addStyleTag({ content: "#tour * { content-visibility: visible !important; }" });
-    for (const section of ["foundations", "screens", "tour", "main-page", "preferences"]) {
+    for (const section of [
+      "foundations",
+      "screens",
+      "tour",
+      "flow-paths",
+      "main-page",
+      "preferences",
+    ]) {
       await expect(page.locator(`#${section}`)).toHaveScreenshot(
         `${section}-${combination.name}.png`,
       );
@@ -197,6 +204,62 @@ for (const width of [1440, 1920, 2560]) {
       }),
     );
     expect(overflow).toEqual(Array(3).fill({ sideways: 0, rows: 0, wrapped: 0, names: 0 }));
+  });
+}
+
+// Only the lanes' table and the bow tie's canvas scroll sideways, whatever has the focus.
+for (const width of [375, 768, 1024]) {
+  test(`keeps the flow paths inside the page, at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await open(page, { theme: "light", palette: "default" });
+    const section = page.locator("#flow-paths");
+    for (const name of ["Show the files of services/ under Ends in", "and 2 more in services/"]) {
+      await section.getByRole("button", { name }).first().click();
+    }
+    const wide = await section.evaluate(async (box) => {
+      const { right } = box.getBoundingClientRect();
+      const out: string[] = [];
+      const check = (when: string) => {
+        if (box.scrollWidth > box.clientWidth) out.push(`it scrolls sideways ${when}`);
+        for (const element of box.querySelectorAll("*")) {
+          if (element.parentElement?.closest("[data-slot$=-scroll]")) continue;
+          if (element.getBoundingClientRect().right > right + 0.5)
+            out.push(`${element.textContent} is past the edge ${when}`);
+        }
+      };
+      check("at rest");
+      for (const button of box.querySelectorAll("button")) {
+        button.focus();
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+        check(`on ${button.getAttribute("aria-label") ?? button.textContent}`);
+      }
+      return out;
+    });
+    expect(wide).toEqual([]);
+  });
+
+  test(`never hides a focused stop of the lanes under their first column, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await open(page, { theme: "light", palette: "default" });
+    const lanes = page.locator("#flow-paths [data-slot=flow-lanes-scroll]");
+    const covered = await lanes.evaluate((box) => {
+      box.scrollLeft = box.scrollWidth;
+      const out: string[] = [];
+      for (const button of [...box.querySelectorAll("button")].reverse()) {
+        button.focus();
+        const at = button.getBoundingClientRect();
+        const shown = [0.05, 0.5, 0.95].some((across) =>
+          button.contains(
+            document.elementFromPoint(at.left + at.width * across, at.top + at.height / 2),
+          ),
+        );
+        if (!shown) out.push(button.textContent ?? "");
+      }
+      return out;
+    });
+    expect(covered).toEqual([]);
   });
 }
 

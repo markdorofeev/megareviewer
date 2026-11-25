@@ -4,6 +4,7 @@ import { cn } from "../lib/utils.ts";
 import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
 import { DomainComponents } from "./DomainComponents.tsx";
+import { FlowPathsDemo } from "./FlowPathsDemo.tsx";
 import { Foundations } from "./Foundations.tsx";
 import { MainPage } from "./MainPage.tsx";
 import { Preferences } from "./Preferences.tsx";
@@ -26,6 +27,7 @@ const SECTIONS: readonly {
   { id: "components", title: "Review components", content: <DomainComponents /> },
   { id: "screens", title: "Screens", content: <Screens /> },
   { id: "tour", title: "Tour", content: <TourDemo /> },
+  { id: "flow-paths", title: "Flow paths", content: <FlowPathsDemo /> },
   { id: "main-page", title: "Main page", content: <MainPage /> },
   { id: "preferences", title: "Preferences", content: <Preferences /> },
 ];

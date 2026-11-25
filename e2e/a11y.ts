@@ -271,7 +271,7 @@ export const pageProblems = (page: Page): Promise<string[]> =>
  */
 export const focusProblems = async (
   page: Page,
-  limit = 600,
+  limit = 800,
 ): Promise<{ readonly problems: string[]; readonly stops: number }> => {
   const problems: string[] = [];
   await page.evaluate(() => {
