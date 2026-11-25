@@ -1,6 +1,6 @@
 # Stage 66: megareviewer's own copy of the repository
 
-**Status:** Not started
+**Status:** In progress (branch claude/full-repo-checkout-feasibility-c87b42)
 **Depends on:** 65
 **Owns:** a `RepositoryCopies` port with its fake and contract suite, the download in `src/adapters/git/`, the copies under megareviewer's home folder, callers added to a complete analysis in `src/application/use-cases/`, `Analysis.checkout`'s new states in `src/domain/review/analysis.ts` and `contracts/`, the `--no-download` flag, the startup summary and `doctor` in `src/cli/`, the checkout note and the callers' arrival in `web/src/pages/review/`, and "Local checkout" in ARCHITECTURE.md and DESIGN.md
 
