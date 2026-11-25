@@ -6,6 +6,7 @@ import type {
   Clock,
   FileAt,
   FileCache,
+  HarnessStore,
   Logger,
   PreferenceStore,
   StoredPublication,
@@ -26,6 +27,7 @@ import {
   Timestamp,
 } from "../../domain/review/index.ts";
 import { MIGRATIONS, migrate } from "./migrations.ts";
+import { createSqliteHarnessStore } from "./sqlite-harness-store.ts";
 import { createSqlitePreferenceStore } from "./sqlite-preference-store.ts";
 
 export interface SqliteAnalysisStoreOptions {
@@ -35,11 +37,14 @@ export interface SqliteAnalysisStoreOptions {
   readonly logger: Logger;
 }
 
-/** Fetched files are kept this long, so the cache doesn't grow without bound. */
+/** Fetched files and harnesses are kept this long, so neither grows without bound. */
 export const FILE_CACHE_DAYS = 30;
 
-/** The analyses, review state, fetched files and the reviewer's preferences, in one database. */
-export type SqliteAnalysisStore = AnalysisStore & FileCache & PreferenceStore & { close(): void };
+/** Analyses, review state, fetched files, harnesses and the reviewer's preferences, in one database. */
+export type SqliteAnalysisStore = AnalysisStore &
+  FileCache &
+  HarnessStore &
+  PreferenceStore & { close(): void };
 
 const PayloadRow = z.object({ id: z.string(), payload: z.string() });
 const PointReviewRow = z.object({
@@ -164,9 +169,10 @@ export const openSqliteAnalysisStore = (
      ON CONFLICT (host, owner, repo, sha, path) DO UPDATE SET
        content = excluded.content, fetched_at = excluded.fetched_at`,
   );
-  const pruned = db
-    .prepare("DELETE FROM file_contents WHERE fetched_at < ?")
-    .run(new Date(Date.parse(clock.now()) - FILE_CACHE_DAYS * 24 * 60 * 60 * 1000).toISOString());
+  const keptSince = new Date(
+    Date.parse(clock.now()) - FILE_CACHE_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const pruned = db.prepare("DELETE FROM file_contents WHERE fetched_at < ?").run(keptSince);
   if (Number(pruned.changes) > 0) {
     logger.debug("Dropped old cached files", { count: Number(pruned.changes) });
   }
@@ -219,6 +225,7 @@ export const openSqliteAnalysisStore = (
 
   return {
     ...createSqlitePreferenceStore(db, logger),
+    ...createSqliteHarnessStore(db, { clock, logger, keptSince }),
 
     async getAnalysis(id: AnalysisId) {
       return toAnalysis(selectById.get(id));

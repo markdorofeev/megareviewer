@@ -29,6 +29,9 @@ describe("migrate", () => {
       "analyses",
       "file_contents",
       "guideline_switches",
+      "harness_blobs",
+      "harness_files",
+      "harnesses",
       "last_model_option",
       "point_reviews",
       "preference_proposals",
@@ -157,6 +160,28 @@ describe("migrate", () => {
       db.exec(`INSERT INTO review_signals VALUES
         ('k', 'liked', 't', 'github', 'acme', 'shop', 1, NULL, '', '', NULL)`),
     ).toThrow(/CHECK/);
+  });
+
+  it("adds the harness tables beside the rest, a harness taking its files with it", () => {
+    const db = databaseAt(8);
+    db.exec("INSERT INTO guideline_switches VALUES ('github', 'acme', 'shop', 'CLAUDE.md', 1)");
+
+    expect(migrate(db, MIGRATIONS.slice(0, 9))).toEqual([9]);
+
+    expect(db.prepare("SELECT path FROM guideline_switches").all()).toEqual([
+      { path: "CLAUDE.md" },
+    ]);
+    db.exec("PRAGMA foreign_keys = ON");
+    db.exec(`INSERT INTO harnesses VALUES
+      ('github', 'acme', 'shop', 'sha', 't', NULL, '[]', '[]')`);
+    const file = (via: string, position: number) =>
+      db.exec(`INSERT INTO harness_files VALUES
+        ('github', 'acme', 'shop', 'sha', ${position}, 'CLAUDE.md', 'blob', 1, 1, '${via}', NULL,
+         '[]', '[]')`);
+    file("root", 0);
+    expect(() => file("guess", 1)).toThrow(/CHECK/);
+    db.exec("DELETE FROM harnesses");
+    expect(db.prepare("SELECT path FROM harness_files").all()).toEqual([]);
   });
 
   it("rolls back a failed migration and stays at the last good version", () => {
