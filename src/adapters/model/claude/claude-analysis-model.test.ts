@@ -17,6 +17,7 @@ import {
   type RecordedRequest,
 } from "./fixtures/anthropic-fetch.ts";
 import errors from "./fixtures/errors.synthetic.json" with { type: "json" };
+import readingRounds from "./fixtures/reading.json" with { type: "json" };
 import smallFeature from "./fixtures/small-feature.synthetic.json" with { type: "json" };
 import { costUsd, HIGHEST_PRICE, PRICES } from "./pricing.ts";
 import { READ_FILE } from "./read-file.ts";
@@ -387,6 +388,38 @@ describe("ClaudeAnalysisModel", () => {
 
     it("says it reads", () => {
       expect(modelWith({}).model.readsHarness).toBe(true);
+    });
+
+    it("reads through recorded rounds: one file, two in parallel, then the answer", async () => {
+      const { model, requests } = modelWith(readingRounds);
+      const first = "harness/docs/where-rules-are.md";
+      const second = ["harness/docs/rules/03.md", "harness/docs/rules/04.md"];
+      const contents = new Map([first, ...second].map((path) => [path, `# ${path}\n`]));
+      const result = await model.intent({
+        ...smallFeatureInput,
+        harness: { files: harness.files, contents },
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      expect(result.value.reads?.map(({ path, outcome }) => [path, outcome])).toEqual(
+        [first, ...second].map((path) => [path, "read"]),
+      );
+      expect(requests).toHaveLength(3);
+      expect(resultsIn(requests[1]).map(({ content }) => content)).toEqual([`# ${first}`]);
+      expect(resultsIn(requests[2]).map(({ content }) => content)).toEqual(
+        second.map((path) => `# ${path}`),
+      );
+      // Sent back as the API gave it: the thinking with its signature, then what it asked for.
+      expect(requests[2]?.body.messages.at(-2)?.content).toEqual([
+        { type: "thinking", thinking: "", signature: expect.any(String) },
+        ...second.map((path) =>
+          expect.objectContaining({ type: "tool_use", name: "read_file", input: { path } }),
+        ),
+      ]);
+      expect(result.value.usage).toMatchObject({
+        inputTokens: 1566,
+        cacheReadTokens: 13_203,
+        cacheWriteTokens: 10_036,
+      });
     });
 
     it("serves one read, then takes the answer, with what was read", async () => {
