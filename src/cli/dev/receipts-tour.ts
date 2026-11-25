@@ -2,7 +2,7 @@ import type { AnalysisInput, AnalysisModel } from "../../application/ports/index
 import { type PullRequestFixture, smallFeature } from "../../application/testing/index.ts";
 import { pullRequestUrl, type StepDraft } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
-import { hunkWith, lineOf } from "./receipts-tested.ts";
+import { hunkWith, lineOf } from "./hunks.ts";
 
 const ref = { ...smallFeature.pullRequest.ref, number: 106 };
 
@@ -56,8 +56,6 @@ export const withTour = (model: AnalysisModel, url: string): AnalysisModel => ({
   checkSize: (input) => model.checkSize(input),
   intent: (input, options) => model.intent(input, options),
   findings: (input, intent, options) => model.findings(input, intent, options),
-  risk: (input, options) => model.risk(input, options),
-  decisions: (input, options) => model.decisions(input, options),
   async steps(input, options) {
     const answer = await model.steps(input, options);
     if (!answer.ok || input.pullRequest.url !== url) return answer;

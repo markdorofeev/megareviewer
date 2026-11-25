@@ -48,7 +48,6 @@ import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./mode
 import { checkedAdvisor, receiptsChecked, withGuardrails } from "./receipts-checked.ts";
 import { downloadedCommits, receiptsDownloaded } from "./receipts-downloaded.ts";
 import { receiptsGuided, withGuidance } from "./receipts-guided.ts";
-import { receiptsTested, withCheckingTests } from "./receipts-tested.ts";
 import { receiptsTour, withTour } from "./receipts-tour.ts";
 
 /** The recorded run the scenarios play, read once at startup. */
@@ -71,7 +70,6 @@ export const intentFailsOnce: PullRequestFixture = {
 export const fakeFixtures: readonly PullRequestFixture[] = [
   ...allFixtures,
   intentFailsOnce,
-  receiptsTested,
   receiptsGuided,
   receiptsChecked,
   receiptsTour,
@@ -179,8 +177,6 @@ export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisMo
       });
     },
     findings: (input, intent, options) => model.findings(input, intent, options),
-    risk: (input, options) => model.risk(input, options),
-    decisions: (input, options) => model.decisions(input, options),
     steps: (input, options) => model.steps(input, options),
   };
 };
@@ -340,12 +336,9 @@ export const createFakeApp = async (options: {
         withTour(
           withGuardrails(
             withGuidance(
-              withCheckingTests(
-                options.scenario === undefined
-                  ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
-                  : createReplayAnalysisModel(recording, { scenario: options.scenario }),
-                receiptsTested.pullRequest.url,
-              ),
+              options.scenario === undefined
+                ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+                : createReplayAnalysisModel(recording, { scenario: options.scenario }),
               receiptsGuided.pullRequest.url,
             ),
             receiptsChecked.pullRequest.url,

@@ -1,17 +1,6 @@
 import type { CaseLabels } from "../../labels.ts";
 
 export const labels: CaseLabels = {
-  risk: {
-    h_90001ce102b87003: "logic", // import
-    h_32b4390529725014: "contract", // who may download customers' personal data
-    h_919a7c7975684236: "logic", // tests
-  },
-  riskAt: {
-    h_32b4390529725014: [{ hunkId: "h_32b4390529725014", side: "new", lines: [19, 23] }],
-  },
-  // The test named for rejecting non-admins sends only an admin's request, whatever its name, the
-  // comment above the route and the description say.
-  checkedBy: { h_32b4390529725014: [] },
   findings: [
     {
       description:
@@ -27,7 +16,6 @@ export const labels: CaseLabels = {
       mustHave: false,
     },
   ],
-  decisions: [],
   mismatches: [
     {
       kind: "contradicts",

@@ -102,8 +102,6 @@ const codeOnly: AnalysisView = {
     stages: {
       ...analysis.stages,
       intent: "skipped",
-      risk: "skipped",
-      decisions: "skipped",
       steps: "skipped",
     },
     modelError: null,
@@ -234,13 +232,13 @@ describe("ReviewPage states", () => {
     // The code's stages are done, so the strip is gone; Claude's run says so in the header.
     expect(screen.queryByRole("list", { name: "Analysis progress" })).toBeNull();
     // The AI split is busy, says how far the run got, and the brief's status line says so too.
-    const reviewing = within(reviewBar()).getByRole("button", { name: /^Reviewing · \d of 4$/ });
+    const reviewing = within(reviewBar()).getByRole("button", { name: /^Reviewing · \d of 2$/ });
     expect(reviewing.getAttribute("aria-disabled")).toBe("true");
     expect(within(reviewBar()).getByRole("status").textContent).toMatch(
-      /^Claude is reading this PR, \d of 4 passes done$/,
+      /^Claude is reading this PR, \d of 2 passes done$/,
     );
     expect(document.querySelector("[data-slot=ai-status]")?.textContent).toMatch(
-      /^AI review running.*\d of 4 passes$/,
+      /^AI review running.*\d of 2 passes$/,
     );
     expect(
       reviewBar().querySelector("[data-slot=model-hairline]")?.getAttribute("data-state"),
@@ -254,11 +252,11 @@ describe("ReviewPage states", () => {
 
     // The intent is the first result: Claude's sentence swaps in where the description was,
     // which keeps its room, hidden from readers, until the run ends.
-    setView({ ...fixture, analysis: analysisInProgress(analysis, 4) });
+    setView({ ...fixture, analysis: analysisInProgress(analysis, 3) });
     expect(await screen.findByText(analysis.intent?.inferred.summary ?? "")).toBeTruthy();
     const swap = document.querySelector("[data-slot=intent-swap]");
     expect(swap?.querySelector("[data-leaving]")?.getAttribute("aria-hidden")).toBe("true");
-    // Findings are in, but the code doesn't change until everything has arrived.
+    // The code doesn't change until everything has arrived.
     expect(document.querySelector("[data-slot=point]")).toBeNull();
     expect(document.querySelector("[data-slot=point-chip]")).toBeNull();
 
@@ -488,9 +486,7 @@ describe("ReviewPage states", () => {
     });
     await loaded();
     // What landed stays; the receipt says what's missing and why.
-    expect(within(reviewBar()).getByRole("alert").textContent).toBe(
-      "findings, risk, decisions missing: Overloaded",
-    );
+    expect(within(reviewBar()).getByRole("alert").textContent).toBe("findings missing: Overloaded");
     // The code's review is all there.
     expect(fileCards()).toContain("src/routes/orders.ts");
 
@@ -768,11 +764,11 @@ describe("header", () => {
     await loaded();
     const usage = screen.getByRole("button", { name: /Usage:/ });
     expect(usage.textContent).toBe(
-      "Sonnet 5.5 through Claude Code · Usage: 87k tokens in · 77k cache read · 7k out · $0.65",
+      "Sonnet 5.5 through Claude Code · Usage: 84k tokens in · 38k cache read · 6k out · $0.57",
     );
     const breakdown = document.getElementById(usage.getAttribute("aria-describedby") ?? "");
     if (breakdown === null) throw new Error("no breakdown");
-    expect(within(breakdown).getAllByRole("row")).toHaveLength(4);
+    expect(within(breakdown).getAllByRole("row")).toHaveLength(3);
     expect(within(breakdown).getByRole("row", { name: /Intent/ }).textContent).toBe(
       "Intent80k01k$0.36",
     );
@@ -1923,15 +1919,10 @@ describe("without the model", () => {
       ...analysis,
       intent: null,
       findings: [],
-      decisions: [],
-      risk: analysis.risk.map((risk) =>
-        risk.source === "model" ? { ...risk, source: "rule" as const } : risk,
-      ),
       stages: {
         ...analysis.stages,
         intent: "skipped",
         findings: "skipped",
-        decisions: "skipped",
         steps: "skipped",
       },
       pullRequest:
@@ -1988,13 +1979,8 @@ describe("without the model", () => {
 });
 
 describe("comments on hunks", () => {
-  const withoutDecisions: AnalysisView = {
-    ...fixture,
-    analysis: { ...analysis, decisions: [], stages: { ...analysis.stages, decisions: "skipped" } },
-  };
-
   it("posts a comment now, as a thread of its own, without keeping a draft", async () => {
-    const { requests } = renderReview({ view: withoutDecisions });
+    const { requests } = renderReview();
     await loaded();
     const [number] = within(mainArea()).getAllByRole("button", { name: /^Comment on line \d+$/ });
     if (number === undefined) throw new Error("no commentable line");
@@ -2016,7 +2002,7 @@ describe("comments on hunks", () => {
   });
 
   it("writes a comment from a line number, keeps it, and publishes it", async () => {
-    const { requests, unmount } = renderReview({ view: withoutDecisions });
+    const { requests, unmount } = renderReview();
     await loaded();
     const [number] = within(mainArea()).getAllByRole("button", { name: /^Comment on line \d+$/ });
     if (number === undefined) throw new Error("no commentable line");
@@ -2029,7 +2015,7 @@ describe("comments on hunks", () => {
     expect(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`)).toContain("Why this?");
 
     unmount();
-    const again = renderReview({ view: withoutDecisions });
+    const again = renderReview();
     await loaded();
     // It's back as the comment it will be, until it's edited.
     const saved = mainArea().querySelector<HTMLElement>("[data-slot=line-comment]");
@@ -2056,7 +2042,7 @@ describe("comments on hunks", () => {
   });
 
   it("removes a comment that's emptied, and c opens one on the focused hunk", async () => {
-    renderReview({ view: withoutDecisions });
+    renderReview();
     await loaded();
     await userEvent.click(cardOf(h.routeImports));
     await userEvent.keyboard("c");

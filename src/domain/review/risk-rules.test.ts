@@ -6,7 +6,7 @@ import {
   type Hunk,
   HunkId,
 } from "../diff/index.ts";
-import { classifyByRules, isTestFile, raiseByRules, ruleReasons } from "./index.ts";
+import { classifyByRules, isTestFile, ruleReasons } from "./index.ts";
 
 const h = (n: number): HunkId => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
 
@@ -69,8 +69,6 @@ describe("classifyByRules", () => {
       riskClass: "logic",
       reason: "No contract rule matched.",
       source: "rule",
-      lines: null,
-      guidance: null,
     });
   });
 
@@ -231,45 +229,6 @@ describe("isTestFile", () => {
     "src/spec.md",
   ])("knows %s isn't", (path) => {
     expect(isTestFile(path)).toBe(false);
-  });
-});
-
-describe("raiseByRules", () => {
-  const assessed = (n: number, riskClass: "logic" | "contract" | "mechanical", reason: string) => ({
-    hunkId: h(n),
-    riskClass,
-    reason,
-    source: "model" as const,
-    lines: null,
-    guidance: null,
-  });
-  const rule = (n: number, riskClass: "logic" | "contract", reason: string) => ({
-    hunkId: h(n),
-    riskClass,
-    reason,
-    source: "rule" as const,
-    lines: null,
-    guidance: null,
-  });
-
-  it("keeps the model's class unless a rule says contract", () => {
-    const model = [
-      assessed(1, "logic", "m1"),
-      assessed(2, "contract", "m2"),
-      assessed(3, "logic", "m3"),
-    ];
-    const rules = [rule(1, "contract", "r1"), rule(2, "contract", "r2"), rule(3, "logic", "r3")];
-
-    expect(raiseByRules(model, rules)).toEqual([
-      rule(1, "contract", "r1"),
-      assessed(2, "contract", "m2"),
-      assessed(3, "logic", "m3"),
-    ]);
-  });
-
-  it("leaves hunks the rules didn't assess alone", () => {
-    const model = [assessed(1, "mechanical", "moved")];
-    expect(raiseByRules(model, [rule(2, "contract", "r")])).toEqual(model);
   });
 });
 

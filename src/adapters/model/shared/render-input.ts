@@ -26,8 +26,6 @@ const TAGS = [
   "call_graph",
   "earlier_results",
   "intent",
-  "risk",
-  "decisions",
   "tour_skeleton",
   "step",
 ];

@@ -43,14 +43,7 @@ export {
   withoutModelRun,
 } from "./analysis.ts";
 export { attachmentHost } from "./attachments.ts";
-export {
-  CheckingTest,
-  type CheckingTestProblem,
-  checkingTestProblem,
-  MAX_CHECKING_LINES,
-} from "./checking-test.ts";
 export { type CodeFlowsInput, codeFlows, looksGenerated } from "./code-flows.ts";
-export { Decision, DecisionCategory, DecisionId } from "./decision.ts";
 export { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 export {
   HostError,
@@ -113,17 +106,16 @@ export {
   MismatchId,
   Point,
   PointId,
-  PointKind,
   PointLines,
   PointReview,
   PointState,
   type PointsInput,
-  pointLinesFit,
   pointsOf,
   Severity,
   strippable,
   validateFindings,
 } from "./point.ts";
+export { PointKind } from "./point-kind.ts";
 export {
   canEnable,
   checkGuidanceMark,
@@ -206,7 +198,6 @@ export {
   classifyByRules,
   isTestFile,
   pathReasons,
-  raiseByRules,
   ruleReasons,
 } from "./risk-rules.ts";
 export { pointSignalKey, postedSignalKey, publishedSignalKey } from "./signal-key.ts";
@@ -244,9 +235,4 @@ export {
   type TableAlign,
 } from "./thread-body.ts";
 export { extractTicketKeys } from "./ticket-keys.ts";
-export {
-  CoverageProblem,
-  type RiskProblem,
-  validateHunkReferences,
-  validateRiskCoverage,
-} from "./validation.ts";
+export { validateHunkReferences } from "./validation.ts";

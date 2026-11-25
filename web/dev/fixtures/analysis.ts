@@ -14,7 +14,6 @@ import {
   type Analysis,
   type AnalysisKey,
   analysisId,
-  DecisionId,
   FindingId,
   MismatchId,
   type ModelCall,
@@ -443,48 +442,15 @@ const provedHunks = new Set(
   proofs.flatMap((proof) => (proof.hunkId === null ? [] : [proof.hunkId])),
 );
 
-const modelRisk: readonly RiskAssessment[] = [
-  {
-    hunkId: h.dependency,
-    riskClass: "contract",
-    reason: "Adds a runtime dependency.",
-    source: "model",
-    lines: null,
-    guidance: null,
-  },
-  {
-    hunkId: h.routeImports,
-    riskClass: "logic",
-    reason: "Imports for the new route.",
-    source: "model",
-    lines: null,
-    guidance: null,
-  },
-  {
-    hunkId: h.receiptRoute,
-    riskClass: "contract",
-    reason: "Adds a public endpoint, GET /orders/:id/receipt, that clients will build on.",
-    source: "model",
-    lines: { hunkId: h.receiptRoute, side: "new", startLine: 14, line: 21 },
-    guidance: null,
-  },
-  {
-    hunkId: h.receiptFormatting,
-    riskClass: "logic",
-    reason: "Changes how dates and prices appear on receipts.",
-    source: "model",
-    lines: null,
-    guidance: null,
-  },
-  {
-    hunkId: h.retryAndCache,
-    riskClass: "logic",
-    reason: "Retries tax service calls and caches rendered receipts in memory.",
-    source: "model",
-    lines: null,
-    guidance: null,
-  },
-];
+const ruleRisk = (hunkId: HunkId): RiskAssessment =>
+  hunkId === h.dependency
+    ? {
+        hunkId,
+        riskClass: "contract",
+        reason: "changes dependencies (package.json)",
+        source: "rule",
+      }
+    : { hunkId, riskClass: "logic", reason: "No contract rule matched.", source: "rule" };
 
 const usage: readonly ModelUsage[] = [
   {
@@ -497,16 +463,7 @@ const usage: readonly ModelUsage[] = [
     billing: "api",
   },
   {
-    pass: "risk",
-    inputTokens: 3_160,
-    cacheReadTokens: 38_400,
-    cacheWriteTokens: 0,
-    outputTokens: 610,
-    costUsd: 0.08,
-    billing: "api",
-  },
-  {
-    pass: "decisions",
+    pass: "findings",
     inputTokens: 3_420,
     cacheReadTokens: 38_400,
     cacheWriteTokens: 0,
@@ -542,8 +499,6 @@ const modelCalls: readonly ModelCall[] = [
       "Finding 4's explanation is longer than 300 characters.",
     ],
   }),
-  call("risk", "2026-10-21T09:00:31.200Z", 18_400),
-  call("decisions", "2026-10-21T09:00:31.200Z", 33_100),
   call("findings", "2026-10-21T09:01:36.000Z", 52_300, { attempt: 2 }),
 ];
 
@@ -573,8 +528,6 @@ const analysis: Analysis = {
     prep: "done",
     intent: "done",
     findings: "done",
-    risk: "done",
-    decisions: "done",
     steps: "skipped",
   },
   filesFetched: null,
@@ -679,12 +632,13 @@ const analysis: Analysis = {
               riskClass: "mechanical",
               reason: proof.detail,
               source: "proof",
-              lines: null,
-              guidance: null,
             },
           ],
     ),
-    ...modelRisk.filter((assessment) => !provedHunks.has(assessment.hunkId)),
+    ...files
+      .flatMap((file) => file.hunks)
+      .filter((hunk) => !provedHunks.has(hunk.id))
+      .map((hunk) => ruleRisk(hunk.id)),
   ],
   findings: [
     {
@@ -719,44 +673,6 @@ const analysis: Analysis = {
       suggestion: null,
       mismatch: null,
       guidance: null,
-    },
-  ],
-  decisions: [
-    {
-      id: DecisionId.parse("d1"),
-      title: "Why plain text, not a PDF",
-      category: "api",
-      whyItMatters:
-        "SHOP-142 asks for a receipt to download; plain text needs no renderer and no new dependency.",
-      hunkIds: [h.receiptRoute],
-      lines: { hunkId: h.receiptRoute, side: "new", startLine: 20, line: 20 },
-    },
-    {
-      id: DecisionId.parse("d2"),
-      title: "Why cache rendered receipts",
-      category: "performance",
-      whyItMatters:
-        "Rendering calls the tax service; a cached receipt is sent again without calling it.",
-      hunkIds: [h.retryAndCache],
-      lines: { hunkId: h.retryAndCache, side: "new", startLine: 44, line: 44 },
-    },
-    {
-      id: DecisionId.parse("d3"),
-      title: "Why dayjs for one date format",
-      category: "dependency",
-      whyItMatters:
-        'Receipts show dates as "21 October 2026"; dayjs writes that in one call, where toISOString gave only "2026-10-21".',
-      hunkIds: [h.receiptFormatting, h.dependency],
-      lines: { hunkId: h.receiptFormatting, side: "new", startLine: 6, line: 6 },
-    },
-    {
-      id: DecisionId.parse("d4"),
-      title: "Why move formatMoney into src/lib",
-      category: "other",
-      whyItMatters:
-        "The receipt renderer now formats prices too, so the helper moved where both can import it.",
-      hunkIds: [h.receiptFormatting],
-      lines: { hunkId: h.receiptFormatting, side: "new", startLine: 2, line: 2 },
     },
   ],
   flows: [

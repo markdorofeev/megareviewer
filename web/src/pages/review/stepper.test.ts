@@ -4,7 +4,6 @@ import { stepFrom, stepperPlace } from "./stepper.ts";
 
 const point = (id: string): Point => ({
   id: PointId.parse(id),
-  kind: "finding",
   title: id,
   explanation: "",
   hunkIds: [],

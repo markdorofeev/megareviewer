@@ -71,14 +71,6 @@ const recordingInput = (model: AnalysisModel) => {
       keep(given);
       return model.findings(given, intent, options);
     },
-    risk: (given, options) => {
-      keep(given);
-      return model.risk(given, options);
-    },
-    decisions: (given, options) => {
-      keep(given);
-      return model.decisions(given, options);
-    },
     steps: (given, options) => {
       keep(given);
       return model.steps(given, options);

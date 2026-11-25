@@ -6,7 +6,7 @@ import {
   smallFeatureInput,
   smallFeatureIntent,
 } from "../../../application/testing/index.ts";
-import type { ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
+import { type ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import { GUIDANCE_BLOCK, withGuidance } from "../shared/fixtures/guidance.ts";
 import { passSchema } from "../shared/prompted-answer.ts";
 import { createClaudeAnalysisModel } from "./claude-analysis-model.ts";
@@ -44,11 +44,9 @@ const runPass = (pass: ModelPass, answer: FixtureAnswer, feedback?: readonly str
   const result =
     pass === "intent"
       ? model.intent(smallFeatureInput, options)
-      : pass === "risk"
-        ? model.risk(smallFeatureInput, options)
-        : pass === "decisions"
-          ? model.decisions(smallFeatureInput, options)
-          : model.findings(smallFeatureInput, smallFeatureIntent, options);
+      : pass === "steps"
+        ? model.steps(smallFeatureInput, options)
+        : model.findings(smallFeatureInput, smallFeatureIntent, options);
   return { ...setup, result };
 };
 
@@ -66,25 +64,20 @@ describe("ClaudeAnalysisModel", () => {
     expect(answering).toBe(1);
   });
 
-  it("returns the guidance a finding and a risk name, and null for the others", async () => {
+  it("returns the guidance a finding names, and null for one that names none", async () => {
     const { model } = modelWith(recorded());
     const findings = await model.findings(guidedInput, smallFeatureIntent);
-    const risks = await model.risk(guidedInput);
-    if (!findings.ok || !risks.ok) throw new Error("expected both passes to answer");
+    if (!findings.ok) throw new Error(findings.error.message);
     expect(findings.value.value.map((finding) => finding.guidance)).toEqual([
       { ref: "p1", effect: "raised" },
       null,
-    ]);
-    expect(risks.value.value.map((risk) => risk.guidance)).toEqual([
-      { ref: "p2", effect: "left-out" },
-      ...Array(5).fill(null),
     ]);
   });
 
   it("sends the reviewer's guidance before the PR, in the cached block every pass shares", async () => {
     const { model, requests } = modelWith(recorded());
     await model.intent(guidedInput);
-    await model.risk(guidedInput);
+    await model.findings(guidedInput, smallFeatureIntent);
     const blocks = requests.map((request) => request.body.messages[0]?.content[0]?.text ?? "");
     expect(blocks[0]).toMatch(GUIDANCE_BLOCK);
     expect(blocks[0]?.startsWith("<reviewer_guidance>")).toBe(true);
@@ -102,8 +95,8 @@ describe("ClaudeAnalysisModel", () => {
     const runAllPasses = async () => {
       const { model, requests } = modelWith(recorded());
       await model.intent(smallFeatureInput);
-      await model.risk(smallFeatureInput);
-      await model.decisions(smallFeatureInput);
+      await model.findings(smallFeatureInput, smallFeatureIntent);
+      await model.steps(smallFeatureInput, { tour: true });
       return requests;
     };
 
@@ -136,7 +129,7 @@ describe("ClaudeAnalysisModel", () => {
     it("sets each pass's effort after the cached prefix", async () => {
       const requests = await runAllPasses();
       expect(requests.map((request) => request.body.messages[1])).toEqual(
-        ["medium", "low", "high"].map((effort) => ({
+        ["medium", "high", "medium"].map((effort) => ({
           role: "system",
           content: [],
           output_config: { effort },
@@ -168,7 +161,7 @@ describe("ClaudeAnalysisModel", () => {
 
     it("ends each pass's task with the schema of its own answer", async () => {
       const requests = await runAllPasses();
-      for (const [index, pass] of (["intent", "risk", "decisions"] as const).entries()) {
+      for (const [index, pass] of ModelPass.options.entries()) {
         const task = requests[index]?.body.messages[2]?.content[0]?.text ?? "";
         expect(task).toMatch(/Answer with one JSON object and nothing else/);
         expect(task.endsWith(JSON.stringify(passSchema(pass)))).toBe(true);
@@ -192,49 +185,53 @@ describe("ClaudeAnalysisModel", () => {
       expect(task.endsWith(JSON.stringify(passSchema("steps")))).toBe(true);
     });
 
-    it("asks each pass for its own task alone, so the passes can run side by side", async () => {
+    it("asks each pass for its own task, and only the findings with the intent's answer", async () => {
       const requests = await runAllPasses();
       const instructions = requests.map(
         (request) => request.body.messages[2]?.content[0]?.text ?? "",
       );
-      expect(instructions.map((text) => /^Task: (\w+)\./.exec(text)?.[1])).toEqual([
+      expect(instructions.map((text) => /^Task: (\w+)\./m.exec(text)?.[1])).toEqual([
         "intent",
-        "risk",
-        "decisions",
+        "findings",
+        "steps",
       ]);
-      for (const text of instructions) expect(text).not.toContain("<earlier_results>");
+      expect(instructions.map((text) => text.includes("<earlier_results>"))).toEqual([
+        false,
+        true,
+        false,
+      ]);
     });
 
     it("appends the feedback on the previous answer when given", async () => {
       const instruction = async (feedback?: readonly string[]) => {
-        const { result, requests } = runPass("risk", smallFeature.passes.risk, feedback);
+        const { result, requests } = runPass("findings", smallFeature.passes.findings, feedback);
         await result;
         return requests[0]?.body.messages[2]?.content[0]?.text ?? "";
       };
       expect(await instruction(["h_1 is not a hunk", "h_2 missing"])).toMatch(
         /\n\nYour previous answer had these problems: h_1 is not a hunk; h_2 missing\. Fix them\.\n\nAnswer with one JSON object/,
       );
-      expect(await instruction()).toMatch(/^Task: risk\.$/m);
+      expect(await instruction()).toMatch(/^Task: findings\.$/m);
       expect(await instruction()).not.toContain("previous answer");
     });
   });
 
   describe("usage", () => {
     it("reports tokens and cost per pass", async () => {
-      const { result, logger } = runPass("risk", smallFeature.passes.risk);
+      const { result, logger } = runPass("findings", smallFeature.passes.findings);
       const output = await result;
       if (!output.ok) throw new Error(output.error.message);
 
       const tokens = {
-        inputTokens: 238,
+        inputTokens: 244,
         cacheReadTokens: 6012,
         cacheWriteTokens: 0,
-        outputTokens: 261,
+        outputTokens: 688,
       };
       const price = PRICES["claude-haiku-5-5"];
       if (price === undefined) throw new Error("no price for the model");
       expect(output.value.usage).toEqual({
-        pass: "risk",
+        pass: "findings",
         ...tokens,
         costUsd: costUsd(price, tokens),
         billing: "api",
@@ -242,7 +239,7 @@ describe("ClaudeAnalysisModel", () => {
       expect(logger.entries).toContainEqual(
         expect.objectContaining({
           level: "info",
-          fields: expect.objectContaining({ pass: "risk", model: "claude-haiku-5-5" }),
+          fields: expect.objectContaining({ pass: "findings", model: "claude-haiku-5-5" }),
         }),
       );
     });
@@ -277,7 +274,7 @@ describe("ClaudeAnalysisModel", () => {
       failsWith("intent", errors.messages.refusal, "refusal", /category: cyber/));
 
     it("reports an answer cut off at the output limit", () =>
-      failsWith("decisions", errors.messages.maxTokens, "max-tokens", /64000/));
+      failsWith("findings", errors.messages.maxTokens, "max-tokens", /64000/));
 
     it("reports an answer that isn't JSON", () =>
       failsWith("intent", errors.messages.malformed, "invalid-output", /isn't one JSON object/));
@@ -292,14 +289,14 @@ describe("ClaudeAnalysisModel", () => {
     });
 
     it("reports an answer outside the schema", () =>
-      failsWith("risk", errors.messages.outsideSchema, "invalid-output", /riskClass/));
+      failsWith("findings", errors.messages.outsideSchema, "invalid-output", /severity/));
 
     it("reports an answer to another pass", () =>
       failsWith(
-        "risk",
+        "findings",
         errors.messages.wrongPass,
         "invalid-output",
-        /intent task instead of risk/,
+        /intent task instead of findings/,
       ));
 
     it.each([
@@ -310,7 +307,7 @@ describe("ClaudeAnalysisModel", () => {
       ["server error", errors.http.serverError, "overloaded"],
       ["bad request", errors.http.badRequest, "unexpected"],
       ["no network", "no-network", "network"],
-    ] as const)("maps %s", (_, answer, kind) => failsWith("decisions", answer, kind));
+    ] as const)("maps %s", (_, answer, kind) => failsWith("findings", answer, kind));
 
     it("logs the failure", async () => {
       const { result, logger } = runPass("intent", errors.http.overloaded);

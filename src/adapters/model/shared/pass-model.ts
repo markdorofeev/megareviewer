@@ -70,16 +70,6 @@ export const createPassModel = (transport: {
         answer.pass === "findings" ? answer.findings : null,
       ),
 
-    risk: (input, options) =>
-      run("risk", input, null, options, (answer) =>
-        answer.pass === "risk" ? answer.assessments : null,
-      ),
-
-    decisions: (input, options) =>
-      run("decisions", input, null, options, (answer) =>
-        answer.pass === "decisions" ? answer.decisions : null,
-      ),
-
     steps: (input, options) =>
       run("steps", input, null, options, (answer) =>
         answer.pass === "steps" ? answer.steps : null,

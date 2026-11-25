@@ -53,8 +53,7 @@ describe("receipts-checked", () => {
     expect(analysis.guidance?.checks).toEqual([
       { tool: "biome", path: "biome.json", bytes: expect.any(Number) },
     ]);
-    const findings = pointsOf(analysis).filter((point) => point.kind === "finding");
-    expect(findings.map((point) => point.guardrail)).toEqual([
+    expect(pointsOf(analysis).map((point) => point.guardrail)).toEqual([
       { is: "rule", tool: "biome", rule: "noMisusedPromises", configPath: "biome.json" },
     ]);
   });

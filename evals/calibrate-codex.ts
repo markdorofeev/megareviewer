@@ -1,7 +1,7 @@
 // Measures bytes per token of the Codex transport's prompt on every eval case, for
 // BYTES_PER_TOKEN and OVERHEAD_TOKENS in src/adapters/model/codex/codex-analysis-model.ts:
 // node evals/calibrate-codex.ts
-// Each case is one short call on the signed-in Codex's plan, answering an empty risk task. Bytes per
+// Each case is one short call on the signed-in Codex's plan, answering an empty steps task. Bytes per
 // token are counted after OVERHEAD_TOKENS, Codex's own: a call with a few hundred bytes of ours was
 // about 5,300 tokens. One with an empty PR isn't a baseline: the model took several turns on it.
 
@@ -22,11 +22,11 @@ const parser = await createTreeSitterCodeParser({
   grammarsDir: fileURLToPath(new URL("../src/adapters/treesitter/grammars", import.meta.url)),
 });
 const run = createRunCodex();
-const message = `${passMessage("intent", null, undefined)}\n\nFor this measurement only, answer the risk task with no assessments.`;
+const message = `${passMessage("intent", null, undefined)}\n\nFor this measurement only, answer the steps task with no steps.`;
 
 /** A call's prompt bytes and the input tokens Codex reported for it. */
 const measure = async (rendered: string): Promise<{ bytes: number; tokens: number } | string> => {
-  const request = codexRequest("risk", rendered, message, MODEL);
+  const request = codexRequest("steps", rendered, message, MODEL);
   const bytes = Object.values(request.files).reduce(
     (total, file) => total + Buffer.byteLength(file, "utf8"),
     Buffer.byteLength(request.stdin, "utf8"),
@@ -48,8 +48,6 @@ const capturingModel = (onInput: (input: AnalysisInput) => void): AnalysisModel 
     },
     intent: fail,
     findings: fail,
-    risk: fail,
-    decisions: fail,
     steps: fail,
   };
 };

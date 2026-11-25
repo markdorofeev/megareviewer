@@ -94,8 +94,6 @@ export const PR = {
   refactorMove: "https://github.com/acme/shop/pull/102",
   /** small-feature again; Claude's first run on it fails at the intent stage. */
   intentFailsOnce: "https://github.com/acme/shop/pull/104",
-  /** small-feature with a test, which checks one of its two risks. */
-  receiptsTested: "https://github.com/acme/shop/pull/105",
   /** small-feature in a repository with guideline files and two of the reviewer's preferences. */
   receiptsGuided: "https://github.com/acme/storefront/pull/7",
   /** small-feature in a repository with a biome.json, whose finding a Biome rule could catch. */

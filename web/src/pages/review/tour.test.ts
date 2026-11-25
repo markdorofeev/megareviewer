@@ -12,7 +12,7 @@ import { depthText, noTourOf, rowsOf, tourOf } from "./tour.ts";
 
 const analysis = tourAnalysisView.analysis;
 const overview = fileOverview(analysis);
-const points = pointsOf(analysis).filter((point) => point.kind === "finding");
+const points = pointsOf(analysis);
 
 const view = (changes: Partial<Analysis> = {}) => {
   const tour = tourOf({ ...analysis, ...changes }, overview, points);
@@ -177,8 +177,6 @@ describe("noTourOf", () => {
         ...skipped,
         intent: "skipped" as const,
         findings: "skipped" as const,
-        risk: "skipped" as const,
-        decisions: "skipped" as const,
       },
       usage: [],
     };

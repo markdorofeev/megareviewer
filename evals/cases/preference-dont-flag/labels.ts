@@ -4,14 +4,6 @@ const route = "h_760e73c73c497808";
 const query = "h_3c995365613ccd2f";
 
 export const labels: CaseLabels = {
-  risk: {
-    // GET /audit-log answers 50 events a page where it answered the latest 200, with new fields.
-    [route]: "contract",
-    [query]: "logic", // the page's query, called only by the route
-  },
-  riskAt: {
-    [route]: [{ hunkId: route, side: "new", lines: [14, 21] }],
-  },
   findings: [
     {
       description:
@@ -29,13 +21,6 @@ export const labels: CaseLabels = {
       description:
         "Orders pages by the event time alone, so events with the same timestamp can repeat or go missing between pages",
       at: [{ hunkId: query, side: "new", lines: [25, 28] }],
-      mustHave: false,
-    },
-  ],
-  decisions: [
-    {
-      description:
-        "Why a page that isn't a positive whole number shows the first page instead of answering an error",
       mustHave: false,
     },
   ],

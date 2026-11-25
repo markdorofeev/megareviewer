@@ -545,7 +545,6 @@ const HUNK_ID = RETRY_FILE.hunks[0]?.id ?? HunkId.parse("h_0123456789abcdef");
 export const POINTS: readonly Point[] = [
   {
     id: PointId.parse("f1"),
-    kind: "finding",
     title: "Sleeps after the last attempt too",
     explanation:
       "After the fifth failure `retry` waits 16 s before it throws, so a caller learns of the failure 16 s late.",
@@ -558,7 +557,6 @@ export const POINTS: readonly Point[] = [
   },
   {
     id: PointId.parse("m1"),
-    kind: "finding",
     title: "Raises the default attempts from 3 to 5 for every caller",
     explanation: "Done, not asked for.",
     path: "src/http/retry.ts",
@@ -590,8 +588,6 @@ export const DESIGN_RUN: ClaudeRun = {
     prep: "done",
     intent: "skipped",
     findings: "skipped",
-    risk: "skipped",
-    decisions: "skipped",
     steps: "skipped",
   },
   modelError: null,

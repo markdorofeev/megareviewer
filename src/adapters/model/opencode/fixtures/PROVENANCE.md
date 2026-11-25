@@ -5,11 +5,11 @@ Recorded with opencode 2.3.0 on macOS, its Anthropic provider from `ANTHROPIC_AP
 | File | How |
 |---|---|
 | `models.json`, `providers.json`, `default-model.json` | `node evals/record-opencode.ts`: the server's lists, with free models off |
-| `intent.json` … `decisions.json` | The same script: each pass on small-feature, Claude Haiku 5.5, findings sent the fixture analysis's intent |
-| `steps.synthetic.json` | Synthetic: `decisions.json` with three steps on small-feature as its answer and the task alone as its prompt, until the steps pass is recorded |
+| `intent.json`, `findings.json` | The same script: each pass on small-feature, Claude Haiku 5.5, findings sent the fixture analysis's intent |
+| `steps.synthetic.json` | Synthetic: a session recorded with them, with three steps on small-feature as its answer and the task alone as its prompt, until the steps pass is recorded |
 | `provider-error.json` | Stage 53's spike: an agent with `steps: 1`, whose last step's assistant prefill Haiku 5.5 refused with a 400 |
 | `unreachable.json` | The spike: the Anthropic provider's base URL on a local proxy that couldn't forward |
 
 Tool calls, shells, skills, second steps and the providers' other errors are written into these in the tests, so they're synthetic; the model never called its one tool in the spike.
 
-The passes were recorded before a finding and a risk had a guidance mark, so their answers have none, which parses as null; a finding with a mark is written into `findings.json` in the test. The suggestion call has no recording either: `opencode-suggester.test.ts` answers it with `intent.json`, its text replaced by the proposals recorded through Claude Code. Neither it nor its agent, `megareviewer-suggest`, was run on a real opencode.
+The passes were recorded before a finding had a guidance mark, so their answers have none, which parses as null; a finding with a mark is written into `findings.json` in the test. The suggestion call has no recording either: `opencode-suggester.test.ts` answers it with `intent.json`, its text replaced by the proposals recorded through Claude Code. Neither it nor its agent, `megareviewer-suggest`, was run on a real opencode.

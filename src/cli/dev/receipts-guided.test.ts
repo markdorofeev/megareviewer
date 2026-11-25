@@ -53,12 +53,13 @@ const reviewed = async (
 };
 
 const marks = (analysis: AnalysisView["analysis"]) =>
-  pointsOf(analysis)
-    .filter((point) => point.kind !== "decision")
-    .map((point) => [point.kind, point.guidance?.effect ?? null, point.guidance?.label ?? null]);
+  pointsOf(analysis).map((point) => [
+    point.guidance?.effect ?? null,
+    point.guidance?.label ?? null,
+  ]);
 
 describe("receipts-guided", () => {
-  it("has a finding a preference raised, one left out, and a risk from REVIEW.md", async () => {
+  it("has a finding a preference raised, one from REVIEW.md, and one left out", async () => {
     const { analysis, preferences } = await reviewed((fake) =>
       seedGuidedPreferences(fake.preferences, AT),
     );
@@ -70,9 +71,9 @@ describe("receipts-guided", () => {
       ["g1", "REVIEW.md"],
     ]);
     expect(marks(analysis)).toEqual([
-      ["finding", "raised", "Caches with nothing that invalidates them"],
-      ["finding", "left-out", "Naming"],
-      ["risk", "raised", "REVIEW.md"],
+      ["raised", "Caches with nothing that invalidates them"],
+      ["raised", "REVIEW.md"],
+      ["left-out", "Naming"],
     ]);
     // CLAUDE.md is over what a guideline file can be, which the preferences page says.
     const files = preferences.repositories.find((one) => one.repo.repo === repo.repo);
@@ -95,10 +96,10 @@ describe("receipts-guided", () => {
       await seedGuidedPreferences(fake.preferences, AT);
     });
     expect(analysis.guidance?.preferences.map((one) => one.ref)).toEqual(["p1", "p2", "p3"]);
-    expect(marks(analysis).map(([, effect, label]) => [effect, label])).toEqual([
+    expect(marks(analysis)).toEqual([
       ["raised", "Caches with nothing that invalidates them"],
-      ["left-out", "Naming"],
       ["raised", "REVIEW.md"],
+      ["left-out", "Naming"],
     ]);
   });
 
@@ -108,9 +109,9 @@ describe("receipts-guided", () => {
     });
     expect(analysis.guidance).toEqual({ preferences: [], guidelines: [], checks: [] });
     expect(marks(analysis)).toEqual([
-      ["finding", null, null],
-      ["finding", null, null],
-      ["risk", null, null],
+      [null, null],
+      [null, null],
+      [null, null],
     ]);
   });
 });

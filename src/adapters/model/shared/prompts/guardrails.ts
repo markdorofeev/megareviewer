@@ -4,13 +4,13 @@ import { attributes, tagEscaper } from "../render-input.ts";
 /** The guardrail call's own instructions: it's none of the passes, and reads their points. */
 export const GUARDRAILS_SYSTEM_PROMPT = `You help a code reviewer decide which of the problems a review found could be caught by a check instead of only being fixed.
 
-A review of a pull request found points: findings (what looks wrong) and risks (where a mistake would break something outside the pull request). Each says what's wrong with this code, and its author fixes it there. When a check could catch that kind of problem in any code, before review, the better answer is the check: it ends the problem for the whole team. You say, for each point, whether a check could, and which. Your answer is only text the reviewer reads: nothing is applied.
+A review of a pull request found points: findings (what looks wrong). Each says what's wrong with this code, and its author fixes it there. When a check could catch that kind of problem in any code, before review, the better answer is the check: it ends the problem for the whole team. You say, for each point, whether a check could, and which. Your answer is only text the reviewer reads: nothing is applied.
 
 ## The data
 
 <guardrail_data> holds:
 
-- <points>: each a <point> with its ref ("f1" for a finding, "r1" for a risk), its kind and its file (path), then its title (a finding's only), what it says, and in <code> the lines of the pull request it rests on, each with its diff marker.
+- <points>: each a <point> with its ref ("f1") and its file (path), then its title, what it says, and in <code> the lines of the pull request it rests on, each with its diff marker.
 - <repository_checks>: the repository's own linter and type-checker configs at its root, as they were before this pull request, each a <check_config> with its tool and path. A tool without one isn't configured.
 - <build_files>: the repository's build files, each a <build_file> with its path, which show the engines and libraries it already uses.
 
@@ -59,9 +59,9 @@ export const renderGuardrailInput = (input: AdviceInput): string =>
     ...block(
       "points",
       input.points.flatMap((point) => [
-        `<point${attributes({ ref: point.ref, kind: point.kind, path: point.path })}>`,
-        ...(point.title === "" ? [] : [`title: ${escapeText(point.title)}`]),
-        escapeText(point.text),
+        `<point${attributes({ ref: point.ref, path: point.path })}>`,
+        `title: ${escapeText(point.title)}`,
+        escapeText(point.explanation),
         "<code>",
         ...point.code.map(escapeText),
         "</code>",

@@ -64,7 +64,7 @@ export const evalCases: readonly EvalCase[] = [
   {
     name: "refactor-move",
     source: "fixture",
-    tests: "Baseline: every hunk mechanical, so nothing to classify and no mismatch",
+    tests: "Baseline: every hunk mechanical, so no finding and no mismatch",
     fixture: refactorMove,
     labels: refactorMoveLabels,
   },
@@ -85,21 +85,22 @@ export const evalCases: readonly EvalCase[] = [
   {
     name: "dependency-bump-signature",
     source: "synthetic",
-    tests: "Contract recall: a major dependency bump and a changed exported signature",
+    tests:
+      "Nothing wrong: a major dependency bump and a changed exported signature, both asked for",
     fixture: dependencyBump.fixture,
     labels: dependencyBumpLabels,
   },
   {
     name: "migration-non-null-column",
     source: "synthetic",
-    tests: "Contract and a data decision: a NOT NULL column with a default backfill",
+    tests: "A NOT NULL column with a default backfill, with at most a minor finding",
     fixture: migration.fixture,
     labels: migrationLabels,
   },
   {
     name: "auth-middleware",
     source: "synthetic",
-    tests: "Security decision: session tokens accepted in the query string",
+    tests: "A security finding: session tokens accepted in the query string",
     fixture: authMiddleware.fixture,
     labels: authMiddlewareLabels,
   },
@@ -127,14 +128,15 @@ export const evalCases: readonly EvalCase[] = [
   {
     name: "python-indentation-logic",
     source: "synthetic",
-    tests: "An indentation change that alters logic must not be mechanical",
+    tests: "Nothing wrong: an indentation change that alters logic, as the ticket asks",
     fixture: pythonIndentation.fixture,
     labels: pythonIndentationLabels,
   },
   {
     name: "env-var-config",
     source: "synthetic",
-    tests: "Contract: a new environment variable and a timeout on an external call",
+    tests:
+      "A new environment variable and a timeout on an external call, with at most a minor finding",
     fixture: envVarConfig.fixture,
     labels: envVarConfigLabels,
   },
@@ -142,7 +144,7 @@ export const evalCases: readonly EvalCase[] = [
     name: "test-named-coverage",
     source: "synthetic",
     tests:
-      "No checking test from a test's name or a comment: the one named for the check never runs it",
+      "A contradicts mismatch found in the code: an export open to a role the ticket shuts out, under a test named for the check that never runs it",
     fixture: testNamedCoverage.fixture,
     labels: testNamedCoverageLabels,
   },
@@ -176,7 +178,7 @@ export const evalCases: readonly EvalCase[] = [
   {
     name: "large-retry-after",
     source: "imported",
-    tests: "Tour quality and cost at size: about 1,500 changed lines",
+    tests: "Noise and cost at size: about 1,500 changed lines",
     fixture: largeRetryAfter.fixture,
     labels: largeRetryAfterLabels,
   },
@@ -184,7 +186,7 @@ export const evalCases: readonly EvalCase[] = [
     name: "delphi-account-connections",
     source: "imported",
     tests:
-      "A 48-hunk full-stack PR whose description explains its choices: risk noise on API models, a generated client and plumbing between the PR's own modules; risks on hunks that open with imports; decisions that repeat the description",
+      "A 48-hunk full-stack PR: three must-have findings in how it stores and orders credentials, and none on its API models, generated client and the plumbing between its own modules",
     fixture: delphiAccountConnections.fixture,
     labels: delphiAccountConnectionsLabels,
   },

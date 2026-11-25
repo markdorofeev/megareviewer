@@ -4,24 +4,6 @@ const migration = "h_dcc1fbe3f6a29adf";
 const route = "h_cda7fd95ffdf660f";
 
 export const labels: CaseLabels = {
-  risk: {
-    [migration]: "contract", // schema: a column and an index on subscriptions
-    [route]: "contract", // new POST /subscriptions/:id/pause
-    // Follows from the migration, but its column list is what makes the existing GET's response
-    // carry pausedAt: a JSON shape others read. Logic at first; the first run marked it contract.
-    h_795da19db7c8ef04: "either",
-    // A new function only the new route calls, and what gets persisted on subscription rows: the
-    // risk prompt's rules point both ways. Logic at first; the first run marked it contract.
-    h_e41c5502431d69d2: "either",
-    h_cfa357a78312f67d: "logic", // import
-  },
-  riskAt: {
-    [migration]: [
-      { hunkId: migration, side: "new", lines: [2, 2] },
-      { hunkId: migration, side: "new", lines: [4, 4] },
-    ],
-    [route]: [{ hunkId: route, side: "new", lines: [15, 21] }],
-  },
   findings: [
     {
       description:
@@ -45,15 +27,7 @@ export const labels: CaseLabels = {
       mustHave: false,
     },
   ],
-  decisions: [
-    {
-      description:
-        "Why pausing a subscription that's already paused keeps the time it was first paused at instead of the latest",
-      mustHave: false,
-    },
-  ],
   mismatches: [],
-  // g1: REVIEW.md. The missing down section may come as the finding or as the migration's risk;
-  // either one naming the file follows it.
-  guidance: [{ ref: "g1", effect: "raised", findings: [0], risks: [migration] }],
+  // g1: REVIEW.md, which the missing down section breaks.
+  guidance: [{ ref: "g1", effect: "raised", findings: [0] }],
 };

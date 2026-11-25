@@ -16,7 +16,12 @@ import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts"
 import type { AnalysisModel, PassOptions, PassOutput } from "../src/application/ports/index.ts";
 import { allFixtures, FakeAnalysisModel } from "../src/application/testing/index.ts";
 import type { ModelRecording } from "../src/cli/dev/model-recording.ts";
-import type { ModelError, ModelPass, ModelUsage } from "../src/domain/review/index.ts";
+import {
+  MODEL_STAGES,
+  type ModelError,
+  type ModelPass,
+  type ModelUsage,
+} from "../src/domain/review/index.ts";
 import type { Result } from "../src/domain/shared/index.ts";
 import { analyzeCase, quietLogger, systemClock } from "./harness.ts";
 
@@ -61,8 +66,6 @@ const recording = (model: AnalysisModel) => {
     intent: (input, options?: PassOptions) => record("intent", () => model.intent(input, options)),
     findings: (input, intent, options) =>
       record("findings", () => model.findings(input, intent, options)),
-    risk: (input, options) => record("risk", () => model.risk(input, options)),
-    decisions: (input, options) => record("decisions", () => model.decisions(input, options)),
     steps: (input, options) => record("steps", () => model.steps(input, options)),
   };
   return { model: wrapped, passes };
@@ -87,9 +90,7 @@ const analysis = await analyzeCase(fixture, {
 });
 if (!analysis.ok) throw new Error(analysis.error);
 
-const missing = (["intent", "findings", "risk", "decisions"] as const).filter(
-  (pass) => !passes.has(pass),
-);
+const missing = MODEL_STAGES.filter((pass) => !passes.has(pass));
 if (missing.length > 0) throw new Error(`No answer recorded for ${missing.join(", ")}`);
 const pass = (name: ModelPass): Recorded => {
   const recorded = passes.get(name);
@@ -105,8 +106,6 @@ const result: ModelRecording = {
   passes: {
     intent: pass("intent"),
     findings: pass("findings"),
-    risk: pass("risk"),
-    decisions: pass("decisions"),
     ...(passes.has("steps") ? { steps: pass("steps") } : {}),
   },
 };

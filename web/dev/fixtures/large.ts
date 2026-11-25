@@ -9,7 +9,6 @@ import {
   type Analysis,
   type AnalysisKey,
   analysisId,
-  DecisionId,
   type PullRequest,
   type RiskAssessment,
 } from "../../../src/domain/review/index.ts";
@@ -111,7 +110,7 @@ export const syntheticAnalysisView = ({
   const key: AnalysisKey = {
     ref: pullRequest.ref,
     headSha: pullRequest.headSha,
-    pipelineVersion: "20",
+    pipelineVersion: "21",
   };
 
   const risk: RiskAssessment[] = files.flatMap((file, at) =>
@@ -123,16 +122,12 @@ export const syntheticAnalysisView = ({
               riskClass: "contract",
               reason: "Changes an exported function.",
               source: "rule",
-              lines: null,
-              guidance: null,
             }
           : {
               hunkId: hunk.id,
               riskClass: "logic",
               reason: "No rule matched.",
               source: "rule",
-              lines: null,
-              guidance: null,
             },
     ),
   );
@@ -155,8 +150,6 @@ export const syntheticAnalysisView = ({
     stages: {
       ...base.stages,
       intent: "skipped",
-      risk: "skipped",
-      decisions: "skipped",
       steps: "skipped",
     },
     pullRequest,
@@ -175,19 +168,6 @@ export const syntheticAnalysisView = ({
     unchangedCallers: [],
     intent: null,
     risk,
-    decisions: [
-      {
-        id: DecisionId.parse("d1"),
-        title: "Prices each step separately",
-        category: "behavior",
-        whyItMatters: "Rounding now happens once per step.",
-        hunkIds: [
-          hunkAt(0, 0),
-          hunkAt(Math.floor(paths.length / 2), Math.min(1, hunksPerFile - 1)),
-        ],
-        lines: null,
-      },
-    ],
     flows: directories.map((directory) => ({
       title: directory === "" ? "Top level" : directory,
       partIds: files

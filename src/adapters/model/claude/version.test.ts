@@ -16,7 +16,7 @@ import {
 /**
  * The passes' full requests for a fixture on Haiku 5.5, with feedback: the system prompt, pass
  * instructions, rendering, answer schema and request settings all show up in them. A run sends the
- * review's four the same with the tour or without, so the steps pass's has a fingerprint of its own.
+ * review's two the same with the tour or without, so the steps pass's has a fingerprint of its own.
  */
 const fingerprint = (passes: readonly ModelPass[] = MODEL_STAGES): string =>
   fnv1a64(

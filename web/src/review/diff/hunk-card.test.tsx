@@ -38,8 +38,6 @@ const card = (index: number, riskClass: RiskClass, reason = `${riskClass} reason
     riskClass,
     reason,
     source: "model",
-    lines: null,
-    guidance: null,
   };
   return { hunk, file: orders, risk };
 };
@@ -524,8 +522,6 @@ describe("HunkCard", () => {
       riskClass: "logic",
       reason: "",
       source: "model",
-      lines: null,
-      guidance: null,
     };
     const parts = [partHunk(hunk, { start: 0, end: 2 }), partHunk(hunk, { start: 2, end: 4 })];
     const { container } = renderWith(
@@ -555,8 +551,6 @@ describe("HunkCard", () => {
           riskClass: "logic",
           reason: "",
           source: "model",
-          lines: null,
-          guidance: null,
         }}
       />,
       { highlight },
@@ -582,8 +576,6 @@ describe("HunkCard", () => {
           riskClass: "logic",
           reason: "",
           source: "model",
-          lines: null,
-          guidance: null,
         }}
       />,
     );
@@ -614,8 +606,6 @@ describe("HunkCard", () => {
           riskClass: "logic",
           reason: "",
           source: "model",
-          lines: null,
-          guidance: null,
         }}
       />,
     );
@@ -648,8 +638,6 @@ describe("HunkCard", () => {
           riskClass: "logic",
           reason: "",
           source: "model",
-          lines: null,
-          guidance: null,
         }}
       />,
     );

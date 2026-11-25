@@ -21,35 +21,11 @@ describe("the intent task", () => {
 });
 
 describe("plain words", () => {
-  it("are asked of every task whose words the reviewer reads as a point, without being vague", () => {
-    for (const pass of ["findings", "risk", "decisions"] as const) {
-      expect(PASS_INSTRUCTIONS[pass]).toContain("in plain words: the ones you'd use");
-      expect(PASS_INSTRUCTIONS[pass]).toContain(
-        "Plain isn't vague: still name the exact function, value, input and result.",
-      );
-    }
-  });
-
-  it("never change what a risk or a decision is about", () => {
-    expect(PASS_INSTRUCTIONS.risk).toContain("The wording never changes what was decided.");
-    expect(PASS_INSTRUCTIONS.decisions).toContain(
-      "The wording never changes which choice a decision is about, or drops its reason.",
-    );
-  });
-
-  it("are the author's in a finding, which posts as a comment", () => {
+  it("are asked of a finding, which posts as the reviewer's comment, without being vague", () => {
     expect(PASS_INSTRUCTIONS.findings).toContain("write it to the author, in plain words");
-  });
-});
-
-describe("the risk task", () => {
-  it("asks for a checking test only when its assertions would fail if the risk's behavior broke", () => {
-    expect(PASS_INSTRUCTIONS.risk).toMatch(/^checkedBy: for a contract hunk/m);
-    expect(PASS_INSTRUCTIONS.risk).toContain("would this test fail?");
-    expect(PASS_INSTRUCTIONS.risk).toContain(
-      "never by its name, its comments, or what the description or a comment says is tested",
+    expect(PASS_INSTRUCTIONS.findings).toContain(
+      "Plain isn't vague: still name the exact function, value, input and result.",
     );
-    expect(PASS_INSTRUCTIONS.risk).toContain("When unsure, null");
   });
 });
 
@@ -72,24 +48,9 @@ describe("the reviewer's guidance", () => {
     );
   });
 
-  it("marks a risk only on a contract hunk, which the code still decides for a dont-flag one", () => {
-    expect(PASS_INSTRUCTIONS.risk).toMatch(/^guidance: null, unless/m);
-    expect(PASS_INSTRUCTIONS.risk).toContain(
-      "when the reason can still say what could break outside this pull request",
-    );
-    expect(PASS_INSTRUCTIONS.risk).toContain(
-      "Classify it by the code all the same, and mark it only when it's contract.",
-    );
-  });
-
-  it("orders the decisions and the brief's watch by it, without a mark", () => {
-    expect(PASS_INSTRUCTIONS.decisions).toContain(
-      "the choices in what a look-for preference or a guideline file names come first",
-    );
+  it("orders the brief's watch by it, without a mark", () => {
     expect(PASS_INSTRUCTIONS.intent).toContain("within the same 2 things and 12 words");
-    for (const pass of ["decisions", "intent"] as const) {
-      expect(PASS_INSTRUCTIONS[pass]).not.toMatch(/"raised"|"left-out"/);
-    }
+    expect(PASS_INSTRUCTIONS.intent).not.toMatch(/"raised"|"left-out"/);
   });
 });
 

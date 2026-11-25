@@ -20,18 +20,9 @@ export const Baseline = z.object({
   summary: z.object({
     cases: z.number(),
     scored: z.number(),
-    contractRecall: RatioSchema,
-    riskAccuracy: RatioSchema,
-    riskNoise: RatioSchema,
-    riskPlaced: RatioSchema,
-    // Absent from baselines measured before the risk pass named checking tests.
-    coverageWrong: RatioSchema.optional(),
-    coverageRecall: RatioSchema.optional(),
     findingRecall: RatioSchema,
     findingNoise: RatioSchema,
     findingPlaced: RatioSchema,
-    decisionRecall: RatioSchema,
-    decisionNoise: RatioSchema,
     mismatchRecall: RatioSchema,
     mismatchNamed: RatioSchema,
     mismatchFalsePositives: z.number(),
@@ -40,8 +31,6 @@ export const Baseline = z.object({
     guidanceFollowed: RatioSchema.optional(),
     leftOutRight: RatioSchema.optional(),
     guidanceWrong: RatioSchema.optional(),
-    firstTryValid: RatioSchema,
-    fallbacksUsed: RatioSchema,
     modelCostUsd: z.number(),
     judgeCostUsd: z.number(),
     modelCostPerCaseUsd: z.number(),
@@ -50,17 +39,9 @@ export const Baseline = z.object({
   cases: z.record(
     z.string(),
     z.object({
-      contractRecall: RatioSchema,
-      riskAccuracy: RatioSchema,
-      riskNoise: RatioSchema,
-      riskPlaced: RatioSchema,
-      coverageWrong: RatioSchema.optional(),
-      coverageRecall: RatioSchema.optional(),
       findingRecall: RatioSchema,
       findingNoise: RatioSchema,
       findingPlaced: RatioSchema,
-      decisionRecall: RatioSchema,
-      decisionNoise: RatioSchema,
       mismatchRecall: RatioSchema,
       mismatchNamed: RatioSchema,
       mismatchFalsePositives: z.number().nullable(),
@@ -68,8 +49,6 @@ export const Baseline = z.object({
       guidanceFollowed: RatioSchema.optional(),
       leftOutRight: RatioSchema.optional(),
       guidanceWrong: RatioSchema.optional(),
-      firstTryValid: z.boolean(),
-      fallbackUsed: z.boolean(),
       /** Model and judge, for the next run's estimate. */
       costUsd: z.number(),
     }),
@@ -79,17 +58,9 @@ export type Baseline = z.infer<typeof Baseline>;
 
 /** Summary metrics compared with a baseline, in the order the table prints them. */
 export const COMPARED = [
-  "contractRecall",
-  "riskAccuracy",
-  "riskNoise",
-  "riskPlaced",
-  "coverageWrong",
-  "coverageRecall",
   "findingRecall",
   "findingNoise",
   "findingPlaced",
-  "decisionRecall",
-  "decisionNoise",
   "mismatchRecall",
   "mismatchNamed",
   "mismatchFalsePositives",
@@ -97,19 +68,13 @@ export const COMPARED = [
   "guidanceFollowed",
   "leftOutRight",
   "guidanceWrong",
-  "firstTryValid",
-  "fallbacksUsed",
 ] as const;
 export type ComparedMetric = (typeof COMPARED)[number];
 
 const LOWER_IS_BETTER: ReadonlySet<ComparedMetric> = new Set([
-  "riskNoise",
-  "coverageWrong",
   "findingNoise",
-  "decisionNoise",
   "mismatchFalsePositives",
   "guidanceWrong",
-  "fallbacksUsed",
 ]);
 
 export const metricValue = (summary: Baseline["summary"] | Summary, metric: ComparedMetric) => {

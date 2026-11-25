@@ -16,7 +16,6 @@ if (shown?.newLine == null) throw new Error("the fixture's first hunk shows new 
 
 const finding: Point = {
   id: PointId.parse("f1"),
-  kind: "finding",
   title: "`r` says nothing of what it holds",
   explanation: "Name it for the rendered receipt.",
   path: file.path,

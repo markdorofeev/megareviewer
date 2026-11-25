@@ -403,10 +403,7 @@ const Review = ({
   const mechanical = mechanicalCount(trailing);
   // On until the reviewer turns it off: off, a run asks for no tour and the layout is the overview.
   const [tourOn, setTourOn] = useStoredState("tour", true, parseBoolean);
-  const points = useMemo(
-    () => pointsOf(analysis).filter((point) => point.kind === "finding"),
-    [analysis],
-  );
+  const points = useMemo(() => pointsOf(analysis), [analysis]);
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
   const pointStates = usePoints(analysisId, view.pointReviews);
   // A point a preference says not to flag is folded where its card would be until the reviewer

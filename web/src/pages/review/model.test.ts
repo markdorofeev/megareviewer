@@ -27,16 +27,14 @@ describe("partIndex", () => {
     ]);
   });
 
-  it("reads a hunk the risk pass hasn't classified yet as logic, never mechanical", () => {
+  it("reads a hunk without an assessment as logic, never mechanical", () => {
     const early: Analysis = { ...analysis, risk: [] };
     const [item] = partIndex(early).items([h.receiptRoute]);
     expect(item?.risk).toEqual({
       hunkId: h.receiptRoute,
       riskClass: "logic",
       reason: "Not classified yet.",
-      source: "fallback",
-      lines: null,
-      guidance: null,
+      source: "rule",
     });
   });
 
@@ -94,21 +92,19 @@ describe("gapBetween", () => {
 });
 
 describe("a split part's risk", () => {
-  it("is its hunk's, whether the rules or the model made it", () => {
-    for (const source of ["rule", "model"] as const) {
-      const assessed: Analysis = {
-        ...analysis,
-        risk: analysis.risk.map((risk) =>
-          risk.hunkId === h.retryAndCache
-            ? { ...risk, riskClass: "contract" as const, reason: "Whole hunk.", source }
-            : risk,
-        ),
-      };
-      expect(partIndex(assessed).items([p.cache])[0]?.risk).toMatchObject({
-        riskClass: "contract",
-        reason: "Whole hunk.",
-      });
-    }
+  it("is its hunk's", () => {
+    const assessed: Analysis = {
+      ...analysis,
+      risk: analysis.risk.map((risk) =>
+        risk.hunkId === h.retryAndCache
+          ? { ...risk, riskClass: "contract" as const, reason: "Whole hunk." }
+          : risk,
+      ),
+    };
+    expect(partIndex(assessed).items([p.cache])[0]?.risk).toMatchObject({
+      riskClass: "contract",
+      reason: "Whole hunk.",
+    });
   });
 });
 
@@ -117,7 +113,6 @@ describe("pointPlaces", () => {
   const order = mapFiles(analysis, index).flatMap((group) => group.partIds);
   const point = (id: string, hunkIds: readonly (typeof h)[keyof typeof h][]): Point => ({
     id: PointId.parse(id),
-    kind: "decision",
     title: id,
     explanation: "w",
     path: null,
@@ -129,11 +124,11 @@ describe("pointPlaces", () => {
   });
 
   it("puts each card on the point's first hunk in the page's order, and links the others", () => {
-    const d5 = point("d5", [h.dependency, h.receiptFormatting]);
-    const places = pointPlaces([d5], order, index);
-    expect(places.cards.get(h.receiptFormatting)).toEqual([d5]);
-    expect(places.mentions.get(h.dependency)).toEqual([d5]);
-    expect(places.cardPart.get(d5.id)).toBe(h.receiptFormatting);
+    const m5 = point("m5", [h.dependency, h.receiptFormatting]);
+    const places = pointPlaces([m5], order, index);
+    expect(places.cards.get(h.receiptFormatting)).toEqual([m5]);
+    expect(places.mentions.get(h.dependency)).toEqual([m5]);
+    expect(places.cardPart.get(m5.id)).toBe(h.receiptFormatting);
     expect(places.unplaced).toEqual([]);
   });
 
@@ -143,7 +138,6 @@ describe("pointPlaces", () => {
     if (line == null) throw new Error("the cache part has an added line");
     const onCache: Point = {
       ...point("f1", [h.retryAndCache]),
-      kind: "finding",
       lines: { hunkId: h.retryAndCache, side: "new", startLine: line, line },
     };
     const places = pointPlaces([onCache], order, index);
@@ -153,8 +147,8 @@ describe("pointPlaces", () => {
   });
 
   it("never puts a card on a mechanical hunk, and keeps points on none apart", () => {
-    const moved = point("d1", [h.formatMoneyRemoved, h.retryAndCache]);
-    const nowhere = point("d2", [h.formatMoneyAdded]);
+    const moved = point("m1", [h.formatMoneyRemoved, h.retryAndCache]);
+    const nowhere = point("m2", [h.formatMoneyAdded]);
     const places = pointPlaces([moved, nowhere], order, index);
     // The card goes on the split hunk's first part on the page, and its other part links to it.
     expect(places.cards.get(p.retry)).toEqual([moved]);

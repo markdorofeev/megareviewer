@@ -1,7 +1,7 @@
 // Measures bytes per token of the Claude Code transport's prompt on every eval case, for
 // BYTES_PER_TOKEN in src/adapters/model/claude/claude-code-analysis-model.ts:
 // node evals/calibrate-claude-code.ts
-// Each case is one short call on the signed-in Claude Code's plan, answering an empty risk task.
+// Each case is one short call on the signed-in Claude Code's plan, answering an empty steps task.
 
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -42,8 +42,6 @@ const capturingModel = (onInput: (input: AnalysisInput) => void): AnalysisModel 
     },
     intent: fail,
     findings: fail,
-    risk: fail,
-    decisions: fail,
     steps: fail,
   };
 };
@@ -64,8 +62,8 @@ for (const evalCase of evalCases) {
     console.log(`${evalCase.name}: no input captured`);
     continue;
   }
-  const message = `${passMessage("intent", null, undefined)}\n\nFor this measurement only, answer the risk task with no assessments.`;
-  const request = claudeCodeRequest("risk", renderInput(input), message);
+  const message = `${passMessage("intent", null, undefined)}\n\nFor this measurement only, answer the steps task with no steps.`;
+  const request = claudeCodeRequest("steps", renderInput(input), message);
   const bytes = Object.values(request.files).reduce(
     (total, file) => total + Buffer.byteLength(file, "utf8"),
     Buffer.byteLength(request.stdin, "utf8"),

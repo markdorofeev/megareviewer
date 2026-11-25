@@ -6,6 +6,7 @@ import { expect, PR, TOKEN, test } from "./fake-server.ts";
 
 const GUIDED_TITLE = "Add receipt download endpoint, with guidance";
 const STALE = "Serves a receipt rendered before a refund for up to an hour";
+const RATE_LIMIT = "Raises the rate limit tenfold without saying who asked for it";
 const NAMING = "`lines` could say what the lines are of";
 
 const everywhere = (page: Page) => page.getByRole("region", { name: "Everywhere", exact: true });
@@ -218,7 +219,7 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   await expect(pointCard(page, STALE).locator("[data-slot=point-guidance]")).toHaveText(
     "From your preference: Caches with nothing that invalidates them",
   );
-  await expect(page.locator("[data-kind=risk] [data-slot=point-guidance]")).toHaveText(
+  await expect(pointCard(page, RATE_LIMIT).locator("[data-slot=point-guidance]")).toHaveText(
     "From REVIEW.md",
   );
 
@@ -226,7 +227,7 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   const leftOut = pointCard(page, NAMING);
   await expect(leftOut).toHaveAttribute("data-left-out", "true");
   await expect(leftOut).toContainText("Left out by your preference: Naming");
-  await expect(chips(page)).toHaveText([/^1\s*finding$/, /^1\s*risk$/]);
+  await expect(chips(page)).toHaveText([/^2\s*findings$/]);
   const marks = page.locator("[data-point-mark=finding]");
   const marked = await marks.count();
 
@@ -246,7 +247,7 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   await expect(leftOut.locator("[data-slot=point-guidance]")).toHaveText(
     "Left out by your preference: Naming",
   );
-  await expect(chips(page)).toHaveText([/^2\s*findings$/, /^1\s*risk$/]);
+  await expect(chips(page)).toHaveText([/^3\s*findings$/]);
   await expect(marks).toHaveCount(marked + 1);
 
   // "Don't flag things like this" on the other finding: a rule for this repository, then dismissed.

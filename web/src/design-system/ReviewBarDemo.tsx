@@ -31,7 +31,6 @@ const MORE_POINTS: readonly Point[] = [
   ...POINTS.slice(0, 1),
   {
     id: PointId.parse("f2"),
-    kind: "finding",
     title: "Gives up after the fifth attempt without saying why",
     explanation: "",
     path: "src/http/retry.ts",

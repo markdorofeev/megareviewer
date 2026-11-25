@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { HunkId, type PartId, parseUnifiedDiff } from "../../domain/diff/index.ts";
+import { HunkId, type PartId } from "../../domain/diff/index.ts";
 import {
   type Analysis,
   AnalysisId,
-  analysisId,
   following,
   type HostError,
   inProgress,
   MismatchId,
-  type ModelCall,
+  MODEL_STAGES,
   type ModelError,
   type ModelOption,
   modelRunnable,
@@ -18,7 +17,6 @@ import {
   pointsOf,
   type StageName,
   type StageStatus,
-  validateRiskCoverage,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
@@ -239,20 +237,10 @@ const configRule = (hunkId: HunkId) => ({
   riskClass: "contract" as const,
   reason: "changes app config (app.yaml)",
   source: "rule" as const,
-  lines: null,
-  guidance: null,
 });
 const configHunks = new Set(smallFeatureFiles[0]?.hunks.map((hunk) => hunk.id));
 /** Well-formed, but not a hunk of any fixture. */
 const unknownHunk = HunkId.parse("h_ffffffffffffffff");
-const logic = (hunkId: HunkId) => ({
-  hunkId,
-  riskClass: "logic" as const,
-  reason: "Logic",
-  lines: null,
-  checkedBy: null,
-  guidance: null,
-});
 
 const modelError = (kind: ModelError["kind"], message = `${kind} happened`): ModelError => ({
   kind,
@@ -271,8 +259,8 @@ describe("the analysis pipeline", () => {
 
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
-    expect(Object.values(analysis.stages)).toEqual([...Array(6).fill("done"), "skipped"]);
-    expect(analysis.key.pipelineVersion).toBe("20");
+    expect(Object.values(analysis.stages)).toEqual([...Array(4).fill("done"), "skipped"]);
+    expect(analysis.key.pipelineVersion).toBe("21");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
@@ -295,24 +283,20 @@ describe("the analysis pipeline", () => {
           : {
               hunkId,
               riskClass: "logic",
-              reason: "Ordinary code change",
-              source: "model",
-              lines: null,
-              guidance: null,
+              reason: "No contract rule matched.",
+              source: "rule",
             },
       ),
     );
-    expect(analysis.decisions.map((decision) => decision.id)).toEqual(["d1", "d2", "d3"]);
+    expect(analysis.findings.map((finding) => finding.id)).toEqual(["f1", "f2", "f3"]);
     expect(analysis.flows).toHaveLength(2);
     expect(analysis.warnings).toEqual([]);
     expect(analysis.filesFetched).toEqual({ done: 6, total: 6 });
     // The guardrail call after the passes, since the run has a finding.
     expect(analysis.usage.map((usage) => usage.pass).sort()).toEqual([
-      "decisions",
       "findings",
       "guardrails",
       "intent",
-      "risk",
     ]);
 
     const updates = emitted.flatMap(({ event }) =>
@@ -330,21 +314,15 @@ describe("the analysis pipeline", () => {
       // The code's analysis ends with the model's stages not run.
       "intent:skipped",
       "findings:skipped",
-      "risk:skipped",
-      "decisions:skipped",
       "done",
-      // Then the model's run, as the button starts it: every pass at once.
+      // Then the model's run, as the button starts it.
       "intent:running",
       "findings:running",
-      "risk:running",
-      "decisions:running",
       "intent:done",
-      "risk:done",
-      "decisions:done",
-      // Last: a finding takes the intent's mismatch on its hunk, so it waits for the intent.
+      // Last: a finding names the intent's mismatch it shows, so it waits for the intent.
       "findings:done",
       // The passes' end, announced as an update while the guardrail call runs; its end is done.
-      "decisions:done",
+      "findings:done",
       "done",
     ]);
     for (const { event, savedStages } of emitted) {
@@ -370,7 +348,9 @@ describe("the analysis pipeline", () => {
     const { analyze } = setup();
     const analysis = await analyze(fixture);
     expect(analysis.status).toBe("complete");
-    expect(validateRiskCoverage(analysis.risk, allHunkIds(analysis))).toEqual([]);
+    expect(analysis.risk.map((risk) => risk.hunkId).sort()).toEqual(
+      [...allHunkIds(analysis)].sort(),
+    );
     placesEveryPartOnce(analysis);
   });
 
@@ -393,7 +373,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.warnings).toEqual([
       "pnpm-lock.yaml changed without a change to package.json or pnpm-workspace.yaml",
     ]);
-    for (const pass of ["intent", "findings", "risk", "decisions"] as const) {
+    for (const pass of MODEL_STAGES) {
       expect(model.callsTo(pass)).toHaveLength(1);
     }
     const input = firstInput(model, "intent");
@@ -417,32 +397,31 @@ describe("the analysis pipeline", () => {
     expect(analysis.warnings).toHaveLength(1);
   });
 
-  it("starts risk and decisions once the intent's answer begins, findings once it ends", async () => {
+  it("starts the steps once the intent's answer begins, findings once it ends", async () => {
     const clock = new FixedClock("2026-10-21T09:00:00Z");
-    const riskCalled = Promise.withResolvers<void>();
+    const stepsCalled = Promise.withResolvers<void>();
     const model = new (class extends FakeAnalysisModel {
       override async intent(input: AnalysisInput, options?: PassOptions) {
         options?.onAnswering?.();
-        await riskCalled.promise;
+        await stepsCalled.promise;
         clock.advance(7_300);
         return super.intent(input, options);
       }
-      override async risk(input: AnalysisInput, options?: PassOptions) {
-        riskCalled.resolve();
-        return super.risk(input, options);
+      override async steps(input: AnalysisInput, options?: PassOptions) {
+        stepsCalled.resolve();
+        return super.steps(input, options);
       }
     })();
-    const { analyze } = setup({ model, clock });
-    const analysis = await analyze();
+    const { analyze, runModel } = setup({ model, clock, modelEnabled: false });
+    const analysis = await runModel((await analyze()).id, undefined, true);
 
     const startOf = (pass: string) =>
       Date.parse(analysis.usage.find((usage) => usage.pass === pass)?.startedAt ?? "");
-    expect(startOf("risk") - startOf("intent")).toBe(0);
-    expect(startOf("decisions") - startOf("intent")).toBe(0);
+    expect(startOf("steps") - startOf("intent")).toBe(0);
     expect(startOf("findings") - startOf("intent")).toBe(7_300);
   });
 
-  it("starts risk and decisions at the intent's end when the transport can't tell when its answer began", async () => {
+  it("starts the steps at the intent's end when the transport can't tell when its answer began", async () => {
     const clock = new FixedClock("2026-10-21T09:00:00Z");
     const model = new (class extends FakeAnalysisModel {
       override async intent(input: AnalysisInput, options?: PassOptions) {
@@ -450,84 +429,57 @@ describe("the analysis pipeline", () => {
         return super.intent(input, { feedback: options?.feedback ?? [] });
       }
     })();
-    const { analyze } = setup({ model, clock });
-    const analysis = await analyze();
+    const { analyze, runModel } = setup({ model, clock, modelEnabled: false });
+    const analysis = await runModel((await analyze()).id, undefined, true);
 
     const startOf = (pass: string) =>
       Date.parse(analysis.usage.find((usage) => usage.pass === pass)?.startedAt ?? "");
-    expect(startOf("risk") - startOf("intent")).toBe(7_300);
+    expect(startOf("steps") - startOf("intent")).toBe(7_300);
   });
 
   it("traces every model call: why a pass ran again, and why one failed", async () => {
     const clock = new FixedClock("2026-10-21T09:00:00Z");
     const model = new FakeAnalysisModel();
-    model.script(
-      "risk",
-      ok(smallFeatureHunks.slice(1).map(logic)),
-      ok(smallFeatureHunks.map(logic)),
-    );
-    model.script("decisions", err(modelError("overloaded", "Overloaded")));
+    const unknown = {
+      title: "Serves a stale receipt",
+      explanation: "Keyed by order ID alone.",
+      lines: { hunkId: unknownHunk, side: "new" as const, startLine: 1, line: 1 },
+      severity: "major" as const,
+      suggestion: null,
+      mismatch: null,
+      guidance: null,
+    };
+    model.script("intent", err(modelError("overloaded", "Overloaded")));
+    model.script("findings", ok([unknown]), ok([]));
     const { analyze, logger } = setup({ model, clock });
     const analysis = await analyze();
 
-    const missing = `${h1} has no risk class. Classify every hunk sent in full exactly once.`;
-    const started = clock.now();
-    // The parallel passes are saved as they finish, in no set order.
-    const order = (call: ModelCall) => `${call.pass}/${call.attempt}`;
-    const calls = analysis.modelCalls.filter(
-      (call) => call.pass !== "intent" && call.pass !== "guardrails",
-    );
-    expect([...calls].sort((a, b) => order(a).localeCompare(order(b)))).toEqual([
+    const missing = `Finding 1 rests on ${unknownHunk}, which isn't a hunk of this pull request.`;
+    const call = { startedAt: clock.now(), durationMs: 0, problems: [], error: null };
+    expect(analysis.modelCalls).toEqual([
       {
-        pass: "decisions",
+        ...call,
+        pass: "intent",
         attempt: 1,
-        startedAt: started,
-        durationMs: 0,
         outcome: "failed",
-        problems: [],
         error: modelError("overloaded", "Overloaded"),
       },
-      {
-        pass: "findings",
-        attempt: 1,
-        startedAt: started,
-        durationMs: 0,
-        outcome: "ok",
-        problems: [],
-        error: null,
-      },
-      {
-        pass: "risk",
-        attempt: 1,
-        startedAt: started,
-        durationMs: 0,
-        outcome: "problems",
-        problems: [missing],
-        error: null,
-      },
-      {
-        pass: "risk",
-        attempt: 2,
-        startedAt: started,
-        durationMs: 0,
-        outcome: "ok",
-        problems: [],
-        error: null,
-      },
+      { ...call, pass: "findings", attempt: 1, outcome: "problems", problems: [missing] },
+      { ...call, pass: "findings", attempt: 2, outcome: "ok" },
     ]);
-    expect(analysis.modelError?.stage).toBe("decisions");
+    expect(analysis.modelError?.stage).toBe("intent");
     expect(logger.entries).toContainEqual(
       expect.objectContaining({
         level: "info",
         message: "Model call answered",
-        fields: expect.objectContaining({ pass: "risk", attempt: 1, problems: [missing] }),
+        fields: expect.objectContaining({ pass: "findings", attempt: 1, problems: [missing] }),
       }),
     );
     expect(logger.entries).toContainEqual(
       expect.objectContaining({
         level: "warn",
         message: "Model call failed",
-        fields: expect.objectContaining({ pass: "decisions", kind: "overloaded" }),
+        fields: expect.objectContaining({ pass: "intent", kind: "overloaded" }),
       }),
     );
   });
@@ -706,8 +658,6 @@ describe("the analysis pipeline", () => {
         prep: "done",
         intent: "failed",
         findings: "done",
-        risk: "done",
-        decisions: "done",
         steps: "skipped",
       });
       expect(analysis.modelError).toEqual({
@@ -718,20 +668,20 @@ describe("the analysis pipeline", () => {
       expect(analysis.files).toHaveLength(3);
       expect(analysis.tickets).toEqual(smallFeature.tickets);
       expect(model.callsTo("intent")).toHaveLength(1);
-      // The other passes don't need the intent, so what they found stays.
-      expect(analysis.risk.map((risk) => risk.source)).toContain("model");
+      // The findings don't need the intent, so what they found stays.
+      expect(analysis.findings).toHaveLength(3);
       expect(emitted.at(-1)?.event).toEqual({ type: "done" });
     });
 
     it("retries an unparseable answer once with the problem as feedback", async () => {
       const model = new FakeAnalysisModel();
-      model.script("intent", err(modelError("invalid-output", "riskClass: invalid enum")));
+      model.script("intent", err(modelError("invalid-output", "kind: invalid enum")));
       const { analyze } = setup({ model });
       const analysis = await analyze();
       expect(analysis.status).toBe("complete");
       expect(model.callsTo("intent").map((call) => call.options?.feedback)).toEqual([
         undefined,
-        ["riskClass: invalid enum"],
+        ["kind: invalid enum"],
       ]);
       expect(analysis.usage.filter((usage) => usage.pass === "intent")).toHaveLength(1);
     });
@@ -776,136 +726,6 @@ describe("the analysis pipeline", () => {
           message: "Dropped unknown hunk references from intent mismatches",
         }),
       );
-    });
-  });
-
-  describe("risk", () => {
-    it("uses a valid second answer after an invalid first one", async () => {
-      const model = new FakeAnalysisModel();
-      const second = smallFeatureHunks.map((id) => ({
-        ...logic(id),
-        riskClass: "contract" as const,
-      }));
-      model.script("risk", ok(smallFeatureHunks.slice(1).map(logic)), ok(second));
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
-
-      expect(model.callsTo("risk")[1]?.options).toEqual({
-        feedback: [`${h1} has no risk class. Classify every hunk sent in full exactly once.`],
-      });
-      expect(analysis.risk.map((risk) => risk.riskClass)).toEqual(Array(6).fill("contract"));
-      expect(analysis.warnings).toEqual([]);
-      expect(analysis.usage.filter((usage) => usage.pass === "risk")).toHaveLength(2);
-    });
-
-    it("falls back to logic for hunks still unclassified after the retry", async () => {
-      const model = new FakeAnalysisModel();
-      const invalid = [
-        logic(h1),
-        { ...logic(h1), riskClass: "contract" as const },
-        logic(unknownHunk),
-        ...smallFeatureHunks.slice(3).map(logic),
-      ];
-      model.script("risk", ok(invalid), ok(invalid));
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
-
-      expect(model.callsTo("risk")[1]?.options?.feedback).toEqual([
-        `${h1} is classified more than once.`,
-        `${unknownHunk} isn't a hunk sent in full, so don't classify it.`,
-        `${h2} has no risk class. Classify every hunk sent in full exactly once.`,
-        `${h3} has no risk class. Classify every hunk sent in full exactly once.`,
-      ]);
-      expect(analysis.status).toBe("complete");
-      // The model's fallback for h2 and h3 is logic; the config rule raises all three.
-      expect(analysis.risk).toEqual([
-        configRule(h1),
-        // A risk without a checking test has none, rather than null.
-        ...smallFeatureHunks.slice(3).map((id) => ({
-          ...logic(id),
-          checkedBy: undefined,
-          source: "model",
-        })),
-        configRule(h2),
-        configRule(h3),
-      ]);
-      expect(analysis.warnings).toEqual([
-        "The model didn't classify 2 hunks, so they're shown as logic",
-      ]);
-    });
-
-    it("keeps a contract hunk's lines only when that hunk shows them", async () => {
-      const [, , , h4, h5, h6] = smallFeatureHunks;
-      if (h4 === undefined || h5 === undefined || h6 === undefined) throw new Error("six hunks");
-      const hunk = smallFeatureFiles.flatMap((file) => file.hunks).find((one) => one.id === h4);
-      const line = hunk?.lines.find((one) => one.newLine !== null)?.newLine;
-      if (line == null) throw new Error("small-feature's fourth hunk has new lines");
-      const lines = { hunkId: h4, side: "new" as const, startLine: line, line };
-      const contract = (id: HunkId, at: typeof lines) => ({
-        ...logic(id),
-        riskClass: "contract" as const,
-        lines: at,
-      });
-      const model = new FakeAnalysisModel();
-      model.script(
-        "risk",
-        ok([
-          ...[h1, h2, h3].map(logic),
-          contract(h4, lines),
-          // Another hunk's lines, and lines on a logic hunk, aren't kept.
-          contract(h5, lines),
-          { ...logic(h6), lines: { ...lines, hunkId: h6 } },
-        ]),
-      );
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
-      const linesOf = (id: HunkId) => analysis.risk.find((risk) => risk.hunkId === id)?.lines;
-      expect([linesOf(h4), linesOf(h5), linesOf(h6)]).toEqual([lines, null, null]);
-    });
-
-    it("warns about ignored classifications when every hunk is still covered", async () => {
-      const model = new FakeAnalysisModel();
-      const repeated = [...smallFeatureHunks.map(logic), logic(h1)];
-      model.script("risk", ok(repeated), ok(repeated));
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
-      expect(analysis.risk).toHaveLength(6);
-      expect(analysis.warnings).toEqual([
-        "Ignored risk classifications for unknown or repeated hunks",
-      ]);
-    });
-
-    it("repairs the first answer when the retry fails", async () => {
-      const model = new FakeAnalysisModel();
-      const last = smallFeatureHunks.at(-1);
-      model.script(
-        "risk",
-        ok(smallFeatureHunks.slice(0, -1).map(logic)),
-        err(modelError("network")),
-      );
-      const { analyze, logger } = setup({ model });
-      const analysis = await analyze();
-      expect(analysis.status).toBe("complete");
-      expect(analysis.risk.find((risk) => risk.hunkId === last)?.source).toBe("fallback");
-      expect(logger.entries.map((entry) => entry.message)).toContain(
-        "A model pass retry failed; repairing the first answer",
-      );
-    });
-
-    it("records a model error and keeps the decisions, and the rules' risk", async () => {
-      const model = new FakeAnalysisModel();
-      model.script("risk", err(modelError("rate-limited", "Slow down")));
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
-      expect(analysis.status).toBe("complete");
-      expect(analysis.modelError).toEqual({
-        stage: "risk",
-        code: "model-error",
-        message: "Slow down",
-      });
-      expect(analysis.stages).toMatchObject({ risk: "failed", decisions: "done" });
-      expect(analysis.decisions).toHaveLength(3);
-      expect(analysis.risk.map((risk) => risk.source)).not.toContain("model");
     });
   });
 
@@ -966,6 +786,47 @@ describe("the analysis pipeline", () => {
       expect(analysis.findings.map((finding) => finding.mismatch)).toEqual([null]);
     });
 
+    it("drops a finding still on lines its hunk doesn't show after the retry", async () => {
+      const model = new FakeAnalysisModel();
+      const wrong = { ...onLine("new"), lines: { ...onLine("new").lines, line: 999 } };
+      model.script("findings", ok([wrong, onLine("new")]), ok([wrong, onLine("new")]));
+      const { analyze, logger } = setup({ model });
+      const analysis = await analyze();
+      expect(model.callsTo("findings")[1]?.options?.feedback).toEqual([
+        `Finding 1's lines aren't lines ${hunk.id} shows on that side.`,
+      ]);
+      expect(analysis.findings).toEqual([{ ...onLine("new"), id: "f1" }]);
+      expect(analysis.warnings).toEqual([]);
+      expect(logger.entries.map((entry) => entry.message)).toContain("Dropped invalid findings");
+    });
+
+    it("repairs the first answer when the retry fails", async () => {
+      const model = new FakeAnalysisModel();
+      const wrong = { ...onLine("new"), title: " " };
+      model.script("findings", ok([onLine("new"), wrong]), err(modelError("network")));
+      const { analyze, logger } = setup({ model });
+      const analysis = await analyze();
+      expect(analysis.stages.findings).toBe("done");
+      expect(analysis.findings).toHaveLength(1);
+      expect(logger.entries.map((entry) => entry.message)).toContain(
+        "A model pass retry failed; repairing the first answer",
+      );
+    });
+
+    it("records a model error and keeps the intent", async () => {
+      const model = new FakeAnalysisModel();
+      model.script("findings", err(modelError("rate-limited", "Slow down")));
+      const { analyze } = setup({ model });
+      const analysis = await analyze();
+      expect(analysis.modelError).toEqual({
+        stage: "findings",
+        code: "model-error",
+        message: "Slow down",
+      });
+      expect(analysis.stages).toMatchObject({ intent: "done", findings: "failed" });
+      expect(analysis.intent).not.toBeNull();
+    });
+
     it("keeps a finding whose text runs long as it is, without running the pass again", async () => {
       const model = new FakeAnalysisModel();
       const long = { ...onLine("new"), title: "t".repeat(81), explanation: "e".repeat(301) };
@@ -974,85 +835,6 @@ describe("the analysis pipeline", () => {
       const analysis = await analyze();
       expect(model.callsTo("findings")).toHaveLength(1);
       expect(analysis.findings).toEqual([{ ...long, id: "f1" }]);
-    });
-  });
-
-  describe("decisions", () => {
-    const draft = (hunkIds: readonly HunkId[]) => ({
-      title: "Adds receipts",
-      category: "api" as const,
-      whyItMatters: "New endpoint.",
-      hunkIds,
-      lines: null,
-    });
-
-    it("drops unknown hunk references after a retry", async () => {
-      const model = new FakeAnalysisModel();
-      const drafts = [draft([h1, unknownHunk]), draft([unknownHunk]), draft([h2])];
-      model.script("decisions", ok(drafts), ok(drafts));
-      const { analyze, logger } = setup({ model });
-      const analysis = await analyze();
-
-      expect(model.callsTo("decisions")[1]?.options).toEqual({
-        feedback: [`${unknownHunk} isn't a hunk of this pull request.`],
-      });
-      expect(analysis.decisions.map((decision) => [decision.id, decision.hunkIds])).toEqual([
-        ["d1", [h1]],
-        ["d2", []],
-        ["d3", [h2]],
-      ]);
-      expect(analysis.warnings).toEqual([]);
-      expect(logger.entries).toContainEqual(
-        expect.objectContaining({
-          level: "warn",
-          message: "Dropped unknown hunk references from decisions",
-        }),
-      );
-    });
-
-    it("keeps a decision's lines only when one of its hunks shows them", async () => {
-      const hunk = smallFeatureFiles.flatMap((file) => file.hunks).find((one) => one.id === h2);
-      const line = hunk?.lines.find((one) => one.newLine !== null)?.newLine;
-      if (line == null) throw new Error("small-feature's second hunk has new lines");
-      const lines = { hunkId: h2, side: "new" as const, startLine: line, line };
-      const model = new FakeAnalysisModel();
-      model.script(
-        "decisions",
-        ok([
-          { ...draft([h2]), lines },
-          { ...draft([h1]), lines },
-          { ...draft([h2]), lines: { ...lines, startLine: 999, line: 999 } },
-        ]),
-      );
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
-      expect(analysis.decisions.map((decision) => decision.lines)).toEqual([lines, null, null]);
-    });
-
-    it("may reference mechanical hunks", async () => {
-      const files = parseUnifiedDiff(refactorMove.pullRequest.diff);
-      const lockfileHunk = files.ok ? files.value[0]?.hunks[0]?.id : undefined;
-      if (lockfileHunk === undefined) throw new Error("refactor-move changes the lockfile");
-      const model = new FakeAnalysisModel();
-      model.script("decisions", ok([draft([lockfileHunk])]));
-      const { analyze } = setup({ model });
-      const analysis = await analyze(refactorMove);
-      expect(analysis.decisions[0]?.hunkIds).toEqual([lockfileHunk]);
-      expect(model.callsTo("decisions")).toHaveLength(1);
-    });
-
-    it("records a model error and keeps the risk", async () => {
-      const model = new FakeAnalysisModel();
-      model.script("decisions", err(modelError("refusal", "Refused")));
-      const { analyze } = setup({ model });
-      const analysis = await analyze();
-      expect(analysis.modelError).toEqual({
-        stage: "decisions",
-        code: "model-error",
-        message: "Refused",
-      });
-      expect(analysis.stages).toMatchObject({ risk: "done", decisions: "failed" });
-      expect(analysis.risk).toHaveLength(6);
     });
   });
 
@@ -1188,7 +970,7 @@ describe("recoverInterruptedAnalyses", () => {
       ...complete,
       id: AnalysisId.parse("a_00000000000000a1"),
       status: "running",
-      stages: { ...complete.stages, intent: "running", risk: "pending", decisions: "pending" },
+      stages: { ...complete.stages, intent: "running", findings: "pending" },
     };
     const notStarted: Analysis = {
       ...complete,
@@ -1291,13 +1073,10 @@ describe("without the model", () => {
       prep: "done",
       intent: "skipped",
       findings: "skipped",
-      risk: "skipped",
-      decisions: "skipped",
       steps: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("20");
+    expect(analysis.key.pipelineVersion).toBe("21");
     expect(analysis.intent).toBeNull();
-    expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
     expect(analysis.risk.map((risk) => [risk.hunkId, risk.source])).toEqual(
       smallFeatureHunks.map((hunkId) => [hunkId, "rule"]),
@@ -1339,7 +1118,7 @@ describe("without the model", () => {
     ]);
   });
 
-  it("keeps a rule's contract over the model's logic when the model runs", async () => {
+  it("keeps the rules' classes when the model runs", async () => {
     const { analyze } = setup();
     const analysis = await analyze(promptInjection);
     const contract = analysis.risk.filter((risk) => risk.riskClass === "contract");
@@ -1384,7 +1163,7 @@ describe("with a local checkout", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
       expect(analysis.checkoutDir).toBe("/src/shop");
-      expect(analysis.key.pipelineVersion).toBe("20");
+      expect(analysis.key.pipelineVersion).toBe("21");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1470,7 +1249,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
       expect(analysis.checkoutDir).toBe(namesRepo ? "/src/shop" : null);
-      expect(analysis.key.pipelineVersion).toBe("20");
+      expect(analysis.key.pipelineVersion).toBe("21");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },
@@ -1621,7 +1400,7 @@ describe("callers brought to a complete analysis", () => {
     let stagesEnded = false;
     copies.download = (...args) => {
       stagesEnded = emitted.some(
-        ({ event }) => event.type === "updated" && event.stage === "decisions",
+        ({ event }) => event.type === "updated" && event.stage === "findings",
       );
       return original(...args);
     };
@@ -1711,54 +1490,6 @@ describe("callers brought to a complete analysis", () => {
     expect((await second.stored(id)).checkoutDir).toBe("/src/shop");
     await second.done(id);
     expect(usesOf(await second.stored(id))).toEqual(USES);
-  });
-
-  describe("an analysis stored while the key said a checkout was read", () => {
-    const storedAs = async (changes: Partial<Analysis>) => {
-      const ready = setup({ modelEnabled: false });
-      const made = await setup({ modelEnabled: false }).analyze();
-      const key = { ...made.key, pipelineVersion: "20+checkout" };
-      const old: Analysis = { ...made, id: analysisId(key), key, ...changes };
-      await ready.store.saveAnalysis(old);
-      return { ...ready, made, old };
-    };
-
-    it("is found, and stays as it is", async () => {
-      const { useCases, old, stored, preps } = await storedAs({
-        checkout: "read",
-        checkoutDir: "/src/shop",
-      });
-      const again = await useCases.startAnalysis(url);
-      expect(again).toEqual({ ok: true, value: { analysisId: old.id } });
-      expect(await stored(old.id)).toEqual(old);
-      expect(preps()).toBe(0);
-    });
-
-    it("runs again under its own ID when it failed", async () => {
-      const { useCases, old, done, stored } = await storedAs({ status: "failed" });
-      const again = await useCases.startAnalysis(url);
-      expect(again).toEqual({ ok: true, value: { analysisId: old.id } });
-      await done(old.id);
-      expect((await stored(old.id)).status).toBe("complete");
-    });
-
-    it.each([
-      ["2026-10-22T09:00:00Z", "complete", true],
-      ["2026-10-20T09:00:00Z", "complete", false],
-      ["2026-10-22T09:00:00Z", "failed", false],
-    ] as const)(
-      "beside one under the plain key: the complete one, then the one changed last (%s, %s)",
-      async (updatedAt, status, expected) => {
-        const { useCases, store, made, old } = await storedAs({
-          checkout: "read",
-          status,
-          updatedAt,
-        });
-        await store.saveAnalysis({ ...made, checkout: "read" });
-        const again = await useCases.startAnalysis(url);
-        expect(again.ok && again.value.analysisId === old.id).toBe(expected);
-      },
-    );
   });
 
   describe("with a model run", () => {
@@ -2031,9 +1762,9 @@ describe("runModel", () => {
     expect(after.id).toBe(analysis.id);
     expect(after.status).toBe("complete");
     expect(after.intent).not.toBeNull();
-    expect(after.decisions).toHaveLength(3);
+    expect(after.findings).toHaveLength(3);
     expect(after.flows).not.toBeNull();
-    expect(Object.values(after.stages)).toEqual([...Array(6).fill("done"), "skipped"]);
+    expect(Object.values(after.stages)).toEqual([...Array(4).fill("done"), "skipped"]);
     expect(model.callsTo("intent")).toHaveLength(1);
   });
 
@@ -2045,7 +1776,7 @@ describe("runModel", () => {
     expect(failed.modelError?.message).toBe("Overloaded");
     const again = await runModel(analysis.id);
     expect(again.modelError).toBeNull();
-    expect(again.stages.decisions).toBe("done");
+    expect(again.stages.findings).toBe("done");
   });
 
   it("refuses what it can't run, and says why", async () => {
@@ -2173,12 +1904,12 @@ describe("runModel", () => {
     const { analysis, useCases, store } = await codeOnly();
     await store.saveAnalysis({
       ...analysis,
-      stages: { ...analysis.stages, intent: "running", risk: "pending" },
+      stages: { ...analysis.stages, intent: "running", findings: "pending" },
     });
     expect(await useCases.recoverInterruptedAnalyses()).toBe(1);
     const recovered = await store.getAnalysis(analysis.id);
     expect(recovered?.status).toBe("complete");
-    expect(recovered?.stages).toMatchObject({ intent: "failed", risk: "skipped" });
+    expect(recovered?.stages).toMatchObject({ intent: "failed", findings: "skipped" });
     expect(recovered?.modelError).toEqual({
       stage: "intent",
       code: "interrupted",
@@ -2281,7 +2012,7 @@ describe("a run with the tour", () => {
       message: "Overloaded",
     });
     expect(failed.modelError).toBeNull();
-    expect(failed.stages.decisions).toBe("done");
+    expect(failed.stages.findings).toBe("done");
 
     const sparse = new FakeAnalysisModel();
     const second = await codeOnly(sparse);
@@ -2319,8 +2050,6 @@ describe("a run with the tour", () => {
         ...analysis.stages,
         intent: "done",
         findings: "done",
-        risk: "done",
-        decisions: "done",
         steps: "running",
       },
     };
@@ -2410,7 +2139,7 @@ describe("a model run's guidance", () => {
       ],
       guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Migrations must be reversible.\n" }],
     };
-    for (const pass of ["checkSize", "intent", "findings", "risk", "decisions"] as const) {
+    for (const pass of ["checkSize", ...MODEL_STAGES] as const) {
       expect(model.callsTo(pass).map((call) => call.input.guidance)).toEqual([guidance]);
     }
     expect(analysis.guidance).toEqual({
@@ -2522,24 +2251,6 @@ describe("a model run's guidance", () => {
         findingOn(5, null),
       ]),
     );
-    model.script(
-      "risk",
-      ok(
-        smallFeatureHunks.map((hunkId, index) => ({
-          ...logic(hunkId),
-          riskClass: index < 4 ? ("contract" as const) : ("logic" as const),
-          guidance:
-            [
-              { ref: "g1", effect: "raised" as const },
-              { ref: "p2", effect: "left-out" as const },
-              { ref: "p2", effect: "raised" as const },
-              null,
-              { ref: "p1", effect: "raised" as const },
-              null,
-            ][index] ?? null,
-        })),
-      ),
-    );
     const { analyze, preferences, logger } = setup({ fixtures: [guidelines], model });
     await preferences.savePreference(tenant);
     await preferences.savePreference(naming);
@@ -2555,28 +2266,13 @@ describe("a model run's guidance", () => {
       null,
     ]);
     expect(model.callsTo("findings")).toHaveLength(1);
-    const modelRisk = analysis.risk.filter((risk) => risk.source === "model");
-    expect(modelRisk.map((risk) => [risk.riskClass, risk.guidance])).toEqual([
-      ["contract", { ref: "g1", effect: "raised" }],
-      ["contract", { ref: "p2", effect: "left-out" }],
-      ["contract", null],
-      ["contract", null],
-      // A mark on a logic hunk says nothing the page shows.
-      ["logic", null],
-      ["logic", null],
-    ]);
-    // The risk pass and the findings pass run side by side, so their entries come in either order.
     const dropped = logger.entries
       .filter((entry) => entry.message === "Dropped a guidance mark that doesn't check out")
       .map((entry) => entry.fields);
-    expect(dropped).toHaveLength(3);
-    expect(dropped).toEqual(
-      expect.arrayContaining([
-        { finding: 4, ref: "p1", effect: "left-out" },
-        { finding: 5, ref: "p7", effect: "raised" },
-        { hunkId: smallFeatureHunks[2], ref: "p2", effect: "raised" },
-      ]),
-    );
+    expect(dropped).toEqual([
+      { finding: 4, ref: "p1", effect: "left-out" },
+      { finding: 5, ref: "p7", effect: "raised" },
+    ]);
     const marked = pointsOf(analysis).flatMap((point) =>
       point.guidance === undefined ? [] : [[point.id, point.guidance.effect, point.guidance.label]],
     );
@@ -2584,8 +2280,6 @@ describe("a model run's guidance", () => {
       ["f1", "raised", "Tenant isolation"],
       ["f2", "left-out", "Naming of test helpers"],
       ["f3", "left-out", "REVIEW.md"],
-      [`r:${smallFeatureHunks[0]}`, "raised", "REVIEW.md"],
-      [`r:${smallFeatureHunks[1]}`, "left-out", "Naming of test helpers"],
     ]);
   });
 
@@ -2671,15 +2365,9 @@ describe("removeModelRun", () => {
   };
 
   it("puts back exactly what the code made, under the same ID, reading nothing outside", async () => {
-    const model = new FakeAnalysisModel();
-    model.script(
-      "risk",
-      ok(smallFeatureHunks.map((hunkId) => ({ ...logic(hunkId), riskClass: "contract" as const }))),
-    );
-    const { codeOnly, ran, remove, cutOff, stored, preps } = await withModelRun(model);
+    const { codeOnly, ran, remove, cutOff, stored, preps } = await withModelRun();
     expect(ran.intent).not.toBeNull();
-    expect(ran.risk).not.toEqual(codeOnly.risk);
-    expect(ran.beforeModel).toEqual({ risk: codeOnly.risk, warnings: codeOnly.warnings });
+    expect(ran.beforeModel).toEqual({ warnings: codeOnly.warnings });
     const prepsBefore = preps();
 
     cutOff();
@@ -2712,7 +2400,6 @@ describe("removeModelRun", () => {
     model.script("findings", err(modelError("rate-limited")));
     const { codeOnly, ran, remove, runModel } = await withModelRun(model);
     expect(ran.modelError).not.toBeNull();
-    expect(ran.risk).not.toEqual(codeOnly.risk);
     const again = await runModel(codeOnly.id);
     expect(again.modelError).toBeNull();
 
@@ -2760,7 +2447,7 @@ describe("removeModelRun", () => {
     await remove();
     expect(await store.getPointReviews(codeOnly.id)).toEqual([]);
     const again = await runModel(codeOnly.id);
-    expect(again.stages.decisions).toBe("done");
+    expect(again.stages.findings).toBe("done");
   });
 
   it("keeps the record of a published review", async () => {
@@ -2802,8 +2489,8 @@ describe("removeModelRun", () => {
     expect((await run).ok).toBe(true);
     await done(codeOnly.id, before + 1);
     const again = await stored(codeOnly.id);
-    expect(again.stages.decisions).toBe("done");
-    expect(again.beforeModel).toEqual({ risk: codeOnly.risk, warnings: codeOnly.warnings });
+    expect(again.stages.findings).toBe("done");
+    expect(again.beforeModel).toEqual({ warnings: codeOnly.warnings });
   });
 
   it("refuses an analysis Claude hasn't run on, or one that isn't complete", async () => {

@@ -1,10 +1,6 @@
 import type { Intent, ModelPass } from "../../../../domain/review/index.ts";
 import { escapeText } from "../render-input.ts";
 
-/** Shared by the findings, risk and decisions tasks, whose words the reviewer reads or posts. */
-const EXACT_TERMS = `- Keep a technical term only when it's the exact name of the thing and a plain word would be vaguer (deadlock, primary key, HTTP 403). Don't name the class of problem in place of what happens ("violates least privilege"), coin compound words ("request-scoped"), or use a symbol, code or jargon as a verb ("callocs", "no-ops").`;
-const STILL_EXACT = "Plain isn't vague: still name the exact function, value, input and result.";
-
 /** What each pass asks for. Sent after the cached PR data, so changing one doesn't cost a cache. */
 export const PASS_INSTRUCTIONS: Readonly<Record<ModelPass, string>> = {
   intent: `Task: intent.
@@ -29,9 +25,9 @@ The reviewer reads every finding, and a wrong one costs them more than a missed 
 
 Each finding is a draft comment the reviewer can add to their review as it is, so write it to the author, in plain words: the ones you'd use telling a colleague, understood on one reading by someone new to this code whose first language isn't English.
 - Say what happens, in everyday words: "Two requests at once can overwrite each other's change", not "Non-atomic read-modify-write permits lost updates under concurrency".
-${EXACT_TERMS}
+- Keep a technical term only when it's the exact name of the thing and a plain word would be vaguer (deadlock, primary key, HTTP 403). Don't name the class of problem in place of what happens ("violates least privilege"), coin compound words ("request-scoped"), or use a symbol, code or jargon as a verb ("callocs", "no-ops").
 - Short sentences, one fact each: what the code does, when that goes wrong, what happens then. No asides in parentheses.
-${STILL_EXACT}
+Plain isn't vague: still name the exact function, value, input and result.
 
 - title: what is wrong, as its consequence, in at most 80 characters ("Retries a charge after it succeeded", not "Possible issue in retry logic").
 - explanation: why, pointing at the code, in at most 300 characters. Put code names in backticks.
@@ -43,61 +39,6 @@ ${STILL_EXACT}
 
 Order them by how much they matter, most first. At most 10. Findings marked "left-out" come after the others and outside that limit, at most 5 of them.`,
 
-  risk: `Task: risk.
-
-Classify every <hunk> in the data exactly once as "contract" or "logic". Mechanical hunks are already classified; leave them out.
-
-Every contract hunk is a place the reviewer is asked to stop, so mark only the hunks where a mistake would break or expose something outside this pull request:
-- callers outside the PR: a public API or endpoint, an exported signature, a serialized format others read (JSON shapes, files, events);
-- stored data: a database schema or migration, what gets persisted and where;
-- a security boundary: authentication, permissions, credentials and secrets, input from untrusted users;
-- the outside world: calls to external services, a dependency manifest, configuration or environment variables.
-
-Everything else is logic, and so are:
-- hunks that only follow from a contract hunk in this PR: the request and response models of a new endpoint, a generated client, types or API schema, the registration of a router, the page or form that calls a new endpoint, a caller passing a new argument. The hunk that makes the change carries it, once.
-- an interface whose every end is in this PR, such as a protocol between two of its own modules or a new method only its own code calls.
-- tests.
-
-reason: one sentence saying what could break outside this pull request, and for whom ("Existing clients that omit region now get a 400", not "Changes the schema" or "Defines the response shape"). When you can't name what could break outside the PR, the hunk is logic. When you can, and are unsure how likely it is, choose contract.
-
-lines: for a contract hunk, the lines in it where the risk is decided, the ones the reason is about (the route that accepts the token, not the imports above it): hunkId (the same hunk), side ("new" for "+" and unchanged lines, "old" for "-" lines), and startLine to line, equal for one line. Use only line numbers the hunk shows. null for a logic hunk.
-
-checkedBy: for a contract hunk, a test in the data whose assertions check the very behavior the reason names, so that they would fail if it broke; otherwise null. Ask: if what the reason says could break did break, would this test fail? If it would still pass, it's null. So:
-- A test of a neighboring behavior of the same code doesn't count: another route, the default case, the path that still works.
-- When the reason is about an order or a choice between two things (which credential wins, which value takes precedence), the test must set up both and assert which one is used.
-- When the harm is something no assertion compares (a leak into logs, load on a service, a secret in a process listing), it's null.
-- A test that only calls the code, sets it up, fakes or patches it doesn't count.
-Judge a test only by what its assertions compare, never by its name, its comments, or what the description or a comment says is tested. When unsure, null: naming a test tells the reviewer the risk is checked, and a wrong one is worse than none.
-- hunkId: the test's hunk, in a test file.
-- test: the test's name exactly as its code writes it: the function's name, or the string a test case is given.
-- startLine to line: the "+" or unchanged lines of that hunk holding its assertions about this behavior, at most 40.
-- checks: what those assertions check, and nothing more, in one sentence of at most 15 words ("a PUT from another origin gets 403 and saves nothing"), so the reviewer sees what they leave unchecked.
-
-guidance: null, unless the reviewer's guidance decides how the hunk is shown; then its ref ("p1", "g1") and the effect. "raised": a look-for preference or a guideline file names the area the hunk changes ("any change to billing"), which makes the hunk contract when the reason can still say what could break outside this pull request. "left-out": a dont-flag preference or a guideline file covers the hunk. Classify it by the code all the same, and mark it only when it's contract.
-
-Once everything above is decided, word reason and checks in plain words: the ones you'd use telling a colleague, understood on one reading by someone new to this code whose first language isn't English. The wording never changes what was decided.
-${EXACT_TERMS}
-- No asides in parentheses.
-${STILL_EXACT}`,
-
-  decisions: `Task: decisions.
-
-Explain the choices this code makes that a reader would wonder about: why it caches, why it retries this way, why a dependency, why this format, why this default. Each is a short footnote the reviewer may read or skip, so it explains and never asks for a change. Anything that looks wrong is a finding, not a decision: leave it out here. So is a choice that only carries out what the description or a ticket already says and explains, such as an implementation detail it describes: the reviewer has just read them, and a footnote that says it again is noise. Keep a choice whose consequence the reviewer has to accept even when it was asked for: a breaking change, a new public surface, a default, a limit, a lifetime.
-
-For each decision:
-- title: the question it answers, starting with "Why", in at most 60 characters ("Why clamp the delay before adding jitter").
-- category: the closest one.
-- whyItMatters: the answer, in one or two sentences, from what the code, the description or the tickets show. Don't guess at a reason they don't show.
-- hunkIds: the hunks the decision rests on.
-- lines: the line that makes the choice, in the first of those hunks: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines), and startLine and line, equal for one line. Use only line numbers the hunk shows.
-
-Choose the decisions first, as above, then word the title and whyItMatters in plain words: the ones you'd use telling a colleague, understood on one reading by someone new to this code whose first language isn't English. The wording never changes which choice a decision is about, or drops its reason.
-${EXACT_TERMS}
-- Short sentences, and no asides in parentheses.
-${STILL_EXACT}
-
-Order them by how much they help a reader, most first. At most 8. A small or routine change may have none. With reviewer guidance, the choices in what a look-for preference or a guideline file names come first, and a choice that a dont-flag preference or a guideline file says to leave alone is left out.`,
-
   steps: `Task: steps.
 
 Write a short tour of this change: a few steps through it that a reader follows to understand what it does and how, without reading the files. The reviewer reads it in about two minutes, before deciding whether to read the code.
@@ -108,7 +49,7 @@ Follow the change the way a request or a user action runs through it, from where
 - sentence: what happens at this step, as behavior a caller notices, in present tense, in at most 20 words, with code names in backticks and no period at the end ("A token is verified against the host before it's saved").
 - excerpts: the lines that decide what the sentence says, 4 to 14 of them: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines, so a removed check can be shown), and startLine to line. Use only line numbers the hunk shows, and only hunks sent in full. One excerpt per step; two only when the hop crosses into another process, such as a client's request and the route that serves it, each in its own file.
 - No step on a test, a generated file or docs.
-- Nothing that looks wrong and no risk: those are other tasks'. A step says what the code does.`,
+- Nothing that looks wrong: that's another task's. A step says what the code does.`,
 };
 
 const ids = (hunkIds: readonly string[]): string =>

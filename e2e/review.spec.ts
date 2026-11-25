@@ -4,11 +4,6 @@ import { expect, PR, publishAttempts, TOKEN, test } from "./fake-server.ts";
 
 const SMALL_FEATURE_TITLE = "Add receipt download endpoint";
 
-// Decisions are off until the Display menu turns them on; these tests read them.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => window.localStorage.setItem("megareviewer:decisions", "true"));
-});
-
 /** Opens the picker the way the CLI's link does. */
 const openPicker = async (page: Page) => {
   await page.goto(`/?token=${TOKEN}`);
@@ -44,18 +39,18 @@ const openReview = async (page: Page, url: string, title: string, claude = true)
   if (claude) await analyzeWithClaude(page);
 };
 
-/** One of Claude's points, by its title: the fake model's decision on a file. */
-/**
- * One of the fake model's decisions: its chip at the end of its line, which opens its footnote
- * with Comment and Hide.
- */
-const decision = (page: Page, title: string) => ({
-  chip: page.getByRole("button", { name: `Decision: ${title}` }),
-  comment: page.getByRole("button", { name: `Comment: ${title}` }),
-  hide: page.getByRole("button", { name: `Hide: ${title}` }),
-});
+/** The fake model's finding on a file: its card, and the folded line it becomes. */
+const findingOn = (page: Page, path: string) => {
+  const title = `Check ${path}`;
+  return {
+    card: page.getByRole("article", { name: title }),
+    add: page.getByRole("button", { name: `Add to review: ${title}` }),
+    edit: page.getByRole("button", { name: `Edit: ${title}` }),
+    dismiss: page.getByRole("button", { name: `Dismiss: ${title}`, exact: true }),
+  };
+};
 
-/** Clicks Comment, Hide or Dismiss and waits until the server has the state. */
+/** Clicks Add to review, Edit or Dismiss and waits until the server has the state. */
 const act = async (page: Page, button: Locator, state: string) => {
   const saved = page.waitForResponse(
     (response) =>
@@ -93,9 +88,8 @@ test("removes Claude's review in place, forgetting its points' states, and asks 
   page,
 }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  const config = decision(page, "Changes config/app.yaml");
-  await config.chip.click();
-  await act(page, config.hide, "dismissed");
+  const config = findingOn(page, "config/app.yaml");
+  await act(page, config.dismiss, "dismissed");
   const views: string[] = [];
   page.on("request", (request) => {
     if (/^\/api\/analyses\/a_[0-9a-f]+(\/events)?$/.test(new URL(request.url()).pathname)) {
@@ -106,13 +100,13 @@ test("removes Claude's review in place, forgetting its points' states, and asks 
   await page.getByRole("button", { name: "Remove AI review…" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.getByRole("button", { name: "Request AI review" })).toBeVisible();
-  await expect(config.chip).toHaveCount(0);
+  await expect(config.card).toHaveCount(0);
   await expect(page.locator("[data-slot=file-card]").first()).toBeVisible();
   // The page starts from what the removal answered, without loading the analysis again.
   expect(views).toEqual([]);
 
   await analyzeWithClaude(page);
-  await expect(config.chip).not.toHaveAttribute("data-state", "dismissed");
+  await expect(config.card).toHaveAttribute("data-state", "open");
 });
 
 test("analyzes a PR picked from the list", async ({ page }) => {
@@ -164,34 +158,6 @@ test("a call shows the code it runs while the pointer is on it or on its card", 
   await card.getByRole("button", { name: "Go to file" }).click();
   await expect(card).toBeHidden();
   await expect(page.locator("[data-slot=hunk-card]:focus")).toContainText("renderReceipt");
-});
-
-test("a risk a test checks names the test, which opens its code; one none checks says nothing", async ({
-  page,
-}) => {
-  await openReview(page, PR.receiptsTested, `${SMALL_FEATURE_TITLE}, with tests`);
-  const checked = page.locator("[data-slot=point][data-kind=risk]", {
-    hasText: "another user's receipt",
-  });
-  await expect(checked.locator("[data-slot=checked-by]")).toHaveText(
-    "Checked by answers 404 for another user's order in orders.test.ts, which asserts: Another user's order gets 404 and no receipt text.",
-  );
-  const unchecked = page.locator("[data-slot=point][data-kind=risk]", {
-    hasText: "ten times as many requests",
-  });
-  await expect(unchecked).toBeVisible();
-  await expect(unchecked.locator("[data-slot=checked-by]")).toHaveCount(0);
-  // Both are risks in the bar: a checked risk is a step like any other.
-  await expect(page.locator("[data-slot=point-chip][data-kind=risk]")).toContainText("2");
-  const name = checked.getByRole("button", { name: "answers 404 for another user's order" });
-  // From the keyboard: Tab onto the name, as a mouse rests on it.
-  await name.focus();
-  await page.keyboard.press("Shift+Tab");
-  await page.keyboard.press("Tab");
-  await expect(name).toBeFocused();
-  const card = page.getByLabel("Test answers 404 for another user's order");
-  await expect(card).toBeVisible();
-  await expect(card).toContainText("expect(res.status).toBe(404);");
 });
 
 test("a call's card keeps its header in view when its code scrolls sideways", async ({ page }) => {
@@ -384,24 +350,22 @@ test("mechanical changes are collapsed until expanded", async ({ page }) => {
 
 test("raised and dismissed points persist across a reload", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  const config = decision(page, "Changes config/app.yaml");
-  const routes = decision(page, "Changes src/routes/orders.ts");
+  const config = findingOn(page, "config/app.yaml");
+  const routes = findingOn(page, "src/routes/orders.ts");
   const changes = page.getByRole("region", { name: "Changes" });
 
-  await config.chip.click();
-  await act(page, config.hide, "dismissed");
-  await routes.chip.click();
-  await act(page, routes.comment, "raised");
+  await act(page, config.dismiss, "dismissed");
+  await act(page, routes.edit, "raised");
   await expect(changes.getByRole("textbox", { name: /^Comment on line/ })).toHaveValue(
-    /Changes src\/routes\/orders\.ts/,
+    /Check src\/routes\/orders\.ts/,
   );
   await changes.getByRole("button", { name: "Add to review", exact: true }).click();
 
   await page.reload();
-  await expect(config.chip).toHaveAttribute("data-state", "dismissed");
-  await expect(routes.chip).toHaveAttribute("data-state", "raised");
+  await expect(config.card).toHaveAttribute("data-state", "dismissed");
+  await expect(routes.card).toHaveAttribute("data-state", "raised");
   // The comment it opened is a draft in this browser until the review is published.
-  await expect(changes.getByText(/Changes src\/routes\/orders\.ts/).first()).toBeVisible();
+  await expect(changes.getByText(/Check src\/routes\/orders\.ts/).first()).toBeVisible();
 });
 
 test("publishes exactly what the preview shows, once, then approves in another review", async ({
@@ -409,9 +373,7 @@ test("publishes exactly what the preview shows, once, then approves in another r
   server,
 }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  const routes = decision(page, "Changes src/routes/orders.ts");
-  await routes.chip.click();
-  await act(page, routes.comment, "raised");
+  await act(page, findingOn(page, "src/routes/orders.ts").edit, "raised");
   const changes = page.getByRole("region", { name: "Changes" });
   const field = changes.getByRole("textbox", { name: /^Comment on line/ });
   await field.fill("Scope this to the order's owner.");
@@ -461,12 +423,8 @@ test("publishes exactly what the preview shows, once, then approves in another r
 
 test("a publish that fails part-way posts only the rest on retry", async ({ page, server }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
-  const changes = page.getByRole("region", { name: "Changes" });
   for (const path of ["config/app.yaml", "src/routes/orders.ts"]) {
-    const one = decision(page, `Changes ${path}`);
-    await one.chip.click();
-    await act(page, one.comment, "raised");
-    await changes.getByRole("button", { name: "Add to review", exact: true }).click();
+    await act(page, findingOn(page, path).add, "raised");
   }
   // Post 1 is the summary, so the second inline comment is post 3.
   const armed = await server.request.post("/__fake/fail-publish-comment", { data: { n: 3 } });
@@ -662,10 +620,10 @@ test("says on a finding which check could catch it, and adds it to the comment m
 
   // The run's guardrail call marks Claude's finding after the review has landed. With the card
   // above the window, the line it adds doesn't move the code being read.
-  const finding = changes.locator("[data-slot=point][data-kind=finding]");
+  const finding = changes.locator("[data-slot=point]");
   await expect(finding.locator("[data-slot=guardrail]")).toHaveCount(0);
   await page.evaluate(() => {
-    const card = document.querySelector("[data-slot=point][data-kind=finding]");
+    const card = document.querySelector("[data-slot=point]");
     if (card === null) throw new Error("no finding");
     window.scrollBy({ top: card.getBoundingClientRect().bottom + 40, behavior: "instant" });
   });

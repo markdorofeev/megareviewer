@@ -1,9 +1,7 @@
 import { z } from "zod";
 import { type FileChange, type Hunk, HunkId, hunkHasLine } from "../diff/index.ts";
-import type { Decision } from "./decision.ts";
 import { Guardrail, StoredGuardrail } from "./guardrail.ts";
 import { type Intent, IntentMismatchKind } from "./intent.ts";
-import { PointKind } from "./point-kind.ts";
 import { PointLines } from "./point-lines.ts";
 import {
   type Guidance,
@@ -13,9 +11,8 @@ import {
   resolveGuidanceMark,
 } from "./preference.ts";
 import { Timestamp } from "./primitives.ts";
-import type { RiskAssessment } from "./risk.ts";
 
-export { PointKind, PointLines };
+export { PointLines };
 
 /** "f1", "f2", … in the order the model listed the findings. */
 export const FindingId = z
@@ -59,8 +56,8 @@ export const Finding = z
 export type Finding = z.infer<typeof Finding>;
 
 /**
- * A finding's ID, "m1" for the first intent mismatch, a decision's ID, or "r:" and the hunk ID for
- * the model's risk on a hunk.
+ * A finding's ID, or "m1" for the first intent mismatch. Reviews stored while risks and decisions
+ * were points have "r:" and a hunk's ID, or "d1".
  */
 export const PointId = z
   .string()
@@ -68,11 +65,10 @@ export const PointId = z
   .brand<"PointId">();
 export type PointId = z.infer<typeof PointId>;
 
-/** What the model asks the reviewer to look at: a finding, a risk or a decision. */
+/** What the model asks the reviewer to look at: a finding, or a mismatch no finding names. */
 export const Point = z
   .object({
     id: PointId,
-    kind: PointKind,
     title: z.string().min(1),
     explanation: z.string(),
     /** The file of `lines`; null with them. */
@@ -81,26 +77,21 @@ export const Point = z
     lines: PointLines.nullable(),
     /** Every hunk the point rests on, `lines`' first. */
     hunkIds: z.array(HunkId).readonly(),
-    /** A finding's severity; null for a mismatch no finding named, and the other kinds. */
+    /** A finding's severity; null for a mismatch no finding names. */
     severity: Severity.nullable(),
     /** A finding's suggested lines, in place of `lines`. */
     suggestion: z.array(z.string()).readonly().nullable(),
     /** The intent mismatch a finding shows. */
     mismatch: z.object({ kind: IntentMismatchKind, description: z.string() }).readonly().nullable(),
-    /** The test that checks a risk's behavior, in the file `path` names; only on a risk. */
-    checkedBy: z
-      .object({ test: z.string(), checks: z.string(), lines: PointLines, path: z.string() })
-      .readonly()
-      .optional(),
     /**
-     * The preference or guideline file that shaped a finding or a risk, by its text or its path;
-     * left-out is one the reviewer asked not to be flagged, which the page folds.
+     * The preference or guideline file that shaped a finding, by its text or its path; left-out is
+     * one the reviewer asked not to be flagged, which the page folds.
      */
     guidance: z
       .object({ effect: GuidanceEffect, label: z.string(), preferenceId: PreferenceId.nullable() })
       .readonly()
       .optional(),
-    /** On a finding or a risk: a check that could catch its kind. */
+    /** On a finding: a check that could catch its kind. */
     guardrail: Guardrail.optional(),
   })
   .readonly();
@@ -138,16 +129,13 @@ export interface PointsInput {
   readonly files: readonly FileChange[];
   readonly intent: Intent | null;
   readonly findings: readonly Finding[];
-  readonly risk: readonly RiskAssessment[];
-  readonly decisions: readonly Decision[];
   /** What the model run was given; without it no point keeps a guidance mark. */
   readonly guidance?: Guidance | null;
 }
 
 /**
- * The model's points on an analysis, in order: findings, the intent's mismatches as findings,
- * risks, then decisions, each in the model's own order. A risk is a hunk the model marked
- * contract: the path rules' contract alone is never shown, since a rule reads the path, not the code.
+ * The model's points on an analysis, in order: the findings, then the intent's mismatches no
+ * finding names, each in the model's own order.
  */
 export const pointsOf = (analysis: PointsInput): Point[] => {
   const hunks = new Map(
@@ -181,7 +169,6 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     return [
       {
         id: PointId.parse(finding.id),
-        kind: "finding",
         title: finding.title,
         explanation: finding.explanation,
         path: hunk.path,
@@ -196,7 +183,6 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     ];
   });
 
-  const NONE = { severity: null, suggestion: null, mismatch: null } as const;
   // A mismatch a finding shows is a line of that finding, not a point of its own.
   const mismatches = mismatchList.flatMap((mismatch, index): Point[] => {
     const id = `m${index + 1}`;
@@ -204,81 +190,17 @@ export const pointsOf = (analysis: PointsInput): Point[] => {
     return [
       {
         id: PointId.parse(id),
-        kind: "finding",
         title: mismatch.description,
         explanation: MISMATCH_EXPLANATION[mismatch.kind],
         ...landing(mismatch.hunkIds),
-        ...NONE,
+        severity: null,
+        suggestion: null,
+        mismatch: null,
       },
     ];
   });
 
-  const risks = analysis.risk.flatMap((risk): Point[] => {
-    if (risk.source !== "model" || risk.riskClass !== "contract") return [];
-    const landed = landing([risk.hunkId]);
-    if (landed.lines === null) return [];
-    // On the lines the model says decide it, when its hunk shows them; else the hunk's changes.
-    const own = risk.lines;
-    const fits = own !== null && pointLinesFit([risk.hunkId], own, hunks);
-    const checked = risk.checkedBy;
-    const test = checked === undefined ? undefined : hunks.get(checked.lines.hunkId);
-    return [
-      {
-        id: PointId.parse(`r:${risk.hunkId}`),
-        kind: "risk",
-        title: risk.reason,
-        explanation: "",
-        ...landed,
-        ...(fits ? { lines: own } : {}),
-        ...NONE,
-        ...(checked === undefined || test === undefined
-          ? {}
-          : { checkedBy: { ...checked, path: test.path } }),
-        ...marked(risk.guidance),
-        ...(risk.guardrail === undefined ? {} : { guardrail: risk.guardrail }),
-      },
-    ];
-  });
-
-  const decisions = analysis.decisions.map((decision): Point => {
-    const landed = landing(decision.hunkIds);
-    const own = decision.lines;
-    const hunk = own === null ? undefined : hunks.get(own.hunkId);
-    // Its own line when one of its hunks shows it, else its first hunk's changed lines.
-    const fits = own !== null && hunk !== undefined && pointLinesFit(decision.hunkIds, own, hunks);
-    return {
-      id: PointId.parse(decision.id),
-      kind: "decision",
-      title: decision.title,
-      explanation: decision.whyItMatters,
-      ...landed,
-      ...(fits
-        ? {
-            lines: own,
-            path: hunk.path,
-            hunkIds: [own.hunkId, ...landed.hunkIds.filter((id) => id !== own.hunkId)],
-          }
-        : {}),
-      ...NONE,
-    };
-  });
-
-  return [...findings, ...mismatches, ...risks, ...decisions];
-};
-
-/** Whether a point's own lines are in one of its hunks, which shows them. */
-export const pointLinesFit = (
-  hunkIds: readonly HunkId[],
-  lines: PointLines,
-  hunks: ReadonlyMap<HunkId, Hunk>,
-): boolean => {
-  const hunk = hunks.get(lines.hunkId);
-  return (
-    hunk !== undefined &&
-    hunkIds.includes(lines.hunkId) &&
-    hunkHasLine(hunk, lines.side, lines.startLine) &&
-    hunkHasLine(hunk, lines.side, lines.line)
-  );
+  return [...findings, ...mismatches];
 };
 
 /** What can be wrong with a finding the model wrote. */

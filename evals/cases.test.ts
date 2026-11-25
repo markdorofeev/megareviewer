@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import type { CodeParser } from "../src/application/ports/index.ts";
 import { FakeAnalysisModel } from "../src/application/testing/index.ts";
-import { HunkId, hunkHasLine, isTestFile } from "../src/domain/diff/index.ts";
+import { HunkId, hunkHasLine } from "../src/domain/diff/index.ts";
 import {
   type Analysis,
   checkGuidanceMark,
@@ -98,64 +98,6 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
         analysis = result.value.analysis;
       });
 
-      it("refer to hunks the model classifies (none proved mechanical)", () => {
-        expect(analysis.status).toBe("complete");
-        const proved = new Set(analysis.proofs.map((proof) => proof.hunkId));
-        const hunks = new Set(analysis.files.flatMap((file) => file.hunks.map((hunk) => hunk.id)));
-        for (const hunkId of Object.keys(labels.risk)) {
-          expect(hunks, hunkId).toContain(hunkId);
-          expect(proved, hunkId).not.toContain(hunkId);
-        }
-      });
-
-      it("label every hunk the risk pass classifies", () => {
-        const proved = new Set(analysis.proofs.map((proof) => proof.hunkId));
-        const classified = analysis.files
-          .flatMap((file) => file.hunks.map((hunk) => hunk.id))
-          .filter((hunkId) => !proved.has(hunkId));
-        expect(Object.keys(labels.risk).sort()).toEqual([...classified].sort());
-      });
-
-      it("say where each contract hunk's risk belongs, on lines it shows", () => {
-        const hunks = new Map(
-          analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
-        );
-        const contract = Object.entries(labels.risk).flatMap(([hunkId, label]) =>
-          label === "contract" ? [hunkId] : [],
-        );
-        expect(Object.keys(labels.riskAt).sort()).toEqual(contract.sort());
-        for (const [hunkId, places] of Object.entries(labels.riskAt)) {
-          expect(places.length, hunkId).toBeGreaterThan(0);
-          const hunk = hunks.get(HunkId.parse(hunkId));
-          if (hunk === undefined) throw new Error(`${hunkId} isn't a hunk of the case`);
-          for (const { hunkId: placeHunk, side, lines } of places) {
-            expect(placeHunk).toBe(hunkId);
-            expect(lines[0]).toBeLessThanOrEqual(lines[1]);
-            for (const line of lines)
-              expect(hunkHasLine(hunk, side, line), `${hunkId} ${line}`).toBe(true);
-          }
-        }
-      });
-
-      it("name checking tests for classified hunks, on lines of a test's hunk", () => {
-        const hunks = new Map(
-          analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk] as const)),
-        );
-        for (const [hunkId, places] of Object.entries(labels.checkedBy ?? {})) {
-          expect(labels.risk[hunkId], hunkId).toBeDefined();
-          if (places === "either") continue;
-          for (const { hunkId: testHunk, side, lines } of places) {
-            const hunk = hunks.get(HunkId.parse(testHunk));
-            if (hunk === undefined) throw new Error(`${testHunk} isn't a hunk of the case`);
-            expect(isTestFile(hunk.path), hunk.path).toBe(true);
-            expect(side).toBe("new");
-            expect(lines[0]).toBeLessThanOrEqual(lines[1]);
-            for (const line of lines)
-              expect(hunkHasLine(hunk, side, line), `${testHunk} ${line}`).toBe(true);
-          }
-        }
-      });
-
       it("place each finding on lines a hunk the model reads shows", () => {
         const proved = new Set(analysis.proofs.map((proof) => proof.hunkId));
         const hunks = new Map(
@@ -193,36 +135,15 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
         for (const label of labels.guidance ?? []) {
           const mark = { ref: label.ref, effect: label.effect };
           expect(checkGuidanceMark(mark, analysis.guidance), label.ref).toEqual(mark);
-          const { findings = [], risks = [] } = label;
-          expect(findings.length + risks.length, label.ref).toBeGreaterThan(0);
-          for (const index of [...findings, ...(label.alsoOn?.findings ?? [])]) {
+          expect(label.findings.length, label.ref).toBeGreaterThan(0);
+          for (const index of [...label.findings, ...(label.alsoOn ?? [])]) {
             expect(labels.findings[index], `${label.ref} finding ${index}`).toBeDefined();
-          }
-          for (const hunkId of [...risks, ...(label.alsoOn?.risks ?? [])]) {
-            expect(labels.risk[hunkId], `${label.ref} ${hunkId}`).toBeDefined();
           }
           if (label.effect !== "left-out") continue;
           // What the reviewer asked not to be told can't also be what they must see.
-          for (const index of findings) expect(labels.findings[index]?.mustHave).toBe(false);
-          for (const hunkId of risks) expect(labels.risk[hunkId]).not.toBe("contract");
+          for (const index of label.findings) expect(labels.findings[index]?.mustHave).toBe(false);
         }
       });
-
-      it("expect something of the model when it has hunks to look at", () => {
-        const required =
-          analysis.files.flatMap((file) => file.hunks).length - analysis.proofs.length;
-        if (required > 0) {
-          expect(Object.keys(labels.risk).length).toBeGreaterThan(0);
-          expect([...labels.findings, ...labels.decisions].some((point) => point.mustHave)).toBe(
-            true,
-          );
-        }
-      });
-    });
-
-    it("phrase decisions as why, and leave what looks wrong to the findings", () => {
-      for (const decision of labels.decisions) expect(decision.description).toMatch(/^Why /);
-      for (const finding of labels.findings) expect(finding.description).not.toMatch(/^Why /);
     });
 
     it("tie each finding to a labeled mismatch at most once", () => {

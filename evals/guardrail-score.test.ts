@@ -12,7 +12,7 @@ const biome: Guardrail = {
 const labels = {
   f1: [{ is: "rule", tool: "biome", rules: ["noFloatingPromises"] }],
   f2: null,
-  r1: [{ is: "suggested", kinds: ["architecture-rule"] }],
+  f3: [{ is: "suggested", kinds: ["architecture-rule"] }],
 } as const;
 
 describe("scoreGuardrailCase", () => {
@@ -21,7 +21,7 @@ describe("scoreGuardrailCase", () => {
       new Map<string, Guardrail>([
         ["f1", biome],
         [
-          "r1",
+          "f3",
           {
             is: "suggested",
             kind: "architecture-rule",
@@ -44,7 +44,7 @@ describe("scoreGuardrailCase", () => {
       new Map<string, Guardrail>([
         ["f1", { ...biome, rule: "noMisusedPromises" }],
         ["f2", biome],
-        ["r1", { is: "suggested", kind: "pattern-rule", engine: "Semgrep", does: "x." }],
+        ["f3", { is: "suggested", kind: "pattern-rule", engine: "Semgrep", does: "x." }],
       ]),
       labels,
     );

@@ -1,11 +1,6 @@
-import type { Hunk, HunkId, PartId } from "../../domain/diff/index.ts";
+import type { Hunk, HunkId } from "../../domain/diff/index.ts";
 import {
-  type CheckingTest,
-  type CoverageProblem,
   checkGuidanceMark,
-  checkingTestProblem,
-  type Decision,
-  DecisionId,
   type Finding,
   FindingId,
   type FindingProblem,
@@ -18,15 +13,12 @@ import {
   type ModelError,
   type ModelPass,
   type ModelUsage,
-  pointLinesFit,
-  type RiskAssessment,
   type Step,
   type StepContext,
   type StepProblem,
   strippable,
   validateFindings,
   validateHunkReferences,
-  validateRiskCoverage,
   validateSteps,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
@@ -35,11 +27,9 @@ import type {
   AnalysisModel,
   Clock,
   Logger,
-  ModelCheckingTest,
   PassOptions,
   PassOutput,
 } from "../ports/index.ts";
-import { count } from "./text.ts";
 
 export interface PassResult<T> {
   readonly outcome: Result<T, ModelError>;
@@ -124,7 +114,7 @@ const callChecked = async <T>(
 };
 
 /**
- * A finding's or a risk's guidance mark when it checks out against what the run was given, else
+ * A finding's guidance mark when it checks out against what the run was given, else
  * null: the point stays, unmarked, so the reviewer sees it as any other. Logged, never retried.
  */
 const checkedMark = (
@@ -139,17 +129,6 @@ const checkedMark = (
   }
   return checked;
 };
-
-type Feedback = Readonly<Record<CoverageProblem["kind"], (id: PartId) => string>>;
-
-const RISK_FEEDBACK: Feedback = {
-  missing: (id) => `${id} has no risk class. Classify every hunk sent in full exactly once.`,
-  duplicate: (id) => `${id} is classified more than once.`,
-  unknown: (id) => `${id} isn't a hunk sent in full, so don't classify it.`,
-};
-
-const describeProblem = (feedback: Feedback) => (problem: CoverageProblem) =>
-  feedback[problem.kind](problem.id);
 
 const describeUnknown = (hunkId: HunkId): string => `${hunkId} isn't a hunk of this pull request.`;
 
@@ -253,140 +232,6 @@ export const runFindings = async (
   };
 };
 
-const checkingTest = (claim: ModelCheckingTest): CheckingTest => ({
-  test: claim.test,
-  checks: claim.checks,
-  lines: { hunkId: claim.hunkId, side: "new", startLine: claim.startLine, line: claim.line },
-});
-
-/**
- * The model's assessments, one per required hunk, with fallbacks for the ones it missed. A
- * checking test is kept only on a contract hunk and only as the server can check it; one it
- * can't is dropped without a retry, which leaves the risk unmarked, the safe side. A guidance mark
- * is kept the same way: on a contract hunk, when it checks out.
- */
-export const runRisk = async (
-  model: AnalysisModel,
-  input: AnalysisInput,
-  required: ReadonlySet<HunkId>,
-  hunks: ReadonlyMap<HunkId, Hunk>,
-  deps: PassDeps,
-  guidance: Guidance | null = null,
-): Promise<PassResult<RiskAssessment[]>> => {
-  const { outcome, usage, modelCalls } = await callChecked(
-    "risk",
-    (options) => model.risk(input, options),
-    (risk) => validateRiskCoverage(risk, required).map(describeProblem(RISK_FEEDBACK)),
-    deps,
-  );
-  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
-
-  // Keep the first assessment per required hunk; drop the rest. Lines only a contract hunk
-  // shows are kept; others fall back to its first changed lines, which isn't worth a retry.
-  const headContent = new Map(input.files.map((file) => [file.path, file.headContent]));
-  const kept = new Map<HunkId, RiskAssessment>();
-  for (const risk of outcome.value.value) {
-    if (!required.has(risk.hunkId) || kept.has(risk.hunkId)) continue;
-    const contract = risk.riskClass === "contract";
-    const fits = contract && risk.lines !== null && pointLinesFit([risk.hunkId], risk.lines, hunks);
-    const claim = contract && risk.checkedBy !== null ? checkingTest(risk.checkedBy) : null;
-    const testPath = claim === null ? undefined : hunks.get(claim.lines.hunkId)?.path;
-    const problem =
-      claim === null
-        ? null
-        : checkingTestProblem(
-            claim,
-            hunks,
-            required,
-            testPath === undefined ? null : (headContent.get(testPath) ?? null),
-          );
-    if (problem !== null) {
-      deps.logger.warn("Dropped a checking test the server couldn't verify", {
-        hunkId: risk.hunkId,
-        testHunkId: claim?.lines.hunkId,
-        problem,
-      });
-    }
-    const { checkedBy: _, ...assessment } = risk;
-    kept.set(risk.hunkId, {
-      ...assessment,
-      source: "model",
-      lines: fits ? risk.lines : null,
-      guidance: contract
-        ? checkedMark(risk.guidance, guidance, deps.logger, { hunkId: risk.hunkId })
-        : null,
-      ...(claim === null || problem !== null ? {} : { checkedBy: claim }),
-    });
-  }
-  const missing = [...required].filter((hunkId) => !kept.has(hunkId));
-  // Unclassified hunks show as ordinary logic: visible, never collapsed.
-  const fallbacks = missing.map((hunkId) => ({
-    hunkId,
-    riskClass: "logic" as const,
-    reason: "Not classified by the model",
-    lines: null,
-    guidance: null,
-  }));
-  const warnings =
-    outcome.value.problems.length === 0
-      ? []
-      : missing.length > 0
-        ? [`The model didn't classify ${count(missing.length, "hunk")}, so they're shown as logic`]
-        : ["Ignored risk classifications for unknown or repeated hunks"];
-  return {
-    outcome: ok([
-      ...kept.values(),
-      ...fallbacks.map((risk) => ({ ...risk, source: "fallback" as const })),
-    ]),
-    usage,
-    modelCalls,
-    warnings,
-  };
-};
-
-export const runDecisions = async (
-  model: AnalysisModel,
-  input: AnalysisInput,
-  hunks: ReadonlyMap<HunkId, Hunk>,
-  deps: PassDeps,
-): Promise<PassResult<Decision[]>> => {
-  const knownHunks = new Set(hunks.keys());
-  const unknownIn = (drafts: readonly { readonly hunkIds: readonly HunkId[] }[]) =>
-    validateHunkReferences(
-      knownHunks,
-      drafts.flatMap((draft) => draft.hunkIds),
-    );
-  const { outcome, usage, modelCalls } = await callChecked(
-    "decisions",
-    (options) => model.decisions(input, options),
-    (drafts) => unknownIn(drafts).map(describeUnknown),
-    deps,
-  );
-  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
-  const { value: drafts, problems } = outcome.value;
-  if (problems.length > 0) {
-    // Not a warning on the page: the reviewer can't act on the model's mistake.
-    deps.logger.warn("Dropped unknown hunk references from decisions", {
-      count: unknownIn(drafts).length,
-    });
-  }
-  return {
-    outcome: ok(
-      drafts.map((draft, index) => {
-        const hunkIds = draft.hunkIds.filter((id) => knownHunks.has(id));
-        // Lines outside its hunks fall back to its first hunk's: a footnote on the wrong line
-        // isn't worth a retry.
-        const lines =
-          draft.lines !== null && pointLinesFit(hunkIds, draft.lines, hunks) ? draft.lines : null;
-        return { ...draft, id: DecisionId.parse(`d${index + 1}`), hunkIds, lines };
-      }),
-    ),
-    usage,
-    modelCalls,
-    warnings: [],
-  };
-};
-
 /**
  * The model with every pass told that the run asked for the tour, so they all send the answer
  * schema with the steps pass's variant and share one cache.
@@ -396,8 +241,6 @@ export const askingForTour = (model: AnalysisModel): AnalysisModel => ({
   checkSize: (input) => model.checkSize(input),
   intent: (input, options) => model.intent(input, { ...options, tour: true }),
   findings: (input, intent, options) => model.findings(input, intent, { ...options, tour: true }),
-  risk: (input, options) => model.risk(input, { ...options, tour: true }),
-  decisions: (input, options) => model.decisions(input, { ...options, tour: true }),
   steps: (input, options) => model.steps(input, { ...options, tour: true }),
 });
 

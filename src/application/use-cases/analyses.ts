@@ -29,7 +29,7 @@ import type { GitHost } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { hostFor } from "./hosts.ts";
-import { keyOf, keysOf } from "./pipeline-version.ts";
+import { keyOf } from "./pipeline-version.ts";
 import { checkoutFields, codeFields, runModel, runPipeline } from "./run-pipeline.ts";
 import { type CheckoutAt, type CheckoutLookup, lookUpCheckout } from "./unchanged-callers.ts";
 
@@ -112,8 +112,6 @@ const newAnalysis = (
     prep: "pending",
     intent: "pending",
     findings: "pending",
-    risk: "pending",
-    decisions: "pending",
     steps: "skipped",
   },
   filesFetched: null,
@@ -134,7 +132,6 @@ const newAnalysis = (
   intent: null,
   findings: [],
   risk: [],
-  decisions: [],
   flows: null,
   steps: null,
   stepsError: null,
@@ -352,27 +349,13 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     await ready;
   };
 
-  /** The pull request's analysis at its head commit, whichever key it's stored under. */
-  const findStored = async (pullRequest: PullRequest): Promise<Analysis | null> => {
-    const stored = await Promise.all(keysOf(pullRequest).map((key) => deps.store.findByKey(key)));
-    return (
-      stored
-        .filter((analysis) => analysis !== null)
-        .sort(
-          (a, b) =>
-            Number(b.status === "complete") - Number(a.status === "complete") ||
-            Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-        )[0] ?? null
-    );
-  };
-
   const startFor = async (host: GitHost, pullRequest: PullRequest): Promise<AnalysisId> => {
-    const opened = await findStored(pullRequest);
+    const key = keyOf(pullRequest);
+    const opened = await deps.store.findByKey(key);
     if (opened?.status === "complete" && opened.checkout === "read") return opened.id;
     const lookup = await lookUpCheckout(deps, pullRequest.ref.repo, pullRequest.headSha);
-    const existing = await findStored(pullRequest);
-    const key = existing?.key ?? keyOf(pullRequest);
-    const id = existing?.id ?? analysisId(key);
+    const existing = await deps.store.findByKey(key);
+    const id = analysisId(key);
     // No await from here on until the run is in the map, so two requests can't both start it.
     if (inFlight.has(id) || bringing.has(id)) return id;
     if (existing?.status === "complete") {

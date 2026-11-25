@@ -192,15 +192,13 @@ describe("failingIntentOnce", () => {
     if (!intent.ok) return;
     await model.checkSize(input);
     await model.findings(input, intent.value.value);
-    await model.risk(input);
-    await model.decisions(input);
+    await model.steps(input);
     expect(model.version).toBe(inner.version);
     expect(inner.calls.map((call) => call.pass)).toEqual([
       "intent",
       "checkSize",
       "findings",
-      "risk",
-      "decisions",
+      "steps",
     ]);
   });
 });

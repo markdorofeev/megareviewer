@@ -4,7 +4,7 @@ import { recordedLines } from "./fixtures/fake-run-claude.ts";
 
 describe("parseClaudeCodeStream", () => {
   it("reads the session, the plan's window and the answer from a recorded pass", () => {
-    const stream = parseClaudeCodeStream(recordedLines("risk"));
+    const stream = parseClaudeCodeStream(recordedLines("intent"));
     expect(stream.init).toEqual({
       tools: ["StructuredOutput"],
       mcpServers: [],
@@ -18,7 +18,7 @@ describe("parseClaudeCodeStream", () => {
     expect(stream.result).toMatchObject({
       isError: false,
       subtype: "success",
-      structuredOutput: { answer: { pass: "risk" } },
+      structuredOutput: { answer: { pass: "intent" } },
     });
   });
 
@@ -39,7 +39,7 @@ describe("parseClaudeCodeStream", () => {
   });
 
   it("reads the model a session was started on, and each model that answered once", () => {
-    const [init = "", ...rest] = recordedLines("risk");
+    const [init = "", ...rest] = recordedLines("intent");
     const stream = parseClaudeCodeStream([
       JSON.stringify({ ...JSON.parse(init), model: "claude-opus-5-5" }),
       ...rest,

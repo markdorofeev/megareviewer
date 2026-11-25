@@ -126,23 +126,15 @@ const check = async (model: AnalysisModel, name: string, input: AnalysisInput) =
   if (!intent.ok) throw new Error(`${name} intent: ${intent.error.message}`);
   report(name, "intent", intent.value.usage, intent.value.value);
 
-  const [risk, decisions, steps] = await Promise.all([
-    model.risk(input),
-    model.decisions(input),
-    model.steps(input, { tour: true }),
-  ]);
-  if (!risk.ok) throw new Error(`${name} risk: ${risk.error.message}`);
-  if (!decisions.ok) throw new Error(`${name} decisions: ${decisions.error.message}`);
+  const steps = await model.steps(input, { tour: true });
   if (!steps.ok) throw new Error(`${name} steps: ${steps.error.message}`);
-  report(name, "risk", risk.value.usage, risk.value.value);
-  report(name, "decisions", decisions.value.usage, decisions.value.value);
   report(name, "steps", steps.value.usage, steps.value.value);
 
   const findings = await model.findings(input, intent.value.value);
   if (!findings.ok) throw new Error(`${name} findings: ${findings.error.message}`);
   report(name, "findings", findings.value.usage, findings.value.value);
 
-  const total = [intent, risk, decisions, steps, findings].reduce(
+  const total = [intent, steps, findings].reduce(
     (sum, result) => sum + (result.value.usage.costUsd ?? 0),
     0,
   );

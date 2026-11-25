@@ -12,7 +12,7 @@ import {
 } from "../../application/testing/index.ts";
 import { pullRequestUrl, sameRepo } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
-import { hunkWith, lineOf } from "./receipts-tested.ts";
+import { hunkWith, lineOf } from "./hunks.ts";
 
 const repo = { ...smallFeature.pullRequest.ref.repo, repo: "checkout" };
 const ref = { repo, number: 31 };
@@ -59,19 +59,17 @@ export const checkedAdvisor = (delayMs = MARKS_DELAY_MS): GuardrailAdvisor => {
       // After the landing, so the page is seen putting the marks in without moving the code.
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       const answer: AdviceDraft = {
-        marks: input.points
-          .filter((point) => point.kind === "finding")
-          .map((point) => ({
-            point: point.ref,
-            guardrail: {
-              kind: "lint-rule",
-              tool: "biome",
-              engine: "Biome",
-              rule: "noMisusedPromises",
-              on: false,
-              does: "Reports a promise passed where its result is ignored.",
-            },
-          })),
+        marks: input.points.map((point) => ({
+          point: point.ref,
+          guardrail: {
+            kind: "lint-rule",
+            tool: "biome",
+            engine: "Biome",
+            rule: "noMisusedPromises",
+            on: false,
+            does: "Reports a promise passed where its result is ignored.",
+          },
+        })),
       };
       return ok({ ...answered.value, value: answer });
     },
@@ -107,7 +105,5 @@ export const withGuardrails = (model: AnalysisModel, url: string): AnalysisModel
     if (!answer.ok || input.pullRequest.url !== url) return answer;
     return ok({ ...answer.value, value: findingsOf(input) });
   },
-  risk: (input, options) => model.risk(input, options),
-  decisions: (input, options) => model.decisions(input, options),
   steps: (input, options) => model.steps(input, options),
 });

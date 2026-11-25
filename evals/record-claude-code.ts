@@ -1,7 +1,7 @@
 // Records the Claude Code transport's fixtures from real runs of the signed-in `claude`:
 // node evals/record-claude-code.ts
-// Three passes of the AnalysisModel contract on small-feature, as the contract suite sends
-// them, and one pass signed out. Runs on the plan Claude Code is signed in to. Only the fields
+// The intent pass of the AnalysisModel contract on small-feature, as the contract suite sends it,
+// and one signed out. Runs on the plan Claude Code is signed in to. Only the fields
 // the adapter reads are kept, so no paths, account or session IDs are written.
 
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -67,8 +67,6 @@ const record = async (name: string, pass: ModelPass) => {
 };
 
 await record("intent", "intent");
-await record("risk", "risk");
-await record("decisions", "decisions");
 
 // An empty config directory is a Claude Code nobody signed in to.
 const empty = mkdtempSync(join(tmpdir(), "megareviewer-signed-out-"));

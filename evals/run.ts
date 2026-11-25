@@ -148,8 +148,6 @@ interface CaseResult {
     | "error"
     | "intent"
     | "findings"
-    | "risk"
-    | "decisions"
     | "flows"
     | "warnings"
     | "usage"
@@ -356,8 +354,7 @@ for (const metric of COMPARED) {
 const ratings = countRatings(results.flatMap((result) => result.verdict ?? []));
 const tally = (counts: readonly (readonly [string, number])[]) =>
   counts.map(([rating, n]) => `${rating} ${n}`).join(" · ");
-console.log(`\nFinding ratings: ${tally(ratings.findings)}`);
-console.log(`Decision ratings: ${tally(ratings.decisions)}`);
+console.log(`\nFinding ratings: ${tally(ratings)}`);
 console.log(
   `\nCost at API prices: $${summary.modelCostUsd.toFixed(2)} model + $${summary.judgeCostUsd.toFixed(2)} judge, the judge's on the Claude plan` +
     ` ($${summary.modelCostPerCaseUsd.toFixed(2)} model per case).` +

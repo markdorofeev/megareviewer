@@ -4,7 +4,7 @@ import { HunkId, hunkHasLine } from "../diff/index.ts";
 import { buildPublication, CommentKey, HunkComment, isEmptyPublication } from "./index.ts";
 
 describe("buildPublication", () => {
-  it("posts the summary as written, and nothing about the decisions", () => {
+  it("posts the summary as written, and nothing else", () => {
     const publication = buildPublication({
       analysis: smallFeatureAnalysis,
       summary: "  Looks good once the retry is fixed.  ",
@@ -19,7 +19,6 @@ describe("buildPublication", () => {
 });
 
 describe("comments on hunks", () => {
-  const withoutDecisions = { ...smallFeatureAnalysis, decisions: [] };
   const file = smallFeatureAnalysis.files[1];
   const target = file?.hunks[0];
   if (file === undefined || target === undefined) throw new Error("small-feature has hunks");
@@ -32,7 +31,7 @@ describe("comments on hunks", () => {
     isAuthor = false,
   ) =>
     buildPublication({
-      analysis: withoutDecisions,
+      analysis: smallFeatureAnalysis,
       summary: "",
       isAuthor,
       hunkComments: comments.map((comment) => ({ hunkId: target.id, ...comment })),
@@ -56,7 +55,7 @@ describe("comments on hunks", () => {
 
   it("leaves out empty comments and comments on unknown hunks", () => {
     const publication = buildPublication({
-      analysis: withoutDecisions,
+      analysis: smallFeatureAnalysis,
       summary: "",
       isAuthor: false,
       hunkComments: [
@@ -70,7 +69,7 @@ describe("comments on hunks", () => {
 
   it("writes a suggestion into the body, and keeps a range", () => {
     const publication = buildPublication({
-      analysis: withoutDecisions,
+      analysis: smallFeatureAnalysis,
       summary: "",
       isAuthor: false,
       hunkComments: [

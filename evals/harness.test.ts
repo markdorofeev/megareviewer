@@ -100,7 +100,7 @@ describe("analyzeCase", () => {
     model.script(
       "findings",
       ok(
-        unmarked.value.analysis.findings.map(({ id: _, ...finding }) => ({
+        unmarked.value.analysis.findings.slice(0, 1).map(({ id: _, ...finding }) => ({
           ...finding,
           guidance: { ref: "p1", effect: "raised" as const },
         })),

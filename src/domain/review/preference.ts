@@ -175,7 +175,7 @@ export type Guidance = z.infer<typeof Guidance>;
 export const GuidanceEffect = z.enum(["raised", "left-out"]);
 export type GuidanceEffect = z.infer<typeof GuidanceEffect>;
 
-/** The model's word that a preference or a guideline file shaped a finding or a risk. */
+/** The model's word that a preference or a guideline file shaped a finding. */
 export const GuidanceMark = z.object({ ref: GuidanceRef, effect: GuidanceEffect }).readonly();
 export type GuidanceMark = z.infer<typeof GuidanceMark>;
 

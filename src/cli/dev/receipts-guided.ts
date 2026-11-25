@@ -2,7 +2,6 @@ import type {
   AnalysisInput,
   AnalysisModel,
   FindingDraft,
-  ModelRisk,
   PreferenceStore,
 } from "../../application/ports/index.ts";
 import { type PullRequestFixture, smallFeature } from "../../application/testing/index.ts";
@@ -15,7 +14,7 @@ import {
   type Timestamp,
 } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
-import { hunkWith, lineOf } from "./receipts-tested.ts";
+import { hunkWith, lineOf } from "./hunks.ts";
 
 const repo = { ...smallFeature.pullRequest.ref.repo, repo: "storefront" };
 const ref = { repo, number: 7 };
@@ -37,8 +36,8 @@ const CLAUDE_MD = `# Working on storefront\n\n${"- Keep route handlers thin; put
 /**
  * small-feature in a repository of its own, on the fake server only: the shared fixture is every
  * test's and every eval's. Its repository has guideline files, and the reviewer two preferences
- * for it, so its AI review, below, has a finding a preference raised, one a preference says not to
- * flag, and a risk from REVIEW.md.
+ * for it, so its AI review, below, has a finding a preference raised, one from REVIEW.md, and one a
+ * preference says not to flag.
  */
 export const receiptsGuided: PullRequestFixture = {
   ...smallFeature,
@@ -97,10 +96,12 @@ const markOf = (
   return found === undefined ? null : { ref: found.ref, effect };
 };
 
-/** The fake model's findings on the guided PR: one a preference asks for, one it says to leave out. */
+/** The fake model's findings on the guided PR: a preference's, REVIEW.md's, and one to leave out. */
 const findingsOf = (input: AnalysisInput): FindingDraft[] => {
   const receipts = hunkWith(input, "src/services/receipts.ts", "renderReceipt");
-  if (receipts === undefined) return [];
+  const limit = hunkWith(input, "config/app.yaml", "perMinute: 600");
+  if (receipts === undefined || limit === undefined) return [];
+  const perMinute = lineOf(limit, "perMinute");
   return [
     {
       title: "Serves a receipt rendered before a refund for up to an hour",
@@ -116,6 +117,16 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
       suggestion: null,
       mismatch: null,
       guidance: markOf(input, LOOK_FOR, "raised"),
+    },
+    {
+      title: "Raises the rate limit tenfold without saying who asked for it",
+      explanation:
+        "Every client can now send 600 requests a minute, and nothing says how that was load tested.",
+      lines: { hunkId: limit.id, side: "new", startLine: perMinute, line: perMinute },
+      severity: "major",
+      suggestion: null,
+      mismatch: null,
+      guidance: markOf(input, "REVIEW.md", "raised"),
     },
     {
       title: "`lines` could say what the lines are of",
@@ -134,36 +145,7 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
   ];
 };
 
-/** Its risks: the rate limit, which REVIEW.md asks about, and nothing else. */
-const risksOf = (input: AnalysisInput): ModelRisk[] => {
-  const limit = hunkWith(input, "config/app.yaml", "perMinute: 600");
-  return input.files.flatMap((file) =>
-    file.hunks.map((hunk): ModelRisk => {
-      if (hunk.id !== limit?.id) {
-        return {
-          hunkId: hunk.id,
-          riskClass: "logic",
-          reason: "",
-          lines: null,
-          checkedBy: null,
-          guidance: null,
-        };
-      }
-      const line = lineOf(hunk, "perMinute");
-      return {
-        hunkId: hunk.id,
-        riskClass: "contract",
-        reason:
-          "Every client can send ten times as many requests a minute, and nothing says who asked for it or how it was load tested.",
-        lines: { hunkId: hunk.id, side: "new", startLine: line, line },
-        checkedBy: null,
-        guidance: markOf(input, "REVIEW.md", "raised"),
-      };
-    }),
-  );
-};
-
-/** The model, but the guided PR's findings and risk passes answer the above, after its own time. */
+/** The model, but the guided PR's findings pass answers the above, after its own time. */
 export const withGuidance = (model: AnalysisModel, url: string): AnalysisModel => ({
   version: model.version,
   checkSize: (input) => model.checkSize(input),
@@ -173,11 +155,5 @@ export const withGuidance = (model: AnalysisModel, url: string): AnalysisModel =
     if (!answer.ok || input.pullRequest.url !== url) return answer;
     return ok({ ...answer.value, value: findingsOf(input) });
   },
-  async risk(input, options) {
-    const answer = await model.risk(input, options);
-    if (!answer.ok || input.pullRequest.url !== url) return answer;
-    return ok({ ...answer.value, value: risksOf(input) });
-  },
-  decisions: (input, options) => model.decisions(input, options),
   steps: (input, options) => model.steps(input, options),
 });

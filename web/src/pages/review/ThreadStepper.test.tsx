@@ -163,8 +163,6 @@ describe("ClaudeElement with threads", () => {
       prep: "done",
       intent: stage,
       findings: stage,
-      risk: stage,
-      decisions: stage,
       steps: "skipped",
     },
     modelError: null,
@@ -173,7 +171,6 @@ describe("ClaudeElement with threads", () => {
   });
   const finding: Point = {
     id: PointId.parse("f1"),
-    kind: "finding",
     title: "Any signed-in user can read any receipt",
     explanation: "",
     hunkIds: [],

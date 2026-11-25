@@ -31,6 +31,7 @@ import {
   RecordingLogger,
   smallFeature,
   smallFeatureAnalysis,
+  smallFeatureIntent,
 } from "../testing/index.ts";
 import { createUseCases } from "./index.ts";
 
@@ -232,18 +233,18 @@ describe("recordPointState", () => {
     await seeded;
     await useCases.recordPointState(id, p("f1"), "dismissed");
     clock.advance(1000);
-    await useCases.recordPointState(id, p("d1"), "raised");
+    await useCases.recordPointState(id, p("m1"), "raised");
 
     const [finding] = smallFeatureAnalysis.findings;
-    const [decision] = smallFeatureAnalysis.decisions;
+    const [mismatch] = smallFeatureIntent.mismatches;
     expect(await preferences.listSignals(10)).toEqual([
       {
         kind: "raised",
         at: "2026-10-21T10:00:01.000Z",
         pullRequest: ref,
-        pointKind: "decision",
-        title: decision?.title,
-        text: decision?.whyItMatters,
+        pointKind: "finding",
+        title: mismatch?.description,
+        text: "Done, not asked for.",
         path: expect.any(String),
       },
       {
@@ -286,7 +287,7 @@ describe("recordPointState", () => {
     await seeded;
 
     expect((await useCases.recordPointState(id, p("f1"), "dismissed")).ok).toBe(true);
-    expect((await useCases.recordPointState(id, p("d1"), "open")).ok).toBe(true);
+    expect((await useCases.recordPointState(id, p("m1"), "open")).ok).toBe(true);
 
     expect((await store.getPointReviews(id)).map((review) => review.state)).toEqual([
       "dismissed",
