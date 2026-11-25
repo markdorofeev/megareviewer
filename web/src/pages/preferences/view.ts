@@ -66,6 +66,12 @@ export const USE_WORDS: Readonly<Record<GuidelineUse, string>> = {
   "on-request": "Read when the model asks",
 };
 
+/** The same of a file whose guideline file is off. */
+export const WOULD_USE_WORDS: Readonly<Record<GuidelineUse, string>> = {
+  prompt: "When on, in every review",
+  "on-request": "When on, read on request",
+};
+
 /** Files by the one that links them, in the order they're first linked. */
 export const byLinking = (
   linked: readonly LinkedGuidelineFile[],

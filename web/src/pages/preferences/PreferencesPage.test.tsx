@@ -740,17 +740,17 @@ describe("PreferencesPage's repositories", () => {
     expect(document.getElementById(button.getAttribute("aria-controls") ?? "")).not.toBeNull();
     expect(linkedFiles(within(section).getByRole("list", { name: "Linked by CLAUDE.md" }))).toEqual(
       [
-        "docs/house-rules.md6.0 KBimportedIn every review",
-        "docs/architecture.md70 KBimportedRead when the model asks",
-        "docs/testing.md3.4 KBRead when the model asks",
-        "docs/runbooks/README.md910 BRead when the model asks",
+        "docs/house-rules.md6.0 KBimportedWhen on, in every review",
+        "docs/architecture.md70 KBimportedWhen on, read on request",
+        "docs/testing.md3.4 KBWhen on, read on request",
+        "docs/runbooks/README.md910 BWhen on, read on request",
       ],
     );
     expect(
       linkedFiles(within(section).getByRole("list", { name: "Linked by docs/runbooks/README.md" })),
     ).toEqual([
-      "docs/runbooks/refunds.md4.2 KBRead when the model asks",
-      "docs/runbooks/stock.md2.7 KBRead when the model asks",
+      "docs/runbooks/refunds.md4.2 KBWhen on, read on request",
+      "docs/runbooks/stock.md2.7 KBWhen on, read on request",
     ]);
     // The first file's switch is the next stop.
     await userEvent.tab();
@@ -781,6 +781,7 @@ describe("PreferencesPage's repositories", () => {
       within(section).getByRole("switch", { name: "Use CLAUDE.md in AI reviews" }),
     );
     await waitFor(() => expect(uses()).toBe("2 in every review, 4 on request, 1 ignored"));
+    expect(linkedFiles(section)[0]).toBe("docs/house-rules.md6.0 KBimportedIn every review");
     // Over what a prompt holds, so it's read when the model asks.
     expect(files(section)[1]).toContain("CLAUDE.md96 KBRead when the model asks");
     expect(fold(section).getAttribute("aria-expanded")).toBe("true");

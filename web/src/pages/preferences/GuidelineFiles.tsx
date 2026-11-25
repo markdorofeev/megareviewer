@@ -16,7 +16,15 @@ import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Switch } from "../../ui/switch.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
-import { byLinking, formatBytes, linkedTotal, linkedUses, sentence, USE_WORDS } from "./view.ts";
+import {
+  byLinking,
+  formatBytes,
+  linkedTotal,
+  linkedUses,
+  sentence,
+  USE_WORDS,
+  WOULD_USE_WORDS,
+} from "./view.ts";
 
 const LOOKED_FOR = `megareviewer looks for ${new Intl.ListFormat("en", { type: "disjunction" }).format(GUIDELINE_PATHS)}.`;
 
@@ -104,8 +112,12 @@ const rootWords = ({ enabled, use }: RepositoryGuidelineFile): string => {
     : USE_WORDS[use];
 };
 
-const linkedWords = ({ enabled, use }: LinkedGuidelineFile, isRoot: boolean): string => {
-  if (use !== null) return USE_WORDS[use];
+const linkedWords = (
+  { enabled, use }: LinkedGuidelineFile,
+  isRoot: boolean,
+  rootOn: boolean,
+): string => {
+  if (use !== null) return rootOn ? USE_WORDS[use] : WOULD_USE_WORDS[use];
   if (isRoot) return "Has its own switch";
   return enabled ? "Ignored: links to it are off" : "Ignored";
 };
@@ -114,11 +126,13 @@ const LinkedGroup = ({
   linkedFrom,
   files,
   roots,
+  rootOn,
   onSwitch,
 }: {
   readonly linkedFrom: string;
   readonly files: readonly LinkedGuidelineFile[];
   readonly roots: ReadonlySet<string>;
+  readonly rootOn: boolean;
   readonly onSwitch: OnSwitch;
 }) => {
   const id = useId();
@@ -134,8 +148,8 @@ const LinkedGroup = ({
               path={file.path}
               bytes={file.bytes}
               note={file.via === "import" ? "imported" : null}
-              words={linkedWords(file, roots.has(file.path))}
-              used={file.use !== null}
+              words={linkedWords(file, roots.has(file.path), rootOn)}
+              used={rootOn && file.use !== null}
               enabled={roots.has(file.path) ? null : file.enabled}
               onSwitch={onSwitch}
               className="min-h-9 py-1"
@@ -195,6 +209,7 @@ const LinkedFiles = ({
               linkedFrom={linkedFrom}
               files={files}
               roots={roots}
+              rootOn={file.enabled}
               onSwitch={onSwitch}
             />
           ))}
