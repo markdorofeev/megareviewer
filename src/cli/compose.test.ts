@@ -28,6 +28,7 @@ import {
   assemble,
   type Composition,
   compose,
+  createHarnessSources,
   createReviewHistories,
   harnessSourceIn,
   newSessionToken,
@@ -238,6 +239,23 @@ describe("compose", () => {
     ]);
     expect(Object.keys(histories({ ...config, github: null }))).toEqual(["bitbucket"]);
     expect(histories({ github: null, bitbucket: null })).toEqual({});
+  });
+
+  it("reads harnesses from the configured hosts, and from no other", async () => {
+    const config = await configIn();
+    const sources = (hosts: Pick<Config, "github" | "bitbucket">) =>
+      createHarnessSources(hosts, {
+        version: "1.2.3",
+        clock: new FixedClock(),
+        logger: new RecordingLogger(),
+      });
+
+    expect(Object.values(sources(config)).map((source) => source.host)).toEqual([
+      "github",
+      "bitbucket",
+    ]);
+    expect(Object.keys(sources({ ...config, github: null }))).toEqual(["bitbucket"]);
+    expect(sources({ github: null, bitbucket: null })).toEqual({});
   });
 
   it("reads a repository's harness from its host's source, or from none", () => {
