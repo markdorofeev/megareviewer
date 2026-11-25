@@ -6,6 +6,7 @@ import type {
   CodeParser,
   FileCache,
   GitHost,
+  KnownCheckouts,
   LocalCheckouts,
   Logger,
   ModelCatalog,
@@ -35,6 +36,8 @@ export interface AppDeps {
   readonly parser: CodeParser;
   /** Where unchanged callers are read from, when a checkout of the PR's repository is found. */
   readonly checkouts: LocalCheckouts;
+  /** The folders repositories were read from before. */
+  readonly knownCheckouts: KnownCheckouts;
   readonly events: AnalysisEvents;
   readonly clock: Clock;
   readonly logger: Logger;

@@ -13,6 +13,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   type PullRequestFixture,
 } from "../src/application/testing/index.ts";
@@ -118,6 +119,7 @@ export const analyzeCase = async (
       preferences,
       history: {},
       checkouts: new FakeLocalCheckouts(),
+      knownCheckouts: new InMemoryKnownCheckouts(),
       threads: {},
       statuses: {},
       parser: options.parser,

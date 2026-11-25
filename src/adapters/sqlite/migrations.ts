@@ -168,6 +168,15 @@ export const MIGRATIONS: readonly string[] = [
   `
   DROP TABLE preference_suggestions;
   `,
+  // The folders a repository was read from, tried before the home folder is searched.
+  `
+  CREATE TABLE known_checkouts (
+    host TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
+    dir TEXT NOT NULL,
+    last_read_at TEXT NOT NULL,
+    PRIMARY KEY (host, owner, repo, dir)
+  );
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

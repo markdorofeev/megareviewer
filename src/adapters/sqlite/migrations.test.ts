@@ -29,6 +29,7 @@ describe("migrate", () => {
       "analyses",
       "file_contents",
       "guideline_switches",
+      "known_checkouts",
       "last_model_option",
       "point_reviews",
       "preference_proposals",

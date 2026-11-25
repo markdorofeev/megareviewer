@@ -6,6 +6,7 @@ import type {
   Clock,
   FileAt,
   FileCache,
+  KnownCheckouts,
   Logger,
   PreferenceStore,
   StoredPublication,
@@ -26,6 +27,7 @@ import {
   Timestamp,
 } from "../../domain/review/index.ts";
 import { MIGRATIONS, migrate } from "./migrations.ts";
+import { createSqliteKnownCheckouts } from "./sqlite-known-checkouts.ts";
 import { createSqlitePreferenceStore } from "./sqlite-preference-store.ts";
 
 export interface SqliteAnalysisStoreOptions {
@@ -38,8 +40,11 @@ export interface SqliteAnalysisStoreOptions {
 /** Fetched files are kept this long, so the cache doesn't grow without bound. */
 export const FILE_CACHE_DAYS = 30;
 
-/** The analyses, review state, fetched files and the reviewer's preferences, in one database. */
-export type SqliteAnalysisStore = AnalysisStore & FileCache & PreferenceStore & { close(): void };
+/** The analyses, review state, fetched files, preferences and folders read, in one database. */
+export type SqliteAnalysisStore = AnalysisStore &
+  FileCache &
+  PreferenceStore &
+  KnownCheckouts & { close(): void };
 
 const PayloadRow = z.object({ id: z.string(), payload: z.string() });
 const PointReviewRow = z.object({
@@ -219,6 +224,7 @@ export const openSqliteAnalysisStore = (
 
   return {
     ...createSqlitePreferenceStore(db, logger),
+    ...createSqliteKnownCheckouts(db, clock),
 
     async getAnalysis(id: AnalysisId) {
       return toAnalysis(selectById.get(id));

@@ -1,13 +1,26 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   CHECKOUT_CONTRACT_FILES,
   describeLocalCheckoutContract,
+  describeLocalCheckoutsContract,
+  FixedClock,
+  RecordingLogger,
 } from "../../application/testing/index.ts";
 import type { RepoRef } from "../../domain/review/index.ts";
+import { createCloneSearch } from "./clone-search.ts";
 import { createGitCheckout, createGitCheckouts, inspectCheckout } from "./git-checkout.ts";
 
 const made: string[] = [];
@@ -60,7 +73,7 @@ describe("createGitCheckouts", () => {
       { "src/a.ts": "export const a = 1;\n" },
       { origin: "git@github.com:Acme/Shop.git", upstream: "https://github.com/other/shop" },
     );
-    const found = await createGitCheckouts({ dir: join(dir, "src") }).pointedAt(repo);
+    const found = await createGitCheckouts({ dir: join(dir, "src"), search: null }).pointedAt(repo);
     expect(found?.namesRepo).toBe(true);
     expect(await found?.checkout.hasCommit(sha)).toBe(true);
     expect(await found?.checkout.filesMentioning(sha, ["a"])).toEqual({
@@ -74,7 +87,7 @@ describe("createGitCheckouts", () => {
       { "a.ts": "" },
       { origin: "https://github.com/someone/shop.git" },
     );
-    const found = await createGitCheckouts({ dir }).pointedAt(repo);
+    const found = await createGitCheckouts({ dir, search: null }).pointedAt(repo);
     expect(found?.namesRepo).toBe(false);
     expect(await found?.checkout.hasCommit(sha)).toBe(true);
   });
@@ -82,14 +95,79 @@ describe("createGitCheckouts", () => {
   it("finds none outside a git checkout", async () => {
     const dir = mkdtempSync(join(tmpdir(), "megareviewer-plain-"));
     made.push(dir);
-    expect(await createGitCheckouts({ dir }).pointedAt(repo)).toBeNull();
+    expect(await createGitCheckouts({ dir, search: null }).pointedAt(repo)).toBeNull();
     expect(await inspectCheckout(dir)).toBeNull();
   });
 
   it("finds none when git can't run", async () => {
     const run = async () => ({ code: null, stdout: Buffer.alloc(0), stderr: "missing" });
-    expect(await createGitCheckouts({ dir: "/", run }).pointedAt(repo)).toBeNull();
+    expect(await createGitCheckouts({ dir: "/", search: null, run }).pointedAt(repo)).toBeNull();
   });
+
+  it("reads a remembered folder, and none that's gone or isn't a checkout", async () => {
+    const { dir, sha } = repository({ "a.ts": "" });
+    const checkouts = createGitCheckouts({ dir: "/nowhere", search: null });
+    const found = await checkouts.at(dir, repo);
+    expect(found?.namesRepo).toBe(false);
+    expect(await found?.checkout.hasCommit(sha)).toBe(true);
+    expect(await checkouts.at(join(dir, "gone"), repo)).toBeNull();
+  });
+
+  it("searches for nothing when the search is off", async () => {
+    const checkouts = createGitCheckouts({ dir: "/nowhere", search: null });
+    expect(checkouts.searchFolder).toBeNull();
+    expect(await checkouts.search(repo)).toEqual([]);
+  });
+
+  it("runs no git to search, whatever it finds", async () => {
+    const ran: string[] = [];
+    const found = await createGitCheckouts({
+      dir: "/nowhere",
+      search: {
+        home: "/home/lee",
+        walked: async () => ({ clones: [], stopped: null }),
+        find: async () => [
+          { dir: "/home/lee/shop", repos: [repo] },
+          { dir: "/home/lee/old/shop", repos: [] },
+        ],
+      },
+      run: async (dir) => {
+        ran.push(dir);
+        return { code: 0, stdout: Buffer.alloc(0), stderr: "" };
+      },
+    }).search(repo);
+    expect(ran).toEqual([]);
+    expect(await found[0]?.checkout.hasCommit("a".repeat(40))).toBe(true);
+    expect(ran).toEqual(["/home/lee/shop"]);
+  });
+});
+
+describeLocalCheckoutsContract("git", async () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), "megareviewer-home-")));
+  made.push(home);
+  const remotes = { origin: "git@github.com:acme/shop.git" };
+  const pointed = repository({ "a.ts": "a" }, remotes);
+  const clone = join(home, "code", "my-shop");
+  git(home, "clone", "-q", pointed.dir, clone);
+  git(clone, "remote", "set-url", "origin", remotes.origin);
+  const namesake = join(home, "old", "shop");
+  mkdirSync(dirname(namesake));
+  renameSync(repository({ "b.ts": "b" }, { origin: "git@github.com:lee/shop.git" }).dir, namesake);
+  return {
+    checkouts: createGitCheckouts({
+      dir: pointed.dir,
+      search: createCloneSearch({
+        home,
+        clock: new FixedClock(),
+        logger: new RecordingLogger(),
+        platform: "linux",
+      }),
+    }),
+    pointedAt: realpathSync(pointed.dir),
+    clone,
+    namesake,
+    sha: pointed.sha,
+  };
 });
 
 describe("inspectCheckout", () => {
@@ -146,5 +224,72 @@ describe("createGitCheckout", () => {
       ok: false,
       error: { kind: "failed", message: "git cat-file failed: fatal: broken" },
     });
+  });
+
+  it("searches whatever the repository's config says of grep, and from any config", async () => {
+    const { dir, sha } = repository({ "a.ts": "save(", "b.ts": "other" });
+    for (const [key, value] of [
+      ["grep.patternType", "perl"],
+      ["grep.fullName", "true"],
+      ["grep.lineNumber", "true"],
+      ["color.grep", "always"],
+      ["color.ui", "always"],
+      ["submodule.recurse", "true"],
+    ] as const) {
+      git(dir, "config", key, value);
+    }
+    expect(await createGitCheckout({ dir }).filesMentioning(sha, ["save("])).toEqual({
+      ok: true,
+      value: ["a.ts"],
+    });
+  });
+
+  it("answers a path git would quote as it is", async () => {
+    const { dir, sha } = repository({ 'src/ünï "q".ts': "save()" });
+    expect(await createGitCheckout({ dir }).filesMentioning(sha, ["save"])).toEqual({
+      ok: true,
+      value: ['src/ünï "q".ts'],
+    });
+  });
+
+  it("takes more names than a command line holds", async () => {
+    const { dir, sha } = repository({ "a.ts": "save()" });
+    const names = Array.from({ length: 50_000 }, (_, at) => `a_rather_long_definition_name_${at}`);
+    expect(await createGitCheckout({ dir }).filesMentioning(sha, [...names, "save"])).toEqual({
+      ok: true,
+      value: ["a.ts"],
+    });
+  });
+
+  it("ignores an empty name, which would match every file, and one with a newline", async () => {
+    const { dir, sha } = repository({ "a.ts": "save()" });
+    const checkout = createGitCheckout({ dir });
+    expect(await checkout.filesMentioning(sha, ["", "x\n"])).toEqual({ ok: true, value: [] });
+  });
+
+  it("changes nothing in a clone, and fetches nothing a partial one lacks", async () => {
+    const origin = repository({ "a.ts": "save()" });
+    git(origin.dir, "config", "uploadpack.allowFilter", "true");
+    git(origin.dir, "config", "uploadpack.allowAnySHA1InWant", "true");
+    const home = mkdtempSync(join(tmpdir(), "megareviewer-partial-"));
+    made.push(home);
+    const dir = join(home, "shop");
+    git(home, "clone", "-q", "--no-checkout", "--filter=blob:none", `file://${origin.dir}`, dir);
+    const files = () =>
+      readdirSync(join(dir, ".git"), { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => join(entry.parentPath, entry.name))
+        .sort()
+        .map((path) => [path, readFileSync(path).toString("base64")]);
+    const before = files();
+
+    const checkout = createGitCheckout({ dir });
+    expect(await checkout.hasCommit(origin.sha)).toBe(true);
+    expect(await checkout.hasCommit("0".repeat(40))).toBe(false);
+    // The file isn't there to search, and that's said rather than read as no mention.
+    expect((await checkout.filesMentioning(origin.sha, ["save"])).ok).toBe(false);
+    const read = await checkout.readFiles(origin.sha, ["a.ts"]);
+    expect(read.ok && read.value[0]?.kind === "text").toBe(false);
+    expect(files()).toEqual(before);
   });
 });

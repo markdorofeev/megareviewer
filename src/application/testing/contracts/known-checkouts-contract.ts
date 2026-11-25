@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { RepoRef } from "../../../domain/review/index.ts";
-import type { Clock, KnownCheckouts } from "../../ports/index.ts";
+import type { KnownCheckouts } from "../../ports/index.ts";
 import { FixedClock } from "../fixed-clock.ts";
 
 const repo: RepoRef = { host: "github", owner: "acme", repo: "shop" };
@@ -8,7 +8,7 @@ const other: RepoRef = { host: "bitbucket", owner: "acme", repo: "shop" };
 
 export const describeKnownCheckoutsContract = (
   name: string,
-  setup: (clock: Clock) => KnownCheckouts,
+  setup: (clock: FixedClock) => KnownCheckouts,
 ): void => {
   describe(`KnownCheckouts contract: ${name}`, () => {
     let clock: FixedClock;

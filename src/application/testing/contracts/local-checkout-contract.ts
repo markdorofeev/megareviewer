@@ -1,11 +1,18 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { mentionsAny } from "../../../domain/diff/index.ts";
+import {
+  type FileChange,
+  findUnchangedCallers,
+  mentionsAny,
+  type UnchangedFile,
+} from "../../../domain/diff/index.ts";
 import type { RepoRef } from "../../../domain/review/index.ts";
 import {
   type LocalCheckout,
   type LocalCheckouts,
   MAX_CHECKOUT_FILE_BYTES,
 } from "../../ports/index.ts";
+import { FakeCodeParser } from "../fake-code-parser.ts";
+import { hunk } from "../fixtures/index.ts";
 
 /** The files every implementation is set up with, at one commit. */
 export const CHECKOUT_CONTRACT_FILES: Readonly<Record<string, string>> = {
@@ -63,6 +70,48 @@ export const describeLocalCheckoutContract = (
       const answered = new Set(mentioning.ok ? mentioning.value : []);
       const left = Object.entries(CHECKOUT_CONTRACT_FILES).filter(([path]) => !answered.has(path));
       expect(left.filter(([, content]) => mentionsAny(content, new Set(names)))).toEqual([]);
+    });
+
+    it("finds the same callers as reading every file", async () => {
+      const path = "src/routes/items.ts";
+      const changed = hunk(path, "@@ -1,1 +1,1 @@", ["-export const items = 1;", "+changed"]);
+      const changes: FileChange[] = [
+        {
+          path,
+          oldPath: null,
+          status: "modified",
+          binary: false,
+          oldMode: null,
+          newMode: null,
+          language: "typescript",
+          hunks: [changed],
+          additions: 1,
+          deletions: 1,
+        },
+      ];
+      const definitions = [{ partId: changed.id, path, name: "items" }];
+      const parser = new FakeCodeParser();
+      const callersIn = async (paths: readonly string[]) => {
+        const read = await checkout.readFiles(sha, paths);
+        if (!read.ok) throw new Error(read.error.message);
+        const unchanged: UnchangedFile[] = [];
+        for (const [at, file] of read.value.entries()) {
+          const language = parser.languageFor(paths[at] ?? "");
+          if (file.kind !== "text" || language === null || paths[at] === path) continue;
+          const symbols = await parser.symbols(file.content, language);
+          if (!symbols.ok) throw new Error(symbols.error.message);
+          const { content } = file;
+          unchanged.push({ path: paths[at] ?? "", language, content, symbols: symbols.value });
+        }
+        return findUnchangedCallers(changes, definitions, unchanged, new Set());
+      };
+      const mentioning = await checkout.filesMentioning(sha, ["items"]);
+      const callers = await callersIn(mentioning.ok ? mentioning.value : []);
+      expect(callers).toEqual(await callersIn(Object.keys(CHECKOUT_CONTRACT_FILES).sort()));
+      // src/nul.ts names it too, but doesn't import it.
+      expect(callers.map(({ uses }) => uses.map((use) => [use.path, use.line]))).toEqual([
+        [["src/server.ts", 2]],
+      ]);
     });
 
     it("answers paths sorted, as they are at the commit", async () => {

@@ -1,7 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
-import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
+import {
+  type CheckoutInfo,
+  type CloneSearch,
+  inspectCheckout,
+  type Walk,
+} from "../adapters/git/index.ts";
 import {
   CLAUDE_MODELS,
   type ClaudeCodeStatus,
@@ -22,9 +27,10 @@ import {
   planName,
 } from "../adapters/model/index.ts";
 import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
-import type { GitHost, Logger, TicketSource } from "../application/ports/index.ts";
-import type { HostKind, RepoRef } from "../domain/review/index.ts";
+import type { GitHost, KnownCheckout, Logger, TicketSource } from "../application/ports/index.ts";
+import type { HostKind } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
+import { clonesSummary, repoName } from "./clones.ts";
 import { createHosts, createTicketSource, systemClock } from "./compose.ts";
 import type { BitbucketCredential, Config, GitHubTokenSource } from "./config.ts";
 import {
@@ -35,6 +41,7 @@ import {
   describeCodex,
   opencodeModels,
 } from "./model-access.ts";
+
 import { NODE_FIX, nodeSupported } from "./node-version.ts";
 
 export interface Check {
@@ -59,10 +66,15 @@ export interface DoctorDeps {
     /** Fetches the default model: free, and proves the credentials work. */
     retrieveModel(): Promise<Result<void, string>>;
   };
-  /** Creates the home directory if needed, then opens and closes the database. */
-  openStore(): Result<void, string>;
+  /**
+   * Creates the home directory if needed, opens the database, reads the folders repositories were
+   * read from, and closes it.
+   */
+  openStore(): Promise<Result<readonly KnownCheckout[], string>>;
   /** Where unchanged callers are read from, and what's there; null when it isn't a checkout. */
   readonly checkout: { readonly dir: string; readonly info: CheckoutInfo | null };
+  /** What the search for clones in the home folder found; null when it's off. */
+  readonly walk: Walk | null;
 }
 
 /** "Haiku 5.5, Sonnet 5.5 and Opus 5.5" */
@@ -314,16 +326,15 @@ const checkOpencode = ({ opencode }: DoctorDeps): Check => {
   }
 };
 
-const HOST_DOMAINS: Readonly<Record<HostKind, string>> = {
-  github: "github.com",
-  bitbucket: "bitbucket.org",
-};
-
-export const repoName = ({ host, owner, repo }: RepoRef): string =>
-  `${HOST_DOMAINS[host]}/${owner}/${repo}`;
-
 /** No PR to check the commit of: says where callers come from, and what a missing commit needs. */
-const checkCheckout = ({ checkout: { dir, info } }: DoctorDeps): Check => {
+const checkCheckout = ({ checkout: { dir, info }, walk }: DoctorDeps): Check => {
+  if (info === null && walk !== null) {
+    return check(
+      "skip",
+      "Checkout",
+      `${dir} isn't in a git checkout: a clone is looked for instead`,
+    );
+  }
   if (info === null) {
     return check(
       "skip",
@@ -344,6 +355,21 @@ const checkCheckout = ({ checkout: { dir, info } }: DoctorDeps): Check => {
   );
 };
 
+/** Where else a PR's repository is looked for, when the checkout doesn't have its head commit. */
+const checkClones = ({ walk }: DoctorDeps): Check =>
+  check(walk === null ? "skip" : "pass", "Clones", clonesSummary(walk));
+
+const checkKnown = (known: readonly KnownCheckout[]): Check[] =>
+  known.length === 0
+    ? []
+    : [
+        check(
+          "pass",
+          "Read before",
+          known.map(({ dir, repo }) => `${dir} (${repoName(repo)})`).join(", "),
+        ),
+      ];
+
 /** One check per line of `doctor`, in a fixed order. Network checks run in parallel. */
 export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
   const node = nodeSupported(deps.nodeVersion)
@@ -359,11 +385,19 @@ export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
     checkCodex(deps),
     checkOpencode(deps),
   ]);
-  const opened = deps.openStore();
+  const opened = await deps.openStore();
   const store = opened.ok
     ? check("pass", "Home", `${deps.config.home} is writable and the database opens`)
     : check("fail", "Home", opened.error, "Set MEGAREVIEWER_HOME to a writable directory.");
-  return [node, ...problems, ...services, checkCheckout(deps), store];
+  return [
+    node,
+    ...problems,
+    ...services,
+    checkCheckout(deps),
+    checkClones(deps),
+    ...checkKnown(opened.ok ? opened.value : []),
+    store,
+  ];
 };
 
 const MARK: Readonly<Record<Check["status"], string>> = { pass: "✓", fail: "✗", skip: "–" };
@@ -378,6 +412,8 @@ export const createDoctorDeps = async (options: {
   readonly config: Config;
   /** The directory unchanged callers are read from. */
   readonly checkoutDir: string;
+  /** Null when the search for clones is off. */
+  readonly search: CloneSearch | null;
   readonly problems: readonly string[];
   readonly version: string;
   readonly logger: Logger;
@@ -387,6 +423,7 @@ export const createDoctorDeps = async (options: {
   return {
     nodeVersion: process.versions.node,
     checkout: { dir: options.checkoutDir, info: await inspectCheckout(options.checkoutDir) },
+    walk: (await options.search?.walked()) ?? null,
     config,
     problems: options.problems,
     hosts: createHosts(config, { version: options.version, clock: systemClock, logger }),
@@ -412,7 +449,7 @@ export const createDoctorDeps = async (options: {
         }
       },
     },
-    openStore() {
+    async openStore() {
       try {
         mkdirSync(config.home, { recursive: true, mode: 0o700 });
         const store = openSqliteAnalysisStore({
@@ -420,8 +457,11 @@ export const createDoctorDeps = async (options: {
           clock: systemClock,
           logger,
         });
-        store.close();
-        return ok(undefined);
+        try {
+          return ok(await store.knownCheckouts());
+        } finally {
+          store.close();
+        }
       } catch (error) {
         return err(messageOf(error));
       }

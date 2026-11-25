@@ -8,6 +8,7 @@ import type {
 import { MAX_CHECKOUT_FILE_BYTES } from "../../application/ports/index.ts";
 import type { RepoRef } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
+import type { CloneSearch } from "./clone-search.ts";
 import { reposOfRemotes, sameRepo } from "./remotes.ts";
 import { type RunGit, runGit } from "./run-git.ts";
 
@@ -199,10 +200,19 @@ const foundIn = async (
 export const createGitCheckouts = (options: {
   /** Where megareviewer was pointed at. */
   readonly dir: string;
+  /** Null turns the search for clones off. */
+  readonly search: CloneSearch | null;
   readonly run?: RunGit;
 }): LocalCheckouts => ({
-  searchFolder: null,
+  searchFolder: options.search?.home ?? null,
   pointedAt: (repo) => foundIn(options.dir, repo, options.run),
   at: (dir, repo) => foundIn(dir, repo, options.run),
-  search: async () => [],
+  async search(repo) {
+    const clones = (await options.search?.find(repo)) ?? [];
+    return clones.map(({ dir, repos }) => ({
+      checkout: createGitCheckout({ dir, run: options.run }),
+      dir,
+      namesRepo: repos.some((known) => sameRepo(known, repo)),
+    }));
+  },
 });

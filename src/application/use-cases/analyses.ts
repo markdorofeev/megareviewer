@@ -160,7 +160,7 @@ const recomputeCode = async (
   if (!host.ok) return host;
   const checkout =
     analysis.checkout === "read"
-      ? await lookUpCheckout(deps.checkouts, pullRequest.ref.repo, analysis.key.headSha)
+      ? await lookUpCheckout(deps, pullRequest.ref.repo, analysis.key.headSha)
       : null;
   const fields = await codeFields(deps, host.value, pullRequest, checkout?.at ?? null);
   if (!fields.ok) return fields;
@@ -174,11 +174,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
   const inFlight = new Map<AnalysisId, Promise<void>>();
 
   const startFor = async (host: GitHost, pullRequest: PullRequest): Promise<AnalysisId> => {
-    const checkout = await lookUpCheckout(
-      deps.checkouts,
-      pullRequest.ref.repo,
-      pullRequest.headSha,
-    );
+    const checkout = await lookUpCheckout(deps, pullRequest.ref.repo, pullRequest.headSha);
     const key: AnalysisKey = {
       ref: pullRequest.ref,
       headSha: pullRequest.headSha,
@@ -279,7 +275,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
       if (!host.ok) return host;
       const checkout =
         analysis.checkout === "read"
-          ? await lookUpCheckout(deps.checkouts, pullRequest.ref.repo, analysis.key.headSha)
+          ? await lookUpCheckout(deps, pullRequest.ref.repo, analysis.key.headSha)
           : null;
       // No await from here on until the run is in the map, so two requests can't both start it.
       if (inFlight.has(id)) return ok({ analysisId: id });
