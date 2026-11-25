@@ -1,6 +1,6 @@
 # Stage 69: A read tool in every pass, through Claude Code
 
-**Status:** Not started
+**Status:** In progress (branch claude/harness-core-4b758f)
 **Depends on:** 67
 **Owns:** the read tool's contract in `src/application/ports/analysis-model.ts`, `src/application/use-cases/model-input.ts` and `model-passes.ts`; `ModelCall.reads` and the guideline fields of `Guidance`; the harness index in `src/adapters/model/shared/render-input.ts`; a pass's directory in `src/adapters/model/shared/run-command.ts`; the Claude Code transport in `src/adapters/model/claude/`; reads in `web/src/pages/review/ModelCalls.tsx` and the usage line; `evals/spikes/harness-read-tool/`; the read tool's text in DESIGN.md, ARCHITECTURE.md and ENGINEERING.md
 
