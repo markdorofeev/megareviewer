@@ -26,6 +26,8 @@ Each case runs through stage 10's real pipeline with the real Claude adapter and
 | `findingRecall` | Must-have findings the judge finds among the produced ones | ≥ 90% |
 | `findingNoise` | Produced findings the judge rates speculative or a nit | ≤ 20% |
 | `findingPlaced` | Labeled findings found whose produced one rests on a hunk and lines the label names | ≥ 90% |
+| `typeRight` | Labeled findings found whose produced one has the label's type | ≥ 85% |
+| `unwantedFindings` | Findings produced on cases labeled `nothingWrong`, in total | 0 |
 | `mismatchRecall` | Labeled mismatches found | ≥ 80% |
 | `mismatchNamed` | Labeled findings that show a mismatch, both found, whose finding names that mismatch | tracked |
 | `mismatchFalsePositives` | Mismatches produced on cases labeled with none, in total | ≤ 1 |
@@ -37,6 +39,10 @@ Each case runs through stage 10's real pipeline with the real Claude adapter and
 A finding marked left out is folded on the page, so every metric above the guidance ones counts it as not produced.
 
 A case can carry guidance, a reviewer's preferences and the repository's guideline files, which its run reads as a real one would: the preferences from the preference store, the files from the host at the PR's base commit. The three guidance metrics come from the marks the analysis kept, compared with the labels; the judge doesn't rate a mark, it only says which produced finding is which labeled one. On such a case the judge's prompt gains a section saying what the guidance is, so a finding that reports a breach of a guideline file's rule is rated valid; a case without guidance is judged by the prompt it always was.
+
+`findingRecall` by the label's type and `findingNoise` by the produced one's come after the table.
+
+A case can have files of its repository the PR doesn't change, in `files/outside/`. Its run then has a checkout holding them and the head files, so it reads the unchanged callers as a real one would, and the judge's prompt gains a section saying what they are, as it does for guidance.
 
 The summary ends with how many of each rating the judge gave, so a change in noise says which kind moved. Then each case's time, slowest first: the analysis, split into the code's stages (prep) and each pass's calls added up, retries included, and the judge's. The findings start when the intent ends, so a case waits on the two.
 
@@ -59,8 +65,9 @@ The call a model run makes after its passes, which marks each finding a check co
 
 1. Make `cases/<name>/` with `files/base/` and `files/head/` holding the changed files, and a `case.ts` with the PR's metadata (copy one). Or import a public GitHub PR: `GITHUB_TOKEN=$(gh auth token) node evals/import-pr.ts <url> <name>`.
 2. For a synthetic case, write its diff: `node evals/make-diff.ts <name>`.
-3. List its hunks with `node evals/print-hunks.ts <name>` (free: it uses the fake model) and write `labels.ts`: the findings (what looks wrong, the hunks and lines that show it, the index of the mismatch it shows, and which ones a reviewer must see), and the expected mismatches (`[]` means none). A case labeled with neither measures noise.
+3. List its hunks with `node evals/print-hunks.ts <name>` (free: it uses the fake model) and write `labels.ts`: the findings (what looks wrong, its type, the hunks and lines that show it, the index of the mismatch it shows, and which ones a reviewer must see), and the expected mismatches (`[]` means none). A case labeled with neither measures noise; `nothingWrong` says besides that any finding on it is wrong.
 4. For a case with guidance, export `guidance` from `case.ts`: the preferences in the order a run numbers them (`p1`, `p2`, …, everywhere's before the repository's) and the guideline files, which stay out of `files/`, in the order of `GUIDELINE_PATHS` (`g1`, …); `print-hunks.ts` lists both with their refs. In the labels' `guidance`, say what each should do, by its ref: `raised` with the labeled findings it should lead to, one of which is enough, or `left-out` with those it covers, none of them a must-have; `alsoOn` lists the findings that may carry its mark without being asked to. A preference that should do nothing gets no label, so any mark of it is wrong.
-5. Register it in [cases/index.ts](cases/index.ts). `pnpm test` checks the diff, that every labeled finding is on lines its hunk shows, the tickets, and that the guidance labels name refs the run has, with an effect it would keep.
+5. For a case an unchanged caller is part of, put the files of its repository the PR doesn't change in `files/outside/`, and export `outside` from `case.ts`.
+6. Register it in [cases/index.ts](cases/index.ts). `pnpm test` checks the diff, that every labeled finding is on lines its hunk shows, the tickets, and that the guidance labels name refs the run has, with an effect it would keep.
 
 Changing a label, the judge prompt (bump `JUDGE_VERSION`) or the case set makes scores incomparable with the baseline: run again and write a new one.

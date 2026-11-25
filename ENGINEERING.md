@@ -26,7 +26,8 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Risk class | *mechanical*, *logic* or *contract*, from a mechanical proof or a path rule. Internal: it orders the flows and is never shown |
 | Mechanical proof | Deterministic evidence that a hunk is mechanical: generated, whitespace, rename, move or formatting |
 | Intent | Stated intent (description, tickets), inferred intent (code: what it does, its shape across the system, what to watch), and the mismatches between them |
-| Finding | Something that looks wrong, on the lines of a hunk that show it |
+| Finding | Something that looks wrong, on the lines of a hunk that show it, with a type and a severity |
+| Finding type | What a finding is about: *logic*, the code does the wrong thing; *contract*, the change breaks or exposes something outside the PR; *architecture*, it's built in the wrong place or way for the code the PR shows |
 | Point | What the model asks the reviewer to look at: a finding, or an intent mismatch no finding names, with the hunk and lines it rests on |
 | Point state | What the reviewer did with a point: *open* (nothing, which means fine), *raised* or *dismissed* |
 | Verdict | What the published review says: approve, request changes or comment. The reviewer picks it |
@@ -49,7 +50,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Reviewer | Someone asked to review a PR or who has, with the verdict of their latest review on the host, or none yet |
 | Review status | What a PR's reviews add up to on its host: *approved*, *changes requested*, or neither |
 | Check | One CI result on a commit: *passed*, *failed*, *running* or *skipped* |
-| Severity | How much Claude thinks a finding matters: *minor*, *major* or *blocking*. Comments carry none |
+| Severity | How much Claude thinks a finding matters: *minor*, *major* or *blocking*. It ranks the findings and colors their marks. Comments carry none |
 | Suggestion | The lines a comment proposes in place of the ones it's on |
 | Connection | A service megareviewer reads from, GitHub, Bitbucket, Claude or Jira, and whether it works |
 | Review activity | The reviews and comments the reviewer posted from megareviewer on this machine, by day |
