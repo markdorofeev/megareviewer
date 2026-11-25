@@ -1,6 +1,6 @@
 # Stage 67: A run reads the linked files the author always loads
 
-**Status:** Not started
+**Status:** In progress (branch claude/harness-core-4b758f)
 **Depends on:** 65
 **Owns:** `src/application/use-cases/guidance.ts`; `InputGuidance` in `src/application/ports/analysis-model.ts`; the guideline fields of `Guidance` in `src/domain/review/preference.ts`; the guidance block in `src/adapters/model/shared/render-input.ts` and its fixtures; the guidance cases of `evals/`; the usage line's words on guideline files in `web/src/pages/review/UsageFooter.tsx`
 
