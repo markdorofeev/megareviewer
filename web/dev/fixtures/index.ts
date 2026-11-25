@@ -18,7 +18,9 @@ export {
 } from "./many-folders.ts";
 export {
   emptyPreferencesView,
+  fixtureHarnessSection,
   fixtureImport,
+  fixtureNothingYet,
   fixturePreferencesView,
   fixtureSuggestions,
 } from "./preferences.ts";

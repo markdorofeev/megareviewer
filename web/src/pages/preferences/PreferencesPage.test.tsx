@@ -1,11 +1,17 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PreferencesView, StatusResponse } from "../../../../contracts/index.ts";
+import type {
+  PreferencesView,
+  RepositoryPreferences,
+  StatusResponse,
+} from "../../../../contracts/index.ts";
 import type { RepoRef } from "../../../../src/domain/review/index.ts";
 import {
   emptyPreferencesView,
+  fixtureHarnessSection,
   fixtureImport,
+  fixtureNothingYet,
   fixturePreferencesView,
   fixtureStatus,
   lockedModelOptions,
@@ -682,19 +688,20 @@ describe("PreferencesPage's repositories", () => {
   const files = (section: HTMLElement) =>
     [...section.querySelectorAll("[data-slot=guideline-file]")].map((file) => file.textContent);
 
-  it("lists a repository's guideline files with their size and state, one too large without a switch", async () => {
+  it("lists a repository's guideline files with their size, switch and how a review uses them", async () => {
     renderPage({ path: SHOP });
     const section = await panel("acme/shop");
     const guidelines = within(section).getByRole("region", { name: "Guideline files" });
     expect(guidelines.textContent).toContain("read at each pull request's base commit");
     expect(files(guidelines)).toEqual([
-      "REVIEW.md1.2 KBFollowed by AI reviews",
-      "CLAUDE.md96 KBToo large to send: a guideline file can be 64 KB",
+      "REVIEW.md1.2 KBIn every review",
+      "CLAUDE.md96 KBIgnored7 linked files, 88 KBWhen on: 2 in every review, 5 on request",
       "CONTRIBUTING.md5.9 KBIgnored",
     ]);
     const switches = within(guidelines).getAllByRole("switch");
     expect(switches.map((one) => one.getAttribute("aria-label"))).toEqual([
       "Use REVIEW.md in AI reviews",
+      "Use CLAUDE.md in AI reviews",
       "Use CONTRIBUTING.md in AI reviews",
     ]);
   });
@@ -711,6 +718,152 @@ describe("PreferencesPage's repositories", () => {
       path: "REVIEW.md",
       enabled: false,
     });
+  });
+
+  const fold = (section: HTMLElement) =>
+    within(section).getByRole("button", {
+      name: /^7 linked files, 88 KB, from CLAUDE\.md$/,
+    });
+  const linkedFiles = (list: HTMLElement) =>
+    [...list.querySelectorAll("[data-slot=linked-file]")].map((file) => file.textContent);
+
+  it("unfolds what a guideline file links with the keyboard, by the file that links each", async () => {
+    renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    const button = fold(section);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(section.querySelector("[data-slot=linked-file]")).toBeNull();
+
+    button.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(button.getAttribute("aria-controls") ?? "")).not.toBeNull();
+    expect(linkedFiles(within(section).getByRole("list", { name: "Linked by CLAUDE.md" }))).toEqual(
+      [
+        "docs/house-rules.md6.0 KBimportedIn every review",
+        "docs/architecture.md70 KBimportedRead when the model asks",
+        "docs/testing.md3.4 KBRead when the model asks",
+        "docs/runbooks/README.md910 BRead when the model asks",
+      ],
+    );
+    expect(
+      linkedFiles(within(section).getByRole("list", { name: "Linked by docs/runbooks/README.md" })),
+    ).toEqual([
+      "docs/runbooks/refunds.md4.2 KBRead when the model asks",
+      "docs/runbooks/stock.md2.7 KBRead when the model asks",
+    ]);
+    // The first file's switch is the next stop.
+    await userEvent.tab();
+    expect(document.activeElement?.getAttribute("aria-label")).toBe(
+      "Use docs/house-rules.md in AI reviews",
+    );
+
+    button.focus();
+    await userEvent.keyboard(" ");
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("switches a linked file and a root with linked files, and the counts follow without a read", async () => {
+    const { sent } = renderPage({ path: SHOP });
+    const section = await panel("acme/shop");
+    const uses = () => section.querySelector("[data-slot=linked-uses]")?.textContent;
+    await userEvent.click(fold(section));
+    const testing = within(section).getByRole("switch", {
+      name: "Use docs/testing.md in AI reviews",
+    });
+
+    await userEvent.click(testing);
+    await waitFor(() => expect(testing.getAttribute("aria-checked")).toBe("false"));
+    expect(uses()).toBe("When on: 2 in every review, 4 on request, 1 ignored");
+    expect(linkedFiles(section)).toContain("docs/testing.md3.4 KBIgnored");
+
+    await userEvent.click(
+      within(section).getByRole("switch", { name: "Use CLAUDE.md in AI reviews" }),
+    );
+    await waitFor(() => expect(uses()).toBe("2 in every review, 4 on request, 1 ignored"));
+    // Over what a prompt holds, so it's read when the model asks.
+    expect(files(section)[1]).toContain("CLAUDE.md96 KBRead when the model asks");
+    expect(fold(section).getAttribute("aria-expanded")).toBe("true");
+    expect(sent("GET", "/api/preferences")).toHaveLength(1);
+    expect(sent("PUT", "/api/preferences/guidelines").map((one) => one.body)).toMatchObject([
+      { path: "docs/testing.md", enabled: false },
+      { path: "CLAUDE.md", enabled: true },
+    ]);
+  });
+
+  const withSection = (section: Partial<RepositoryPreferences>): PreferencesView => ({
+    ...fixturePreferencesView,
+    repositories: [{ ...fixtureHarnessSection, ...section }],
+  });
+
+  it("says when a file isn't used, and why: its own switch, links that are off, or no room", async () => {
+    const [review, claude, contributing] = fixtureHarnessSection.guidelineFiles ?? [];
+    const [rules, architecture, testing] = claude?.linked ?? [];
+    if (!review || !claude || !contributing || !rules || !architecture || !testing) {
+      throw new Error("the fixture has them");
+    }
+    renderPage({
+      path: SHOP,
+      preferences: withSection({
+        guidelineFiles: [
+          { ...review, use: null, bytes: 70_000 },
+          {
+            ...claude,
+            linked: [
+              { ...rules, enabled: false, use: null },
+              { ...architecture, use: null },
+              { ...testing, path: "CONTRIBUTING.md", enabled: false, use: null },
+            ],
+          },
+          contributing,
+        ],
+      }),
+    });
+    const section = await panel("acme/shop");
+    expect(files(section)[0]).toBe("REVIEW.md68 KBLeft out: over the 64 KB a review holds");
+    await userEvent.click(within(section).getByRole("button", { name: /^3 linked files/ }));
+    expect(linkedFiles(section)).toEqual([
+      "docs/house-rules.md6.0 KBimportedIgnored",
+      "docs/architecture.md70 KBimportedIgnored: links to it are off",
+      "CONTRIBUTING.md3.4 KBHas its own switch",
+    ]);
+    // A guideline file another one links is switched on its own row.
+    expect(
+      within(section).getAllByRole("switch", { name: "Use CONTRIBUTING.md in AI reviews" }),
+    ).toHaveLength(1);
+  });
+
+  it("says what isn't listed: a limit reached, a file it can't use, and a load that isn't in", async () => {
+    renderPage({
+      path: SHOP,
+      preferences: withSection({
+        harnessCut: "depth",
+        harnessSkipped: [
+          { path: "docs/changelog.md", reason: "too-large" },
+          { path: "docs/diagram.md", reason: "unreadable" },
+        ],
+        harnessNote: "The files they link are still loading",
+      }),
+    });
+    const section = await panel("acme/shop");
+    const notes = [...section.querySelectorAll("[data-slot=harness-notes] li")];
+    expect(notes.map((note) => note.textContent)).toEqual([
+      "The files they link are still loading.",
+      "Links are followed 5 steps from a guideline file. A file further away isn't listed, and AI reviews don't use it.",
+      "docs/changelog.md is over 1 MB, so AI reviews don't use it.",
+      "docs/diagram.md couldn't be read as text, so AI reviews don't use it.",
+    ]);
+  });
+
+  it("says that the links stopped at the limit on files", async () => {
+    renderPage({
+      path: SHOP,
+      preferences: withSection({ harnessCut: "files", harnessSkipped: [] }),
+    });
+    const section = await panel("acme/shop");
+    expect(section.querySelector("[data-slot=harness-notes]")?.textContent).toBe(
+      "Links are followed to 200 files, looking for 400 at most. A file past that isn't listed, and AI reviews don't use it.",
+    );
   });
 
   it("says why a guideline switch failed, and leaves it as it was", async () => {
@@ -760,7 +913,7 @@ describe("PreferencesPage's repositories", () => {
         ...fixturePreferencesView,
         repositories: [
           ...fixturePreferencesView.repositories,
-          { repo: ledger, guidelineFiles: [], guidelineNote: null },
+          { ...fixtureNothingYet, repo: ledger },
         ],
       },
     });
