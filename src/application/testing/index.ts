@@ -25,6 +25,10 @@ export {
   type PullRequestStatusContractSetup,
 } from "./contracts/pull-request-status-contract.ts";
 export {
+  describeRepositoryCopiesContract,
+  type RepositoryCopiesContractSetup,
+} from "./contracts/repository-copies-contract.ts";
+export {
   describeReviewHistoryContract,
   type ReviewHistoryContractSetup,
 } from "./contracts/review-history-contract.ts";
@@ -54,6 +58,7 @@ export {
 export { FakeModelCatalog, fakeModelOption } from "./fake-model-catalog.ts";
 export { FakePreferenceSuggester } from "./fake-preference-suggester.ts";
 export { FakePullRequestStatusSource } from "./fake-pull-request-status-source.ts";
+export { FakeRepositoryCopies } from "./fake-repository-copies.ts";
 export { FakeReviewHistory } from "./fake-review-history.ts";
 export {
   FakeReviewThreads,

@@ -3,7 +3,8 @@ import { err, ok, type Result } from "../domain/shared/index.ts";
 
 /**
  * `checkout`: the directory given with --checkout, or null for the one megareviewer runs in.
- * `search`: whether the home folder is searched for clones.
+ * `search`: whether the home folder is searched for clones. `download`: whether a commit no clone
+ * has is downloaded.
  */
 export type Command =
   | {
@@ -12,20 +13,28 @@ export type Command =
       readonly open: boolean;
       readonly checkout: string | null;
       readonly search: boolean;
+      readonly download: boolean;
     }
-  | { readonly kind: "doctor"; readonly checkout: string | null; readonly search: boolean }
+  | {
+      readonly kind: "doctor";
+      readonly checkout: string | null;
+      readonly search: boolean;
+      readonly download: boolean;
+    }
   | { readonly kind: "version" }
   | { readonly kind: "help" };
 
 export const EXIT = { ok: 0, config: 1, usage: 2 } as const;
 
 export const USAGE = `Usage:
-  megareviewer [--port <n>] [--no-open] [--checkout <dir>] [--no-search]
+  megareviewer [--port <n>] [--no-open] [--checkout <dir>] [--no-search] [--no-download]
       Start the review UI, on any free port by default. Code outside the PR that calls what it
       changes is read from a clone that has the PR's head commit: in <dir>, or else the current
       directory, then a clone read before, then one found in your home folder. --no-search turns
-      off looking through your home folder. Clones are only read, never changed.
-  megareviewer doctor [--checkout <dir>] [--no-search]
+      off looking through your home folder. Clones are only read, never changed. When no clone has
+      the commit, megareviewer downloads it into a copy of its own in ~/.megareviewer/repos.
+      --no-download turns that off.
+  megareviewer doctor [--checkout <dir>] [--no-search] [--no-download]
       Check credentials and setup
   megareviewer --version
   megareviewer --help`;
@@ -52,16 +61,19 @@ export const parseCliArgs = (argv: readonly string[]): Result<Command, string> =
   const checkout = values.checkout ?? null;
   if (checkout === "") return err("--checkout needs a directory");
   const search = values["no-search"] !== true;
+  const download = values["no-download"] !== true;
 
   if (values.version === true) {
-    if (command !== undefined || serveFlags || checkout !== null || !search) {
+    if (command !== undefined || serveFlags || checkout !== null || !search || !download) {
       return err("--version takes no other arguments");
     }
     return ok({ kind: "version" });
   }
   if (command === "doctor") {
-    if (serveFlags) return err("doctor takes no options but --checkout and --no-search");
-    return ok({ kind: "doctor", checkout, search });
+    if (serveFlags) {
+      return err("doctor takes no options but --checkout, --no-search and --no-download");
+    }
+    return ok({ kind: "doctor", checkout, search, download });
   }
   if (command !== undefined) return err(`Unknown command: ${command}`);
 
@@ -78,6 +90,7 @@ export const parseCliArgs = (argv: readonly string[]): Result<Command, string> =
     open: values["no-open"] !== true,
     checkout,
     search,
+    download,
   });
 };
 
@@ -89,6 +102,7 @@ const parse = (argv: readonly string[]) =>
       "no-open": { type: "boolean" },
       checkout: { type: "string" },
       "no-search": { type: "boolean" },
+      "no-download": { type: "boolean" },
       version: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },

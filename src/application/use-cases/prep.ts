@@ -43,7 +43,10 @@ export interface Prepared {
   readonly generated: ReadonlySet<string>;
   /** Read from the checkout, naming candidate parts like the hints; none without a checkout. */
   readonly unchangedCallers: readonly UnchangedCallers[];
+  /** The checkout's warnings aside. */
   readonly warnings: readonly string[];
+  /** What couldn't be read from the checkout. */
+  readonly checkoutWarnings: readonly string[];
   /** Hunks without a proof: the ones the model passes must cover. */
   readonly required: ReadonlySet<HunkId>;
 }
@@ -140,7 +143,8 @@ export const prep = async (
     definitions: changedDefinitionNames(files, symbolsByPath, parts),
     generated,
     unchangedCallers: outside.unchangedCallers,
-    warnings: [...lockfileWarnings(files), ...outside.warnings],
+    warnings: lockfileWarnings(files),
+    checkoutWarnings: outside.warnings,
     required: new Set(
       files
         .flatMap((file) => file.hunks.map((hunk) => hunk.id))

@@ -20,6 +20,7 @@ const summary = (overrides: Partial<Parameters<typeof startSummary>[0]> = {}) =>
       repos: [{ host: "github", owner: "acme", repo: "shop" }],
     },
     walk: { clones: [], stopped: null },
+    downloadFolder: "/home/lee/.megareviewer/repos",
     url: "http://127.0.0.1:4823/?token=t",
     ui: true,
     ...overrides,
@@ -38,6 +39,7 @@ describe("startSummary", () => {
       "  Model      unavailable: no model is known",
       "  Checkout   /home/lee/src/shop (github.com/acme/shop)",
       "  Clones     your home folder is searched for a PR's repository: 0 clones found. --no-search turns this off",
+      "  Download   when no clone has a PR's head commit, it's downloaded into /home/lee/.megareviewer/repos. --no-download turns this off",
       "",
       "Open http://127.0.0.1:4823/?token=t",
       "Press Ctrl+C to stop.",
@@ -52,7 +54,7 @@ describe("startSummary", () => {
   });
 
   it("says the search is off, and then how else to show callers", () => {
-    const off = { walk: null, checkout: null };
+    const off = { walk: null, checkout: null, downloadFolder: null };
     expect(line("Clones", off)).toBe("  Clones     not searched for, with --no-search");
     expect(line("Checkout", off)).toBe(
       "  Checkout   none: start in a checkout of the PR's repository, or pass --checkout, to show callers outside the PR",
@@ -63,5 +65,12 @@ describe("startSummary", () => {
     expect(line("Checkout", { checkout: null })).toBe(
       "  Checkout   none here, so a PR's repository is looked for on this machine",
     );
+  });
+
+  it("says a repository is downloaded when nothing on this machine is looked at, or that it's off", () => {
+    expect(line("Checkout", { checkout: null, walk: null })).toBe(
+      "  Checkout   none here, so a PR's repository is downloaded",
+    );
+    expect(line("Download", { downloadFolder: null })).toBe("  Download   off, with --no-download");
   });
 });

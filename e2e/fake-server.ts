@@ -18,11 +18,12 @@ export interface FakeServer {
 
 /**
  * Starts the server's fake mode on a free port, serving the built UI, with the model or without,
- * playing a scenario of Claude's run when one is named.
+ * playing a scenario of Claude's run when one is named, and downloading what no clone has or not.
  */
 const start = async (
   ai: boolean,
   scenario: string | null,
+  download: boolean,
 ): Promise<{ child: ChildProcess; url: string }> => {
   if (!existsSync(`${root}/dist/web/index.html`)) {
     throw new Error("No built UI in dist/web. Run `pnpm build` first.");
@@ -39,6 +40,7 @@ const start = async (
       "dist/web",
       ...(ai ? [] : ["--no-ai"]),
       ...(scenario === null ? [] : ["--scenario", scenario]),
+      ...(download ? ["--download"] : []),
     ],
     { cwd: root, stdio: ["ignore", "pipe", "pipe"] },
   );
@@ -60,13 +62,20 @@ const start = async (
   return { child, url };
 };
 
-export const test = base.extend<{ ai: boolean; scenario: string | null; server: FakeServer }>({
+export const test = base.extend<{
+  ai: boolean;
+  scenario: string | null;
+  download: boolean;
+  server: FakeServer;
+}>({
   /** Whether Request AI review can run; `test.use({ ai: false })` serves it as unavailable. */
   ai: [true, { option: true }],
   /** The scenario Claude's run plays, as `--scenario` names it; `test.use({ scenario: "many" })`. */
   scenario: [null, { option: true }],
-  server: async ({ playwright, ai, scenario }, use) => {
-    const { child, url } = await start(ai, scenario);
+  /** Whether a commit no clone has is downloaded; `test.use({ download: true })`. */
+  download: [false, { option: true }],
+  server: async ({ playwright, ai, scenario, download }, use) => {
+    const { child, url } = await start(ai, scenario, download);
     const request = await playwright.request.newContext({
       baseURL: url,
       extraHTTPHeaders: { [TOKEN_HEADER]: TOKEN },
@@ -95,6 +104,8 @@ export const PR = {
   receiptsChecked: "https://github.com/acme/checkout/pull/31",
   /** small-feature whose steps pass writes a tour of three steps. */
   receiptsTour: "https://github.com/acme/shop/pull/106",
+  /** small-feature with a changed function that code outside the PR calls, in no clone. */
+  receiptsDownloaded: "https://github.com/acme/shop/pull/107",
 } as const;
 
 /** What the fake hosts received, as GET /__fake/publications reports it. */

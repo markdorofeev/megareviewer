@@ -596,6 +596,7 @@ const analysis: Analysis = {
   generated: [],
   checkout: "read",
   checkoutDir: "/home/lee/code/shop",
+  checkoutError: null,
   unchangedCallers: [
     {
       partId: h.receiptFormatting,

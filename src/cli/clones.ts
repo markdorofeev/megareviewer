@@ -16,3 +16,9 @@ export const clonesSummary = (walk: Walk | null): string => {
   const stopped = walk.stopped === null ? "" : `. The search stopped early: ${stoppedReason(walk)}`;
   return `your home folder is searched for a PR's repository: ${count} found${stopped}. --no-search turns this off`;
 };
+
+/** What happens when no clone has a PR's head commit. `folder` is null when nothing does. */
+export const downloadsSummary = (folder: string | null): string =>
+  folder === null
+    ? "off, with --no-download"
+    : `when no clone has a PR's head commit, it's downloaded into ${folder}. --no-download turns this off`;

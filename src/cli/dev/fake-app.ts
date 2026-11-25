@@ -18,6 +18,7 @@ import {
   FakeModelCatalog,
   FakePreferenceSuggester,
   FakePullRequestStatusSource,
+  FakeRepositoryCopies,
   FakeReviewHistory,
   FakeReviewThreads,
   FakeTicketSource,
@@ -54,6 +55,7 @@ import {
 import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
 import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./model-recording.ts";
 import { checkedAdvisor, receiptsChecked, withGuardrails } from "./receipts-checked.ts";
+import { downloadedCommits, receiptsDownloaded } from "./receipts-downloaded.ts";
 import { receiptsGuided, withGuidance } from "./receipts-guided.ts";
 import { fakeHarnessSources, receiptsHarness } from "./receipts-harness.ts";
 import { receiptsTested, withCheckingTests } from "./receipts-tested.ts";
@@ -84,6 +86,7 @@ export const fakeFixtures: readonly PullRequestFixture[] = [
   receiptsChecked,
   receiptsTour,
   receiptsHarness,
+  receiptsDownloaded,
 ];
 
 const FAKE_MODELS = [
@@ -209,6 +212,7 @@ export const controlRoutes = (options: {
   readonly github: FakeGitHost;
   readonly bitbucket: FakeGitHost;
   readonly threads: readonly FakeReviewThreads[];
+  readonly copies: FakeRepositoryCopies;
   readonly sessionToken: string;
   readonly allowedHosts: readonly string[];
 }): Hono => {
@@ -219,6 +223,8 @@ export const controlRoutes = (options: {
     given !== undefined &&
     Buffer.byteLength(given) === expected.length &&
     timingSafeEqual(Buffer.from(given), expected);
+
+  let releaseDownloads = () => {};
 
   return new Hono()
     .use(async (c, next) => {
@@ -247,6 +253,14 @@ export const controlRoutes = (options: {
           retryAfterSeconds: null,
         });
       }
+      return c.json({});
+    })
+    .post("/hold-downloads", (c) => {
+      releaseDownloads = options.copies.hold();
+      return c.json({});
+    })
+    .post("/release-downloads", (c) => {
+      releaseDownloads();
       return c.json({});
     })
     .post("/set-head", async (c) => {
@@ -292,8 +306,15 @@ export const createFakeApp = async (options: {
   readonly modelAvailable?: boolean;
   /** Plays the recorded model run as this scenario instead of answering from the fake model. */
   readonly scenario?: Scenario;
+  /** Whether a commit no clone has is downloaded. Only receipts-downloaded's host has it. */
+  readonly download?: boolean;
 }): Promise<FakeApp> => {
   const clock = systemClock;
+  const copies = new FakeRepositoryCopies({
+    commits: downloadedCommits,
+    downloadFolder: options.download === true ? "/home/lee/.megareviewer/repos" : null,
+    clock,
+  });
   const github = new FakeGitHost({ host: "github", fixtures: fakeFixtures, clock });
   const bitbucket = new FakeGitHost({ host: "bitbucket", fixtures: fakeFixtures, clock });
   const threads = {
@@ -360,6 +381,7 @@ export const createFakeApp = async (options: {
       harnessStore,
       checkouts: new FakeLocalCheckouts(),
       knownCheckouts: new InMemoryKnownCheckouts(),
+      copies,
       parser: options.parser,
       clock,
       logger: options.logger,
@@ -385,6 +407,7 @@ export const createFakeApp = async (options: {
         github,
         bitbucket,
         threads: [threads.github, threads.bitbucket],
+        copies,
         sessionToken: composition.sessionToken,
         allowedHosts: allowedHosts(port),
       });

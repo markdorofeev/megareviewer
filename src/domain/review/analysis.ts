@@ -160,10 +160,18 @@ export const FilesFetched = z
 export type FilesFetched = z.infer<typeof FilesFetched>;
 
 /**
- * Whether the analysis read the PR's repository from a local checkout: "read", or why not. "none":
- * no checkout of the repository was found. "missing-commit": one was, without the PR's head commit.
+ * Whether the analysis read the PR's repository from a checkout: "read", or why not. "none": no
+ * checkout of the repository was found. "missing-commit": one was, without the PR's head commit.
+ * "downloading": the commit is being downloaded into megareviewer's own copy, and the callers come
+ * when it ends. "download-failed": it wasn't, for the reason in `checkoutError`.
  */
-export const CheckoutStatus = z.enum(["read", "none", "missing-commit"]);
+export const CheckoutStatus = z.enum([
+  "read",
+  "none",
+  "missing-commit",
+  "downloading",
+  "download-failed",
+]);
 export type CheckoutStatus = z.infer<typeof CheckoutStatus>;
 
 /** The fields of an analysis a model run changes, as the code made them. */
@@ -217,6 +225,8 @@ export const Analysis = z.preprocess(
        * when none was found, and on analyses stored before it was kept.
        */
       checkoutDir: z.string().nullable().default(null),
+      /** Why the commit couldn't be downloaded, and what would fix it; null unless it failed. */
+      checkoutError: z.string().nullable().default(null),
       /** Read from the checkout: uses outside the PR of the definitions it changes. */
       unchangedCallers: z.array(UnchangedCallers).readonly(),
       intent: Intent.nullable(),
@@ -306,9 +316,16 @@ export const inProgress = (analysis: Pick<Analysis, "status" | "stages">): boole
       (stage) => analysis.stages[stage] === "running" || analysis.stages[stage] === "pending",
     ));
 
-/** Whether its events still stream: it's in progress, or its run's guardrail call is running. */
-export const following = (analysis: Pick<Analysis, "status" | "stages" | "guardrails">): boolean =>
-  inProgress(analysis) || analysis.guardrails === "running";
+/**
+ * Whether its events still stream: it's in progress, its run's guardrail call is running, or the
+ * commit its callers are read from is being downloaded.
+ */
+export const following = (
+  analysis: Pick<Analysis, "status" | "stages" | "guardrails" | "checkout">,
+): boolean =>
+  inProgress(analysis) ||
+  analysis.guardrails === "running" ||
+  (analysis.status === "complete" && analysis.checkout === "downloading");
 
 /** Whether the model can be asked to run: the code's analysis is complete and the model isn't running or done. */
 export const modelRunnable = (analysis: Pick<Analysis, "status" | "stages">): boolean =>

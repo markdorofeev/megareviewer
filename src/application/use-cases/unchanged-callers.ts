@@ -20,7 +20,7 @@ export interface CheckoutAt {
 
 /** What looking for a checkout came to. */
 export interface CheckoutLookup {
-  readonly status: CheckoutStatus;
+  readonly status: Extract<CheckoutStatus, "read" | "none" | "missing-commit">;
   /** The folder read, or the one that names the repository without the commit. */
   readonly dir: string | null;
   readonly at: CheckoutAt | null;
@@ -48,12 +48,12 @@ async function* candidates(
 
 /**
  * The checkout to read for a PR: the first that has its head commit, whatever its remotes, since the
- * commit pins the content. It's remembered for the next time. Without one, "missing-commit" with the
- * first folder that names the repository, so the reviewer knows where a `git fetch` would help, and
- * "none" otherwise.
+ * commit pins the content. It's remembered for the next time. After the reviewer's own come the
+ * copies megareviewer downloaded. Without one, "missing-commit" with the first folder that names the
+ * repository, so the reviewer knows where a `git fetch` would help, and "none" otherwise.
  */
 export const lookUpCheckout = async (
-  deps: Pick<AppDeps, "checkouts" | "knownCheckouts">,
+  deps: Pick<AppDeps, "checkouts" | "knownCheckouts" | "copies">,
   repo: RepoRef,
   headSha: string,
 ): Promise<CheckoutLookup> => {
@@ -68,10 +68,23 @@ export const lookUpCheckout = async (
       return { status: "read", dir, at: { checkout, sha: headSha } };
     }
   }
+  const copy = await deps.copies.find(repo, headSha);
+  if (copy !== null) {
+    return { status: "read", dir: copy.dir, at: { checkout: copy.checkout, sha: headSha } };
+  }
   return naming === null
     ? { status: "none", dir: null, at: null }
     : { status: "missing-commit", dir: naming, at: null };
 };
+
+const COPY_KEPT_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Removes megareviewer's copies that nothing read for a while. Call once at startup. */
+export const forgetOldCopies = ({
+  copies,
+  clock,
+}: Pick<AppDeps, "copies" | "clock">): Promise<number> =>
+  copies.forget(new Date(Date.parse(clock.now()) - COPY_KEPT_MS).toISOString());
 
 /** Files read per `git cat-file --batch`, so a large repository isn't held in memory at once. */
 const FILES_PER_READ = 500;

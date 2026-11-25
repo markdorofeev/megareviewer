@@ -6,6 +6,7 @@ import {
   classifyByRules,
   codeFlows,
   type FilesFetched,
+  following,
   joinParts,
   keepBeforeModel,
   MODEL_STAGES,
@@ -65,9 +66,23 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
     await save({ filesFetched });
     deps.events.emit(analysis.id, { type: "updated", stage: "collect", status: "running" });
   };
-  const finish = async (error: AnalysisError | null) => {
-    await save({ status: error === null ? "complete" : "failed", error });
-    deps.events.emit(analysis.id, { type: "done" });
+  /** The end of what ran, or an update while something else of the analysis is still to come. */
+  const announceEnd = (stage: StageName) => {
+    deps.events.emit(
+      analysis.id,
+      following(analysis)
+        ? { type: "updated", stage, status: analysis.stages[stage] }
+        : { type: "done" },
+    );
+  };
+  /** A complete analysis whose callers come later says so in the same write, so the events go on. */
+  const finish = async (error: AnalysisError | null, downloading = false) => {
+    await save({
+      status: error === null ? "complete" : "failed",
+      error,
+      ...(error === null && downloading ? { checkout: "downloading" } : {}),
+    });
+    announceEnd("prep");
   };
   /**
    * Ends a model run's passes. Passes it didn't reach go back to not run; the analysis stays
@@ -81,12 +96,7 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
         status === "pending" ? "skipped" : status,
       ),
     }));
-    deps.events.emit(
-      analysis.id,
-      analysis.guardrails === "running"
-        ? { type: "updated", stage: "decisions", status: analysis.stages.decisions }
-        : { type: "done" },
-    );
+    announceEnd("decisions");
   };
   /** Ends a run's guardrail call, with what came of it, or as failed when the run crashed. */
   const finishGuardrails = async (call: GuardrailCall | null) => {
@@ -107,7 +117,7 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
             })(current),
           }),
     }));
-    deps.events.emit(analysis.id, { type: "done" });
+    announceEnd("decisions");
   };
   return {
     get lastStage() {
@@ -224,13 +234,30 @@ export const codeFields = async (
     tickets,
     missingTicketKeys,
     ...preparedFields(prepared),
-    warnings: [...warnings, ...prepared.prepared.warnings],
+    warnings: [...warnings, ...prepared.prepared.warnings, ...prepared.prepared.checkoutWarnings],
   });
 };
 
 /**
+ * What a checkout adds to a PR the code's stages read without one. The parts the callers name are
+ * the analysis's own, since prep is deterministic and a checkout changes nothing else in it.
+ */
+export const checkoutFields = async (
+  deps: AppDeps,
+  host: GitHost,
+  pullRequest: PullRequest,
+  checkout: CheckoutAt,
+): Promise<Result<Pick<Analysis, "unchangedCallers" | "warnings">, UseCaseError>> => {
+  const collected = await collect(deps, host, pullRequest);
+  if (!collected.ok) return collected;
+  const { prepared, joined } = await prepare(deps, collected.value, checkout);
+  return ok({ unchangedCallers: joined.unchangedCallers, warnings: prepared.checkoutWarnings });
+};
+
+/**
  * Runs the code's stages on a saved, running analysis until it's complete or failed, leaving the
- * model's stages not run. Never throws: a bug fails the analysis with code "internal".
+ * model's stages not run. With `downloading`, a complete one's callers are still to come. Never
+ * throws: a bug fails the analysis with code "internal".
  */
 export const runPipeline = async (
   deps: AppDeps,
@@ -238,10 +265,11 @@ export const runPipeline = async (
   analysis: Analysis,
   pullRequest: PullRequest,
   checkout: CheckoutAt | null = null,
+  downloading = false,
 ): Promise<void> => {
   const tracker = createTracker(deps, analysis);
   try {
-    await codeStages(deps, host, pullRequest, checkout, tracker);
+    await codeStages(deps, host, pullRequest, checkout, downloading, tracker);
   } catch (error) {
     deps.logger.error("The analysis pipeline crashed", { analysisId: analysis.id, error });
     await tracker.fail(tracker.lastStage, {
@@ -256,6 +284,7 @@ const codeStages = async (
   host: GitHost,
   pullRequest: PullRequest,
   checkout: CheckoutAt | null,
+  downloading: boolean,
   tracker: Tracker,
 ): Promise<void> => {
   await tracker.setStage("collect", "running");
@@ -273,10 +302,12 @@ const codeStages = async (
   const prepared = await prepare(deps, collected.value, checkout);
   await tracker.setStage("prep", "done", (analysis) => ({
     ...preparedFields(prepared),
-    ...adding(prepared.prepared)(analysis),
+    ...adding({
+      warnings: [...prepared.prepared.warnings, ...prepared.prepared.checkoutWarnings],
+    })(analysis),
   }));
   for (const stage of MODEL_STAGES) await tracker.setStage(stage, "skipped");
-  await tracker.finish(null);
+  await tracker.finish(null, downloading);
 };
 
 /**

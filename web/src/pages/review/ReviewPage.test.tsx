@@ -2708,6 +2708,52 @@ describe("outside the pull request", () => {
     },
   );
 
+  it("says in the details that the repository is being downloaded", async () => {
+    renderReview({ view: withCheckout("downloading"), respond: searching("/home/lee") });
+    await loaded();
+    expect((await openDetails()).querySelector("[data-slot=checkout-note]")?.textContent).toBe(
+      "Downloading acme/shop to find the code that calls what this pull request changes. It shows on the changes when the download ends.",
+    );
+  });
+
+  it.each([
+    [null, "Open the pull request again to try again."],
+    [
+      "/home/lee/code/shop",
+      "Open the pull request again to try again, or run git fetch in ~/code/shop first.",
+    ],
+  ])("says in the details why the download failed (clone in %s)", async (dir, fix) => {
+    const view = withCheckout("download-failed");
+    const checkoutError =
+      "GitHub didn't let megareviewer download acme/shop. Check that the GitHub token can read this repository's contents.";
+    renderReview({
+      view: { ...view, analysis: { ...view.analysis, checkoutDir: dir, checkoutError } },
+      respond: searching("/home/lee"),
+    });
+    await loaded();
+    const details = await openDetails();
+    await waitFor(() =>
+      expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toBe(
+        `Code outside the pull request that calls what it changes isn't shown: the repository couldn't be downloaded. ${checkoutError} ${fix}`,
+      ),
+    );
+  });
+
+  it("shows the callers when a download ends, without the landing", async () => {
+    const { setView, emit } = renderReview({ view: withCheckout("downloading") });
+    await loaded();
+    expect(document.querySelector("[data-slot=unchanged-uses]")).toBeNull();
+
+    setView(fixture);
+    emit(id, { type: "done" });
+
+    const card = cardOf(h.receiptFormatting);
+    expect(
+      await within(card).findByRole("button", { name: "Used unchanged in 1 place and 1 test" }),
+    ).not.toBeNull();
+    expect(document.querySelector("[data-landing]")?.getAttribute("data-landing")).toBe("done");
+  });
+
   it("says nothing about the checkout in the details when one was read", async () => {
     renderReview();
     await loaded();

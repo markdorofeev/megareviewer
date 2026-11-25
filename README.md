@@ -14,7 +14,7 @@ Needs Node 22.13 or later.
 npx megareviewer
 ```
 
-It starts a server on `127.0.0.1` and opens the review UI in your browser. `--port <n>` picks the port, and `--no-open` skips the browser. The review also shows the code outside the PR that calls what it changes, read from a clone on your machine that has the PR's head commit. megareviewer looks in the folder it's started in, or the one given with `--checkout <dir>`, then in the clones it read before, then through your home folder. `--no-search` turns the last off. Clones are only read, never changed.
+It starts a server on `127.0.0.1` and opens the review UI in your browser. `--port <n>` picks the port, and `--no-open` skips the browser. The review also shows the code outside the PR that calls what it changes, read from a clone on your machine that has the PR's head commit. megareviewer looks in the folder it's started in, or the one given with `--checkout <dir>`, then in the clones it read before, then through your home folder. `--no-search` turns the last off. Clones are only read, never changed. When none has the commit, megareviewer downloads that one commit with your GitHub or Bitbucket credentials into `~/.megareviewer/repos`, and the callers appear on the open review when it's done. It needs git 2.32 or newer, and `--no-download` turns it off.
 
 ```bash
 npx megareviewer doctor

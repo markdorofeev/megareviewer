@@ -55,6 +55,7 @@ export {
   type SuggestionOutput,
 } from "./preference-suggester.ts";
 export type { PullRequestStatusSource } from "./pull-request-status-source.ts";
+export type { DownloadError, RepositoryCopies, RepositoryCopy } from "./repository-copies.ts";
 export type { ReviewerComments, ReviewHistory } from "./review-history.ts";
 export {
   type Attachment,

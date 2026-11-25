@@ -7,7 +7,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import { type CloneSearch, createCloneSearch, inspectCheckout } from "../adapters/git/index.ts";
 import type { Logger } from "../application/ports/index.ts";
 import { EXIT, parseCliArgs, USAGE } from "./args.ts";
-import { compose, systemClock } from "./compose.ts";
+import { compose, copiesFolder, systemClock } from "./compose.ts";
 import { loadConfig } from "./config.ts";
 import { createDoctorDeps, formatCheck, runDoctor } from "./doctor.ts";
 import { createLogger } from "./logger.ts";
@@ -48,7 +48,11 @@ const startSearch = (on: boolean, logger: Logger): CloneSearch | null => {
 /** The directory given with --checkout, or the one megareviewer runs in. */
 const checkoutDir = (given: string | null): string => resolve(given ?? process.cwd());
 
-const doctor = async (options: { checkout: string | null; search: boolean }): Promise<number> => {
+const doctor = async (options: {
+  checkout: string | null;
+  search: boolean;
+  download: boolean;
+}): Promise<number> => {
   const { config, problems } = await loadConfig();
   // Adapters' own logs would interleave with the checks; their failures are in the checks.
   const logger = createLogger({ level: "error" });
@@ -58,6 +62,7 @@ const doctor = async (options: { checkout: string | null; search: boolean }): Pr
       problems,
       checkoutDir: checkoutDir(options.checkout),
       search: startSearch(options.search, logger),
+      download: options.download,
       version,
       logger,
     }),
@@ -91,6 +96,7 @@ const start = async (options: {
   open: boolean;
   checkout: string | null;
   search: boolean;
+  download: boolean;
 }): Promise<number | null> => {
   const { config, problems } = await loadConfig();
   if (problems.length > 0) {
@@ -105,6 +111,7 @@ const start = async (options: {
     ...assets,
     checkoutDir: dir,
     search,
+    download: options.download,
     version,
     logger,
   });
@@ -134,7 +141,8 @@ const start = async (options: {
     search?.walked() ?? null,
   ]);
   const ui = assets.staticDir !== null;
-  console.log(startSummary({ version, config, model, checkout, walk, url, ui }));
+  const downloadFolder = options.download ? copiesFolder(config) : null;
+  console.log(startSummary({ version, config, model, checkout, walk, downloadFolder, url, ui }));
   if (options.open) openBrowser(url, logger);
   return null;
 };
