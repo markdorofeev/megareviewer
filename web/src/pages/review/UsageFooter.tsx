@@ -38,7 +38,7 @@ export const runName = (option: ModelRunOption | null): string | null =>
 const AND = new Intl.ListFormat("en", { type: "conjunction" });
 
 /** "3 files it imports", for the files a run's roots import; null for none. */
-const importedRead = (roots: number, imported: number): string | null => {
+export const importedRead = (roots: number, imported: number): string | null => {
   if (imported === 0) return null;
   const files = imported === 1 ? "1 file" : `${imported} files`;
   // No root: the one that imports them didn't fit.

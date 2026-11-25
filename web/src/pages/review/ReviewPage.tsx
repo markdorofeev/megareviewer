@@ -121,6 +121,7 @@ import { type NoTour, noTourOf, type TourExcerpt, type TourStep, tourOf } from "
 import { BackToTour, NoTourLine, TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
+import { useHarness } from "./useHarness.ts";
 import { useLanding } from "./useLanding.ts";
 import { useMarksHeld } from "./useMarksHeld.ts";
 import { usePoints } from "./usePoints.ts";
@@ -709,6 +710,7 @@ const Review = ({
   // The host's conversation on the code, read live, beside the analysis.
   const threads = useThreads(analysisId, analysis.stages.prep === "done");
   const prStatus = usePullRequestStatus(analysisId);
+  const harness = useHarness(analysisId);
   const { post } = threads;
   const postCommentNow = useCallback(
     (id: PartId, comment: LineComment) => post({ hunkId: hunkIdOf(id), ...comment }),
@@ -1625,6 +1627,7 @@ const Review = ({
                   ? errorMessage(reanalyze.error)
                   : null
             }
+            harness={harness}
             filesChanged={analysis.stages.prep === "done" ? totals.files : null}
             reanalyze={
               view.stale
