@@ -20,6 +20,28 @@ describe("the intent task", () => {
   });
 });
 
+describe("plain words", () => {
+  it("are asked of every task whose words the reviewer reads as a point, without being vague", () => {
+    for (const pass of ["findings", "risk", "decisions"] as const) {
+      expect(PASS_INSTRUCTIONS[pass]).toContain("in plain words: the ones you'd use");
+      expect(PASS_INSTRUCTIONS[pass]).toContain(
+        "Plain isn't vague: still name the exact function, value, input and result.",
+      );
+    }
+  });
+
+  it("never change what a risk or a decision is about", () => {
+    expect(PASS_INSTRUCTIONS.risk).toContain("The wording never changes what was decided.");
+    expect(PASS_INSTRUCTIONS.decisions).toContain(
+      "The wording never changes which choice a decision is about, or drops its reason.",
+    );
+  });
+
+  it("are the author's in a finding, which posts as a comment", () => {
+    expect(PASS_INSTRUCTIONS.findings).toContain("write it to the author, in plain words");
+  });
+});
+
 describe("the risk task", () => {
   it("asks for a checking test only when its assertions would fail if the risk's behavior broke", () => {
     expect(PASS_INSTRUCTIONS.risk).toMatch(/^checkedBy: for a contract hunk/m);
