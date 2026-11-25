@@ -251,9 +251,24 @@ const PAGE_SHORTCUTS: readonly ShortcutId[] = [
   "close",
   "help",
 ];
+const NoteCode = ({ children }: { readonly children: ReactNode }) => (
+  <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">{children}</code>
+);
+
+/** A folder by `~` when it's in the home folder, which is known while it's searched. */
+const shortFolder = (dir: string, home: string | null): string =>
+  home !== null && dir.startsWith(`${home}/`) ? `~${dir.slice(home.length)}` : dir;
+
 /** Why callers outside the pull request aren't shown, when no checkout was read. */
-const CheckoutNote = ({ analysis }: { readonly analysis: AnalysisView["analysis"] }) => {
-  const { checkout, pullRequest } = analysis;
+const CheckoutNote = ({
+  analysis,
+  searched,
+}: {
+  readonly analysis: Analysis;
+  /** The folder searched for clones, null when that's off; undefined until the status is read. */
+  readonly searched: string | null | undefined;
+}) => {
+  const { checkout, checkoutDir, pullRequest } = analysis;
   if (checkout === "read" || pullRequest === null) return null;
   const { ref, headSha } = pullRequest;
   return (
@@ -261,32 +276,33 @@ const CheckoutNote = ({ analysis }: { readonly analysis: AnalysisView["analysis"
       Code outside the pull request that calls what it changes isn't shown:{" "}
       {checkout === "missing-commit" ? (
         <>
-          the local checkout doesn't have the head commit{" "}
-          <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">
-            {headSha.slice(0, 7)}
-          </code>
-          . Run{" "}
-          <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">git fetch</code> in
-          it
+          the clone on this machine doesn't have the head commit{" "}
+          <NoteCode>{headSha.slice(0, 7)}</NoteCode>. Run <NoteCode>git fetch</NoteCode> in{" "}
+          {checkoutDir === null ? (
+            "it"
+          ) : (
+            <NoteCode>{shortFolder(checkoutDir, searched ?? null)}</NoteCode>
+          )}
           {ref.repo.host === "github" && (
             <>
-              , or{" "}
-              <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">
-                git fetch origin pull/{ref.number}/head
-              </code>{" "}
-              for a pull request from a fork
+              , or <NoteCode>git fetch origin pull/{ref.number}/head</NoteCode> for a pull request
+              from a fork
             </>
           )}
           , then open the pull request again.
         </>
       ) : (
         <>
-          megareviewer didn't run in a checkout of {ref.repo.owner}/{ref.repo.repo}. Start it in
-          one, or pass{" "}
-          <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">
-            --checkout &lt;dir&gt;
-          </code>
-          , then open the pull request again.
+          megareviewer found no clone of {ref.repo.owner}/{ref.repo.repo} on this machine.{" "}
+          {searched === null && (
+            <>
+              It didn't look in your home folder, because it was started with{" "}
+              <NoteCode>--no-search</NoteCode>.{" "}
+            </>
+          )}
+          {typeof searched === "string" && "It looked in your home folder. "}
+          Start it in a clone, or pass <NoteCode>--checkout &lt;dir&gt;</NoteCode>, then open the
+          pull request again.
         </>
       )}
     </p>
@@ -355,7 +371,8 @@ const Review = ({
   readonly restart: (seed?: AnalysisView | null) => void;
 }) => {
   const { client } = useApi();
-  const modelChoice = useModelChoice(useStatus().status?.model ?? null);
+  const { status } = useStatus();
+  const modelChoice = useModelChoice(status?.model ?? null);
   const { analysis: live, publication } = view;
   const analysisId = live.id;
   const complete = live.status === "complete";
@@ -2047,7 +2064,7 @@ const Review = ({
               />
             )
           )}
-          <CheckoutNote analysis={analysis} />
+          <CheckoutNote analysis={analysis} searched={status?.cloneSearchFolder} />
         </Dialog>
       )}
       <p className="flex items-center gap-1.5 text-caption text-muted-foreground">

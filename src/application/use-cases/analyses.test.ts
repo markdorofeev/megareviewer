@@ -20,7 +20,7 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
-import type { AnalysisInput, CodeParser, PassOptions } from "../ports/index.ts";
+import type { AnalysisInput, CodeParser, FoundCheckout, PassOptions } from "../ports/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
@@ -1474,6 +1474,37 @@ describe("with a local checkout", () => {
   it("says none was found without a checkout", async () => {
     const { analyze } = setup({ modelEnabled: false });
     expect((await analyze()).checkout).toBe("none");
+  });
+
+  it("says what's on the machine now when a PR is opened again, changing nothing else", async () => {
+    const clones: FoundCheckout[] = [];
+    const { analyze, useCases, stored } = setup({
+      modelEnabled: false,
+      checkouts: new FakeLocalCheckouts(null, { clones }),
+    });
+    const analysis = await analyze();
+    expect(analysis.checkoutDir).toBeNull();
+
+    clones.push({ checkout: new FakeLocalCheckout({}), dir: "/src/shop", namesRepo: true });
+    const again = await useCases.startAnalysis(smallFeature.pullRequest.url);
+    expect(again).toEqual({ ok: true, value: { analysisId: analysis.id } });
+    expect(await stored(analysis.id)).toEqual({
+      ...analysis,
+      checkout: "missing-commit",
+      checkoutDir: "/src/shop",
+    });
+  });
+
+  it("reads a clone found after the folder pointed at, and remembers it for the next start", async () => {
+    const clone = { checkout: checkout(), dir: "/src/shop", namesRepo: true };
+    const checkouts = new FakeLocalCheckouts(null, { clones: [clone] });
+    const { analyze, runModel } = setup({ modelEnabled: false, checkouts });
+    const analysis = await analyze();
+    expect(analysis.checkout).toBe("read");
+    expect(analysis.checkoutDir).toBe("/src/shop");
+    expect(checkouts.asked).toEqual(["pointedAt", "search"]);
+    await runModel(analysis.id);
+    expect(checkouts.asked.slice(2)).toEqual(["pointedAt", "at /src/shop"]);
   });
 });
 

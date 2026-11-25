@@ -2656,23 +2656,57 @@ describe("outside the pull request", () => {
     expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptFormatting}`);
   });
 
-  it("says in the details why nothing outside is shown without a checkout", async () => {
-    renderReview({ view: withCheckout("none") });
+  /** The page's status, with the folder searched for clones. */
+  const searching = (cloneSearchFolder: string | null) => (request: RecordedRequest) =>
+    request.url === "/api/status"
+      ? jsonResponse(200, { ...fixtureStatus, cloneSearchFolder })
+      : undefined;
+
+  it("says in the details that no clone was found, and where it looked", async () => {
+    renderReview({ view: withCheckout("none"), respond: searching("/home/lee") });
     await loaded();
-    expect(
-      within(await openDetails()).getByText(/didn't run in a checkout of acme\/shop/),
-    ).toBeTruthy();
+    const details = await openDetails();
+    await waitFor(() =>
+      expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toBe(
+        "Code outside the pull request that calls what it changes isn't shown: megareviewer found no clone of acme/shop on this machine. It looked in your home folder. Start it in a clone, or pass --checkout <dir>, then open the pull request again.",
+      ),
+    );
     expect(document.querySelector("[data-slot=unchanged-uses]")).toBeNull();
   });
 
-  it("says in the details to fetch the head commit when the checkout lacks it", async () => {
-    renderReview({ view: withCheckout("missing-commit") });
+  it("says in the details that the home folder isn't searched", async () => {
+    renderReview({ view: withCheckout("none"), respond: searching(null) });
     await loaded();
     const details = await openDetails();
-    expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toBe(
-      "Code outside the pull request that calls what it changes isn't shown: the local checkout doesn't have the head commit 9e8d7c6. Run git fetch in it, or git fetch origin pull/128/head for a pull request from a fork, then open the pull request again.",
+    await waitFor(() =>
+      expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toContain(
+        "megareviewer found no clone of acme/shop on this machine. It didn't look in your home folder, because it was started with --no-search. Start it in a clone",
+      ),
     );
   });
+
+  it.each([
+    ["/home/lee", "/home/lee/code/shop", "~/code/shop"],
+    ["/home/lee", "/srv/shop", "/srv/shop"],
+    [null, "/home/lee/code/shop", "/home/lee/code/shop"],
+    ["/home/lee", null, "it"],
+  ])(
+    "says in the details where to fetch the head commit (searching %s, clone in %s)",
+    async (searched, dir, shown) => {
+      const view = withCheckout("missing-commit");
+      renderReview({
+        view: { ...view, analysis: { ...view.analysis, checkoutDir: dir } },
+        respond: searching(searched),
+      });
+      await loaded();
+      const details = await openDetails();
+      await waitFor(() =>
+        expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toBe(
+          `Code outside the pull request that calls what it changes isn't shown: the clone on this machine doesn't have the head commit 9e8d7c6. Run git fetch in ${shown}, or git fetch origin pull/128/head for a pull request from a fork, then open the pull request again.`,
+        ),
+      );
+    },
+  );
 
   it("says nothing about the checkout in the details when one was read", async () => {
     renderReview();

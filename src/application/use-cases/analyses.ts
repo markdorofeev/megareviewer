@@ -183,7 +183,18 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     const existing = await deps.store.findByKey(key);
     const id = existing?.id ?? analysisId(key);
     // No await from here on until the run is in the map, so two requests can't both start it.
-    if (existing?.status === "complete" || inFlight.has(id)) return id;
+    if (inFlight.has(id)) return id;
+    if (existing?.status === "complete") {
+      // What's on the machine can have changed since, and the page says what was found.
+      if (existing.checkout !== checkout.status || existing.checkoutDir !== checkout.dir) {
+        await deps.store.saveAnalysis({
+          ...existing,
+          checkout: checkout.status,
+          checkoutDir: checkout.dir,
+        });
+      }
+      return id;
+    }
     // A failed analysis, or one interrupted by a restart, runs again under the same ID.
     const analysis = newAnalysis(
       deps,
