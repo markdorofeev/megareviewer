@@ -1,6 +1,6 @@
 # Stage 65: A clone found on this machine
 
-**Status:** Not started
+**Status:** In progress (branch claude/full-repo-checkout-feasibility-c87b42)
 **Depends on:** 30
 **Unblocks:** 66
 **Owns:** the `LocalCheckouts` and `LocalCheckout` ports and their fake and contract suite, a `KnownCheckouts` port, `src/adapters/git/`, the `known_checkouts` table in `src/adapters/sqlite/`, `lookUpCheckout` and `readUnchangedCallers` in `src/application/use-cases/unchanged-callers.ts` and their callers in `analyses.ts`, `checkoutDir` on the analysis and in `contracts/`, the `--no-search` flag, the startup summary and `doctor`'s checkout check in `src/cli/`, the checkout note in `web/src/pages/review/ReviewPage.tsx`, and "Local checkout" in ARCHITECTURE.md
