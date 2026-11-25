@@ -222,7 +222,7 @@ describe("ClaudeElement with threads", () => {
     const chips = [...document.querySelectorAll("[data-slot=point-chip]")].map((chip) =>
       chip.getAttribute("data-kind"),
     );
-    expect(chips).toEqual(["finding", "thread"]);
+    expect(chips).toEqual(["logic", "thread"]);
     const chip = screen.getByRole("button", { name: "3 unresolved threads" });
     expect(chip.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(chip);

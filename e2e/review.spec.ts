@@ -653,6 +653,33 @@ test("says on a finding which check could catch it, and adds it to the comment m
   );
 });
 
+test("ranks findings by severity, says each one's type and narrows the stepper to one", async ({
+  page,
+}) => {
+  await openReview(page, PR.receiptsTyped, `${SMALL_FEATURE_TITLE}, with a finding of each type`);
+  const bar = page.locator("[data-slot=review-bar]");
+  const title = bar.locator("[data-slot=stepper-title]");
+  const next = bar.getByRole("button", { name: "Next point" });
+  await next.click();
+  await expect(title).toHaveText("Any client can send ten times the requests");
+  const card = page.getByRole("article", { name: "Any client can send ten times the requests" });
+  await expect(card.locator("[data-slot=finding-type]")).toHaveText(/contract/);
+  await expect(card.locator("[data-slot=severity]")).toHaveText(/blocking/);
+  await expect(page.locator("[data-point-mark=blocking]")).toHaveCount(1);
+  await next.click();
+  await expect(title).toHaveText("Formats prices beside the code that already does");
+  await next.click();
+  await expect(title).toHaveText("Receipts are never removed from memory");
+
+  const architecture = bar.getByRole("button", { name: "1 architecture finding" });
+  await architecture.click();
+  await expect(architecture).toHaveAttribute("aria-pressed", "true");
+  await expect(title).toHaveText("Formats prices beside the code that already does");
+  await expect(bar.getByRole("button", { name: "Point 1 of 1, show all" })).toBeVisible();
+  await architecture.click();
+  await expect(bar.getByRole("button", { name: "Point 2 of 3, show all" })).toBeVisible();
+});
+
 test.describe("without the model", () => {
   test.use({ ai: false });
 

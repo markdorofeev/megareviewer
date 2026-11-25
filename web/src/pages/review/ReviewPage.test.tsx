@@ -1056,14 +1056,14 @@ describe("points", () => {
     expect(cardOf(h.dependency).dataset.highlighted === "true").toBe(true);
   });
 
-  it("mark a finding's lines on their numbers", async () => {
+  it("mark a finding's lines on their numbers, in its severity's color", async () => {
     renderReview();
     await loaded();
     const card = cardOf(h.receiptRoute);
     const marked = [...card.querySelectorAll("[data-point-mark]")];
-    expect(marked.map((cell) => cell.getAttribute("data-point-mark"))).toEqual(["finding"]);
+    expect(marked.map((cell) => cell.getAttribute("data-point-mark"))).toEqual(["blocking"]);
     // The mark is on the number beside the code, not on the row's edge.
-    expect(lineRow(card, "added line 15").getAttribute("data-point")).toBe("finding");
+    expect(lineRow(card, "added line 15").getAttribute("data-point")).toBe("blocking");
     expect(lineRow(card, "added line 15").className).not.toMatch(/after:/);
   });
 
@@ -1197,7 +1197,7 @@ describe("points", () => {
         [...reviewBar().querySelectorAll("[data-slot=point-chip]")].map((chip) =>
           chip.textContent?.replace(/\s+/g, " ").trim(),
         ),
-      ).toEqual(["3 findings"]),
+      ).toEqual(["ƒ2 logic", "◆1 contract"]),
     );
     // Before the first step, the count; Next goes to the first.
     expect(position().textContent).toBe("3 points");
@@ -1225,18 +1225,66 @@ describe("points", () => {
     expect(scrolledTo().slice(-2)).toEqual(["point-f2", "point-f2"]);
   });
 
-  it("go to the first with their chip, unless the stepper is on one", async () => {
+  it("are narrowed to a type by its chip, which goes to its first unless the stepper is on one", async () => {
     renderReview();
     await loaded();
-    const chip = await within(reviewBar()).findByRole("button", { name: "3 findings" });
+    const chip = await within(reviewBar()).findByRole("button", { name: "2 logic findings" });
     expect(chip.getAttribute("aria-pressed")).toBe("false");
     await userEvent.click(chip);
     expect(chip.getAttribute("aria-pressed")).toBe("true");
-    expect(scrolledTo().at(-1)).toBe("point-f1");
+    expect(scrolledTo().at(-1)).toBe("point-f2");
+    expect(position().textContent).toBe("1 of 2");
     await step("Next point");
-    await userEvent.click(chip);
+    expect(scrolledTo().at(-1)).toBe("point-f3");
+    expect(position().textContent).toBe("2 of 2");
+    // Round the two of them, never the contract finding.
+    await step("Next point");
+    expect(scrolledTo().at(-1)).toBe("point-f2");
+    // No chip pressed is all of them, from where the stepper is.
     await userEvent.click(chip);
     expect(position().textContent).toBe("2 of 3");
+    await userEvent.click(chip);
+    expect(position().textContent).toBe("1 of 2");
+    expect(scrolledTo().at(-1)).toBe("point-f2");
+
+    // Another type's chip takes its place.
+    const contract = within(reviewBar()).getByRole("button", { name: "1 contract finding" });
+    await userEvent.click(contract);
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    expect(position().textContent).toBe("1 of 1");
+    expect(scrolledTo().at(-1)).toBe("point-f1");
+  });
+
+  it("stop being narrowed when the reviewer goes to one of another type", async () => {
+    renderReview();
+    await loaded();
+    const chip = await within(reviewBar()).findByRole("button", { name: "2 logic findings" });
+    await userEvent.click(chip);
+    await userEvent.click(position());
+    const list = screen.getByRole("list", { name: "Points" });
+    await userEvent.click(within(list).getAllByRole("button")[0] as HTMLElement);
+    expect(scrolledTo().at(-1)).toBe("point-f1");
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    expect(position().textContent).toBe("1 of 3");
+  });
+
+  it("are listed by severity, each with its type and its severity in words", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(position());
+    const list = screen.getByRole("list", { name: "Points" });
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .map((row) => [
+          row.querySelector("[data-slot=finding-type]")?.textContent,
+          row.querySelector("[data-slot=severity]")?.textContent,
+        ]),
+    ).toEqual([
+      ["◆contract", "■blocking"],
+      ["ƒlogic", "▲major"],
+      ["ƒlogic", "●minor"],
+    ]);
   });
 
   it("are listed in full from the position, and a row there is where the stepper goes on", async () => {
@@ -1276,7 +1324,7 @@ describe("points", () => {
     const card = await screen.findByRole("article", { name: FINDING });
     const fold = card.closest("[data-slot=point-fold]");
     // The row before the card's is the last line it rests on, marked.
-    expect(fold?.previousElementSibling?.getAttribute("data-point")).toBe("finding");
+    expect(fold?.previousElementSibling?.getAttribute("data-point")).toBe("blocking");
     expect(Number(card.style.getPropertyValue("--lines-above"))).toBeGreaterThan(0);
     // Opened with its results, the page is at rest: nothing lands.
     expect(document.querySelector("[data-landing]")?.getAttribute("data-landing")).toBe("done");

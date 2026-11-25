@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { memo, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import {
+  type FindingType,
   type IntentMismatchKind,
   type Point,
   type PointId,
@@ -18,7 +19,14 @@ import {
 } from "../../../../src/domain/review/index.ts";
 import { Link } from "../../app/Link.tsx";
 import { PREFERENCES_PATH } from "../../app/router.ts";
-import { FINDING_STATUS } from "../../lib/status.ts";
+import {
+  FINDING_STATUS,
+  FINDING_TYPE_STATUS,
+  POINT_TONE,
+  type PointTone,
+  pointTone,
+  SEVERITY_STATUS,
+} from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { CHIP, lineRef, RefChip, SuggestionDiff, ThreadBody } from "../../review/thread/index.ts";
 import { Button } from "../../ui/button.tsx";
@@ -71,8 +79,8 @@ export interface PointActions {
 
 const FindingIcon = FINDING_STATUS.icon;
 
-const FindingLabel = () => (
-  <span className="inline-flex items-center gap-1 font-medium text-review-changes">
+const FindingLabel = ({ tone }: { readonly tone: PointTone }) => (
+  <span className={cn("inline-flex items-center gap-1 font-medium", POINT_TONE[tone].text)}>
     <FindingIcon aria-hidden="true" className="size-3.5" />
     {FINDING_STATUS.label}
   </span>
@@ -331,28 +339,19 @@ const dismissedNote = (ruleSaved: boolean): ReactNode =>
     "Dismissed"
   );
 
-// Spelled out because Tailwind only generates the classes it finds whole in the source.
-const SEVERITY: Readonly<Record<Severity, { readonly glyph: string; readonly className: string }>> =
-  {
-    blocking: {
-      glyph: "■",
-      className: "text-severity-blocker bg-review-changes-bg border-severity-blocker/25",
-    },
-    major: {
-      glyph: "▲",
-      className: "text-severity-major bg-severity-major-bg border-severity-major/25",
-    },
-    minor: {
-      glyph: "●",
-      className: "text-severity-minor bg-review-pending-bg border-severity-minor/25",
-    },
-  };
+/** What a finding is about, in a word. */
+export const TypeChip = ({ type }: { readonly type: FindingType }) => (
+  <span data-slot="finding-type" className={cn(CHIP, FINDING_TYPE_STATUS[type].className)}>
+    <span aria-hidden="true">{FINDING_TYPE_STATUS[type].glyph}</span>
+    {FINDING_TYPE_STATUS[type].label}
+  </span>
+);
 
 /** How much Claude thinks a finding matters, while it's Claude's. */
-const SeverityChip = ({ severity }: { readonly severity: Severity }) => (
-  <span data-slot="severity" className={cn(CHIP, SEVERITY[severity].className)}>
-    <span aria-hidden="true">{SEVERITY[severity].glyph}</span>
-    {severity}
+export const SeverityChip = ({ severity }: { readonly severity: Severity }) => (
+  <span data-slot="severity" className={cn(CHIP, SEVERITY_STATUS[severity].className)}>
+    <span aria-hidden="true">{SEVERITY_STATUS[severity].glyph}</span>
+    {SEVERITY_STATUS[severity].label}
   </span>
 );
 
@@ -366,8 +365,8 @@ const SCROLL_UNDER_LINES =
 const FOLDED = cn(SHELL, "px-3 py-1.5");
 
 /**
- * A finding: what looks wrong, as a draft comment under the line it rests on, with its severity
- * and suggested change. Add to review saves it as the reviewer's draft on its lines; Edit opens
+ * A finding: what looks wrong, as a draft comment under the line it rests on, with its type, its
+ * severity and suggested change. Add to review saves it as the reviewer's draft on its lines; Edit opens
  * the comment box on it first; Dismiss folds it. Saying nothing means it's fine.
  */
 export const FindingCard = memo(function FindingCard({
@@ -467,10 +466,14 @@ export const FindingCard = memo(function FindingCard({
       {/* Inside the card's left edge. */}
       <span
         aria-hidden="true"
-        className="absolute top-2 bottom-2 left-1.5 w-[3px] rounded-full bg-review-changes"
+        className={cn(
+          "absolute top-2 bottom-2 left-1.5 w-[3px] rounded-full",
+          POINT_TONE[pointTone(point)].bar,
+        )}
       />
       <header className="flex flex-wrap items-center gap-2">
-        <FindingLabel />
+        <FindingLabel tone={pointTone(point)} />
+        {point.type !== null && <TypeChip type={point.type} />}
         {point.severity !== null && <SeverityChip severity={point.severity} />}
         <span
           className={cn(CHIP, "border-review-pending/25 bg-review-pending-bg text-review-pending")}

@@ -86,11 +86,11 @@ const position = () => {
 const pointCard = (title: RegExp) => screen.getByRole("article", { name: title });
 const guidanceOf = (title: RegExp) =>
   pointCard(title).querySelector("[data-slot=point-guidance]")?.textContent;
-/** The finding marks on the numbers of the hunk that adds the retry and the cache. */
+/** The points' marks on the numbers of the hunk that adds the retry and the cache. */
 const retryMarks = () =>
   [...document.querySelectorAll(`[id^="hunk-${fixtureHunks.retryAndCache}"] [data-point-mark]`)]
     .map((cell) => cell.getAttribute("data-point-mark"))
-    .filter((kind) => kind === "finding");
+    .filter((kind) => kind !== "step");
 const stepTitle = () => reviewBar().querySelector("[data-slot=stepper-title]")?.textContent ?? null;
 
 beforeEach(() => {
@@ -121,7 +121,7 @@ describe("a review whose run read guidance", () => {
     const folded = pointCard(RETRIES);
     expect(folded.dataset.leftOut).toBe("true");
     expect(folded.textContent).toContain("Left out by your preference: Retries without backoff");
-    await waitFor(() => expect(chips()).toEqual(["2 findings"]));
+    await waitFor(() => expect(chips()).toEqual(["ƒ1 logic", "◆1 contract"]));
     expect(position().textContent).toBe("2 points");
     // Only the stale receipt's two lines are marked; the retry's six aren't.
     expect(retryMarks()).toHaveLength(2);
@@ -151,7 +151,7 @@ describe("a review whose run read guidance", () => {
     expect(card.dataset.leftOut).toBeUndefined();
     expect(document.activeElement).toBe(card);
     expect(guidanceOf(RETRIES)).toBe("Left out by your preference: Retries without backoff");
-    await waitFor(() => expect(chips()).toEqual(["3 findings"]));
+    await waitFor(() => expect(chips()).toEqual(["ƒ2 logic", "◆1 contract"]));
     expect(position().textContent).toBe("3 points");
     expect(retryMarks()).toHaveLength(8);
 
@@ -172,7 +172,7 @@ describe("a review whose run read guidance", () => {
     });
     await loaded();
     expect(pointCard(RETRIES).dataset.leftOut).toBeUndefined();
-    await waitFor(() => expect(chips()).toEqual(["3 findings"]));
+    await waitFor(() => expect(chips()).toEqual(["ƒ2 logic", "◆1 contract"]));
   });
 
   it("says when everything Claude found was left out", async () => {

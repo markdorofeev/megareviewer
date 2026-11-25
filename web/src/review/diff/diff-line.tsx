@@ -1,5 +1,6 @@
 import { BugIcon } from "lucide-react";
 import { Fragment, type MouseEvent, memo, type ReactNode } from "react";
+import { POINT_TONE, type PointTone } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import type { CharRange } from "./intra-line.ts";
 import type { LineKind, ViewLine } from "./rows.ts";
@@ -131,11 +132,17 @@ export type LineLayout = "unified" | "split-old" | "split-new";
 // Spelled out because Tailwind only generates the classes it finds whole in the source. The mark
 // is a pseudo-element rather than the cell's background so the landing can draw it down the lines.
 /** What marks a line's number: one of Claude's points, or the tour's step the map was opened from. */
-export type LineMarkKind = "finding" | "step";
+export type LineMarkKind = PointTone | "step";
 
 const POINT_MARK: Readonly<Record<LineMarkKind, string>> = {
-  finding:
-    "isolate font-medium text-review-changes before:absolute before:inset-0 before:-z-1 before:bg-review-changes-bg before:shadow-[inset_-3px_0_0_var(--review-changes)]",
+  blocking:
+    "isolate font-medium text-severity-blocker before:absolute before:inset-0 before:-z-1 before:bg-review-changes-bg before:shadow-[inset_-3px_0_0_var(--severity-blocker)]",
+  major:
+    "isolate font-medium text-severity-major before:absolute before:inset-0 before:-z-1 before:bg-severity-major-bg before:shadow-[inset_-3px_0_0_var(--severity-major)]",
+  minor:
+    "isolate font-medium text-severity-minor before:absolute before:inset-0 before:-z-1 before:bg-review-pending-bg before:shadow-[inset_-3px_0_0_var(--severity-minor)]",
+  mismatch:
+    "isolate font-medium text-foreground before:absolute before:inset-0 before:-z-1 before:bg-muted before:shadow-[inset_-3px_0_0_var(--muted-foreground)]",
   step: "isolate font-medium text-primary before:absolute before:inset-0 before:-z-1 before:bg-ai-soft before:shadow-[inset_-3px_0_0_var(--primary)]",
 };
 
@@ -179,8 +186,8 @@ export interface DiffLineProps {
   readonly onRowClick?: (event: MouseEvent<HTMLDivElement>) => void;
   /** Ranges of the code to wrap, e.g. calls; a new array each render re-renders the row. */
   readonly marks?: readonly LineMark[];
-  /** A finding's card is under this line: a bug in the new number's cell. */
-  readonly flagged?: boolean;
+  /** A point's card is under this line: a bug in the new number's cell, in its color. */
+  readonly flag?: PointTone | null;
 }
 
 export interface PointLanding {
@@ -207,7 +214,7 @@ export const DiffLine = memo(function DiffLine({
   onRowClick,
   cellRole = "gridcell",
   marks = NO_MARKS,
-  flagged = false,
+  flag = null,
 }: DiffLineProps) {
   const kind = KIND[line.kind];
   const number = line.newNo ?? line.oldNo;
@@ -254,12 +261,15 @@ export const DiffLine = memo(function DiffLine({
       ) : (
         (value ?? "")
       )}
-      {side === "new" && flagged && value !== null && value < 1000 && (
+      {side === "new" && flag !== null && value !== null && value < 1000 && (
         // Gives way to the plus the row shows under the mouse.
         <BugIcon
           aria-hidden="true"
           data-slot="finding-flag"
-          className="pointer-events-none absolute top-1/2 left-1 size-3 -translate-y-1/2 text-review-changes group-hover/line:hidden"
+          className={cn(
+            "pointer-events-none absolute top-1/2 left-1 size-3 -translate-y-1/2 group-hover/line:hidden",
+            POINT_TONE[flag].text,
+          )}
         />
       )}
       {side === "new" && onComment !== undefined && numberButton === undefined && (

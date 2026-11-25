@@ -45,10 +45,12 @@ import { err } from "../../domain/shared/index.ts";
 import { allowedHosts, assemble, type Composition, systemClock } from "../compose.ts";
 import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
 import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./model-recording.ts";
-import { checkedAdvisor, receiptsChecked, withGuardrails } from "./receipts-checked.ts";
+import { checkedAdvisor, checkedFindings, receiptsChecked } from "./receipts-checked.ts";
 import { downloadedCommits, receiptsDownloaded } from "./receipts-downloaded.ts";
-import { receiptsGuided, withGuidance } from "./receipts-guided.ts";
+import { guidedFindings, receiptsGuided } from "./receipts-guided.ts";
 import { receiptsTour, withTour } from "./receipts-tour.ts";
+import { receiptsTyped, typedFindings } from "./receipts-typed.ts";
+import { withFindings } from "./with-findings.ts";
 
 /** The recorded run the scenarios play, read once at startup. */
 const recording = ModelRecording.parse(recordingJson);
@@ -74,6 +76,7 @@ export const fakeFixtures: readonly PullRequestFixture[] = [
   receiptsChecked,
   receiptsTour,
   receiptsDownloaded,
+  receiptsTyped,
 ];
 
 const FAKE_MODELS = [
@@ -334,14 +337,20 @@ export const createFakeApp = async (options: {
       }),
       models: fakeModels(
         withTour(
-          withGuardrails(
-            withGuidance(
-              options.scenario === undefined
-                ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
-                : createReplayAnalysisModel(recording, { scenario: options.scenario }),
-              receiptsGuided.pullRequest.url,
+          withFindings(
+            withFindings(
+              withFindings(
+                options.scenario === undefined
+                  ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+                  : createReplayAnalysisModel(recording, { scenario: options.scenario }),
+                receiptsGuided.pullRequest.url,
+                guidedFindings,
+              ),
+              receiptsChecked.pullRequest.url,
+              checkedFindings,
             ),
-            receiptsChecked.pullRequest.url,
+            receiptsTyped.pullRequest.url,
+            typedFindings,
           ),
           receiptsTour.pullRequest.url,
         ),

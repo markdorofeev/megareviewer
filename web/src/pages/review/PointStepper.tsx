@@ -1,7 +1,12 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Point, PointId, PointState } from "../../../../src/domain/review/index.ts";
-import { FINDING_STATUS } from "../../lib/status.ts";
+import type {
+  FindingType,
+  Point,
+  PointId,
+  PointState,
+} from "../../../../src/domain/review/index.ts";
+import { FINDING_STATUS, FINDING_TYPE_STATUS, POINT_TONE, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { stepFrom, stepperPlace } from "./stepper.ts";
@@ -82,27 +87,31 @@ export const STEPPER_TITLE =
 
 /**
  * Previous and Next through Claude's points, round from the last to the first, with the position
- * that opens the whole list and the current point's title, which goes back to its card.
- * Before the first step, the position is a count.
+ * that opens the whole list and the current point's title, which goes back to its card. Before the
+ * first step, the position is a count. A type's chip narrows it to that type's findings.
  */
 export const PointStepper = ({
   points,
+  type = null,
   current,
   stateOf,
   onGo,
   onOpenList,
 }: {
   readonly points: readonly Point[];
+  /** The type a chip narrowed the steps to. */
+  readonly type?: FindingType | null;
   /** The point last gone to, by the stepper, the list, a mention or Raise. */
   readonly current: PointId | null;
   readonly stateOf: (id: PointId) => PointState;
   readonly onGo: (id: PointId) => void;
   readonly onOpenList: () => void;
 }) => {
-  const place = stepperPlace(points, current);
+  const place = stepperPlace(points, type, current);
   const { steps, at } = place;
   const point = at === null ? undefined : steps[at];
   const { label, icon: Icon } = FINDING_STATUS;
+  const noun = type === null ? "point" : `${FINDING_TYPE_STATUS[type].label} finding`;
   const dismissed = point !== undefined && stateOf(point.id) === "dismissed";
 
   return (
@@ -111,7 +120,7 @@ export const PointStepper = ({
       noun="point"
       total={steps.length}
       at={at}
-      count={`${steps.length} ${steps.length === 1 ? "point" : "points"}`}
+      count={`${steps.length} ${steps.length === 1 ? noun : `${noun}s`}`}
       onStep={(direction) => {
         const to = stepFrom(place, direction);
         if (to !== null) onGo(to);
@@ -126,7 +135,10 @@ export const PointStepper = ({
             aria-label={`Go to ${label.toLowerCase()}: ${point.title}`}
             onClick={() => onGo(point.id)}
           >
-            <Icon aria-hidden="true" className="size-3.5 shrink-0 text-review-changes" />
+            <Icon
+              aria-hidden="true"
+              className={cn("size-3.5 shrink-0", POINT_TONE[pointTone(point)].text)}
+            />
             <span
               className={cn("min-w-0 truncate", dismissed && "text-muted-foreground line-through")}
             >

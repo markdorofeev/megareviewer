@@ -102,6 +102,8 @@ export const PR = {
   receiptsTour: "https://github.com/acme/shop/pull/106",
   /** small-feature with a changed function that code outside the PR calls, in no clone. */
   receiptsDownloaded: "https://github.com/acme/shop/pull/107",
+  /** small-feature whose review has a finding of each type, one of each severity. */
+  receiptsTyped: "https://github.com/acme/shop/pull/108",
 } as const;
 
 /** What the fake hosts received, as GET /__fake/publications reports it. */

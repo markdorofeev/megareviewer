@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Point, PointState } from "../../../../src/domain/review/index.ts";
-import { FINDING_STATUS } from "../../lib/status.ts";
+import { FINDING_STATUS, POINT_TONE, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { holdInPlace } from "./heldScroll.ts";
@@ -323,7 +323,7 @@ const PointChip = ({
   readonly wide?: boolean;
   readonly after?: ReactNode;
 }) => {
-  const { icon: Icon, label, className } = FINDING_STATUS;
+  const { icon: Icon, label } = FINDING_STATUS;
   const dismissed = state === "dismissed";
   return (
     <button
@@ -333,7 +333,7 @@ const PointChip = ({
       className={cn(
         "flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body",
         wide ? "w-full max-w-4xl" : "w-fit max-w-full",
-        className,
+        POINT_TONE[pointTone(point)].chip,
       )}
     >
       <Icon aria-hidden="true" className="mt-1 size-3.5 shrink-0" />

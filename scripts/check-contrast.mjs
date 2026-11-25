@@ -204,12 +204,9 @@ const PAIRS = [
   ["Pressed toggle border (non-text)", "muted-foreground", "background", 3],
   // hunk: risk classes. A bar on its own tint is under 3:1 for logic in light, so bars sit on
   // background or card only.
-  // hunk: the bar inside a finding's card.
-  ["Finding bar on card (non-text)", "review-changes", "card", 3],
-  // The stepper's glyph, beside the current point's title in the review bar.
-  ["Finding glyph in the review bar (non-text)", "review-changes", "background", 3],
-  // A pressed point chip's border is its text's color, on the chip's own tint.
-  ["Pressed finding chip border (non-text)", "review-changes", "review-changes-bg", 3],
+  // hunk: a pressed chip in the review bar is told by its border, in its text's color.
+  ["Pressed chip border (non-text)", "foreground", "background", 3],
+  ["Finding's type chip", "foreground", "secondary", 4.5],
   ["Logic label on its tint", "risk-logic", "risk-logic-bg", 4.5],
   ["Logic label on card", "risk-logic", "card", 4.5],
   ["Logic bar on background (non-text)", "risk-logic-solid", "background", 3],
@@ -223,17 +220,33 @@ const PAIRS = [
   ["Resolved label on thread", "review-approved", "thread-bg", 4.5],
   ["Suggested change title", "primary", "thread-bg", 4.5],
   ["Draft comment bar (non-text)", "review-pending", "thread-bg", 3],
-  // hunk: Claude's points on the lines: a finding's card, a bug in the gutter.
-  ["Finding label on its card", "review-changes", "thread-bg", 4.5],
-  // The rail of a point's mark on a line's number, on the mark's tint and on the row beside it.
-  ...["review-changes-bg", "diff-add-bg", "diff-del-bg", "background"].map((surface) => [
-    `Finding mark's rail on ${surface} (non-text)`,
-    "review-changes",
-    surface,
-    3,
+  // hunk: Claude's points on the lines, each in its severity's color, a mismatch's in grey.
+  ...[
+    ["Blocking", "severity-blocker", "review-changes-bg"],
+    ["Major", "severity-major", "severity-major-bg"],
+    ["Minor", "severity-minor", "review-pending-bg"],
+    ["Mismatch", "muted-foreground", "muted"],
+  ].flatMap(([name, color, tint]) => [
+    [`${name} point's label on its card`, color, "thread-bg", 4.5],
+    [`${name} point's bar on its card (non-text)`, color, "thread-bg", 3],
+    [`${name} point's glyph in the review bar (non-text)`, color, "background", 3],
+    [`${name} point's glyph in the list (non-text)`, color, "popover", 3],
+    // A marked line's number on its tint, and its rail on the tint and on the row beside it.
+    [`${name} mark's number`, name === "Mismatch" ? "foreground" : color, tint, 4.5],
+    ...[tint, "diff-add-bg", "diff-del-bg", "background", "surface-subtle"].map((surface) => [
+      `${name} mark's rail on ${surface} (non-text)`,
+      color,
+      surface,
+      3,
+    ]),
+    // The bug at the end of a point's lines: on the mark's tint, or the gutter it stands in.
+    ...[tint, "diff-add-gutter", "diff-gutter-bg"].map((surface) => [
+      `${name} flag on ${surface} (non-text)`,
+      color,
+      surface,
+      3,
+    ]),
   ]),
-  ["Finding flag on added gutter (non-text)", "review-changes", "diff-add-gutter", 3],
-  ["Finding flag on unchanged gutter (non-text)", "review-changes", "diff-gutter-bg", 3],
   ["Open thread bar (non-text)", "thread-marker", "thread-bg", 3],
   ["Resolved thread bar (non-text)", "review-approved", "thread-bg", 3],
   ["Outdated thread bar (non-text)", "muted-foreground", "thread-bg", 3],

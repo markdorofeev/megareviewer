@@ -9,7 +9,7 @@ import {
 } from "../../../src/domain/review/index.ts";
 import { DEEP_APP_PATHS, JAVA_SERVICE_PATHS, MONOREPO_PATHS } from "../../dev/fixtures/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
-import { VERDICT_STATUS } from "../lib/status.ts";
+import { type PointTone, VERDICT_STATUS } from "../lib/status.ts";
 import { FindingCard } from "../pages/review/PointCard.tsx";
 import {
   CiSummary,
@@ -573,7 +573,7 @@ const PointStates = () => {
           id: PointId.parse("f10"),
           title: "`attempt` could be `tries`",
           explanation: "The loop counts tries from zero; `attempt + 1` reads as an off-by-one.",
-          type: "logic",
+          type: "architecture",
           severity: "minor",
           suggestion: null,
           guidance: {
@@ -595,7 +595,7 @@ const PointStates = () => {
           id: PointId.parse("f11"),
           title: "Retries a request that isn't idempotent",
           explanation: "A payment whose answer was lost is taken again.",
-          type: "logic",
+          type: "contract",
           severity: "blocking",
           suggestion: null,
           guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null },
@@ -612,7 +612,7 @@ const PointStates = () => {
             file={RETRY_FILE}
             risk={null}
             pointLines={MARKED_LINES}
-            flagged={new Set(["new:16", "new:23"])}
+            flags={MARK_FLAGS}
           />
         </Card>
       )}
@@ -620,13 +620,24 @@ const PointStates = () => {
   );
 };
 
-/** Findings' lines on the retry file's first hunk, by "side:line". */
-const MARKED_LINES: ReadonlyMap<string, PointLine> = new Map(
-  ["old:14", "new:14", "new:15", "new:16", "old:21", "new:21", "new:22", "new:23"].map((key) => [
-    key,
-    { kind: "finding" },
-  ]),
-);
+/** Points' lines on the retry file's first hunk, by "side:line", in each severity's color. */
+const MARKED_LINES: ReadonlyMap<string, PointLine> = new Map([
+  ["old:14", { kind: "blocking" }],
+  ["new:14", { kind: "blocking" }],
+  ["new:15", { kind: "major" }],
+  ["new:16", { kind: "major" }],
+  ["new:18", { kind: "mismatch" }],
+  ["old:21", { kind: "minor" }],
+  ["new:21", { kind: "minor" }],
+  ["new:22", { kind: "minor" }],
+  ["new:23", { kind: "mismatch" }],
+]);
+const MARK_FLAGS: ReadonlyMap<string, PointTone> = new Map([
+  ["new:14", "blocking"],
+  ["new:16", "major"],
+  ["new:18", "mismatch"],
+  ["new:22", "minor"],
+]);
 
 const HEAD = "9e8d7c6b5a49382716051f2e3d4c5b6a79881726";
 

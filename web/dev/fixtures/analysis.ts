@@ -647,7 +647,7 @@ const analysis: Analysis = {
       explanation:
         "`findOrderById` takes the ID alone, and order IDs are sequential. The route below it scopes the order by `req.user.id`; this one doesn't.",
       lines: { hunkId: h.receiptRoute, side: "new", startLine: 15, line: 15 },
-      type: "logic",
+      type: "contract",
       severity: "blocking",
       suggestion: ["  const order = await findOrder(req.user.id, req.params.id);"],
       mismatch: MismatchId.parse("m1"),

@@ -711,11 +711,13 @@
   );
 }
 
-/* The code: for each point in view, its mark draws down its lines' numbers, a wash of its kind
+/* The code: for each point in view, its mark draws down its lines' numbers, a wash of its color
    passes over them, then its card unfolds under them. Lines that don't land keep their mark at
    rest. */
-[role="row"][data-point="finding"] { --point-wash: color-mix(in oklab, var(--review-changes) 22%, transparent); }
-
+[role="row"][data-point="blocking"] { --point-wash: color-mix(in oklab, var(--severity-blocker) 22%, transparent); }
+[role="row"][data-point="major"] { --point-wash: color-mix(in oklab, var(--severity-major) 22%, transparent); }
+[role="row"][data-point="minor"] { --point-wash: color-mix(in oklab, var(--severity-minor) 22%, transparent); }
+[role="row"][data-point="mismatch"] { --point-wash: color-mix(in oklab, var(--muted-foreground) 22%, transparent); }
 
 [data-landing="landing"] [role="row"][data-point-line] [data-point-mark]::before {
   transform-origin: top;

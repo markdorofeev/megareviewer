@@ -10,6 +10,7 @@ import {
 import { type ReactNode, useId } from "react";
 import {
   type Analysis,
+  FindingType,
   hasModelRun,
   MODEL_STAGES,
   modelFamily,
@@ -24,20 +25,18 @@ export type ClaudeRun = Pick<
   "status" | "stages" | "modelError" | "modelOption" | "usage"
 >;
 
-import { FINDING_STATUS } from "../../lib/status.ts";
+import { FINDING_TYPE_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import { ModelMenu } from "./ModelMenu.tsx";
 import type { ModelChoice } from "./model-choice.ts";
 
-/** What a chip has the stepper walk: Claude's findings, or the PR's threads. */
-export type Narrowing = "finding" | "thread";
-
-const FINDING_WORDS = ["finding", "findings"] as const;
+/** What a chip has the stepper walk: the findings of a type, or the PR's threads. */
+export type Narrowing = FindingType | "thread";
 
 /**
- * A count, a toggle for what the stepper walks: the findings, or the threads. Landing, it
+ * A count, a toggle for what the stepper walks: a type's findings, or the threads. Landing, it
  * rises in at its place among the chips, its count rolling up from zero (globals.css); the number
  * is in the text for screen readers, and drawn for the eye. Below 1280px the word gives way to the
  * glyph and count, leaving the stepper room for its title.
@@ -53,7 +52,7 @@ const Chip = ({
 }: {
   readonly kind: Narrowing;
   readonly count: number;
-  /** The word after the count, one and many: "finding", "findings". */
+  /** The word after the count, one and many: "logic" for both, or "thread" and "threads". */
   readonly words: readonly [string, string];
   readonly at: number;
   readonly pressed: boolean;
@@ -62,7 +61,6 @@ const Chip = ({
   readonly label?: string;
 }) => {
   const [one, many] = words;
-  const Icon = kind === "thread" ? MessageSquareIcon : FINDING_STATUS.icon;
   return (
     <button
       type="button"
@@ -75,13 +73,14 @@ const Chip = ({
       onClick={() => onPressed(!pressed)}
       className={cn(
         // A pressed chip is told by a border in its text's color, as well as by its fill.
-        "flex min-h-6 shrink-0 items-center gap-1.5 rounded-full border px-2 text-caption font-medium aria-pressed:border-current aria-pressed:ring-1 aria-pressed:ring-current",
-        kind === "thread"
-          ? "border-border bg-background text-foreground"
-          : FINDING_STATUS.className,
+        "flex min-h-6 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-2 text-caption font-medium text-foreground aria-pressed:border-current aria-pressed:ring-1 aria-pressed:ring-current",
       )}
     >
-      <Icon aria-hidden="true" className="size-3.5" />
+      {kind === "thread" ? (
+        <MessageSquareIcon aria-hidden="true" className="size-3.5" />
+      ) : (
+        <span aria-hidden="true">{FINDING_TYPE_STATUS[kind].glyph}</span>
+      )}
       <span>
         <span
           data-slot="count-up"
@@ -201,8 +200,8 @@ export interface Reanalyze {
 }
 
 /**
- * The AI review in the bar. First what it found, a chip with the findings' count, and one for the
- * PR's threads, each a toggle for what the stepper that follows walks; then the stepper,
+ * The AI review in the bar. First what it found, a chip per type that has findings, and one for
+ * the PR's threads, each a toggle for what the stepper that follows walks; then the stepper,
  * through the points or the threads; then, after a divider, the AI review's split button: Request
  * AI review before a run, with a line of what it would do; Reviewing while it runs; Re-run after
  * it; Try again after a run that didn't finish; Re-analyze when the PR has new commits.
@@ -267,7 +266,11 @@ export const ClaudeElement = ({
 
   const receipt = !running && points.length > 0;
   // What follows the chips lands after the last of them.
-  const chips = receipt ? 1 + (threads === null ? 0 : 1) : 0;
+  const types = FindingType.options.flatMap((type) => {
+    const count = points.filter((point) => point.type === type).length;
+    return count === 0 ? [] : [{ type, count }];
+  });
+  const chips = receipt ? types.length + (threads === null ? 0 : 1) : 0;
   const after = (at: number) =>
     receipt ? { "data-land": "rise", style: cssVars({ "--landing-i": chips + at }) } : {};
 
@@ -380,21 +383,28 @@ export const ClaudeElement = ({
 
   const left = receipt ? (
     <span data-slot="claude-receipt" className="flex min-w-0 items-center gap-1.5">
-      <Chip
-        kind="finding"
-        count={points.length}
-        words={FINDING_WORDS}
-        at={0}
-        pressed={narrowed === "finding"}
-        onPressed={(pressed) => onNarrow(pressed ? "finding" : null)}
-      />
+      {types.map(({ type, count }, at) => {
+        const { label } = FINDING_TYPE_STATUS[type];
+        return (
+          <Chip
+            key={type}
+            kind={type}
+            count={count}
+            words={[label, label]}
+            label={`${count} ${label} ${count === 1 ? "finding" : "findings"}`}
+            at={at}
+            pressed={narrowed === type}
+            onPressed={(pressed) => onNarrow(pressed ? type : null)}
+          />
+        );
+      })}
       {threads !== null && (
         <Chip
           kind="thread"
           count={threads.count}
           words={threads.words}
           label={threads.label}
-          at={1}
+          at={types.length}
           pressed={narrowed === "thread"}
           onPressed={(pressed) => onNarrow(pressed ? "thread" : null)}
         />

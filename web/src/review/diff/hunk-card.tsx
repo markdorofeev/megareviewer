@@ -17,7 +17,7 @@ import type {
   UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
 import { parseBody, type RiskAssessment } from "../../../../src/domain/review/index.ts";
-import { RISK_STATUS } from "../../lib/status.ts";
+import { type PointTone, RISK_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
@@ -160,11 +160,11 @@ export interface HunkCardProps {
   readonly pointLines?: ReadonlyMap<string, PointLine>;
   /** Claude's findings under the last of their lines. */
   readonly pointsAt?: (place: LinePlace) => ReactNode;
-  /** Lines with a finding's card under them, by "side:line": a bug in the number cell. */
-  readonly flagged?: ReadonlySet<string>;
+  /** Lines with a point's card under them, by "side:line": a bug in the number cell. */
+  readonly flags?: ReadonlyMap<string, PointTone>;
 }
 
-/** A line a point rests on: the kind that wins there, and how the line lands when it does. */
+/** A line a point rests on: the tone that wins there, and how the line lands when it does. */
 export interface PointLine {
   readonly kind: LineMarkKind;
   readonly landing?: PointLanding;
@@ -196,7 +196,7 @@ export const HunkCard = memo(function HunkCard({
   marks,
   pointLines,
   pointsAt,
-  flagged,
+  flags,
 }: HunkCardProps) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -329,7 +329,7 @@ export const HunkCard = memo(function HunkCard({
                   line={line}
                   cellRole="cell"
                   pointKind={point?.kind ?? null}
-                  flagged={key !== null && flagged?.has(key) === true}
+                  flag={(key === null ? undefined : flags?.get(key)) ?? null}
                   {...(point?.landing === undefined ? {} : { pointLanding: point.landing })}
                   marks={
                     (line.kind === "del" || line.newNo === null

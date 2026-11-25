@@ -227,7 +227,7 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   const leftOut = pointCard(page, NAMING);
   await expect(leftOut).toHaveAttribute("data-left-out", "true");
   await expect(leftOut).toContainText("Left out by your preference: Naming");
-  await expect(chips(page)).toHaveText([/^2\s*findings$/]);
+  await expect(chips(page)).toHaveText([/^ƒ\s*1\s*logic$/, /^◆\s*1\s*contract$/]);
   const marks = page.locator("[data-point-mark=finding]");
   const marked = await marks.count();
 
@@ -247,7 +247,7 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   await expect(leftOut.locator("[data-slot=point-guidance]")).toHaveText(
     "Left out by your preference: Naming",
   );
-  await expect(chips(page)).toHaveText([/^3\s*findings$/]);
+  await expect(chips(page)).toHaveText([/^ƒ\s*2\s*logic$/, /^◆\s*1\s*contract$/]);
   await expect(marks).toHaveCount(marked + 1);
 
   // "Don't flag things like this" on the other finding: a rule for this repository, then dismissed.

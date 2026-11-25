@@ -112,3 +112,25 @@ One agent, in this order, each step its own commits with `pnpm check` passing:
 | Severity | How much Claude thinks a finding matters: *minor*, *major* or *blocking*. It ranks the findings and colors their marks. Comments carry none |
 
 ## Notes for later stages
+
+### Open issues
+
+The session that did this stage ran out of its usage allowance here. Left to do:
+
+- **`pnpm e2e` hasn't passed since the page changed.** `review.spec.ts` has a new test on the fake server's `receiptsTyped` (PR 108), and `preferences.spec.ts` expects the new chips; neither has run to the end. The design-system snapshots of `foundations`, `screens` and `tour` may need updating: the marks, chips and bar demos changed.
+- **The whole `pnpm check` hasn't run on the page's commit.** Typecheck, Biome, the contrast check, `src/cli` (194) and the web tests of the review page, the review components and the design system (670) passed.
+- **The live run on delphi-code #2** with its checkout.
+- **The documents:** DESIGN.md, ARCHITECTURE.md, ENGINEERING.md's three rows, and `evals/README.md` (a finding's `type`, `nothingWrong`, `outside`, `typeRight`, `unwantedFindings`, noise and recall by type, the judge's callers section). Their text is still stage 67's.
+- **Definition of done** isn't ticked until those are.
+
+### What was decided
+
+- **The bar was met by the first run,** on the first prompt tried, so the other two weren't used: [the report](../../evals/reports/2026-11-25/finding-types.md). Nothing was dropped.
+- The contract and the input are one commit: `type` in the output schema moves every transport's fingerprint.
+- A model run reads the analysis's own `unchangedCallers`, and no longer looks the checkout up again. `AnalysisInput.unchangedCallers` names the hunk, not the part, since the model sees whole hunks.
+- When even the hunks don't fit with the callers, the callers are left out with a warning, after the file contents: a PR that was analyzed before isn't refused because of them.
+- `nothingWrong` marks the two cases where any finding is wrong. A case with no labeled finding isn't the same: on stage 67's baseline dependency-bump-signature and large-retry-after had two each the judge rates valid.
+- A mismatch no finding names is grey: it has no severity to take a color from.
+- Going to a point of another type than the pressed chip's lets go of the chip, as going to a point lets go of the threads'.
+- The bar's order is logic, contract, architecture. Glyphs: `ƒ`, `◆`, `≡`.
+- `with-findings.ts` in `src/cli/dev/` replaces the two wrappers that each answered one fake PR's findings.

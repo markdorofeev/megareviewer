@@ -20,6 +20,7 @@ import { ClaudeElement, type ClaudeRun, type Narrowing } from "../pages/review/C
 import { barButtons } from "../pages/review/header-buttons.ts";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
+import { narrowTo } from "../pages/review/stepper.ts";
 import { ThreadStepper, threadChip } from "../pages/review/ThreadStepper.tsx";
 import { type ThreadScope, threadScopeOf, threadSteps } from "../pages/review/thread-steps.ts";
 import { Button } from "../ui/button.tsx";
@@ -36,7 +37,7 @@ const MORE_POINTS: readonly Point[] = [
     path: "src/http/retry.ts",
     lines: null,
     hunkIds: [],
-    type: "logic",
+    type: "contract",
     severity: "minor",
     suggestion: null,
     mismatch: null,
@@ -149,7 +150,8 @@ const BarDemo = ({
                   if (thread === null && first !== undefined) setThread(first.id);
                   return;
                 }
-                if (kind !== null && current === null) setCurrent(points[0]?.id ?? null);
+                const to = narrowTo(points, kind, current);
+                if (to !== null) setCurrent(to);
               }}
               onRun={() => {}}
               onRerun={() => {}}
@@ -159,6 +161,7 @@ const BarDemo = ({
               {!walkingThreads ? (
                 <PointStepper
                   points={points}
+                  type={narrowed}
                   current={current}
                   stateOf={stateOf}
                   onGo={setCurrent}
@@ -294,7 +297,11 @@ export const ReviewBarStates = (): ReactNode => (
     />
     <BarDemo label="Before the first step: the count" />
     <BarDemo label="Mid-list" start={PointId.parse("f2")} />
-    <BarDemo label="The findings' chip pressed" narrowedAt="finding" start={PointId.parse("f2")} />
+    <BarDemo
+      label="A type's chip pressed, narrowing the stepper to it"
+      narrowedAt="contract"
+      start={PointId.parse("f2")}
+    />
     <BarDemo label="On a dismissed point" start={PointId.parse("f2")} dismissed={["f2"]} />
     <BarDemo label="One point" points={POINTS.slice(0, 1)} start={PointId.parse("f1")} />
     <BarDemo

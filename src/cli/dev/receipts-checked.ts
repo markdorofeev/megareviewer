@@ -1,7 +1,6 @@
 import type {
   AdviceDraft,
   AnalysisInput,
-  AnalysisModel,
   FindingDraft,
   GuardrailAdvisor,
 } from "../../application/ports/index.ts";
@@ -77,7 +76,7 @@ export const checkedAdvisor = (delayMs = MARKS_DELAY_MS): GuardrailAdvisor => {
 };
 
 /** The fake model's finding on the checked PR, which a Biome rule would have caught. */
-const findingsOf = (input: AnalysisInput): FindingDraft[] => {
+export const checkedFindings = (input: AnalysisInput): FindingDraft[] => {
   const route = hunkWith(input, "src/routes/orders.ts", 'get("/orders/:id/receipt"');
   if (route === undefined) return [];
   const line = lineOf(route, 'get("/orders/:id/receipt"');
@@ -95,16 +94,3 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
     },
   ];
 };
-
-/** The model, but the checked PR's findings pass answers the above, after its own time. */
-export const withGuardrails = (model: AnalysisModel, url: string): AnalysisModel => ({
-  version: model.version,
-  checkSize: (input) => model.checkSize(input),
-  intent: (input, options) => model.intent(input, options),
-  async findings(input, intent, options) {
-    const answer = await model.findings(input, intent, options);
-    if (!answer.ok || input.pullRequest.url !== url) return answer;
-    return ok({ ...answer.value, value: findingsOf(input) });
-  },
-  steps: (input, options) => model.steps(input, options),
-});

@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { mapModelStages, type Point, PointId } from "../../../src/domain/review/index.ts";
 import { fixtureModelOptions } from "../../dev/fixtures/index.ts";
+import { pointTone } from "../lib/status.ts";
 import { ClaudeElement } from "../pages/review/ClaudeElement.tsx";
 import { FindingCard, PointFold } from "../pages/review/PointCard.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
@@ -47,7 +48,7 @@ export const LandingDemo = () => {
     for (let line = startLine; line <= last; line += 1) {
       if (pointLines.has(`${side}:${line}`)) continue;
       pointLines.set(`${side}:${line}`, {
-        kind: "finding",
+        kind: pointTone(point),
         ...(at === undefined
           ? {}
           : { landing: { at, line: line - startLine, lines: last - startLine + 1 } }),
@@ -99,9 +100,11 @@ export const LandingDemo = () => {
     );
     return fold(here, true, here.map(card));
   };
-  const flagged = new Set(
+  const flags = new Map(
     points.flatMap((point) =>
-      point.lines === null ? [] : [`${point.lines.side}:${point.lines.line}`],
+      point.lines === null
+        ? []
+        : [[`${point.lines.side}:${point.lines.line}`, pointTone(point)] as const],
     ),
   );
   const unlined = points.filter((point) => point.lines === null);
@@ -160,7 +163,7 @@ export const LandingDemo = () => {
             afterHeader={fold(unlined, false, unlined.map(card))}
             pointLines={pointLines}
             pointsAt={pointsAt}
-            flagged={flagged}
+            flags={flags}
           />
         )}
       </div>

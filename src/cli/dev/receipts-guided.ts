@@ -1,6 +1,5 @@
 import type {
   AnalysisInput,
-  AnalysisModel,
   FindingDraft,
   PreferenceStore,
 } from "../../application/ports/index.ts";
@@ -13,7 +12,6 @@ import {
   pullRequestUrl,
   type Timestamp,
 } from "../../domain/review/index.ts";
-import { ok } from "../../domain/shared/index.ts";
 import { hunkWith, lineOf } from "./hunks.ts";
 
 const repo = { ...smallFeature.pullRequest.ref.repo, repo: "storefront" };
@@ -97,7 +95,7 @@ const markOf = (
 };
 
 /** The fake model's findings on the guided PR: a preference's, REVIEW.md's, and one to leave out. */
-const findingsOf = (input: AnalysisInput): FindingDraft[] => {
+export const guidedFindings = (input: AnalysisInput): FindingDraft[] => {
   const receipts = hunkWith(input, "src/services/receipts.ts", "renderReceipt");
   const limit = hunkWith(input, "config/app.yaml", "perMinute: 600");
   if (receipts === undefined || limit === undefined) return [];
@@ -124,7 +122,7 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
       explanation:
         "Every client can now send 600 requests a minute, and nothing says how that was load tested.",
       lines: { hunkId: limit.id, side: "new", startLine: perMinute, line: perMinute },
-      type: "logic",
+      type: "contract",
       severity: "major",
       suggestion: null,
       mismatch: null,
@@ -147,16 +145,3 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
     },
   ];
 };
-
-/** The model, but the guided PR's findings pass answers the above, after its own time. */
-export const withGuidance = (model: AnalysisModel, url: string): AnalysisModel => ({
-  version: model.version,
-  checkSize: (input) => model.checkSize(input),
-  intent: (input, options) => model.intent(input, options),
-  async findings(input, intent, options) {
-    const answer = await model.findings(input, intent, options);
-    if (!answer.ok || input.pullRequest.url !== url) return answer;
-    return ok({ ...answer.value, value: findingsOf(input) });
-  },
-  steps: (input, options) => model.steps(input, options),
-});

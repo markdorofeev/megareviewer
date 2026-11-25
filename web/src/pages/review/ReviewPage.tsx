@@ -32,6 +32,7 @@ import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
 import { type ShortcutHandlers, type ShortcutId, useShortcuts } from "../../lib/keymap.ts";
 import { usePageDisplay } from "../../lib/page-display.tsx";
+import { type PointTone, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import {
   CallPeek,
@@ -108,6 +109,7 @@ import { RerunModel } from "./RerunModel.tsx";
 import { ReviewBar } from "./ReviewBar.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
+import { narrowTo } from "./stepper.ts";
 import { parseBoolean, readSession, useStoredState, writeSession } from "./storage.ts";
 import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
 import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
@@ -578,6 +580,9 @@ const Review = ({
   const [showThreads, setShowThreads] = useState(false);
   // The stepper walks the threads when their chip is pressed, or when Claude has no points.
   const walkingThreads = narrowed === "thread" || walked.length === 0;
+  // A run again may find none of the type a chip narrowed the stepper to.
+  const walkedType =
+    narrowed !== "thread" && walked.some((point) => point.type === narrowed) ? narrowed : null;
   // One thing on the page is the current one: the point or the thread the stepper is on.
   const activePoint = walkingThreads ? null : currentPoint;
   const [showPoints, setShowPoints] = useState(false);
@@ -767,7 +772,8 @@ const Review = ({
     const cardPart = places.cardPart.get(id);
     // Going to a point a preference left out shows it.
     if (folded.has(id)) showLeftOut(id);
-    if (narrowed === "thread") setNarrowed(null);
+    // The stepper stays on what was gone to.
+    setNarrowed((narrowing) => (narrowing === point?.type ? narrowing : null));
     setHighlight(new Set((point?.hunkIds ?? []).flatMap(index.partsOf)));
     if (layout === "overview" && !understand) {
       if (cardPart !== undefined) showHunk(cardPart);
@@ -838,7 +844,7 @@ const Review = ({
     if (layout === "overview") setLayout(() => "map");
     scrollTo(threadAnchor(id));
   };
-  /** Has the stepper walk the findings or the threads, going to the first unless on one. */
+  /** Has the stepper walk a type's findings or the threads, going to the first unless on one. */
   const narrow = (kind: Narrowing | null) => {
     setNarrowed(kind);
     if (kind === "thread") {
@@ -849,9 +855,8 @@ const Review = ({
       }
       return;
     }
-    const [first] = walked;
-    if (kind === null || first === undefined) return;
-    if (!walked.some((point) => point.id === currentPoint)) goToPoint(first.id);
+    const to = narrowTo(walked, kind, currentPoint);
+    if (to !== null) goToPoint(to);
   };
   /**
    * A mismatch is one of Claude's points, the nth of the intent's, so Details goes to its card:
@@ -1198,7 +1203,7 @@ const Review = ({
           const key = `${side}:${line}`;
           if (lines.has(key)) continue;
           lines.set(key, {
-            kind: "finding",
+            kind: pointTone(point),
             ...(at === undefined
               ? {}
               : { landing: { at, line: line - startLine, lines: last - startLine + 1 } }),
@@ -1306,12 +1311,16 @@ const Review = ({
       here.map((point) => findingCard(point, id)),
     );
   };
-  const flaggedOf = useCallback(
-    (id: PartId): ReadonlySet<string> | undefined => {
+  const flagsOf = useCallback(
+    (id: PartId): ReadonlyMap<string, PointTone> | undefined => {
       const lines = cardPlaces.underLine.get(id);
       if (lines === undefined) return undefined;
-      const flagged = [...lines].filter(([, here]) => here.some((p) => !folded.has(p.id)));
-      return new Set(flagged.map(([key]) => key));
+      return new Map(
+        [...lines].flatMap(([key, here]) => {
+          const first = here.find((point) => !folded.has(point.id));
+          return first === undefined ? [] : [[key, pointTone(first)] as const];
+        }),
+      );
     },
     [cardPlaces, folded],
   );
@@ -1431,7 +1440,7 @@ const Review = ({
     marksOf,
     pointsOn,
     pointsAt,
-    flaggedOf,
+    flagsOf,
     pointLinesOf,
     threadsAt,
     earlierThreads,
@@ -1518,7 +1527,7 @@ const Review = ({
             points={walked}
             leftOut={folded.size}
             threads={threadChip(orderedThreads, threadScope, resolvedHere)}
-            narrowed={narrowed}
+            narrowed={narrowed === "thread" ? narrowed : walkedType}
             onNarrow={narrow}
             onRun={async () => {
               const optionId = modelChoice.chosen?.id;
@@ -1533,6 +1542,7 @@ const Review = ({
             {!walkingThreads ? (
               <PointStepper
                 points={walked}
+                type={walkedType}
                 current={currentPoint}
                 stateOf={pointStates.stateOf}
                 onGo={goToPoint}

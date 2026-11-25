@@ -2,10 +2,13 @@ import { BugIcon, type LucideIcon } from "lucide-react";
 import type { FileStatus } from "../../../src/domain/diff/index.ts";
 import type {
   CheckState,
+  FindingType,
+  Point,
   PullRequestState,
   ReviewerVerdict,
   ReviewStatus,
   RiskClass,
+  Severity,
 } from "../../../src/domain/review/index.ts";
 
 // One map from every state to its label, glyph and token classes. The glyph and the label always
@@ -18,12 +21,76 @@ export interface StatusStyle {
   readonly className: string;
 }
 
-/** A finding: its icon and word go everywhere its tint does. */
-export const FINDING_STATUS: StatusStyle & { readonly icon: LucideIcon } = {
+/** A finding: its icon and word go everywhere its severity's tint does. */
+export const FINDING_STATUS: { readonly label: string; readonly icon: LucideIcon } = {
   label: "Finding",
-  glyph: "⚠",
-  className: "text-review-changes bg-review-changes-bg border-review-changes/25",
   icon: BugIcon,
+};
+
+/** A finding's type: grey, since its severity has the color. */
+export const FINDING_TYPE_STATUS: Readonly<Record<FindingType, StatusStyle>> = {
+  logic: { label: "logic", glyph: "ƒ", className: "border-border bg-secondary text-foreground" },
+  contract: {
+    label: "contract",
+    glyph: "◆",
+    className: "border-border bg-secondary text-foreground",
+  },
+  architecture: {
+    label: "architecture",
+    glyph: "≡",
+    className: "border-border bg-secondary text-foreground",
+  },
+};
+
+/** How much Claude thinks a finding matters, while it's Claude's. */
+export const SEVERITY_STATUS: Readonly<Record<Severity, StatusStyle>> = {
+  blocking: {
+    label: "blocking",
+    glyph: "■",
+    className: "text-severity-blocker bg-review-changes-bg border-severity-blocker/25",
+  },
+  major: {
+    label: "major",
+    glyph: "▲",
+    className: "text-severity-major bg-severity-major-bg border-severity-major/25",
+  },
+  minor: {
+    label: "minor",
+    glyph: "●",
+    className: "text-severity-minor bg-review-pending-bg border-severity-minor/25",
+  },
+};
+
+/** What colors a point: a finding's severity, or grey for a mismatch no finding names. */
+export type PointTone = Severity | "mismatch";
+
+export const pointTone = (point: Pick<Point, "severity">): PointTone =>
+  point.severity ?? "mismatch";
+
+/** A point's color as text, as a bar, and as a chip. */
+export const POINT_TONE: Readonly<
+  Record<PointTone, { readonly text: string; readonly bar: string; readonly chip: string }>
+> = {
+  blocking: {
+    text: "text-severity-blocker",
+    bar: "bg-severity-blocker",
+    chip: SEVERITY_STATUS.blocking.className,
+  },
+  major: {
+    text: "text-severity-major",
+    bar: "bg-severity-major",
+    chip: SEVERITY_STATUS.major.className,
+  },
+  minor: {
+    text: "text-severity-minor",
+    bar: "bg-severity-minor",
+    chip: SEVERITY_STATUS.minor.className,
+  },
+  mismatch: {
+    text: "text-muted-foreground",
+    bar: "bg-muted-foreground",
+    chip: "border-border bg-muted text-foreground",
+  },
 };
 
 /** The verdict a published review carries, and the marks the design system still shows. */

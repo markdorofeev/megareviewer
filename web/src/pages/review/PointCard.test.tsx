@@ -55,6 +55,42 @@ const leftOutByPreference = {
 const guidanceLine = (container: HTMLElement) =>
   container.querySelector<HTMLElement>("[data-slot=point-guidance]");
 
+describe("a finding's card", () => {
+  const chips = (container: HTMLElement) =>
+    [...container.querySelectorAll("[data-slot=finding-type], [data-slot=severity]")].map(
+      (chip) => chip.textContent,
+    );
+
+  it("says its type in a word, before its severity", () => {
+    const { container, rerender } = render(
+      <FindingCard point={finding} {...actions} {...findingProps} />,
+    );
+    expect(chips(container)).toEqual(["ƒlogic", "●minor"]);
+    rerender(
+      <FindingCard
+        point={{ ...finding, type: "architecture", severity: "blocking" }}
+        {...actions}
+        {...findingProps}
+      />,
+    );
+    expect(chips(container)).toEqual(["≡architecture", "■blocking"]);
+    for (const glyph of container.querySelectorAll("[data-slot=finding-type] > span")) {
+      expect(glyph.getAttribute("aria-hidden")).toBe("true");
+    }
+  });
+
+  it("says neither of a mismatch no finding names", () => {
+    const { container } = render(
+      <FindingCard
+        point={{ ...finding, id: PointId.parse("m1"), type: null, severity: null }}
+        {...actions}
+        {...findingProps}
+      />,
+    );
+    expect(chips(container)).toEqual([]);
+  });
+});
+
 describe("a point's guidance", () => {
   it("says which preference raised it, as a link to the preferences", () => {
     const { container } = render(

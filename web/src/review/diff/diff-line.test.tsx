@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { HunkId } from "../../../../src/domain/diff/index.ts";
-import { DiffLine, type LineMark, segments } from "./diff-line.tsx";
+import { DiffLine, type LineMark, type LineMarkKind, segments } from "./diff-line.tsx";
 import type { ViewLine } from "./rows.ts";
 
 const line = (overrides: Partial<ViewLine> = {}): ViewLine => ({
@@ -93,15 +93,33 @@ describe("a point's mark", () => {
       <DiffLine
         line={line({ kind: "del", oldNo: 6, newNo: null })}
         layout="split-old"
-        pointKind="finding"
+        pointKind="major"
       />,
     );
     expect(marked(container).map((cell) => cell.textContent)).toEqual(["6"]);
   });
 
+  it("takes the color of what it marks", () => {
+    const of = (kind: LineMarkKind) =>
+      marked(render(<DiffLine line={line()} pointKind={kind} />).container)[0]?.className ?? "";
+    expect(of("blocking")).toContain("text-severity-blocker");
+    expect(of("major")).toContain("text-severity-major");
+    expect(of("minor")).toContain("text-severity-minor");
+    expect(of("mismatch")).not.toContain("severity");
+  });
+
+  it("has a bug at the end of the lines, in the card's color", () => {
+    const flag = (tone: "major" | null) =>
+      render(<DiffLine line={line()} flag={tone} />).container.querySelector(
+        "[data-slot=finding-flag]",
+      );
+    expect(flag("major")?.getAttribute("class")).toContain("text-severity-major");
+    expect(flag(null)).toBeNull();
+  });
+
   it("leaves the edge bar to the focus and the open comment box", () => {
     const row = (props: { focused?: boolean; marked?: boolean }) =>
-      render(<DiffLine line={line()} pointKind="finding" {...props} />).container.querySelector(
+      render(<DiffLine line={line()} pointKind="major" {...props} />).container.querySelector(
         "[role=row]",
       )?.className ?? "";
     expect(row({})).not.toMatch(/after:w-\[3px\]/);

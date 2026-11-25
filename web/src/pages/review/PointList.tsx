@@ -1,10 +1,14 @@
 import { useRef } from "react";
 import type { Point, PointId, PointState } from "../../../../src/domain/review/index.ts";
-import { FINDING_STATUS } from "../../lib/status.ts";
+import { FINDING_STATUS, POINT_TONE, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Dialog } from "./Dialog.tsx";
+import { SeverityChip, TypeChip } from "./PointCard.tsx";
 
-/** The points Claude raised, in its order. A row per point goes to its card. */
+/**
+ * The points Claude raised, findings by severity first, each with its type and severity. A row per
+ * point goes to its card.
+ */
 export const PointList = ({
   points,
   stateOf,
@@ -44,13 +48,18 @@ export const PointList = ({
                   onGo(point.id);
                 }}
               >
-                <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+                <Icon
+                  aria-hidden="true"
+                  className={cn("size-3.5 shrink-0", POINT_TONE[pointTone(point)].text)}
+                />
                 <span className="sr-only">{label}: </span>
                 <span
                   className={cn("min-w-0 flex-1 truncate", state === "dismissed" && "line-through")}
                 >
                   {point.title}
                 </span>
+                {point.type !== null && <TypeChip type={point.type} />}
+                {point.severity !== null && <SeverityChip severity={point.severity} />}
                 {state !== "open" && (
                   <span className="text-caption text-muted-foreground">
                     {state === "raised" ? "Raised" : "Dismissed"}
