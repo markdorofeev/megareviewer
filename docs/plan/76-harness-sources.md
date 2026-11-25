@@ -53,7 +53,7 @@ Both hosts implement `HarnessSource`, so a PR opened on either loads its reposit
 
 ### Bitbucket's diffstat spec
 
-The new commit goes first, `diffstat/{new}..{old}`: in the recording, `b467819..9c2e7d9` lists the file the newer commit adds with `old: null`. `topic=false` is needed too. Between two commits that diverged (`atlassian/aui`, `eeda066` and `450892f`), it listed the same 432 files in either direction, where `topic=true` listed 432 in one and 6 in the other, since it starts from the merge base. The default listed 432 in the direction tried.
+The new commit goes first, `diffstat/{new}..{old}`: in the recording, `b467819..9c2e7d9` lists the file the newer commit adds with `old: null`. `topic=false` is needed too. Between two commits that diverged (`atlassian/aui`, `eeda066` and `450892f`), it listed the same 432 files in either direction, where `topic=true` and the default listed 432 in one and 6 in the other, since they start from the merge base.
 
 ### Live, on 2026-11-25
 

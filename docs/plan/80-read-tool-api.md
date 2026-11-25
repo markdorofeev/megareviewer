@@ -54,11 +54,6 @@ A pass through the API reads harness files with a tool megareviewer serves itsel
 
 `src/adapters/model/shared/errors.ts` has `readerFailed`, `roundsUsedUp` and `readTooMuch`, so both transports say them in the same words; `claude-code-call.ts` takes them from there, with no change in what it does.
 
-### To fold into ARCHITECTURE.md when the slice is merged
-
-- Model passes: the reader is on Claude Code and the API; on the API it's one tool megareviewer serves from memory, so no path reaches a disk and nothing is killed. "On Codex, the API and opencode it has none" and "Claude Code today" are out of date.
-- Reading the harness: an **On the Anthropic API** paragraph, with the rounds, the breakpoints and the reader failures above.
-
 ### Live, on 2026-11-25, Haiku 5.5
 
 `node evals/claude-live-check.ts --harness --record`, once: `small-feature` with seven files to read, where only the first says which of the others has the rules. All five passes, the tour's steps among them, read that file, then two others side by side, then answered. $0.017 in all.

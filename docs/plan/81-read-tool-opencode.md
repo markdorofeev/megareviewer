@@ -74,8 +74,3 @@ All measured in the spike on opencode 2.3.0.
 ### The merge
 
 `claude/harness-core-4b758f` at `659fb3f` merged into this branch without a conflict (`47075ea`). The reader errors are `shared/errors.ts`'s.
-
-### To fold into ARCHITECTURE.md when the slice is merged
-
-- Model passes and the lockdown bullets say opencode's passes have no reader, a denied tool and one answer; an **On opencode** paragraph in "Reading the harness" would say the directory, the rules by file, the look every 2 seconds and the check on the turn.
-- "a transport that reads them … Claude Code today" is three transports now; Codex is the one without.

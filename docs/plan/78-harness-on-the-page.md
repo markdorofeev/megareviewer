@@ -69,9 +69,3 @@ The reviewer sees what a repository's harness holds and decides what an AI revie
 ### For the core track
 
 - `GuidelineFile.tooLarge` has no reader on the page now. It's still in the contract, as part of the domain's type; taking it out is `preference.ts`'s.
-
-### To fold into ARCHITECTURE.md and DESIGN.md when the slice is merged
-
-- "Preferences page" says a guideline file too large is named as such with no switch, and gives "Followed by AI reviews": now any size has its switch, the words are "In every review", "Read when the model asks" and "Ignored", and a root's row opens to what it links.
-- "The routes" says `PUT /api/preferences/guidelines` switches one of the five paths, and that guideline files are read at the latest analysis's base commit: now any path of the repository's latest harness, answering the section. `GET /api/analyses/:id/harness` is new.
-- "Review page" says the tooltip names the model and who pays: now what the run would read of the harness too.

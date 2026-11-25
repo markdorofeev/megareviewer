@@ -61,7 +61,8 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Guideline file | A file at a repository's root that says how its code is written or reviewed, such as `REVIEW.md`: a root of the harness. A model run reads the ones the reviewer switched on, at the PR's base commit |
 | Harness | The guideline files at a repository's root and the files they link, at a PR's base commit |
 | Harness file | One of the harness's files, with how it was found: a root, or by an import, a link or a mention, and the file that names it |
-| Harness read | A file of the harness a pass opened or searched with its read tool, with the lines it was given, or was refused. Kept on the pass's model call |
+| Linked file | A harness file that a guideline file reaches, straight or through other files. On unless switched off, and used only when a root that's on reaches it through files that are |
+| Harness read | A file of the harness a pass opened or searched with its reader, or that a transport loaded by itself, with the lines it was given, or was refused. Kept on the pass's model call |
 | Guidance | What one model run was given beside the code: the enabled preferences and the guideline files, numbered, and kept on the analysis so a point can say which one shaped it, with the check configs and build files its guardrail call read |
 | Guardrail | A check that would catch a kind of problem before review, in any code: a named rule of a tool whose config megareviewer read, which the config doesn't turn on, or a kind of check and an engine the model suggests. A mark on a finding or a risk. megareviewer names it and never turns it on |
 | Check config | A tool's configuration file at a repository's root, read at the PR's base commit to know which rules the repository has |
