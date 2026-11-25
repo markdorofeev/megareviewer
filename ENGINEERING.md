@@ -43,7 +43,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Call site | A use, at a line and column of a part, of a definition the PR changes: where the page shows the code a call runs |
 | Model provider | What runs the model passes and decides who pays: Claude Code, the Anthropic API, Codex, opencode |
 | Model option | A model on a provider, which the reviewer can choose when its provider can run it, with the reason when it can't |
-| Model call | One request of a model pass or of a run's guardrail call, with when it ran, how long it took, and what came of it: an answer, an answer with problems, which a retry is told, or an error |
+| Model call | One request of a model pass or of a run's guardrail call, with when it ran, how long it took, and what came of it: an answer, an answer with problems, which a retry is told or the server mended, or an error |
 | Analysis | All of the above for one PR at one head SHA and pipeline version |
 | Publication | A review sent back to the git host. An analysis can send several, numbered from 1 |
 | Review thread | A conversation the host keeps on lines of a file: its comments, whether it's resolved or outdated. Read live, never part of an analysis |

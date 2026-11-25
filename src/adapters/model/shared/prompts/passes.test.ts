@@ -123,6 +123,16 @@ describe("what guidance adds to a task", () => {
     }
   });
 
+  it("asks every pass to keep refs out of what the reviewer reads", () => {
+    for (const given of [withPreferences, withFiles, reading]) {
+      for (const pass of ModelPass.options) {
+        expect(passMessage(pass, null, undefined, given)).toContain(
+          "name a guideline file by its path in the repository, and a preference by what it says",
+        );
+      }
+    }
+  });
+
   it("asks every pass but the intent to read first, where there's something to read", () => {
     for (const pass of ModelPass.options) {
       const asks = passMessage(pass, null, undefined, reading).includes(READ_FIRST);
@@ -138,7 +148,7 @@ describe("what guidance adds to a task", () => {
     expect(
       fnv1a64(JSON.stringify(messages)),
       "A run with guidance sends something else. Bump every transport's prompt version.",
-    ).toBe("d8ebc6413f4c26a1");
+    ).toBe("1cfdc0f1a8c9816f");
   });
 
   it("comes before the problems with an earlier answer", () => {

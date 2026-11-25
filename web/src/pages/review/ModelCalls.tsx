@@ -163,8 +163,8 @@ export const ModelCalls = ({
           <p className="text-ui text-muted-foreground">
             {runName(option) === null ? "" : `On ${runName(option)}. `}
             {formatDuration(end - start)} from the first call to the end of the last. A call whose
-            answer has problems runs once more, told what they are, and one whose reading failed
-            runs once more without it.
+            answer has problems only it can fix runs once more, told what they are, and one whose
+            reading failed runs once more without it.
           </p>
           <table className="tabular w-full text-ui [&_td]:px-2 [&_td]:py-1 [&_td]:align-top [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:align-top [&_th]:font-normal [&_thead_th]:font-medium [&_thead_th]:text-muted-foreground">
             <thead>

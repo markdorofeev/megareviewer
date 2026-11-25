@@ -20,23 +20,30 @@ import {
   type ModelPass,
   type ModelUsage,
   pointLinesFit,
+  type RefNames,
   type RiskAssessment,
+  refNames,
   type Step,
   type StepContext,
+  type StepDraft,
   type StepProblem,
   strippable,
   validateFindings,
   validateHunkReferences,
   validateRiskCoverage,
   validateSteps,
+  withoutRefs,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type {
   AnalysisInput,
   AnalysisModel,
   Clock,
+  DecisionDraft,
+  FindingDraft,
   Logger,
   ModelCheckingTest,
+  ModelRisk,
   PassError,
   PassOptions,
   PassOutput,
@@ -59,17 +66,62 @@ export interface PassDeps {
   readonly clock: Clock;
 }
 
+/** An answer with each text of it the reviewer reads rewritten. */
+type Rewrite<T> = (answer: T, text: (one: string) => string) => T;
+
+interface Mended<T> {
+  readonly value: T;
+  /** What was mended, as the call's problems say it. */
+  readonly notes: readonly string[];
+}
+
+/** The refs a run's prose can't have, by the guidance it was given and the pull request's own text. */
+const proseRefs = (guidance: Guidance | null, { pullRequest, files }: AnalysisInput): RefNames =>
+  refNames(guidance, [
+    pullRequest.title,
+    pullRequest.description,
+    ...files.flatMap((file) => [
+      file.headContent ?? "",
+      ...file.hunks.flatMap((hunk) => hunk.lines.map((line) => line.text)),
+    ]),
+  ]);
+
+/** Takes the run's refs out of what the reviewer reads, so a ref it can't look up never shows. */
+const refsOutOf = <T>(
+  guidance: Guidance | null,
+  input: AnalysisInput,
+  rewrite: Rewrite<T>,
+): ((answer: T) => Mended<T>) => {
+  const names = proseRefs(guidance, input);
+  return (answer) => {
+    const found = new Set<string>();
+    const value = rewrite(answer, (one) => {
+      const { text, refs } = withoutRefs(one, names);
+      for (const ref of refs) found.add(ref);
+      return text;
+    });
+    const notes = [...found].map((ref) => {
+      const path = names.get(ref) ?? null;
+      const mended = path === null ? "taken out" : `replaced with ${path}`;
+      return `${ref} in text the reviewer reads: ${mended}`;
+    });
+    return { value, notes };
+  };
+};
+
 /**
  * Calls a pass, and once more with feedback when its answer is invalid: unparseable, or with
  * the problems `check` finds. The answer comes back with whatever problems are left, for the
  * caller to repair; when the retry fails outright, the first answer is repaired instead. A call
  * whose read tool fails, or that uses up its rounds of reading, is made once more on the prompt
  * alone, and so is what follows it. Every call is traced, with when it ran, what it read and what
- * came of it.
+ * came of it: `mend` runs before the checks, and what it mended is among the call's problems without
+ * a retry.
  */
 const callChecked = async <T>(
   pass: ModelPass,
   call: PassCall<T>,
+  mend: (value: T) => Mended<T>,
   check: (value: T) => string[],
   { logger, clock }: PassDeps,
 ): Promise<{
@@ -84,9 +136,11 @@ const callChecked = async <T>(
   ): Promise<Result<{ value: T; problems: string[] }, ModelError>> => {
     const number = modelCalls.length + 1;
     const startedAt = clock.now();
-    const result = await call(options);
+    const called = await call(options);
     const durationMs = Math.max(0, Date.parse(clock.now()) - Date.parse(startedAt));
+    const result = called.ok ? ok({ ...called.value, ...mend(called.value.value) }) : called;
     const problems = result.ok ? check(result.value.value) : [];
+    const found = result.ok ? [...problems, ...result.value.notes] : [];
     if (result.ok) usage.push({ ...result.value.usage, startedAt, durationMs });
     const reads = (result.ok ? result.value.reads : result.error.reads) ?? [];
     modelCalls.push({
@@ -94,8 +148,8 @@ const callChecked = async <T>(
       attempt: number,
       startedAt,
       durationMs,
-      outcome: !result.ok ? "failed" : problems.length > 0 ? "problems" : "ok",
-      problems,
+      outcome: !result.ok ? "failed" : found.length > 0 ? "problems" : "ok",
+      problems: found,
       error: result.ok ? null : { kind: result.error.kind, message: result.error.message },
       reads,
     });
@@ -114,7 +168,7 @@ const callChecked = async <T>(
       pass,
       attempt: number,
       durationMs,
-      problems,
+      problems: found,
       reads: reads.length,
     });
     return ok({ value: result.value.value, problems });
@@ -193,12 +247,24 @@ const describeProblem = (feedback: Feedback) => (problem: CoverageProblem) =>
 
 const describeUnknown = (hunkId: HunkId): string => `${hunkId} isn't a hunk of this pull request.`;
 
+const intentTexts: Rewrite<Intent> = ({ stated, inferred, mismatches }, text) => ({
+  stated: stated === null ? null : { ...stated, summary: text(stated.summary) },
+  inferred: {
+    summary: text(inferred.summary),
+    shape: text(inferred.shape),
+    behaviorChanges: inferred.behaviorChanges.map(text),
+    watch: inferred.watch.map(text),
+  },
+  mismatches: mismatches.map((one) => ({ ...one, description: text(one.description) })),
+});
+
 export const runIntent = async (
   model: AnalysisModel,
   input: AnalysisInput,
   knownHunks: ReadonlySet<HunkId>,
   deps: PassDeps,
   onAnswering?: () => void,
+  guidance: Guidance | null = null,
 ): Promise<PassResult<Intent>> => {
   const unknownIn = (intent: Intent) =>
     validateHunkReferences(
@@ -209,6 +275,7 @@ export const runIntent = async (
     "intent",
     (options) =>
       model.intent(input, onAnswering === undefined ? options : { ...options, onAnswering }),
+    refsOutOf(guidance, input, intentTexts),
     (intent) => unknownIn(intent).map(describeUnknown),
     deps,
   );
@@ -245,6 +312,13 @@ const FINDING_FEEDBACK = (problem: FindingProblem): string => {
   }
 };
 
+const findingTexts: Rewrite<FindingDraft[]> = (drafts, text) =>
+  drafts.map((draft) => ({
+    ...draft,
+    title: text(draft.title),
+    explanation: text(draft.explanation),
+  }));
+
 /**
  * Findings on lines the PR's hunks show, each with the intent's mismatch it shows, if any; the
  * intent is null when its pass failed. One still invalid after the retry is dropped and logged,
@@ -263,6 +337,7 @@ export const runFindings = async (
   const { outcome, usage, modelCalls } = await callChecked(
     "findings",
     (options) => model.findings(input, intent, options),
+    refsOutOf(guidance, input, findingTexts),
     (drafts) => validateFindings(drafts, hunks, mismatches).map(FINDING_FEEDBACK),
     deps,
   );
@@ -301,6 +376,14 @@ const checkingTest = (claim: ModelCheckingTest): CheckingTest => ({
   lines: { hunkId: claim.hunkId, side: "new", startLine: claim.startLine, line: claim.line },
 });
 
+const riskTexts: Rewrite<ModelRisk[]> = (risks, text) =>
+  risks.map((risk) => ({
+    ...risk,
+    reason: text(risk.reason),
+    checkedBy:
+      risk.checkedBy === null ? null : { ...risk.checkedBy, checks: text(risk.checkedBy.checks) },
+  }));
+
 /**
  * The model's assessments, one per required hunk, with fallbacks for the ones it missed. A
  * checking test is kept only on a contract hunk and only as the server can check it; one it
@@ -318,6 +401,7 @@ export const runRisk = async (
   const { outcome, usage, modelCalls } = await callChecked(
     "risk",
     (options) => model.risk(input, options),
+    refsOutOf(guidance, input, riskTexts),
     (risk) => validateRiskCoverage(risk, required).map(describeProblem(RISK_FEEDBACK)),
     deps,
   );
@@ -386,11 +470,19 @@ export const runRisk = async (
   };
 };
 
+const decisionTexts: Rewrite<DecisionDraft[]> = (drafts, text) =>
+  drafts.map((draft) => ({
+    ...draft,
+    title: text(draft.title),
+    whyItMatters: text(draft.whyItMatters),
+  }));
+
 export const runDecisions = async (
   model: AnalysisModel,
   input: AnalysisInput,
   hunks: ReadonlyMap<HunkId, Hunk>,
   deps: PassDeps,
+  guidance: Guidance | null = null,
 ): Promise<PassResult<Decision[]>> => {
   const knownHunks = new Set(hunks.keys());
   const unknownIn = (drafts: readonly { readonly hunkIds: readonly HunkId[] }[]) =>
@@ -401,6 +493,7 @@ export const runDecisions = async (
   const { outcome, usage, modelCalls } = await callChecked(
     "decisions",
     (options) => model.decisions(input, options),
+    refsOutOf(guidance, input, decisionTexts),
     (drafts) => unknownIn(drafts).map(describeUnknown),
     deps,
   );
@@ -462,6 +555,9 @@ const describeStepProblem = (problem: StepProblem): string => {
   }
 };
 
+const stepTexts: Rewrite<StepDraft[]> = (drafts, text) =>
+  drafts.map((draft) => ({ ...draft, sentence: text(draft.sentence) }));
+
 /**
  * The page's tour: the steps the model wrote, checked, with one retry for what the checks find.
  * After it, what's still wrong is repaired as `keptSteps` says and logged. An answer of fewer than
@@ -473,10 +569,12 @@ export const runSteps = async (
   input: AnalysisInput,
   context: StepContext,
   deps: PassDeps,
+  guidance: Guidance | null = null,
 ): Promise<PassResult<Step[]>> => {
   const { outcome, usage, modelCalls } = await callChecked(
     "steps",
     (options) => model.steps(input, options),
+    refsOutOf(guidance, input, stepTexts),
     (drafts) => validateSteps(drafts, context).map(describeStepProblem),
     deps,
   );

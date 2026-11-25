@@ -107,7 +107,7 @@ export const ModelCall = z
     startedAt: Timestamp,
     durationMs: z.number().int().nonnegative(),
     outcome: ModelCallOutcome,
-    /** What the checks found wrong with the answer: what a retry is told, or what was dropped. */
+    /** What the checks found wrong with the answer: what a retry is told, or what was dropped or mended. */
     problems: z.array(z.string()).readonly(),
     error: ModelError.nullable(),
     /** What it read of the harness, in order. Empty for a call without the read tool. */

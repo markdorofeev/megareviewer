@@ -11,7 +11,7 @@ export const OPENCODE_FINGERPRINT = "76348cab00accff5";
 export const OPENCODE_TOUR_FINGERPRINT = "a8343a604fe1bce8";
 
 /** The same, of a run with something to read, which the others send nothing of. */
-export const OPENCODE_READER_FINGERPRINT = "151403970cd14473";
+export const OPENCODE_READER_FINGERPRINT = "6edcf78df57c5713";
 
 /** Names the model on its provider; an effort for every pass, in place of each pass's own, too. */
 export const opencodeVersion = (providerID: string, model: string, effort?: string): string =>

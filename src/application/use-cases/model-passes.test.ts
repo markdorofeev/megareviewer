@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Hunk, HunkId } from "../../domain/diff/index.ts";
-import type { Guidance, HarnessRead } from "../../domain/review/index.ts";
+import { type Hunk, HunkId } from "../../domain/diff/index.ts";
+import { Guidance, type HarnessRead, PreferenceId } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import type { AnalysisInput, ModelRisk } from "../ports/index.ts";
 import {
@@ -9,8 +9,9 @@ import {
   hunk,
   RecordingLogger,
   smallFeatureInput,
+  smallFeatureIntent,
 } from "../testing/index.ts";
-import { runFindings, runIntent, runRisk } from "./model-passes.ts";
+import { runDecisions, runFindings, runIntent, runRisk, runSteps } from "./model-passes.ts";
 
 const route = hunk("src/routes/orders.ts", "@@ -1,1 +1,3 @@", [
   " const router = Router();",
@@ -131,6 +132,160 @@ describe("runRisk's checking tests", () => {
     );
     expect(risk[0]?.checkedBy).toBeUndefined();
     expect(dropped[0]?.fields?.problem).toBe("not-a-test");
+  });
+});
+
+describe("a ref of the run's guidance in text the reviewer reads", () => {
+  const deps = () => ({
+    logger: new RecordingLogger(),
+    clock: new FixedClock("2026-11-25T10:00:00Z"),
+  });
+  const guidance = Guidance.parse({
+    preferences: [
+      {
+        ref: "p1",
+        id: PreferenceId.parse("pref_0123456789abcdef"),
+        kind: "look-for",
+        text: "Tenant isolation",
+        scope: { kind: "global" },
+      },
+    ],
+    guidelines: [
+      { ref: "g1", path: "CLAUDE.md", bytes: 10 },
+      { ref: "g2", path: "docs/handbook.md", bytes: 10, linkedFrom: "CLAUDE.md" },
+    ],
+  });
+  const said = "By the handbook (g2) and the tenant rule (p1).";
+  const clean = "By the handbook (docs/handbook.md) and the tenant rule.";
+  const notes = [
+    "g2 in text the reviewer reads: replaced with docs/handbook.md",
+    "p1 in text the reviewer reads: taken out",
+  ];
+  const lines = { hunkId: route.id, side: "new" as const, startLine: 2, line: 2 };
+
+  it("is replaced in everything the intent says, recorded and never retried", async () => {
+    const model = new FakeAnalysisModel();
+    model.script(
+      "intent",
+      ok({
+        stated: { summary: said, sources: [] },
+        inferred: { summary: said, shape: said, behaviorChanges: [said], watch: [said] },
+        mismatches: [{ kind: "unrequested", description: said, hunkIds: [] }],
+      }),
+    );
+    const result = await runIntent(model, input, required, deps(), undefined, guidance);
+    expect(result.outcome).toEqual(
+      ok({
+        stated: { summary: clean, sources: [] },
+        inferred: { summary: clean, shape: clean, behaviorChanges: [clean], watch: [clean] },
+        mismatches: [{ kind: "unrequested", description: clean, hunkIds: [] }],
+      }),
+    );
+    expect(result.modelCalls).toMatchObject([{ attempt: 1, outcome: "problems", problems: notes }]);
+  });
+
+  it("is replaced in a finding's words and kept in its mark", async () => {
+    const model = new FakeAnalysisModel();
+    const mark = { ref: "g2", effect: "raised" as const };
+    model.script(
+      "findings",
+      ok([
+        {
+          title: said,
+          explanation: said,
+          lines,
+          severity: "major",
+          suggestion: ["const g2 = 1;"],
+          mismatch: null,
+          guidance: mark,
+        },
+      ]),
+    );
+    const { outcome } = await runFindings(model, input, null, hunks, deps(), guidance);
+    if (!outcome.ok) throw new Error(outcome.error.message);
+    expect(outcome.value).toMatchObject([
+      { title: clean, explanation: clean, suggestion: ["const g2 = 1;"], guidance: mark },
+    ]);
+  });
+
+  it("is replaced in a risk's reason and what its test checks, and not in the test's name", async () => {
+    const model = new FakeAnalysisModel();
+    model.script(
+      "risk",
+      ok([
+        {
+          ...contract({
+            ...named("answers 404 for another user's order", 3, 3),
+            checks: said,
+          }),
+          reason: said,
+        },
+        logic(tests.id),
+      ]),
+    );
+    const { outcome } = await runRisk(model, input, required, hunks, deps(), guidance);
+    if (!outcome.ok) throw new Error(outcome.error.message);
+    expect(outcome.value[0]).toMatchObject({
+      reason: clean,
+      checkedBy: { test: "answers 404 for another user's order", checks: clean },
+    });
+  });
+
+  it("is replaced in a decision's title and answer, and in a step's sentence", async () => {
+    const model = new FakeAnalysisModel();
+    model.script(
+      "decisions",
+      ok([{ title: said, category: "api", whyItMatters: said, hunkIds: [route.id], lines }]),
+    );
+    const decisions = await runDecisions(model, input, hunks, deps(), guidance);
+    if (!decisions.outcome.ok) throw new Error(decisions.outcome.error.message);
+    expect(decisions.outcome.value).toMatchObject([{ title: clean, whyItMatters: clean }]);
+
+    const step = (n: number) => ({ sentence: `${said} ${n}`, excerpts: [lines] });
+    model.script("steps", ok([step(1), step(2), step(3)]));
+    const steps = await runSteps(
+      model,
+      input,
+      { hunks, mechanical: new Set(), parts: [], callGraph: [] },
+      deps(),
+      guidance,
+    );
+    if (!steps.outcome.ok) throw new Error(steps.outcome.error.message);
+    expect(steps.outcome.value[0]?.sentence).toBe(`${clean} 1`);
+  });
+
+  it("is left alone when it isn't the run's, or the pull request's own code has the word", async () => {
+    const coded = hunk("src/geometry.ts", "@@ -1,1 +1,2 @@", [" x", "+const g2 = centroid(p1);"]);
+    const text = "Sets `g2` from p1, unlike g9.";
+    const model = new FakeAnalysisModel();
+    const inferred = { ...smallFeatureIntent.inferred, summary: text };
+    model.script("intent", ok({ ...smallFeatureIntent, inferred, mismatches: [] }));
+    const [file] = input.files;
+    if (file === undefined) throw new Error("the input has a file");
+    const result = await runIntent(
+      model,
+      { ...input, files: [{ ...file, hunks: [coded] }] },
+      required,
+      deps(),
+      undefined,
+      guidance,
+    );
+    if (!result.outcome.ok) throw new Error(result.outcome.error.message);
+    expect(result.outcome.value.inferred.summary).toBe(text);
+    expect(result.modelCalls).toMatchObject([{ outcome: "ok", problems: [] }]);
+  });
+
+  it("isn't what a retry for other problems is told", async () => {
+    const model = new FakeAnalysisModel();
+    const inferred = { ...smallFeatureIntent.inferred, summary: said };
+    const unknown = HunkId.parse("h_0000000000000000");
+    const mismatch = { kind: "missing" as const, description: "x", hunkIds: [unknown] };
+    model.script("intent", ok({ ...smallFeatureIntent, inferred, mismatches: [mismatch] }));
+    model.script("intent", ok({ ...smallFeatureIntent, mismatches: [] }));
+    const result = await runIntent(model, input, required, deps(), undefined, guidance);
+    const told = "h_0000000000000000 isn't a hunk of this pull request.";
+    expect(result.modelCalls[0]?.problems).toEqual([told, ...notes]);
+    expect(model.callsTo("intent")[1]?.options?.feedback).toEqual([told]);
   });
 });
 

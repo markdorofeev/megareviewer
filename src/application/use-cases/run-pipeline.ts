@@ -444,18 +444,20 @@ const modelStages = async (
   // The intent pass writes the PR to the prompt cache; risk and decisions start once it's there, to
   // read it rather than each write it again. A transport that can't tell starts them at its end.
   const { promise: cached, resolve: cacheWritten } = Promise.withResolvers<void>();
-  const intentRun = runIntent(model, input, knownHunks, deps, cacheWritten).then(async (result) => {
-    cacheWritten();
-    await tracker.setStage(
-      "intent",
-      result.outcome.ok ? "done" : "failed",
-      ending((analysis) => ({
-        ...(result.outcome.ok ? { intent: result.outcome.value } : {}),
-        ...adding(result)(analysis),
-      })),
-    );
-    return result.outcome;
-  });
+  const intentRun = runIntent(model, input, knownHunks, deps, cacheWritten, guidance).then(
+    async (result) => {
+      cacheWritten();
+      await tracker.setStage(
+        "intent",
+        result.outcome.ok ? "done" : "failed",
+        ending((analysis) => ({
+          ...(result.outcome.ok ? { intent: result.outcome.value } : {}),
+          ...adding(result)(analysis),
+        })),
+      );
+      return result.outcome;
+    },
+  );
   await Promise.race([cached, intentRun]);
   // Findings read the intent's mismatches, to name the one a finding shows, so they wait for it.
   const findingsRun = intentRun.then(async (intent) => {
@@ -493,7 +495,7 @@ const modelStages = async (
       );
       return result.outcome;
     }),
-    runDecisions(model, input, hunks, deps).then(async (result) => {
+    runDecisions(model, input, hunks, deps, guidance).then(async (result) => {
       await tracker.setStage(
         "decisions",
         result.outcome.ok ? "done" : "failed",
@@ -516,6 +518,7 @@ const modelStages = async (
             callGraph: prepared.callGraph,
           },
           deps,
+          guidance,
         ).then(async (result) => {
           await tracker.setStage(
             STEPS_STAGE,

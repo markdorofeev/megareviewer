@@ -85,6 +85,7 @@ export {
   ruleStanding,
   StoredGuardrail,
 } from "./guardrail.ts";
+export { type RefNames, refNames, withoutRefs } from "./guidance-refs.ts";
 export {
   BlobHash,
   fitInPrompt,
