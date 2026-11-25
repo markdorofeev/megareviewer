@@ -8,6 +8,7 @@ export const labels: CaseLabels = {
     {
       description:
         "Without a status filter the ticket query has no tenant condition, so the list returns every tenant's tickets, and with only an assignee any tenant's: the tenant ID is added inside the status branch",
+      type: "contract",
       at: [
         { hunkId: query, side: "new", lines: [29, 32] },
         { hunkId: query, side: "new", lines: [37, 40] },
@@ -17,6 +18,7 @@ export const labels: CaseLabels = {
     {
       description:
         "The test for listing without a status only checks that the query has no status condition, so nothing checks the tenant filter on that path",
+      type: "logic",
       at: [{ hunkId: tests, side: "new", lines: [28, 32] }],
       mustHave: false,
     },

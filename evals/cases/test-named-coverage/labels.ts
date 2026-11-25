@@ -5,6 +5,7 @@ export const labels: CaseLabels = {
     {
       description:
         "Lets the support role download the customer export too, though SHOP-310 says only admins may: it holds personal data",
+      type: "contract",
       at: [{ hunkId: "h_32b4390529725014", side: "new", lines: [20, 20] }],
       mismatch: 0,
       mustHave: true,
@@ -12,6 +13,7 @@ export const labels: CaseLabels = {
     {
       description:
         "The test named for rejecting non-admin users sends only an admin's request, so nothing checks that anyone is rejected",
+      type: "logic",
       at: [{ hunkId: "h_919a7c7975684236", side: "new", lines: [6, 10] }],
       mustHave: false,
     },

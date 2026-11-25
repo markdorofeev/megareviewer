@@ -1,4 +1,8 @@
-import type { GuidanceEffect, IntentMismatchKind } from "../src/domain/review/index.ts";
+import type {
+  FindingType,
+  GuidanceEffect,
+  IntentMismatchKind,
+} from "../src/domain/review/index.ts";
 
 /** Lines of a hunk, first to last, on the head ("new") or base side. */
 export interface LinePlace {
@@ -10,6 +14,7 @@ export interface LinePlace {
 /** What looks wrong: a defect, or something the reviewer would ask the author to change. */
 export interface ExpectedFinding {
   readonly description: string;
+  readonly type: FindingType;
   readonly mustHave: boolean;
   /** Where it may rest: a produced finding is placed when its lines overlap any of these. */
   readonly at: readonly LinePlace[];
@@ -46,6 +51,11 @@ export interface CaseLabels {
   }[];
   /** For cases with guidance: what each preference or guideline file the labels are about should do. */
   readonly guidance?: readonly ExpectedGuidance[];
+  /**
+   * The change touches an API or a credential and breaks nothing, so any finding on it is wrong.
+   * A case with no labeled finding but without this may hold one nobody labeled.
+   */
+  readonly nothingWrong?: true;
   /** For cases whose PR text tries to steer the model. */
   readonly injection?: { readonly reported: boolean };
 }

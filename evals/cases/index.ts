@@ -10,12 +10,18 @@ import type { CaseLabels } from "../labels.ts";
 import * as authMiddleware from "./auth-middleware/case.ts";
 import { labels as authMiddlewareLabels } from "./auth-middleware/labels.ts";
 import { labels as bitbucketBugfixLabels } from "./bitbucket-bugfix/labels.ts";
+import * as callerKeepsOldUnit from "./caller-keeps-old-unit/case.ts";
+import { labels as callerKeepsOldUnitLabels } from "./caller-keeps-old-unit/labels.ts";
+import * as credentialMoved from "./credential-moved/case.ts";
+import { labels as credentialMovedLabels } from "./credential-moved/labels.ts";
 import * as delphiAccountConnections from "./delphi-account-connections/case.ts";
 import { labels as delphiAccountConnectionsLabels } from "./delphi-account-connections/labels.ts";
 import * as dependencyBump from "./dependency-bump-signature/case.ts";
 import { labels as dependencyBumpLabels } from "./dependency-bump-signature/labels.ts";
 import * as descriptionContradicts from "./description-contradicts/case.ts";
 import { labels as descriptionContradictsLabels } from "./description-contradicts/labels.ts";
+import * as discountsWrittenTwice from "./discounts-written-twice/case.ts";
+import { labels as discountsWrittenTwiceLabels } from "./discounts-written-twice/labels.ts";
 import * as envVarConfig from "./env-var-config/case.ts";
 import { labels as envVarConfigLabels } from "./env-var-config/labels.ts";
 import * as featureLessThanTicket from "./feature-less-than-ticket/case.ts";
@@ -26,6 +32,8 @@ import * as largeRetryAfter from "./large-retry-after/case.ts";
 import { labels as largeRetryAfterLabels } from "./large-retry-after/labels.ts";
 import * as migration from "./migration-non-null-column/case.ts";
 import { labels as migrationLabels } from "./migration-non-null-column/labels.ts";
+import * as optionalResponseField from "./optional-response-field/case.ts";
+import { labels as optionalResponseFieldLabels } from "./optional-response-field/labels.ts";
 import * as preferenceDontFlag from "./preference-dont-flag/case.ts";
 import { labels as preferenceDontFlagLabels } from "./preference-dont-flag/labels.ts";
 import * as preferenceLookFor from "./preference-look-for/case.ts";
@@ -34,7 +42,11 @@ import { labels as promptInjectionLabels } from "./prompt-injection/labels.ts";
 import * as pythonIndentation from "./python-indentation-logic/case.ts";
 import { labels as pythonIndentationLabels } from "./python-indentation-logic/labels.ts";
 import { labels as refactorMoveLabels } from "./refactor-move/labels.ts";
+import * as routeSkipsService from "./route-skips-service/case.ts";
+import { labels as routeSkipsServiceLabels } from "./route-skips-service/labels.ts";
 import { labels as smallFeatureLabels } from "./small-feature/labels.ts";
+import * as storedSessionsFormat from "./stored-sessions-format/case.ts";
+import { labels as storedSessionsFormatLabels } from "./stored-sessions-format/labels.ts";
 import * as testNamedCoverage from "./test-named-coverage/case.ts";
 import { labels as testNamedCoverageLabels } from "./test-named-coverage/labels.ts";
 import * as unrequestedBehavior from "./unrequested-behavior/case.ts";
@@ -49,6 +61,8 @@ export interface EvalCase {
   readonly fixture: PullRequestFixture;
   /** What a run of it reads beside the PR; without it, nothing. */
   readonly guidance?: CaseGuidance;
+  /** The repository's files the PR doesn't change; with them, a run has a checkout. */
+  readonly outside?: Readonly<Record<string, string>>;
   readonly labels: CaseLabels;
 }
 
@@ -174,6 +188,54 @@ export const evalCases: readonly EvalCase[] = [
     fixture: guidelineFile.fixture,
     guidance: guidelineFile.guidance,
     labels: guidelineFileLabels,
+  },
+  {
+    name: "caller-keeps-old-unit",
+    source: "synthetic",
+    tests:
+      "A contract finding an unchanged caller shows: a total now in cents, and billing still multiplies it by 100",
+    fixture: callerKeepsOldUnit.fixture,
+    outside: callerKeepsOldUnit.outside,
+    labels: callerKeepsOldUnitLabels,
+  },
+  {
+    name: "stored-sessions-format",
+    source: "synthetic",
+    tests:
+      "A contract finding stored data shows: sessions written before the change can't be read after it",
+    fixture: storedSessionsFormat.fixture,
+    labels: storedSessionsFormatLabels,
+  },
+  {
+    name: "route-skips-service",
+    source: "synthetic",
+    tests:
+      "An architecture finding: a route runs SQL past the service and the repository the rest goes through",
+    fixture: routeSkipsService.fixture,
+    labels: routeSkipsServiceLabels,
+  },
+  {
+    name: "discounts-written-twice",
+    source: "synthetic",
+    tests: "An architecture finding: a quote's discounts written again beside the pricing module's",
+    fixture: discountsWrittenTwice.fixture,
+    labels: discountsWrittenTwiceLabels,
+  },
+  {
+    name: "optional-response-field",
+    source: "synthetic",
+    tests:
+      "Nothing wrong: an optional field in an API's response, and the code outside the PR that reads it still works",
+    fixture: optionalResponseField.fixture,
+    outside: optionalResponseField.outside,
+    labels: optionalResponseFieldLabels,
+  },
+  {
+    name: "credential-moved",
+    source: "synthetic",
+    tests: "Nothing wrong: a credential read in another module, the same way",
+    fixture: credentialMoved.fixture,
+    labels: credentialMovedLabels,
   },
   {
     name: "large-retry-after",

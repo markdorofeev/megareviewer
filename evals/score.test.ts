@@ -40,7 +40,7 @@ const finding = (id: string, mismatch: string | null, lines: PointLines): Findin
 const analysis: Analysis = {
   ...smallFeatureAnalysis,
   findings: [
-    finding("f1", "m1", on("h_fbaf18305007c20a", 13)),
+    { ...finding("f1", "m1", on("h_fbaf18305007c20a", 13)), type: "contract" },
     finding("f2", null, on(receipts, 4)),
     finding("f3", "m2", on(receipts, 3)),
     stale,
@@ -72,8 +72,20 @@ describe("scoreCase", () => {
     const score = scoreCase(analysis, labels, oracleVerdict);
     expect(score).toEqual({
       findingRecall: { hit: 3, total: 3 },
+      findingRecallByType: {
+        logic: { hit: 2, total: 2 },
+        contract: { hit: 1, total: 1 },
+        architecture: { hit: 0, total: 0 },
+      },
       findingNoise: { hit: 0, total: 4 },
+      findingNoiseByType: {
+        logic: { hit: 0, total: 3 },
+        contract: { hit: 0, total: 1 },
+        architecture: { hit: 0, total: 0 },
+      },
       findingPlaced: { hit: 4, total: 4 },
+      typeRight: { hit: 4, total: 4 },
+      unwantedFindings: null,
       mismatchRecall: { hit: 2, total: 2 },
       mismatchNamed: { hit: 2, total: 2 },
       mismatchFalsePositives: null,
@@ -82,6 +94,32 @@ describe("scoreCase", () => {
       leftOutRight: { hit: 0, total: 0 },
       guidanceWrong: { hit: 0, total: 0 },
     } satisfies CaseScore);
+  });
+
+  it("counts a type that isn't the label's, and rates noise by the produced type", () => {
+    const untyped = {
+      ...analysis,
+      findings: analysis.findings.map((one) => ({ ...one, type: "architecture" as const })),
+    };
+    const score = scoreCase(untyped, labels, {
+      ...oracleVerdict,
+      findingRatings: [{ produced: 0, rating: "nit" }, ...oracleVerdict.findingRatings.slice(1)],
+    });
+    expect(score.typeRight).toEqual({ hit: 0, total: 4 });
+    expect(score.findingRecallByType.logic).toEqual({ hit: 2, total: 2 });
+    expect(score.findingNoiseByType).toEqual({
+      logic: { hit: 0, total: 0 },
+      contract: { hit: 0, total: 0 },
+      architecture: { hit: 1, total: 4 },
+    });
+  });
+
+  it("counts every finding on a case where nothing is wrong, but those left out", () => {
+    const clean: CaseLabels = { findings: [], mismatches: [], nothingWrong: true };
+    const verdict = { ...nullVerdict, findings: [], mismatches: [] };
+    expect(scoreCase(analysis, clean, verdict).unwantedFindings).toBe(4);
+    const { nothingWrong: _, ...unlabeled } = clean;
+    expect(scoreCase(analysis, unlabeled, verdict).unwantedFindings).toBeNull();
   });
 
   it("gives nothing to an analysis that meets none", () => {

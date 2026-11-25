@@ -7,6 +7,7 @@ import type {
 } from "../src/application/ports/index.ts";
 import {
   FakeGitHost,
+  FakeLocalCheckout,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakeRepositoryCopies,
@@ -43,6 +44,8 @@ export interface AnalyzeOptions {
   readonly timeoutMs: number;
   /** The reviewer's preferences and the repository's guideline files, for a case that has them. */
   readonly guidance?: CaseGuidance | undefined;
+  /** The repository's files the PR doesn't change, for a case whose run has a checkout. */
+  readonly outside?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface CaseRun {
@@ -81,8 +84,8 @@ const recordingInput = (model: AnalysisModel) => {
 
 /**
  * Runs the analysis pipeline on one case, as the CLI would: the case's PR on a fake host, its
- * tickets in a fake Jira, the given model and parser, an in-memory store, and the case's guidance
- * where a run reads it. Once the code's analysis completes, runs the model on it, as "Request AI
+ * tickets in a fake Jira, the given model and parser, an in-memory store, the case's guidance
+ * where a run reads it, and a checkout when the case has files outside its PR. Once the code's analysis completes, runs the model on it, as "Request AI
  * review" does. Resolves with the analysis and the model's input once both end; an error only
  * when it didn't start or ran out of time.
  */
@@ -98,6 +101,17 @@ export const analyzeCase = async (
   if (options.guidance !== undefined) {
     await giveGuidance(options.guidance, fixture, { host: gitHost, preferences });
   }
+  const checkouts = new FakeLocalCheckouts(
+    options.outside === undefined
+      ? null
+      : {
+          checkout: new FakeLocalCheckout({
+            [fixture.pullRequest.headSha]: { ...options.outside, ...fixture.headFiles },
+          }),
+          dir: "/eval",
+          namesRepo: true,
+        },
+  );
   const events = createAnalysisEvents();
   const useCases = createUseCases(
     {
@@ -111,7 +125,7 @@ export const analyzeCase = async (
       fileCache: new InMemoryFileCache(),
       preferences,
       history: {},
-      checkouts: new FakeLocalCheckouts(),
+      checkouts,
       knownCheckouts: new InMemoryKnownCheckouts(),
       copies: new FakeRepositoryCopies(),
       threads: {},

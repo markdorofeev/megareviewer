@@ -9,6 +9,7 @@ import {
   type Analysis,
   checkGuidanceMark,
   extractTicketKeys,
+  FindingType,
   PullRequest,
   Ticket,
 } from "../src/domain/review/index.ts";
@@ -57,6 +58,18 @@ it("has a case for each kind of guidance, each labeled with what its guidance sh
   expect([...new Set(effects)].sort()).toEqual(["left-out", "raised"]);
 });
 
+it("has a case for each type of finding, and cases where nothing is wrong", () => {
+  const types = evalCases.flatMap(({ labels }) =>
+    labels.findings.flatMap(({ type, mustHave }) => (mustHave ? [type] : [])),
+  );
+  for (const type of FindingType.options) {
+    expect(types.filter((one) => one === type).length, type).toBeGreaterThanOrEqual(2);
+  }
+  const clean = evalCases.filter(({ labels }) => labels.nothingWrong === true);
+  expect(clean.length).toBeGreaterThanOrEqual(2);
+  for (const { name, labels } of clean) expect(labels.findings, name).toEqual([]);
+});
+
 describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
   "case %s",
   (_, evalCase) => {
@@ -93,6 +106,7 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
           logger: quietLogger(),
           timeoutMs: 30_000,
           guidance: evalCase.guidance,
+          outside: evalCase.outside,
         });
         if (!result.ok) throw new Error(result.error);
         analysis = result.value.analysis;
@@ -114,6 +128,11 @@ describe.each(evalCases.map((evalCase) => [evalCase.name, evalCase] as const))(
               expect(hunkHasLine(hunk, side, line), `${hunkId} ${line}`).toBe(true);
           }
         }
+      });
+
+      it("have the code outside the PR that uses what it changes, when the case has files of it", () => {
+        if (evalCase.outside === undefined) expect(analysis.checkout).toBe("none");
+        else expect(analysis.unchangedCallers).not.toEqual([]);
       });
 
       it("give a run the case's guidance, numbered in the order the case lists it", () => {

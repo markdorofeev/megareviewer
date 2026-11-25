@@ -6,7 +6,19 @@ import { type CaseScore, summarize } from "./score.ts";
 const score = (overrides: Partial<CaseScore> = {}): CaseScore => ({
   findingRecall: { hit: 1, total: 1 },
   findingNoise: { hit: 0, total: 2 },
+  findingRecallByType: {
+    logic: { hit: 1, total: 1 },
+    contract: { hit: 0, total: 0 },
+    architecture: { hit: 0, total: 0 },
+  },
+  findingNoiseByType: {
+    logic: { hit: 0, total: 2 },
+    contract: { hit: 0, total: 0 },
+    architecture: { hit: 0, total: 0 },
+  },
   findingPlaced: { hit: 1, total: 1 },
+  typeRight: { hit: 1, total: 1 },
+  unwantedFindings: null,
   mismatchRecall: { hit: 1, total: 1 },
   mismatchNamed: { hit: 1, total: 1 },
   mismatchFalsePositives: null,

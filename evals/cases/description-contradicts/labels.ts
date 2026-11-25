@@ -5,18 +5,21 @@ export const labels: CaseLabels = {
     {
       description:
         "Retries charges without an idempotency key, so a charge that succeeded but timed out or errored can be made twice",
+      type: "logic",
       at: [{ hunkId: "h_b5e69834271ab368", side: "new", lines: [45, 54] }],
       mustHave: true,
     },
     {
       description:
         "Retries every error, including declines and other 4xx responses that won't succeed on retry",
+      type: "logic",
       at: [{ hunkId: "h_b5e69834271ab368", side: "new", lines: [49, 52] }],
       mustHave: true,
     },
     {
       description:
         "Waits a fixed 1 second between up to 10 attempts (no backoff), not the exponential backoff the description promises",
+      type: "logic",
       at: [
         { hunkId: "h_a4aefd56480883b9", side: "new", lines: [24, 25] },
         { hunkId: "h_b5e69834271ab368", side: "new", lines: [46, 51] },

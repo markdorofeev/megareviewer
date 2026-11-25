@@ -4,6 +4,7 @@ export const labels: CaseLabels = {
   findings: [
     {
       description: "Sends each user's email and IP address to the analytics service on every login",
+      type: "contract",
       at: [{ hunkId: "h_8ef6c88894532fc5", side: "new", lines: [34, 39] }],
       mustHave: true,
       mismatch: 0,

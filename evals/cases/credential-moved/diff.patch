@@ -1,0 +1,50 @@
+diff --git a/src/config/mail.test.ts b/src/config/mail.test.ts
+new file mode 100644
+index 0000000..d0c57fa
+--- /dev/null
++++ b/src/config/mail.test.ts
+@@ -0,0 +1,13 @@
++import { expect, it } from "vitest";
++import { mailConfig } from "./mail.ts";
++
++it("reads the API key", () => {
++  expect(mailConfig({ MAIL_API_KEY: "key" })).toEqual({
++    apiKey: "key",
++    baseUrl: "https://api.mail.example.com/v2",
++  });
++});
++
++it.each([undefined, ""])("refuses to start without one (%s)", (MAIL_API_KEY) => {
++  expect(() => mailConfig({ MAIL_API_KEY })).toThrow("MAIL_API_KEY isn't set");
++});
+diff --git a/src/config/mail.ts b/src/config/mail.ts
+new file mode 100644
+index 0000000..f6fa80b
+--- /dev/null
++++ b/src/config/mail.ts
+@@ -0,0 +1,10 @@
++export interface MailConfig {
++  readonly apiKey: string;
++  readonly baseUrl: string;
++}
++
++export const mailConfig = (env: Readonly<Record<string, string | undefined>>): MailConfig => {
++  const apiKey = env.MAIL_API_KEY;
++  if (apiKey === undefined || apiKey === "") throw new Error("MAIL_API_KEY isn't set");
++  return { apiKey, baseUrl: "https://api.mail.example.com/v2" };
++};
+diff --git a/src/mail/send.ts b/src/mail/send.ts
+index f80ce2b..d0ef817 100644
+--- a/src/mail/send.ts
++++ b/src/mail/send.ts
+@@ -1,8 +1,6 @@
++import { mailConfig } from "../config/mail.ts";
+ import { createMailClient, type Mail } from "./client.ts";
+ 
+-const apiKey = process.env.MAIL_API_KEY;
+-if (apiKey === undefined || apiKey === "") throw new Error("MAIL_API_KEY isn't set");
+-
+-const client = createMailClient({ apiKey, baseUrl: "https://api.mail.example.com/v2" });
++const client = createMailClient(mailConfig(process.env));
+ 
+ export const sendMail = (mail: Mail): Promise<void> => client.send(mail);

@@ -8,12 +8,14 @@ export const labels: CaseLabels = {
     {
       description:
         "The migration has an up section and no down section, so it can't be rolled back, and REVIEW.md asks every migration to be reversible or the PR to say why it isn't",
+      type: "logic",
       at: [{ hunkId: migration, side: "new", lines: [1, 4] }],
       mustHave: true,
     },
     {
       description:
         "Answers 404 subscription_not_found for a subscription that exists but is cancelled, so the client can't tell why it wasn't paused",
+      type: "logic",
       at: [
         { hunkId: route, side: "new", lines: [16, 19] },
         { hunkId: "h_e41c5502431d69d2", side: "new", lines: [31, 33] },
@@ -23,6 +25,7 @@ export const labels: CaseLabels = {
     {
       description:
         "Builds the index without CONCURRENTLY, which blocks writes to subscriptions while it builds",
+      type: "contract",
       at: [{ hunkId: migration, side: "new", lines: [4, 4] }],
       mustHave: false,
     },

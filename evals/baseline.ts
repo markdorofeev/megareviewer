@@ -9,6 +9,11 @@ import {
 } from "./score.ts";
 
 const RatioSchema = z.object({ hit: z.number(), total: z.number() });
+const ByTypeSchema = z.object({
+  logic: RatioSchema,
+  contract: RatioSchema,
+  architecture: RatioSchema,
+});
 
 /** evals/baseline.json: scores only, no model outputs, and what they were measured on. */
 export const Baseline = z.object({
@@ -23,6 +28,11 @@ export const Baseline = z.object({
     findingRecall: RatioSchema,
     findingNoise: RatioSchema,
     findingPlaced: RatioSchema,
+    // Absent from baselines measured before findings had a type.
+    findingRecallByType: ByTypeSchema.optional(),
+    findingNoiseByType: ByTypeSchema.optional(),
+    typeRight: RatioSchema.optional(),
+    unwantedFindings: z.number().optional(),
     mismatchRecall: RatioSchema,
     mismatchNamed: RatioSchema,
     mismatchFalsePositives: z.number(),
@@ -42,6 +52,10 @@ export const Baseline = z.object({
       findingRecall: RatioSchema,
       findingNoise: RatioSchema,
       findingPlaced: RatioSchema,
+      findingRecallByType: ByTypeSchema.optional(),
+      findingNoiseByType: ByTypeSchema.optional(),
+      typeRight: RatioSchema.optional(),
+      unwantedFindings: z.number().nullable().optional(),
       mismatchRecall: RatioSchema,
       mismatchNamed: RatioSchema,
       mismatchFalsePositives: z.number().nullable(),
@@ -61,6 +75,8 @@ export const COMPARED = [
   "findingRecall",
   "findingNoise",
   "findingPlaced",
+  "typeRight",
+  "unwantedFindings",
   "mismatchRecall",
   "mismatchNamed",
   "mismatchFalsePositives",
@@ -73,6 +89,7 @@ export type ComparedMetric = (typeof COMPARED)[number];
 
 const LOWER_IS_BETTER: ReadonlySet<ComparedMetric> = new Set([
   "findingNoise",
+  "unwantedFindings",
   "mismatchFalsePositives",
   "guidanceWrong",
 ]);
@@ -119,10 +136,8 @@ export const regressedCases = (
           ? [{ name, metric }]
           : [];
       }
-      if (metric === "mismatchFalsePositives") {
-        return (score.mismatchFalsePositives ?? 0) > (before.mismatchFalsePositives ?? 0)
-          ? [{ name, metric }]
-          : [];
+      if (metric === "mismatchFalsePositives" || metric === "unwantedFindings") {
+        return (score[metric] ?? 0) > (before[metric] ?? 0) ? [{ name, metric }] : [];
       }
       const earlier = before[metric];
       if (earlier === undefined) return [];

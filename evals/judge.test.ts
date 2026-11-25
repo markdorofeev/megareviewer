@@ -7,6 +7,7 @@ import {
 } from "../src/adapters/model/index.ts";
 import { smallFeatureAnalysis, smallFeatureInput } from "../src/application/testing/index.ts";
 import {
+  JUDGE_CALLERS_PROMPT,
   JUDGE_GUIDANCE_PROMPT,
   JUDGE_MODEL,
   JUDGE_SYSTEM_PROMPT,
@@ -20,7 +21,7 @@ import { countRatings, JUDGE_VERDICT_SCHEMA, JudgeVerdict } from "./judge-verdic
 import type { CaseLabels } from "./labels.ts";
 
 const labels: CaseLabels = {
-  findings: [{ description: "Receipts go stale", at: [], mustHave: true }],
+  findings: [{ description: "Receipts go stale", type: "logic", at: [], mustHave: true }],
   mismatches: [{ kind: "missing", description: "TTL isn't configurable" }],
 };
 
@@ -71,6 +72,18 @@ describe("the judge's input", () => {
     );
     expect(prompt.endsWith(renderInput(guided))).toBe(true);
     expect(judgeSystemPrompt(smallFeatureInput)).not.toContain("reviewer's guidance");
+  });
+
+  it("says what the code outside the pull request is, only for a case that has some", () => {
+    const [hunk] = smallFeatureInput.files.flatMap((file) => file.hunks);
+    if (hunk === undefined) throw new Error("no hunk");
+    const prompt = judgeSystemPrompt({
+      ...smallFeatureInput,
+      unchangedCallers: [{ symbol: "total", hunkId: hunk.id, uses: [], more: 1 }],
+    });
+    expect(prompt.startsWith(`${JUDGE_SYSTEM_PROMPT}\n\n${JUDGE_CALLERS_PROMPT}\n\n`)).toBe(true);
+    expect(prompt).toContain('<changed_definition symbol="total"');
+    expect(judgeSystemPrompt(smallFeatureInput)).not.toContain("outside the pull request");
   });
 
   it("names the guidance a rendered input doesn't show", () => {

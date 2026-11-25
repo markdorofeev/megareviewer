@@ -5,12 +5,14 @@ export const labels: CaseLabels = {
     {
       description:
         "Exports every order in one response with no date range, limit or streaming, loading all orders into memory",
+      type: "logic",
       at: [{ hunkId: "h_cf32c71b35173a7f", side: "new", lines: [14, 20] }],
       mustHave: true,
       mismatch: 0,
     },
     {
       description: "Builds CSV rows by joining values with commas without quoting or escaping",
+      type: "logic",
       at: [{ hunkId: "h_50b0def4be0636d1", side: "new", lines: [7, 15] }],
       mustHave: false,
     },

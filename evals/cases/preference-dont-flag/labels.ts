@@ -8,18 +8,21 @@ export const labels: CaseLabels = {
     {
       description:
         "Page 1 starts at the 51st event and the last page is empty: the offset is the page number times the page size, though pages count from 1",
+      type: "logic",
       at: [{ hunkId: route, side: "new", lines: [14, 15] }],
       mustHave: true,
       mismatch: 0,
     },
     {
       description: "Leaves a console.log of the page and offset in the request handler",
+      type: "logic",
       at: [{ hunkId: route, side: "new", lines: [16, 16] }],
       mustHave: false,
     },
     {
       description:
         "Orders pages by the event time alone, so events with the same timestamp can repeat or go missing between pages",
+      type: "logic",
       at: [{ hunkId: query, side: "new", lines: [25, 28] }],
       mustHave: false,
     },

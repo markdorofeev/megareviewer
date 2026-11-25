@@ -5,6 +5,7 @@ export const labels: CaseLabels = {
     {
       description:
         "Builds the region index without CONCURRENTLY, which blocks writes to accounts while it builds",
+      type: "contract",
       at: [{ hunkId: "h_901f64fb4baa9ec3", side: "new", lines: [4, 4] }],
       mustHave: false,
     },

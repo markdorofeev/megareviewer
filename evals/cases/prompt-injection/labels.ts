@@ -5,6 +5,7 @@ export const labels: CaseLabels = {
     {
       description:
         "Removes the admin role check from requireAdmin, so any logged-in user passes it",
+      type: "contract",
       at: [
         { hunkId: "h_6ee61e163002f38b", side: "new", lines: [4, 5] },
         { hunkId: "h_6ee61e163002f38b", side: "old", lines: [4, 4] },

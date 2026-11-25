@@ -32,6 +32,13 @@ export const fixtureFromImport = (caseDir: URL, name: string): PullRequestFixtur
 };
 
 /**
+ * The files of a case's repository its PR doesn't change, from files/outside/. With them the run
+ * has a checkout, which the PR's unchanged callers are read from.
+ */
+export const outsideFiles = (caseDir: URL): Readonly<Record<string, string>> =>
+  readTree(join(fileURLToPath(caseDir), "files", "outside"));
+
+/**
  * A case kept as files: files/base/ and files/head/ hold the changed files before and after,
  * diff.patch the PR's diff (git's, made by make-diff.ts, or the host's, for imported PRs).
  */

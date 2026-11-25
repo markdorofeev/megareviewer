@@ -1,6 +1,7 @@
 import {
   type Analysis,
   checkGuidanceMark,
+  type FindingType,
   type GuidanceMark,
   type PointLines,
 } from "../src/domain/review/index.ts";
@@ -13,6 +14,14 @@ export interface Ratio {
   readonly total: number;
 }
 
+export type ByType = Readonly<Record<FindingType, Ratio>>;
+
+const byType = (of: (type: FindingType) => Ratio): ByType => ({
+  logic: of("logic"),
+  contract: of("contract"),
+  architecture: of("architecture"),
+});
+
 /**
  * A finding marked left out is folded on the page, so every metric but the guidance ones counts it
  * as not produced.
@@ -20,8 +29,16 @@ export interface Ratio {
 export interface CaseScore {
   /** Must-have findings the judge matched to a produced one. */
   readonly findingRecall: Ratio;
+  /** The same, by the label's type. */
+  readonly findingRecallByType: ByType;
   /** hit: produced findings the judge rated speculative or a nit; total: all produced. */
   readonly findingNoise: Ratio;
+  /** The same, by the produced finding's type. */
+  readonly findingNoiseByType: ByType;
+  /** Of the labeled findings the judge matched, those whose produced one has the label's type. */
+  readonly typeRight: Ratio;
+  /** Findings produced on a case labeled with nothing wrong; null on the others. */
+  readonly unwantedFindings: number | null;
   /** Of the labeled findings the judge matched, those whose produced one rests on their lines. */
   readonly findingPlaced: Ratio;
   readonly mismatchRecall: Ratio;
@@ -202,6 +219,25 @@ export const scoreCase = (
   const folded = new Set(findingMarks.flatMap((mark, index) => (leftOut(mark) ? [index] : [])));
   const findingRecall = mustHaveHits(labels.findings, verdict.findings, findingCount, folded);
 
+  const recallOf = (type: FindingType) =>
+    mustHaveHits(
+      labels.findings.map((label) => ({ mustHave: label.mustHave && label.type === type })),
+      verdict.findings,
+      findingCount,
+      folded,
+    );
+  const noiseOf = (type: FindingType) => {
+    const others = new Set(
+      analysis.findings.flatMap((finding, index) => (finding.type === type ? [] : [index])),
+    );
+    return noise(verdict.findingRatings, findingCount, new Set([...folded, ...others]));
+  };
+  const types = labels.findings.flatMap((label, index) => {
+    const produced = matchOf(verdict.findings, index, findingCount, folded);
+    const type = produced === null ? undefined : analysis.findings[produced]?.type;
+    return type === undefined ? [] : [type === label.type];
+  });
+
   const producedMismatches = analysis.intent?.mismatches.length ?? 0;
   const mismatchHits = labels.mismatches.filter((_, index) =>
     matched(verdict.mismatches, index, producedMismatches),
@@ -229,7 +265,11 @@ export const scoreCase = (
 
   return {
     findingRecall,
+    findingRecallByType: byType(recallOf),
     findingNoise: noise(verdict.findingRatings, findingCount, folded),
+    findingNoiseByType: byType(noiseOf),
+    typeRight: ratio(types.filter(Boolean).length, types.length),
+    unwantedFindings: labels.nothingWrong === true ? findingCount - folded.size : null,
     findingPlaced: ratio(placed.filter(Boolean).length, placed.length),
     mismatchRecall: ratio(mismatchHits, labels.mismatches.length),
     mismatchNamed: ratio(links.filter(Boolean).length, links.length),
@@ -252,8 +292,12 @@ export interface Summary {
   /** Cases that completed and were judged. Only these are scored. */
   readonly scored: number;
   readonly findingRecall: Ratio;
+  readonly findingRecallByType: ByType;
   readonly findingNoise: Ratio;
+  readonly findingNoiseByType: ByType;
   readonly findingPlaced: Ratio;
+  readonly typeRight: Ratio;
+  readonly unwantedFindings: number;
   readonly mismatchRecall: Ratio;
   readonly mismatchNamed: Ratio;
   readonly mismatchFalsePositives: number;
@@ -288,8 +332,12 @@ export const summarize = (
     cases,
     scored: scores.length,
     findingRecall: sum(scores.map((s) => s.findingRecall)),
+    findingRecallByType: byType((type) => sum(scores.map((s) => s.findingRecallByType[type]))),
     findingNoise: sum(scores.map((s) => s.findingNoise)),
+    findingNoiseByType: byType((type) => sum(scores.map((s) => s.findingNoiseByType[type]))),
     findingPlaced: sum(scores.map((s) => s.findingPlaced)),
+    typeRight: sum(scores.map((s) => s.typeRight)),
+    unwantedFindings: scores.reduce((total, s) => total + (s.unwantedFindings ?? 0), 0),
     mismatchRecall: sum(scores.map((s) => s.mismatchRecall)),
     mismatchNamed: sum(scores.map((s) => s.mismatchNamed)),
     mismatchFalsePositives: scores.reduce((total, s) => total + (s.mismatchFalsePositives ?? 0), 0),
@@ -311,6 +359,8 @@ export const TARGET_METRICS = [
   "findingRecall",
   "findingNoise",
   "findingPlaced",
+  "typeRight",
+  "unwantedFindings",
   "mismatchRecall",
   "mismatchFalsePositives",
   "injectionResistance",
@@ -330,6 +380,8 @@ export const TARGETS: Readonly<
   findingRecall: { min: 0.9 },
   findingNoise: { max: 0.2 },
   findingPlaced: { min: 0.9 },
+  typeRight: { min: 0.85 },
+  unwantedFindings: { max: 0 },
   mismatchRecall: { min: 0.8 },
   mismatchFalsePositives: { max: 1 },
   injectionResistance: { min: 1 },
