@@ -3,6 +3,8 @@ import { HunkId, type PartId, parseUnifiedDiff } from "../../domain/diff/index.t
 import {
   type Analysis,
   AnalysisId,
+  analysisId,
+  following,
   type HostError,
   inProgress,
   MismatchId,
@@ -30,6 +32,7 @@ import {
   FakeLocalCheckout,
   FakeLocalCheckouts,
   FakeModelCatalog,
+  FakeRepositoryCopies,
   FakeTicketSource,
   FixedClock,
   fakeModelOption,
@@ -74,6 +77,7 @@ const setup = (
     /** The catalog's options; Sonnet 5.5 on Claude Code, available, unless given. */
     modelOptions?: readonly ModelOption[];
     checkouts?: FakeLocalCheckouts;
+    copies?: FakeRepositoryCopies;
     clock?: FixedClock;
     /** The PRs GitHub has; every fixture unless given. */
     fixtures?: readonly PullRequestFixture[];
@@ -127,6 +131,7 @@ const setup = (
       history: {},
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
       knownCheckouts: new InMemoryKnownCheckouts(),
+      copies: options.copies ?? new FakeRepositoryCopies(),
       threads: {},
       statuses: {},
       parser,
@@ -1379,7 +1384,7 @@ describe("with a local checkout", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
       expect(analysis.checkoutDir).toBe("/src/shop");
-      expect(analysis.key.pipelineVersion).toBe("20+checkout");
+      expect(analysis.key.pipelineVersion).toBe("20");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1505,6 +1510,511 @@ describe("with a local checkout", () => {
     expect(checkouts.asked).toEqual(["pointedAt", "search"]);
     await runModel(analysis.id);
     expect(checkouts.asked.slice(2)).toEqual(["pointedAt", "at /src/shop"]);
+  });
+});
+
+describe("callers brought to a complete analysis", () => {
+  const { headSha, ref, url } = smallFeature.pullRequest;
+  const big = `ordersRouter ${"x".repeat(1024 * 1024)}`;
+  const repositoryFiles = {
+    ...smallFeature.headFiles,
+    "src/app.ts": [
+      'import { ordersRouter } from "./routes/orders.ts";',
+      'app.use("/api", ordersRouter);',
+    ].join("\n"),
+  };
+  const commits = { [headSha]: repositoryFiles };
+  const downloads = (files: Readonly<Record<string, string>> = repositoryFiles) =>
+    new FakeRepositoryCopies({ commits: { [headSha]: files }, downloadFolder: "/copies" });
+  const COPY = `/copies/github/${ref.repo.owner}/${ref.repo.repo}.git`;
+
+  /** A model whose intent pass waits until it's let go. */
+  class HeldModel extends FakeAnalysisModel {
+    private readonly gate = Promise.withResolvers<void>();
+    release = () => this.gate.resolve();
+    override async intent(...args: Parameters<FakeAnalysisModel["intent"]>) {
+      await this.gate.promise;
+      return super.intent(...args);
+    }
+  }
+
+  /** Lets everything that can run without a timer run. */
+  const settle = async () => {
+    for (let turn = 0; turn < 50; turn++) await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  /** A PR opened with downloads on, its review complete and the download held. */
+  const opened = async (
+    options: Parameters<typeof setup>[0] & { copies: FakeRepositoryCopies },
+  ) => {
+    const release = options.copies.hold();
+    const ready = setup({ modelEnabled: false, ...options });
+    const started = await ready.useCases.startAnalysis(url);
+    if (!started.ok) throw new Error(started.error.message);
+    await settle();
+    const id = started.value.analysisId;
+    return { ...ready, id, release, before: await ready.stored(id) };
+  };
+
+  const usesOf = (analysis: Analysis) =>
+    analysis.unchangedCallers.flatMap(({ symbol, uses }) =>
+      uses.map((use) => `${symbol} ${use.path}:${use.line}`),
+    );
+  const USES = ["ordersRouter src/app.ts:2"];
+
+  it("opens the review without them, then adds them under the same ID", async () => {
+    const copies = downloads();
+    const { id, before, release, stored, done, doneCount, emitted } = await opened({ copies });
+    expect(before.status).toBe("complete");
+    expect(before.checkout).toBe("downloading");
+    expect(before.unchangedCallers).toEqual([]);
+    expect(following(before)).toBe(true);
+    // The page reads the review now, and goes on following for the callers.
+    expect(doneCount(id)).toBe(0);
+    expect(emitted.at(-1)?.event).toEqual({ type: "updated", stage: "prep", status: "done" });
+
+    release();
+    await done(id);
+    const after = await stored(id);
+    expect(usesOf(after)).toEqual(USES);
+    expect(following(after)).toBe(false);
+    expect(after).toEqual({
+      ...before,
+      checkout: "read",
+      checkoutDir: COPY,
+      unchangedCallers: after.unchangedCallers,
+    });
+    expect(doneCount(id)).toBe(1);
+  });
+
+  it("changes nothing but the callers, the checkout and its warnings", async () => {
+    const copies = downloads({ ...repositoryFiles, "src/big.ts": big });
+    const { id, before, release, stored, done } = await opened({ copies });
+    release();
+    await done(id);
+    const after = await stored(id);
+    const WARNING = "1 file in the local checkout is over 1 MB, so callers in it aren't shown.";
+    expect(after).toEqual({
+      ...before,
+      checkout: "read",
+      checkoutDir: COPY,
+      unchangedCallers: after.unchangedCallers,
+      warnings: [...before.warnings, WARNING],
+    });
+  });
+
+  it("has the same callers as an analysis that read a checkout from the start", async () => {
+    const checkouts = new FakeLocalCheckouts({
+      checkout: new FakeLocalCheckout(commits),
+      dir: "/src/shop",
+      namesRepo: true,
+    });
+    const whole = await setup({ modelEnabled: false, checkouts }).analyze();
+    const brought = await setup({ modelEnabled: false, copies: downloads() }).analyze();
+    expect(brought).toEqual({ ...whole, checkoutDir: COPY, filesFetched: brought.filesFetched });
+  });
+
+  it("starts downloading only once the code's stages have ended", async () => {
+    const copies = downloads();
+    const { analyze, emitted } = setup({ modelEnabled: false, copies });
+    const original = copies.download.bind(copies);
+    let stagesEnded = false;
+    copies.download = (...args) => {
+      stagesEnded = emitted.some(
+        ({ event }) => event.type === "updated" && event.stage === "decisions",
+      );
+      return original(...args);
+    };
+    await analyze();
+    expect(stagesEnded).toBe(true);
+  });
+
+  it("downloads nothing for an analysis that failed", async () => {
+    const copies = downloads();
+    const { github, useCases, done } = setup({ modelEnabled: false, copies });
+    github.failNext("getFiles", hostError("unauthorized"));
+    const started = await useCases.startAnalysis(url);
+    if (!started.ok) throw new Error(started.error.message);
+    await done(started.value.analysisId);
+    await settle();
+    expect(copies.downloads).toBe(0);
+  });
+
+  it("uses a copy that has the commit at once", async () => {
+    const copies = downloads();
+    await copies.download(ref.repo, headSha);
+    const analysis = await setup({ modelEnabled: false, copies }).analyze();
+    expect(analysis.checkout).toBe("read");
+    expect(analysis.checkoutDir).toBe(COPY);
+    expect(usesOf(analysis)).toEqual(USES);
+    expect(copies.downloads).toBe(1);
+  });
+
+  it("downloads once for a PR opened twice meanwhile", async () => {
+    const copies = downloads();
+    const { useCases, id, release, done } = await opened({ copies });
+    const again = await useCases.startAnalysis(url);
+    expect(again).toEqual({ ok: true, value: { analysisId: id } });
+    release();
+    await done(id);
+    expect(copies.asked.filter((one) => one.startsWith("download"))).toHaveLength(1);
+  });
+
+  it("reads a clone that has the commit by the time the PR is opened again", async () => {
+    const clones: FoundCheckout[] = [];
+    const { analyze, useCases, stored, preps } = setup({
+      modelEnabled: false,
+      checkouts: new FakeLocalCheckouts(null, { clones }),
+    });
+    const before = await analyze();
+    expect(before.checkout).toBe("none");
+
+    // The reviewer ran git fetch.
+    clones.push({ checkout: new FakeLocalCheckout(commits), dir: "/src/shop", namesRepo: true });
+    const [again, twice] = await Promise.all([
+      useCases.startAnalysis(url),
+      useCases.startAnalysis(url),
+    ]);
+    expect([again, twice]).toEqual(
+      Array.from({ length: 2 }, () => ({ ok: true, value: { analysisId: before.id } })),
+    );
+    await settle();
+    const after = await stored(before.id);
+    expect(usesOf(after)).toEqual(USES);
+    expect(after).toEqual({
+      ...before,
+      checkout: "read",
+      checkoutDir: "/src/shop",
+      unchangedCallers: after.unchangedCallers,
+    });
+    expect(preps()).toBe(1);
+  });
+
+  it("downloads when a complete analysis without callers is opened", async () => {
+    const before = await setup({ modelEnabled: false }).analyze();
+    const { id } = before;
+    // As one an earlier version stored, with a clone that lacks the commit.
+    const old = { ...before, checkout: "missing-commit" as const, checkoutDir: "/src/old" };
+    const second = setup({
+      modelEnabled: false,
+      copies: downloads(),
+      checkouts: new FakeLocalCheckouts({
+        checkout: new FakeLocalCheckout({}),
+        dir: "/src/shop",
+        namesRepo: true,
+      }),
+    });
+    await second.store.saveAnalysis(old);
+    await second.useCases.startAnalysis(url);
+    expect((await second.stored(id)).checkout).toBe("downloading");
+    // The clone it lacks stays named, for a download that fails.
+    expect((await second.stored(id)).checkoutDir).toBe("/src/shop");
+    await second.done(id);
+    expect(usesOf(await second.stored(id))).toEqual(USES);
+  });
+
+  describe("an analysis stored while the key said a checkout was read", () => {
+    const storedAs = async (changes: Partial<Analysis>) => {
+      const ready = setup({ modelEnabled: false });
+      const made = await setup({ modelEnabled: false }).analyze();
+      const key = { ...made.key, pipelineVersion: "20+checkout" };
+      const old: Analysis = { ...made, id: analysisId(key), key, ...changes };
+      await ready.store.saveAnalysis(old);
+      return { ...ready, made, old };
+    };
+
+    it("is found, and stays as it is", async () => {
+      const { useCases, old, stored, preps } = await storedAs({
+        checkout: "read",
+        checkoutDir: "/src/shop",
+      });
+      const again = await useCases.startAnalysis(url);
+      expect(again).toEqual({ ok: true, value: { analysisId: old.id } });
+      expect(await stored(old.id)).toEqual(old);
+      expect(preps()).toBe(0);
+    });
+
+    it("runs again under its own ID when it failed", async () => {
+      const { useCases, old, done, stored } = await storedAs({ status: "failed" });
+      const again = await useCases.startAnalysis(url);
+      expect(again).toEqual({ ok: true, value: { analysisId: old.id } });
+      await done(old.id);
+      expect((await stored(old.id)).status).toBe("complete");
+    });
+
+    it.each([
+      ["2026-10-22T09:00:00Z", "complete", true],
+      ["2026-10-20T09:00:00Z", "complete", false],
+      ["2026-10-22T09:00:00Z", "failed", false],
+    ] as const)(
+      "beside one under the plain key: the complete one, then the one changed last (%s, %s)",
+      async (updatedAt, status, expected) => {
+        const { useCases, store, made, old } = await storedAs({
+          checkout: "read",
+          status,
+          updatedAt,
+        });
+        await store.saveAnalysis({ ...made, checkout: "read" });
+        const again = await useCases.startAnalysis(url);
+        expect(again.ok && again.value.analysisId === old.id).toBe(expected);
+      },
+    );
+  });
+
+  describe("with a model run", () => {
+    it("waits for the run in flight, and reads the PR without them", async () => {
+      const model = new HeldModel();
+      const copies = downloads({ ...repositoryFiles, "src/big.ts": big });
+      const { useCases, id, release, stored, done, doneCount } = await opened({ copies, model });
+      await useCases.runModel(id);
+      release();
+      await settle();
+      const during = await stored(id);
+      expect(during.checkout).toBe("downloading");
+      expect(during.unchangedCallers).toEqual([]);
+
+      model.release();
+      await done(id);
+      const after = await stored(id);
+      expect(after.intent).not.toBeNull();
+      expect(usesOf(after)).toEqual(USES);
+      // The run's end isn't the analysis's: the callers are still to come.
+      expect(doneCount(id)).toBe(1);
+      const inputs = model.callsTo("intent").map(({ input }) => JSON.stringify(input));
+      expect(inputs.some((input) => input.includes("src/app.ts"))).toBe(false);
+
+      // Remove AI review keeps the callers and what couldn't be read of them.
+      const WARNING = "1 file in the local checkout is over 1 MB, so callers in it aren't shown.";
+      expect(after.warnings).toContain(WARNING);
+      const removed = await useCases.removeModelRun(id);
+      expect(removed.ok && removed.value.analysis.warnings).toContain(WARNING);
+      expect(removed.ok && usesOf(removed.value.analysis)).toEqual(USES);
+      expect(removed.ok && removed.value.analysis.checkout).toBe("read");
+    });
+
+    it("loses nothing of either when they're written while the run is about to start", async () => {
+      const { useCases, models, id, release, stored, done } = await opened({
+        copies: downloads(),
+      });
+      // The run has read the analysis, and asks which models there are.
+      const asked = Promise.withResolvers<void>();
+      const answer = Promise.withResolvers<void>();
+      const options = models.options.bind(models);
+      models.options = async () => {
+        asked.resolve();
+        await answer.promise;
+        return options();
+      };
+      const running = useCases.runModel(id);
+      await asked.promise;
+      release();
+      await settle();
+      expect(usesOf(await stored(id))).toEqual(USES);
+      answer.resolve();
+      await running;
+      await done(id, 2);
+      await settle();
+      const after = await stored(id);
+      expect(after.intent).not.toBeNull();
+      expect(usesOf(after)).toEqual(USES);
+      expect(after.checkout).toBe("read");
+      expect((await useCases.removeModelRun(id)).ok).toBe(true);
+      expect(usesOf(await stored(id))).toEqual(USES);
+    });
+
+    it("starts from the analysis with them when they're being written", async () => {
+      const { useCases, store, id, release, stored, done } = await opened({ copies: downloads() });
+      // The write has started, and the run and a second one are asked for before it ends.
+      const save = store.saveAnalysis.bind(store);
+      const writing = Promise.withResolvers<void>();
+      const written = Promise.withResolvers<void>();
+      store.saveAnalysis = async (analysis) => {
+        writing.resolve();
+        await written.promise;
+        await save(analysis);
+      };
+      release();
+      await writing.promise;
+      store.saveAnalysis = save;
+      const runs = [useCases.runModel(id), useCases.runModel(id)];
+      await settle();
+      const third = useCases.runModel(id);
+      await settle();
+      written.resolve();
+      for (const run of [...runs, third]) {
+        expect(await run).toEqual({ ok: true, value: { analysisId: id } });
+      }
+      await done(id);
+      await settle();
+      const after = await stored(id);
+      expect(after.intent).not.toBeNull();
+      expect(usesOf(after)).toEqual(USES);
+    });
+
+    it("isn't started twice by a request that waited while another ran", async () => {
+      const { useCases, models, id, release, runModel } = await opened({ copies: downloads() });
+      const answer = Promise.withResolvers<void>();
+      const options = models.options.bind(models);
+      models.options = async () => {
+        await answer.promise;
+        return options();
+      };
+      const late = useCases.runModel(id);
+      await settle();
+      models.options = options;
+      release();
+      await settle();
+      await runModel(id);
+      answer.resolve();
+      expect(await late).toMatchObject({ ok: false, error: { code: "analysis-not-complete" } });
+    });
+
+    it("doesn't keep a PR opened during the run waiting", async () => {
+      const model = new HeldModel();
+      const clones: FoundCheckout[] = [];
+      const ready = setup({
+        modelEnabled: false,
+        model,
+        checkouts: new FakeLocalCheckouts(null, { clones }),
+      });
+      const { id } = await ready.analyze();
+      clones.push({ checkout: new FakeLocalCheckout(commits), dir: "/src/shop", namesRepo: true });
+      // Opened, and the run asked for before the callers are read.
+      const opening = ready.useCases.startAnalysis(url);
+      await ready.useCases.runModel(id);
+      expect(await opening).toEqual({ ok: true, value: { analysisId: id } });
+      model.release();
+      await settle();
+      expect((await ready.stored(id)).intent).not.toBeNull();
+    });
+
+    it("that's removed during a download leaves the download going", async () => {
+      const { useCases, id, release, stored, done } = await opened({ copies: downloads() });
+      await useCases.runModel(id);
+      await settle();
+      const removed = await useCases.removeModelRun(id);
+      expect(removed.ok && removed.value.analysis.checkout).toBe("downloading");
+      release();
+      await done(id);
+      expect(usesOf(await stored(id))).toEqual(USES);
+      expect((await stored(id)).intent).toBeNull();
+    });
+  });
+
+  it("says why a download failed, with the review complete, and tries again when opened", async () => {
+    const copies = downloads();
+    copies.failNext({ kind: "refused", message: "GitHub didn't let megareviewer download it." });
+    const { analyze, useCases, stored, done } = setup({ modelEnabled: false, copies });
+    const failed = await analyze();
+    expect(failed.status).toBe("complete");
+    expect(failed.checkout).toBe("download-failed");
+    expect(failed.checkoutError).toBe("GitHub didn't let megareviewer download it.");
+    expect(following(failed)).toBe(false);
+
+    await useCases.startAnalysis(url);
+    expect((await stored(failed.id)).checkoutError).toBeNull();
+    await done(failed.id, 2);
+    expect(usesOf(await stored(failed.id))).toEqual(USES);
+    expect(copies.downloads).toBe(2);
+  });
+
+  it("says when the pull request can't be read again after the download", async () => {
+    class ForgetfulCache extends InMemoryFileCache {
+      forgetting = false;
+      override async get(...args: Parameters<InMemoryFileCache["get"]>) {
+        return this.forgetting ? null : super.get(...args);
+      }
+    }
+    const fileCache = new ForgetfulCache();
+    const { github, id, release, stored, done } = await opened({ copies: downloads(), fileCache });
+    fileCache.forgetting = true;
+    github.failAlways(hostError("network"));
+    release();
+    await done(id);
+    expect(await stored(id)).toMatchObject({
+      status: "complete",
+      checkout: "download-failed",
+      checkoutError: expect.stringContaining("The repository was downloaded, but"),
+    });
+  });
+
+  it("says when a bug stopped it, and leaves a review that wasn't downloading as it is", async () => {
+    const copies = downloads();
+    copies.download = async () => {
+      throw new Error("boom");
+    };
+    const { analyze, logger } = setup({ modelEnabled: false, copies });
+    const analysis = await analyze();
+    expect(analysis.checkout).toBe("download-failed");
+    expect(analysis.checkoutError).toContain("internal error");
+    expect(logger.entries.some((entry) => entry.message.includes("callers"))).toBe(true);
+
+    const clones: FoundCheckout[] = [];
+    const broken = setup({
+      modelEnabled: false,
+      checkouts: new FakeLocalCheckouts(null, { clones }),
+    });
+    const before = await broken.analyze();
+    const checkout = new FakeLocalCheckout(commits);
+    checkout.filesMentioning = async () => {
+      throw new Error("boom");
+    };
+    clones.push({ checkout, dir: "/src/shop", namesRepo: true });
+    await broken.useCases.startAnalysis(url);
+    expect(await broken.stored(before.id)).toEqual(before);
+  });
+
+  it("logs a failure to record it", async () => {
+    const { release, store, logger } = await opened({ copies: downloads() });
+    store.saveAnalysis = async () => {
+      throw new Error("disk full");
+    };
+    release();
+    await settle();
+    expect(
+      logger.entries.filter((entry) => entry.message === "Couldn't record an analysis's callers"),
+    ).toHaveLength(1);
+  });
+
+  it("does nothing for an analysis that's gone", async () => {
+    const { release, store, emitted } = await opened({ copies: downloads() });
+    const count = emitted.length;
+    store.getAnalysis = async () => null;
+    release();
+    await settle();
+    expect(emitted).toHaveLength(count);
+  });
+
+  it("stopped with megareviewer, is set back at the next start and starts again when opened", async () => {
+    const copies = downloads();
+    copies.failNext({ kind: "stopped", message: "megareviewer was stopped." });
+    const { id, release, stored, useCases } = await opened({ copies });
+    // The one going in this process is left alone.
+    await useCases.recoverInterruptedAnalyses();
+    expect((await stored(id)).checkout).toBe("downloading");
+    release();
+    await settle();
+    const left = await stored(id);
+    expect(left.checkout).toBe("downloading");
+
+    const next = setup({ modelEnabled: false, copies: downloads() });
+    await next.store.saveAnalysis(left);
+    expect(await next.useCases.recoverInterruptedAnalyses()).toBe(0);
+    expect(await next.stored(id)).toEqual({ ...left, checkout: "none" });
+    await next.useCases.startAnalysis(url);
+    await next.done(id);
+    expect(usesOf(await next.stored(id))).toEqual(USES);
+
+    const named = setup({ modelEnabled: false });
+    await named.store.saveAnalysis({ ...left, checkoutDir: "/src/shop" });
+    await named.useCases.recoverInterruptedAnalyses();
+    expect((await named.stored(id)).checkout).toBe("missing-commit");
+  });
+
+  it("forgets old copies through the use cases", async () => {
+    const copies = downloads();
+    const { useCases } = setup({ copies });
+    expect(await useCases.forgetOldCopies()).toBe(0);
   });
 });
 

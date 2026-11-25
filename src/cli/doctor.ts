@@ -4,7 +4,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   type CheckoutInfo,
   type CloneSearch,
+  type CopyInfo,
+  createRepositoryCopies,
+  GIT_NEEDED,
   inspectCheckout,
+  installedGit,
+  isNewEnough,
   type Walk,
 } from "../adapters/git/index.ts";
 import {
@@ -30,8 +35,8 @@ import { openSqliteAnalysisStore } from "../adapters/sqlite/index.ts";
 import type { GitHost, KnownCheckout, Logger, TicketSource } from "../application/ports/index.ts";
 import type { HostKind } from "../domain/review/index.ts";
 import { err, ok, type Result } from "../domain/shared/index.ts";
-import { clonesSummary, repoName } from "./clones.ts";
-import { createHosts, createTicketSource, systemClock } from "./compose.ts";
+import { clonesSummary, downloadsSummary, repoName } from "./clones.ts";
+import { copiesFolder, createHosts, createTicketSource, systemClock } from "./compose.ts";
 import type { BitbucketCredential, Config, GitHubTokenSource } from "./config.ts";
 import {
   anthropicConfigured,
@@ -75,6 +80,15 @@ export interface DoctorDeps {
   readonly checkout: { readonly dir: string; readonly info: CheckoutInfo | null };
   /** What the search for clones in the home folder found; null when it's off. */
   readonly walk: Walk | null;
+  /** git's version; null when it isn't installed. */
+  readonly git: string | null;
+  /** megareviewer's own copies of repositories, and where they're kept. */
+  readonly copies: {
+    /** Whether a commit no clone has is downloaded. */
+    readonly download: boolean;
+    readonly folder: string;
+    readonly list: readonly CopyInfo[];
+  };
 }
 
 /** "Haiku 5.5, Sonnet 5.5 and Opus 5.5" */
@@ -327,12 +341,19 @@ const checkOpencode = ({ opencode }: DoctorDeps): Check => {
 };
 
 /** No PR to check the commit of: says where callers come from, and what a missing commit needs. */
-const checkCheckout = ({ checkout: { dir, info }, walk }: DoctorDeps): Check => {
+const checkCheckout = ({ checkout: { dir, info }, walk, copies }: DoctorDeps): Check => {
   if (info === null && walk !== null) {
     return check(
       "skip",
       "Checkout",
       `${dir} isn't in a git checkout: a clone is looked for instead`,
+    );
+  }
+  if (info === null && copies.download) {
+    return check(
+      "skip",
+      "Checkout",
+      `${dir} isn't in a git checkout: the PR's repository is downloaded instead`,
     );
   }
   if (info === null) {
@@ -370,6 +391,43 @@ const checkKnown = (known: readonly KnownCheckout[]): Check[] =>
         ),
       ];
 
+/** Callers are read with git, and downloading needs one that's new enough. */
+const checkGit = ({ git, copies }: DoctorDeps): Check => {
+  if (git === null) {
+    return check(
+      "skip",
+      "git",
+      "not installed: callers outside a PR aren't shown",
+      `Install git ${GIT_NEEDED} or newer.`,
+    );
+  }
+  return copies.download && !isNewEnough(git)
+    ? check(
+        "skip",
+        "git",
+        `${git}, too old to download a repository with`,
+        `Install git ${GIT_NEEDED} or newer.`,
+      )
+    : check("pass", "git", git);
+};
+
+const megabytes = (bytes: number): string =>
+  bytes < 1_000_000 ? "under 1 MB" : `${Math.round(bytes / 1_000_000)} MB`;
+
+const checkCopies = ({ copies: { download, folder, list } }: DoctorDeps): Check[] => [
+  check(download ? "pass" : "skip", "Download", downloadsSummary(download ? folder : null)),
+  ...(list.length === 0
+    ? []
+    : [
+        check(
+          "pass",
+          "Downloaded",
+          `${list.map(({ repo, bytes }) => `${repoName(repo)} (${megabytes(bytes)})`).join(", ")}, in ${folder}`,
+          "Removed when nothing has read them for 30 days. Deleting them is safe.",
+        ),
+      ]),
+];
+
 /** One check per line of `doctor`, in a fixed order. Network checks run in parallel. */
 export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
   const node = nodeSupported(deps.nodeVersion)
@@ -396,6 +454,8 @@ export const runDoctor = async (deps: DoctorDeps): Promise<Check[]> => {
     checkCheckout(deps),
     checkClones(deps),
     ...checkKnown(opened.ok ? opened.value : []),
+    checkGit(deps),
+    ...checkCopies(deps),
     store,
   ];
 };
@@ -414,16 +474,28 @@ export const createDoctorDeps = async (options: {
   readonly checkoutDir: string;
   /** Null when the search for clones is off. */
   readonly search: CloneSearch | null;
+  readonly download: boolean;
   readonly problems: readonly string[];
   readonly version: string;
   readonly logger: Logger;
 }): Promise<DoctorDeps> => {
   const { config, logger } = options;
   const client = new Anthropic({ maxRetries: 0 });
+  const folder = copiesFolder(config);
+  const copies = createRepositoryCopies({
+    folder,
+    on: false,
+    remoteFor: () => null,
+    clock: systemClock,
+    logger,
+    signal: new AbortController().signal,
+  });
   return {
     nodeVersion: process.versions.node,
     checkout: { dir: options.checkoutDir, info: await inspectCheckout(options.checkoutDir) },
     walk: (await options.search?.walked()) ?? null,
+    git: await installedGit(),
+    copies: { download: options.download, folder, list: await copies.list() },
     config,
     problems: options.problems,
     hosts: createHosts(config, { version: options.version, clock: systemClock, logger }),

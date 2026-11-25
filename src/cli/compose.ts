@@ -9,7 +9,12 @@ import {
   createBitbucketReviewThreads,
   createBitbucketStatusSource,
 } from "../adapters/bitbucket/index.ts";
-import { type CloneSearch, createGitCheckouts } from "../adapters/git/index.ts";
+import {
+  type CloneSearch,
+  createGitCheckouts,
+  createRepositoryCopies,
+  remotesFor,
+} from "../adapters/git/index.ts";
 import {
   createGitHubHost,
   createGitHubReviewHistory,
@@ -57,6 +62,8 @@ export interface ComposeOptions {
   readonly checkoutDir: string;
   /** Finds clones of a PR's repository on this machine, or null when that's off. */
   readonly search: CloneSearch | null;
+  /** Whether a commit no clone has is downloaded. */
+  readonly download: boolean;
   readonly version: string;
   readonly logger: Logger;
 }
@@ -71,6 +78,9 @@ export interface Composition {
   /** Closes the database. Safe to call more than once. */
   close(): Promise<void>;
 }
+
+/** Where megareviewer's own copies of repositories are kept. */
+export const copiesFolder = ({ home }: Pick<Config, "home">): string => join(home, "repos");
 
 export const systemClock: Clock = {
   now: () => new Date().toISOString(),
@@ -207,6 +217,7 @@ export const assemble = async (
       count: interrupted,
     });
   }
+  await useCases.forgetOldCopies();
   const sessionToken = options.sessionToken ?? newSessionToken();
   return {
     useCases,
@@ -261,6 +272,14 @@ export const compose = async (
     return err(`Can't open the database at ${path}: ${messageOf(error)}`);
   }
 
+  const copies = createRepositoryCopies({
+    folder: copiesFolder(config),
+    on: options.download,
+    remoteFor: remotesFor(config),
+    clock,
+    logger,
+    signal: running.signal,
+  });
   try {
     return ok(
       await assemble(
@@ -276,6 +295,7 @@ export const compose = async (
           fileCache: store,
           knownCheckouts: store,
           checkouts: createGitCheckouts({ dir: options.checkoutDir, search: options.search }),
+          copies,
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),
           clock,
           logger,
@@ -285,6 +305,8 @@ export const compose = async (
           version: options.version,
           close: async () => {
             running.abort();
+            // A download that's stopped takes its half-made pack away with it.
+            await copies.settled();
             store.close();
           },
         },

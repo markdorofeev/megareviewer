@@ -6,10 +6,12 @@ import {
   FakeCodeParser,
   FakeLocalCheckout,
   FakeLocalCheckouts,
+  FakeRepositoryCopies,
+  FixedClock,
   hunk,
   InMemoryKnownCheckouts,
 } from "../testing/index.ts";
-import { lookUpCheckout, readUnchangedCallers } from "./unchanged-callers.ts";
+import { forgetOldCopies, lookUpCheckout, readUnchangedCallers } from "./unchanged-callers.ts";
 
 const SHA = "e".repeat(40);
 const repo = { host: "github", owner: "acme", repo: "shop" } as const;
@@ -44,12 +46,13 @@ describe("lookUpCheckout", () => {
     pointed: FoundCheckout | null,
     clones: readonly FoundCheckout[] = [],
     remembered: readonly string[] = [],
+    copies = new FakeRepositoryCopies(),
   ) => {
     const checkouts = new FakeLocalCheckouts(pointed, { clones });
     const knownCheckouts = new InMemoryKnownCheckouts();
     for (const dir of remembered.toReversed()) await knownCheckouts.rememberFolder(repo, dir);
     return {
-      lookup: await lookUpCheckout({ checkouts, knownCheckouts }, repo, SHA),
+      lookup: await lookUpCheckout({ checkouts, knownCheckouts, copies }, repo, SHA),
       asked: checkouts.asked,
       remembered: await knownCheckouts.foldersRead(repo),
     };
@@ -91,6 +94,25 @@ describe("lookUpCheckout", () => {
       at: { checkout: has, sha: SHA },
     });
     expect(found.remembered).toEqual(["/src/shop"]);
+  });
+
+  it("reads megareviewer's own copy last, and doesn't remember it as the reviewer's", async () => {
+    const copies = new FakeRepositoryCopies({ commits: { [SHA]: {} }, downloadFolder: "/copies" });
+    await copies.download(repo, SHA);
+    const found = await lookUp(null, [at("/src/shop", lacks)], [], copies);
+    expect(found.lookup).toMatchObject({ status: "read", dir: "/copies/github/acme/shop.git" });
+    expect(await found.lookup.at?.checkout.hasCommit(SHA)).toBe(true);
+    expect(found.remembered).toEqual([]);
+
+    const clone = await lookUp(null, [at("/src/shop")], [], copies);
+    expect(clone.lookup.dir).toBe("/src/shop");
+  });
+
+  it("downloads nothing", async () => {
+    const copies = new FakeRepositoryCopies({ commits: { [SHA]: {} }, downloadFolder: "/copies" });
+    const found = await lookUp(null, [], [], copies);
+    expect(found.lookup.status).toBe("none");
+    expect(copies.asked).toEqual([`find ${SHA}`]);
   });
 
   it("asks one folder for the commit once", async () => {
@@ -192,5 +214,19 @@ describe("readUnchangedCallers", () => {
     expect(unchangedCallers.map(({ uses }) => uses.map(({ path }) => path))).toEqual([
       ["src/b.ts"],
     ]);
+  });
+});
+
+describe("forgetOldCopies", () => {
+  it("removes the copies not read for 30 days", async () => {
+    const clock = new FixedClock("2026-11-25T10:00:00.000Z");
+    const commits = { [SHA]: {} };
+    const copies = new FakeRepositoryCopies({ commits, downloadFolder: "/copies", clock });
+    await copies.download(repo, SHA);
+    clock.advance(30 * 24 * 60 * 60 * 1000);
+    expect(await forgetOldCopies({ copies, clock })).toBe(0);
+    clock.advance(1);
+    expect(await forgetOldCopies({ copies, clock })).toBe(1);
+    expect(await copies.find(repo, SHA)).toBeNull();
   });
 });

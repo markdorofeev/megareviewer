@@ -3,20 +3,37 @@ import { parseCliArgs } from "./args.ts";
 
 describe("parseCliArgs", () => {
   it.each([
-    [[], { kind: "serve", port: 0, open: true, checkout: null, search: true }],
-    [["--port", "4823"], { kind: "serve", port: 4823, open: true, checkout: null, search: true }],
+    [[], { kind: "serve", port: 0, open: true, checkout: null, search: true, download: true }],
+    [
+      ["--port", "4823"],
+      { kind: "serve", port: 4823, open: true, checkout: null, search: true, download: true },
+    ],
     [
       ["--port=0", "--no-open"],
-      { kind: "serve", port: 0, open: false, checkout: null, search: true },
+      { kind: "serve", port: 0, open: false, checkout: null, search: true, download: true },
     ],
-    [["doctor"], { kind: "doctor", checkout: null, search: true }],
-    [["doctor", "--checkout", "../shop"], { kind: "doctor", checkout: "../shop", search: true }],
+    [["doctor"], { kind: "doctor", checkout: null, search: true, download: true }],
+    [
+      ["doctor", "--checkout", "../shop"],
+      { kind: "doctor", checkout: "../shop", search: true, download: true },
+    ],
     [
       ["--checkout=/src/shop"],
-      { kind: "serve", port: 0, open: true, checkout: "/src/shop", search: true },
+      { kind: "serve", port: 0, open: true, checkout: "/src/shop", search: true, download: true },
     ],
-    [["--no-search"], { kind: "serve", port: 0, open: true, checkout: null, search: false }],
-    [["doctor", "--no-search"], { kind: "doctor", checkout: null, search: false }],
+    [
+      ["--no-search"],
+      { kind: "serve", port: 0, open: true, checkout: null, search: false, download: true },
+    ],
+    [["doctor", "--no-search"], { kind: "doctor", checkout: null, search: false, download: true }],
+    [
+      ["--no-download"],
+      { kind: "serve", port: 0, open: true, checkout: null, search: true, download: false },
+    ],
+    [
+      ["doctor", "--no-download"],
+      { kind: "doctor", checkout: null, search: true, download: false },
+    ],
     [["--version"], { kind: "version" }],
     [["--help"], { kind: "help" }],
     [["-h"], { kind: "help" }],
@@ -33,7 +50,10 @@ describe("parseCliArgs", () => {
     [["--port", "-1"], "--port"],
     [["serve"], "Unknown command: serve"],
     [["doctor", "now"], "Unexpected argument: now"],
-    [["doctor", "--no-open"], "doctor takes no options but --checkout and --no-search"],
+    [
+      ["doctor", "--no-open"],
+      "doctor takes no options but --checkout, --no-search and --no-download",
+    ],
     [["--checkout"], "--checkout"],
     [["--checkout="], "--checkout needs a directory"],
     [["--version", "--checkout", "."], "--version takes no other arguments"],
@@ -41,6 +61,8 @@ describe("parseCliArgs", () => {
     [["--ai-via", "api"], "Unknown option '--ai-via'"],
     [["--version", "--no-search"], "--version takes no other arguments"],
     [["--no-search=yes"], "--no-search"],
+    [["--version", "--no-download"], "--version takes no other arguments"],
+    [["--no-download=yes"], "--no-download"],
     [["--version", "--port", "1"], "--version takes no other arguments"],
     [["doctor", "--version"], "--version takes no other arguments"],
     [["--no-open=yes"], "--no-open"],

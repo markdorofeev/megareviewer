@@ -5,6 +5,7 @@ import { createPullRequestStatusUseCases } from "./pull-request-status.ts";
 import { createReviewUseCases } from "./review.ts";
 import { createStatusUseCases } from "./status.ts";
 import { createThreadUseCases } from "./threads.ts";
+import { forgetOldCopies } from "./unchanged-callers.ts";
 
 /** Every use case the HTTP API calls. Expected failures are results with an `ErrorCode`. */
 export const createUseCases = (deps: AppDeps, options: { readonly version: string }) => {
@@ -20,6 +21,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     runModel: runner.runModel,
     removeModelRun: runner.removeModelRun,
     recoverInterruptedAnalyses: runner.recoverInterruptedAnalyses,
+    forgetOldCopies: () => forgetOldCopies(deps),
     getAnalysisView: review.getAnalysisView,
     getFileContent: review.getFileContent,
     recordPointState: review.recordPointState,

@@ -74,11 +74,15 @@ const deps = (overrides: Partial<DoctorDeps> = {}): DoctorDeps => ({
     },
   },
   walk: { clones: [{ dir: "/home/lee/src/app", repos: [] }], stopped: null },
+  git: "2.50.1",
+  copies: { download: true, folder: "/home/lee/.megareviewer/repos", list: [] },
   ...overrides,
 });
 
 const lines = async (overrides: Partial<DoctorDeps> = {}) =>
   (await runDoctor(deps(overrides))).map(formatCheck);
+
+const OFF = { download: false, folder: "/home/lee/.megareviewer/repos", list: [] };
 
 const HOST_ERROR = {
   kind: "unauthorized",
@@ -99,6 +103,8 @@ describe("runDoctor", () => {
       "✓ opencode: 2.3.0: Request AI review offers 2 models through Anthropic and Ollama, none measured by megareviewer's evals",
       "✓ Checkout: /home/lee/src/shop, a checkout of github.com/acme/shop\n    Callers outside a PR need its head commit: if a review says it's missing, run `git fetch` there.",
       "✓ Clones: your home folder is searched for a PR's repository: 1 clone found. --no-search turns this off",
+      "✓ git: 2.50.1",
+      "✓ Download: when no clone has a PR's head commit, it's downloaded into /home/lee/.megareviewer/repos. --no-download turns this off",
       "✓ Home: /home/lee/.megareviewer is writable and the database opens",
     ]);
   });
@@ -111,7 +117,9 @@ describe("runDoctor", () => {
   });
 
   it("says how to show callers outside a git checkout when no clone is searched for", async () => {
-    const checks = await runDoctor(deps({ checkout: { dir: "/tmp", info: null }, walk: null }));
+    const checks = await runDoctor(
+      deps({ checkout: { dir: "/tmp", info: null }, walk: null, copies: OFF }),
+    );
     expect(checks.find((check) => check.title === "Clones")).toEqual({
       status: "skip",
       title: "Clones",
@@ -131,6 +139,39 @@ describe("runDoctor", () => {
     expect(output).toContain(
       "✓ Clones: your home folder is searched for a PR's repository: 0 clones found. The search stopped early: it took 2 seconds. --no-search turns this off",
     );
+  });
+
+  it("says the repository is downloaded when there's no checkout and no search", async () => {
+    const output = await lines({ checkout: { dir: "/tmp", info: null }, walk: null });
+    expect(output).toContain(
+      "– Checkout: /tmp isn't in a git checkout: the PR's repository is downloaded instead",
+    );
+    expect(await lines({ copies: OFF })).toContain("– Download: off, with --no-download");
+  });
+
+  it("lists the copies it downloaded, with their size", async () => {
+    const copy = (repo: string, bytes: number) => ({
+      repo: { host: "github" as const, owner: "acme", repo },
+      dir: `/home/lee/.megareviewer/repos/github/acme/${repo}.git`,
+      bytes,
+      lastReadAt: "2026-11-25T10:00:00.000Z",
+    });
+    const output = await lines({
+      copies: { ...OFF, list: [copy("shop", 58_400_000), copy("app", 120_000)] },
+    });
+    expect(output).toContain(
+      "✓ Downloaded: github.com/acme/shop (58 MB), github.com/acme/app (under 1 MB), in /home/lee/.megareviewer/repos\n    Removed when nothing has read them for 30 days. Deleting them is safe.",
+    );
+  });
+
+  it("says when git is missing, or too old to download with", async () => {
+    expect(await lines({ git: null })).toContain(
+      "– git: not installed: callers outside a PR aren't shown\n    Install git 2.32 or newer.",
+    );
+    expect(await lines({ git: "2.25.1" })).toContain(
+      "– git: 2.25.1, too old to download a repository with\n    Install git 2.32 or newer.",
+    );
+    expect(await lines({ git: "2.25.1", copies: OFF })).toContain("✓ git: 2.25.1");
   });
 
   it("lists the folders repositories were read from", async () => {

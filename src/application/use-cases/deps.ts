@@ -12,6 +12,7 @@ import type {
   ModelCatalog,
   PreferenceStore,
   PullRequestStatusSource,
+  RepositoryCopies,
   ReviewHistory,
   ReviewThreads,
   TicketSource,
@@ -38,6 +39,8 @@ export interface AppDeps {
   readonly checkouts: LocalCheckouts;
   /** The folders repositories were read from before. */
   readonly knownCheckouts: KnownCheckouts;
+  /** megareviewer's own copies, for a repository no checkout on the machine has the commit of. */
+  readonly copies: RepositoryCopies;
   readonly events: AnalysisEvents;
   readonly clock: Clock;
   readonly logger: Logger;

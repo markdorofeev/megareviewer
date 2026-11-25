@@ -1,4 +1,4 @@
-import { mkdtemp, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +12,7 @@ import {
   FakeGitHost,
   FakeLocalCheckouts,
   FakeModelCatalog,
+  FakeRepositoryCopies,
   FakeTicketSource,
   FixedClock,
   fakeModelOption,
@@ -67,6 +68,7 @@ const fakeComposition = () => {
       history: {},
       checkouts: new FakeLocalCheckouts(),
       knownCheckouts: new InMemoryKnownCheckouts(),
+      copies: new FakeRepositoryCopies(),
       threads: {},
       statuses: {},
       parser: new FakeCodeParser(),
@@ -125,6 +127,7 @@ describe("assemble and serve", () => {
         history: {},
         checkouts: new FakeLocalCheckouts(),
         knownCheckouts: new InMemoryKnownCheckouts(),
+        copies: new FakeRepositoryCopies(),
         threads: {},
         statuses: {},
         parser: new FakeCodeParser(),
@@ -148,6 +151,7 @@ describe("assemble and serve", () => {
         history: {},
         checkouts: new FakeLocalCheckouts(),
         knownCheckouts: new InMemoryKnownCheckouts(),
+        copies: new FakeRepositoryCopies(),
         threads: {},
         statuses: {},
         parser: new FakeCodeParser(),
@@ -182,6 +186,7 @@ describe("compose", () => {
     staticDir: null,
     checkoutDir: "/nowhere",
     search: null,
+    download: true,
     version: "1.2.3",
   };
 
@@ -197,6 +202,19 @@ describe("compose", () => {
     await composed(config);
     expect((await stat(config.home)).mode & 0o777).toBe(0o700);
     expect((await stat(join(config.home, "db.sqlite"))).isFile()).toBe(true);
+  });
+
+  it("removes the copies of repositories nothing read for a while", async () => {
+    const config = await configIn();
+    const copy = join(config.home, "repos", "github", "acme", "shop.git");
+    await mkdir(copy, { recursive: true });
+    await writeFile(join(copy, "megareviewer-last-read"), "2020-01-01T00:00:00.000Z");
+    const kept = join(config.home, "repos", "github", "acme", "web.git");
+    await mkdir(kept);
+    await writeFile(join(kept, "megareviewer-last-read"), "2999-01-01T00:00:00.000Z");
+    await composed(config);
+    await expect(stat(copy)).rejects.toThrow("ENOENT");
+    expect((await stat(kept)).isDirectory()).toBe(true);
   });
 
   it("keeps the reviewer's preferences in the database, across a restart", async () => {
