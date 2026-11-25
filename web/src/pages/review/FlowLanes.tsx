@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { cn } from "../../lib/utils.ts";
 import {
   EndChip,
+  type FlowFolds,
   FlowLegend,
   type FlowViewProps,
   NoPaths,
@@ -38,10 +39,16 @@ const Line = ({
  * path, with a mark in each directory where the path runs changed files. The directories are the
  * headings, so the architecture is read once and the rows say what's particular to this change.
  */
-export const FlowLanes = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewProps) => {
+export const FlowLanes = ({
+  flow,
+  onOpenPart,
+  onOpenFile,
+  focusKey,
+  opened,
+  onToggle,
+}: FlowViewProps & FlowFolds) => {
   const box = useRef<HTMLElement>(null);
   const [hot, setHot] = useState<string | null>(null);
-  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
   useFocusedStop(box, focusKey);
   const sends = flow.paths.some((path) => path.ends.length > 0);
   const chip = (stop: Stop) => (
@@ -67,13 +74,17 @@ export const FlowLanes = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewPr
       {flow.paths.length === 0 ? (
         <NoPaths />
       ) : (
-        <div data-slot="flow-lanes-scroll" className="overflow-x-auto rounded-lg border bg-card">
+        // The first column stays while the lanes scroll, except where it would cover most of them.
+        <div
+          data-slot="flow-lanes-scroll"
+          className="overflow-x-auto rounded-lg border bg-card sm:scroll-pl-64"
+        >
           <table className="w-full border-separate border-spacing-0 text-left">
             <thead>
               <tr>
                 <th
                   scope="col"
-                  className="sticky left-0 z-10 w-64 min-w-64 border-b bg-card px-3 py-2 text-caption font-medium text-muted-foreground"
+                  className="sm:sticky sm:left-0 sm:z-10 w-64 min-w-64 border-b bg-card px-3 py-2 text-caption font-medium text-muted-foreground"
                 >
                   Reached from
                 </th>
@@ -111,7 +122,7 @@ export const FlowLanes = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewPr
                     <th
                       scope="row"
                       className={cn(
-                        "sticky left-0 z-10 w-64 max-w-64 min-w-64 bg-card px-3 py-2.5 text-left align-middle font-normal",
+                        "sm:sticky sm:left-0 sm:z-10 w-64 max-w-64 min-w-64 bg-card px-3 py-2.5 text-left align-middle font-normal",
                         border,
                       )}
                     >
@@ -120,7 +131,9 @@ export const FlowLanes = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewPr
                     {cells.map((stops, at) => {
                       const layer = flow.layers[at]?.key ?? "";
                       const key = `${path.key}\u0000${layer}`;
-                      const open = unfolded.has(key) || stops.length <= SHOWN;
+                      const open = opened.has(key) || stops.length <= SHOWN;
+                      const folded = open ? [] : stops.slice(SHOWN - 1);
+                      const more = open ? "Show fewer" : `and ${folded.length} more`;
                       const onLine = at >= first && at <= last && first !== -1;
                       const ends = path.ends.length > 0;
                       return (
@@ -138,17 +151,13 @@ export const FlowLanes = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewPr
                             {stops.length > SHOWN && (
                               <button
                                 type="button"
+                                data-holds={folded.map((stop) => stop.path).join("\n")}
                                 aria-expanded={open}
+                                aria-label={`${more} in ${flow.layers[at]?.label ?? layer}/`}
                                 className="min-h-6 rounded-md bg-card px-1.5 text-caption text-muted-foreground underline decoration-input underline-offset-2 hover:text-foreground"
-                                onClick={() =>
-                                  setUnfolded((previous) => {
-                                    const next = new Set(previous);
-                                    if (!next.delete(key)) next.add(key);
-                                    return next;
-                                  })
-                                }
+                                onClick={() => onToggle(key)}
                               >
-                                {open ? "Show fewer" : `and ${stops.length - SHOWN + 1} more`}
+                                {more}
                               </button>
                             )}
                           </div>

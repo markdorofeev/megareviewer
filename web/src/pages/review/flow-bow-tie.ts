@@ -15,6 +15,8 @@ export interface BowTieNode {
   readonly status: StopStatus | "outside";
   /** A directory's files, or a path's first. */
   readonly stops: readonly Stop[];
+  /** The directory's box it is, or was before that was opened to its files. */
+  readonly group: string | null;
   /** The part a click opens. */
   readonly partId: PartId | null;
 }
@@ -22,6 +24,12 @@ export interface BowTieNode {
 export interface BowTie {
   readonly nodes: readonly BowTieNode[];
   readonly edges: readonly { readonly from: string; readonly to: string }[];
+  /** The directories' boxes opened to their files. */
+  readonly opened: readonly {
+    readonly key: string;
+    readonly column: 1 | 2;
+    readonly label: string;
+  }[];
 }
 
 const statusOf = (stops: readonly Stop[]): StopStatus =>
@@ -38,9 +46,10 @@ const pathNote = (path: FlowPath): string => {
  * is in the middle, by directory, when it calls another changed file, and on the right when it
  * calls none. A path links to each directory it runs through, and to an end only when nothing it
  * runs through calls that end; a directory links to the ends its files call. Requests to the pull
- * request's routes are ends too.
+ * request's routes are ends too. A directory named in `opened` by its box's key is a box per file,
+ * each with its own links.
  */
-export const bowTie = (flow: FlowPaths): BowTie => {
+export const bowTie = (flow: FlowPaths, opened: ReadonlySet<string> = new Set()): BowTie => {
   const calling = new Set(flow.calls.map((call) => call.from));
   const callsTo = new Map<string, Set<string>>();
   for (const { from, to } of flow.calls)
@@ -50,14 +59,29 @@ export const bowTie = (flow: FlowPaths): BowTie => {
 
   // The stops a path runs after the file it starts in; outside the pull request, all of them.
   const runs = (path: FlowPath) => (path.inPullRequest ? path.stops.slice(1) : path.stops);
-  const groups = new Map<string, Map<string, Stop>>();
+  const groups = new Map<
+    string,
+    { readonly layer: string; readonly column: 1 | 2; readonly stops: Map<string, Stop> }
+  >();
   const groupOf = (stop: Stop) => `${calling.has(stop.path) ? "through" : "end"}:${stop.layer}`;
   for (const path of flow.paths) {
     for (const stop of runs(path)) {
       const key = groupOf(stop);
-      groups.set(key, (groups.get(key) ?? new Map<string, Stop>()).set(stop.path, stop));
+      const group = groups.get(key) ?? {
+        layer: stop.layer,
+        column: calling.has(stop.path) ? 1 : 2,
+        stops: new Map<string, Stop>(),
+      };
+      group.stops.set(stop.path, stop);
+      groups.set(key, group);
     }
   }
+  const isOpened = (key: string) => opened.has(key) && (groups.get(key)?.stops.size ?? 0) > 1;
+  const boxOf = (stop: Stop) => {
+    const key = groupOf(stop);
+    return isOpened(key) ? `${key}\u0000${stop.path}` : key;
+  };
+  const directory = (layer: string) => layerLabel.get(layer) ?? layer;
 
   const left = flow.paths.map((path): BowTieNode => {
     const [first] = path.stops;
@@ -69,32 +93,32 @@ export const bowTie = (flow: FlowPaths): BowTie => {
       note: pathNote(path),
       status: path.inPullRequest ? (first?.status ?? "changed") : "outside",
       stops: first === undefined ? [] : [first],
+      group: null,
       partId: first?.partIds[0] ?? null,
     };
   });
-  const files = [...groups]
-    .sort(([a], [b]) => {
-      const at = (key: string) => layerAt.get(key.slice(key.indexOf(":") + 1)) ?? 0;
-      return at(a) - at(b);
-    })
-    .map(([key, inIt]): BowTieNode => {
-      const stops = [...inIt.values()];
-      const [only] = stops;
-      const layer = key.slice(key.indexOf(":") + 1);
+  const inOrder = [...groups].sort(
+    ([, a], [, b]) => (layerAt.get(a.layer) ?? 0) - (layerAt.get(b.layer) ?? 0),
+  );
+  const files = inOrder.flatMap(([group, { layer, column, stops }]): BowTieNode[] => {
+    const node = (key: string, inIt: readonly Stop[]): BowTieNode => {
+      const [first] = inIt;
+      const one = inIt.length === 1;
       return {
         key,
-        column: key.startsWith("through:") ? 1 : 2,
+        column,
         kind: "files",
-        label:
-          stops.length === 1 && only !== undefined
-            ? only.label
-            : `${layerLabel.get(layer) ?? layer}/`,
-        note: stops.length === 1 ? (layerLabel.get(layer) ?? layer) : `${stops.length} files`,
-        status: statusOf(stops),
-        stops,
-        partId: only?.partIds[0] ?? null,
+        label: one && first !== undefined ? first.label : `${directory(layer)}/`,
+        note: one ? directory(layer) : `${inIt.length} files`,
+        status: statusOf(inIt),
+        stops: inIt,
+        group,
+        partId: first?.partIds[0] ?? null,
       };
-    });
+    };
+    const inIt = [...stops.values()];
+    return isOpened(group) ? inIt.map((stop) => node(boxOf(stop), [stop])) : [node(group, inIt)];
+  });
   const requests = new Map(
     flow.paths.flatMap((path) => path.ends).map((end) => [`request:${end.label}`, end]),
   );
@@ -107,6 +131,7 @@ export const bowTie = (flow: FlowPaths): BowTie => {
       note: "Request to a route in this PR",
       status: "changed",
       stops: [],
+      group: null,
       partId: end.partId,
     }),
   );
@@ -117,16 +142,22 @@ export const bowTie = (flow: FlowPaths): BowTie => {
     const through = runs(path).filter((stop) => calling.has(stop.path));
     for (const stop of runs(path)) {
       const reachedThrough = through.some((other) => callsTo.get(other.path)?.has(stop.path));
-      if (calling.has(stop.path) || !reachedThrough) link(path.key, groupOf(stop));
+      if (calling.has(stop.path) || !reachedThrough) link(path.key, boxOf(stop));
     }
     for (const stop of through) {
       for (const to of runs(path)) {
         if (!calling.has(to.path) && callsTo.get(stop.path)?.has(to.path)) {
-          link(groupOf(stop), groupOf(to));
+          link(boxOf(stop), boxOf(to));
         }
       }
     }
     for (const end of path.ends) link(path.key, `request:${end.label}`);
   }
-  return { nodes: [...left, ...files, ...ends], edges: [...edges.values()] };
+  return {
+    nodes: [...left, ...files, ...ends],
+    edges: [...edges.values()],
+    opened: inOrder.flatMap(([key, { layer, column }]) =>
+      isOpened(key) ? [{ key, column, label: `${directory(layer)}/` }] : [],
+    ),
+  };
 };

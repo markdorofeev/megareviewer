@@ -268,4 +268,47 @@ describe("bowTie", () => {
     expect(direct.nodes.map((node) => node.column)).toEqual([0, 2]);
     expect(direct.edges).toHaveLength(1);
   });
+
+  it("opens a directory to a box per file, each with its own links", () => {
+    const refunds = file("src/main/java/shop/services/RefundService.java", [9]);
+    const ledger = file("src/main/java/shop/ledger/Ledger.java", [10]);
+    const several = flowPaths(
+      input([controller, service, refunds, repository, ledger], {
+        callGraph: [hint(1, 3), hint(1, 9), hint(3, 5), hint(9, 10)],
+        flows: [flow("POST /orders", [1], [1])],
+      }),
+    );
+    const linksOf = (tie: ReturnType<typeof bowTie>) => {
+      const name = (key: string) => tie.nodes.find((node) => node.key === key)?.label;
+      return tie.edges.map((edge) => [name(edge.from), name(edge.to)]);
+    };
+    const closed = bowTie(several);
+    const [box] = closed.nodes.filter((node) => node.stops.length > 1);
+    expect(box).toMatchObject({ column: 1, label: "services/", note: "2 files" });
+    expect(closed.opened).toEqual([]);
+
+    const opened = bowTie(several, new Set([box?.group ?? ""]));
+    expect(opened.opened).toEqual([{ key: box?.group, column: 1, label: "services/" }]);
+    expect(
+      opened.nodes
+        .filter((node) => node.column === 1)
+        .map((node) => [node.label, node.note, node.group]),
+    ).toEqual([
+      ["OrderService", "services", box?.group],
+      ["RefundService", "services", box?.group],
+    ]);
+    expect(linksOf(opened)).toEqual([
+      ["POST /orders", "OrderService"],
+      ["POST /orders", "RefundService"],
+      ["OrderService", "OrderRepository"],
+      ["RefundService", "Ledger"],
+    ]);
+  });
+
+  it("keeps a box of one file as it is when it's asked to open", () => {
+    const [box] = tie.nodes.filter((node) => node.column === 1);
+    const asked = bowTie(paths, new Set([box?.group ?? ""]));
+    expect(asked.nodes).toEqual(tie.nodes);
+    expect(asked.opened).toEqual([]);
+  });
 });

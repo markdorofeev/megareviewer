@@ -1,10 +1,12 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { type ComponentType, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { HunkId } from "../../../../src/domain/diff/index.ts";
 import { FlowBowTie } from "./FlowBowTie.tsx";
 import { FlowLanes } from "./FlowLanes.tsx";
 import { FlowRows } from "./FlowRows.tsx";
+import type { FlowFolds, FlowViewProps } from "./flow-parts.tsx";
 import type { FlowPaths, Stop } from "./flow-paths.ts";
 
 const h = (n: number) => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
@@ -62,11 +64,62 @@ const flow: FlowPaths = {
   },
 };
 
+/** A view with what the reviewer opened in it, which the page keeps. */
+const withFolds = (View: ComponentType<FlowViewProps & FlowFolds>) => {
+  const Kept = (props: FlowViewProps) => {
+    const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+    return (
+      <View
+        {...props}
+        opened={opened}
+        onToggle={(key) =>
+          setOpened((previous) =>
+            previous.has(key)
+              ? new Set([...previous].filter((one) => one !== key))
+              : new Set([...previous, key]),
+          )
+        }
+      />
+    );
+  };
+  return Kept;
+};
+const Lanes = withFolds(FlowLanes);
+const BowTie = withFolds(FlowBowTie);
+
 const VIEWS = [
   ["rows", FlowRows],
-  ["lanes", FlowLanes],
-  ["bow tie", FlowBowTie],
+  ["lanes", Lanes],
+  ["bow tie", BowTie],
 ] as const;
+
+// A route that runs four services, two of which call one of two repositories.
+const services = ["Order", "Refund", "Stock", "Tax"].map((name, at) =>
+  stop("services", `${name}Service`, 10 + at),
+);
+const repositories = ["Order", "Refund"].map((name, at) =>
+  stop("repositories", `${name}Repository`, 20 + at, { status: "new" }),
+);
+const call = (from: Stop | undefined, to: Stop | undefined) =>
+  from === undefined || to === undefined ? [] : [{ from: from.path, to: to.path }];
+const wide: FlowPaths = {
+  ...flow,
+  paths: [
+    {
+      key: "flow:0",
+      labels: ["POST /orders"],
+      inPullRequest: true,
+      outside: [],
+      stops: [controller, ...services, ...repositories],
+      ends: [],
+    },
+  ],
+  calls: [
+    ...services.flatMap((service) => call(controller, service)),
+    ...call(services[0], repositories[0]),
+    ...call(services[1], repositories[1]),
+  ],
+};
 
 describe.each(VIEWS)("the overview as %s", (_name, View) => {
   const show = (focusKey: { key: string; n: number } | null = null) => {
@@ -125,7 +178,7 @@ describe.each(VIEWS)("the overview as %s", (_name, View) => {
 describe("the overview as rows and lanes", () => {
   it.each([
     ["rows", FlowRows],
-    ["lanes", FlowLanes],
+    ["lanes", Lanes],
   ] as const)("says a stop's status and how many ways run it, as %s", (_name, View) => {
     render(<View flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />);
     expect(
@@ -146,7 +199,7 @@ describe("the overview as rows and lanes", () => {
 
 describe("the overview as lanes", () => {
   it("is a table of the paths by directory", () => {
-    render(<FlowLanes flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />);
+    render(<Lanes flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />);
     expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
       "Reached from",
       "controllers/",
@@ -163,5 +216,96 @@ describe("the overview as lanes", () => {
     expect(within(services).getByRole("button").getAttribute("aria-label")).toMatch(
       /^OrderService, /,
     );
+  });
+});
+
+describe("a cell of the lanes with more than three files", () => {
+  const show = (focusKey: FlowViewProps["focusKey"] = null) =>
+    render(<Lanes flow={wide} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={focusKey} />);
+
+  it("shows two, and the rest behind a button that says where they are", async () => {
+    show();
+    expect(screen.queryByRole("button", { name: /^TaxService, / })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "and 2 more in services/" }));
+    expect(screen.getByRole("button", { name: /^TaxService, / })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Show fewer in services/" }));
+    expect(screen.queryByRole("button", { name: /^TaxService, / })).toBeNull();
+  });
+
+  it("takes the focus to the fold that holds the file the page asks for", () => {
+    show({ key: services[3]?.path ?? "", n: 1 });
+    expect(document.activeElement?.textContent).toBe("and 2 more");
+  });
+});
+
+describe("a box of the bow tie with several files", () => {
+  const show = (focusKey: FlowViewProps["focusKey"] = null) => {
+    const onOpenPart = vi.fn();
+    const props = { flow: wide, onOpenPart, onOpenFile: vi.fn() };
+    const view = render(<BowTie {...props} focusKey={focusKey} />);
+    return {
+      onOpenPart,
+      ask: (key: string, n: number) => view.rerender(<BowTie {...props} focusKey={{ key, n }} />),
+    };
+  };
+  const boxes = () =>
+    [...document.querySelectorAll("[data-slot=flow-bow-tie-node]")].map(
+      (box) => box.querySelector("span.truncate")?.textContent,
+    );
+  const open = (name: string) => userEvent.click(screen.getByRole("button", { name }));
+
+  it("opens in place to its files, each opening its own code", async () => {
+    const { onOpenPart } = show();
+    // The two services that call a repository are run through; the other two end the path.
+    expect(boxes()).toEqual(["POST /orders", "services/", "services/", "repositories/"]);
+    await open("Show the files of services/ under Runs through");
+    expect(boxes()).toEqual([
+      "POST /orders",
+      "OrderService",
+      "RefundService",
+      "services/",
+      "repositories/",
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: /^RefundService, / }));
+    expect(onOpenPart).toHaveBeenCalledWith(h(11), services[1]?.path);
+  });
+
+  it("opens and collapses from the keyboard, keeping the focus at its files", async () => {
+    show();
+    screen.getByRole("button", { name: "Show the files of repositories/ under Ends in" }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(document.activeElement?.getAttribute("data-path")).toBe(repositories[0]?.path);
+    await userEvent.tab();
+    expect(document.activeElement?.getAttribute("data-path")).toBe(repositories[1]?.path);
+    screen.getByRole("button", { name: "Collapse repositories/ · Ends in" }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(boxes()).toEqual(["POST /orders", "services/", "services/", "repositories/"]);
+    expect(document.activeElement?.getAttribute("aria-label")).toMatch(/^repositories\//);
+  });
+
+  it("takes the focus to the box that holds the file the page asks for, or to its own", async () => {
+    const refund = repositories[1]?.path ?? "";
+    const { ask } = show({ key: refund, n: 1 });
+    expect(document.activeElement?.getAttribute("aria-label")).toMatch(/^repositories\//);
+    await open("Show the files of repositories/ under Ends in");
+    ask(refund, 2);
+    expect(document.activeElement?.getAttribute("data-path")).toBe(refund);
+  });
+
+  it("has nothing to open when it holds one file", () => {
+    render(<BowTie flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />);
+    expect(screen.queryByRole("button", { name: /^Show the files/ })).toBeNull();
+  });
+
+  it("takes a file outside the pull request's box for its own, not for the code it uses", () => {
+    render(
+      <BowTie
+        flow={flow}
+        onOpenPart={vi.fn()}
+        onOpenFile={vi.fn()}
+        focusKey={{ key: service.path, n: 1 }}
+      />,
+    );
+    expect(document.activeElement?.getAttribute("aria-label")).toMatch(/^OrderService, /);
   });
 });

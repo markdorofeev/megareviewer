@@ -1,8 +1,10 @@
-import { ArrowRightIcon } from "lucide-react";
-import { useId, useMemo, useRef, useState } from "react";
+import { ArrowRightIcon, LayoutGridIcon } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils.ts";
+import { Button } from "../../ui/button.tsx";
 import { type BowTieNode, bowTie } from "./flow-bow-tie.ts";
 import {
+  type FlowFolds,
   FlowLegend,
   type FlowViewProps,
   NoPaths,
@@ -37,15 +39,24 @@ const nodeName = (node: BowTieNode): string =>
 
 /**
  * The pull request as a bow tie: where the change is reached on the left, the changed code it runs
- * through in the middle, by directory, and what it ends in on the right.
+ * through in the middle, by directory, and what it ends in on the right. A directory's box opens in
+ * place to a box per file.
  */
-export const FlowBowTie = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewProps) => {
+export const FlowBowTie = ({
+  flow,
+  onOpenPart,
+  onOpenFile,
+  focusKey,
+  opened,
+  onToggle,
+}: FlowViewProps & FlowFolds) => {
   const id = useId();
   const box = useRef<HTMLElement>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [hot, setHot] = useState<string | null>(null);
   useFocusedStop(box, focusKey);
-  const { nodes, edges } = useMemo(() => bowTie(flow), [flow]);
+  const tie = useMemo(() => bowTie(flow, opened), [flow, opened]);
+  const { nodes, edges } = tie;
   const { boxes, height } = useMemo(() => {
     const columns = [0, 1, 2].map((column) => nodes.filter((node) => node.column === column));
     const tall = (count: number) => Math.max(0, count * (NODE_HEIGHT + NODE_GAP) - NODE_GAP);
@@ -62,6 +73,23 @@ export const FlowBowTie = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewP
   const width = columnX(2) + NODE_WIDTH + PAD;
   const hoveredNode = nodes.find((node) => node.key === hovered);
 
+  // The button that opened or collapsed a directory is gone with it, so the focus goes to the
+  // directory's first file, or back to its box.
+  const toggled = useRef<string | null>(null);
+  const toggle = (group: string) => {
+    toggled.current = group;
+    setHovered(null);
+    onToggle(group);
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a directory opened or collapsed.
+  useEffect(() => {
+    if (toggled.current === null) return;
+    box.current
+      ?.querySelector<HTMLElement>(`[data-group="${CSS.escape(toggled.current)}"]`)
+      ?.focus();
+    toggled.current = null;
+  }, [tie]);
+
   return (
     <section
       ref={box}
@@ -73,6 +101,21 @@ export const FlowBowTie = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewP
         Left, where the change is reached. Middle, the changed directories it runs through. Right,
         the changed code that calls nothing else that changed, and the requests it sends.
       </FlowLegend>
+      {tie.opened.length > 0 && (
+        <p className="flex flex-wrap gap-2">
+          {tie.opened.map(({ key, label, column }) => (
+            <Button
+              key={key}
+              variant="outline"
+              size="sm"
+              className="h-auto min-h-7 max-w-full text-left wrap-anywhere whitespace-normal"
+              onClick={() => toggle(key)}
+            >
+              Collapse {label} · {COLUMNS[column]}
+            </Button>
+          ))}
+        </p>
+      )}
       {flow.paths.length === 0 ? (
         <NoPaths />
       ) : (
@@ -135,43 +178,66 @@ export const FlowBowTie = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewP
             {nodes.map((node) => {
               const at = boxes.get(node.key);
               const [first] = node.stops;
+              const { group } = node;
+              const several = node.stops.length > 1;
               return (
-                <button
+                <div
                   key={node.key}
-                  type="button"
-                  data-slot="flow-bow-tie-node"
-                  data-kind={node.kind}
-                  data-path={first?.path}
-                  className={cn(
-                    "absolute grid content-center gap-0.5 overflow-hidden rounded-md border px-2 text-left text-caption",
-                    node.kind === "request"
-                      ? "border-dashed border-input bg-card text-foreground"
-                      : STOP_STYLE[node.status],
-                    hovered === node.key && "border-primary",
-                  )}
+                  className="absolute"
                   style={{ left: at?.x, top: at?.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
-                  aria-label={nodeName(node)}
-                  title={node.stops.map((stop) => stop.path).join("\n") || node.label}
-                  onClick={() =>
-                    node.partId !== null && onOpenPart(node.partId, first?.path ?? null)
-                  }
-                  onFocus={() => setHovered(node.key)}
-                  onBlur={() => setHovered(null)}
-                  onMouseEnter={() => setHovered(node.key)}
-                  onMouseLeave={() => setHovered(null)}
                 >
-                  <span className="flex min-w-0 items-center gap-1">
-                    {node.kind === "request" ? (
-                      <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
-                    ) : (
-                      node.status !== "outside" && <StatusGlyph status={node.status} />
+                  <button
+                    type="button"
+                    data-slot="flow-bow-tie-node"
+                    data-kind={node.kind}
+                    data-group={group ?? undefined}
+                    // A path from outside isn't the file it uses, which has a box of its own.
+                    data-path={node.status === "outside" ? undefined : first?.path}
+                    data-holds={
+                      several ? node.stops.map((stop) => stop.path).join("\n") : undefined
+                    }
+                    className={cn(
+                      "grid size-full content-center gap-0.5 overflow-hidden rounded-md border px-2 text-left text-caption",
+                      node.kind === "request"
+                        ? "border-dashed border-input bg-card text-foreground"
+                        : STOP_STYLE[node.status],
+                      hovered === node.key && "border-primary",
                     )}
-                    <span className="truncate font-mono text-code-compact font-semibold">
-                      {node.label}
+                    aria-label={nodeName(node)}
+                    title={node.stops.map((stop) => stop.path).join("\n") || node.label}
+                    onClick={() =>
+                      node.partId !== null && onOpenPart(node.partId, first?.path ?? null)
+                    }
+                    onFocus={() => setHovered(node.key)}
+                    onBlur={() => setHovered(null)}
+                    onMouseEnter={() => setHovered(node.key)}
+                    onMouseLeave={() => setHovered(null)}
+                  >
+                    <span className={cn("flex min-w-0 items-center gap-1", several && "pr-6")}>
+                      {node.kind === "request" ? (
+                        <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
+                      ) : (
+                        node.status !== "outside" && <StatusGlyph status={node.status} />
+                      )}
+                      <span className="truncate font-mono text-code-compact font-semibold">
+                        {node.label}
+                      </span>
                     </span>
-                  </span>
-                  <span className="truncate">{node.note}</span>
-                </button>
+                    <span className="truncate">{node.note}</span>
+                  </button>
+                  {several && group !== null && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="absolute top-1 right-1 text-current"
+                      aria-label={`Show the files of ${node.label} under ${COLUMNS[node.column]}`}
+                      title="Show its files"
+                      onClick={() => toggle(group)}
+                    >
+                      <LayoutGridIcon aria-hidden="true" />
+                    </Button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -179,7 +245,7 @@ export const FlowBowTie = ({ flow, onOpenPart, onOpenFile, focusKey }: FlowViewP
       )}
       <p
         data-slot="flow-bow-tie-detail"
-        className="min-h-5 text-muted-foreground"
+        className="min-h-5 wrap-anywhere text-muted-foreground"
         aria-live="polite"
       >
         {hoveredNode === undefined

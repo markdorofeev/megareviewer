@@ -536,6 +536,14 @@ const Review = ({
     () => (overviewForm === "directories" ? null : flowPaths(analysis)),
     [overviewForm, analysis],
   );
+  // The directories the bow tie shows as their files, and the cells the lanes show whole.
+  const [flowOpened, setFlowOpened] = useState<ReadonlySet<string>>(new Set());
+  const toggleFlow = (key: string) =>
+    setFlowOpened((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const understand = layout === "overview" && noTour === null && tour !== null;
   const filePaths = useMemo(() => files.map((group) => group.file.path), [files]);
   const fileInView = useFileInView(filePaths, layout === "map" && analysis.stages.prep === "done");
@@ -1911,6 +1919,8 @@ const Review = ({
           ) : overviewForm === "lanes" ? (
             <FlowLanes
               flow={flow}
+              opened={flowOpened}
+              onToggle={toggleFlow}
               focusKey={overviewFocus}
               onOpenPart={openFlowPart}
               onOpenFile={openFileFromTour}
@@ -1918,6 +1928,8 @@ const Review = ({
           ) : overviewForm === "bow-tie" ? (
             <FlowBowTie
               flow={flow}
+              opened={flowOpened}
+              onToggle={toggleFlow}
               focusKey={overviewFocus}
               onOpenPart={openFlowPart}
               onOpenFile={openFileFromTour}

@@ -23,7 +23,16 @@ export interface FlowViewProps {
   readonly focusKey: { readonly key: string; readonly n: number } | null;
 }
 
-/** Focuses the first stop of the file the page asks for, once per request. */
+/** What the reviewer opened in place. The page keeps it, so coming back from the map finds it open. */
+export interface FlowFolds {
+  readonly opened: ReadonlySet<string>;
+  readonly onToggle: (key: string) => void;
+}
+
+/**
+ * Focuses the first stop of the file the page asks for, or the box or fold that holds it, once per
+ * request.
+ */
 export const useFocusedStop = (
   box: RefObject<HTMLElement | null>,
   focusKey: FlowViewProps["focusKey"],
@@ -31,10 +40,12 @@ export const useFocusedStop = (
   const focused = useRef(-1);
   useEffect(() => {
     if (focusKey === null || focused.current === focusKey.n) return;
-    const stop = box.current?.querySelector<HTMLElement>(
-      `[data-path="${CSS.escape(focusKey.key)}"]`,
-    );
-    if (stop === null || stop === undefined) return;
+    const stop =
+      box.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(focusKey.key)}"]`) ??
+      [...(box.current?.querySelectorAll<HTMLElement>("[data-holds]") ?? [])].find((one) =>
+        one.dataset.holds?.split("\n").includes(focusKey.key),
+      );
+    if (stop === undefined) return;
     focused.current = focusKey.n;
     stop.focus();
     stop.scrollIntoView?.({ block: "nearest", inline: "nearest" });
@@ -88,7 +99,7 @@ export const StopChip = ({
       data-status={stop.status}
       data-hot={hot || undefined}
       className={cn(
-        "inline-flex h-6 max-w-full items-center gap-1 rounded-md border px-1.5 font-mono text-code-compact",
+        "inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md border px-1.5 font-mono text-code-compact",
         STOP_STYLE[stop.status],
         hot && "shadow-[0_0_0_2px_var(--background),0_0_0_4px_var(--primary)]",
         className,
@@ -119,7 +130,7 @@ export const EndChip = ({
   <button
     type="button"
     data-slot="flow-end"
-    className="inline-flex h-6 max-w-full items-center gap-1 rounded-md border border-dashed border-input bg-surface-subtle px-1.5 font-mono text-code-compact text-foreground"
+    className="inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md border border-dashed border-input bg-surface-subtle px-1.5 font-mono text-code-compact text-foreground"
     aria-label={`Sends ${end.label} to a route in this pull request`}
     title="A request to a route this pull request adds"
     onClick={() => onOpen(end.partId, null)}
@@ -231,7 +242,7 @@ export const OffThePaths = ({
                     key={path}
                     type="button"
                     data-slot="flow-also-file"
-                    className="min-h-6 font-mono text-code-compact text-foreground underline decoration-input underline-offset-2 hover:decoration-foreground"
+                    className="min-h-6 text-left font-mono text-code-compact wrap-anywhere text-foreground underline decoration-input underline-offset-2 hover:decoration-foreground"
                     title={path}
                     onClick={() => onOpenFile(path)}
                   >
