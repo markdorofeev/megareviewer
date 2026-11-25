@@ -2,7 +2,7 @@
 
 Planned and committed as stage 72.
 
-**Status:** Not started
+**Status:** In progress (branch claude/harness-core-4b758f)
 **Depends on:** 77, 79
 **Owns:** `evals/`
 
