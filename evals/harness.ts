@@ -15,6 +15,7 @@ import {
   InMemoryAnalysisStore,
   InMemoryFileCache,
   InMemoryHarnessStore,
+  InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   type PullRequestFixture,
 } from "../src/application/testing/index.ts";
@@ -124,6 +125,7 @@ export const analyzeCase = async (
       checkouts: new FakeLocalCheckouts(),
       harnessSource: () => harnessSource,
       harnessStore: new InMemoryHarnessStore(),
+      knownCheckouts: new InMemoryKnownCheckouts(),
       threads: {},
       statuses: {},
       parser: options.parser,

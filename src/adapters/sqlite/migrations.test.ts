@@ -32,6 +32,7 @@ describe("migrate", () => {
       "harness_blobs",
       "harness_files",
       "harnesses",
+      "known_checkouts",
       "last_model_option",
       "point_reviews",
       "preference_proposals",
@@ -163,14 +164,16 @@ describe("migrate", () => {
   });
 
   it("adds the harness tables beside the rest, a harness taking its files with it", () => {
-    const db = databaseAt(8);
+    const db = databaseAt(9);
     db.exec("INSERT INTO guideline_switches VALUES ('github', 'acme', 'shop', 'CLAUDE.md', 1)");
+    db.exec("INSERT INTO known_checkouts VALUES ('github', 'acme', 'shop', '/shop', 't')");
 
-    expect(migrate(db, MIGRATIONS.slice(0, 9))).toEqual([9]);
+    expect(migrate(db, MIGRATIONS.slice(0, 10))).toEqual([10]);
 
     expect(db.prepare("SELECT path FROM guideline_switches").all()).toEqual([
       { path: "CLAUDE.md" },
     ]);
+    expect(db.prepare("SELECT dir FROM known_checkouts").all()).toEqual([{ dir: "/shop" }]);
     db.exec("PRAGMA foreign_keys = ON");
     db.exec(`INSERT INTO harnesses VALUES
       ('github', 'acme', 'shop', 'sha', 't', NULL, '[]', '[]')`);

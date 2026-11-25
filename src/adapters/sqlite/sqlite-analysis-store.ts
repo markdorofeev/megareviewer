@@ -7,6 +7,7 @@ import type {
   FileAt,
   FileCache,
   HarnessStore,
+  KnownCheckouts,
   Logger,
   PreferenceStore,
   StoredPublication,
@@ -28,6 +29,7 @@ import {
 } from "../../domain/review/index.ts";
 import { MIGRATIONS, migrate } from "./migrations.ts";
 import { createSqliteHarnessStore } from "./sqlite-harness-store.ts";
+import { createSqliteKnownCheckouts } from "./sqlite-known-checkouts.ts";
 import { createSqlitePreferenceStore } from "./sqlite-preference-store.ts";
 
 export interface SqliteAnalysisStoreOptions {
@@ -40,11 +42,12 @@ export interface SqliteAnalysisStoreOptions {
 /** Fetched files and harnesses are kept this long, so neither grows without bound. */
 export const FILE_CACHE_DAYS = 30;
 
-/** Analyses, review state, fetched files, harnesses and the reviewer's preferences, in one database. */
+/** Analyses, review state, fetched files, harnesses, preferences and folders read, in one database. */
 export type SqliteAnalysisStore = AnalysisStore &
   FileCache &
   HarnessStore &
-  PreferenceStore & { close(): void };
+  PreferenceStore &
+  KnownCheckouts & { close(): void };
 
 const PayloadRow = z.object({ id: z.string(), payload: z.string() });
 const PointReviewRow = z.object({
@@ -226,6 +229,7 @@ export const openSqliteAnalysisStore = (
   return {
     ...createSqlitePreferenceStore(db, logger),
     ...createSqliteHarnessStore(db, { clock, logger, keptSince }),
+    ...createSqliteKnownCheckouts(db, clock),
 
     async getAnalysis(id: AnalysisId) {
       return toAnalysis(selectById.get(id));

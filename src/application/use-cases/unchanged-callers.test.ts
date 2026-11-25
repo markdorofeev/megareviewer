@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ChangedDefinition, FileChange } from "../../domain/diff/index.ts";
 import { err } from "../../domain/shared/index.ts";
-import { FakeCodeParser, FakeLocalCheckout, FakeLocalCheckouts, hunk } from "../testing/index.ts";
+import type { FoundCheckout } from "../ports/index.ts";
+import {
+  FakeCodeParser,
+  FakeLocalCheckout,
+  FakeLocalCheckouts,
+  hunk,
+  InMemoryKnownCheckouts,
+} from "../testing/index.ts";
 import { lookUpCheckout, readUnchangedCallers } from "./unchanged-callers.ts";
 
 const SHA = "e".repeat(40);
@@ -29,18 +36,100 @@ const files: FileChange[] = [
 const changed: ChangedDefinition[] = [{ partId: changedHunk.id, path: "src/a.ts", name: "save" }];
 
 describe("lookUpCheckout", () => {
-  it("reads a checkout with the head commit, whatever its remotes", async () => {
-    const checkout = new FakeLocalCheckout({ [SHA]: {} });
-    expect(
-      await lookUpCheckout(new FakeLocalCheckouts({ checkout, namesRepo: false }), repo, SHA),
-    ).toEqual({ status: "read", at: { checkout, sha: SHA } });
+  const has = new FakeLocalCheckout({ [SHA]: {} });
+  const lacks = new FakeLocalCheckout({});
+  const at = (dir: string, checkout = has, namesRepo = true) => ({ dir, checkout, namesRepo });
+
+  const lookUp = async (
+    pointed: FoundCheckout | null,
+    clones: readonly FoundCheckout[] = [],
+    remembered: readonly string[] = [],
+  ) => {
+    const checkouts = new FakeLocalCheckouts(pointed, { clones });
+    const knownCheckouts = new InMemoryKnownCheckouts();
+    for (const dir of remembered.toReversed()) await knownCheckouts.rememberFolder(repo, dir);
+    return {
+      lookup: await lookUpCheckout({ checkouts, knownCheckouts }, repo, SHA),
+      asked: checkouts.asked,
+      remembered: await knownCheckouts.foldersRead(repo),
+    };
+  };
+
+  it("reads the folder pointed at when it has the head commit, whatever its remotes", async () => {
+    const found = await lookUp(at("/src/fork", has, false), [at("/src/shop")], ["/src/shop"]);
+    expect(found.lookup).toEqual({
+      status: "read",
+      dir: "/src/fork",
+      at: { checkout: has, sha: SHA },
+    });
+    expect(found.asked).toEqual(["pointedAt"]);
+    expect(found.remembered).toEqual(["/src/fork", "/src/shop"]);
+  });
+
+  it("reads a folder read before without searching, the most recently read first", async () => {
+    const found = await lookUp(
+      at("/src/here", lacks),
+      [at("/src/a"), at("/src/b")],
+      ["/src/b", "/src/a"],
+    );
+    expect(found.lookup.dir).toBe("/src/b");
+    expect(found.asked).toEqual(["pointedAt", "at /src/b"]);
+  });
+
+  it("forgets a folder that's gone, and goes on", async () => {
+    const found = await lookUp(null, [at("/src/shop")], ["/src/gone"]);
+    expect(found.lookup.dir).toBe("/src/shop");
+    expect(found.asked).toEqual(["pointedAt", "at /src/gone", "search"]);
+    expect(found.remembered).toEqual(["/src/shop"]);
+  });
+
+  it("searches when no earlier folder has the commit, and remembers the clone it reads", async () => {
+    const found = await lookUp(null, [at("/src/old", lacks), at("/src/shop")]);
+    expect(found.lookup).toEqual({
+      status: "read",
+      dir: "/src/shop",
+      at: { checkout: has, sha: SHA },
+    });
+    expect(found.remembered).toEqual(["/src/shop"]);
+  });
+
+  it("asks one folder for the commit once", async () => {
+    const here = new FakeLocalCheckout({});
+    let asked = 0;
+    here.hasCommit = async () => {
+      asked += 1;
+      return false;
+    };
+    await lookUp(at("/src/shop", here), [at("/src/shop", here)], ["/src/shop"]);
+    expect(asked).toBe(1);
+  });
+
+  it("answers the first folder that names the repository when none has the commit", async () => {
+    const found = await lookUp(at("/src/other", lacks, false), [
+      at("/src/first", lacks),
+      at("/src/second", lacks),
+    ]);
+    expect(found.lookup).toEqual({ status: "missing-commit", dir: "/src/first", at: null });
+    expect(found.remembered).toEqual([]);
+  });
+
+  it("answers a folder read before that now lacks the commit, whatever its remotes", async () => {
+    const found = await lookUp(null, [at("/src/shop", lacks, false)], ["/src/shop"]);
+    expect(found.lookup).toEqual({ status: "missing-commit", dir: "/src/shop", at: null });
+    expect(found.remembered).toEqual(["/src/shop"]);
+  });
+
+  it("reads a clone named like the repository only when it has the commit", async () => {
+    expect((await lookUp(null, [at("/src/shop", lacks, false)])).lookup).toEqual({
+      status: "none",
+      dir: null,
+      at: null,
+    });
+    expect((await lookUp(null, [at("/src/shop", has, false)])).lookup.status).toBe("read");
   });
 
   it("finds none without a checkout", async () => {
-    expect(await lookUpCheckout(new FakeLocalCheckouts(), repo, SHA)).toEqual({
-      status: "none",
-      at: null,
-    });
+    expect((await lookUp(null)).lookup).toEqual({ status: "none", dir: null, at: null });
   });
 });
 
@@ -61,7 +150,9 @@ describe("readUnchangedCallers", () => {
   });
 
   it("counts one file too large to read", async () => {
-    const checkout = new FakeLocalCheckout({ [SHA]: { "src/b.ts": "x".repeat(1024 * 1024 + 1) } });
+    const checkout = new FakeLocalCheckout({
+      [SHA]: { "src/b.ts": `save ${"x".repeat(1024 * 1024)}` },
+    });
     expect((await read(checkout)).warnings).toEqual([
       "1 file in the local checkout is over 1 MB, so callers in it aren't shown.",
     ]);
@@ -85,5 +176,21 @@ describe("readUnchangedCallers", () => {
     expect(
       await readUnchangedCallers(parser, { checkout, sha: SHA }, files, changed, new Set()),
     ).toEqual({ unchangedCallers: [], warnings: [] });
+  });
+
+  it("reads only the files that mention a changed definition", async () => {
+    const checkout = new FakeLocalCheckout({
+      [SHA]: {
+        "src/b.ts": 'import { save } from "./a.ts";\nsave();',
+        "src/c.ts": "other();",
+        "src/a.ts": "export function save() {}",
+        "src/d.py": "save()",
+      },
+    });
+    const { unchangedCallers } = await read(checkout);
+    expect(checkout.reads).toEqual([["src/b.ts"]]);
+    expect(unchangedCallers.map(({ uses }) => uses.map(({ path }) => path))).toEqual([
+      ["src/b.ts"],
+    ]);
   });
 });

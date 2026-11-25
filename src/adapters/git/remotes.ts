@@ -34,13 +34,35 @@ export const sameRepo = (a: RepoRef, b: RepoRef): boolean =>
   a.owner.toLowerCase() === b.owner.toLowerCase() &&
   a.repo.toLowerCase() === b.repo.toLowerCase();
 
-/** The repositories `git remote -v` output names, once each, in its order. */
-export const reposOfRemotes = (output: string): RepoRef[] => {
+/** The repositories remote URLs name, once each, in their order. */
+const reposOfUrls = (urls: readonly string[]): RepoRef[] => {
   const repos: RepoRef[] = [];
-  for (const line of output.split("\n")) {
-    const url = line.split(/\s+/)[1];
-    const repo = url === undefined ? null : repoOfRemote(url);
+  for (const url of urls) {
+    const repo = repoOfRemote(url);
     if (repo !== null && !repos.some((known) => sameRepo(known, repo))) repos.push(repo);
   }
   return repos;
+};
+
+/** The repositories `git remote -v` output names. */
+export const reposOfRemotes = (output: string): RepoRef[] =>
+  reposOfUrls(output.split("\n").map((line) => line.split(/\s+/)[1] ?? ""));
+
+const SECTION = /^\s*\[\s*([\w.-]+)(?:\s+"[^\n]*")?\s*\]/;
+const REMOTE_URL = /^\s*(?:url|pushurl)\s*=\s*(?:"([^"]*)"|([^#;]*))/i;
+
+/**
+ * The repositories a `.git/config` file's remotes name, read as text so that finding a clone runs no
+ * git in it. Names what it can of a file git wouldn't parse; a file it includes isn't read.
+ */
+export const reposOfConfig = (text: string): RepoRef[] => {
+  let inRemote = false;
+  const urls: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const section = SECTION.exec(line);
+    if (section !== null) inRemote = /^remote(?:\.|$)/i.test(section[1] ?? "");
+    const url = inRemote ? REMOTE_URL.exec(line.slice(section?.[0].length ?? 0)) : null;
+    if (url !== null) urls.push(url[1] ?? url[2] ?? "");
+  }
+  return reposOfUrls(urls);
 };

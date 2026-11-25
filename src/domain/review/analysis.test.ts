@@ -19,6 +19,13 @@ const key: AnalysisKey = {
   pipelineVersion: "1+claude-opus-5-5/p1",
 };
 
+describe("checkoutDir", () => {
+  it("is null on an analysis stored before it", () => {
+    const { checkoutDir: _, ...stored } = smallFeatureAnalysis;
+    expect(Analysis.parse(stored).checkoutDir).toBeNull();
+  });
+});
+
 describe("analysisId", () => {
   it("is stable for the same key", () => {
     expect(analysisId(key)).toBe(analysisId(structuredClone(key)));

@@ -58,6 +58,8 @@ export const StatusResponse = z
      * it and who pays ("Claude Code, on your Pro plan"), `reason` why it can't.
      */
     model: ModelOptions,
+    /** The folder searched for clones of a PR's repository, in full; null when the search is off. */
+    cloneSearchFolder: z.string().nullable(),
   })
   .readonly();
 export type StatusResponse = z.infer<typeof StatusResponse>;

@@ -102,7 +102,7 @@ const newAnalysis = (
   deps: AppDeps,
   key: AnalysisKey,
   pullRequest: PullRequest,
-  checkout: CheckoutStatus,
+  checkout: { readonly status: CheckoutStatus; readonly dir: string | null },
   createdAt: string,
 ): Analysis => ({
   id: analysisId(key),
@@ -128,7 +128,8 @@ const newAnalysis = (
   callSites: [],
   fileLinks: [],
   generated: [],
-  checkout,
+  checkout: checkout.status,
+  checkoutDir: checkout.dir,
   unchangedCallers: [],
   intent: null,
   findings: [],
@@ -160,7 +161,7 @@ const recomputeCode = async (
   if (!host.ok) return host;
   const checkout =
     analysis.checkout === "read"
-      ? await lookUpCheckout(deps.checkouts, pullRequest.ref.repo, analysis.key.headSha)
+      ? await lookUpCheckout(deps, pullRequest.ref.repo, analysis.key.headSha)
       : null;
   const fields = await codeFields(deps, host.value, pullRequest, checkout?.at ?? null);
   if (!fields.ok) return fields;
@@ -176,11 +177,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
   const startFor = async (host: GitHost, pullRequest: PullRequest): Promise<AnalysisId> => {
     // Not awaited: an AI review joins it, and the analysis doesn't need it.
     void loadHarness(deps, pullRequest.ref.repo, pullRequest.baseSha);
-    const checkout = await lookUpCheckout(
-      deps.checkouts,
-      pullRequest.ref.repo,
-      pullRequest.headSha,
-    );
+    const checkout = await lookUpCheckout(deps, pullRequest.ref.repo, pullRequest.headSha);
     const key: AnalysisKey = {
       ref: pullRequest.ref,
       headSha: pullRequest.headSha,
@@ -189,13 +186,24 @@ export const createAnalysisRunner = (deps: AppDeps) => {
     const existing = await deps.store.findByKey(key);
     const id = existing?.id ?? analysisId(key);
     // No await from here on until the run is in the map, so two requests can't both start it.
-    if (existing?.status === "complete" || inFlight.has(id)) return id;
+    if (inFlight.has(id)) return id;
+    if (existing?.status === "complete") {
+      // What's on the machine can have changed since, and the page says what was found.
+      if (existing.checkout !== checkout.status || existing.checkoutDir !== checkout.dir) {
+        await deps.store.saveAnalysis({
+          ...existing,
+          checkout: checkout.status,
+          checkoutDir: checkout.dir,
+        });
+      }
+      return id;
+    }
     // A failed analysis, or one interrupted by a restart, runs again under the same ID.
     const analysis = newAnalysis(
       deps,
       key,
       pullRequest,
-      checkout.status,
+      checkout,
       existing?.createdAt ?? deps.clock.now(),
     );
     runCode(host, analysis, pullRequest, checkout.at);
@@ -281,7 +289,7 @@ export const createAnalysisRunner = (deps: AppDeps) => {
       if (!host.ok) return host;
       const checkout =
         analysis.checkout === "read"
-          ? await lookUpCheckout(deps.checkouts, pullRequest.ref.repo, analysis.key.headSha)
+          ? await lookUpCheckout(deps, pullRequest.ref.repo, analysis.key.headSha)
           : null;
       // No await from here on until the run is in the map, so two requests can't both start it.
       if (inFlight.has(id)) return ok({ analysisId: id });

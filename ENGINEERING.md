@@ -37,7 +37,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Stop | A changed file on a flow path, *new* when the PR adds it and *changed* otherwise. Tests, docs, generated and mechanical files are never stops |
 | Tour | The page's tour of a PR: a few steps in call order, which the model writes and the Understand layout shows |
 | Step | A place on the page's tour: one sentence and the lines of one or two hunks that decide it, in call order. The model writes the steps and the server checks them |
-| Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed |
+| Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed: the one megareviewer was pointed at, one it read before, or one found by searching the home folder |
 | Unchanged caller | Code outside the PR that calls a definition the PR changes, or names it as a type. Read from a checkout |
 | Call site | A use, at a line and column of a part, of a definition the PR changes: where the page shows the code a call runs |
 | Model provider | What runs the model passes and decides who pays: Claude Code, the Anthropic API, Codex, opencode |

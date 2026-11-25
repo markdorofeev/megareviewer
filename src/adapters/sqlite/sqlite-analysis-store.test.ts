@@ -6,6 +6,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
   describeAnalysisStoreContract,
   describeFileCacheContract,
+  describeKnownCheckoutsContract,
   FixedClock,
   RecordingLogger,
   smallFeatureAnalysis,
@@ -75,6 +76,12 @@ describeAnalysisStoreContract("sqlite-memory", (clock) =>
 describeAnalysisStoreContract("sqlite-file", (clock) =>
   openStore(tempPath(), new RecordingLogger(), clock),
 );
+describeKnownCheckoutsContract("sqlite-memory", (clock) =>
+  openStore(":memory:", new RecordingLogger(), clock),
+);
+describeKnownCheckoutsContract("sqlite-file", (clock) =>
+  openStore(tempPath(), new RecordingLogger(), clock),
+);
 describeFileCacheContract("sqlite-memory", () => openStore(":memory:"));
 describeFileCacheContract("sqlite-file", () => openStore(tempPath()));
 
@@ -87,6 +94,18 @@ describe("the file cache", () => {
     const path = tempPath();
     await openStore(path).put(repo, file, "kept");
     expect(await openStore(path).get(repo, file)).toEqual({ content: "kept" });
+  });
+
+  it("keeps the folders read across reopening, and leaves out a row of an unknown host", async () => {
+    const path = tempPath();
+    const repo = { host: "github", owner: "acme", repo: "shop" } as const;
+    await openStore(path).rememberFolder(repo, "/src/shop");
+    withRawDatabase(path, (db) =>
+      db.exec("INSERT INTO known_checkouts VALUES ('gitlab', 'a', 'b', '/src/b', '2026-11-25')"),
+    );
+    const reopened = openStore(path);
+    expect(await reopened.foldersRead(repo)).toEqual(["/src/shop"]);
+    expect((await reopened.knownCheckouts()).map(({ dir }) => dir)).toEqual(["/src/shop"]);
   });
 
   it("drops files fetched more than 30 days before it opens", async () => {

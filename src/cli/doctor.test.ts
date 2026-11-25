@@ -65,7 +65,7 @@ const deps = (overrides: Partial<DoctorDeps> = {}): DoctorDeps => ({
     defaultModel: null,
   },
   anthropic: { configured: true, retrieveModel: async () => ok(undefined) },
-  openStore: () => ok(undefined),
+  openStore: async () => ok([]),
   checkout: {
     dir: "/home/lee/src/shop/web",
     info: {
@@ -73,6 +73,7 @@ const deps = (overrides: Partial<DoctorDeps> = {}): DoctorDeps => ({
       repos: [{ host: "github", owner: "acme", repo: "shop" }],
     },
   },
+  walk: { clones: [{ dir: "/home/lee/src/app", repos: [] }], stopped: null },
   ...overrides,
 });
 
@@ -97,18 +98,53 @@ describe("runDoctor", () => {
       "✓ Codex: 0.162.0, signed in, on your ChatGPT plan: Request AI review offers GPT-6 Luna and GPT-6 Sol on it",
       "✓ opencode: 2.3.0: Request AI review offers 2 models through Anthropic and Ollama, none measured by megareviewer's evals",
       "✓ Checkout: /home/lee/src/shop, a checkout of github.com/acme/shop\n    Callers outside a PR need its head commit: if a review says it's missing, run `git fetch` there.",
+      "✓ Clones: your home folder is searched for a PR's repository: 1 clone found. --no-search turns this off",
       "✓ Home: /home/lee/.megareviewer is writable and the database opens",
     ]);
   });
 
-  it("skips the checkout outside a git checkout", async () => {
-    const checks = await runDoctor(deps({ checkout: { dir: "/tmp", info: null } }));
+  it("skips the checkout outside a git checkout, where a clone is looked for instead", async () => {
+    const output = await lines({ checkout: { dir: "/tmp", info: null } });
+    expect(output).toContain(
+      "– Checkout: /tmp isn't in a git checkout: a clone is looked for instead",
+    );
+  });
+
+  it("says how to show callers outside a git checkout when no clone is searched for", async () => {
+    const checks = await runDoctor(deps({ checkout: { dir: "/tmp", info: null }, walk: null }));
+    expect(checks.find((check) => check.title === "Clones")).toEqual({
+      status: "skip",
+      title: "Clones",
+      detail: "not searched for, with --no-search",
+      fix: null,
+    });
     expect(checks.find((check) => check.title === "Checkout")).toEqual({
       status: "skip",
       title: "Checkout",
       detail: "/tmp isn't in a git checkout: callers outside a PR aren't shown",
       fix: "Run megareviewer in a checkout of the PR's repository, or pass --checkout <dir>.",
     });
+  });
+
+  it("says that the search for clones stopped early", async () => {
+    const output = await lines({ walk: { clones: [], stopped: "time" } });
+    expect(output).toContain(
+      "✓ Clones: your home folder is searched for a PR's repository: 0 clones found. The search stopped early: it took 2 seconds. --no-search turns this off",
+    );
+  });
+
+  it("lists the folders repositories were read from", async () => {
+    const known = (dir: string, repo: string) => ({
+      repo: { host: "github" as const, owner: "acme", repo },
+      dir,
+      lastReadAt: "2026-11-25T10:00:00.000Z",
+    });
+    const output = await lines({
+      openStore: async () => ok([known("/src/shop", "shop"), known("/src/app", "app")]),
+    });
+    expect(output).toContain(
+      "✓ Read before: /src/shop (github.com/acme/shop), /src/app (github.com/acme/app)",
+    );
   });
 
   it("names a checkout without a GitHub or Bitbucket remote", async () => {
@@ -279,7 +315,7 @@ describe("runDoctor", () => {
   });
 
   it("fails when the home directory or database doesn't open", async () => {
-    const output = await lines({ openStore: () => err("EACCES: permission denied") });
+    const output = await lines({ openStore: async () => err("EACCES: permission denied") });
     expect(output.at(-1)).toBe(
       "✗ Home: EACCES: permission denied\n    Set MEGAREVIEWER_HOME to a writable directory.",
     );

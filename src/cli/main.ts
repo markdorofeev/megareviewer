@@ -1,19 +1,19 @@
 import "./warnings.ts";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import packageJson from "../../package.json" with { type: "json" };
-import { type CheckoutInfo, inspectCheckout } from "../adapters/git/index.ts";
+import { type CloneSearch, createCloneSearch, inspectCheckout } from "../adapters/git/index.ts";
 import type { Logger } from "../application/ports/index.ts";
-import type { ModelOptions } from "../domain/review/index.ts";
 import { EXIT, parseCliArgs, USAGE } from "./args.ts";
-import { compose } from "./compose.ts";
-import { type Config, loadConfig } from "./config.ts";
-import { createDoctorDeps, formatCheck, repoName, runDoctor } from "./doctor.ts";
+import { compose, systemClock } from "./compose.ts";
+import { loadConfig } from "./config.ts";
+import { createDoctorDeps, formatCheck, runDoctor } from "./doctor.ts";
 import { createLogger } from "./logger.ts";
-import { modelSummary } from "./model-access.ts";
 import { openBrowser } from "./open-browser.ts";
 import { serve } from "./serve.ts";
+import { startSummary } from "./summary.ts";
 
 const { version } = packageJson;
 
@@ -37,41 +37,18 @@ const printProblems = (problems: readonly string[]): void => {
   console.error("\nRun `megareviewer doctor` for details.");
 };
 
-const printSummary = (
-  config: Config,
-  model: ModelOptions,
-  checkout: CheckoutInfo | null,
-  url: string,
-  ui: boolean,
-) => {
-  const github = config.github === null ? "not configured" : `token from ${config.github.source}`;
-  const bitbucket =
-    config.bitbucket === null
-      ? "not configured"
-      : `as ${config.bitbucket.username} (${config.bitbucket.credential})${config.bitbucket.workspace === null ? "" : `, workspace ${config.bitbucket.workspace}`}`;
-  const jira =
-    config.jira === null ? "not configured: ticket keys aren't fetched" : config.jira.baseUrl;
-  const claude = modelSummary(model);
-  const repos = checkout?.repos.map(repoName).join(", ") ?? "";
-  const local =
-    checkout === null
-      ? "none: start in a checkout of the PR's repository, or pass --checkout, to show callers outside the PR"
-      : `${checkout.root}${repos === "" ? "" : ` (${repos})`}`;
-  console.log(`megareviewer ${version}
-  GitHub     ${github}
-  Bitbucket  ${bitbucket}
-  Jira       ${jira}
-  Model      ${claude}
-  Checkout   ${local}
-${ui ? "" : "\nNo built UI found, so only the API is served.\n"}
-Open ${url}
-Press Ctrl+C to stop.`);
+/** The search for clones in the home folder, already walking; null when it's off. */
+const startSearch = (on: boolean, logger: Logger): CloneSearch | null => {
+  if (!on) return null;
+  const search = createCloneSearch({ home: homedir(), clock: systemClock, logger });
+  void search.walked();
+  return search;
 };
 
 /** The directory given with --checkout, or the one megareviewer runs in. */
 const checkoutDir = (given: string | null): string => resolve(given ?? process.cwd());
 
-const doctor = async (options: { checkout: string | null }): Promise<number> => {
+const doctor = async (options: { checkout: string | null; search: boolean }): Promise<number> => {
   const { config, problems } = await loadConfig();
   // Adapters' own logs would interleave with the checks; their failures are in the checks.
   const logger = createLogger({ level: "error" });
@@ -80,6 +57,7 @@ const doctor = async (options: { checkout: string | null }): Promise<number> => 
       config,
       problems,
       checkoutDir: checkoutDir(options.checkout),
+      search: startSearch(options.search, logger),
       version,
       logger,
     }),
@@ -112,6 +90,7 @@ const start = async (options: {
   port: number;
   open: boolean;
   checkout: string | null;
+  search: boolean;
 }): Promise<number | null> => {
   const { config, problems } = await loadConfig();
   if (problems.length > 0) {
@@ -121,9 +100,11 @@ const start = async (options: {
   const logger = createLogger({ level: config.logLevel });
   const assets = locateAssets();
   const dir = checkoutDir(options.checkout);
+  const search = startSearch(options.search, logger);
   const composed = await compose(config, {
     ...assets,
     checkoutDir: dir,
+    search,
     version,
     logger,
   });
@@ -147,8 +128,13 @@ const start = async (options: {
   }, logger);
 
   const url = `http://127.0.0.1:${server.port}/?token=${composition.sessionToken}`;
-  const [model, checkout] = await Promise.all([composition.modelOptions(), inspectCheckout(dir)]);
-  printSummary(config, model, checkout, url, assets.staticDir !== null);
+  const [model, checkout, walk] = await Promise.all([
+    composition.modelOptions(),
+    inspectCheckout(dir),
+    search?.walked() ?? null,
+  ]);
+  const ui = assets.staticDir !== null;
+  console.log(startSummary({ version, config, model, checkout, walk, url, ui }));
   if (options.open) openBrowser(url, logger);
   return null;
 };

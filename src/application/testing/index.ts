@@ -11,10 +11,13 @@ export {
   type HarnessSourceContractSetup,
 } from "./contracts/harness-source-contract.ts";
 export { describeHarnessStoreContract } from "./contracts/harness-store-contract.ts";
+export { describeKnownCheckoutsContract } from "./contracts/known-checkouts-contract.ts";
 export {
   CHECKOUT_CONTRACT_FILES,
   describeLocalCheckoutContract,
+  describeLocalCheckoutsContract,
   type LocalCheckoutContractSetup,
+  type LocalCheckoutsContractSetup,
 } from "./contracts/local-checkout-contract.ts";
 export { describePreferenceStoreContract } from "./contracts/preference-store-contract.ts";
 export {
@@ -63,5 +66,6 @@ export * from "./fixtures/index.ts";
 export { InMemoryAnalysisStore } from "./in-memory-analysis-store.ts";
 export { InMemoryFileCache } from "./in-memory-file-cache.ts";
 export { InMemoryHarnessStore } from "./in-memory-harness-store.ts";
+export { InMemoryKnownCheckouts } from "./in-memory-known-checkouts.ts";
 export { InMemoryPreferenceStore } from "./in-memory-preference-store.ts";
 export { type LogEntry, RecordingLogger } from "./recording-logger.ts";

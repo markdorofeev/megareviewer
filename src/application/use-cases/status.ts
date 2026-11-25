@@ -30,6 +30,8 @@ export interface Status {
   readonly jira: { readonly configured: boolean };
   /** Every model option, enabled or not, and the one a run without a choice uses. */
   readonly model: ModelOptions;
+  /** The folder searched for clones of a PR's repository; null when the search is off. */
+  readonly cloneSearchFolder: string | null;
 }
 
 const HOSTS: readonly HostKind[] = HostKinds.options;
@@ -114,6 +116,7 @@ export const createStatusUseCases = (deps: AppDeps, version: string) => ({
       hosts: { github, bitbucket },
       jira: { configured: deps.tickets.configured },
       model,
+      cloneSearchFolder: deps.checkouts.searchFolder,
     };
   },
 });

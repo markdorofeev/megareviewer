@@ -68,9 +68,19 @@ Flaky networks: on a lossy link, one dropped request used to fail the whole anal
 
 ## Local checkout
 
-The checkout is the directory given with `--checkout`, or else the one megareviewer runs in. It's read when it has the PR's head commit, whatever its remotes say: the commit pins every file's content, so a fork's checkout, or one cloned before its owner was renamed, reads the same. Requiring a remote that names the PR's repository was the plan, and refused delphi-code's own checkout, whose remote still names its owner's old account. The remotes only decide what the page says when the commit is missing: with one that names the repository, that a `git fetch` would bring it; without, that no checkout was found. `doctor` names the checkout and the repositories its remotes name.
+For a PR megareviewer tries these, in this order, and reads the first that has the PR's head commit:
 
-Reading runs `git` without a shell and without a new dependency: `cat-file -e` for the commit, `ls-tree` for the files at it, and `cat-file --batch` for many files in one process, after `--batch-check` skips those over 1 MB. Nothing it runs fetches, checks out or writes, so the reviewer's working tree stays as it is. A failure to read is a warning on the analysis, never a failed analysis.
+1. **The folder it was started in,** or the one given with `--checkout`.
+2. **A folder it read the repository from before,** the most recent first, remembered in the store (`known_checkouts`). One that's gone is forgotten.
+3. **A clone found by searching the home folder.** The search runs only when the first two don't have the commit.
+
+What decides is the head commit, whatever a folder's remotes say: the commit pins every file's content, so a fork's checkout, or one cloned before its owner was renamed, reads the same. Requiring a remote that names the PR's repository was the plan, and refused delphi-code's own checkout, whose remote still names its owner's old account. When none has the commit, the review opens without it, and the page says what was found: the first folder that names the repository, by a remote or because it was read from it before, where a `git fetch` would bring the commit; or that no clone was found, and whether the home folder was searched. The analysis keeps the folder (`checkoutDir`), and opening a PR again brings it up to date. Reading only the folder megareviewer was started in was the first version: a reviewer who started it anywhere else got no callers, and a note telling them to restart.
+
+**The search** walks the home folder at startup, up to 6 folders deep, for folders with a `.git` folder in them. It never opens `Library`, `node_modules` or a folder whose name starts with a dot, nor the home folder's own `Documents`, `Desktop`, `Downloads`, `Pictures`, `Music` and `Movies`, which macOS asks the reviewer about. It doesn't look inside a clone or a worktree, and follows no symlink. It stops after 2 seconds or 2,000 clones, and the startup summary, `doctor` and the log say so. On the author's machine it finds 20 clones in 0.05 s. A clone could be the repository's when one of its remotes names it, or its folder has its name. The remotes come from `.git/config` read as text: `git remote -v` in each of the 20 took 0.37 s and would run git in folders that have nothing to do with the PR, so git runs only in a folder that could be the PR's. A lookup that finds nothing walks again, at most once a minute, so a repository cloned meanwhile is found. On a Mac it then asks Spotlight for folders of the repository's name in the home folder, which finds `~/Documents/GitHub/<repo>`, where GitHub Desktop clones. A name with anything but letters, digits, dots, dashes and underscores is never put in a query.
+
+The search runs without asking, and the startup summary says so, with how many clones it found and `--no-search`, which turns it off. Nothing it reads leaves the machine. Asking first was the alternative: a question before the first review, for a walk that reads folder names. A `--repos` flag for folders the reviewer names waits until someone keeps code outside the home folder. The folders beside the checkout would be a second rule for what the walk finds anyway. Claude Code, Cursor and JetBrains each keep a list of projects, but those are other programs' files, and the walk finds the same folders. Fetching the missing commit into a found clone would write into the reviewer's repository.
+
+Reading runs `git` without a shell and without a new dependency: `cat-file -e` for the commit, `grep` for the files at it whose text holds a name, with the names on stdin and no path list, and `cat-file --batch` for many files in one process, after `--batch-check` skips those over 1 MB. Only files that mention a changed definition are read: on oracle/graal, 383 of 16,579 Java files, in 0.3 s instead of 3.3. Listing every file and reading all in the PR's languages was the first version. `grep` is told to search what git takes for binary too, and to ignore the repository's own grep settings, so it never leaves out a file. Nothing megareviewer runs fetches, checks out or writes, so the reviewer's clones stay as they are. A partial clone would fetch a file it lacks when asked for it, so git runs with lazy fetching off and every protocol refused; what it lacks is a warning. A failure to read is a warning on the analysis, never a failed analysis.
 
 It's used for one thing so far: the unchanged callers of what the PR changes (see prep).
 
@@ -458,13 +468,14 @@ SQLite at `~/.megareviewer/db.sqlite`:
 | `review_signals` | what made it (its key), kind (dismissed / raised / comment), time, PR, the point's kind, title, text, file |
 | `guideline_switches` | host, owner, repo, path, enabled |
 | `last_model_option` | the model option the last model call used, and when |
+| `known_checkouts` | host, owner, repo, folder it was read from, last read time |
 | `harnesses` | host, owner, repo, commit SHA, loaded time, the limit that cut it, the files skipped with why, the paths that weren't there |
 | `harness_files` | a harness's files in order: path, blob hash, bytes, lines, how it was found, the first file that links it, headings, its links to the others |
 | `harness_blobs` | host, owner, repo, blob hash, content, last used time |
 
 The pipeline version changes whenever prompts or schemas change, which invalidates cached analyses.
 
-The four preference tables and the harness's don't reference `analyses`: a preference is for every pull request, a signal outlives its analysis, and a harness is for every pull request on its base commit.
+The four preference tables don't reference `analyses`: a preference is for every pull request, and a signal outlives its analysis. Nor does `known_checkouts`: a folder is the repository's, for any pull request. Nor do the harness's: a harness is for every pull request on its base commit.
 
 `file_contents` keeps every file fetched from a host. A file at a commit never changes, so an analysis that failed partway, or another analysis of the same commits, doesn't fetch it again. Rows older than 30 days are dropped when megareviewer starts. A file over 1 MB isn't kept, because the analysis doesn't use it.
 

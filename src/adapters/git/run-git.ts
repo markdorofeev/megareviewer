@@ -14,8 +14,18 @@ export const runGit: RunGit = (dir, args, input) =>
   new Promise((resolve) => {
     const child = spawn("git", ["-C", dir, ...args], {
       stdio: ["pipe", "pipe", "pipe"],
-      // A checkout's own config can't page or prompt for credentials: nothing here reads a remote.
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_PAGER: "cat", LC_ALL: "C" },
+      env: {
+        ...process.env,
+        // A checkout's own config can't page or prompt for credentials: nothing here reads a remote.
+        GIT_TERMINAL_PROMPT: "0",
+        GIT_PAGER: "cat",
+        LC_ALL: "C",
+        // A partial clone fetches what it lacks when asked for it, which would write into it. The
+        // protocol stops a git too old to know the first.
+        GIT_NO_LAZY_FETCH: "1",
+        GIT_ALLOW_PROTOCOL: "none",
+        GIT_OPTIONAL_LOCKS: "0",
+      },
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];

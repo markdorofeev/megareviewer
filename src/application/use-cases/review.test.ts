@@ -26,6 +26,7 @@ import {
   InMemoryAnalysisStore,
   InMemoryFileCache,
   InMemoryHarnessStore,
+  InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   RecordingLogger,
   smallFeature,
@@ -84,6 +85,7 @@ const setup = (
       checkouts: new FakeLocalCheckouts(),
       harnessSource: () => null,
       harnessStore: new InMemoryHarnessStore(),
+      knownCheckouts: new InMemoryKnownCheckouts(),
       threads: {},
       statuses: {},
       parser: new FakeCodeParser(),
@@ -760,6 +762,7 @@ describe("getStatus", () => {
       },
       jira: { configured: true },
       model: { options: [fakeModelOption()], defaultId: fakeModelOption().id },
+      cloneSearchFolder: "/home/lee",
     });
   });
 

@@ -9,7 +9,7 @@ import {
   createBitbucketReviewThreads,
   createBitbucketStatusSource,
 } from "../adapters/bitbucket/index.ts";
-import { createGitCheckouts } from "../adapters/git/index.ts";
+import { type CloneSearch, createGitCheckouts } from "../adapters/git/index.ts";
 import {
   createGitHubHost,
   createGitHubReviewHistory,
@@ -56,6 +56,8 @@ export interface ComposeOptions {
   readonly staticDir: string | null;
   /** Where unchanged callers are read from, when it's a checkout with the PR's head commit. */
   readonly checkoutDir: string;
+  /** Finds clones of a PR's repository on this machine, or null when that's off. */
+  readonly search: CloneSearch | null;
   readonly version: string;
   readonly logger: Logger;
 }
@@ -281,7 +283,8 @@ export const compose = async (
           fileCache: store,
           harnessSource: harnessSourceIn({}),
           harnessStore: store,
-          checkouts: createGitCheckouts({ dir: options.checkoutDir }),
+          knownCheckouts: store,
+          checkouts: createGitCheckouts({ dir: options.checkoutDir, search: options.search }),
           parser: await createTreeSitterCodeParser({ grammarsDir: options.grammarsDir }),
           clock,
           logger,
