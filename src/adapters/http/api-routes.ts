@@ -116,6 +116,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     },
     getThreads: ({ params }) => useCases.getThreads(params.id),
     getPullRequestStatus: ({ params }) => useCases.getPullRequestStatus(params.id),
+    getHarness: ({ params }) => useCases.getHarnessUse(params.id),
     replyToThread: ({ params, body }) =>
       useCases.replyToThread(params.id, params.threadId, body.body),
     resolveThread: ({ params, body }) =>
@@ -127,10 +128,8 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
     getPreferences: async () => ok(await useCases.getPreferences()),
     addPreference: ({ body }) => useCases.addPreference(body),
     suggestPreferences: ({ body }) => useCases.suggestPreferences(body.repo, body.optionId),
-    setGuidelineSwitch: async ({ body }) => {
-      const switched = await useCases.setGuidelineSwitch(body.repo, body.path, body.enabled);
-      return switched.ok ? ok({}) : switched;
-    },
+    setGuidelineSwitch: ({ body }) =>
+      useCases.setGuidelineSwitch(body.repo, body.path, body.enabled),
     decideProposal: ({ params, body }) => useCases.decideProposal(params.proposalId, body),
     updatePreference: ({ params, body }) => useCases.updatePreference(params.preferenceId, body),
     deletePreference: async ({ params }) => {
@@ -153,6 +152,7 @@ export const registerApiRoutes = (app: Hono, useCases: UseCases): void => {
   register(app, routes.revokeApproval, handlers.revokeApproval);
   register(app, routes.getThreads, handlers.getThreads);
   register(app, routes.getPullRequestStatus, handlers.getPullRequestStatus);
+  register(app, routes.getHarness, handlers.getHarness);
   register(app, routes.replyToThread, handlers.replyToThread);
   register(app, routes.resolveThread, handlers.resolveThread);
   register(app, routes.postComment, handlers.postComment);

@@ -897,7 +897,16 @@ describe("the preference routes", () => {
     expect(listed.body).toEqual({
       preferences: [added.body],
       proposals: [],
-      repositories: [{ repo, guidelineFiles: [], guidelineNote: null }],
+      repositories: [
+        {
+          repo,
+          guidelineFiles: [],
+          guidelineNote: null,
+          harnessCut: null,
+          harnessSkipped: [],
+          harnessNote: null,
+        },
+      ],
     });
 
     const changed = await call("updatePreference", {
@@ -1030,8 +1039,16 @@ describe("the preference routes", () => {
       body: { repo, path: "CLAUDE.md", enabled: true },
     });
 
-    expect(switched.body).toEqual({});
+    expect(switched.body).toMatchObject({ repo, guidelineFiles: null });
     expect(await preferences.getGuidelineSwitches(repo)).toEqual(new Map([["CLAUDE.md", true]]));
+  });
+
+  it("say where the harness of an analysis stands, or that there's no such analysis", async () => {
+    const { call } = await seeded();
+    const { body } = await call("getHarness", { params: { id: smallFeatureAnalysis.id } });
+    expect(body).toEqual({ status: "none", inPrompt: [], onRequest: 0 });
+    const unknown = await call("getHarness", { params: { id: "a_0000000000000000" } });
+    expect(unknown.error?.code).toBe("not-found");
   });
 
   it("validate params and bodies", async () => {

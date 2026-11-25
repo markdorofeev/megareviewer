@@ -5,6 +5,7 @@ export type { ErrorCode, UseCaseError } from "./errors.ts";
 export { type HarnessState, harnessState, type LoadedHarness, loadHarness } from "./harness.ts";
 export { PIPELINE_VERSION } from "./pipeline-version.ts";
 export type {
+  HarnessUse,
   NewPreference,
   PreferenceChanges,
   PreferencesView,

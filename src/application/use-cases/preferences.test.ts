@@ -19,6 +19,7 @@ import type { PreferenceSuggester, ProposalDraft } from "../ports/index.ts";
 import {
   FakeCodeParser,
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakePreferenceSuggester,
@@ -36,7 +37,7 @@ import {
   smallFeature,
   smallFeatureAnalysis,
 } from "../testing/index.ts";
-import { createUseCases } from "./index.ts";
+import { createUseCases, loadHarness } from "./index.ts";
 import { SUGGESTION_PULL_REQUESTS, SUGGESTION_SIGNALS } from "./preferences.ts";
 
 const shop: RepoRef = smallFeature.pullRequest.ref.repo;
@@ -98,6 +99,7 @@ const setup = (
     comments?: readonly PastComment[];
     noHistory?: boolean;
     noHosts?: boolean;
+    harnessSource?: FakeHarnessSource;
   } = {},
 ) => {
   const clock = new FixedClock("2026-11-10T10:00:00.000Z");
@@ -107,6 +109,8 @@ const setup = (
   const suggester = new FakePreferenceSuggester({ drafts: options.drafts ?? [jsdoc, tenant] });
   const history = new FakeReviewHistory({ host: "github", comments: options.comments ?? [] });
   const logger = new RecordingLogger();
+  const harnessStore = new InMemoryHarnessStore(clock);
+  const harnessSource = options.harnessSource ?? null;
   const useCases = createUseCases(
     {
       hosts: options.noHosts ? {} : { github },
@@ -122,8 +126,8 @@ const setup = (
       preferences,
       history: options.noHistory ? {} : { github: history },
       checkouts: new FakeLocalCheckouts(),
-      harnessSource: () => null,
-      harnessStore: new InMemoryHarnessStore(),
+      harnessSource: () => harnessSource,
+      harnessStore,
       knownCheckouts: new InMemoryKnownCheckouts(),
       parser: new FakeCodeParser(),
       events: createAnalysisEvents(),
@@ -148,8 +152,25 @@ const setup = (
       await preferences.recordSignal(SignalKey.parse(`point:a:f${recorded}`), one);
     }
   };
-  return { clock, github, store, preferences, suggester, history, logger, useCases, add, record };
+  /** Loads the harness at a commit, as starting an analysis does. */
+  const load = (baseSha: string, repo = shop) =>
+    loadHarness({ harnessSource: () => harnessSource, harnessStore, logger }, repo, baseSha);
+  return {
+    clock,
+    github,
+    store,
+    preferences,
+    suggester,
+    history,
+    logger,
+    useCases,
+    add,
+    record,
+    load,
+  };
 };
+
+const noHarness = { harnessCut: null, harnessSkipped: [], harnessNote: null };
 
 const badRequest = (message: RegExp | string) => ({
   ok: false,
@@ -176,11 +197,33 @@ describe("getPreferences", () => {
       {
         repo: shop,
         guidelineFiles: [
-          { path: "REVIEW.md", bytes: 31, enabled: true, tooLarge: false },
-          { path: "CLAUDE.md", bytes: 70_000, enabled: false, tooLarge: true },
-          { path: ".github/copilot-instructions.md", bytes: 22, enabled: true, tooLarge: false },
+          {
+            path: "REVIEW.md",
+            bytes: 31,
+            enabled: true,
+            tooLarge: false,
+            use: "prompt",
+            linked: [],
+          },
+          {
+            path: "CLAUDE.md",
+            bytes: 70_000,
+            enabled: false,
+            tooLarge: true,
+            use: null,
+            linked: [],
+          },
+          {
+            path: ".github/copilot-instructions.md",
+            bytes: 22,
+            enabled: true,
+            tooLarge: false,
+            use: "prompt",
+            linked: [],
+          },
         ],
         guidelineNote: null,
+        ...noHarness,
       },
     ]);
     expect(github.getFilesCalls).toEqual([
@@ -220,16 +263,19 @@ describe("getPreferences", () => {
         repo: shop,
         guidelineFiles: null,
         guidelineNote: "Couldn't read its guideline files: socket hang up",
+        ...noHarness,
       },
       {
         repo: { ...shop, host: "bitbucket" },
         guidelineFiles: null,
         guidelineNote: "Couldn't read its guideline files: Bitbucket Cloud isn't configured",
+        ...noHarness,
       },
       {
         repo: api,
         guidelineFiles: null,
         guidelineNote: "No pull request of this repository has been analyzed yet",
+        ...noHarness,
       },
     ]);
   });
@@ -263,6 +309,7 @@ describe("getPreferences", () => {
         repo: shop,
         guidelineFiles: null,
         guidelineNote: "No pull request of this repository has been analyzed yet",
+        ...noHarness,
       },
     ]);
 
@@ -817,13 +864,191 @@ describe("decideProposal", () => {
   });
 });
 
+describe("a repository's harness", () => {
+  const { baseSha } = smallFeature.pullRequest;
+  const earlier = "e".repeat(40);
+  const section = async ({ useCases }: ReturnType<typeof setup>) => {
+    const [repository] = (await useCases.getPreferences()).repositories;
+    if (repository === undefined) throw new Error("the analyzed repository is listed");
+    return repository;
+  };
+  const analyzed = async (files: Readonly<Record<string, string>>, sha: string = baseSha) => {
+    const harnessSource = new FakeHarnessSource({ host: "github" });
+    harnessSource.setFiles(shop, sha, files);
+    const made = setup({ harnessSource });
+    await made.store.saveAnalysis(smallFeatureAnalysis);
+    return { ...made, harnessSource };
+  };
+
+  it("is shown without asking the host for the guideline files", async () => {
+    const made = await analyzed({ "AGENTS.md": "[Style](docs/style.md)\n", "docs/style.md": "x" });
+    await made.load(baseSha);
+
+    expect((await section(made)).guidelineFiles).toEqual([
+      {
+        path: "AGENTS.md",
+        bytes: 23,
+        enabled: false,
+        tooLarge: false,
+        use: null,
+        linked: [
+          {
+            path: "docs/style.md",
+            bytes: 1,
+            linkedFrom: "AGENTS.md",
+            via: "link",
+            enabled: true,
+            use: "on-request",
+          },
+        ],
+      },
+    ]);
+    expect(made.github.getFilesCalls).toEqual([]);
+  });
+
+  it("shows a root an enabled one imports as on, and what each would bring while it's off", async () => {
+    const made = await analyzed({
+      "CLAUDE.md": "@AGENTS.md\n",
+      "AGENTS.md": "@style.md\nSee CONTRIBUTING.md.\n",
+      "CONTRIBUTING.md": "Write tests.\n",
+      "style.md": "x",
+    });
+    await made.load(baseSha);
+    const shown = async () =>
+      ((await section(made)).guidelineFiles ?? []).map(({ path, enabled, use, linked }) => [
+        path,
+        enabled,
+        use,
+        linked.map((file) => [file.path, file.enabled, file.use]),
+      ]);
+
+    expect(await shown()).toEqual([
+      [
+        "AGENTS.md",
+        false,
+        null,
+        [
+          ["style.md", true, "prompt"],
+          // A guideline file that's only mentioned keeps its own switch.
+          ["CONTRIBUTING.md", false, null],
+        ],
+      ],
+      [
+        "CLAUDE.md",
+        false,
+        null,
+        [
+          ["AGENTS.md", false, "prompt"],
+          ["style.md", true, "prompt"],
+          ["CONTRIBUTING.md", false, null],
+        ],
+      ],
+      ["CONTRIBUTING.md", false, null, []],
+    ]);
+
+    await made.useCases.setGuidelineSwitch(shop, "CLAUDE.md", true);
+    expect((await shown()).map((file) => file.slice(0, 3))).toEqual([
+      ["AGENTS.md", true, "prompt"],
+      ["CLAUDE.md", true, "prompt"],
+      ["CONTRIBUTING.md", false, null],
+    ]);
+
+    await made.useCases.setGuidelineSwitch(shop, "AGENTS.md", false);
+    expect((await shown()).map((file) => file.slice(0, 3))).toEqual([
+      ["AGENTS.md", false, null],
+      ["CLAUDE.md", true, "prompt"],
+      ["CONTRIBUTING.md", false, null],
+    ]);
+  });
+
+  it("says that it's loading, and that it couldn't be loaded", async () => {
+    const made = await analyzed({ "REVIEW.md": "x" });
+    const release = made.harnessSource.hold();
+    const loading = made.load(baseSha);
+    expect(await section(made)).toMatchObject({
+      harnessNote: "The files they link are still loading",
+    });
+    expect(await made.useCases.getHarnessUse(smallFeatureAnalysis.id)).toEqual(
+      ok({ status: "loading", inPrompt: [], onRequest: 0 }),
+    );
+    made.harnessSource.failNext("listFiles", network);
+    release();
+    await loading;
+
+    expect(await section(made)).toMatchObject({
+      guidelineFiles: [{ path: "REVIEW.md" }, { path: "CLAUDE.md" }, {}],
+      harnessNote: "Couldn't load the files they link: socket hang up",
+    });
+    expect(await made.useCases.getHarnessUse(smallFeatureAnalysis.id)).toEqual(
+      ok({ status: "failed", inPrompt: [], onRequest: 0 }),
+    );
+  });
+
+  it("is the latest one loaded while the newest pull request's isn't, and says when that failed", async () => {
+    const made = await analyzed({ "REVIEW.md": "See style.md.\n", "style.md": "x" }, earlier);
+    await made.load(earlier);
+    expect(await section(made)).toMatchObject({
+      guidelineFiles: [{ path: "REVIEW.md", linked: [{ path: "style.md" }] }],
+      harnessNote: null,
+    });
+    const release = made.harnessSource.hold();
+    const loading = made.load(baseSha);
+    expect((await section(made)).harnessNote).toBeNull();
+    made.harnessSource.failNext("listFiles", network);
+    release();
+    await loading;
+
+    expect(await section(made)).toMatchObject({
+      guidelineFiles: [{ path: "REVIEW.md", linked: [{ path: "style.md" }] }],
+      harnessNote:
+        "Couldn't load the latest pull request's, so these are an earlier one's: socket hang up",
+    });
+  });
+
+  it("says which files an AI review would use, and none for an analysis without its pull request", async () => {
+    const made = await analyzed({
+      "REVIEW.md": "@style.md\n",
+      "style.md": "See tests.md.",
+      "tests.md": "x",
+    });
+    const id = smallFeatureAnalysis.id;
+    expect(await made.useCases.getHarnessUse(id)).toEqual(
+      ok({ status: "none", inPrompt: [], onRequest: 0 }),
+    );
+    await made.load(baseSha);
+    expect(await made.useCases.getHarnessUse(id)).toEqual(
+      ok({ status: "ready", inPrompt: ["REVIEW.md", "style.md"], onRequest: 1 }),
+    );
+    await made.store.saveAnalysis({ ...smallFeatureAnalysis, pullRequest: null });
+    expect(await made.useCases.getHarnessUse(id)).toEqual(
+      ok({ status: "none", inPrompt: [], onRequest: 0 }),
+    );
+  });
+
+  it("puts the guideline files that fit in a review while there's no harness, and says which don't", async () => {
+    const { useCases, preferences, store } = setup();
+    await store.saveAnalysis(smallFeatureAnalysis);
+    await preferences.setGuidelineSwitch(shop, "CLAUDE.md", true);
+
+    const [repository] = (await useCases.getPreferences()).repositories;
+
+    expect(
+      repository?.guidelineFiles?.map(({ path, enabled, use }) => [path, enabled, use]),
+    ).toEqual([
+      ["REVIEW.md", true, "prompt"],
+      ["CLAUDE.md", true, null],
+      [".github/copilot-instructions.md", false, null],
+    ]);
+  });
+});
+
 describe("setGuidelineSwitch", () => {
   it("switches a guideline file on or off for a repository", async () => {
     const { useCases, preferences, store } = setup();
     await store.saveAnalysis(smallFeatureAnalysis);
 
-    expect(await useCases.setGuidelineSwitch(shop, "REVIEW.md", false)).toEqual(ok(null));
-    expect(await useCases.setGuidelineSwitch(shop, "CLAUDE.md", true)).toEqual(ok(null));
+    await useCases.setGuidelineSwitch(shop, "REVIEW.md", false);
+    const switched = await useCases.setGuidelineSwitch(shop, "CLAUDE.md", true);
 
     expect(await preferences.getGuidelineSwitches(shop)).toEqual(
       new Map([
@@ -832,6 +1057,7 @@ describe("setGuidelineSwitch", () => {
       ]),
     );
     const [repository] = (await useCases.getPreferences()).repositories;
+    expect(switched).toEqual(ok(repository));
     expect(repository?.guidelineFiles?.map((file) => [file.path, file.enabled])).toEqual([
       ["REVIEW.md", false],
       ["CLAUDE.md", true],

@@ -1,9 +1,9 @@
 import {
+  type AnalysisId,
   canEnable,
   GUIDELINE_PATHS,
-  type GuidelineFile,
-  GuidelinePath,
-  guidelineFile,
+  type Harness,
+  harnessPlan,
   MAX_ENABLED_PREFERENCES,
   MAX_EVIDENCE_LINES,
   MAX_PREFERENCE_TEXT,
@@ -28,6 +28,12 @@ import { chooseOption } from "./analyses.ts";
 import type { AppDeps } from "./deps.ts";
 import { appError, fromHostError, type UseCaseError } from "./errors.ts";
 import { readRootFiles } from "./guidance.ts";
+import {
+  guidelineFilesAlone,
+  guidelineFilesOf,
+  type RepositoryGuidelineFile,
+} from "./guideline-files.ts";
+import { type HarnessState, harnessState } from "./harness.ts";
 import { mapLimit } from "./text.ts";
 
 /** The analyses whose repositories the page lists, the most recently updated. */
@@ -42,10 +48,27 @@ const GUIDELINE_READS = 6;
 export interface RepositoryPreferences {
   readonly repo: RepoRef;
   /** The guideline files the repository has; null when they couldn't be looked for. */
-  readonly guidelineFiles: readonly GuidelineFile[] | null;
+  readonly guidelineFiles: readonly RepositoryGuidelineFile[] | null;
   /** Why they couldn't be looked for. */
   readonly guidelineNote: string | null;
+  /** The limit the search for linked files stopped at, and the files it left out. */
+  readonly harnessCut: Harness["cut"];
+  readonly harnessSkipped: Harness["skipped"];
+  /** Why the linked files aren't here, or aren't the latest analysis's. */
+  readonly harnessNote: string | null;
 }
+
+/** How an AI review of an analysis's pull request would use its harness. */
+export interface HarnessUse {
+  /** none: nothing has loaded it. */
+  readonly status: HarnessState["status"];
+  /** The files put in every pass's prompt. */
+  readonly inPrompt: readonly string[];
+  /** How many more a pass can read. */
+  readonly onRequest: number;
+}
+
+const NO_HARNESS = { harnessCut: null, harnessSkipped: [], harnessNote: null } as const;
 
 export interface PreferencesView {
   /** In the order they were made. */
@@ -226,47 +249,89 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
     return proposals.ok ? ok({ proposals: proposals.value, ...counts }) : proposals;
   };
 
-  /** A repository's guideline files at the base commit of its latest analysis. */
+  /** Why the latest analysis's linked files aren't `shown`, the repository's latest harness. */
+  const loadNote = async (
+    repo: RepoRef,
+    baseSha: string | null,
+    shown: Harness | null,
+  ): Promise<string | null> => {
+    if (baseSha === null || shown?.baseSha === baseSha) return null;
+    const state = await harnessState(deps, repo, baseSha);
+    if (state.status === "failed") {
+      const { message } = state.error;
+      return shown === null
+        ? `Couldn't load the files they link: ${message}`
+        : `Couldn't load the latest pull request's, so these are an earlier one's: ${message}`;
+    }
+    return state.status === "loading" && shown === null
+      ? "The files they link are still loading"
+      : null;
+  };
+
+  /**
+   * A repository's guideline files with what they link, from its latest harness; without one, the
+   * guideline files alone, at the base commit of its latest analysis.
+   */
   const repositoryOf = async (
     repo: RepoRef,
     baseSha: string | null,
   ): Promise<RepositoryPreferences> => {
-    const unread = (guidelineNote: string) => ({ repo, guidelineFiles: null, guidelineNote });
+    const [switches, harness] = await Promise.all([
+      store.getGuidelineSwitches(repo),
+      deps.harnessStore.latestHarness(repo),
+    ]);
+    const harnessNote = await loadNote(repo, baseSha, harness);
+    if (harness !== null) {
+      return {
+        repo,
+        guidelineFiles: guidelineFilesOf(harness, switches),
+        guidelineNote: null,
+        harnessCut: harness.cut,
+        harnessSkipped: harness.skipped,
+        harnessNote,
+      };
+    }
+    const unread = (guidelineNote: string) => ({
+      repo,
+      guidelineFiles: null,
+      guidelineNote,
+      ...NO_HARNESS,
+    });
     if (baseSha === null) {
       return unread("No pull request of this repository has been analyzed yet");
     }
-    const [switches, files] = await Promise.all([
-      store.getGuidelineSwitches(repo),
-      readRootFiles(deps, repo, baseSha, GUIDELINE_PATHS),
-    ]);
+    const files = await readRootFiles(deps, repo, baseSha, GUIDELINE_PATHS);
     if (!files.ok) return unread(`Couldn't read its guideline files: ${files.error.message}`);
     return {
       repo,
-      guidelineFiles: GUIDELINE_PATHS.flatMap((path) => {
-        const content = files.value.get(path) ?? null;
-        return content === null ? [] : [guidelineFile(path, content, switches)];
-      }),
+      guidelineFiles: guidelineFilesAlone(files.value, switches),
       guidelineNote: null,
+      ...NO_HARNESS,
+      harnessNote,
     };
+  };
+
+  /** The repositories analyzed lately, each with the base commit of its latest analysis that has one. */
+  const recentRepositories = async () => {
+    const repositories = new Map<string, { repo: RepoRef; baseSha: string | null }>();
+    for (const analysis of await deps.store.listRecent(LISTED_ANALYSES)) {
+      const { repo } = analysis.key.ref;
+      const baseSha = analysis.pullRequest?.baseSha ?? null;
+      const known = repositories.get(repoKey(repo));
+      if (known === undefined || (known.baseSha === null && baseSha !== null)) {
+        repositories.set(repoKey(repo), { repo, baseSha: baseSha ?? known?.baseSha ?? null });
+      }
+    }
+    return repositories;
   };
 
   return {
     async getPreferences(): Promise<PreferencesView> {
-      const [preferences, proposals, recent] = await Promise.all([
+      const [preferences, proposals, repositories] = await Promise.all([
         store.listPreferences(),
         store.listProposals(),
-        deps.store.listRecent(LISTED_ANALYSES),
+        recentRepositories(),
       ]);
-      // By repository, with the base commit of its latest analysis that has one.
-      const repositories = new Map<string, { repo: RepoRef; baseSha: string | null }>();
-      for (const analysis of recent) {
-        const { repo } = analysis.key.ref;
-        const baseSha = analysis.pullRequest?.baseSha ?? null;
-        const known = repositories.get(repoKey(repo));
-        if (known === undefined || (known.baseSha === null && baseSha !== null)) {
-          repositories.set(repoKey(repo), { repo, baseSha: baseSha ?? known?.baseSha ?? null });
-        }
-      }
       const others = preferences
         .flatMap(({ scope }) => (scope.kind === "repo" ? [scope.repo] : []))
         .filter((repo) => !repositories.has(repoKey(repo)))
@@ -377,13 +442,16 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
       return ok({ preference: saved.value });
     },
 
+    /** Switches a file of the repository's latest harness, and answers the repository as it is then. */
     async setGuidelineSwitch(
       repo: RepoRef,
       path: string,
       enabled: boolean,
-    ): Promise<Result<null, UseCaseError>> {
-      const known = GuidelinePath.safeParse(path);
-      if (!known.success) {
+    ): Promise<Result<RepositoryPreferences, UseCaseError>> {
+      const known =
+        GUIDELINE_PATHS.some((one) => one === path) ||
+        (await deps.harnessStore.latestHarness(repo))?.files.some((file) => file.path === path);
+      if (known !== true) {
         return err(
           appError(
             "bad-request",
@@ -391,8 +459,29 @@ export const createPreferenceUseCases = (deps: AppDeps) => {
           ),
         );
       }
-      await store.setGuidelineSwitch(repo, known.data, enabled);
-      return ok(null);
+      await store.setGuidelineSwitch(repo, path, enabled);
+      const baseSha = (await recentRepositories()).get(repoKey(repo))?.baseSha ?? null;
+      return ok(await repositoryOf(repo, baseSha));
+    },
+
+    /** How an AI review of an analysis's pull request would use its harness, as far as it's loaded. */
+    async getHarnessUse(id: AnalysisId): Promise<Result<HarnessUse, UseCaseError>> {
+      const analysis = await deps.store.getAnalysis(id);
+      if (analysis === null) return err(appError("not-found", `No analysis ${id}`));
+      const { repo } = analysis.key.ref;
+      const baseSha = analysis.pullRequest?.baseSha ?? null;
+      const state =
+        baseSha === null ? ({ status: "none" } as const) : await harnessState(deps, repo, baseSha);
+      if (state.status !== "ready") return ok({ status: state.status, inPrompt: [], onRequest: 0 });
+      const { inPrompt, onRequest } = harnessPlan(
+        state.harness,
+        await store.getGuidelineSwitches(repo),
+      );
+      return ok({
+        status: "ready",
+        inPrompt: inPrompt.map(({ path }) => path),
+        onRequest: onRequest.length,
+      });
     },
   };
 };

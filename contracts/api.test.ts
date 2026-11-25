@@ -51,6 +51,32 @@ const proposal = {
   createdAt: "2026-11-10T10:05:00Z",
 } as const;
 
+const claudeMd = {
+  path: "CLAUDE.md",
+  bytes: 98_000,
+  enabled: true,
+  tooLarge: true,
+  use: "on-request",
+  linked: [
+    {
+      path: "docs/rules.md",
+      bytes: 6_000,
+      linkedFrom: "CLAUDE.md",
+      via: "import",
+      enabled: true,
+      use: "prompt",
+    },
+    {
+      path: "docs/testing.md",
+      bytes: 900,
+      linkedFrom: "docs/rules.md",
+      via: "mention",
+      enabled: false,
+      use: null,
+    },
+  ],
+};
+
 const responses: Record<RouteName, unknown> = {
   getStatus: {
     version: "0.1.0",
@@ -141,15 +167,28 @@ const responses: Record<RouteName, unknown> = {
       {
         repo,
         guidelineFiles: [
-          { path: "REVIEW.md", bytes: 1200, enabled: true, tooLarge: false },
-          { path: "CLAUDE.md", bytes: 48_000, enabled: false, tooLarge: true },
+          {
+            path: "REVIEW.md",
+            bytes: 1200,
+            enabled: true,
+            tooLarge: false,
+            use: "prompt",
+            linked: [],
+          },
+          claudeMd,
         ],
         guidelineNote: null,
+        harnessCut: "files",
+        harnessSkipped: [{ path: "docs/changelog.md", reason: "too-large" }],
+        harnessNote: null,
       },
       {
         repo: { ...repo, repo: "api" },
         guidelineFiles: null,
         guidelineNote: "No pull request of this repository has been analyzed yet",
+        harnessCut: null,
+        harnessSkipped: [],
+        harnessNote: null,
       },
     ],
   },
@@ -158,7 +197,15 @@ const responses: Record<RouteName, unknown> = {
   deletePreference: {},
   suggestPreferences: { proposals: [proposal], signals: 14, comments: 92, pullRequests: 30 },
   decideProposal: { preference: { ...preference, source: "learned" } },
-  setGuidelineSwitch: {},
+  setGuidelineSwitch: {
+    repo,
+    guidelineFiles: [claudeMd],
+    guidelineNote: null,
+    harnessCut: null,
+    harnessSkipped: [],
+    harnessNote: "Couldn't load the files they link: GitHub is down",
+  },
+  getHarness: { status: "ready", inPrompt: ["CLAUDE.md", "docs/rules.md"], onRequest: 66 },
 };
 
 const requests: Partial<Record<RouteName, unknown>> = {
@@ -223,7 +270,33 @@ describe("routes", () => {
     }
   });
 
-  it("refuses a preference saved as imported, and a guideline path megareviewer doesn't read", () => {
+  it("takes any path for a guideline switch, and refuses an empty one and a file used some other way", () => {
+    const { request, response } = routes.setGuidelineSwitch;
+    const body = { repo, path: "docs/STYLE.md", enabled: true };
+    expect(request.safeParse(body).success).toBe(true);
+    expect(request.safeParse({ ...body, path: "" }).success).toBe(false);
+    const section = (file: object) => ({
+      repo,
+      guidelineFiles: [file],
+      guidelineNote: null,
+      harnessCut: null,
+      harnessSkipped: [],
+      harnessNote: null,
+    });
+    expect(response.safeParse(section(claudeMd)).success).toBe(true);
+    expect(response.safeParse(section({ ...claudeMd, use: "sometimes" })).success).toBe(false);
+    expect(response.safeParse(section({ ...claudeMd, path: "docs/STYLE.md" })).success).toBe(false);
+  });
+
+  it("says where a harness's load stands in one of four words", () => {
+    const { response } = routes.getHarness;
+    for (const status of ["loading", "ready", "none", "failed"]) {
+      expect(response.safeParse({ status, inPrompt: [], onRequest: 0 }).success).toBe(true);
+    }
+    expect(response.safeParse({ status: "stale", inPrompt: [], onRequest: 0 }).success).toBe(false);
+  });
+
+  it("refuses a preference saved as imported", () => {
     expect(
       routes.addPreference.request.safeParse({
         kind: "look-for",
@@ -231,10 +304,6 @@ describe("routes", () => {
         scope: { kind: "global" },
         source: "imported",
       }).success,
-    ).toBe(false);
-    expect(
-      routes.setGuidelineSwitch.request.safeParse({ repo, path: "docs/STYLE.md", enabled: true })
-        .success,
     ).toBe(false);
   });
 

@@ -42,6 +42,7 @@ export const createUseCases = (deps: AppDeps, options: { readonly version: strin
     suggestPreferences: preferences.suggestPreferences,
     decideProposal: preferences.decideProposal,
     setGuidelineSwitch: preferences.setGuidelineSwitch,
+    getHarnessUse: preferences.getHarnessUse,
   };
 };
 
