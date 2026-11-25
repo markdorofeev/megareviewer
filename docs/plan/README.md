@@ -258,6 +258,17 @@ Between the brief's three lines and the files, nothing says what happens and in 
 |---|---|---|---|
 | 64 | [A tour of the PR, behind a switch](64-tour.md) | 27, 45, 50, 56, 61 | The `steps` pass and its checks, the Understand layout, the Display menu's switches, the steps' eval scores |
 
+## Eighteenth slice: the repository beside the PR
+
+Code outside the PR that calls what it changes shows only when megareviewer is started inside a clone that has the PR's head commit. This slice has megareviewer find a clone on the machine, and download the commit into a copy of its own when there's none.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 65 | [A clone found on this machine](65-clone-on-this-machine.md) | 30 | The `LocalCheckouts` port, the home folder search in `src/adapters/git/`, the `known_checkouts` table, `--no-search` |
+| 66 | [megareviewer's own copy of the repository](66-own-copy-of-the-repository.md) | 65 | The `RepositoryCopies` port, the download in `src/adapters/git/`, callers added to a complete analysis, `--no-download` |
+
+One after the other: both change the checkout's port, the git adapter and how an analysis looks a checkout up. Stage 66 starts with a check of each host's git access that can stop it.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.
