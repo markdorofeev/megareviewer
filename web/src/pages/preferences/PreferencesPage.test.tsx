@@ -850,7 +850,7 @@ describe("PreferencesPage's repositories", () => {
     const notes = [...section.querySelectorAll("[data-slot=harness-notes] li")];
     expect(notes.map((note) => note.textContent)).toEqual([
       "The files they link are still loading.",
-      "Links are followed 5 steps from a guideline file. A file further away isn't listed, and AI reviews don't use it.",
+      "Links are followed up to 5 files deep from a guideline file. A file further away isn't listed, and AI reviews don't use it.",
       "docs/changelog.md is over 1 MB, so AI reviews don't use it.",
       "docs/diagram.md couldn't be read as text, so AI reviews don't use it.",
     ]);

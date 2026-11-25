@@ -29,7 +29,7 @@ import {
 const LOOKED_FOR = `megareviewer looks for ${new Intl.ListFormat("en", { type: "disjunction" }).format(GUIDELINE_PATHS)}.`;
 
 const CUT: Readonly<Record<NonNullable<RepositoryPreferences["harnessCut"]>, string>> = {
-  depth: `Links are followed ${MAX_HARNESS_DEPTH} steps from a guideline file. A file further away isn't listed, and AI reviews don't use it.`,
+  depth: `Links are followed up to ${MAX_HARNESS_DEPTH} files deep from a guideline file. A file further away isn't listed, and AI reviews don't use it.`,
   files: `Links are followed to ${MAX_HARNESS_FILES} files, looking for ${MAX_HARNESS_LOOKUPS} at most. A file past that isn't listed, and AI reviews don't use it.`,
 };
 
