@@ -376,10 +376,13 @@ describe("ReviewPage states", () => {
     });
     await loaded();
     const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
-    await waitFor(() => expect(button.getAttribute("aria-disabled")).toBe("true"));
-    expect(description(button)).toBe(
-      "Claude Code isn't signed in: run `claude` and sign in; or No Anthropic API credentials: set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API",
+    // Disabled before the status is read too, so the reason is what's waited for.
+    await waitFor(() =>
+      expect(description(button)).toBe(
+        "Claude Code isn't signed in: run `claude` and sign in; or No Anthropic API credentials: set ANTHROPIC_API_KEY or run `ant auth login` to use the Anthropic API",
+      ),
     );
+    expect(button.getAttribute("aria-disabled")).toBe("true");
     // Still focusable, so the keyboard reaches the reason too.
     expect(button.hasAttribute("disabled")).toBe(false);
 
