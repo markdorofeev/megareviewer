@@ -86,6 +86,27 @@ export {
   StoredGuardrail,
 } from "./guardrail.ts";
 export {
+  BlobHash,
+  Harness,
+  HarnessFile,
+  HarnessHeading,
+  type HarnessLink,
+  HarnessLinkKind,
+  type HarnessPlan,
+  HarnessSkipReason,
+  harnessEnabled,
+  harnessLinks,
+  harnessOutline,
+  harnessPlan,
+  harnessReach,
+  MAX_HARNESS_DEPTH,
+  MAX_HARNESS_FILE_BYTES,
+  MAX_HARNESS_FILES,
+  MAX_HARNESS_LOOKUPS,
+  MAX_INLINE_BYTES,
+  strongerLink,
+} from "./harness.ts";
+export {
   InferredIntent,
   Intent,
   IntentMismatch,
