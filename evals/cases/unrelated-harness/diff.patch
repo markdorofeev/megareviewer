@@ -1,0 +1,30 @@
+diff --git a/src/format/duration.test.ts b/src/format/duration.test.ts
+index d10e51c..3c55386 100644
+--- a/src/format/duration.test.ts
++++ b/src/format/duration.test.ts
+@@ -3,5 +3,9 @@ import { formatDuration } from "./duration.ts";
+ 
+ it("shows minutes", () => {
+   expect(formatDuration(300)).toBe("5 min");
+-  expect(formatDuration(5700)).toBe("95 min");
++});
++
++it("shows hours from an hour on", () => {
++  expect(formatDuration(3600)).toBe("1 h");
++  expect(formatDuration(5700)).toBe("1 h 35 min");
+ });
+diff --git a/src/format/duration.ts b/src/format/duration.ts
+index 322a542..fa9aed1 100644
+--- a/src/format/duration.ts
++++ b/src/format/duration.ts
+@@ -1,2 +1,8 @@
+-/** "95 min", for the length of a call. */
+-export const formatDuration = (seconds: number): string => `${Math.floor(seconds / 60)} min`;
++/** "1 h 35 min", for the length of a call. */
++export const formatDuration = (seconds: number): string => {
++  const hours = Math.floor(seconds / 3600);
++  const minutes = Math.floor((seconds % 3600) / 60);
++  return [hours > 0 ? `${hours} h` : "", minutes > 0 ? `${minutes} min` : ""]
++    .filter((part) => part !== "")
++    .join(" ");
++};

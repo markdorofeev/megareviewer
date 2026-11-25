@@ -1,0 +1,22 @@
+diff --git a/src/invoices/routes.ts b/src/invoices/routes.ts
+index 2a22564..e211d67 100644
+--- a/src/invoices/routes.ts
++++ b/src/invoices/routes.ts
+@@ -1,4 +1,5 @@
+ import { sendError } from "../errors.ts";
++import { publishEvent } from "../events.ts";
+ import type { Router } from "../http.ts";
+ import { findInvoice, voidInvoice } from "./repository.ts";
+ 
+@@ -18,6 +19,11 @@ export const registerInvoiceRoutes = (router: Router): void => {
+       sendError(res, 404, "invoice_not_found");
+       return;
+     }
++    await publishEvent("invoice.voided", {
++      invoiceId: invoice.id,
++      accountId: req.accountId,
++      voidedAt: invoice.voidedAt,
++    });
+     res.json({ invoice });
+   });
+ };
