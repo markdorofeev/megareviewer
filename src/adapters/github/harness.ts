@@ -7,10 +7,13 @@ import {
 } from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
 import { createGitHubClient, type GitHubClientOptions } from "./client.ts";
-import { blobsQuery, FILES_PER_QUERY, rawFile } from "./github-host.ts";
+import { blobsQuery, rawFile } from "./github-host.ts";
 import { GitHubHarnessBlobs, GitHubTree } from "./schemas.ts";
 
 const BLOB_FIELDS = "oid byteSize text isBinary isTruncated";
+/** As Collect reads a PR's files: on a slow link each connection is slow on its own. */
+const FILES_PER_QUERY = 3;
+const QUERIES_AT_ONCE = 6;
 /** A blob that holds a path instead of text. */
 const SYMLINK_MODE = "120000";
 
@@ -43,6 +46,29 @@ export const createGitHubHarnessSource = (options: GitHubClientOptions): Harness
     );
   };
 
+  const readQuery = async (
+    repo: RepoRef,
+    sha: string,
+    paths: readonly string[],
+  ): Promise<Result<(HarnessSourceFile | null)[], HostError>> => {
+    const blobs = await client.read(`${paths.length} files`, GitHubHarnessBlobs, (request) =>
+      client.octokit.graphql(blobsQuery(paths.length, BLOB_FIELDS), {
+        owner: repo.owner,
+        repo: repo.repo,
+        ...Object.fromEntries(paths.map((path, i) => [`e${i}`, `${sha}:${path}`])),
+        request,
+      }),
+    );
+    if (!blobs.ok) return blobs;
+    const files: (HarnessSourceFile | null)[] = [];
+    for (const [i, path] of paths.entries()) {
+      const file = await fileOf(repo, sha, path, blobs.value.repository[`f${i}`] ?? null);
+      if (!file.ok) return file;
+      files.push(file.value);
+    }
+    return ok(files);
+  };
+
   return {
     host: "github",
 
@@ -71,22 +97,17 @@ export const createGitHubHarnessSource = (options: GitHubClientOptions): Harness
     },
 
     async readFiles(repo, sha, paths) {
+      const queries = Array.from({ length: Math.ceil(paths.length / FILES_PER_QUERY) }, (_, i) =>
+        paths.slice(i * FILES_PER_QUERY, (i + 1) * FILES_PER_QUERY),
+      );
       const files: (HarnessSourceFile | null)[] = [];
-      for (let start = 0; start < paths.length; start += FILES_PER_QUERY) {
-        const chunk = paths.slice(start, start + FILES_PER_QUERY);
-        const blobs = await client.read(`${chunk.length} files`, GitHubHarnessBlobs, (request) =>
-          client.octokit.graphql(blobsQuery(chunk.length, BLOB_FIELDS), {
-            owner: repo.owner,
-            repo: repo.repo,
-            ...Object.fromEntries(chunk.map((path, i) => [`e${i}`, `${sha}:${path}`])),
-            request,
-          }),
+      for (let start = 0; start < queries.length; start += QUERIES_AT_ONCE) {
+        const answers = await Promise.all(
+          queries.slice(start, start + QUERIES_AT_ONCE).map((asked) => readQuery(repo, sha, asked)),
         );
-        if (!blobs.ok) return blobs;
-        for (const [i, path] of chunk.entries()) {
-          const file = await fileOf(repo, sha, path, blobs.value.repository[`f${i}`] ?? null);
-          if (!file.ok) return file;
-          files.push(file.value);
+        for (const answer of answers) {
+          if (!answer.ok) return answer;
+          files.push(...answer.value);
         }
       }
       return ok(files);

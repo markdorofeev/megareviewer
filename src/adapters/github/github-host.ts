@@ -42,7 +42,7 @@ const RAW = "application/vnd.github.raw";
 const MAX_COMMITS = 250;
 const SEARCH_PAGE_SIZE = 50;
 /** Files per GraphQL query: each is an alias, so one request reads them all. */
-export const FILES_PER_QUERY = 25;
+const FILES_PER_QUERY = 25;
 
 /** Reads `count` files, each named by a "sha:path" variable so paths are never interpolated. */
 export const blobsQuery = (count: number, fields = "text isBinary isTruncated"): string => {

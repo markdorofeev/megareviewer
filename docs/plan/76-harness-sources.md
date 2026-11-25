@@ -44,7 +44,7 @@ Both hosts implement `HarnessSource`, so a PR opened on either loads its reposit
 
 ### Where the code differs from this doc
 
-- **The batch sizes are `getFiles`' own constants,** as the code has them: 25 files a GraphQL query, one query after another, and 8 Bitbucket requests at a time. This doc's and ARCHITECTURE.md's 3 a query, 6 at a time, and 18 aren't in the code, on this branch or on `main`.
+- **Files are read 3 a GraphQL query, 6 queries at a time, and 18 at a time on Bitbucket,** inside the adapters. Collect's batches give a PR's files those sizes, and `loadHarness` asks for a hop's files in one call. The first version took the adapters' own limits, 25 a query one after another and 8 at a time, and these notes said the documented sizes weren't in the code: they're in `collect.ts`. A lost request still retries the whole hop, where Collect's retries its batch.
 - **A symlink isn't in GitHub's list.** Its blob holds a path: `sindresorhus/is` has a `CLAUDE.md` that links to `AGENTS.md`, and its harness is `AGENTS.md` alone. A submodule isn't either. In a tree GitHub cuts short, and on Bitbucket, a link can't be told from a file, and is read as the host gives it.
 - **A file over 1 MB isn't downloaded:** GitHub's query says its size, and Bitbucket's answer its length. One GraphQL cuts short under that is read whole over REST, as `getFiles` does.
 - **A directory on Bitbucket is told by its answer,** a listing in JSON. A file comes as text or binary, a `.json` file too.
@@ -59,12 +59,12 @@ The new commit goes first, `diffstat/{new}..{old}`: in the recording, `b467819..
 
 | Repository | Load | Requests | Time | Harness |
 |---|---|---|---|---|
-| markdorofeev/megareviewer, GitHub | First, `61bd0ac` | 1 tree, 6 file queries | 7.6 s | 73 files, 1.0 MB, not cut, 13 dead links |
-| | Second, `ebd66b6`, 3 days newer | 1 tree, 2 file queries | 2.6 s | 73 files, 1.0 MB |
+| markdorofeev/megareviewer, GitHub | First, `61bd0ac` | 1 tree, 26 file queries | 6.0 s; 7.6 s as 6 queries of up to 25 | 73 files, 1.0 MB, not cut, 13 dead links |
+| | Second, `ebd66b6`, 3 days newer | 1 tree, 2 file queries | 2.5 s | 73 files, 1.0 MB |
 | | The same again | none | 1 ms | |
 | atlassian/aui, Bitbucket | First, `865f546` | 5 files | 1.2 s | `CONTRIBUTING.md` |
 | | Second, `e9ba9f6`, 700 files apart | 1 diffstat, on 2 pages | 1.2 s | the same |
-| atlassian/bitbucket-upload-file, Bitbucket | First, `9c2e7d9` | 8 files | 1.7 s | `CONTRIBUTING.md` and 3 files it links |
+| atlassian/bitbucket-upload-file, Bitbucket | First, `9c2e7d9` | 8 files | 1.7 and 2.6 s | `CONTRIBUTING.md` and 3 files it links |
 | | Second, `b467819` | 1 diffstat | 0.4 s | the same |
 | sindresorhus/is, GitHub | First | 1 tree, 1 file query | 1.3 s | `AGENTS.md` |
 | torvalds/linux, GitHub | First | 1 tree, cut short, 1 file query | 6.1 s | none, its five roots asked for |
@@ -72,7 +72,3 @@ The new commit goes first, `diffstat/{new}..{old}`: in the recording, `b467819..
 The last one downloads a 71,474-entry tree GitHub has cut and can't use it. A repository that size pays it once a base commit.
 
 Not checked: a symlink on Bitbucket, and a repository whose harness changed between two commits there.
-
-### To fold into ARCHITECTURE.md
-
-The "Git hosts" table has no rows for `HarnessSource`, and its batch sizes aren't the code's.

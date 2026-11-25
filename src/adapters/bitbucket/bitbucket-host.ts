@@ -47,7 +47,7 @@ export interface BitbucketHostOptions {
 /** Repositories scanned for PRs to review: Bitbucket has no cross-repo reviewer search. */
 const SCANNED_REPOS = 50;
 const SCAN_CONCURRENCY = 5;
-export const FILE_CONCURRENCY = 8;
+const FILE_CONCURRENCY = 8;
 const PAGE_SIZE = 50;
 
 /** Failures that say a PR asked about is gone or hidden from the user, so it's left out. */

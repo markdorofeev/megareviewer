@@ -47,16 +47,23 @@ const unauthorizedExchanges: RecordedExchange[] = [
   },
 ];
 
-const RecordedBlobs = z.object({ data: GitHubHarnessBlobs });
+const RecordedQuery = z.object({
+  request: z.object({ body: z.object({ variables: z.record(z.string(), z.string()) }) }),
+  response: z.object({ body: z.object({ data: GitHubHarnessBlobs }) }),
+});
 
 /** The recorded text of a file, whose hash below is what `git ls-tree` prints. */
-const recordedText = (alias: string): string => {
-  for (const { response } of harnessExchanges) {
-    const blobs = RecordedBlobs.safeParse(response.body);
-    const text = blobs.success ? blobs.data.data.repository[alias]?.text : null;
+const recordedText = (path: string): string => {
+  for (const exchange of harnessExchanges) {
+    const query = RecordedQuery.safeParse(exchange);
+    if (!query.success) continue;
+    const { variables } = query.data.request.body;
+    const [name] = Object.entries(variables).find(([, value]) => value === `${SHA}:${path}`) ?? [];
+    const { repository } = query.data.response.body.data;
+    const text = name === undefined ? null : repository[name.replace("e", "f")]?.text;
     if (typeof text === "string") return text;
   }
-  throw new Error(`no recorded text for ${alias}`);
+  throw new Error(`no recorded text for ${path}`);
 };
 
 describeHarnessSourceContract("github", () => ({
@@ -69,17 +76,17 @@ describeHarnessSourceContract("github", () => ({
   files: [
     {
       path: ".github/security.md",
-      content: recordedText("f3"),
+      content: recordedText(".github/security.md"),
       blob: "34a527ba6b8ef13393330073af5ec736b2e7393a",
     },
     {
       path: "AGENTS.md",
-      content: recordedText("f2"),
+      content: recordedText("AGENTS.md"),
       blob: "2996cf5a36aab4c3067cd8bd0f8286229759f1dd",
     },
     {
       path: "readme.md",
-      content: recordedText("f1"),
+      content: recordedText("readme.md"),
       blob: "509f75fc162053037b834ddb86c12a674a31619a",
     },
   ],
@@ -94,6 +101,8 @@ const FileQuery = z.object({ variables: z.record(z.string(), z.string()) });
 /** A GitHub over files by commit, which answers trees and file queries and counts them. */
 const fakeGitHub = async (commits: Readonly<Record<string, Readonly<Record<string, string>>>>) => {
   const requests = { trees: 0, queries: 0 };
+  const most = { files: 0, queries: 0 };
+  let going = 0;
   const hashes = new Map<string, string>();
   for (const files of Object.values(commits)) {
     for (const content of Object.values(files)) hashes.set(content, await gitBlobHash(content));
@@ -115,7 +124,13 @@ const fakeGitHub = async (commits: Readonly<Record<string, Readonly<Record<strin
       });
     }
     requests.queries += 1;
+    going += 1;
+    most.queries = Math.max(most.queries, going);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    going -= 1;
     const { variables } = FileQuery.parse(await request.json());
+    const asked = Object.keys(variables).filter((name) => /^e\d+$/.test(name)).length;
+    most.files = Math.max(most.files, asked);
     const repository = Object.fromEntries(
       Object.entries(variables)
         .filter(([name]) => /^e\d+$/.test(name))
@@ -139,7 +154,7 @@ const fakeGitHub = async (commits: Readonly<Record<string, Readonly<Record<strin
     );
     return answer({ data: { repository } });
   };
-  return { source: sourceOver(fetch), requests };
+  return { source: sourceOver(fetch), requests, most };
 };
 
 describe("createGitHubHarnessSource", () => {
@@ -255,7 +270,16 @@ describe("createGitHubHarnessSource", () => {
     expect(
       read.ok && read.value.map((file) => (file?.kind === "text" ? file.content : null)),
     ).toEqual(paths.map((path) => `# ${path}`));
-    expect(requests).toEqual({ trees: 0, queries: 2 });
+    expect(requests).toEqual({ trees: 0, queries: 10 });
+  });
+
+  it("asks for three files a query, six queries at a time", async () => {
+    const paths = Array.from({ length: 30 }, (_, i) => `docs/${i}.md`);
+    const { source, most } = await fakeGitHub({
+      [SHA]: Object.fromEntries(paths.map((path) => [path, `# ${path}`])),
+    });
+    await source.readFiles(repo, SHA, paths);
+    expect(most).toEqual({ files: 3, queries: 6 });
   });
 });
 

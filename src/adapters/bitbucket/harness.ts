@@ -7,7 +7,7 @@ import {
   type RepoRef,
 } from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
-import { FILE_CONCURRENCY, fileUrl, mapLimit, repoUrl, withQuery } from "./bitbucket-host.ts";
+import { fileUrl, mapLimit, repoUrl, withQuery } from "./bitbucket-host.ts";
 import { createBitbucketClient, MAX_PAGES } from "./client.ts";
 import { BitbucketDiffstat, BitbucketPage } from "./schemas.ts";
 
@@ -19,6 +19,8 @@ export interface BitbucketHarnessOptions {
   readonly requestTimeoutMs?: number;
 }
 
+/** As many as Collect's batches of a PR's files ask for together. */
+const FILES_AT_ONCE = 18;
 const DIFFSTAT_FIELDS = "next,values.old.path,values.new.path";
 const DIFFSTAT_PAGE_SIZE = 500;
 
@@ -80,7 +82,7 @@ export const createBitbucketHarnessSource = (options: BitbucketHarnessOptions): 
     listFiles: async () => ok(null),
 
     async readFiles(repo, sha, paths) {
-      const read = await mapLimit(paths, FILE_CONCURRENCY, (path) => readFile(repo, sha, path));
+      const read = await mapLimit(paths, FILES_AT_ONCE, (path) => readFile(repo, sha, path));
       const files: (HarnessSourceFile | null)[] = [];
       for (const file of read) {
         if (!file.ok) return file;
