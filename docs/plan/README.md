@@ -275,16 +275,16 @@ A repository's rules for an AI review are rarely one file. `CLAUDE.md` or `AGENT
 
 | # | Stage | Depends on | Owns |
 |---|---|---|---|
-| 65 | [The harness: the domain, the ports, the store and loading](65-harness-core.md) | 55, 56 | `src/domain/review/harness.ts`, the `HarnessSource` and `HarnessStore` ports, their fakes and contract suites, the harness tables, `src/application/use-cases/harness.ts`, the start of loading in `analyses.ts`, the slice's text in DESIGN.md, ARCHITECTURE.md and ENGINEERING.md |
-| 66 | [The harness from GitHub and Bitbucket](66-harness-sources.md) | 65 | `HarnessSource` in `src/adapters/github/` and `src/adapters/bitbucket/`, their fixtures, their wiring in `src/cli/compose.ts` |
-| 67 | [A run reads the linked files the author always loads](67-harness-in-guidance.md) | 65 | `src/application/use-cases/guidance.ts`, the guidance of `AnalysisInput`, `render-input.ts` and the prompts' text on guideline files |
-| 68 | [The harness on the Preferences page](68-harness-on-the-page.md) | 65 | The guideline parts of `contracts/api.ts`, `preferences.ts` and `src/adapters/http/`, `web/src/pages/preferences/`, the Request AI review tooltip |
-| 69 | [A read tool in every pass, through Claude Code](69-read-tool.md) | 67 | The read tool's contract in `src/application/ports/analysis-model.ts`, `model-passes.ts` and `src/adapters/model/shared/`, the Claude Code transport, reads in Run details, `evals/spikes/harness-read-tool/` |
-| 70 | [The read tool on the Anthropic API](70-read-tool-api.md) | 69 | The API transport in `src/adapters/model/claude/` |
-| 71 | [The read tool on opencode](71-read-tool-opencode.md) | 69 | `src/adapters/model/opencode/` |
-| 72 | [Evals for the harness](72-harness-evals.md) | 67, 69 | `evals/` |
+| 75 | [The harness: the domain, the ports, the store and loading](75-harness-core.md) | 55, 56 | `src/domain/review/harness.ts`, the `HarnessSource` and `HarnessStore` ports, their fakes and contract suites, the harness tables, `src/application/use-cases/harness.ts`, the start of loading in `analyses.ts`, the slice's text in DESIGN.md, ARCHITECTURE.md and ENGINEERING.md |
+| 76 | [The harness from GitHub and Bitbucket](76-harness-sources.md) | 75 | `HarnessSource` in `src/adapters/github/` and `src/adapters/bitbucket/`, their fixtures, their wiring in `src/cli/compose.ts` |
+| 77 | [A run reads the linked files the author always loads](77-harness-in-guidance.md) | 75 | `src/application/use-cases/guidance.ts`, the guidance of `AnalysisInput`, `render-input.ts` and the prompts' text on guideline files |
+| 78 | [The harness on the Preferences page](78-harness-on-the-page.md) | 75 | The guideline parts of `contracts/api.ts`, `preferences.ts` and `src/adapters/http/`, `web/src/pages/preferences/`, the Request AI review tooltip |
+| 79 | [A read tool in every pass, through Claude Code](79-read-tool.md) | 77 | The read tool's contract in `src/application/ports/analysis-model.ts`, `model-passes.ts` and `src/adapters/model/shared/`, the Claude Code transport, reads in Run details, `evals/spikes/harness-read-tool/` |
+| 80 | [The read tool on the Anthropic API](80-read-tool-api.md) | 79 | The API transport in `src/adapters/model/claude/` |
+| 81 | [The read tool on opencode](81-read-tool-opencode.md) | 79 | `src/adapters/model/opencode/` |
+| 82 | [Evals for the harness](82-harness-evals.md) | 77, 79 | `evals/` |
 
-Stage 65 is the bottleneck, as 55 was: it fixes the types, ports and fakes, so 66, 67 and 68 run side by side. Stage 69 fixes the read tool's contract and builds it on the default transport; 70 and 71 then run side by side. Stages 65 and 69 write DESIGN.md, ARCHITECTURE.md and ENGINEERING.md; the others record what they decide in their own notes, folded in when the slice is merged.
+Stage 75 is the bottleneck, as 55 was: it fixes the types, ports and fakes, so 76, 77 and 78 run side by side. Stage 79 fixes the read tool's contract and builds it on the default transport; 80 and 81 then run side by side. Stages 75 and 79 write DESIGN.md, ARCHITECTURE.md and ENGINEERING.md; the others record what they decide in their own notes, folded in when the slice is merged.
 
 ### Decisions the stages share
 
@@ -293,17 +293,17 @@ Stage 65 is the bottleneck, as 55 was: it fixes the types, ports and fakes, so 6
 - **No MCP server.** The read tool is each command's own file reader over a directory megareviewer writes, or on the API a tool megareviewer serves. An MCP server of ours was the first design: one handler on every transport, and no read tool at all for an organization whose `managed-mcp.json` forbids added servers.
 - **Codex gets no read tool.** Its only reader is the shell, which the sandbox lets read the whole disk, and a denied command isn't on its stream. It runs on the files a run always loads.
 - **A file of any size is usable.** The 32 KB limit becomes a budget on what's put in every pass's prompt. What doesn't fit is read on request.
-- **Whether reading helps is unmeasured** until stage 72. A reviewer meets the read tool only after switching on a root file that links others, and `REVIEW.md` alone is on by default, so 69 to 71 can land before it; the release that announces the harness waits for 72's report.
+- **Whether reading helps is unmeasured** until stage 82. A reviewer meets the read tool only after switching on a root file that links others, and `REVIEW.md` alone is on by default, so 79 to 81 can land before it; the release that announces the harness waits for 82's report.
 
-The measurements behind the transport decisions are the spike's, `evals/spikes/harness-read-tool/RESULTS.md` on branch `claude/read-tool-spike-4956c1`, which stage 69 brings to `main`.
+The measurements behind the transport decisions are the spike's, `evals/spikes/harness-read-tool/RESULTS.md` on branch `claude/read-tool-spike-4956c1`, which stage 79 brings to `main`.
 
 ### Room for a full checkout
 
 megareviewer may later read a repository from a clone of its own, or from the reviewer's checkout, in place of the host's API. The slice is built so that this is one more implementation and no redesign:
 
-- **`HarnessSource` is the only way a file is found or fetched.** It lists paths with their blob hashes, reads contents and says which paths changed between two commits, and a source that can't do one of them says so. `LocalCheckout` already lists and reads at a commit, so a checkout-backed source is an adapter over it, chosen in the one function that picks a repository's source (stage 65).
+- **`HarnessSource` is the only way a file is found or fetched.** It lists paths with their blob hashes, reads contents and says which paths changed between two commits, and a source that can't do one of them says so. `LocalCheckout` already lists and reads at a commit, so a checkout-backed source is an adapter over it, chosen in the one function that picks a repository's source (stage 75).
 - **The blob hash is git's own.** A source that reads git's object store keys content the way the store already does, and the harness tables need no change.
-- **A pass's directory has a root per kind of content.** Harness files go under `harness/`, and the tool's reads are recorded by the path the model used. Code at the PR's head commit would be a second root beside it, with no change to the harness's paths, its index or the record of reads (stage 69).
+- **A pass's directory has a root per kind of content.** Harness files go under `harness/`, and the tool's reads are recorded by the path the model used. Code at the PR's head commit would be a second root beside it, with no change to the harness's paths, its index or the record of reads (stage 79).
 - **The base commit rule doesn't depend on the source.** Rules stay the base commit's whatever is added later; code context would be the head commit's and stays untrusted data.
 
 Not built here: the checkout-backed source, a clone megareviewer keeps, and code in the read tool.

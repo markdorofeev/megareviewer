@@ -1,6 +1,6 @@
 # Eval run, 2026-11-25: a rule in a file a guideline file imports
 
-Stage 67 gives a run the files its guideline files import. This asks whether a rule stated only in one of them is followed, and marked on that file. Four cases, three runs each, on Sonnet 5.5 through Claude Code (`claude-code/claude-sonnet-5-5/p13`, pipeline unchanged), judged by `claude-opus-5-5`. Every case scored, every pass valid on the first try. Results: `2026-11-25T09-20-44.737Z`, `2026-11-25T09-21-36.796Z`, `2026-11-25T09-22-22.450Z`.
+Stage 77 gives a run the files its guideline files import. This asks whether a rule stated only in one of them is followed, and marked on that file. Four cases, three runs each, on Sonnet 5.5 through Claude Code (`claude-code/claude-sonnet-5-5/p13`, pipeline unchanged), judged by `claude-opus-5-5`. Every case scored, every pass valid on the first try. Results: `2026-11-25T09-20-44.737Z`, `2026-11-25T09-21-36.796Z`, `2026-11-25T09-22-22.450Z`.
 
 The new case, `imported-guideline`: `CLAUDE.md` imports `docs/service-rules.md` (`g2`) and `docs/local-setup.md` (`g3`). Only the first asks a handler that takes away access to record it, and the PR's handler doesn't.
 

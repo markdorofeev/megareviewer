@@ -1,12 +1,14 @@
-# Stage 66: The harness from GitHub and Bitbucket
+# Stage 76: The harness from GitHub and Bitbucket
+
+Planned and committed as stage 66.
 
 **Status:** Not started
-**Depends on:** 65
+**Depends on:** 75
 **Owns:** `HarnessSource` in `src/adapters/github/` and `src/adapters/bitbucket/`, their fixtures and recorder scripts, their wiring in `src/cli/compose.ts`
 
 ## Read first
 
-- [Stage 65](65-harness-core.md): the `HarnessSource` port, its contract suite, and how `loadHarness` uses each answer.
+- [Stage 75](75-harness-core.md): the `HarnessSource` port, its contract suite, and how `loadHarness` uses each answer.
 - `src/adapters/github/github-host.ts`: `getFiles`, a GraphQL query per 3 files, 6 at a time.
 - `src/adapters/bitbucket/bitbucket-host.ts`: `getFiles`, a request per file, 18 at a time.
 - ARCHITECTURE.md, "Git hosts": the timeouts, retries and batch sizes both hosts follow.

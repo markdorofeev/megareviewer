@@ -1,12 +1,14 @@
-# Stage 68: The harness on the Preferences page
+# Stage 78: The harness on the Preferences page
+
+Planned and committed as stage 68.
 
 **Status:** Not started
-**Depends on:** 65
+**Depends on:** 75
 **Owns:** the guideline parts of `contracts/api.ts`, `src/application/use-cases/preferences.ts` and `src/adapters/http/`; `web/src/pages/preferences/`; the Request AI review tooltip's line on the harness; `e2e/preferences.spec.ts`; the harness on the design-system page
 
 ## Read first
 
-- [Stage 65](65-harness-core.md): `Harness`, `HarnessFile`, `harnessEnabled` and `harnessPlan`.
+- [Stage 75](75-harness-core.md): `Harness`, `HarnessFile`, `harnessEnabled` and `harnessPlan`.
 - `web/src/pages/preferences/GuidelineFiles.tsx` and `view.ts`: a repository's guideline files as the page lists them.
 - ARCHITECTURE.md, "Preferences page", and ENGINEERING.md, "UI".
 
@@ -17,7 +19,7 @@ The reviewer sees what a repository's harness holds and decides what an AI revie
 ## Decisions
 
 - **Linked files are listed under their root, folded.** A root's row says what it reaches, "70 linked files, 1 MB", and opens to them, grouped by the file that links each. megareviewer's own harness is 70 files, so a flat list always open would bury the preferences above it.
-- **A file says how a review uses it.** "In every review" for a file the plan puts in the prompt, "Read when the model asks" for the rest. The words don't name a transport: which ones have the read tool is the run's to say (stage 69).
+- **A file says how a review uses it.** "In every review" for a file the plan puts in the prompt, "Read when the model asks" for the rest. The words don't name a transport: which ones have the read tool is the run's to say (stage 79).
 - **One switch a file, on unless switched off.** A linked file is used when its root is on and nothing between them is off. Off by default for links and on for imports was the first design, from before the read tool: a linked file costs a line of the index until a pass reads it, so there's nothing to save by leaving it off.
 - **A root switched off shows what it would bring,** its count and size, so the reviewer knows what switching `CLAUDE.md` on means before doing it.
 - **What the walk left out is said.** A harness cut at 5 hops or 200 files, and a file skipped as too large or unreadable, each have a line, as a guideline file over the limit has today.
@@ -32,7 +34,7 @@ The reviewer sees what a repository's harness holds and decides what an AI revie
 
 ## Definition of done
 
-- [ ] The routes above, with `contracts/api.test.ts` cases and HTTP tests on the fake app's harness from stage 65.
+- [ ] The routes above, with `contracts/api.test.ts` cases and HTTP tests on the fake app's harness from stage 75.
 - [ ] The panel lists roots and their linked files as decided, keyboard reachable, each switch named by its file, the fold a button with `aria-expanded`.
 - [ ] Switching a linked file, and a root with linked files, updates the counts without a reload.
 - [ ] The tooltip's line in its four states.
@@ -41,7 +43,7 @@ The reviewer sees what a repository's harness holds and decides what an AI revie
 
 ## Out of scope
 
-- What a run reads (67, 69).
+- What a run reads (77, 79).
 - Showing a file's content on the page.
 
 ## Notes for later stages

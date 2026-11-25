@@ -1,12 +1,14 @@
-# Stage 71: The read tool on opencode
+# Stage 81: The read tool on opencode
+
+Planned and committed as stage 71.
 
 **Status:** Not started
-**Depends on:** 69
+**Depends on:** 79
 **Owns:** `src/adapters/model/opencode/`
 
 ## Read first
 
-- [Stage 69](69-read-tool.md): the contract and a pass's directory.
+- [Stage 79](79-read-tool.md): the contract and a pass's directory.
 - The spike's results, sections 8 to 10: the permission vocabulary, what confined a read and what didn't, and the cache.
 - `src/adapters/model/opencode/opencode-request.ts` and `opencode-output.ts`: the agent's deny-all rule and `readTurn`.
 
@@ -24,7 +26,7 @@ All measured in the spike on opencode 2.3.0.
 - **`readTurn` reads a turn of several messages.** It asks for the messages oldest first, follows the pages to the end, and takes the answer from the last assistant message. A tool item is allowed when it's `read` on a path of the harness, and becomes a `HarnessRead`, a refusal included; anything else fails the pass as now.
 - **A nested `AGENTS.md` that loads itself counts as a read.** Reading a file with an `AGENTS.md` beside it puts that file in the context as a synthetic message. It's allowed only when its path is a harness file, and recorded as a read of it. Renaming such files in the copy was the alternative: the links to them would then name nothing.
 - **The check is on the turn, not a kill.** opencode shows a read once the session is idle. A read outside the harness that somehow went through fails the pass and discards its answer, as any tool does today.
-- **A whole file takes several reads.** opencode pages at about 50 KB, so ARCHITECTURE.md is 4 reads. The cap on rounds is stage 69's; a pass that needs more reads the part it needs by lines.
+- **A whole file takes several reads.** opencode pages at about 50 KB, so ARCHITECTURE.md is 4 reads. The cap on rounds is stage 79's; a pass that needs more reads the part it needs by lines.
 
 ## Definition of done
 
@@ -37,7 +39,7 @@ All measured in the spike on opencode 2.3.0.
 ## Open issues
 
 - The spike ran one provider, Anthropic. Another provider's models may call `read` differently or not at all.
-- The copy's wrapped lines (stage 69) should mean opencode cuts none at 2,000 characters; confirm it on ARCHITECTURE.md's copy.
+- The copy's wrapped lines (stage 79) should mean opencode cuts none at 2,000 characters; confirm it on ARCHITECTURE.md's copy.
 
 ## Notes for later stages
 

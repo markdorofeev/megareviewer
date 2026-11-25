@@ -1,19 +1,21 @@
-# Stage 69: A read tool in every pass, through Claude Code
+# Stage 79: A read tool in every pass, through Claude Code
+
+Planned and committed as stage 69.
 
 **Status:** Done on `claude/harness-core-4b758f` (`cae0596`, `7758482`, `f33dd05`, `92bd1ae`). `pnpm check`: 208 test files, 4,059 passed, 6 skipped, no dependency violations.
-**Depends on:** 67
+**Depends on:** 77
 **Owns:** the read tool's contract in `src/application/ports/analysis-model.ts`, `src/application/use-cases/model-input.ts` and `model-passes.ts`; `ModelCall.reads` and the guideline fields of `Guidance`; the harness index in `src/adapters/model/shared/render-input.ts`; a pass's directory in `src/adapters/model/shared/run-command.ts`; the Claude Code transport in `src/adapters/model/claude/`; reads in `web/src/pages/review/ModelCalls.tsx` and the usage line; `evals/spikes/harness-read-tool/`; the read tool's text in DESIGN.md, ARCHITECTURE.md and ENGINEERING.md
 
 ## Read first
 
-- [The slice in the plan README](README.md#eighteenth-slice-the-repositorys-harness): no MCP, no tool on Codex, and the room left for a checkout.
+- [The slice in the plan README](README.md#nineteenth-slice-the-repositorys-harness): no MCP, no tool on Codex, and the room left for a checkout.
 - The spike's results, `evals/spikes/harness-read-tool/RESULTS.md` on branch `claude/read-tool-spike-4956c1`. Bring that directory to `main` in this stage's first PR (commits `59fa0fd` and `b57c7e6`).
 - `src/adapters/model/claude/claude-code-request.ts`, `claude-code-output.ts` and `run-claude.ts`: the flags, the lockdown check and the environment.
 - ARCHITECTURE.md, the bullets after "PR content is untrusted".
 
 ## Goal
 
-Every pass can open the harness files that aren't in its prompt, whole or by lines, when the change it's reading calls for them. This stage fixes the contract every transport follows and builds it on Claude Code. Stages 70 and 71 build it on the API and on opencode; Codex stays without.
+Every pass can open the harness files that aren't in its prompt, whole or by lines, when the change it's reading calls for them. This stage fixes the contract every transport follows and builds it on Claude Code. Stages 80 and 81 build it on the API and on opencode; Codex stays without.
 
 ## Decisions
 
@@ -71,9 +73,9 @@ Measured in the spike on 2.1.303, the oldest version megareviewer runs:
 
 ## Out of scope
 
-- The API (70) and opencode (71).
+- The API (80) and opencode (81).
 - Code in the reader, and reading from a checkout.
-- Whether reading improves a review: stage 72.
+- Whether reading improves a review: stage 82.
 
 ## Open issues
 
@@ -85,29 +87,29 @@ Measured in the spike on 2.1.303, the oldest version megareviewer runs:
 
 ### Where the code differs from the contract above
 
-- **`passMessage` takes a fourth argument,** which adds a line after the task asking the pass to go through `<readable_files>` first. The index alone, above 150,000 tokens of PR, led to no read in two live runs; with the line the decisions pass read two exact sections in one and one in the other. 70 and 71 pass it too, on a pass with a harness.
+- **`passMessage` takes a fourth argument,** which adds a line after the task asking the pass to go through `<readable_files>` first. The index alone, above 150,000 tokens of PR, led to no read in two live runs; with the line the decisions pass read two exact sections in one and one in the other. 80 and 81 pass it too, on a pass with a harness.
 - **A failed call carries its reads in its error:** `PassError`, a `ModelError` with `reads`. A failure of the reading is the new kind `reader`, which the pipeline runs again without the tool; a transport returns it for a path outside, rounds used up, reads that overflow the context, or a reader that can't be set up.
 - **`PassOutput.reads` and `AnsweredPass.reads` are optional,** none when absent, as `ModelCall.reads` is empty.
-- **The fingerprints are `main`'s, since its prompts were merged in.** This doc's `0cf796199906ab9d` was the API's and is now `e2c3840f44583d24`; opencode's, `6f77c495527ff5c6` in [stage 71's](71-read-tool-opencode.md), is now `76348cab00accff5`; Codex's is `56880436e3d197a5`. Claude Code's, the one this stage holds, is `335fd83816664f3b` (p14), and a run with something to read has its own, `910a221c8c2fc25d`. The live runs below were on p13.
+- **The fingerprints are `main`'s, since its prompts were merged in.** This doc's `0cf796199906ab9d` was the API's and is now `e2c3840f44583d24`; opencode's, `6f77c495527ff5c6` in [stage 81's](81-read-tool-opencode.md), is now `76348cab00accff5`; Codex's is `56880436e3d197a5`. Claude Code's, the one this stage holds, is `335fd83816664f3b` (p14), and a run with something to read has its own, `910a221c8c2fc25d`. The live runs below were on p13.
 - **A pass's reads for a mark are its calls' together,** a retry's with the first answer's.
 - **A `Grep` is recorded by the files it showed lines of,** and by the directory when it showed none. A search of one file that only names it isn't recorded.
 - **A file that isn't there is recorded as refused,** since the tool gave nothing.
 - **Case-only twins can't both be written** where the file system ignores case (`a.md` and `A.md`); the write fails and the pass runs without the reader, rather than read one as the other.
-- **`linkedFrom` of a readable file** is the first enabled file that links it, as 67's is the first that imports it.
+- **`linkedFrom` of a readable file** is the first enabled file that links it, as 77's is the first that imports it.
 
-### For 70 and 71
+### For 80 and 81
 
 - `AnalysisInput.harness` is null when there's nothing to read, and with `withoutReader` the adapter renders the input with it null, so the second run is the request of a run without a harness.
 - `MAX_READ_ROUNDS`, 8, is in the port; the index tells the model the number.
 - The text of the index and of the line after the task name no tool, so each transport's own name works.
 
-### For 68
+### For 78
 
 - `Guidance.guidelines` now lists the readable files too, with `given: "on-request"`; the usage line and Run details leave them out.
 
 ### Live, on 2026-11-25, Sonnet 5.5 through Claude Code
 
-`8d79787..57aceb4` of this repository, which touches the Bitbucket adapter, as in stage 67's run: `CLAUDE.md` on, 4 files in the prompt and 69 to read. One run each.
+`8d79787..57aceb4` of this repository, which touches the Bitbucket adapter, as in stage 77's run: `CLAUDE.md` on, 4 files in the prompt and 69 to read. One run each.
 
 | | With the reader | Without |
 |---|---|---|
@@ -116,13 +118,13 @@ Measured in the spike on 2.1.303, the oldest version megareviewer runs:
 | Risk | 28.9 s and 6.9 s, no read | 11.5 s and 34.4 s |
 | Decisions | 21.9 s, read `ARCHITECTURE.md` lines 27–68, Git hosts | 20.8 s |
 | The shared text | 463,131 bytes | 447,849 bytes |
-| Written to the cache by the intent | 174,674 tokens | 167,265 tokens, in stage 67's run |
+| Written to the cache by the intent | 174,674 tokens | 167,265 tokens, in stage 77's run |
 | Read from it by the decisions | 356,290 in two requests | 168,984 |
-| At API prices | $0.95 | $0.22, the prompt still cached; $0.84 fresh in stage 67's |
+| At API prices | $0.95 | $0.22, the prompt still cached; $0.84 fresh in stage 77's |
 
 - The read cost the decisions pass one more request, $0.03. The index is 15 KB, 7,000 tokens, in every pass.
 - The first wording, the index alone, read nothing on this PR (four passes) and on `57aceb4..165b9fd` (four). With the line, on the second: decisions read `ARCHITECTURE.md` lines 128–139 and 228–235, Credentials and the untrusted-content bullets; no other pass read.
-- Only the decisions pass, at high effort, has read anything live; the findings pass, at high effort too, hasn't. No mark named a readable file. Whether that's worth the index is 72's question.
-- **A retry made an answer worse, with the reader:** the risk pass classified one hunk twice, and its retry left 43 unclassified and invented one, so they were shown as logic. Without the reader the same pass was retried too and answered whole. One run each, so it may be the retry's own weakness, which keeps a second answer even when the first had a single duplicate; it's worth a look in 72.
+- Only the decisions pass, at high effort, has read anything live; the findings pass, at high effort too, hasn't. No mark named a readable file. Whether that's worth the index is 82's question.
+- **A retry made an answer worse, with the reader:** the risk pass classified one hunk twice, and its retry left 43 unclassified and invented one, so they were shown as logic. Without the reader the same pass was retried too and answered whole. One run each, so it may be the retry's own weakness, which keeps a second answer even when the first had a single duplicate; it's worth a look in 82.
 - The kill, live: a call told to read outside was refused by Claude Code (two denials, nothing of the file on the stream), and with the check on was stopped at the first try, with what it had read.
-- `imported-guideline` and `guideline-file`, which have nothing to read, scored as in stage 67's report, with the prompts unchanged.
+- `imported-guideline` and `guideline-file`, which have nothing to read, scored as in stage 77's report, with the prompts unchanged.
