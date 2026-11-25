@@ -1,0 +1,271 @@
+import { describe, expect, it } from "vitest";
+import {
+  type CallGraphHint,
+  type FileChange,
+  HunkId,
+  type UnchangedCallers,
+} from "../../../../src/domain/diff/index.ts";
+import type { Flow } from "../../../../src/domain/review/index.ts";
+import { bowTie } from "./flow-bow-tie.ts";
+import { type FlowPaths, type FlowPathsInput, filesOf, flowPaths } from "./flow-paths.ts";
+
+const h = (n: number) => HunkId.parse(`h_${n.toString(16).padStart(16, "0")}`);
+
+/** A file with one hunk per number in `ids`. */
+const file = (
+  path: string,
+  ids: readonly number[],
+  more: Partial<Pick<FileChange, "status" | "language">> = {},
+): FileChange => ({
+  path,
+  oldPath: null,
+  status: "modified",
+  binary: false,
+  oldMode: null,
+  newMode: null,
+  language: "java",
+  hunks: ids.map((n) => ({
+    id: h(n),
+    path,
+    oldStart: n * 10,
+    oldLines: 0,
+    newStart: n * 10,
+    newLines: 1,
+    sectionHeading: null,
+    lines: [
+      { kind: "add" as const, oldLine: null, newLine: n * 10, text: "x", noNewlineAtEnd: false },
+    ],
+  })),
+  additions: ids.length,
+  deletions: 0,
+  ...more,
+});
+
+const hint = (from: number, to: number, use: CallGraphHint["use"] = "call"): CallGraphHint => ({
+  fromPartId: h(from),
+  toPartId: h(to),
+  symbol: use === "request" ? "POST /orders" : `f${to}`,
+  line: from * 10 + to,
+  use,
+});
+
+const flow = (title: string, hunks: readonly number[], entries: readonly number[] = []): Flow => ({
+  title,
+  partIds: hunks.map(h),
+  kind: "flow",
+  entries: entries.map(h),
+});
+
+const input = (
+  files: readonly FileChange[],
+  more: Partial<FlowPathsInput> = {},
+): FlowPathsInput => ({
+  files,
+  proofs: [],
+  parts: [],
+  callGraph: [],
+  generated: [],
+  flows: [],
+  ...more,
+});
+
+const shape = ({ paths }: FlowPaths) =>
+  paths.map((path) => [path.labels.join(" + "), ...path.stops.map((stop) => stop.label)]);
+
+// A controller, a service and a repository, with the service's test and a README.
+const controller = file("src/main/java/shop/controllers/OrderController.java", [1, 2]);
+const service = file("src/main/java/shop/services/OrderService.java", [3, 4]);
+const repository = file("src/main/java/shop/repositories/OrderRepository.java", [5], {
+  status: "added",
+});
+const test = file("src/test/java/shop/services/OrderServiceTest.java", [6]);
+const readme = file("README.md", [7], { language: null });
+const config = file("src/main/resources/application.yml", [8], { language: null });
+const shop = [controller, service, repository, test, readme, config];
+const calls = [hint(1, 3), hint(3, 5), hint(2, 4), hint(6, 3)];
+
+describe("flowPaths", () => {
+  it("runs each flow from its entry through the changed files its calls reach", () => {
+    const paths = flowPaths(
+      input(shop, {
+        callGraph: calls,
+        flows: [flow("POST /orders", [1], [1]), flow("GET /orders/{id}", [2], [2])],
+      }),
+    );
+    expect(shape(paths)).toEqual([
+      ["POST /orders", "OrderController", "OrderService", "OrderRepository"],
+      ["GET /orders/{id}", "OrderController", "OrderService"],
+    ]);
+    expect(paths.paths[0]?.stops.map((stop) => [stop.status, stop.shared])).toEqual([
+      ["changed", 2],
+      ["changed", 2],
+      ["new", 1],
+    ]);
+  });
+
+  it("orders the directories callers first", () => {
+    const paths = flowPaths(
+      input(shop, { callGraph: calls, flows: [flow("POST /orders", [1], [1])] }),
+    );
+    expect(paths.layers.map((layer) => layer.label)).toEqual([
+      "controllers",
+      "services",
+      "repositories",
+    ]);
+  });
+
+  it("keeps tests, docs and other files off the paths, and loses no file", () => {
+    const paths = flowPaths(
+      input(shop, { callGraph: calls, flows: [flow("POST /orders", [1], [1])] }),
+    );
+    expect(paths.also).toEqual({
+      tests: [test.path],
+      docs: [readme.path],
+      generated: [],
+      mechanical: [],
+      other: [config.path],
+    });
+    expect(paths.paths.flatMap((path) => path.stops).map((stop) => stop.path)).not.toContain(
+      test.path,
+    );
+    expect(filesOf(paths).sort()).toEqual(shop.map((one) => one.path).sort());
+  });
+
+  it("lists changed code no flow runs as unreached", () => {
+    const paths = flowPaths(input(shop, { flows: [flow("POST /orders", [1], [1])] }));
+    expect(shape(paths)).toEqual([["POST /orders", "OrderController"]]);
+    expect(paths.unreached.map((stop) => stop.label)).toEqual(["OrderRepository", "OrderService"]);
+    expect(filesOf(paths).sort()).toEqual(shop.map((one) => one.path).sort());
+  });
+
+  it("runs a shared section on each path that calls it, and makes no path of it", () => {
+    const paths = flowPaths(
+      input(shop, {
+        callGraph: calls,
+        flows: [
+          flow("Shared: OrderService", [3, 4, 5]),
+          flow("POST /orders", [1], [1]),
+          flow("GET /orders/{id}", [2], [2]),
+        ],
+      }),
+    );
+    expect(paths.paths.map((path) => path.labels)).toEqual([
+      ["POST /orders"],
+      ["GET /orders/{id}"],
+    ]);
+    expect(paths.unreached).toEqual([]);
+  });
+
+  it("joins the paths that run the same files into one, with each label", () => {
+    const paths = flowPaths(
+      input([controller, service], {
+        callGraph: [hint(1, 3), hint(2, 3)],
+        flows: [flow("POST /orders", [1], [1]), flow("PUT /orders/{id}", [2], [2])],
+      }),
+    );
+    expect(shape(paths)).toEqual([
+      ["POST /orders + PUT /orders/{id}", "OrderController", "OrderService"],
+    ]);
+  });
+
+  it("starts a path at a file outside the pull request that uses a changed definition", () => {
+    const callers: UnchangedCallers[] = [
+      {
+        partId: h(3),
+        symbol: "place",
+        uses: [
+          {
+            path: "src/main/java/shop/jobs/RefundJob.java",
+            line: 12,
+            use: "call",
+            excerpt: { start: 12, lines: ["place()"] },
+          },
+          {
+            path: "src/test/java/shop/jobs/RefundJobTest.java",
+            line: 9,
+            use: "call",
+            excerpt: { start: 9, lines: ["place()"] },
+          },
+        ],
+        more: 0,
+      },
+    ];
+    const paths = flowPaths(
+      input(shop, { callGraph: calls, flows: [], unchangedCallers: callers }),
+    );
+    expect(paths.paths).toHaveLength(1);
+    expect(paths.paths[0]).toMatchObject({
+      labels: ["RefundJob.java"],
+      inPullRequest: false,
+      outside: ["src/main/java/shop/jobs/RefundJob.java"],
+    });
+    expect(shape(paths)).toEqual([["RefundJob.java", "OrderService", "OrderRepository"]]);
+  });
+
+  it("ends a path in the requests it sends, without following them", () => {
+    const page = file("web/src/pages/Orders.tsx", [9], { language: "tsx" });
+    const paths = flowPaths(
+      input([page, controller, service], {
+        callGraph: [hint(9, 1, "request"), hint(1, 3)],
+        flows: [flow("Page: Orders", [9], [9]), flow("POST /orders", [1], [1])],
+      }),
+    );
+    expect(shape(paths)[0]).toEqual(["Page: Orders", "Orders"]);
+    expect(paths.paths[0]?.ends).toEqual([{ label: "POST /orders", partId: h(1) }]);
+  });
+
+  it("lists a file proved mechanical in every hunk apart, and never as a stop", () => {
+    const paths = flowPaths(
+      input(shop, {
+        callGraph: calls,
+        flows: [flow("POST /orders", [1], [1])],
+        proofs: [
+          { kind: "whitespace", hunkId: h(5), path: repository.path, detail: "whitespace only" },
+        ],
+      }),
+    );
+    expect(paths.also.mechanical).toEqual([repository.path]);
+    expect(shape(paths)).toEqual([["POST /orders", "OrderController", "OrderService"]]);
+  });
+});
+
+describe("bowTie", () => {
+  const paths = flowPaths(
+    input(shop, {
+      callGraph: calls,
+      flows: [flow("POST /orders", [1], [1]), flow("GET /orders/{id}", [2], [2])],
+    }),
+  );
+  const tie = bowTie(paths);
+  const label = (key: string) => tie.nodes.find((node) => node.key === key)?.label;
+
+  it("puts paths on the left, files that call on in the middle and the rest on the right", () => {
+    expect(tie.nodes.map((node) => [node.column, node.label])).toEqual([
+      [0, "POST /orders"],
+      [0, "GET /orders/{id}"],
+      [1, "OrderService"],
+      [2, "OrderRepository"],
+    ]);
+  });
+
+  it("links a path to what it runs through, and that to what it ends in", () => {
+    expect(tie.edges.map((edge) => [label(edge.from), label(edge.to)])).toEqual([
+      ["POST /orders", "OrderService"],
+      ["OrderService", "OrderRepository"],
+      ["GET /orders/{id}", "OrderService"],
+    ]);
+  });
+
+  it("links a path straight to an end nothing in between calls", () => {
+    const direct = bowTie(
+      flowPaths(
+        input([controller, repository], {
+          callGraph: [hint(1, 5)],
+          flows: [flow("POST /orders", [1], [1])],
+        }),
+      ),
+    );
+    expect(direct.nodes.map((node) => node.column)).toEqual([0, 2]);
+    expect(direct.edges).toHaveLength(1);
+  });
+});

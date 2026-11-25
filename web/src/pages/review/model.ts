@@ -27,6 +27,19 @@ export type Layout = "map" | "overview";
 export const parseLayout = (stored: unknown): Layout | undefined =>
   stored === "map" ? "map" : stored === "overview" || stored === "tree" ? "overview" : undefined;
 
+/** The form the overview takes: its directories, or one of the three previews of its flow paths. */
+export type OverviewForm = "directories" | "lanes" | "bow-tie" | "rows";
+
+export const OVERVIEW_FORMS: readonly { readonly value: OverviewForm; readonly label: string }[] = [
+  { value: "directories", label: "Directories" },
+  { value: "lanes", label: "Lanes" },
+  { value: "bow-tie", label: "Bow tie" },
+  { value: "rows", label: "Flow rows" },
+];
+
+export const parseOverviewForm = (stored: unknown): OverviewForm | undefined =>
+  OVERVIEW_FORMS.find((form) => form.value === stored)?.value;
+
 const byPath = (a: FileChange, b: FileChange): number => byTreePath(a.path, b.path);
 
 const UNCLASSIFIED = "Not classified yet.";

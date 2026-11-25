@@ -15,17 +15,23 @@ export interface PageToggle {
   readonly onChange: (checked: boolean) => void;
 }
 
+/** One of a few values, as the menu's radio items under a label. */
+export interface PageChoice {
+  readonly label: string;
+  readonly options: readonly { readonly value: string; readonly label: string }[];
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}
+
 /**
  * A choice of views a page puts in the header's Display menu, such as the review page's layout,
  * with the page's switches under it. The page owns the values; the menu shows them and reports the
  * reviewer's pick.
  */
-export interface PageDisplay {
-  readonly label: string;
-  readonly options: readonly { readonly value: string; readonly label: string }[];
-  readonly value: string;
-  readonly onChange: (value: string) => void;
+export interface PageDisplay extends PageChoice {
   readonly toggles?: readonly PageToggle[];
+  /** A second choice after the switches, such as the form a preview takes. It keeps the menu open. */
+  readonly more?: PageChoice;
 }
 
 // Two contexts, so a page setting its choice doesn't re-render from its own update.
@@ -52,6 +58,11 @@ export const usePageDisplay = (display: PageDisplay): void => {
   const onToggles = useRef((display.toggles ?? []).map((toggle) => toggle.onChange));
   onToggles.current = (display.toggles ?? []).map((toggle) => toggle.onChange);
   const { label, options, value } = display;
+  const onMore = useRef(display.more?.onChange);
+  onMore.current = display.more?.onChange;
+  const moreLabel = display.more?.label;
+  const moreOptions = display.more?.options;
+  const moreValue = display.more?.value;
   // Strings, so the menu's switches change only when a label or a state does.
   const labels = (display.toggles ?? []).map((toggle) => toggle.label).join("\n");
   const checks = (display.toggles ?? []).map((toggle) => (toggle.checked ? "1" : "0")).join("");
@@ -67,8 +78,18 @@ export const usePageDisplay = (display: PageDisplay): void => {
       value,
       onChange: (next) => onChange.current(next),
       ...(toggles.length === 0 ? {} : { toggles }),
+      ...(moreLabel === undefined || moreOptions === undefined || moreValue === undefined
+        ? {}
+        : {
+            more: {
+              label: moreLabel,
+              options: moreOptions,
+              value: moreValue,
+              onChange: (next: string) => onMore.current?.(next),
+            },
+          }),
     };
-  }, [label, options, value, labels, checks]);
+  }, [label, options, value, labels, checks, moreLabel, moreOptions, moreValue]);
   useEffect(() => set(shown), [set, shown]);
   useEffect(() => () => set(null), [set]);
 };

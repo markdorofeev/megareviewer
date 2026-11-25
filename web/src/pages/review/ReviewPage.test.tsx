@@ -1587,6 +1587,58 @@ describe("overview", () => {
     await userEvent.click(screen.getByRole("button", { name: "Collapse src/module1/" }));
     expect(nodeOf("group:src/module1")).toBeTruthy();
   }, 30_000);
+
+  it("takes the form chosen in the Display menu, and keeps it", async () => {
+    renderReview();
+    await loaded();
+    await openOverview();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    const forms = within(await screen.findByRole("group", { name: "Overview (preview)" }));
+    expect(
+      forms.getAllByRole("menuitemradio").map((item) => [item.textContent, item.ariaChecked]),
+    ).toEqual([
+      ["Directories", "true"],
+      ["Lanes", "false"],
+      ["Bow tie", "false"],
+      ["Flow rows", "false"],
+    ]);
+    await userEvent.click(forms.getByRole("menuitemradio", { name: "Flow rows" }));
+    await userEvent.keyboard("{Escape}");
+    expect(window.localStorage.getItem("megareviewer:overview-form")).toBe('"rows"');
+    expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
+    const rows = within(screen.getByRole("region", { name: "Flow paths of the pull request" }));
+    // A file outside the pull request that uses its code starts a path; a test outside doesn't.
+    const labels = [...document.querySelectorAll("[data-slot=flow-path-label]")].map(
+      (label) => label.textContent,
+    );
+    expect(labels.some((label) => label?.startsWith("email-receipts.ts"))).toBe(true);
+    expect(labels.some((label) => label?.includes("email-receipts.test.ts"))).toBe(false);
+    // Proved-mechanical files are listed apart, never a stop on a path.
+    const also = within(rows.getByRole("region", { name: "Also changed" }));
+    expect(also.getByRole("button", { name: "pnpm-lock.yaml" })).toBeTruthy();
+    expect(rows.queryByRole("button", { name: /^pnpm-lock, / })).toBeNull();
+
+    const [stop] = rows.getAllByRole("button", { name: /, (changed|new file)/ });
+    if (stop === undefined) throw new Error("the fixture has a flow path");
+    const path = stop.dataset.path;
+    await userEvent.click(stop);
+    expect(layoutIs("map")).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(layoutIs("overview")).toBe(true);
+    expect((document.activeElement as HTMLElement | null)?.dataset.path).toBe(path);
+  });
+
+  it.each([
+    ["lanes", "Flow paths of the pull request, by directory"],
+    ["bow-tie", "Where the change is reached, what it runs through and what it ends in"],
+  ])("draws the stored form %s", async (form, name) => {
+    window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
+    renderReview();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    await userEvent.click(await screen.findByRole("menuitemradio", { name: "Understand" }));
+    expect(screen.getByRole("region", { name })).toBeTruthy();
+  });
 });
 
 describe("the tour", () => {
