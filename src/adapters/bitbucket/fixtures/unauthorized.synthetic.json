@@ -2,7 +2,7 @@
   {
     "request": {
       "method": "GET",
-      "url": "https://api.bitbucket.org/2.0/user",
+      "url": "https://api.bitbucket.org/2.0/user/workspaces/acme/permissions/repositories?pagelen=1&fields=values.user.uuid%2Cvalues.user.display_name",
       "accept": "application/json"
     },
     "response": {

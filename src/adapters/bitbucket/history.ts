@@ -2,17 +2,15 @@ import type { Logger, ReviewHistory } from "../../application/ports/index.ts";
 import type { HostError, PastComment, RepoRef } from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
 import { API, createBitbucketClient, MAX_PAGES } from "./client.ts";
-import {
-  BitbucketAccount,
-  BitbucketListedPullRequest,
-  BitbucketPage,
-  BitbucketThreadComment,
-} from "./schemas.ts";
+import { BitbucketListedPullRequest, BitbucketPage, BitbucketThreadComment } from "./schemas.ts";
 import { toThreads } from "./threads.ts";
+import { createUserLookup } from "./user.ts";
 
 export interface BitbucketHistoryOptions {
   readonly username: string;
   readonly password: string;
+  /** Asked first who the user is; null asks the repository's. */
+  readonly workspace: string | null;
   readonly logger: Logger;
   readonly fetch?: typeof fetch;
   readonly requestTimeoutMs?: number;
@@ -70,14 +68,7 @@ export const createBitbucketReviewHistory = (options: BitbucketHistoryOptions): 
     requestTimeoutMs: options.requestTimeoutMs,
   });
 
-  let uuid: string | null = null;
-  const currentUuid = async (): Promise<Result<string, HostError>> => {
-    if (uuid !== null) return ok(uuid);
-    const user = await client.json("the current user", BitbucketAccount, `${API}/user`);
-    if (!user.ok) return user;
-    uuid = user.value.uuid;
-    return ok(uuid);
-  };
+  const currentUser = createUserLookup(client, options.workspace);
 
   /** The first `wanted` pull requests the user reviewed, among the most recently updated. */
   const reviewed = async (
@@ -145,9 +136,9 @@ export const createBitbucketReviewHistory = (options: BitbucketHistoryOptions): 
     host: "bitbucket",
 
     async getReviewerComments(repo, { pullRequests }) {
-      const user = await currentUuid();
+      const user = await currentUser(repo);
       if (!user.ok) return user;
-      const found = await reviewed(repo, user.value, pullRequests);
+      const found = await reviewed(repo, user.value.id, pullRequests);
       if (!found.ok) return found;
 
       const repoKey = `${repo.owner}/${repo.repo}`;
@@ -161,7 +152,7 @@ export const createBitbucketReviewHistory = (options: BitbucketHistoryOptions): 
             const key = `${id}@${updated_on}`;
             const before = got.get(key);
             if (before !== undefined) return ok(before);
-            const read = await commentsOn(repo, id, user.value);
+            const read = await commentsOn(repo, id, user.value.id);
             if (read.ok) got.set(key, read.value);
             return read;
           }),

@@ -60,6 +60,9 @@ export type BitbucketCommit = z.infer<typeof BitbucketCommit>;
 /** A commit lookup or the merge base: both return a commit with its full hash. */
 export const BitbucketCommitHash = z.object({ hash: Sha });
 
+/** The caller's permission on a repository. Only who the caller is gets read. */
+export const BitbucketRepositoryPermission = z.object({ user: BitbucketAccount });
+
 export const BitbucketRepository = z.object({ slug: z.string().min(1) });
 
 export const BitbucketComment = z.object({ id: z.number().int() });

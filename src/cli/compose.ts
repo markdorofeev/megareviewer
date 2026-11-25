@@ -174,6 +174,7 @@ export const createReviewHistories = (
         createBitbucketReviewHistory({
           username: bitbucket.username,
           password: bitbucket.password,
+          workspace: bitbucket.workspace,
           logger,
         }),
       ),

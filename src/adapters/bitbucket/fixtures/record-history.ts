@@ -15,6 +15,7 @@ import {
   BitbucketErrorBody,
   BitbucketListedPullRequest,
   BitbucketPage,
+  BitbucketRepositoryPermission,
   BitbucketThreadComment,
 } from "../schemas.ts";
 
@@ -25,15 +26,25 @@ interface RecordedExchange {
 }
 
 const KEPT_HEADERS = /^(x-ratelimit-.*|retry-after|content-type)$/;
+const PERMISSIONS = "/2.0/user/workspaces/";
 const REVIEWER_UUID = "00000000-0000-4000-8000-000000000000";
 
 const pathOf = (exchange: RecordedExchange): string => new URL(exchange.request.url).pathname;
 const bare = (uuid: string): string => uuid.replace(/[{}]/g, "");
 
+/** The owner's account, from whichever answer named them. */
+const ownerIn = (exchange: RecordedExchange): BitbucketAccount | null => {
+  const { response } = exchange;
+  const path = pathOf(exchange);
+  if (response.status >= 400) return null;
+  if (path === "/2.0/user") return BitbucketAccount.parse(response.body);
+  if (!path.startsWith(PERMISSIONS)) return null;
+  return BitbucketPage(BitbucketRepositoryPermission).parse(response.body).values[0]?.user ?? null;
+};
+
 /** The exchanges with only the fields the adapter reads, and without anyone's words or names. */
 const scrubbed = (exchanges: readonly RecordedExchange[]): string => {
-  const user = exchanges.find((exchange) => pathOf(exchange) === "/2.0/user");
-  const owner = user === undefined ? null : BitbucketAccount.parse(user.response.body).uuid;
+  const owner = exchanges.map(ownerIn).find((account) => account !== null)?.uuid ?? null;
   const named = (account: BitbucketAccount | null | undefined) =>
     account == null
       ? account
@@ -50,6 +61,10 @@ const scrubbed = (exchanges: readonly RecordedExchange[]): string => {
       return error.success ? error.data : body;
     }
     if (path === "/2.0/user") return named(BitbucketAccount.parse(body));
+    if (path.startsWith(PERMISSIONS)) {
+      const permissions = BitbucketPage(BitbucketRepositoryPermission).parse(body);
+      return { values: permissions.values.map(({ user }) => ({ user: named(user) })) };
+    }
     if (path.endsWith("/pullrequests")) {
       return BitbucketPage(BitbucketListedPullRequest).parse(body);
     }
@@ -128,6 +143,8 @@ const main = async (): Promise<void> => {
   const history = createBitbucketReviewHistory({
     username,
     password,
+    // The repository's own is asked, so the owner's workspace isn't recorded.
+    workspace: null,
     logger: { debug: () => {}, info: log, warn: log, error: log },
     fetch: recordingFetch,
   });

@@ -125,11 +125,12 @@ describe("getAnalysisView", () => {
     );
   });
 
-  it("knows when the current user wrote the PR", async () => {
-    const { useCases, seeded } = setup({ githubUser: smallFeature.pullRequest.author });
+  it("knows when the current user wrote the PR, asking the host by its repository", async () => {
+    const { useCases, github, seeded } = setup({ githubUser: smallFeature.pullRequest.author });
     await seeded;
     const view = await useCases.getAnalysisView(id);
     expect(view.ok && view.value.isAuthor).toBe(true);
+    expect(github.currentUserCalls).toEqual([smallFeature.pullRequest.ref.repo]);
   });
 
   it("isn't the author when the current user can't be fetched or the host is gone", async () => {

@@ -1,4 +1,5 @@
 import { commentsUrl, othersPullRequestsUrl } from "../history.ts";
+import { permissionsUrl } from "../user.ts";
 
 // Written from Bitbucket's REST docs and the shapes of live answers, for a made-up acme
 // workspace: recording would capture the credentials' owner's own comments. record-history.ts
@@ -10,7 +11,6 @@ export interface Exchange {
   readonly response: { status: number; headers: Record<string, string>; body: unknown };
 }
 
-const API = "https://api.bitbucket.org/2.0";
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
 export const HISTORY_REPO = { host: "bitbucket", owner: "acme", repo: "shop" } as const;
@@ -34,7 +34,9 @@ export const get = (url: string, body: unknown): Exchange => ({
   response: { status: 200, headers: JSON_HEADERS, body },
 });
 
-export const userExchange: Exchange = get(`${API}/user`, LEE);
+export const userExchange: Exchange = get(permissionsUrl(HISTORY_REPO.owner), {
+  values: [{ user: LEE }],
+});
 
 /** When someone on a pull request last acted, or null for one asked to review who never did. */
 const on = (account: { uuid: string }, participatedOn: string | null) => ({

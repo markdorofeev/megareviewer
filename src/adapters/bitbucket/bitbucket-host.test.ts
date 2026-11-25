@@ -19,6 +19,7 @@ import readExchanges from "./fixtures/read.json" with { type: "json" };
 import unauthorizedExchanges from "./fixtures/unauthorized.synthetic.json" with { type: "json" };
 import { createBitbucketHost } from "./index.ts";
 import { BitbucketPullRequest } from "./schemas.ts";
+import { permissionsUrl, USER_URL } from "./user.ts";
 
 const API = "https://api.bitbucket.org/2.0";
 const repo: RepoRef = { host: "bitbucket", owner: "atlassian", repo: "bitbucket-upload-file" };
@@ -459,7 +460,7 @@ describe("createBitbucketHost", () => {
       const host = createBitbucketHost({
         username: "e",
         password: "t",
-        workspace: null,
+        workspace: "acme",
         clock: new FixedClock(),
         logger: new RecordingLogger(),
         fetch,
@@ -470,7 +471,7 @@ describe("createBitbucketHost", () => {
         value: { id: "{8d3c1a52-6f0e-4a8b-9a51-2f4c7e0b9d13}", name: "Grace Hopper" },
       });
       await host.currentUser();
-      expect(requests.map((request) => request.url)).toEqual([`${API}/user`]);
+      expect(requests.map((request) => request.url)).toEqual([permissionsUrl("acme")]);
     });
 
     it("asks again after a failure", async () => {
@@ -478,7 +479,7 @@ describe("createBitbucketHost", () => {
       const host = createBitbucketHost({
         username: "e",
         password: "t",
-        workspace: null,
+        workspace: "acme",
         clock: new FixedClock(),
         logger: new RecordingLogger(),
         fetch,
@@ -486,22 +487,6 @@ describe("createBitbucketHost", () => {
       await host.currentUser();
       await host.currentUser();
       expect(requests).toHaveLength(2);
-    });
-
-    it("says which scope the token lacks", async () => {
-      const result = await hostWith([
-        exchange("GET", `${API}/user`, 403, {
-          type: "error",
-          error: {
-            message: "Your credentials lack one or more required privilege scopes.",
-            detail: { required: ["read:user:bitbucket"], granted: ["read:repository:bitbucket"] },
-          },
-        }),
-      ]).currentUser();
-      expect(!result.ok && result.error).toMatchObject({
-        kind: "forbidden",
-        message: expect.stringContaining("read:user:bitbucket"),
-      });
     });
   });
 
@@ -566,7 +551,7 @@ describe("createBitbucketHost", () => {
 
     it("fails when listing own PRs fails", async () => {
       const failing = listExchanges.map((recorded) =>
-        recorded.request.url.includes("/workspaces/")
+        recorded.request.url.includes("/2.0/workspaces/")
           ? { ...recorded, response: { ...recorded.response, status: 500, body: "" } }
           : recorded,
       );
@@ -855,7 +840,10 @@ describe("createBitbucketHost", () => {
 
 describe("revokeApproval", () => {
   const me = { uuid: "{me}", display_name: "Me" };
-  const user = exchange("GET", `${API}/user`, 200, me);
+  const user = exchange("GET", permissionsUrl("acme"), 200, { values: [{ user: me }] });
+  const unnamed = [permissionsUrl("acme"), permissionsUrl("atlassian"), USER_URL].map((url) =>
+    exchange("GET", url, 403, { type: "error", error: { message: "No." } }),
+  );
   const pullRequest = (approved: boolean) =>
     exchange("GET", PR_URL, 200, {
       state: "OPEN",
@@ -875,7 +863,7 @@ describe("revokeApproval", () => {
     const host = createBitbucketHost({
       username: "e",
       password: "t",
-      workspace: null,
+      workspace: "acme",
       clock: new FixedClock(),
       logger: new RecordingLogger(),
       fetch,
@@ -887,6 +875,16 @@ describe("revokeApproval", () => {
 
   it("does nothing when the reviewer hasn't approved, though someone else has", async () => {
     const result = await hostWith([user, pullRequest(false)]).revokeApproval(pr);
+
+    expect(result).toEqual({ ok: true, value: null });
+  });
+
+  it("leaves it to Bitbucket when it doesn't say who the reviewer is", async () => {
+    const result = await hostWith([
+      ...unnamed,
+      pullRequest(false),
+      exchange("DELETE", `${PR_URL}/approve`, 204, null),
+    ]).revokeApproval(pr);
 
     expect(result).toEqual({ ok: true, value: null });
   });

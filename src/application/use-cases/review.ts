@@ -15,6 +15,7 @@ import {
   pointSignalKey,
   pointsOf,
   publishedSignalKey,
+  type RepoRef,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type { GitHost } from "../ports/index.ts";
@@ -41,9 +42,12 @@ export interface AnalysisView {
   readonly stale: boolean;
 }
 
-const currentUserIdOf = async (host: GitHost | undefined): Promise<string | null> => {
+const currentUserIdOf = async (
+  host: GitHost | undefined,
+  repo: RepoRef,
+): Promise<string | null> => {
   if (host === undefined) return null;
-  const user = await host.currentUser();
+  const user = await host.currentUser(repo);
   return user.ok ? user.value.id : null;
 };
 
@@ -134,7 +138,7 @@ export const createReviewUseCases = (deps: AppDeps) => {
         analysis,
         summary,
         isAuthor: isAuthorOf(
-          await currentUserIdOf(deps.hosts[analysis.key.ref.repo.host]),
+          await currentUserIdOf(deps.hosts[analysis.key.ref.repo.host], analysis.key.ref.repo),
           analysis,
         ),
         hunkComments: review.hunkComments,
@@ -254,7 +258,7 @@ export const createReviewUseCases = (deps: AppDeps) => {
       const [pointReviews, publications, currentUserId, stale] = await Promise.all([
         deps.store.getPointReviews(id),
         deps.store.getPublications(id),
-        currentUserIdOf(host),
+        currentUserIdOf(host, analysis.value.key.ref.repo),
         isStale(analysis.value),
       ]);
       const publication = publications.at(-1)?.receipt ?? null;

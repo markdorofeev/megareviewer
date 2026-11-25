@@ -28,7 +28,13 @@ import {
 import { createBitbucketReviewHistory } from "./index.ts";
 
 const historyWith = (fetch: typeof globalThis.fetch, logger = new RecordingLogger()) =>
-  createBitbucketReviewHistory({ username: "lee", password: "token", logger, fetch });
+  createBitbucketReviewHistory({
+    username: "lee",
+    password: "token",
+    workspace: null,
+    logger,
+    fetch,
+  });
 
 describeReviewHistoryContract("bitbucket", () => ({
   history: () => historyWith(createFixtureFetch(historyExchanges)),

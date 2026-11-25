@@ -28,7 +28,8 @@ export interface PublishOptions {
 
 export interface GitHost {
   readonly host: HostKind;
-  currentUser(): Promise<Result<HostUser, HostError>>;
+  /** Who the credentials belong to. `repo` is the one at hand, which a host may need to ask by. */
+  currentUser(repo?: RepoRef): Promise<Result<HostUser, HostError>>;
   getPullRequest(ref: PullRequestRef): Promise<Result<PullRequest, HostError>>;
   /**
    * File contents at commits, in the order of `files`: null for a file that doesn't exist at its

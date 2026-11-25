@@ -2,7 +2,7 @@
   {
     "request": {
       "method": "GET",
-      "url": "https://api.bitbucket.org/2.0/user",
+      "url": "https://api.bitbucket.org/2.0/user/workspaces/acme/permissions/repositories?pagelen=1&fields=values.user.uuid%2Cvalues.user.display_name",
       "accept": "application/json"
     },
     "response": {
@@ -11,8 +11,14 @@
         "content-type": "application/json; charset=utf-8"
       },
       "body": {
-        "uuid": "{8d3c1a52-6f0e-4a8b-9a51-2f4c7e0b9d13}",
-        "display_name": "Grace Hopper"
+        "values": [
+          {
+            "user": {
+              "uuid": "{8d3c1a52-6f0e-4a8b-9a51-2f4c7e0b9d13}",
+              "display_name": "Grace Hopper"
+            }
+          }
+        ]
       }
     }
   },

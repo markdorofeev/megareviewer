@@ -10,7 +10,7 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
 import { API, type BitbucketClient, createBitbucketClient } from "./client.ts";
-import { byUpdatedAtDesc, toHostUser, toPullRequest, toSummary } from "./map.ts";
+import { byUpdatedAtDesc, toPullRequest, toSummary } from "./map.ts";
 import {
   type CommentRequest,
   generalComment,
@@ -19,7 +19,6 @@ import {
   VERDICT_ENDPOINTS,
 } from "./publish.ts";
 import {
-  BitbucketAccount,
   BitbucketComment,
   BitbucketCommit,
   BitbucketCommitHash,
@@ -30,12 +29,13 @@ import {
   BitbucketPullRequestWithState,
   BitbucketRepository,
 } from "./schemas.ts";
+import { createUserLookup } from "./user.ts";
 
 export interface BitbucketHostOptions {
   /** Basic auth: an Atlassian email and API token, or a Bitbucket username and app password. */
   readonly username: string;
   readonly password: string;
-  /** Where listPullRequests looks. null means it lists nothing. */
+  /** Where listPullRequests looks, and who the user is gets asked. null means it lists nothing. */
   readonly workspace: string | null;
   readonly clock: Clock;
   readonly logger: Logger;
@@ -95,15 +95,7 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
     requestTimeoutMs: options.requestTimeoutMs,
   });
 
-  let cachedUser: HostUser | null = null;
-
-  const currentUser = async (): Promise<Result<HostUser, HostError>> => {
-    if (cachedUser !== null) return ok(cachedUser);
-    const user = await client.json("the current user", BitbucketAccount, `${API}/user`);
-    if (!user.ok) return user;
-    cachedUser = toHostUser(user.value);
-    return ok(cachedUser);
-  };
+  const currentUser = createUserLookup(client, workspace);
 
   /**
    * The merge base the diff is computed from, else the destination commit: formatting proofs
@@ -375,14 +367,14 @@ export const createBitbucketHost = (options: BitbucketHostOptions): GitHost => {
 
     async revokeApproval(ref) {
       const [user, pullRequest] = await Promise.all([
-        currentUser(),
+        currentUser(ref.repo),
         client.json("the pull request", BitbucketPullRequestStatus, pullRequestApiUrl(ref)),
       ]);
-      if (!user.ok) return user;
       if (!pullRequest.ok) return pullRequest;
+      // Deleting needs no ID: unless the user is known not to approve, Bitbucket decides.
       const approves = pullRequest.value.participants.some(
         (participant) =>
-          participant.user?.uuid === user.value.id &&
+          (!user.ok || participant.user?.uuid === user.value.id) &&
           (participant.approved || participant.state === "approved"),
       );
       if (!approves) return ok(null);

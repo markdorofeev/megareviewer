@@ -65,9 +65,9 @@ Set them as environment variables. You need at least one git host.
 | Variable | Notes |
 |---|---|
 | `BITBUCKET_EMAIL` | Your Atlassian account email |
-| `BITBUCKET_API_TOKEN` | A scoped Atlassian API token with `read:user:bitbucket`, `read:repository:bitbucket`, `read:pullrequest:bitbucket` and `write:pullrequest:bitbucket` |
+| `BITBUCKET_API_TOKEN` | A scoped Atlassian API token with `read:repository:bitbucket`, `read:pullrequest:bitbucket` and `write:pullrequest:bitbucket` |
 | `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD` | Used instead of the two above when they aren't set: your Bitbucket username and an app password with Account: read, Repositories: read and Pull requests: write. Atlassian removed app passwords in July 2026, so they only work where Bitbucket still accepts them |
-| `BITBUCKET_WORKSPACE` | Optional. The workspace whose PRs the picker lists. It scans the 50 most recently updated repositories; a pasted PR URL always works |
+| `BITBUCKET_WORKSPACE` | Optional. The workspace whose PRs the picker lists, and where megareviewer asks Bitbucket who you are, so one with a repository you were given access to. It scans the 50 most recently updated repositories; a pasted PR URL always works. Without it, Connections shows an error unless the token also has `read:user:bitbucket` |
 
 **The model.** Only for the Request AI review button, whose menu lists every model megareviewer offers, on each command or account that can run it; the ones your machine can't run are disabled, with the fix. Without a choice it runs Claude Sonnet 5.5 on the first of these that can:
 

@@ -141,7 +141,11 @@ export class FakeGitHost implements GitHost {
   /** Every getOpenPullRequests call, with the refs it asked about. */
   readonly getOpenPullRequestsCalls: PullRequestRef[][] = [];
 
-  async currentUser(): Promise<Result<HostUser, HostError>> {
+  /** Every currentUser call, with the repository it named. */
+  readonly currentUserCalls: (RepoRef | undefined)[] = [];
+
+  async currentUser(repo?: RepoRef): Promise<Result<HostUser, HostError>> {
+    this.currentUserCalls.push(repo);
     return this.fail("currentUser") ?? ok({ ...this.user });
   }
 
