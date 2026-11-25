@@ -2,7 +2,7 @@
 
 Planned and committed as stage 68.
 
-**Status:** Not started
+**Status:** In progress (branch claude/harness-second-8cfed6)
 **Depends on:** 75
 **Owns:** the guideline parts of `contracts/api.ts`, `src/application/use-cases/preferences.ts` and `src/adapters/http/`; `web/src/pages/preferences/`; the Request AI review tooltip's line on the harness; `e2e/preferences.spec.ts`; the harness on the design-system page
 
