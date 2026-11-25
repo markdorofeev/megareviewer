@@ -45,7 +45,7 @@ Each has a harness at its base commit: a root that imports one file and links ot
 
 ## Notes for later stages
 
-Nothing has been run on a model yet. What's built, and how to run it:
+Nothing has been run on a model yet. Every way of reading, the kill on case 4's file and the report were run through a stand-in for `claude` with canned answers, whose results files aren't kept. What's built, and how to run it:
 
 ### The line that asks a pass to read
 
