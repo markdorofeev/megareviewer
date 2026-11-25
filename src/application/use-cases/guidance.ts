@@ -8,7 +8,10 @@ import {
   type GuidelinePath,
   guidanceOf,
   guidelineEnabled,
+  HARNESS_ROOT,
+  type HarnessFile,
   type HarnessSkipReason,
+  harnessCopy,
   harnessLinks,
   harnessPlan,
   MAX_INLINE_BYTES,
@@ -17,11 +20,12 @@ import {
   type RepoRef,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { InputGuidance } from "../ports/index.ts";
+import type { InputGuidance, InputHarness } from "../ports/index.ts";
 import type { AppDeps } from "./deps.ts";
 import { fromHostError, type UseCaseError } from "./errors.ts";
 import { type LoadedHarness, loadHarness } from "./harness.ts";
 import { hostFor } from "./hosts.ts";
+import { count } from "./text.ts";
 
 /** As Collect does, a file over 1 MB isn't kept. */
 const MAX_CACHED_BYTES = 1024 * 1024;
@@ -84,8 +88,21 @@ interface GuidelineToSend {
 
 interface Guidelines {
   readonly sent: readonly GuidelineToSend[];
+  /** What a pass that reads the harness can open, nearest a root first. */
+  readonly onRequest: readonly Omit<GuidelineToSend, "content">[];
+  readonly contents: ReadonlyMap<string, string>;
+  readonly headings: ReadonlyMap<string, HarnessFile["headings"]>;
   readonly warnings: readonly string[];
 }
+
+/** Who runs the passes, and whether they read the harness. */
+export interface Reader {
+  readonly readsHarness: boolean;
+  /** "GPT-6 Sol through Codex" */
+  readonly name: string;
+}
+
+const NOTHING_TO_READ = { onRequest: [], contents: new Map(), headings: new Map() };
 
 const kilobytes = (bytes: number): string => `${Math.ceil(bytes / 1024)} KB`;
 
@@ -102,16 +119,21 @@ const leftOutWarning = (reasons: readonly string[]): string[] =>
     ? []
     : [`The AI review ran without some guideline files: ${reasons.join("; ")}`];
 
-/** The enabled roots and the files they import, as many as fit. */
+/**
+ * The enabled roots and the files they import, as many as fit, and the other enabled files for a
+ * pass to read, when it can.
+ */
 const harnessGuidelines = (
   { harness, contents }: LoadedHarness,
   switches: ReadonlyMap<string, boolean>,
+  reader: Reader,
 ): Guidelines => {
-  const { inPrompt, passedOver } = harnessPlan(harness, switches);
+  const { inPrompt, onRequest, passedOver } = harnessPlan(harness, switches);
   const loading = [...inPrompt, ...passedOver];
-  const importerOf = (path: string): string | null =>
-    loading.find((file) => file.links.some((link) => link.path === path && link.kind === "import"))
-      ?.path ?? null;
+  const linking = (files: readonly HarnessFile[], path: string, how: "import" | "any") =>
+    files.find((file) =>
+      file.links.some((link) => link.path === path && (how === "any" || link.kind === "import")),
+    )?.path ?? null;
   const asked = new Set([
     ...GUIDELINE_PATHS.filter((path) => guidelineEnabled(path, switches)),
     ...loading.flatMap(({ path }) =>
@@ -120,19 +142,38 @@ const harnessGuidelines = (
       ),
     ),
   ]);
+  const unread = onRequest.length - passedOver.length;
   return {
     sent: inPrompt.map(({ path, bytes, via }) => ({
       path,
       bytes,
       content: contents.get(path) ?? "",
-      linkedFrom: via === "root" ? null : importerOf(path),
+      linkedFrom: via === "root" ? null : linking(loading, path, "import"),
     })),
-    warnings: leftOutWarning([
-      ...passedOver.map(doesntFit),
-      ...harness.skipped
-        .filter(({ path }) => asked.has(path))
-        .map(({ path, reason }) => `${path} ${SKIPPED[reason]}`),
-    ]),
+    ...(reader.readsHarness
+      ? {
+          onRequest: onRequest.map(({ path, bytes, via }) => ({
+            path,
+            bytes,
+            linkedFrom: via === "root" ? null : linking([...inPrompt, ...onRequest], path, "any"),
+          })),
+          contents,
+          headings: new Map(onRequest.map(({ path, headings }) => [path, headings])),
+        }
+      : NOTHING_TO_READ),
+    warnings: [
+      ...leftOutWarning([
+        ...(reader.readsHarness ? [] : passedOver.map(doesntFit)),
+        ...harness.skipped
+          .filter(({ path }) => asked.has(path))
+          .map(({ path, reason }) => `${path} ${SKIPPED[reason]}`),
+      ]),
+      ...(reader.readsHarness || unread === 0
+        ? []
+        : [
+            `The AI review ran without ${count(unread, "file")} the repository's guideline files link: ${reader.name} can't read files on request`,
+          ]),
+    ],
   };
 };
 
@@ -153,22 +194,30 @@ const rootGuidelines = async (
         : [{ path, content, bytes: utf8.encode(content).byteLength, linkedFrom: null }];
     }),
   );
-  return ok({ sent: fitting, warnings: leftOutWarning(passedOver.map(doesntFit)) });
+  return ok({
+    sent: fitting,
+    ...NOTHING_TO_READ,
+    warnings: leftOutWarning(passedOver.map(doesntFit)),
+  });
 };
 
 const guidelinesOf = async (
   deps: Pick<AppDeps, "fileCache" | "hosts" | "harnessSource" | "harnessStore" | "logger">,
   { ref: { repo }, baseSha }: PullRequest,
   switches: ReadonlyMap<string, boolean>,
+  reader: Reader,
 ): Promise<Guidelines> => {
   const paths = GUIDELINE_PATHS.filter((path) => guidelineEnabled(path, switches));
-  if (paths.length === 0) return { sent: [], warnings: [] };
+  if (paths.length === 0) return { sent: [], ...NOTHING_TO_READ, warnings: [] };
   const loaded = await loadHarness(deps, repo, baseSha);
-  if (loaded.ok && loaded.value !== null) return harnessGuidelines(loaded.value, switches);
+  if (loaded.ok && loaded.value !== null) {
+    return harnessGuidelines(loaded.value, switches, reader);
+  }
   const roots = await rootGuidelines(deps, repo, baseSha, paths);
   if (!roots.ok) {
     return {
       sent: [],
+      ...NOTHING_TO_READ,
       warnings: [
         `Couldn't read the repository's guideline files, so the AI review ran without them: ${roots.error.message}`,
       ],
@@ -178,7 +227,7 @@ const guidelinesOf = async (
   return loaded.ok || sent.length + warnings.length === 0
     ? roots.value
     : {
-        sent,
+        ...roots.value,
         warnings: [
           ...warnings,
           `Couldn't load the files the repository's guideline files import, so the AI review ran without them: ${loaded.error.message}`,
@@ -191,15 +240,45 @@ export interface RunGuidance {
   readonly guidance: Guidance;
   /** The same, as the passes read it. */
   readonly input: InputGuidance;
+  /** What the passes can read beside it. */
+  readonly harness: InputHarness | null;
   readonly warnings: readonly string[];
 }
+
+/** The files a pass can read, as the copies it reads, by the refs after those in the prompt. */
+const inputHarness = (
+  guidance: Guidance,
+  { contents, headings }: Pick<Guidelines, "contents" | "headings">,
+): InputHarness | null => {
+  const left = guidance.guidelines.filter((file) => file.given === "on-request");
+  if (left.length === 0) return null;
+  const copies = new Map<string, string>();
+  const files = left.map(({ ref, path, linkedFrom }) => {
+    const copy = harnessCopy(contents.get(path) ?? "");
+    const at = `${HARNESS_ROOT}/${path}`;
+    copies.set(at, copy.content);
+    return {
+      ref,
+      path: at,
+      bytes: utf8.encode(copy.content).byteLength,
+      lines: copy.lines,
+      linkedFrom,
+      headings: (headings.get(path) ?? []).map((heading) => ({
+        ...heading,
+        line: copy.lineOf(heading.line),
+      })),
+    };
+  });
+  return { files, contents: copies };
+};
 
 /**
  * What a model run on a pull request reads beside the code: the reviewer's enabled preferences for
  * its repository, and the repository's guideline files they switched on with the files those
  * import, at the PR's base commit, so a PR can't rewrite the rules it's reviewed by. It joins the
- * harness's load, running since the PR was opened. A file that can't be read or doesn't fit is a
- * warning, and the run goes on without it.
+ * harness's load, running since the PR was opened. The harness's other files are there to read, for
+ * a model that reads them. A file that can't be read, or that a run always reads and doesn't fit,
+ * is a warning, and the run goes on without it.
  */
 export const runGuidance = async (
   deps: Pick<
@@ -207,14 +286,19 @@ export const runGuidance = async (
     "preferences" | "fileCache" | "hosts" | "harnessSource" | "harnessStore" | "logger"
   >,
   pullRequest: PullRequest,
+  reader: Reader,
 ): Promise<RunGuidance> => {
   const { repo } = pullRequest.ref;
   const [all, switches] = await Promise.all([
     deps.preferences.listPreferences(),
     deps.preferences.getGuidelineSwitches(repo),
   ]);
-  const { sent, warnings } = await guidelinesOf(deps, pullRequest, switches);
-  const guidance = guidanceOf(preferencesFor(all, repo), sent);
+  const guidelines = await guidelinesOf(deps, pullRequest, switches, reader);
+  const { sent, onRequest, warnings } = guidelines;
+  const guidance = guidanceOf(preferencesFor(all, repo), [
+    ...sent.map((file) => ({ ...file, given: "prompt" as const })),
+    ...onRequest.map((file) => ({ ...file, given: "on-request" as const })),
+  ]);
   return {
     guidance,
     input: {
@@ -229,6 +313,7 @@ export const runGuidance = async (
         return content === undefined ? [] : [{ ref, path, linkedFrom, content }];
       }),
     },
+    harness: inputHarness(guidance, guidelines),
     warnings,
   };
 };

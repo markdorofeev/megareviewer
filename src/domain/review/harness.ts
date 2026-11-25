@@ -67,6 +67,24 @@ export const MAX_HARNESS_FILES = 200;
 export const MAX_HARNESS_LOOKUPS = 400;
 export const MAX_HARNESS_FILE_BYTES = 1_048_576;
 
+/** Where a pass's directory holds the harness; code would go beside it. */
+export const HARNESS_ROOT = "harness";
+/** A longer line is wrapped in the copy a pass reads: opencode cuts one at 2,000 characters. */
+export const MAX_COPY_LINE = 1_000;
+
+/** A file a pass opened or searched, or tried to, with the tool it reads the harness with. */
+export const HarnessRead = z
+  .object({
+    /** In the pass's directory, "harness/docs/rules.md"; a path outside it is absolute. */
+    path: z.string(),
+    /** Null for a whole file, and for a search. */
+    fromLine: z.number().int().positive().nullable(),
+    toLine: z.number().int().positive().nullable(),
+    outcome: z.enum(["read", "refused"]),
+  })
+  .readonly();
+export type HarnessRead = z.infer<typeof HarnessRead>;
+
 /** A path in prose can mean two files: the first of `paths` that's one is the one it links. */
 export interface HarnessLink {
   readonly kind: HarnessLinkKind;
@@ -278,6 +296,48 @@ export const harnessOutline = (
     }
   }
   return { headings, lines: lines.length };
+};
+
+/** Where to cut a line too long for the copy: at its last space that fits, else where it must. */
+const cutAt = (line: string): { readonly end: number; readonly next: number } => {
+  const space = line.lastIndexOf(" ", MAX_COPY_LINE);
+  if (space > 0) return { end: space, next: space + 1 };
+  // Never between the two halves of a surrogate pair.
+  const end = /[\uD800-\uDBFF]/.test(line.charAt(MAX_COPY_LINE - 1))
+    ? MAX_COPY_LINE - 1
+    : MAX_COPY_LINE;
+  return { end, next: end };
+};
+
+/**
+ * A file as a pass reads it: its lines over MAX_COPY_LINE characters wrapped at spaces, which lose
+ * only the space they're cut at. `lineOf` is where a line of the file starts in the copy.
+ */
+export const harnessCopy = (
+  content: string,
+): {
+  readonly content: string;
+  readonly lines: number;
+  readonly lineOf: (line: number) => number;
+} => {
+  const wrapped: string[] = [];
+  const starts: number[] = [];
+  for (const line of content.split("\n")) {
+    starts.push(wrapped.length + 1);
+    let rest = line;
+    while (rest.length > MAX_COPY_LINE) {
+      const { end, next } = cutAt(rest);
+      wrapped.push(rest.slice(0, end));
+      rest = rest.slice(next);
+    }
+    wrapped.push(rest);
+  }
+  const copy = wrapped.join("\n");
+  return {
+    content: copy,
+    lines: lineList(copy).length,
+    lineOf: (line) => starts[line - 1] ?? line,
+  };
 };
 
 /** The files at `from`, then breadth-first the ones they link and `follow` lets through. */

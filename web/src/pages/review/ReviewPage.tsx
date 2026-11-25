@@ -1897,7 +1897,12 @@ const Review = ({
             onRemoved={(removed) => restart({ ...view, ...removed })}
           />
         )}
-        <UsageFooter usage={live.usage} option={live.modelOption} guidance={live.guidance} />
+        <UsageFooter
+          usage={live.usage}
+          option={live.modelOption}
+          guidance={live.guidance}
+          calls={live.modelCalls}
+        />
       </footer>
 
       {rerunning && modelChoice.chosen !== null && (

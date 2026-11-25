@@ -176,6 +176,7 @@ export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisMo
   let failed = false;
   return {
     version: model.version,
+    readsHarness: model.readsHarness,
     checkSize: (input) => model.checkSize(input),
     async intent(input, options) {
       if (failed || input.pullRequest.url !== url) return model.intent(input, options);
@@ -335,7 +336,10 @@ export const createFakeApp = async (options: {
             withGuidance(
               withCheckingTests(
                 options.scenario === undefined
-                  ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+                  ? failingIntentOnce(
+                      new FakeAnalysisModel({ readsHarness: true }),
+                      intentFailsOnce.pullRequest.url,
+                    )
                   : createReplayAnalysisModel(recording, { scenario: options.scenario }),
                 receiptsTested.pullRequest.url,
               ),

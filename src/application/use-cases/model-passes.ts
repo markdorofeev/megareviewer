@@ -11,6 +11,7 @@ import {
   type FindingProblem,
   type Guidance,
   type GuidanceMark,
+  HARNESS_ROOT,
   type Intent,
   keptSteps,
   MIN_STEPS,
@@ -36,6 +37,7 @@ import type {
   Clock,
   Logger,
   ModelCheckingTest,
+  PassError,
   PassOptions,
   PassOutput,
 } from "../ports/index.ts";
@@ -50,7 +52,7 @@ export interface PassResult<T> {
   readonly warnings: readonly string[];
 }
 
-type PassCall<T> = (options?: PassOptions) => Promise<Result<PassOutput<T>, ModelError>>;
+type PassCall<T> = (options?: PassOptions) => Promise<Result<PassOutput<T>, PassError>>;
 
 export interface PassDeps {
   readonly logger: Logger;
@@ -60,8 +62,10 @@ export interface PassDeps {
 /**
  * Calls a pass, and once more with feedback when its answer is invalid: unparseable, or with
  * the problems `check` finds. The answer comes back with whatever problems are left, for the
- * caller to repair; when the retry fails outright, the first answer is repaired instead. Every
- * call is traced, with when it ran and what came of it.
+ * caller to repair; when the retry fails outright, the first answer is repaired instead. A call
+ * whose read tool fails, or that uses up its rounds of reading, is made once more on the prompt
+ * alone, and so is what follows it. Every call is traced, with when it ran, what it read and what
+ * came of it.
  */
 const callChecked = async <T>(
   pass: ModelPass,
@@ -75,15 +79,16 @@ const callChecked = async <T>(
 }> => {
   const usage: ModelUsage[] = [];
   const modelCalls: ModelCall[] = [];
-  const attempt = async (
-    number: number,
+  const attemptOnce = async (
     options?: PassOptions,
   ): Promise<Result<{ value: T; problems: string[] }, ModelError>> => {
+    const number = modelCalls.length + 1;
     const startedAt = clock.now();
     const result = await call(options);
     const durationMs = Math.max(0, Date.parse(clock.now()) - Date.parse(startedAt));
     const problems = result.ok ? check(result.value.value) : [];
     if (result.ok) usage.push({ ...result.value.usage, startedAt, durationMs });
+    const reads = (result.ok ? result.value.reads : result.error.reads) ?? [];
     modelCalls.push({
       pass,
       attempt: number,
@@ -91,7 +96,8 @@ const callChecked = async <T>(
       durationMs,
       outcome: !result.ok ? "failed" : problems.length > 0 ? "problems" : "ok",
       problems,
-      error: result.ok ? null : result.error,
+      error: result.ok ? null : { kind: result.error.kind, message: result.error.message },
+      reads,
     });
     if (!result.ok) {
       logger.warn("Model call failed", {
@@ -100,21 +106,39 @@ const callChecked = async <T>(
         durationMs,
         kind: result.error.kind,
         message: result.error.message,
+        reads: reads.length,
       });
       return result;
     }
-    logger.info("Model call answered", { pass, attempt: number, durationMs, problems });
+    logger.info("Model call answered", {
+      pass,
+      attempt: number,
+      durationMs,
+      problems,
+      reads: reads.length,
+    });
     return ok({ value: result.value.value, problems });
   };
+  let withoutReader = false;
+  const attempt = async (
+    options?: PassOptions,
+  ): Promise<Result<{ value: T; problems: string[] }, ModelError>> => {
+    if (withoutReader) return attemptOnce({ ...options, withoutReader });
+    const result = await attemptOnce(options);
+    if (result.ok || result.error.kind !== "reader") return result;
+    logger.info("Running a model pass again without the read tool", { pass });
+    withoutReader = true;
+    return attemptOnce({ ...options, withoutReader });
+  };
 
-  const first = await attempt(1);
+  const first = await attempt();
   if (!first.ok && first.error.kind !== "invalid-output")
     return { outcome: first, usage, modelCalls };
   if (first.ok && first.value.problems.length === 0) return { outcome: first, usage, modelCalls };
   const feedback = first.ok ? first.value.problems : [first.error.message];
 
   logger.info("Retrying a model pass with feedback", { pass, problems: feedback.length });
-  const second = await attempt(2, { feedback });
+  const second = await attempt({ feedback });
   if (second.ok || !first.ok) return { outcome: second, usage, modelCalls };
   logger.warn("A model pass retry failed; repairing the first answer", {
     pass,
@@ -123,17 +147,33 @@ const callChecked = async <T>(
   return { outcome: first, usage, modelCalls };
 };
 
+/** Whether a mark's file was in the prompt, or left for the pass to read and read by it. */
+const readIfLeft = (
+  mark: GuidanceMark | null,
+  guidance: Guidance | null,
+  calls: readonly ModelCall[],
+): boolean => {
+  const file = guidance?.guidelines.find((one) => one.ref === mark?.ref);
+  if (file === undefined || file.given === "prompt") return true;
+  const path = `${HARNESS_ROOT}/${file.path}`;
+  return calls.some((call) =>
+    call.reads.some((read) => read.outcome === "read" && read.path === path),
+  );
+};
+
 /**
- * A finding's or a risk's guidance mark when it checks out against what the run was given, else
- * null: the point stays, unmarked, so the reviewer sees it as any other. Logged, never retried.
+ * A finding's or a risk's guidance mark when it checks out against what the run was given and the
+ * pass's calls read, else null: the point stays, unmarked, so the reviewer sees it as any other.
+ * Logged, never retried.
  */
 const checkedMark = (
   mark: GuidanceMark | null,
   guidance: Guidance | null,
+  calls: readonly ModelCall[],
   logger: Logger,
   on: Readonly<Record<string, unknown>>,
 ): GuidanceMark | null => {
-  const checked = checkGuidanceMark(mark, guidance);
+  const checked = readIfLeft(mark, guidance, calls) ? checkGuidanceMark(mark, guidance) : null;
   if (mark !== null && checked === null) {
     logger.warn("Dropped a guidance mark that doesn't check out", { ...on, ...mark });
   }
@@ -241,7 +281,9 @@ export const runFindings = async (
             ...draft,
             ...(stripped(index, "suggestion-old-side") ? { suggestion: null } : {}),
             ...(stripped(index, "unknown-mismatch") ? { mismatch: null } : {}),
-            guidance: checkedMark(draft.guidance, guidance, deps.logger, { finding: index + 1 }),
+            guidance: checkedMark(draft.guidance, guidance, modelCalls, deps.logger, {
+              finding: index + 1,
+            }),
           },
         ],
   );
@@ -313,7 +355,7 @@ export const runRisk = async (
       source: "model",
       lines: fits ? risk.lines : null,
       guidance: contract
-        ? checkedMark(risk.guidance, guidance, deps.logger, { hunkId: risk.hunkId })
+        ? checkedMark(risk.guidance, guidance, modelCalls, deps.logger, { hunkId: risk.hunkId })
         : null,
       ...(claim === null || problem !== null ? {} : { checkedBy: claim }),
     });
@@ -393,6 +435,7 @@ export const runDecisions = async (
  */
 export const askingForTour = (model: AnalysisModel): AnalysisModel => ({
   version: model.version,
+  readsHarness: model.readsHarness,
   checkSize: (input) => model.checkSize(input),
   intent: (input, options) => model.intent(input, { ...options, tour: true }),
   findings: (input, intent, options) => model.findings(input, intent, { ...options, tour: true }),

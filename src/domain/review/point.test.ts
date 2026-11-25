@@ -73,7 +73,7 @@ describe("pointsOf", () => {
         },
         { ref: "p2", id: naming, kind: "dont-flag", text: "Naming", scope: { kind: "global" } },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, bytes: 120 }],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 120 }],
       checks: [],
     };
     const contractRisk = smallFeatureAnalysis.risk[0];

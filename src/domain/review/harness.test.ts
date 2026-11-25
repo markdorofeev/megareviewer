@@ -5,11 +5,13 @@ import {
   Harness,
   type HarnessFile,
   type HarnessLinkKind,
+  harnessCopy,
   harnessEnabled,
   harnessLinks,
   harnessOutline,
   harnessPlan,
   harnessReach,
+  MAX_COPY_LINE,
   MAX_INLINE_BYTES,
   strongerLink,
 } from "./index.ts";
@@ -221,6 +223,50 @@ describe("harnessOutline", () => {
       headings: [{ level: 1, text: "One", line: 1 }],
       lines: 2,
     });
+  });
+});
+
+describe("harnessCopy", () => {
+  it("is the file itself when no line is too long", () => {
+    const content = `# One\r\n\n${"x".repeat(MAX_COPY_LINE)}\nlast`;
+    const copy = harnessCopy(content);
+    expect(copy.content).toBe(content);
+    expect(copy.lines).toBe(4);
+    expect([1, 3, 4].map(copy.lineOf)).toEqual([1, 3, 4]);
+  });
+
+  it("wraps a long line at spaces, and loses nothing but the space it's cut at", () => {
+    const words = Array.from({ length: 900 }, (_, index) => `word${index}`).join(" ");
+    const copy = harnessCopy(`# One\n\n${words}\n\n## Two\n`);
+    const lines = copy.content.split("\n");
+    expect(Math.max(...lines.map((line) => line.length))).toBeLessThanOrEqual(MAX_COPY_LINE);
+    expect(lines.slice(2, copy.lineOf(4) - 1).join(" ")).toBe(words);
+    expect(lines[copy.lineOf(5) - 1]).toBe("## Two");
+    expect(copy.lines).toBe(lines.length - 1);
+  });
+
+  it("keeps every space but the one it's cut at", () => {
+    const line = `${"a ".repeat(499)}bb    ${"c".repeat(10)}`;
+    expect(harnessCopy(line).content.replaceAll("\n", " ")).toBe(line);
+  });
+
+  it("cuts a line without a space where it must, never in the middle of a character", () => {
+    const line = `x${"😀".repeat(1500)}`;
+    const copy = harnessCopy(line);
+    expect(copy.content.replaceAll("\n", "")).toBe(line);
+    expect(copy.content).not.toMatch(/[\uD800-\uDBFF]\n/);
+    expect(Math.max(...copy.content.split("\n").map((one) => one.length))).toBeLessThanOrEqual(
+      MAX_COPY_LINE,
+    );
+  });
+
+  it("puts a heading on the copy's line, whatever came before it was wrapped into", () => {
+    const content = `${"intro ".repeat(700)}\n# One\n${"text # not a heading ".repeat(200)}\n## Two\n`;
+    const copy = harnessCopy(content);
+    const lines = copy.content.split("\n");
+    for (const { level, text, line } of harnessOutline(content).headings) {
+      expect(lines[copy.lineOf(line) - 1]).toBe(`${"#".repeat(level)} ${text}`);
+    }
   });
 });
 

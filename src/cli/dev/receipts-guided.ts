@@ -166,6 +166,7 @@ const risksOf = (input: AnalysisInput): ModelRisk[] => {
 /** The model, but the guided PR's findings and risk passes answer the above, after its own time. */
 export const withGuidance = (model: AnalysisModel, url: string): AnalysisModel => ({
   version: model.version,
+  readsHarness: model.readsHarness,
   checkSize: (input) => model.checkSize(input),
   intent: (input, options) => model.intent(input, options),
   async findings(input, intent, options) {

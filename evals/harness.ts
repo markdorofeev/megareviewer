@@ -59,6 +59,7 @@ const recordingInput = (model: AnalysisModel) => {
   };
   const recording: AnalysisModel = {
     version: model.version,
+    readsHarness: model.readsHarness,
     checkSize: (given) => {
       keep(given);
       return model.checkSize(given);

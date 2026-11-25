@@ -30,6 +30,7 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
 
   return createPassModel({
     version: apiVersion(model),
+    readsHarness: false,
 
     async checkSize(input) {
       const request = passRequest(

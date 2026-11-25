@@ -100,6 +100,7 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
 /** The model, but the checked PR's findings pass answers the above, after its own time. */
 export const withGuardrails = (model: AnalysisModel, url: string): AnalysisModel => ({
   version: model.version,
+  readsHarness: model.readsHarness,
   checkSize: (input) => model.checkSize(input),
   intent: (input, options) => model.intent(input, options),
   async findings(input, intent, options) {

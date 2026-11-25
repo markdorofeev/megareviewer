@@ -108,14 +108,20 @@ const renderIntent = (intent: Intent): string[] => [
   "</intent>",
 ];
 
+/** Beside the task, since the list of files is far above it and alone led no pass to read any. */
+const READ_FIRST =
+  "First go through <readable_files> in the reviewer's guidance and open the parts that speak of the code this change touches, with the tool that reads them. Then answer.";
+
 /**
  * The pass's own message: the intent's answer when the pass reads it (model output, so escaped
- * like PR content), the instruction, and what was wrong with the previous attempt, if anything.
+ * like PR content), the instruction, what it can read first, when it can, and what was wrong with
+ * the previous attempt, if anything.
  */
 export const passMessage = (
   pass: ModelPass,
   intent: Intent | null,
   feedback: readonly string[] | undefined,
+  reads = false,
 ): string => {
   const earlier =
     intent === null
@@ -131,5 +137,6 @@ export const passMessage = (
     feedback === undefined || feedback.length === 0
       ? []
       : ["", `Your previous answer had these problems: ${feedback.join("; ")}. Fix them.`];
-  return [...earlier, PASS_INSTRUCTIONS[pass], ...problems].join("\n");
+  const reading = reads ? ["", READ_FIRST] : [];
+  return [...earlier, PASS_INSTRUCTIONS[pass], ...reading, ...problems].join("\n");
 };

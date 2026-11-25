@@ -57,6 +57,7 @@ const recording = (model: AnalysisModel) => {
   };
   const wrapped: AnalysisModel = {
     version: model.version,
+    readsHarness: model.readsHarness,
     checkSize: (input) => model.checkSize(input),
     intent: (input, options?: PassOptions) => record("intent", () => model.intent(input, options)),
     findings: (input, intent, options) =>

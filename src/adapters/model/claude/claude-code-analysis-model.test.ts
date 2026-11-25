@@ -182,6 +182,57 @@ describe("ClaudeCodeAnalysisModel", () => {
     await expectFailure(recordedLines("risk"), "invalid-output", /answered the risk task/);
   });
 
+  describe("with a harness to read", () => {
+    const harness = {
+      files: [
+        {
+          ref: "g1",
+          path: "harness/docs/rules.md",
+          bytes: 8,
+          lines: 1,
+          linkedFrom: "CLAUDE.md",
+          headings: [],
+        },
+      ],
+      contents: new Map([["harness/docs/rules.md", "# Rules\n"]]),
+    };
+    const reading = { ...smallFeatureInput, harness };
+    const withReads = [...recordedLines("reads").slice(0, -1), ...recorded("intent").slice(1)];
+
+    it("reads the harness, and says what it read with its answer", async () => {
+      const { model, calls } = modelWith(() => withReads);
+      expect(model.readsHarness).toBe(true);
+      const result = await model.intent(reading);
+      if (!result.ok) throw new Error(result.error.message);
+      expect(result.value.reads?.[0]).toMatchObject({ path: "harness/CLAUDE.md" });
+      const [made] = calls;
+      expect(made?.options.files?.["work/harness/docs/rules.md"]).toBe("# Rules\n");
+      expect(made?.options.files?.[SYSTEM_PROMPT_FILE]).toContain("<readable_files>");
+      expect(made?.options.stdin).toContain("First go through <readable_files>");
+    });
+
+    it("sends what a run without a harness does when run without the reader", async () => {
+      const { model, calls } = modelWith();
+      const result = await model.intent(reading, { withoutReader: true });
+      await model.intent(smallFeatureInput);
+      expect(result.ok && result.value.reads).toBeUndefined();
+      expect(calls[0]?.args).toEqual(calls[1]?.args);
+      expect(calls[0]?.options.files).toEqual(calls[1]?.options.files);
+      expect(calls[0]?.options.stdin).toBe(calls[1]?.options.stdin);
+    });
+
+    it("says what a pass whose answer doesn't parse had read", async () => {
+      const { model } = modelWith(() => [
+        ...recordedLines("reads").slice(0, -1),
+        ...recorded("risk").slice(1),
+      ]);
+      const result = await model.intent(reading);
+      if (result.ok) throw new Error("expected the wrong pass's answer to fail");
+      expect(result.error.kind).toBe("invalid-output");
+      expect(result.error.reads?.[0]).toMatchObject({ path: "harness/CLAUDE.md" });
+    });
+  });
+
   describe("lockdown", () => {
     it.each<[SyntheticRun, RegExp]>([
       ["tools", /tools: Bash/],

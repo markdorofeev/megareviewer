@@ -14,6 +14,7 @@ const failed: ModelCall = {
   outcome: "failed",
   problems: [],
   error: { kind: "overloaded", message: "Anthropic is overloaded or failing: 529" },
+  reads: [],
 };
 
 describe("ModelCalls", () => {
@@ -41,6 +42,32 @@ describe("ModelCalls", () => {
     );
     expect(within(dialog).getByText("✕ Failed: overloaded")).toBeTruthy();
     expect(within(dialog).getByText("Anthropic is overloaded or failing: 529")).toBeTruthy();
+  });
+
+  it("lists what each call read of the harness, and what it was refused", () => {
+    const read = (path: string, lines: readonly [number, number] | null, outcome = "read") => ({
+      path,
+      fromLine: lines?.[0] ?? null,
+      toLine: lines?.[1] ?? null,
+      outcome: outcome === "read" ? ("read" as const) : ("refused" as const),
+    });
+    const reading: ModelCall = {
+      ...failed,
+      error: { kind: "reader", message: "The pass was stopped: it tried to read /etc/hosts." },
+      reads: [
+        read("harness/docs/rules.md", null),
+        read("harness/docs/rules.md", null),
+        read("harness/ARCHITECTURE.md", [27, 69]),
+        read("/etc/hosts", null, "refused"),
+      ],
+    };
+    render(<ModelCalls calls={[reading]} option={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run details…" }));
+    const row = within(screen.getByRole("dialog")).getAllByRole("row")[1];
+    expect(row?.textContent).toContain("it tried to read /etc/hosts");
+    expect(row?.textContent).toContain(
+      "Readharness/docs/rules.mdharness/ARCHITECTURE.md, lines 27–69Refused/etc/hosts",
+    );
   });
 
   it("shows nothing before Claude has run", () => {

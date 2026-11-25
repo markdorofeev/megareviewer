@@ -129,6 +129,7 @@ export const createOpencodeAnalysisModel = (
 
   return createPassModel({
     version: opencodeVersion(providerID, model, effort),
+    readsHarness: false,
 
     async checkSize(input) {
       const inputTokens = estimateTokens(

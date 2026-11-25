@@ -168,8 +168,10 @@ export const Guidance = z
             ref: GuidanceRef,
             path: z.string(),
             bytes: z.number().int().nonnegative(),
-            /** The file that imports it; null for a root. */
+            /** The file that imports it, or for one left to be read, links it; null for a root. */
             linkedFrom: z.string().nullable().default(null),
+            /** Put in every pass's prompt, or left for a pass to read when it needs it. */
+            given: z.enum(["prompt", "on-request"]).default("prompt"),
           })
           .readonly(),
       )
@@ -251,6 +253,7 @@ export const guidanceOf = (
     readonly path: string;
     readonly bytes: number;
     readonly linkedFrom: string | null;
+    readonly given: "prompt" | "on-request";
   }[],
   checks: readonly ReadCheckConfig[] = [],
 ): Guidance => ({
@@ -261,11 +264,12 @@ export const guidanceOf = (
     text,
     scope,
   })),
-  guidelines: guidelines.map(({ path, bytes, linkedFrom }, index) => ({
+  guidelines: guidelines.map(({ path, bytes, linkedFrom, given }, index) => ({
     ref: `g${index + 1}`,
     path,
     bytes,
     linkedFrom,
+    given,
   })),
   checks,
 });

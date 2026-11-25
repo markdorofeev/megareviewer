@@ -2,6 +2,7 @@ import { FileTextIcon } from "lucide-react";
 import { useState } from "react";
 import {
   type Guidance,
+  type HarnessRead,
   type ModelCall,
   type ModelCallName,
   type ModelRunOption,
@@ -35,6 +36,32 @@ const outcomeLabel = (call: ModelCall): string => {
   if (call.outcome === "failed") return `✕ Failed: ${call.error?.kind ?? "unknown"}`;
   const count = call.problems.length;
   return `⚠ ${count} ${count === 1 ? "problem" : "problems"}`;
+};
+
+/** "harness/docs/rules.md, lines 3–40" */
+const readLabel = ({ path, fromLine, toLine }: HarnessRead): string =>
+  fromLine === null || toLine === null ? path : `${path}, lines ${fromLine}–${toLine}`;
+
+/** What a call read of the harness, each once, and what it was refused. */
+const Reads = ({ reads }: { readonly reads: readonly HarnessRead[] }) => {
+  const labels = (outcome: HarnessRead["outcome"]) => [
+    ...new Set(reads.filter((read) => read.outcome === outcome).map(readLabel)),
+  ];
+  return (["read", "refused"] as const).map((outcome) => {
+    const listed = labels(outcome);
+    return listed.length === 0 ? null : (
+      <div key={outcome} className="mt-1 text-muted-foreground">
+        {outcome === "read" ? "Read" : "Refused"}
+        <ul className="list-disc pl-4">
+          {listed.map((label) => (
+            <li key={label} className="font-mono text-code-compact break-all">
+              {label}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  });
 };
 
 /** Calls in the order they started; a retry after the call it retries. */
@@ -78,15 +105,20 @@ const GuidanceRead = ({
             </span>
           </li>
         ))}
-        {guidance.guidelines.map((file) => (
-          <li key={file.ref} className="flex items-center gap-2">
-            <FileTextIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="font-mono text-code-compact break-all">{file.path}</span>
-            <span className="tabular text-caption text-muted-foreground">
-              {formatBytes(file.bytes)}
-            </span>
-          </li>
-        ))}
+        {guidance.guidelines
+          .filter((file) => file.given === "prompt")
+          .map((file) => (
+            <li key={file.ref} className="flex items-center gap-2">
+              <FileTextIcon
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-muted-foreground"
+              />
+              <span className="font-mono text-code-compact break-all">{file.path}</span>
+              <span className="tabular text-caption text-muted-foreground">
+                {formatBytes(file.bytes)}
+              </span>
+            </li>
+          ))}
       </ul>
     </section>
   );
@@ -131,7 +163,8 @@ export const ModelCalls = ({
           <p className="text-ui text-muted-foreground">
             {runName(option) === null ? "" : `On ${runName(option)}. `}
             {formatDuration(end - start)} from the first call to the end of the last. A call whose
-            answer has problems runs once more, told what they are.
+            answer has problems runs once more, told what they are, and one whose reading failed
+            runs once more without it.
           </p>
           <table className="tabular w-full text-ui [&_td]:px-2 [&_td]:py-1 [&_td]:align-top [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:align-top [&_th]:font-normal [&_thead_th]:font-medium [&_thead_th]:text-muted-foreground">
             <thead>
@@ -164,6 +197,7 @@ export const ModelCalls = ({
                           ))}
                         </ul>
                       )}
+                      <Reads reads={call.reads} />
                     </td>
                   </tr>
                 );

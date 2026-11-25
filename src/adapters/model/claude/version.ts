@@ -21,6 +21,8 @@ export const VERSION = apiVersion(MODEL);
  */
 export const CLAUDE_CODE_PROMPT_VERSION = 13;
 export const CLAUDE_CODE_FINGERPRINT = "3772d089a53898a6";
+/** The same, of a run with something to read, which the others send nothing of. */
+export const CLAUDE_CODE_READER_FINGERPRINT = "ec8bfea3e953f372";
 export const CLAUDE_CODE_TOUR_FINGERPRINT = "8b3948466b6041bd";
 
 /** An effort for every pass, in place of each pass's own, is named after the model. */

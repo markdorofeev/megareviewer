@@ -184,7 +184,7 @@ const dontFlag = preference({
 });
 const guidance: Guidance = guidanceOf(
   [lookFor, dontFlag],
-  [{ path: "REVIEW.md", bytes: 120, linkedFrom: null }],
+  [{ path: "REVIEW.md", bytes: 120, linkedFrom: null, given: "prompt" }],
 );
 
 describe("guidanceOf", () => {
@@ -200,7 +200,7 @@ describe("guidanceOf", () => {
         },
         { ref: "p2", id: dontFlag.id, kind: "dont-flag", text: "Naming", scope: dontFlag.scope },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, bytes: 120 }],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 120 }],
       checks: [],
     });
   });
@@ -213,7 +213,7 @@ describe("Guidance", () => {
       guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
     };
     expect(Guidance.parse(stored).guidelines).toEqual([
-      { ref: "g1", path: "REVIEW.md", bytes: 120, linkedFrom: null },
+      { ref: "g1", path: "REVIEW.md", bytes: 120, linkedFrom: null, given: "prompt" },
     ]);
   });
 });
@@ -244,8 +244,8 @@ describe("checkGuidanceMark", () => {
     const linked = guidanceOf(
       [],
       [
-        { path: "CLAUDE.md", bytes: 40, linkedFrom: null },
-        { path: "ENGINEERING.md", bytes: 900, linkedFrom: "CLAUDE.md" },
+        { path: "CLAUDE.md", bytes: 40, linkedFrom: null, given: "prompt" },
+        { path: "ENGINEERING.md", bytes: 900, linkedFrom: "CLAUDE.md", given: "prompt" },
       ],
     );
     const mark = { ref: "g2", effect: "raised" } as const;

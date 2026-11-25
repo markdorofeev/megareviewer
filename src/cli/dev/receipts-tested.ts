@@ -134,6 +134,7 @@ const risksOf = (input: AnalysisInput): ModelRisk[] => {
 /** The model, but receipts-tested's risk pass answers with its risks, after the model's own time. */
 export const withCheckingTests = (model: AnalysisModel, url: string): AnalysisModel => ({
   version: model.version,
+  readsHarness: model.readsHarness,
   checkSize: (input) => model.checkSize(input),
   intent: (input, options) => model.intent(input, options),
   findings: (input, intent, options) => model.findings(input, intent, options),

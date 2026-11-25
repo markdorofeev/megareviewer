@@ -95,6 +95,7 @@ export const createCodexAnalysisModel = (options: CodexAnalysisModelOptions): An
 
   return createPassModel({
     version: codexVersion(model, effort),
+    readsHarness: false,
 
     async checkSize(input) {
       const inputTokens = estimateTokens(

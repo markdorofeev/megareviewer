@@ -1,3 +1,4 @@
+import { MAX_READ_ROUNDS } from "../../../application/ports/index.ts";
 import type { ModelPass } from "../../../domain/review/index.ts";
 import { type Effort, PASS_EFFORT } from "../shared/effort.ts";
 import { PASS_ANSWER_FORMAT, passAnswerFormat } from "../shared/output-schema.ts";
@@ -10,6 +11,12 @@ export const SYSTEM_PROMPT_FILE = "system.txt";
 /** The tool Claude Code turns `--json-schema` into: the one tool a pass's session may have. */
 export const STRUCTURED_OUTPUT_TOOL = "StructuredOutput";
 
+/** The read tool: Claude Code's own file reader and search, which `--restricted` confines. */
+export const READ_TOOLS = ["Read", "Grep"] as const;
+
+/** Where a pass with the read tool runs, so the system prompt's file is outside what it can read. */
+export const WORK_DIR = "work";
+
 /** What Claude Code 2.1.303 reported as Haiku 5.5's output limit under -p, past the API path's. */
 export const CLAUDE_CODE_MAX_OUTPUT_TOKENS = 128_000;
 
@@ -20,6 +27,8 @@ export const claudeCodeOutputLimit = (model: string): number =>
 export interface ClaudeCodeRequest {
   readonly args: readonly string[];
   readonly files: Readonly<Record<string, string>>;
+  /** Where it runs, when not the directory the files are in. */
+  readonly workDir?: string;
   readonly stdin: string;
 }
 
@@ -58,12 +67,14 @@ export const mcpLockdownArgs = (managedMcpServers: readonly string[] | null): st
  * A locked-down `claude -p` answering through `schema`. The schema becomes a tool, which comes
  * before the system prompt, so calls meant to share the cache must send the same one.
  * `managedMcpServers` is what `readManagedMcpServers` found: null when there's no managed config.
+ * `reads`: the session has the read tool, over the directory it runs in and nothing else.
  */
 export const claudeCodeArgs = (
   model: string,
   effort: string,
   schema: object,
   managedMcpServers: readonly string[] | null = null,
+  reads = false,
 ): string[] => [
   "-p",
   "--model",
@@ -71,20 +82,23 @@ export const claudeCodeArgs = (
   "--effort",
   effort,
   "--system-prompt-file",
-  SYSTEM_PROMPT_FILE,
+  reads ? `../${SYSTEM_PROMPT_FILE}` : SYSTEM_PROMPT_FILE,
   "--json-schema",
   JSON.stringify(schema),
-  // No tools, servers, skills, commands or settings: PR text can't reach anything to run.
+  // No servers, skills, commands or settings, and no tools but the confined reader: PR text can't
+  // reach anything to run.
   "--tools",
-  "",
+  reads ? READ_TOOLS.join(" ") : "",
+  ...(reads ? ["--restricted"] : []),
   ...mcpLockdownArgs(managedMcpServers),
   "--disable-slash-commands",
   "--setting-sources",
   "",
   "--no-session-persistence",
-  // The answer takes 2: the StructuredOutput call and the turn after it.
+  // The answer takes 2: the StructuredOutput call and the turn after it. With the reader, a turn a
+  // round of reads, one for the answer, and a spare for an answer the schema refused.
   "--max-turns",
-  "4",
+  reads ? String(MAX_READ_ROUNDS + 2) : "4",
   "--output-format",
   "stream-json",
   "--verbose",
@@ -99,13 +113,30 @@ export interface StructuredCall {
   readonly message: string;
   /** The servers of the organization's `managed-mcp.json`, or null (the default) without one. */
   readonly managedMcpServers?: readonly string[] | null;
+  /** What the call can read, by path in the directory it runs in; null or none without the tool. */
+  readonly readable?: ReadonlyMap<string, string> | null;
 }
 
-export const structuredCallRequest = (call: StructuredCall): ClaudeCodeRequest => ({
-  args: claudeCodeArgs(call.model, call.effort, call.schema, call.managedMcpServers ?? null),
-  files: { [SYSTEM_PROMPT_FILE]: call.systemPrompt },
-  stdin: call.message,
-});
+export const structuredCallRequest = (call: StructuredCall): ClaudeCodeRequest => {
+  const readable = call.readable ?? null;
+  return {
+    args: claudeCodeArgs(
+      call.model,
+      call.effort,
+      call.schema,
+      call.managedMcpServers ?? null,
+      readable !== null,
+    ),
+    files: {
+      [SYSTEM_PROMPT_FILE]: call.systemPrompt,
+      ...Object.fromEntries(
+        [...(readable ?? [])].map(([path, content]) => [`${WORK_DIR}/${path}`, content]),
+      ),
+    },
+    ...(readable === null ? {} : { workDir: WORK_DIR }),
+    stdin: call.message,
+  };
+};
 
 /**
  * Everything but the effort is the same for every pass of a run, so later passes read the cache.
@@ -118,12 +149,14 @@ export const passCall = (
   model: string = MODEL,
   effort?: Effort,
   tour = false,
+  readable: ReadonlyMap<string, string> | null = null,
 ): StructuredCall => ({
   model,
   effort: effort ?? effortFor(claudeModel(model), PASS_EFFORT[pass]),
   systemPrompt: claudeCodeSystemPrompt(renderedInput),
   schema: passAnswerFormat(tour).schema,
   message,
+  readable,
 });
 
 export const claudeCodePassArgs = (pass: ModelPass, model: string = MODEL): string[] =>
@@ -139,5 +172,6 @@ export const claudeCodeRequest = (
   message: string,
   model: string = MODEL,
   tour = false,
+  readable: ReadonlyMap<string, string> | null = null,
 ): ClaudeCodeRequest =>
-  structuredCallRequest(passCall(pass, renderedInput, message, model, undefined, tour));
+  structuredCallRequest(passCall(pass, renderedInput, message, model, undefined, tour, readable));

@@ -318,7 +318,11 @@ export const runModel = async (
     }));
     await modelStages(
       deps,
-      { model: run.tour === true ? askingForTour(run.model) : run.model, advisor: run.advisor },
+      {
+        model: run.tour === true ? askingForTour(run.model) : run.model,
+        option: run.option,
+        advisor: run.advisor,
+      },
       run.tour === true,
       host,
       pullRequest,
@@ -339,7 +343,15 @@ const noProgress: OnFilesFetched = async () => {};
 
 const modelStages = async (
   deps: AppDeps,
-  { model, advisor }: { readonly model: AnalysisModel; readonly advisor: GuardrailAdvisor | null },
+  {
+    model,
+    option,
+    advisor,
+  }: {
+    readonly model: AnalysisModel;
+    readonly option: ModelRunOption;
+    readonly advisor: GuardrailAdvisor | null;
+  },
   tour: boolean,
   host: GitHost,
   pullRequest: PullRequest,
@@ -351,7 +363,10 @@ const modelStages = async (
   const { prepared, proofRisk, ruleRisk } = await prepare(deps, collected.value, checkout);
   const { files } = collected.value;
 
-  const read = await runGuidance(deps, pullRequest);
+  const read = await runGuidance(deps, pullRequest, {
+    readsHarness: model.readsHarness,
+    name: `${option.modelName} through ${option.providerName}`,
+  });
   const { guidance } = read;
   await tracker.save((analysis) => ({
     guidance,
@@ -369,6 +384,7 @@ const modelStages = async (
       headContents: collected.value.headContents,
       prepared,
       guidance: read.input,
+      harness: read.harness,
     }),
   );
   if (!fitted.ok) return tracker.failModel("intent", fitted.error);

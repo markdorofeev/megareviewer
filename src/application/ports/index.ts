@@ -5,9 +5,12 @@ export {
   DecisionDraft,
   FindingDraft,
   type InputGuidance,
+  type InputHarness,
+  MAX_READ_ROUNDS,
   ModelCheckingTest,
   ModelRisk,
   NO_GUIDANCE,
+  type PassError,
   type PassOptions,
   type PassOutput,
 } from "./analysis-model.ts";

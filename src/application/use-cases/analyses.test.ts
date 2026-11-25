@@ -486,6 +486,7 @@ describe("the analysis pipeline", () => {
         outcome: "failed",
         problems: [],
         error: modelError("overloaded", "Overloaded"),
+        reads: [],
       },
       {
         pass: "findings",
@@ -495,6 +496,7 @@ describe("the analysis pipeline", () => {
         outcome: "ok",
         problems: [],
         error: null,
+        reads: [],
       },
       {
         pass: "risk",
@@ -504,6 +506,7 @@ describe("the analysis pipeline", () => {
         outcome: "problems",
         problems: [missing],
         error: null,
+        reads: [],
       },
       {
         pass: "risk",
@@ -513,6 +516,7 @@ describe("the analysis pipeline", () => {
         outcome: "ok",
         problems: [],
         error: null,
+        reads: [],
       },
     ]);
     expect(analysis.modelError?.stage).toBe("decisions");
@@ -1949,7 +1953,7 @@ describe("a model run's guidance", () => {
         },
         { ref: "p2", id: naming.id, kind: "dont-flag", text: naming.text, scope: naming.scope },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, bytes: 31 }],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 31 }],
       checks: [],
     });
     expect(analysis.warnings).toEqual([]);
@@ -1986,7 +1990,7 @@ describe("a model run's guidance", () => {
       { ref: "g1", path: "AGENTS.md", linkedFrom: null, content: "Use pnpm.\n" },
     ]);
     expect(analysis.guidance?.guidelines).toEqual([
-      { ref: "g1", path: "AGENTS.md", linkedFrom: null, bytes: 10 },
+      { ref: "g1", path: "AGENTS.md", linkedFrom: null, given: "prompt", bytes: 10 },
     ]);
   });
 
@@ -2004,7 +2008,7 @@ describe("a model run's guidance", () => {
     expect(failed.warnings).toEqual([warning]);
     expect(analysis.warnings).toEqual([warning]);
     expect(analysis.guidance?.guidelines).toEqual([
-      { ref: "g1", path: "REVIEW.md", linkedFrom: null, bytes: 31 },
+      { ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 31 },
     ]);
     expect(model.callsTo("findings")[0]?.input.guidance.guidelines.map((one) => one.path)).toEqual([
       "REVIEW.md",
@@ -2087,9 +2091,9 @@ describe("a model run's guidance", () => {
         ref: "g3",
         path: "docs/rules.md",
         linkedFrom: "CLAUDE.md",
+        given: "prompt",
         bytes: 19,
       });
-      expect(analysis.warnings).toEqual([]);
       // Nothing is asked of the host's files: the harness has them.
       expect(github.getFilesCalls.flat().filter(({ path }) => path.endsWith(".md"))).toEqual([]);
     });
@@ -2135,6 +2139,78 @@ describe("a model run's guidance", () => {
       expect(analysis.warnings).toEqual([
         "The AI review ran without some guideline files: large.md is 69 KB and didn't fit in the 64 KB they can add up to; huge.md is over 1 MB; image.txt couldn't be read as text",
       ]);
+    });
+
+    it("lists the other enabled files for a model that reads them, as the copies it reads", async () => {
+      const long = `${"word ".repeat(400)}\n\n## After\n`;
+      const model = new FakeAnalysisModel({ readsHarness: true });
+      const { analyze, preferences } = setup({
+        harnessSource: source({
+          "CLAUDE.md": "@docs/rules.md @docs/large.md\n\nSee docs/plan.md.\n",
+          "docs/rules.md": "[Deep](deep.md)\n",
+          "docs/large.md": `# Large\n\n${"x ".repeat(40_000)}`,
+          "docs/plan.md": long,
+          "docs/deep.md": "# Deep\n",
+        }),
+        model,
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+      const analysis = await analyze();
+
+      expect(
+        analysis.guidance?.guidelines.map(({ ref, path, linkedFrom, given }) => [
+          ref,
+          path,
+          linkedFrom,
+          given,
+        ]),
+      ).toEqual([
+        ["g1", "CLAUDE.md", null, "prompt"],
+        ["g2", "docs/rules.md", "CLAUDE.md", "prompt"],
+        ["g3", "docs/large.md", "CLAUDE.md", "on-request"],
+        ["g4", "docs/plan.md", "CLAUDE.md", "on-request"],
+        ["g5", "docs/deep.md", "docs/rules.md", "on-request"],
+      ]);
+      const { harness, guidance } = firstInput(model, "intent");
+      expect(guidance.guidelines.map(({ ref }) => ref)).toEqual(["g1", "g2"]);
+      expect(harness?.files.map(({ ref, path }) => [ref, path])).toEqual([
+        ["g3", "harness/docs/large.md"],
+        ["g4", "harness/docs/plan.md"],
+        ["g5", "harness/docs/deep.md"],
+      ]);
+      const plan = harness?.contents.get("harness/docs/plan.md")?.split("\n") ?? [];
+      const [after] = harness?.files[1]?.headings ?? [];
+      expect(plan[(after?.line ?? 0) - 1]).toBe("## After");
+      expect(harness?.files[1]?.lines).toBe(plan.length - 1);
+      // What doesn't fit the prompt can be read, so nothing is left out.
+      expect(analysis.warnings).toEqual([]);
+    });
+
+    it("says how many files a model that doesn't read them ran without, and why", async () => {
+      const { analyze, model, preferences } = setup({ harnessSource: source(FILES) });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+      const analysis = await analyze();
+
+      expect(firstInput(model, "intent").harness).toBeNull();
+      expect(analysis.guidance?.guidelines.every((file) => file.given === "prompt")).toBe(true);
+      expect(analysis.warnings).toEqual([
+        "The AI review ran without 1 file the repository's guideline files link: Sonnet 5.5 through Claude Code can't read files on request",
+      ]);
+    });
+
+    it("has nothing to read when the harness can't be loaded, or every file is in the prompt", async () => {
+      const model = new FakeAnalysisModel({ readsHarness: true });
+      const harnessSource = source(FILES);
+      harnessSource.failAlways(hostError("network"));
+      const failing = setup({ harnessSource, model, fixtures: [withGuidelines(FILES)] });
+      await failing.analyze();
+      expect(firstInput(model, "intent").harness).toBeNull();
+
+      const other = new FakeAnalysisModel({ readsHarness: true });
+      await setup({ harnessSource: source({ "REVIEW.md": "Be kind." }), model: other }).analyze();
+      expect(firstInput(other, "intent").harness).toBeNull();
     });
 
     it("names the file that imports one, not the first that mentions it", async () => {

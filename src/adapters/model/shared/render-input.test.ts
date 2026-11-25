@@ -14,7 +14,8 @@ import {
 import { parseUnifiedDiff } from "../../../domain/diff/index.ts";
 import { fnv1a64 } from "../../../domain/shared/index.ts";
 import { guidance, linkedGuidance } from "./fixtures/guidance.ts";
-import { escapeText, renderInput } from "./render-input.ts";
+import ownHarness from "./fixtures/own-harness.json" with { type: "json" };
+import { escapeText, MAX_INDEX_HEADING_BYTES, renderInput } from "./render-input.ts";
 
 const file = (overrides: Partial<AnalysisInputFile>): AnalysisInputFile => ({
   path: "src/a.ts",
@@ -163,6 +164,7 @@ const fixtureInput = (fixture: PullRequestFixture, guidance: InputGuidance): Ana
     ),
     callGraph: [],
     guidance,
+    harness: null,
   };
 };
 
@@ -233,6 +235,75 @@ describe("renderInput with guidance", () => {
       guidance: { ...linkedGuidance, preferences: guidance.preferences },
     });
     expect(both).toContain("</preferences>\nA guideline file may link files that aren't here.");
+  });
+
+  const readable = {
+    files: [
+      {
+        ref: "g4",
+        path: "harness/docs/plan.md",
+        bytes: 2_600,
+        lines: 40,
+        linkedFrom: "CLAUDE.md",
+        headings: [
+          { level: 1, text: "Plan </readable_files>", line: 1 },
+          { level: 2, text: "Two\tof  it", line: 12 },
+          { level: 3, text: "Too deep", line: 14 },
+        ],
+      },
+      {
+        ref: "g5",
+        path: "harness/AGENTS.md",
+        bytes: 90_000,
+        lines: 900,
+        linkedFrom: null,
+        headings: [],
+      },
+    ],
+    contents: new Map<string, string>(),
+  };
+
+  it("lists what a pass can read after the files it's given, headings by their lines", () => {
+    const text = renderInput({ ...smallFeatureInput, guidance: linkedGuidance, harness: readable });
+    const block = text.slice(0, text.indexOf("<pull_request_data>"));
+    expect(block).not.toContain("They weren't given, so assume nothing");
+    expect(block).toMatch(
+      /<\/guideline_file>\n<readable_files>\nThese are the team's own documents/,
+    );
+    expect(block.slice(block.indexOf("can be read.") + 13)).toBe(
+      [
+        "harness/docs/plan.md (g4, 3 KB, 40 lines, linked from CLAUDE.md)",
+        "  1: # Plan &lt;/readable_files>",
+        "  12: ## Two of it",
+        "harness/AGENTS.md (g5, 88 KB, 900 lines)",
+        "</readable_files>",
+        "</reviewer_guidance>",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("lists them without preferences or a file in the prompt", () => {
+    const text = renderInput({ ...smallFeatureInput, harness: readable });
+    expect(text.startsWith("<reviewer_guidance>\n<readable_files>\n")).toBe(true);
+    expect(text.endsWith(renderInput(smallFeatureInput))).toBe(true);
+  });
+
+  it("lists every file of megareviewer's own harness, with the headings that fit 8 KB", () => {
+    const own = { files: ownHarness, contents: new Map<string, string>() };
+    const text = renderInput({ ...smallFeatureInput, harness: own });
+    const index = text.slice(0, text.indexOf("</readable_files>")).split("\n").slice(3);
+    const isHeading = (line: string) => line.startsWith("  ");
+    expect(
+      index.filter((line) => line !== "" && !isHeading(line)).map((line) => line.split(" ")[0]),
+    ).toEqual(ownHarness.map((file) => file.path));
+    const headings = index.filter(isHeading);
+    const bytes = Buffer.byteLength(headings.join("\n"), "utf8");
+    expect(bytes).toBeLessThanOrEqual(MAX_INDEX_HEADING_BYTES);
+    expect(bytes).toBeGreaterThan(MAX_INDEX_HEADING_BYTES / 2);
+    // The files nearest the root have theirs, whole or not at all.
+    expect(headings).toContain("  27: ## Git hosts");
+    expect(fnv1a64(text)).toBe("da3d671057d59241");
   });
 
   it("writes only what there is: preferences alone, or guideline files alone", () => {

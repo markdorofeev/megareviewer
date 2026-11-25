@@ -80,6 +80,7 @@ const inputFrom = (fixture: PullRequestFixture): AnalysisInput => {
     }),
     callGraph: [],
     guidance: NO_GUIDANCE,
+    harness: null,
   };
   return input;
 };

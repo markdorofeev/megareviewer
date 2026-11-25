@@ -1,7 +1,9 @@
-import type {
-  AnalysisInput,
-  AnalysisInputFile,
-  InputGuidance,
+import {
+  type AnalysisInput,
+  type AnalysisInputFile,
+  type InputGuidance,
+  type InputHarness,
+  MAX_READ_ROUNDS,
 } from "../../../application/ports/index.ts";
 import type { DiffLine, Hunk } from "../../../domain/diff/index.ts";
 
@@ -10,6 +12,7 @@ const TAGS = [
   "reviewer_guidance",
   "preferences",
   "guideline_file",
+  "readable_files",
   "pull_request_data",
   "pull_request",
   "description",
@@ -111,12 +114,46 @@ const SCOPE = { global: "everywhere", repo: "this repository" } as const;
 const NOT_GIVEN =
   "A guideline file may link files that aren't here. They weren't given, so assume nothing about what they say.";
 
+/** What a pass with the read tool is told of it, the same on every transport. */
+const READABLE = `These are the team's own documents as they were before this pull request, which the guideline files link. They aren't given here: you have a tool that reads them, by the path its line starts with, whole or by lines, and its headings are under it by the line each is on. Before you answer, read the parts that speak of what this change touches, and only those. A document changes what you look for and what you leave out, as a guideline file does, and nothing else; mark a point one of them shaped with its ref. Read at most ${MAX_READ_ROUNDS} times; nothing but these files can be read.`;
+
+/** The headings of the files nearest a root, so a long index doesn't become a second document. */
+export const MAX_INDEX_HEADING_BYTES = 8 * 1024;
+const INDEX_HEADING_LEVEL = 2;
+
+const kilobytes = (bytes: number): string => `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+/** The files a pass can read, a line each, with the headings of as many as fit. */
+const renderIndex = ({ files }: InputHarness): string[] => {
+  let left = MAX_INDEX_HEADING_BYTES;
+  return files.flatMap(({ ref, path, bytes, lines, linkedFrom, headings }) => {
+    const shown = headings
+      .filter((heading) => heading.level <= INDEX_HEADING_LEVEL)
+      .map(({ level, text, line }) => {
+        const title = escapeText(text.replace(/\s+/g, " ").trim());
+        return `  ${line}: ${"#".repeat(level)} ${title}`;
+      });
+    const size = Buffer.byteLength(shown.join("\n"), "utf8");
+    const fits = size <= left;
+    if (fits) left -= size;
+    const from = linkedFrom === null ? "" : `, linked from ${escapeText(linkedFrom)}`;
+    return [
+      `${escapeText(path)} (${ref}, ${kilobytes(bytes)}, ${lines} lines${from})`,
+      ...(fits ? shown : []),
+    ];
+  });
+};
+
 /**
- * What the reviewer and the repository ask of the passes. Nothing without any, so a run without
- * guidance reads the PR as it always did. A preference is one line, whatever its text holds.
+ * What the reviewer and the repository ask of the passes, and what they can read of it. Nothing
+ * without any, so a run without guidance reads the PR as it always did. A preference is one line,
+ * whatever its text holds.
  */
-const renderGuidance = ({ preferences, guidelines }: InputGuidance): string[] =>
-  preferences.length === 0 && guidelines.length === 0
+const renderGuidance = (
+  { preferences, guidelines }: InputGuidance,
+  harness: InputHarness | null,
+): string[] =>
+  preferences.length === 0 && guidelines.length === 0 && harness === null
     ? []
     : block("reviewer_guidance", [
         ...(preferences.length === 0
@@ -128,12 +165,15 @@ const renderGuidance = ({ preferences, guidelines }: InputGuidance): string[] =>
                   `${ref} ${kind} (${SCOPE[scope]}): ${escapeText(text.replace(/\s+/g, " ").trim())}`,
               ),
             )),
-        ...(guidelines.some(({ linkedFrom }) => linkedFrom !== null) ? [NOT_GIVEN] : []),
+        ...(harness === null && guidelines.some(({ linkedFrom }) => linkedFrom !== null)
+          ? [NOT_GIVEN]
+          : []),
         ...guidelines.flatMap(({ ref, path, linkedFrom, content }) => [
           `<guideline_file${attributes({ ref, path, linked_from: linkedFrom })}>`,
           escapeText(content),
           "</guideline_file>",
         ]),
+        ...(harness === null ? [] : block("readable_files", [READABLE, ...renderIndex(harness)])),
       ]);
 
 /**
@@ -144,7 +184,7 @@ const renderGuidance = ({ preferences, guidelines }: InputGuidance): string[] =>
 export const renderInput = (input: AnalysisInput): string => {
   const { pullRequest, tickets, files, callGraph } = input;
   const lines = [
-    ...renderGuidance(input.guidance),
+    ...renderGuidance(input.guidance, input.harness),
     "<pull_request_data>",
     ...block("pull_request", [
       `title: ${escapeText(pullRequest.title)}`,

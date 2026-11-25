@@ -15,6 +15,7 @@ import { CLAUDE_MODELS } from "./models.ts";
 import {
   CLAUDE_CODE_FINGERPRINT,
   CLAUDE_CODE_PROMPT_VERSION,
+  CLAUDE_CODE_READER_FINGERPRINT,
   CLAUDE_CODE_TOUR_FINGERPRINT,
 } from "./version.ts";
 
@@ -108,6 +109,56 @@ describe("Claude Code request", () => {
       `A run with the tour changed its requests. Bump CLAUDE_CODE_PROMPT_VERSION in version.ts ` +
         `(now ${CLAUDE_CODE_PROMPT_VERSION}) and set CLAUDE_CODE_TOUR_FINGERPRINT to "${current}".`,
     ).toBe(CLAUDE_CODE_TOUR_FINGERPRINT);
+  });
+
+  describe("with something to read", () => {
+    const readable = new Map([["harness/docs/rules.md", "# Rules\n"]]);
+    const reading = MODEL_STAGES.map((pass) =>
+      claudeCodeRequest(
+        pass,
+        renderInput(smallFeatureInput),
+        passMessage(pass, pass === "findings" ? smallFeatureIntent : null, ["problem"], true),
+        HAIKU,
+        false,
+        readable,
+      ),
+    );
+
+    it("has the reader alone, confined to the directory its files are in, and 8 rounds of it", () => {
+      for (const { args, files, workDir } of reading) {
+        expect(flag(args, "--tools")).toBe("Read Grep");
+        expect(args).toContain("--restricted");
+        expect(args).toContain("--strict-mcp-config");
+        expect(flag(args, "--setting-sources")).toBe("");
+        expect(flag(args, "--max-turns")).toBe("10");
+        expect(flag(args, "--system-prompt-file")).toBe(`../${SYSTEM_PROMPT_FILE}`);
+        expect(workDir).toBe("work");
+        expect(Object.keys(files)).toEqual([SYSTEM_PROMPT_FILE, "work/harness/docs/rules.md"]);
+      }
+    });
+
+    it("sends every pass the same arguments and prompt, so later passes read the cache", () => {
+      const without = (args: readonly string[]) =>
+        args.filter((_, i) => args[i - 1] !== "--effort");
+      expect(new Set(reading.map(({ args }) => JSON.stringify(without(args)))).size).toBe(1);
+      expect(new Set(reading.map(({ files }) => files[SYSTEM_PROMPT_FILE])).size).toBe(1);
+    });
+
+    it("asks each pass to read first, after its task", () => {
+      for (const [index, { stdin }] of reading.entries()) {
+        expect(stdin).toContain("First go through <readable_files>");
+        expect(requests()[index]?.stdin).not.toContain("readable_files");
+      }
+    });
+
+    it("is versioned too", () => {
+      const current = fnv1a64(JSON.stringify(reading));
+      expect(
+        current,
+        `A run with something to read changed its requests. Bump CLAUDE_CODE_PROMPT_VERSION in ` +
+          `version.ts (now ${CLAUDE_CODE_PROMPT_VERSION}) and set CLAUDE_CODE_READER_FINGERPRINT to "${current}".`,
+      ).toBe(CLAUDE_CODE_READER_FINGERPRINT);
+    });
   });
 
   it("sends every pass of a run with the tour the schema with the steps pass's variant", () => {
