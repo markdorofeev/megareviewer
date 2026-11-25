@@ -1,6 +1,6 @@
 # Stage 65: The harness: the domain, the ports, the store and loading
 
-**Status:** Not started
+**Status:** In progress (branch claude/harness-core-4b758f)
 **Depends on:** 55, 56
 **Owns:** `src/domain/review/harness.ts`; the `HarnessSource` and `HarnessStore` ports, their fakes and contract suites; the harness tables and store in `src/adapters/sqlite/`; `src/application/use-cases/harness.ts`; the start of loading in `src/application/use-cases/analyses.ts`; their wiring in `src/cli/compose.ts` and `src/cli/dev/fake-app.ts`; the slice's text in DESIGN.md, ARCHITECTURE.md and ENGINEERING.md
 
