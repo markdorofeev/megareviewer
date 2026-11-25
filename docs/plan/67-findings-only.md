@@ -1,6 +1,6 @@
 # Stage 67: Findings only
 
-**Status:** In progress (branch claude/risk-findings-severity-type-b3302c)
+**Status:** Done (branch claude/risk-findings-severity-type-b3302c, no PR)
 **Depends on:** 45, 50, 56, 58, 59, 63, 64
 **Owns:** the risk and decisions passes, to remove them: `risk` and `decisions` on `AnalysisModel` with their fakes and contract suite, their prompts, schemas, fixtures and tests on every transport in `src/adapters/model/`, their stages and validation in `src/application/use-cases/` and `src/domain/review/`, `decision.ts` and `checking-test.ts`; the kinds of a point in `src/domain/review/point.ts`; the guardrail call's and the guidance's handling of risks; the risk note, the decision chip and footnote, the Decisions switch, the kinds' chips, the tree's risk ring and Risks filter, and the tour's use of risks, in `web/src/`; their demos on the design-system page; the fake server's fixtures in `src/cli/dev/`; the risk and decision labels, metrics and judge ratings in `evals/`; `PIPELINE_VERSION`; the feature's text in DESIGN.md, ARCHITECTURE.md, ENGINEERING.md and `evals/README.md`
 
@@ -95,14 +95,14 @@ Steps 2 and 3 may be one commit if `pnpm check` can't pass between them.
 
 ## Definition of done
 
-- [ ] A model run makes the intent and the findings passes, the steps pass when asked, and the guardrail call when it has a finding. Its stages, progress count and Run details say so.
-- [ ] `AnalysisModel` has no `risk` or `decisions` on any transport, and each transport's tests and fingerprint are updated.
-- [ ] An analysis stored at pipeline version 20 with risks, a checking test, decisions and their stages parses and shows its findings; a test holds it with a stored fixture. A stored point review and a stored review signal on a risk or a decision read.
-- [ ] The page shows no risk and no decision, in the map, the bar, the tree, the tour or the Display menu, and no unused token is left.
-- [ ] The fake server's fixtures and the end-to-end tests are updated. The small-feature fixture gains no file.
-- [ ] The evals ran, with their report and a new baseline, or the open issue says why not.
-- [ ] DESIGN.md, ARCHITECTURE.md, ENGINEERING.md and `evals/README.md` say what the product does now, with risks and decisions among the alternatives.
-- [ ] `pnpm check` and `pnpm e2e` pass.
+- [x] A model run makes the intent and the findings passes, the steps pass when asked, and the guardrail call when it has a finding. Its stages, progress count and Run details say so.
+- [x] `AnalysisModel` has no `risk` or `decisions` on any transport, and each transport's tests and fingerprint are updated.
+- [x] An analysis stored at pipeline version 20 with risks, a checking test, decisions and their stages parses and shows its findings; a test holds it with a stored fixture. A stored point review and a stored review signal on a risk or a decision read.
+- [x] The page shows no risk and no decision, in the map, the bar, the tree, the tour or the Display menu, and no unused token is left.
+- [x] The fake server's fixtures and the end-to-end tests are updated. The small-feature fixture gains no file.
+- [x] The evals ran, with their report and a new baseline, or the open issue says why not.
+- [x] DESIGN.md, ARCHITECTURE.md, ENGINEERING.md and `evals/README.md` say what the product does now, with risks and decisions among the alternatives.
+- [x] `pnpm check` and `pnpm e2e` pass.
 
 ### Ubiquitous language (ENGINEERING.md)
 
@@ -117,3 +117,45 @@ Decision and Checking test leave the table. These rows change:
 Intent, Analysis, Step, Review signal, Preference, Guidance and Model call lose their mention of a risk or a decision where they have one.
 
 ## Notes for later stages
+
+### What changed in the prompts
+
+The findings task is byte for byte what it was; the rule on technical terms it shared with the risk and decisions tasks is now written in it. The intent task is unchanged. The rest:
+
+| Where | Was | Is |
+|---|---|---|
+| System prompt | "The reviewer's attention should go to what the change does, the decisions it makes, and the places where a mistake would be expensive" | "… to what the change does and the places where a mistake would be expensive" |
+| Steps, last bullet | "Nothing that looks wrong and no risk: those are other tasks'." | "Nothing that looks wrong: that's another task's." |
+| Guardrail call, opening | "found points: findings (what looks wrong) and risks (where a mistake would break something outside the pull request)" | "found points: findings (what looks wrong)" |
+| Guardrail call, data | `<point>` "with its ref ("f1" for a finding, "r1" for a risk), its kind and its file (path), then its title (a finding's only), what it says" | "with its ref ("f1") and its file (path), then its title, what it says" |
+| Risk and decisions tasks | | gone |
+
+The suggestion call's prompt is untouched: it still names risks and decisions, since signals recorded on one are still read. `risk` and `decisions` left the tags a PR's text is escaped for, with the block that held a risk's answer. Prompt versions: API 18, Claude Code 15, Codex 11, opencode 12.
+
+### Where this doc was wrong about the code
+
+- **`decision_reviews` doesn't exist.** A migration had already dropped it and made `point_reviews`; ARCHITECTURE.md's Storage table still listed it, and lists `point_reviews` now.
+- **The `+checkout` key went with version 21.** `startFor` looked up an analysis stored under `20+checkout` before its own key. Version 21 has no such analysis, so the lookup and its tests are gone (`keysOf`, `findStored`).
+- **No eval case exists only for a risk or a decision.** The cases with no labeled finding stay: a finding there is noise, which is what stage 68 measures against. `test-named-coverage` was made for the checking test and has findings of its own. Their `tests` descriptions say what they test now. Of the guardrail call's cases, `risk-credential-order` goes and `delphi-real-run` keeps its finding.
+
+### Names and choices
+
+- `PointKind` is in `point-kind.ts` and only review signals use it. A signal's `pointKind` is always `finding` when written.
+- `AdvicePoint.text` is `explanation`, as a finding's is, and the point has no `kind`.
+- `currentModelError` drops a stored error of a removed pass when the intent and the findings both finished, and otherwise keeps it under the first of them that didn't, so Try again still shows.
+- `RiskAssessment` is `hunkId`, `riskClass`, `reason` and `source`. `web`'s `ShownRisk` is logic and mechanical: contract is never drawn, and its tokens are gone.
+- Two filters are left in the tree, All and Findings, and one chip for points in the bar.
+- `validateRiskCoverage`, `raiseByRules`, `pointLinesFit`, `checking-test.ts`, `decision.ts` and the fake server's `receipts-tested.ts` (its PR #105) are gone, and `hunks.ts` in `src/cli/dev/` has the two helpers the last one shared. The fake scenario `limit-after-findings` is `limit-after-intent`, since the intent is the pass before it now.
+- `FakeAnalysisModel` derives a finding per file instead of one for the PR. The derived decisions were what gave a larger fixture several points to go round.
+- `src/domain/review/fixtures/analysis-v20.json` is the stored analysis the parsing tests read, with point reviews and signals on a risk and a decision. Nothing else should read it.
+- The API's output format wasn't tried again with the smaller union: ARCHITECTURE.md says why each pass asks for its answer in its prompt, and none of it rests on the risk and decisions variants.
+
+### The evals
+
+One run of the 18 cases, p15, judge 6, is the new baseline, with [its report](../../evals/reports/2026-11-25/findings-only.md): findingRecall 14 of 17, findingNoise 1 of 25, findingPlaced 17 of 17, mismatchRecall 10 of 10, mismatchFalsePositives 4. The findings and the intent are about the old baseline's. The guardrail call's nine cases ran once: guardrailRight 4 of 5, guardrailWrong none; java-layering's rule was answered in a sentence over the 160 characters the server takes.
+
+For stage 68: the three missed must-haves are delphi-account-connections', where the run produced no finding; the one noisy finding is test-named-coverage's CSV escaping; and dependency-bump-signature and large-retry-after, labeled with no finding, produced two each that the judge rates valid.
+
+### What's left
+
+- The design-system page's tour demo dismisses the second step's finding and still suggests reading that step, since its tour is built with every point open. It was so before this stage.

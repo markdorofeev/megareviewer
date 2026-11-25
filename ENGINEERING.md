@@ -21,16 +21,14 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Term | Meaning |
 |---|---|
 | Pull request | A host-agnostic PR: title, description, branch, commits, diff, head SHA |
-| Hunk | One contiguous change, identified by a stable hunk ID. Risk, proofs and decisions are per hunk |
+| Hunk | One contiguous change, identified by a stable hunk ID. Risk classes and proofs are per hunk |
 | Part | The lines of a hunk that change one definition, identified by a part ID. A hunk that isn't split is one part. The flows and hints are per part |
-| Risk class | *mechanical*, *logic* or *contract*. Contract is internal: the page shows only the model's, as a risk |
+| Risk class | *mechanical*, *logic* or *contract*, from a mechanical proof or a path rule. Internal: it orders the flows and is never shown |
 | Mechanical proof | Deterministic evidence that a hunk is mechanical: generated, whitespace, rename, move or formatting |
 | Intent | Stated intent (description, tickets), inferred intent (code: what it does, its shape across the system, what to watch), and the mismatches between them |
-| Decision | A choice the code makes, resting on one or more hunks |
 | Finding | Something that looks wrong, on the lines of a hunk that show it |
-| Point | What the model asks the reviewer to look at: a finding, a risk it raised, or a decision, with the hunk and lines it rests on |
+| Point | What the model asks the reviewer to look at: a finding, or an intent mismatch no finding names, with the hunk and lines it rests on |
 | Point state | What the reviewer did with a point: *open* (nothing, which means fine), *raised* or *dismissed* |
-| Checking test | A test in the PR whose assertions check the very behavior a risk names, by its name, lines and what it asserts. The model names it, the server checks it, and it's a mark on the risk, never a reason to show it less |
 | Verdict | What the published review says: approve, request changes or comment. The reviewer picks it |
 | Flow | An entry point a user or caller reaches and the changed code it runs, callers first, found from the call graph by the code; or a supporting flow of changes no flow runs, by kind. The code's flows order and label the overview: its order, its entry points and the Through line |
 | Flow path | Where a change is reached and the changed files it runs from there, in call order: a flow's entry points, or a file outside the PR that uses a changed definition, with code several flows run on each. What the overview's preview forms draw |
@@ -60,14 +58,14 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Review signal | Something the reviewer did that says what they value: a point dismissed or raised, or a line comment posted, with its text as it was |
 | Guideline file | A file at a repository's root that says how its code is written or reviewed, such as `REVIEW.md`. A model run reads the ones the reviewer switched on, at the PR's base commit |
 | Guidance | What one model run was given beside the code: the enabled preferences and the guideline files, numbered, and kept on the analysis so a point can say which one shaped it, with the check configs and build files its guardrail call read |
-| Guardrail | A check that would catch a kind of problem before review, in any code: a named rule of a tool whose config megareviewer read, which the config doesn't turn on, or a kind of check and an engine the model suggests. A mark on a finding or a risk. megareviewer names it and never turns it on |
+| Guardrail | A check that would catch a kind of problem before review, in any code: a named rule of a tool whose config megareviewer read, which the config doesn't turn on, or a kind of check and an engine the model suggests. A mark on a finding. megareviewer names it and never turns it on |
 | Check config | A tool's configuration file at a repository's root, read at the PR's base commit to know which rules the repository has |
 
 ### Bounded contexts
 
 | Context | Kind | Contains |
 |---|---|---|
-| Review | Core | Analysis, hunks, risk, intent, decisions, tour, verdicts |
+| Review | Core | Analysis, hunks, risk classes, intent, findings, tour, verdicts |
 | Diff analysis | Supporting | Diff parsing, mechanical proofs, call-graph hints |
 | Integrations | Generic | Git hosts, Jira, Claude, storage |
 
@@ -126,10 +124,10 @@ Don't over-apply it. An interface exists only at an I/O boundary or when there's
 
 ### UI
 
-- **Tokens only.** Colors, type, radius, shadows and durations come from `web/src/styles/globals.css` through Tailwind's utilities (`bg-diff-add-bg`, `text-risk-contract`, `text-ui`). No hex, `rgb()`, palette colors such as `bg-zinc-100`, or inline colors. A color that isn't there is added to the tokens, with its pairs in `pnpm check:contrast`, not to a component.
+- **Tokens only.** Colors, type, radius, shadows and durations come from `web/src/styles/globals.css` through Tailwind's utilities (`bg-diff-add-bg`, `text-severity-major`, `text-ui`). No hex, `rgb()`, palette colors such as `bg-zinc-100`, or inline colors. A color that isn't there is added to the tokens, with its pairs in `pnpm check:contrast`, not to a component.
 - **Primitives from `web/src/ui`.** shadcn/ui on Base UI, owned here; a change from upstream is marked `// hunk:`. No other component library.
 - **Classes with `cn()`,** from `web/src/lib/utils.ts`, and `cva` for a component with more than two variants. Tailwind generates only the classes it finds whole, so a class chosen by a value is spelled out in a map.
-- **Never color alone.** A risk, verdict, status or changed line also has a glyph or a word.
+- **Never color alone.** A severity, verdict, status or changed line also has a glyph or a word.
 - **One keymap, and few keys.** Every shortcut is in `web/src/lib/keymap.ts`, and hints come from it through `KeyHint`. A new one is added only when a reviewer asks for it or the action is one they repeat on every PR; a button or a click is the way to do something, and a key per button is a list nobody learns.
 - **WCAG 2.2 AA** in light, dark and the color-blind diff: 4.5:1 text, 3:1 for what isn't text, a visible focus, 24 px targets.
 
