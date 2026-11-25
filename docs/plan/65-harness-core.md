@@ -41,7 +41,7 @@ Follow the existing patterns for IDs, timestamps and schemas (Zod, `readonly`).
 - Pure functions:
   - `harnessLinks(path, content)`: the paths a file links, resolved and normalized, each with its kind, in the order they appear, each once.
   - `harnessOutline(content)`: its headings with their 1-based lines, and its line count.
-  - `harnessEnabled(path, harness, switches)`: whether a run may use a file. A root is on by `guidelineEnabled`. Any other file is on unless its own switch is off, and only when an enabled root reaches it through enabled files.
+  - `harnessEnabled(path, harness, switches)`: whether a run may use a file. A root is on by `guidelineEnabled`, or with an enabled root that imports it unless its own switch is off. Any other file is on unless its own switch is off, and only when an enabled root reaches it through enabled files.
   - `harnessPlan(harness, switches)`: the enabled files in two lists. `inPrompt`: the enabled roots in `GUIDELINE_PATHS` order, then the files they import breadth-first in the order written, each taken while it fits what's left of `MAX_INLINE_BYTES`, a file that doesn't fit passed over and the next tried. `onRequest`: every other enabled file, nearest a root first. Stage 67 sends the first, stage 69 serves the second.
 - The `guideline_switches` table already takes any path. The route that sets one accepts only the five until stage 68.
 
@@ -117,7 +117,7 @@ Two calls for one repository and commit join, as two starts of one analysis do. 
 ### For 67
 
 - Join a load with `loadHarness(deps, repo, baseSha)`. `contents` holds every file's text by path.
-- **To decide: a root another root imports is off until it's switched on itself,** as the contract says ("a root is on by `guidelineEnabled`"). A repository whose `CLAUDE.md` is only `@AGENTS.md`, which is common, gets nothing from switching `CLAUDE.md` on alone.
+- **Decided since: a root that an enabled root imports with `@` is used with it,** unless the reviewer switched that file off. One only linked or mentioned, or imported by a file that isn't a root, keeps its own switch and default. The first version left every root to its own switch, and a `CLAUDE.md` that is only `@AGENTS.md` brought nothing.
 - A file passed over for its size still has its imports followed, and a root over the budget is in `onRequest`.
 
 ### For 68

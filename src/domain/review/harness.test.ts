@@ -334,15 +334,56 @@ describe("harnessEnabled", () => {
     expect(harnessEnabled("docs/none.md", linked, on("docs/none.md"))).toBe(false);
   });
 
-  it("doesn't switch a root on because another root links it", () => {
-    const both = harness(
-      file("AGENTS.md", [["docs/a.md", "import"]]),
-      file("CLAUDE.md", [["AGENTS.md", "import"]]),
-      file("docs/a.md"),
-    );
-    expect(harnessEnabled("AGENTS.md", both, on("CLAUDE.md"))).toBe(false);
-    expect(harnessEnabled("docs/a.md", both, on("CLAUDE.md"))).toBe(false);
-    expect(harnessEnabled("docs/a.md", both, on("CLAUDE.md", "AGENTS.md"))).toBe(true);
+  describe("a root another root names", () => {
+    const naming = (kind: HarnessLinkKind) =>
+      harness(
+        file("AGENTS.md", [["docs/a.md", "import"]]),
+        file("CLAUDE.md", [["AGENTS.md", kind]]),
+        file("docs/a.md"),
+      );
+    const used = (files: Harness, switches: ReadonlyMap<string, boolean>) =>
+      paths(files.files).filter((path) => harnessEnabled(path, files, switches));
+
+    it("is on with a root that's on and imports it, and so is what it imports", () => {
+      expect(used(naming("import"), on("CLAUDE.md"))).toEqual([
+        "AGENTS.md",
+        "CLAUDE.md",
+        "docs/a.md",
+      ]);
+      expect(used(naming("import"), new Map())).toEqual([]);
+    });
+
+    it("is off when it's switched off, and nothing is reached through it", () => {
+      const switches = new Map([...on("CLAUDE.md"), ...off("AGENTS.md")]);
+      expect(used(naming("import"), switches)).toEqual(["CLAUDE.md"]);
+    });
+
+    it.each(["link", "mention"] as const)("keeps its own default when it's only a %s", (kind) => {
+      expect(used(naming(kind), on("CLAUDE.md"))).toEqual(["CLAUDE.md"]);
+      expect(used(naming(kind), on("CLAUDE.md", "AGENTS.md"))).toEqual([
+        "AGENTS.md",
+        "CLAUDE.md",
+        "docs/a.md",
+      ]);
+    });
+
+    it("keeps its own default when a file that isn't a root imports it", () => {
+      const through = harness(
+        file("AGENTS.md"),
+        file("CLAUDE.md", [["docs/all.md", "import"]]),
+        file("docs/all.md", [["AGENTS.md", "import"]]),
+      );
+      expect(used(through, on("CLAUDE.md"))).toEqual(["CLAUDE.md", "docs/all.md"]);
+    });
+
+    it("is on through a root that's on only by an import itself", () => {
+      const chain = harness(
+        file("AGENTS.md", [["CONTRIBUTING.md", "import"]]),
+        file("CLAUDE.md", [["AGENTS.md", "import"]]),
+        file("CONTRIBUTING.md"),
+      );
+      expect(used(chain, on("CLAUDE.md"))).toEqual(["AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md"]);
+    });
   });
 });
 
@@ -434,6 +475,25 @@ describe("harnessPlan", () => {
       inPrompt: ["a.md"],
       onRequest: ["CLAUDE.md"],
       passedOver: ["CLAUDE.md"],
+    });
+  });
+
+  it("puts a root that's on by its importer in the prompt, after the roots that are on", () => {
+    const only = harness(
+      file("REVIEW.md", [["AGENTS.md", "link"]]),
+      file("AGENTS.md", [["docs/a.md", "import"]]),
+      file("CLAUDE.md", [["AGENTS.md", "import"]]),
+      file("docs/a.md"),
+    );
+    expect(plan(only, on("CLAUDE.md"))).toEqual({
+      inPrompt: ["REVIEW.md", "CLAUDE.md", "AGENTS.md", "docs/a.md"],
+      onRequest: [],
+      passedOver: [],
+    });
+    expect(plan(only, new Map([...on("CLAUDE.md"), ...off("AGENTS.md")]))).toEqual({
+      inPrompt: ["REVIEW.md", "CLAUDE.md"],
+      onRequest: [],
+      passedOver: [],
     });
   });
 

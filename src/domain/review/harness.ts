@@ -344,18 +344,18 @@ export const harnessCopy = (
 const reach = (
   harness: Harness,
   from: readonly string[],
-  follow: (file: HarnessFile, kind: HarnessLinkKind | "root") => boolean,
+  follow: (file: HarnessFile, kind: HarnessLinkKind | "root", from: HarnessFile | null) => boolean,
 ): HarnessFile[] => {
   const byPath = new Map(harness.files.map((file) => [file.path, file]));
   const reached = new Map<string, HarnessFile>();
-  const visit = (path: string, kind: HarnessLinkKind | "root") => {
+  const visit = (path: string, kind: HarnessLinkKind | "root", by: HarnessFile | null) => {
     const file = byPath.get(path);
-    if (file !== undefined && follow(file, kind)) reached.set(path, file);
+    if (file !== undefined && follow(file, kind, by)) reached.set(path, file);
   };
-  for (const path of from) visit(path, "root");
+  for (const path of from) visit(path, "root", null);
   // A Map's iteration reaches what's added to it on the way.
   for (const file of reached.values()) {
-    for (const link of file.links) if (!reached.has(link.path)) visit(link.path, link.kind);
+    for (const link of file.links) if (!reached.has(link.path)) visit(link.path, link.kind, file);
   }
   return [...reached.values()];
 };
@@ -364,16 +364,26 @@ const reach = (
 export const harnessReach = (harness: Harness, path: string): HarnessFile[] =>
   reach(harness, [path], () => true).filter((file) => file.path !== path);
 
-const switchedOn = (file: HarnessFile, switches: ReadonlyMap<string, boolean>): boolean =>
-  file.via === "root" ? guidelineEnabled(file.path, switches) : (switches.get(file.path) ?? true);
+/** A root that's on brings the roots it imports, as it does its other imports, unless one is off. */
+const switchedOn = (
+  file: HarnessFile,
+  switches: ReadonlyMap<string, boolean>,
+  kind: HarnessLinkKind | "root",
+  from: HarnessFile | null,
+): boolean => {
+  if (file.via !== "root") return switches.get(file.path) ?? true;
+  const imported = kind === "import" && from?.via === "root";
+  return imported ? (switches.get(file.path) ?? true) : guidelineEnabled(file.path, switches);
+};
 
 /** The files a run may use, nearest a root first. */
 const enabledFiles = (harness: Harness, switches: ReadonlyMap<string, boolean>): HarnessFile[] =>
-  reach(harness, GUIDELINE_PATHS, (file) => switchedOn(file, switches));
+  reach(harness, GUIDELINE_PATHS, (file, kind, from) => switchedOn(file, switches, kind, from));
 
 /**
- * Whether a run may use a file: a root by its switch, any other unless its own is off, and only
- * when an enabled root reaches it through enabled files.
+ * Whether a run may use a file: a root by its switch, or with a root that's on and imports it, and
+ * any other unless its own switch is off, and only when an enabled root reaches it through enabled
+ * files.
  */
 export const harnessEnabled = (
   path: string,
@@ -416,7 +426,8 @@ export const harnessPlan = (
   const always = reach(
     harness,
     GUIDELINE_PATHS,
-    (file, kind) => (kind === "root" || kind === "import") && switchedOn(file, switches),
+    (file, kind, from) =>
+      (kind === "root" || kind === "import") && switchedOn(file, switches, kind, from),
   );
   const { fitting, passedOver } = fitInPrompt(always);
   const given = new Set(fitting.map((file) => file.path));

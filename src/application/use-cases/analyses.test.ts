@@ -2141,6 +2141,22 @@ describe("a model run's guidance", () => {
       ]);
     });
 
+    it("gives a root that's on only because a root that's on imports it", async () => {
+      const { analyze, preferences } = setup({
+        harnessSource: source({
+          "CLAUDE.md": "@AGENTS.md\n",
+          "AGENTS.md": "Use pnpm.\n\n@docs/rules.md\n",
+          "docs/rules.md": "# Rules\n",
+        }),
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      expect(given(await analyze())).toEqual([
+        ["g1", "CLAUDE.md", null],
+        ["g2", "AGENTS.md", null],
+        ["g3", "docs/rules.md", "AGENTS.md"],
+      ]);
+    });
+
     it("lists the other enabled files for a model that reads them, as the copies it reads", async () => {
       const long = `${"word ".repeat(400)}\n\n## After\n`;
       const model = new FakeAnalysisModel({ readsHarness: true });
