@@ -9,17 +9,16 @@ import {
 import type { HarnessRead, ModelError, ModelUsage } from "../../../domain/review/index.ts";
 import { err, ok, type Result } from "../../../domain/shared/index.ts";
 import type { Effort } from "../shared/effort.ts";
-import { invalidOutput, tooLarge } from "../shared/errors.ts";
+import { invalidOutput, readerFailed, roundsUsedUp, tooLarge } from "../shared/errors.ts";
 import { createPassModel } from "../shared/pass-model.ts";
 import { answerJson, passText } from "../shared/prompted-answer.ts";
 import { passMessage } from "../shared/prompts/passes.ts";
 import { renderInput } from "../shared/render-input.ts";
 import { createHarnessDirectories } from "./harness-directory.ts";
 import type { OpencodeClient, OpencodeHttpError } from "./opencode-client.ts";
-import { fromHttpError, fromTurn, readerFailed, usedTool } from "./opencode-errors.ts";
+import { fromHttpError, fromTurn, readingFailure, usedTool } from "./opencode-errors.ts";
 import {
   type OpencodeTokens,
-  type OpencodeTurn,
   type PassHarness,
   readTurn,
   SessionMessages,
@@ -111,12 +110,6 @@ const watchRounds = (
   };
 };
 
-/** A turn's failure, when it's the reading's, which the pass can be run again without. */
-const readingFailure = (turn: OpencodeTurn, failure: ModelError): ModelError =>
-  failure.kind === "too-large" && turn.reads.length > 0
-    ? readerFailed("What it read didn't fit in the model's context window.")
-    : failure;
-
 /**
  * Runs one pass in a session of its own, deleted afterwards so it stays out of the reviewer's
  * opencode history. A session that did anything but answer, or with a harness read its files, has
@@ -175,11 +168,11 @@ export const runOpencodeCall = async (
       const used = usedTool(turn.tools);
       return failed(harness === null ? used : readerFailed(used.message));
     }
-    if (watch?.usedUp()) {
-      return failed(readerFailed("It used up its rounds of reading before it answered."));
-    }
+    if (watch?.usedUp()) return failed(roundsUsedUp());
     const failure = fromTurn(turn);
-    if (failure !== null) return failed(readingFailure(turn, failure));
+    if (failure !== null) {
+      return failed((harness === null ? null : readingFailure(turn, failure)) ?? failure);
+    }
     if (turn.text === null) {
       return failed(invalidOutput("the model ended the turn without an answer"));
     }

@@ -517,18 +517,29 @@ describe("OpencodeAnalysisModel", () => {
       expect((await passing).ok).toBe(false);
     });
 
-    it("takes reads that overflow the context for the reader's failure, and nothing else", async () => {
-      const overflow = {
-        type: "assistant",
-        content: [],
-        error: { type: "provider.context-overflow", message: "prompt is too long", status: 400 },
-      };
+    it.each<[Record<string, unknown>, ModelErrorKind, ModelErrorKind]>([
+      [
+        { type: "provider.context-overflow", message: "prompt is too long", status: 400 },
+        "reader",
+        "too-large",
+      ],
+      [{ type: "provider.invalid", message: "bad block", status: 400 }, "reader", "unexpected"],
+      [{ type: "provider.invalid", message: "bad block", status: 413 }, "reader", "unexpected"],
+      [{ type: "provider.overloaded", message: "Busy", status: 529 }, "overloaded", "overloaded"],
+      [
+        { type: "provider.rate-limit", message: "Too many requests", status: 429 },
+        "rate-limited",
+        "rate-limited",
+      ],
+      [{ type: "provider.content-filter", message: "blocked" }, "refusal", "refusal"],
+    ])("takes %o after a read for %s, and before any for %s", async (error, after, before) => {
       const failing = async (data: unknown[]) => {
         const result = await modelWith(() => ({ data })).model.intent(input);
         return result.ok ? null : result.error.kind;
       };
-      expect(await failing([...rounds(1).data, overflow])).toBe("reader");
-      expect(await failing([overflow])).toBe("too-large");
+      const failed = { type: "assistant", content: [], error };
+      expect(await failing([...rounds(1).data, failed])).toBe(after);
+      expect(await failing([failed])).toBe(before);
     });
   });
 

@@ -1,5 +1,5 @@
 import type { ModelError } from "../../../domain/review/index.ts";
-import { modelError, refusal } from "../shared/errors.ts";
+import { modelError, readerFailed, readTooMuch, refusal } from "../shared/errors.ts";
 import { describeHttpError, type OpencodeHttpError } from "./opencode-client.ts";
 import type { OpencodeError, OpencodeTurn } from "./opencode-output.ts";
 
@@ -12,9 +12,6 @@ export const usedTool = (tools: readonly string[]): ModelError =>
     "unexpected",
     `The session used a tool (${tools.join(", ")}), so the pass was stopped and its answer discarded.`,
   );
-
-/** A failure of the reading, after which the pass is run again without the reader. */
-export const readerFailed = (message: string): ModelError => modelError("reader", message);
 
 /** The server couldn't be reached or started, or answered a request with an error. */
 export const fromHttpError = (error: OpencodeHttpError): ModelError => {
@@ -75,4 +72,17 @@ export const fromTurn = (turn: OpencodeTurn): ModelError | null => {
     return modelError("max-tokens", "The answer was cut off at the model's output limit.");
   }
   return null;
+};
+
+/**
+ * A pass's failure after it read, when it's the reading's: the provider took the same request
+ * without what was read the round before, and then refused it or ran out of room.
+ */
+export const readingFailure = (turn: OpencodeTurn, failure: ModelError): ModelError | null => {
+  if (turn.rounds === 0) return null;
+  if (failure.kind === "too-large") return readTooMuch();
+  const status = turn.error?.status;
+  return status === 400 || status === 413
+    ? readerFailed(`The provider refused what it read: ${turn.error?.message}`)
+    : null;
 };
