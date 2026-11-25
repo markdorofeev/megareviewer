@@ -2,7 +2,7 @@
 
 Planned and committed as stage 71.
 
-**Status:** Not started
+**Status:** In progress (branch claude/harness-second-8cfed6)
 **Depends on:** 79
 **Owns:** `src/adapters/model/opencode/`
 
