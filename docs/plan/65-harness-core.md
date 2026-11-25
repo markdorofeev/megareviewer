@@ -1,6 +1,6 @@
 # Stage 65: The harness: the domain, the ports, the store and loading
 
-**Status:** In progress (branch claude/harness-core-4b758f)
+**Status:** Done on `claude/harness-core-4b758f` (`d72135f`, `62c4bf3`, `7c7610a`, `785898b`, `ceffc3f`). `pnpm check`: 205 test files, 3,919 passed, 6 skipped, no dependency violations.
 **Depends on:** 55, 56
 **Owns:** `src/domain/review/harness.ts`; the `HarnessSource` and `HarnessStore` ports, their fakes and contract suites; the harness tables and store in `src/adapters/sqlite/`; `src/application/use-cases/harness.ts`; the start of loading in `src/application/use-cases/analyses.ts`; their wiring in `src/cli/compose.ts` and `src/cli/dev/fake-app.ts`; the slice's text in DESIGN.md, ARCHITECTURE.md and ENGINEERING.md
 
@@ -73,16 +73,16 @@ Two calls for one repository and commit join, as two starts of one analysis do. 
 
 ## Definition of done
 
-- [ ] `harness.ts` with the types and functions above, and tests for the links: imports, Markdown links, mentions, both resolutions, code spans and fences, URLs, `~`, `..` out of the repository, anchors and a file that links itself.
-- [ ] Adversarial tests for the walk: a cycle, a chain deeper than 5, more than 200 files, a file over 1 MB, a link to a directory.
-- [ ] The two ports, in-memory fakes, and a contract suite each that the fakes pass.
-- [ ] The SQLite store passes `HarnessStore`'s suite; a migration adds the tables.
-- [ ] `loadHarness` tested on each of its four paths with a fake source that counts requests: none when stored, only changed blobs when listed, only changed paths after a diff, one read per hop otherwise.
-- [ ] Two concurrent loads make one walk. A failing source is an error result and leaves the store as it was.
-- [ ] Starting an analysis starts a load and doesn't wait for it; the analysis completes when the load fails.
-- [ ] The fake app has a source with a root file that imports and links others, for stages 67 and 68.
-- [ ] ENGINEERING.md has the terms: **Harness**, the guideline files at a repository's root and the files they link, at a PR's base commit; **Harness file**, one of them, with how it was found; and **Guideline file** now says it's a root of the harness.
-- [ ] DESIGN.md and ARCHITECTURE.md have this stage's decisions and the storage table's new rows.
+- [x] `harness.ts` with the types and functions above, and tests for the links: imports, Markdown links, mentions, both resolutions, code spans and fences, URLs, `~`, `..` out of the repository, anchors and a file that links itself.
+- [x] Adversarial tests for the walk: a cycle, a chain deeper than 5, more than 200 files, a file over 1 MB, a link to a directory.
+- [x] The two ports, in-memory fakes, and a contract suite each that the fakes pass.
+- [x] The SQLite store passes `HarnessStore`'s suite; a migration adds the tables.
+- [x] `loadHarness` tested on each of its four paths with a fake source that counts requests: none when stored, only changed blobs when listed, only changed paths after a diff, one read per hop otherwise.
+- [x] Two concurrent loads make one walk. A failing source is an error result and leaves the store as it was.
+- [x] Starting an analysis starts a load and doesn't wait for it; the analysis completes when the load fails.
+- [x] The fake app has a source with a root file that imports and links others, for stages 67 and 68.
+- [x] ENGINEERING.md has the terms: **Harness**, the guideline files at a repository's root and the files they link, at a PR's base commit; **Harness file**, one of them, with how it was found; and **Guideline file** now says it's a root of the harness.
+- [x] DESIGN.md and ARCHITECTURE.md have this stage's decisions and the storage table's new rows.
 
 ## Out of scope
 
@@ -91,4 +91,39 @@ Two calls for one repository and commit join, as two starts of one analysis do. 
 
 ## Notes for later stages
 
-None yet.
+### Where the code differs from the contract above
+
+- **`HarnessFile.links` and `Harness.missing` were added.** `linkedFrom` and `via` alone can't say whether an enabled root still reaches a file once the root that linked it first is off, nor what a file imports, which `harnessEnabled` and `harnessPlan` need. `missing` is the paths looked for that aren't files at the commit: without it, a Bitbucket load with nothing changed would ask again for every dead link and absent root.
+- **`harnessLinks` gives each link's `paths`,** not one path: a path in prose has up to two, its file's first. The walk takes the first that's there.
+- **`readFiles` answers `HarnessSourceFile | null`,** in the order asked: a file's text and blob hash, or `skipped` with `too-large` or `unreadable`. With null alone, a file the host won't serve would read as one that isn't there, and the page couldn't name it. A source that can't tell the two apart answers null.
+- **`HarnessSource` has a `host`,** as the other ports do.
+- **`dropBlobsUnusedSince` is `dropUnusedSince`,** since it drops the old harnesses too. The SQLite store calls it as it opens.
+- **A fourth limit, `MAX_HARNESS_LOOKUPS`, 400,** on paths asked for that a source doesn't know are there. Without it a page of dead links is a request each on Bitbucket. It cuts as `files`. It doesn't apply to a source that lists.
+- **`loadHarness` gives `LoadedHarness | null`,** null for a repository without a source, so stage 67 can tell that from a failure. `changedPaths` failing with `not-found` walks afresh, since a force-push can take the last harness's commit away; any other failure is the load's.
+- **`harnessState(deps, repo, baseSha)` and `harnessReach(harness, path)` are extra,** for stage 68: where a load stands without starting one (`loading`, `ready`, `failed`, `none`), and every file a root reaches whatever is switched on.
+- **The walk calls a harness cut at `depth` when a last-hop link may lead to a file it doesn't have,** without reading to find out. A source that lists knows; one that doesn't may say so for a dead link.
+- **A Markdown link with a leading slash is from the root,** as both hosts render it. An `@path` is an import only after a space or at a line's start, as Claude Code reads it; elsewhere it's a path in prose.
+
+### Changed outside what this stage owns
+
+`AppDeps` gained two required fields, so every place that builds one gained them: the setups of `analyses`, `collect`, `guardrails`, `preferences`, `pull-request-status`, `review` and `threads` in `src/application/use-cases/`, of `src/adapters/http/http-app.test.ts` and of `src/cli/compose.test.ts`, and `evals/harness.ts`, where they mean no source. The fake app's harness is in a file of its own, `src/cli/dev/receipts-harness.ts`.
+
+### For 66
+
+- `harnessSourceIn(sources)` in `compose.ts` is the one place a repository's source is picked. It's given none until this stage passes it the hosts'.
+- No retrying wrapper for `HarnessSource` exists, and `src/application/retries/` belongs to neither stage. It needs a `retryingHarnessSource` beside the others, of the same shape.
+- The contract suite's setup says whether a source lists and whether it diffs, and takes each file's hash as git prints it. `skipped` is optional.
+
+### For 67
+
+- Join a load with `loadHarness(deps, repo, baseSha)`. `contents` holds every file's text by path.
+- **To decide: a root another root imports is off until it's switched on itself,** as the contract says ("a root is on by `guidelineEnabled`"). A repository whose `CLAUDE.md` is only `@AGENTS.md`, which is common, gets nothing from switching `CLAUDE.md` on alone.
+- A file passed over for its size still has its imports followed, and a root over the budget is in `onRequest`.
+
+### For 68
+
+- The fake app's PR is `https://github.com/acme/warehouse/pull/8`, "Add receipt download endpoint, with a harness": two roots, nine files, imports two deep, a file over the prompt's budget, and a skipped one. `FakeApp.harnessSources` and `FakeApp.harnessStore` are there for tests.
+
+### Checked
+
+Over 16 commits of this repository's own history, 25 apart, a source that lists, one that diffs and one that does neither gave the same harness and contents. At the last, 81 files and 1 MB in three hops, not cut; with `CLAUDE.md` on, `harnessPlan` puts `CLAUDE.md`, `MISSION.md`, `DESIGN.md` and `ENGINEERING.md` in the prompt, 42 KB, and 77 files on request. No real host was asked: 66 brings them.
