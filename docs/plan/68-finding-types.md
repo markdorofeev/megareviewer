@@ -1,6 +1,6 @@
 # Stage 68: A type on every finding
 
-**Status:** In progress (branch claude/risk-findings-severity-type-b3302c)
+**Status:** Done (branch claude/risk-findings-severity-type-b3302c, no PR)
 **Depends on:** 30, 66, 67
 **Owns:** `FindingType` and a finding's `type` in `src/domain/review/`; the unchanged callers in the model's input, in `AnalysisInput`, `model-input.ts` and `src/adapters/model/shared/render-input.ts`; the findings task in `src/adapters/model/shared/prompts/`; the order of points in `pointsOf`; a finding's type and severity on its card, its lines' marks, the bar's chips and the stepper's list, in `web/src/`, with their tokens and contrast pairs; the fake server's fixtures in `src/cli/dev/`; the findings' labels, cases and metrics in `evals/`; `PIPELINE_VERSION`; the feature's text in DESIGN.md, ARCHITECTURE.md, ENGINEERING.md and `evals/README.md`
 
@@ -93,15 +93,15 @@ One agent, in this order, each step its own commits with `pnpm check` passing:
 
 ## Definition of done
 
-- [ ] `Finding.type` with its default, and a stored finding without one parses as logic.
-- [ ] `pointsOf` orders by severity, with a test, and mismatches come last.
-- [ ] The model's input holds the unchanged callers when the analysis has them, on every transport, and without them the text is what it was after stage 67.
-- [ ] The findings task asks for the three types with their bars, and each transport's tests and fingerprint are updated.
-- [ ] The evals met the bar within the limit, with their report and a new baseline, or the notes say what was dropped and why.
-- [ ] The card's type chip, the severity's color on the marks with its contrast pairs, the type chips on the bar narrowing the stepper, and the list, with component tests and an end-to-end test on the fake server. The small-feature fixture gains no file.
-- [ ] One AI review on delphi-code #2 through the real server, with its checkout, its findings by type and severity recorded in the notes beside the 6 risks and 1 finding of the run stage 63 records.
-- [ ] DESIGN.md, ARCHITECTURE.md, ENGINEERING.md and `evals/README.md` say it, with the alternatives.
-- [ ] `pnpm check` and `pnpm e2e` pass.
+- [x] `Finding.type` with its default, and a stored finding without one parses as logic.
+- [x] `pointsOf` orders by severity, with a test, and mismatches come last.
+- [x] The model's input holds the unchanged callers when the analysis has them, on every transport, and without them the text is what it was after stage 67.
+- [x] The findings task asks for the three types with their bars, and each transport's tests and fingerprint are updated.
+- [x] The evals met the bar within the limit, with their report and a new baseline, or the notes say what was dropped and why.
+- [x] The card's type chip, the severity's color on the marks with its contrast pairs, the type chips on the bar narrowing the stepper, and the list, with component tests and an end-to-end test on the fake server. The small-feature fixture gains no file.
+- [x] One AI review on delphi-code #2 through the real server, with its checkout, its findings by type and severity recorded in the notes beside the 6 risks and 1 finding of the run stage 63 records.
+- [x] DESIGN.md, ARCHITECTURE.md, ENGINEERING.md and `evals/README.md` say it, with the alternatives.
+- [x] `pnpm check` and `pnpm e2e` pass.
 
 ### Ubiquitous language (ENGINEERING.md)
 
@@ -113,19 +113,38 @@ One agent, in this order, each step its own commits with `pnpm check` passing:
 
 ## Notes for later stages
 
-### Open issues
+### The evals, against stage 67's baseline
 
-The session that did this stage ran out of its usage allowance here. Left to do:
+One run of 24 cases, the 18 of stage 67 and six new ones, p16, pipeline 22, judge 7: the first of the three allowed met the bar, on the first prompt tried, so it's the only one, and the new baseline. Nothing was dropped. [The report](../../evals/reports/2026-11-25/finding-types.md) has the rest.
 
-- **`pnpm e2e` hasn't passed since the page changed.** `review.spec.ts` has a new test on the fake server's `receiptsTyped` (PR 108), and `preferences.spec.ts` expects the new chips; neither has run to the end. The design-system snapshots of `foundations`, `screens` and `tour` may need updating: the marks, chips and bar demos changed.
-- **The whole `pnpm check` hasn't run on the page's commit.** Typecheck, Biome, the contrast check, `src/cli` (194) and the web tests of the review page, the review components and the design system (670) passed.
-- **The live run on delphi-code #2** with its checkout.
-- **The documents:** DESIGN.md, ARCHITECTURE.md, ENGINEERING.md's three rows, and `evals/README.md` (a finding's `type`, `nothingWrong`, `outside`, `typeRight`, `unwantedFindings`, noise and recall by type, the judge's callers section). Their text is still stage 67's.
-- **Definition of done** isn't ticked until those are.
+| Metric | Stage 67, 18 cases | Stage 68, the same 18 | Stage 68, all 24 | Target |
+|---|---|---|---|---|
+| findingRecall | 14/17 | 14/17 | 18/21 | ≥ 90% |
+| … on logic findings | 8/11 | 8/11 | 8/11 | the bar: no lower |
+| findingNoise | 1/25 | 0/23 | 0/27 | the bar: at most one more than 1 |
+| typeRight | | 17/17 | 21/21 | ≥ 85% |
+| unwantedFindings, on the two cases with nothing wrong | | | 0 | the bar: 0 |
+| mismatchFalsePositives | 4 | 3 | 6 | ≤ 1 |
+
+The three missed must-haves are delphi-account-connections', as in every run. Three of the six false-positive mismatches are on the new cases, where the intent names the finding's problem as a mismatch, and the finding names it back, so it's read once.
+
+### A real run, on delphi-code #2
+
+Through the real server on Sonnet 5.5 through Claude Code, with the reviewer's checkout of delphi-code read and a home of its own (`MEGAREVIEWER_HOME`), so no preference or guideline file. The analysis had the unchanged callers of `create_app` (3 uses), `clone_credentials`, `FakeHost` and `CredentialsGuide` (1 each), and the passes read them.
+
+- **No finding,** where stage 63's run had 6 risks and 1 finding. The eval runs on the same PR found none either, in this stage and the one before it, so the three must-haves on its credentials are still missed. Nothing raised the token routes, the keychain or `create_app`'s callers as a contract finding: what the risks said is now the brief's, whose watch line was "Tokens are now stored in the OS keychain, a new secret store" and "`configured_hosts()` replaced by `known_hosts()`, returning every service".
+- **No mismatch.** No guardrail call, since there was no finding.
+- **35 seconds** for the run: the intent 4.1 s, reading 130,713 tokens from the cache, the findings 30.8 s; $0.08 at API prices, on the plan.
+- The first try ran across the Mac's sleep, with its lid closed, and the intent was cut off at Claude Code's 10 minutes; Remove AI review and a run while awake gave the above.
+
+So the page's type chips and the severity's colors were seen on the fake server only (the end-to-end test on `receiptsTyped`), not on real data.
+
+### How the checks were run
+
+The Mac slept with its lid closed for most of the session, waking for about a minute every 15, which times tests out at random. `pnpm check` passed whole, 3904 tests, in one wake; before that, each of its steps passed run apart, the tests in shards. `pnpm e2e` passed whole, 91 tests, on a port of its own (5180 can be another worktree's), with the design-system snapshots of the tour section updated, the only one that changed.
 
 ### What was decided
 
-- **The bar was met by the first run,** on the first prompt tried, so the other two weren't used: [the report](../../evals/reports/2026-11-25/finding-types.md). Nothing was dropped.
 - The contract and the input are one commit: `type` in the output schema moves every transport's fingerprint.
 - A model run reads the analysis's own `unchangedCallers`, and no longer looks the checkout up again. `AnalysisInput.unchangedCallers` names the hunk, not the part, since the model sees whole hunks.
 - When even the hunks don't fit with the callers, the callers are left out with a warning, after the file contents: a PR that was analyzed before isn't refused because of them.
@@ -133,4 +152,12 @@ The session that did this stage ran out of its usage allowance here. Left to do:
 - A mismatch no finding names is grey: it has no severity to take a color from.
 - Going to a point of another type than the pressed chip's lets go of the chip, as going to a point lets go of the threads'.
 - The bar's order is logic, contract, architecture. Glyphs: `ƒ`, `◆`, `≡`.
-- `with-findings.ts` in `src/cli/dev/` replaces the two wrappers that each answered one fake PR's findings.
+- `with-findings.ts` in `src/cli/dev/` replaces the two wrappers that each answered one fake PR's findings, now that a third, `receiptsTyped` (PR 108), needed one.
+- The type's chip is grey and the severity has the color; `PointTone` in `web/src/lib/status.ts` is a severity or `mismatch`, and the line marks, the card's bar and label, the bug, the stepper's and list's glyph, the tour's chips and the landing's wash take it.
+- The judge's prompt gains a section on the unchanged callers only for a case that has some, so the 18 cases without are judged by the prompt they were (`JUDGE_VERSION` 7).
+
+### Left for later
+
+- delphi-code #2's three must-have findings, missed in every run since the findings pass has been measured on it.
+- `mismatchFalsePositives` is over its target, as it was before this stage.
+- The design-system page's tour demo still suggests reading a step whose finding it dismissed, as stage 67's notes say.
