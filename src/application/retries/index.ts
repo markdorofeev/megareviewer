@@ -2,6 +2,7 @@ export {
   RETRY_DELAYS_MS,
   type RetryOptions,
   retryingGitHost,
+  retryingHarnessSource,
   retryingReviewHistory,
   retryingReviewThreads,
   retryingStatusSource,

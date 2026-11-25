@@ -2,6 +2,7 @@ import type { HostError } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
 import type {
   GitHost,
+  HarnessSource,
   Logger,
   PullRequestStatusSource,
   ReviewHistory,
@@ -101,5 +102,21 @@ export const retryingReviewHistory = (
     host: history.host,
     getReviewerComments: (repo, read) =>
       retried("the reviewer's past comments", () => history.getReviewerComments(repo, read)),
+  };
+};
+
+/** Retries reading a harness after a network failure, as for the host's other reads. */
+export const retryingHarnessSource = (
+  source: HarnessSource,
+  options: RetryOptions,
+): HarnessSource => {
+  const retried = retrier(source.host, options);
+  return {
+    host: source.host,
+    listFiles: (repo, sha) => retried("the files at a commit", () => source.listFiles(repo, sha)),
+    readFiles: (repo, sha, paths) =>
+      retried(`${paths.length} files`, () => source.readFiles(repo, sha, paths)),
+    changedPaths: (repo, fromSha, toSha) =>
+      retried("the changed files", () => source.changedPaths(repo, fromSha, toSha)),
   };
 };
