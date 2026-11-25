@@ -6,6 +6,12 @@ export {
   type GitHostContractSetup,
 } from "./contracts/git-host-contract.ts";
 export {
+  describeHarnessSourceContract,
+  type HarnessSourceContractFile,
+  type HarnessSourceContractSetup,
+} from "./contracts/harness-source-contract.ts";
+export { describeHarnessStoreContract } from "./contracts/harness-store-contract.ts";
+export {
   CHECKOUT_CONTRACT_FILES,
   describeLocalCheckoutContract,
   type LocalCheckoutContractSetup,
@@ -36,6 +42,7 @@ export {
 export { type CodeParserMethod, FakeCodeParser } from "./fake-code-parser.ts";
 export { FakeGitHost, type GitHostMethod, type PublishAttempt } from "./fake-git-host.ts";
 export { FakeGuardrailAdvisor } from "./fake-guardrail-advisor.ts";
+export { FakeHarnessSource, gitBlobHash, type HarnessSourceMethod } from "./fake-harness-source.ts";
 export {
   type CheckoutCommits,
   FakeLocalCheckout,
@@ -55,5 +62,6 @@ export { createFixtureFetch, type RecordedExchange } from "./fixture-fetch.ts";
 export * from "./fixtures/index.ts";
 export { InMemoryAnalysisStore } from "./in-memory-analysis-store.ts";
 export { InMemoryFileCache } from "./in-memory-file-cache.ts";
+export { InMemoryHarnessStore } from "./in-memory-harness-store.ts";
 export { InMemoryPreferenceStore } from "./in-memory-preference-store.ts";
 export { type LogEntry, RecordingLogger } from "./recording-logger.ts";
