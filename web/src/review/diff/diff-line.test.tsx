@@ -114,3 +114,54 @@ describe("a point's mark", () => {
     expect(row({ marked: true })).toMatch(/after:bg-ring/);
   });
 });
+
+describe("the comment button on a line's number", () => {
+  const numbered = (overrides: Partial<ViewLine> = {}, flagged = false) => {
+    const { container } = render(
+      <DiffLine
+        line={line(overrides)}
+        flagged={flagged}
+        numberButton={{ side: "new", label: "Comment on line 7", onClick: () => {} }}
+      />,
+    );
+    const button = container.querySelector("button");
+    if (button === null) throw new Error("no number button");
+    return {
+      row: container.querySelector("[role=row]"),
+      classes: button.className.split(" "),
+      flag: container.querySelector("[data-slot=finding-flag]"),
+    };
+  };
+  const plusOnRow = "group-hover/line:before:content-['+']";
+
+  it("shows only a quiet plus while the pointer is on the row, and fills on its own hover or focus", () => {
+    const { row, classes } = numbered();
+    expect(row?.className).not.toMatch(/cursor-pointer|hover:before/);
+    expect(classes).toContain(plusOnRow);
+    expect(classes).toContain("before:text-muted-foreground");
+    expect(classes.filter((one) => one.startsWith("group-hover/line:bg"))).toEqual([]);
+    for (const on of ["hover", "focus-visible"]) {
+      expect(classes).toContain(`${on}:bg-primary`);
+      expect(classes).toContain(`${on}:text-primary-foreground`);
+      expect(classes).toContain(`${on}:before:content-['+']`);
+      expect(classes).toContain(`${on}:before:text-primary-foreground`);
+    }
+  });
+
+  it("has no plus from 10,000, where the cell has no room for it", () => {
+    expect(numbered({ newNo: 10_000 }).classes.filter((one) => one.includes("content"))).toEqual(
+      [],
+    );
+    expect(numbered({ newNo: 9_999 }).classes).toContain(plusOnRow);
+  });
+
+  it("keeps a finding's bug on the row's hover, and gives way to the plus on the number's", () => {
+    const { classes, flag } = numbered({}, true);
+    expect(classes).not.toContain(plusOnRow);
+    expect(classes).toContain("hover:before:content-['+']");
+    expect(flag?.getAttribute("class")).toContain("peer-hover/number:hidden");
+    expect(flag?.getAttribute("class")).not.toContain("group-hover/line:hidden");
+    // Past three digits the bug isn't drawn, so the plus is.
+    expect(numbered({ newNo: 1_000 }, true).classes).toContain(plusOnRow);
+  });
+});

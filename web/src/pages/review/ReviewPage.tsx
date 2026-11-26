@@ -49,6 +49,7 @@ import {
   PINNED,
   type PointLine,
   ReviewThreadView,
+  SelectionComment,
   ShortcutsDialog,
   TreeSkeleton,
   threadPlace,
@@ -83,6 +84,7 @@ import {
   mapFiles,
   mechanicalCount,
   OVERVIEW_FORMS,
+  openedOn,
   parseLayout,
   parseOverviewForm,
   partIndex,
@@ -688,23 +690,17 @@ const Review = ({
       }),
     [setHunkComments],
   );
+  const latestComments = useRef(hunkComments);
+  latestComments.current = hunkComments;
   const openCommentOn = useCallback(
     (partId: PartId, place: LinePlace | null) => {
       raised.current = null;
       setOpenComment((previous) => {
-        // Extending a comment into a range takes its draft along to the range's last line.
-        if (place?.startLine !== undefined && previous !== null && previous.partId === partId) {
-          const hunkId = hunkIdOf(partId);
-          const from = previous.place;
-          setHunkComments((comments) =>
-            comments.map((comment) =>
-              comment.hunkId === hunkId && comment.side === from.side && comment.line === from.line
-                ? { ...comment, line: place.line, startLine: place.startLine }
-                : comment,
-            ),
-          );
-        }
-        return place === null ? null : { partId, place };
+        if (place === null) return null;
+        const hunkId = hunkIdOf(partId);
+        const open = previous?.partId === partId ? previous.place : null;
+        setHunkComments((comments) => openedOn(comments, hunkId, place, open).comments);
+        return { partId, place: openedOn(latestComments.current, hunkId, place, open).place };
       });
     },
     [setHunkComments],
@@ -1490,7 +1486,7 @@ const Review = ({
       epochOf(analysis),
       readOnly,
       highlight.has(id),
-      openComment?.partId === id ? `${openComment.place.side}${openComment.place.line}` : "",
+      openComment?.partId === id ? JSON.stringify(openComment.place) : "",
       ...commentsOf(id).map((comment) => JSON.stringify(comment)),
     ];
     // A part with threads draws again when they change, or another becomes the current one.
@@ -1980,6 +1976,8 @@ const Review = ({
           )}
         </div>
       )}
+
+      {complete && <SelectionComment onComment={openCommentOn} />}
 
       <footer className="flex items-center justify-end gap-3">
         <ModelCalls

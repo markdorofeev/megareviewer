@@ -35,6 +35,7 @@ import {
   ReviewSubmitPanel,
   type ReviewThreadProps,
   ReviewThreadView,
+  SelectionComment,
   ShortcutsDialog,
   TreeSkeleton,
   useSyntax,
@@ -194,7 +195,7 @@ export const DomainComponents = () => {
         </div>
       </Group>
 
-      <Group title="A draft on a line: click a line to write one, Edit to change it">
+      <Group title="A draft on a line: click a line's number or select code to write one, Edit to change it">
         <DraftDemo />
       </Group>
 
@@ -463,6 +464,7 @@ const DraftDemo = () => {
           setComments(empty ? rest : [...rest, comment]);
         }}
       />
+      <SelectionComment onComment={(_, place) => setOpen(place)} />
     </div>
   );
 };
