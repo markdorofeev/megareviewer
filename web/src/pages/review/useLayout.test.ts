@@ -5,6 +5,7 @@ describe("layoutOfSearch", () => {
   it("reads the layout a review's address names, and nothing else", () => {
     expect(layoutOfSearch("?view=code")).toBe("map");
     expect(layoutOfSearch("?view=overview")).toBe("overview");
+    expect(layoutOfSearch("?view=tour")).toBe("tour");
     expect(layoutOfSearch("?view=map")).toBeUndefined();
     expect(layoutOfSearch("")).toBeUndefined();
   });
@@ -24,6 +25,7 @@ describe("layoutUrl", () => {
 describe("cameFrom", () => {
   it("reads where an entry came from, whatever else it holds", () => {
     expect(cameFrom({ from: "overview", scrollY: 40 })).toEqual({ from: "overview" });
+    expect(cameFrom({ from: "tour" })).toEqual({ from: "tour" });
     expect(cameFrom({ from: "code", at: "group:src/routes" })).toEqual({
       from: "code",
       at: "group:src/routes",

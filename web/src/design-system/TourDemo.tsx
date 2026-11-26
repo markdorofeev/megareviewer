@@ -4,7 +4,7 @@ import { pointsOf } from "../../../src/domain/review/index.ts";
 import { tourAnalysisView } from "../../dev/fixtures/index.ts";
 import { fileOverview } from "../pages/review/overview.ts";
 import { type TourExcerpt, tourOf } from "../pages/review/tour.ts";
-import { NoTourLine, TourLanding, Understand } from "../pages/review/Understand.tsx";
+import { TourLanding, Understand } from "../pages/review/Understand.tsx";
 import { HunkCard, type PointLine } from "../review/index.ts";
 
 const analysis = tourAnalysisView.analysis;
@@ -53,10 +53,6 @@ export const TourDemo = () => {
             onOpenInCode={() => {}}
           />
         )}
-      </div>
-      <div className="flex flex-col gap-2">
-        <NoTourLine>This AI review ran without the tour. Re-run it to get one.</NoTourLine>
-        <NoTourLine busy>The tour is being written.</NoTourLine>
       </div>
       {step !== undefined && excerpt !== undefined && landed !== undefined && (
         <div className="overflow-hidden rounded-lg border">

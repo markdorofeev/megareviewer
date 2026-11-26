@@ -20,12 +20,16 @@ import { byTreePath } from "../../review/tree/paths.ts";
 
 export { byTreePath };
 
-/** The page's two layouts: one scroll of the changed files, or an overview of them. */
-export type Layout = "map" | "overview";
+/** The page's layouts: one scroll of the changed files, an overview of them, or the tour. */
+export type Layout = "map" | "overview" | "tour";
 
 /** The call tree the overview replaced is stored as `tree`, and opens the overview. */
 export const parseLayout = (stored: unknown): Layout | undefined =>
-  stored === "map" ? "map" : stored === "overview" || stored === "tree" ? "overview" : undefined;
+  stored === "map" || stored === "tour"
+    ? stored
+    : stored === "overview" || stored === "tree"
+      ? "overview"
+      : undefined;
 
 /** The form the overview takes: its directories, or one of the three previews of its flow paths. */
 export type OverviewForm = "directories" | "lanes" | "bow-tie" | "rows";

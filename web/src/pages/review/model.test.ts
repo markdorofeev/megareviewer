@@ -171,6 +171,7 @@ describe("parseLayout", () => {
     expect(parseLayout("tree")).toBe("overview");
     expect(parseLayout("overview")).toBe("overview");
     expect(parseLayout("map")).toBe("map");
+    expect(parseLayout("tour")).toBe("tour");
     expect(parseLayout("graph")).toBeUndefined();
   });
 });

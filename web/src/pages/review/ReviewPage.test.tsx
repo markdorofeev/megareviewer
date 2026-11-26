@@ -1406,7 +1406,7 @@ const nodeOf = (path: string) => {
   return node;
 };
 const focusedKey = () => (document.activeElement as HTMLElement | null)?.dataset.key;
-const layoutIs = (layout: "map" | "overview") =>
+const layoutIs = (layout: "map" | "overview" | "tour") =>
   document.querySelector("[data-slot=review-page]")?.getAttribute("data-layout") === layout;
 
 describe("overview", () => {
@@ -1561,16 +1561,24 @@ describe("overview", () => {
 
 describe("the tour", () => {
   const withTour = () => {
-    window.localStorage.setItem("megareviewer:review-layout", '"overview"');
+    window.localStorage.setItem("megareviewer:review-layout", '"tour"');
   };
   const tourRegion = () => screen.getByRole("region", { name: "Tour steps" });
 
-  it("is what the overview shows unless the Tour switch is off", async () => {
+  it("is a layout beside the overview, which stays the overview, unless the Tour switch is off", async () => {
     withTour();
     const first = renderReview({ view: tourAnalysisView });
     await loaded();
     expect(await screen.findByRole("region", { name: "Tour steps" })).toBeTruthy();
-    expect(layoutSwitch().getByRole("button", { name: "Overview" })).toBeTruthy();
+    expect(layoutSwitch().getByRole("button", { name: "Tour" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(window.location.search).toBe("?view=tour");
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
+    expect(overviewBox()).toBeTruthy();
+    expect(() => tourRegion()).toThrow();
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Tour" }));
+    expect(await screen.findByRole("region", { name: "Tour steps" })).toBeTruthy();
     first.unmount();
 
     window.localStorage.setItem("megareviewer:tour", "false");
@@ -1578,6 +1586,7 @@ describe("the tour", () => {
     await loaded();
     expect(overviewBox()).toBeTruthy();
     expect(() => tourRegion()).toThrow();
+    expect(layoutSwitch().queryByRole("button", { name: "Tour" })).toBeNull();
   });
 
   it("shows the steps in order, their points, and what the tour didn't show", async () => {
@@ -1661,7 +1670,7 @@ describe("the tour", () => {
     expect(document.querySelectorAll("[data-point-mark=step]").length).toBeGreaterThan(0);
 
     await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(layoutIs("overview")).toBe(true));
+    await waitFor(() => expect(layoutIs("tour")).toBe(true));
     expect(document.activeElement?.textContent).toContain("Step 2:");
     // The step it came back to is the current one.
     const current = document.querySelector("[data-slot=tour-step][aria-current=step]");
@@ -1684,7 +1693,7 @@ describe("the tour", () => {
       "Tour step 3",
     );
     await userEvent.keyboard("v");
-    await waitFor(() => expect(layoutIs("overview")).toBe(true));
+    await waitFor(() => expect(layoutIs("tour")).toBe(true));
     expect(document.activeElement?.textContent).toContain("Step 3:");
   });
 
@@ -1693,35 +1702,19 @@ describe("the tour", () => {
     await loaded();
     expect(layoutIs("map")).toBe(true);
     await userEvent.click(await screen.findByRole("button", { name: "Tour · 4 steps" }));
-    await waitFor(() => expect(layoutIs("overview")).toBe(true));
+    await waitFor(() => expect(layoutIs("tour")).toBe(true));
     expect(screen.getByRole("region", { name: "Tour steps" })).toBeTruthy();
   });
 
-  it("is the overview and a line saying why, without a tour", async () => {
+  it("isn't a layout without a tour, where the overview is shown in its place", async () => {
     withTour();
-    const first = renderReview();
+    renderReview();
     await loaded();
-    expect(
-      await screen.findByText("This AI review ran without the tour. Re-run it to get one."),
-    ).toBeTruthy();
-    expect(overviewBox()).toBeTruthy();
-    first.unmount();
-
-    renderReview({
-      view: {
-        ...codeOnly,
-        analysis: {
-          ...codeOnly.analysis,
-          stages: { ...codeOnly.analysis.stages, findings: "skipped" },
-          usage: [],
-          modelCalls: [],
-        },
-      },
-    });
-    await loaded();
-    expect(await screen.findByText(/^No AI review yet\. The tour/)).toBeTruthy();
     expect(overviewBox()).toBeTruthy();
     expect(() => tourRegion()).toThrow();
+    expect(screen.queryByText(/the tour/i)).toBeNull();
+    expect(layoutSwitch().queryByRole("button", { name: "Tour" })).toBeNull();
+    expect(window.location.search).toBe("?view=overview");
   });
 });
 

@@ -116,8 +116,8 @@ import { parseBoolean, readSession, useStoredState, writeSession } from "./stora
 import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
 import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
-import { type NoTour, noTourOf, type TourExcerpt, type TourStep, tourOf } from "./tour.ts";
-import { NoTourLine, TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
+import { noTourOf, type TourExcerpt, type TourStep, tourOf } from "./tour.ts";
+import { TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
 import { useHarness } from "./useHarness.ts";
@@ -218,22 +218,6 @@ type ReturnTo =
   | { readonly kind: "overview"; readonly node: string | null }
   | { readonly kind: "tour"; readonly step: number };
 
-/** Why Understand shows the overview instead of a tour. */
-const noTourText = (reason: NoTour): string => {
-  switch (reason.kind) {
-    case "no-review":
-      return "No AI review yet. The tour through these directories is written with one: Request AI review above.";
-    case "without-tour":
-      return "This AI review ran without the tour. Re-run it to get one.";
-    case "writing":
-      return "The tour is being written.";
-    case "too-small":
-      return "The change is too small for a tour: it has fewer than 3 steps to make.";
-    case "failed":
-      return `The tour couldn't be written: ${reason.message}`;
-  }
-};
-
 /** The shortcuts the review page has, for its `?` dialog. */
 const PAGE_SHORTCUTS: readonly ShortcutId[] = [
   "nextFile",
@@ -328,7 +312,7 @@ const Review = ({
   const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
   const mechanical = mechanicalCount(trailing);
-  // On until the reviewer turns it off: off, a run asks for no tour and the layout is the overview.
+  // On until the reviewer turns it off: off, a run asks for no tour and there's no Tour layout.
   const [tourOn, setTourOn] = useStoredState("tour", true, parseBoolean);
   const points = useMemo(() => pointsOf(analysis), [analysis]);
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
@@ -434,9 +418,8 @@ const Review = ({
     () => fileOverview(analysis, new Set(expandedGroups)),
     [analysis, expandedGroups],
   );
-  // With the Tour switch on, the overview's layout is Understand: the tour, or the overview and
-  // a line saying why there's none. The tour is drawn from the analysis shown; whether it's being
-  // written, from the live one.
+  // With the Tour switch on and a tour, the Tour layout is Understand. The tour is drawn from the
+  // analysis shown; whether it's being written, from the live one.
   const tourOverview = useMemo(() => fileOverview(analysis), [analysis]);
   const noTour = tourOn ? noTourOf(live) : null;
   const tour = useMemo(
@@ -444,7 +427,8 @@ const Review = ({
     [tourOn, analysis, tourOverview, points, stateOf],
   );
 
-  const [layout, setLayout] = useLayout();
+  const tourReady = tourOn && noTour === null && tour !== null;
+  const [layout, setLayout] = useLayout(tourReady);
   // The overview as its directories, or as one of the previews of the pull request's flow paths.
   const [overviewForm, setOverviewForm] = useStoredState(
     "overview-form",
@@ -463,7 +447,7 @@ const Review = ({
       if (!next.delete(key)) next.add(key);
       return next;
     });
-  const understand = layout === "overview" && noTour === null && tour !== null;
+  const understand = layout === "tour";
   const filePaths = useMemo(() => files.map((group) => group.file.path), [files]);
   const fileInView = useFileInView(filePaths, layout === "map" && analysis.stages.prep === "done");
   // At 1024px or less the rail is behind a button.
@@ -665,7 +649,7 @@ const Review = ({
   const scrollTo = (id: string) =>
     setScrollRequest((previous) => ({ id, n: (previous?.n ?? 0) + 1 }));
   /** The part the reviewer is on: the one last focused in the map. */
-  const currentHunk = (): PartId | null => (layout === "overview" ? null : focusedHunkId);
+  const currentHunk = (): PartId | null => (layout === "map" ? focusedHunkId : null);
 
   const focusHunk = useCallback((id: PartId) => setFocusedHunkId(id), []);
   /** Focuses a file's place in the overview: its directory, its node, or a node it's a badge on. */
@@ -690,7 +674,7 @@ const Review = ({
     // The stepper stays on what was gone to.
     setNarrowed((narrowing) => (narrowing === point?.type ? narrowing : null));
     setHighlight(new Set((point?.hunkIds ?? []).flatMap(index.partsOf)));
-    if (layout === "overview" && !understand) {
+    if (layout === "overview") {
       if (cardPart !== undefined) showHunk(cardPart);
     } else {
       // The tour has no point cards: its points open the map.
@@ -721,7 +705,6 @@ const Review = ({
     const stored = readSession(storedStepKey);
     return typeof stored === "number" ? stored : 0;
   };
-  const tourReady = tourOn && noTour === null && tour !== null;
   /**
    * To the code from the overview or the tour, on a history entry of its own that Back, Esc and
    * the switch go back from; nothing while the code is shown.
@@ -731,13 +714,18 @@ const Review = ({
       ? { kind: "tour", step: readStoredStep() }
       : { kind: "overview", node: overviewAt.current },
   ) => {
-    if (layout !== "overview") return;
-    setLayout("map", { from: "overview" });
+    if (layout === "map") return;
+    setLayout("map", { from: layout });
     setReturnTo(from);
+  };
+  /** Whether the code was opened from the overview or the tour, which Back goes back to. */
+  const openedFrom = (): Layout | null => {
+    const came = cameFrom();
+    return came?.from === "overview" || came?.from === "tour" ? came.from : null;
   };
   /** Back to the overview or the tour the code was opened from, as the reader left it. */
   const backFromCode = () => {
-    if (cameFrom()?.from === "overview") window.history.back();
+    if (openedFrom() !== null) window.history.back();
   };
   // Back on the overview or the tour, however: the node or the step the code was opened from takes
   // the focus again, and the code's marks of where it was opened from go.
@@ -759,10 +747,10 @@ const Review = ({
     setFromStep(null);
     setHighlight(new Set());
   }, [layout]);
-  /** Understand from the code, on step `step`, or at its top for 0. */
+  /** The tour on step `step`, or at its top for 0. */
   const enterTour = (step: number) => {
     setReturnTo(null);
-    setLayout("overview", { from: "code", step });
+    setLayout("tour", layout === "map" ? { from: "code", step } : null);
     setLandOn((previous) => ({ step, n: (previous?.n ?? 0) + 1 }));
   };
   /** The map on an excerpt's lines, marked, under a label naming its step. */
@@ -848,7 +836,7 @@ const Review = ({
   const switchLayout = () => {
     if (layout === "map") {
       // Opened from the overview or the tour: back to it, as the reader left it.
-      if (cameFrom()?.from === "overview") return window.history.back();
+      if (openedFrom() !== null) return window.history.back();
       // With a tour, to the step last current; else the overview, on the file in view.
       if (tourReady) return enterTour(readStoredStep());
       return openOverview();
@@ -874,6 +862,16 @@ const Review = ({
     );
     if (node !== undefined) return openNode(node);
     toCode();
+  };
+  /** The layout the bar's switch chose: from the code, back to the one it was opened from. */
+  const chooseLayout = (next: Layout) => {
+    if (next === layout) return;
+    if (next === "map") return switchLayout();
+    if (layout === "map" && openedFrom() === next) return window.history.back();
+    if (next === "tour") return enterTour(readStoredStep());
+    if (layout === "map") return openOverview();
+    setReturnTo(null);
+    setLayout("overview");
   };
   usePageDisplay({
     toggles: [{ label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) }],
@@ -1449,13 +1447,7 @@ const Review = ({
       <ReviewBar
         layout={
           analysis.stages.prep === "done" ? (
-            <LayoutSwitch
-              layout={layout}
-              tour={tourOn}
-              onChange={(next) => {
-                if (next !== layout) switchLayout();
-              }}
-            />
+            <LayoutSwitch layout={layout} tour={tourReady} onChange={chooseLayout} />
           ) : null
         }
         title={live.pullRequest?.title ?? null}
@@ -1756,9 +1748,6 @@ const Review = ({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {noTour !== null && (
-            <NoTourLine busy={noTour.kind === "writing"}>{noTourText(noTour)}</NoTourLine>
-          )}
           {flow === null ? (
             <Overview
               overview={overview}

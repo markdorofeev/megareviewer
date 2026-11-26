@@ -708,24 +708,6 @@ export const Understand = ({
   );
 };
 
-/** Why Understand shows the overview instead of a tour, in one line. */
-export const NoTourLine = ({
-  children,
-  busy,
-}: {
-  readonly children: ReactNode;
-  readonly busy?: boolean;
-}) => (
-  <p
-    data-slot="no-tour"
-    {...(busy ? { role: "status" } : {})}
-    className="flex items-center gap-2 text-ui text-muted-foreground"
-  >
-    <SparklesIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
-    {children}
-  </p>
-);
-
 /** The landing label's anchor, which Open in code scrolls to. */
 export const TOUR_LANDING = "tour-landing";
 

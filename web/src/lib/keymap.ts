@@ -76,7 +76,12 @@ export const KEYMAP: readonly Shortcut[] = [
     scope: "diff",
   },
   { id: "toggleSplit", chords: [{ key: "u" }], action: "Unified or split diff", scope: "diff" },
-  { id: "toggleLayout", chords: [{ key: "v" }], action: "Code or overview", scope: "global" },
+  {
+    id: "toggleLayout",
+    chords: [{ key: "v" }],
+    action: "Code or overview or tour",
+    scope: "global",
+  },
   {
     id: "moveFile",
     chords: [{ key: "ArrowLeft" }, { key: "ArrowRight" }, { key: "ArrowUp" }, { key: "ArrowDown" }],

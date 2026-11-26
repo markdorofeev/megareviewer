@@ -18,7 +18,7 @@ const openReview = async (page: Page, url: string, title: string) => {
 
 const layout = (page: Page) => page.locator("[data-slot=review-page]");
 
-test("with the Tour switch off, a run asks for no tour and the layout is Overview", async ({
+test("with the Tour switch off, a run asks for no tour and there's no Tour layout", async ({
   page,
 }) => {
   await page.addInitScript(() => window.localStorage.setItem("megareviewer:tour", "false"));
@@ -31,9 +31,9 @@ test("with the Tour switch off, a run asks for no tour and the layout is Overvie
     "aria-checked",
     "false",
   );
-  await expect(
-    page.getByRole("group", { name: "Layout" }).getByRole("button", { name: "Overview" }),
-  ).toBeVisible();
+  const layouts = page.getByRole("group", { name: "Layout" });
+  await expect(layouts.getByRole("button", { name: "Overview" })).toBeVisible();
+  await expect(layouts.getByRole("button", { name: "Tour" })).toHaveCount(0);
 });
 
 test("scrolling the tour moves its steps by what was scrolled, under a compact strip", async ({
@@ -79,7 +79,7 @@ for (const theme of ["light", "dark"] as const) {
 
     // The brief's link opens the tour.
     await page.getByRole("button", { name: "Tour · 3 steps" }).click();
-    await expect(layout(page)).toHaveAttribute("data-layout", "overview");
+    await expect(layout(page)).toHaveAttribute("data-layout", "tour");
     const steps = page.getByRole("region", { name: "Tour steps" });
     await expect(steps.getByRole("heading", { level: 2 })).toHaveCount(4);
 
@@ -123,7 +123,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("[data-point-mark=step]").first()).toBeVisible();
     await expect(page.getByLabel("Changes").getByText("Why here?")).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(layout(page)).toHaveAttribute("data-layout", "overview");
+    await expect(layout(page)).toHaveAttribute("data-layout", "tour");
     await expect(page.locator(":focus")).toContainText("Step 2:");
 
     await page.getByRole("button", { name: /^Publish review…/ }).click();
