@@ -107,6 +107,7 @@ import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
 import { Rail } from "./Rail.tsx";
 import { RemoveModelRun } from "./RemoveModelRun.tsx";
+import { RepositoryStatus } from "./RepositoryStatus.tsx";
 import { RerunModel } from "./RerunModel.tsx";
 import { ReviewBar } from "./ReviewBar.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
@@ -251,80 +252,6 @@ const PAGE_SHORTCUTS: readonly ShortcutId[] = [
   "close",
   "help",
 ];
-const NoteCode = ({ children }: { readonly children: ReactNode }) => (
-  <code className="rounded-sm bg-muted px-1 font-mono text-code-compact">{children}</code>
-);
-
-/** A folder by `~` when it's in the home folder, which is known while it's searched. */
-const shortFolder = (dir: string, home: string | null): string =>
-  home !== null && dir.startsWith(`${home}/`) ? `~${dir.slice(home.length)}` : dir;
-
-/** Why callers outside the pull request aren't shown, or aren't yet, when no checkout was read. */
-const CheckoutNote = ({
-  analysis,
-  searched,
-}: {
-  readonly analysis: Analysis;
-  /** The folder searched for clones, null when that's off; undefined until the status is read. */
-  readonly searched: string | null | undefined;
-}) => {
-  const { checkout, checkoutDir, checkoutError, pullRequest } = analysis;
-  if (checkout === "read" || pullRequest === null) return null;
-  const { ref, headSha } = pullRequest;
-  if (checkout === "downloading") {
-    return (
-      <p data-slot="checkout-note" className="text-muted-foreground">
-        Downloading {ref.repo.owner}/{ref.repo.repo} to find the code that calls what this pull
-        request changes. It shows on the changes when the download ends.
-      </p>
-    );
-  }
-  const folder =
-    checkoutDir === null ? "it" : <NoteCode>{shortFolder(checkoutDir, searched ?? null)}</NoteCode>;
-  return (
-    <p data-slot="checkout-note" className="text-muted-foreground">
-      Code outside the pull request that calls what it changes isn't shown:{" "}
-      {checkout === "download-failed" ? (
-        <>
-          the repository couldn't be downloaded. {checkoutError} Open the pull request again to try
-          again
-          {checkoutDir !== null && (
-            <>
-              , or run <NoteCode>git fetch</NoteCode> in {folder} first
-            </>
-          )}
-          .
-        </>
-      ) : checkout === "missing-commit" ? (
-        <>
-          the clone on this machine doesn't have the head commit{" "}
-          <NoteCode>{headSha.slice(0, 7)}</NoteCode>. Run <NoteCode>git fetch</NoteCode> in {folder}
-          {ref.repo.host === "github" && (
-            <>
-              , or <NoteCode>git fetch origin pull/{ref.number}/head</NoteCode> for a pull request
-              from a fork
-            </>
-          )}
-          , then open the pull request again.
-        </>
-      ) : (
-        <>
-          megareviewer found no clone of {ref.repo.owner}/{ref.repo.repo} on this machine.{" "}
-          {searched === null && (
-            <>
-              It didn't look in your home folder, because it was started with{" "}
-              <NoteCode>--no-search</NoteCode>.{" "}
-            </>
-          )}
-          {typeof searched === "string" && "It looked in your home folder. "}
-          Start it in a clone, or pass <NoteCode>--checkout &lt;dir&gt;</NoteCode>, then open the
-          pull request again.
-        </>
-      )}
-    </p>
-  );
-};
-
 const NO_UNCHANGED: readonly UnchangedCallers[] = [];
 
 /**
@@ -1467,6 +1394,13 @@ const Review = ({
     >
       <ReviewHeader
         view={view}
+        repository={
+          <RepositoryStatus
+            analysis={analysis}
+            searched={status?.cloneSearchFolder}
+            copies={status?.downloadFolder}
+          />
+        }
         intent={
           <IntentLine
             analysis={live}
@@ -1951,7 +1885,6 @@ const Review = ({
               />
             )
           )}
-          <CheckoutNote analysis={analysis} searched={status?.cloneSearchFolder} />
         </Dialog>
       )}
       <p className="flex items-center gap-1.5 text-caption text-muted-foreground">

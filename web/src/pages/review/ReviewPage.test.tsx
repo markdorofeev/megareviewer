@@ -697,7 +697,7 @@ describe("the PR's standing in the header", () => {
 });
 
 describe("header", () => {
-  it("names the PR once: its number linked after the title, where it is, who wants to merge what and how much it changes", async () => {
+  it("names the PR once: its number linked after the title, where it is, how much of it was read, who wants to merge what and how much it changes", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-21T10:21:00Z"));
     renderReview();
     await loaded();
@@ -707,7 +707,7 @@ describe("header", () => {
     const byline = document.querySelector<HTMLElement>("[data-slot=pr-byline]");
     // No count of files, which the tree has, nor of threads, which the bar has.
     expect(byline?.textContent?.replace(/\s+/g, " ")).toBe(
-      "shop · Sam Rivera wants to merge shop-142-order-receipts → into main · updated 40m ago · +58 −1358 lines added, 13 removed",
+      "shop · Whole repository · Sam Rivera wants to merge shop-142-order-receipts → into main · updated 40m ago · +58 −1358 lines added, 13 removed",
     );
     expect(screen.queryByText(/\d threads/)).toBeNull();
   });
@@ -2609,31 +2609,63 @@ describe("outside the pull request", () => {
     );
   });
 
-  /** The page's status, with the folder searched for clones. */
-  const searching = (cloneSearchFolder: string | null) => (request: RecordedRequest) =>
-    request.url === "/api/status"
-      ? jsonResponse(200, { ...fixtureStatus, cloneSearchFolder })
-      : undefined;
+  /** The page's status, with the folder searched for clones and the one copies are kept in. */
+  const searching =
+    (
+      cloneSearchFolder: string | null,
+      downloadFolder: string | null = "/home/lee/.megareviewer/repos",
+    ) =>
+    (request: RecordedRequest) =>
+      request.url === "/api/status"
+        ? jsonResponse(200, { ...fixtureStatus, cloneSearchFolder, downloadFolder })
+        : undefined;
 
-  it("says in the details that no clone was found, and where it looked", async () => {
+  /** The byline's item, which says how much of the repository was read. */
+  const repositoryStatus = () => {
+    const item = document.querySelector("[data-slot=pr-byline] [data-slot=repository-status]");
+    if (!(item instanceof HTMLElement)) throw new Error("The byline has no repository status");
+    return item;
+  };
+
+  /** What the item's popover says, once it's open. */
+  const openRepository = async () => {
+    await userEvent.click(repositoryStatus());
+    return () => document.querySelector("[data-slot=checkout-note]")?.textContent;
+  };
+
+  it("says PR only when no clone was found, and where it looked", async () => {
     renderReview({ view: withCheckout("none"), respond: searching("/home/lee") });
     await loaded();
-    const details = await openDetails();
+    expect(repositoryStatus().textContent).toBe("PR only");
+    expect(repositoryStatus().dataset.reach).toBe("pull-request");
+    const note = await openRepository();
+    expect(screen.getByText("Only the pull request was read")).not.toBeNull();
     await waitFor(() =>
-      expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toBe(
+      expect(note()).toBe(
         "Code outside the pull request that calls what it changes isn't shown: megareviewer found no clone of acme/shop on this machine. It looked in your home folder. Start it in a clone, or pass --checkout <dir>, then open the pull request again.",
       ),
     );
     expect(document.querySelector("[data-slot=unchanged-uses]")).toBeNull();
   });
 
-  it("says in the details that the home folder isn't searched", async () => {
+  it("says that the home folder isn't searched", async () => {
     renderReview({ view: withCheckout("none"), respond: searching(null) });
     await loaded();
-    const details = await openDetails();
+    const note = await openRepository();
     await waitFor(() =>
-      expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toContain(
+      expect(note()).toContain(
         "megareviewer found no clone of acme/shop on this machine. It didn't look in your home folder, because it was started with --no-search. Start it in a clone",
+      ),
+    );
+  });
+
+  it("says that the repository isn't downloaded when that's off", async () => {
+    renderReview({ view: withCheckout("none"), respond: searching("/home/lee", null) });
+    await loaded();
+    const note = await openRepository();
+    await waitFor(() =>
+      expect(note()).toContain(
+        "It looked in your home folder. It didn't download it, because it was started with --no-download. Start it in a clone",
       ),
     );
   });
@@ -2644,7 +2676,7 @@ describe("outside the pull request", () => {
     [null, "/home/lee/code/shop", "/home/lee/code/shop"],
     ["/home/lee", null, "it"],
   ])(
-    "says in the details where to fetch the head commit (searching %s, clone in %s)",
+    "says where to fetch the head commit (searching %s, clone in %s)",
     async (searched, dir, shown) => {
       const view = withCheckout("missing-commit");
       renderReview({
@@ -2652,19 +2684,23 @@ describe("outside the pull request", () => {
         respond: searching(searched),
       });
       await loaded();
-      const details = await openDetails();
+      expect(repositoryStatus().textContent).toBe("PR only");
+      const note = await openRepository();
       await waitFor(() =>
-        expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toBe(
+        expect(note()).toBe(
           `Code outside the pull request that calls what it changes isn't shown: the clone on this machine doesn't have the head commit 9e8d7c6. Run git fetch in ${shown}, or git fetch origin pull/128/head for a pull request from a fork, then open the pull request again.`,
         ),
       );
     },
   );
 
-  it("says in the details that the repository is being downloaded", async () => {
+  it("says that the repository is being downloaded", async () => {
     renderReview({ view: withCheckout("downloading"), respond: searching("/home/lee") });
     await loaded();
-    expect((await openDetails()).querySelector("[data-slot=checkout-note]")?.textContent).toBe(
+    expect(repositoryStatus().textContent).toBe("Downloading repository…");
+    expect(repositoryStatus().dataset.reach).toBe("downloading");
+    const note = await openRepository();
+    expect(note()).toBe(
       "Downloading acme/shop to find the code that calls what this pull request changes. It shows on the changes when the download ends.",
     );
   });
@@ -2675,7 +2711,7 @@ describe("outside the pull request", () => {
       "/home/lee/code/shop",
       "Open the pull request again to try again, or run git fetch in ~/code/shop first.",
     ],
-  ])("says in the details why the download failed (clone in %s)", async (dir, fix) => {
+  ])("says why the download failed (clone in %s)", async (dir, fix) => {
     const view = withCheckout("download-failed");
     const checkoutError =
       "GitHub didn't let megareviewer download acme/shop. Check that the GitHub token can read this repository's contents.";
@@ -2684,9 +2720,10 @@ describe("outside the pull request", () => {
       respond: searching("/home/lee"),
     });
     await loaded();
-    const details = await openDetails();
+    expect(repositoryStatus().textContent).toBe("PR only");
+    const note = await openRepository();
     await waitFor(() =>
-      expect(details.querySelector("[data-slot=checkout-note]")?.textContent).toBe(
+      expect(note()).toBe(
         `Code outside the pull request that calls what it changes isn't shown: the repository couldn't be downloaded. ${checkoutError} ${fix}`,
       ),
     );
@@ -2705,10 +2742,48 @@ describe("outside the pull request", () => {
       await within(card).findByRole("button", { name: "Used unchanged in 1 place and 1 test" }),
     ).not.toBeNull();
     expect(document.querySelector("[data-landing]")?.getAttribute("data-landing")).toBe("done");
+    expect(repositoryStatus().textContent).toBe("Whole repository");
   });
 
-  it("says nothing about the checkout in the details when one was read", async () => {
-    renderReview();
+  it("says the whole repository was read, from which clone and what it found", async () => {
+    renderReview({ respond: searching("/home/lee") });
+    await loaded();
+    expect(repositoryStatus().textContent).toBe("Whole repository");
+    expect(repositoryStatus().dataset.reach).toBe("repository");
+    const note = await openRepository();
+    expect(screen.getByText("The whole repository was read")).not.toBeNull();
+    await waitFor(() =>
+      expect(note()).toBe(
+        "megareviewer read acme/shop at 9e8d7c6, from your clone in ~/code/shop. It found 2 uses of what the pull request changes in code outside it, shown on the changes.",
+      ),
+    );
+  });
+
+  it("says the repository was read from megareviewer's own copy, and that nothing uses the change", async () => {
+    const view = withCheckout("read");
+    const checkoutDir = "/home/lee/.megareviewer/repos/github/acme/shop.git";
+    renderReview({
+      view: { ...view, analysis: { ...view.analysis, checkoutDir } },
+      respond: searching("/home/lee"),
+    });
+    await loaded();
+    const note = await openRepository();
+    await waitFor(() =>
+      expect(note()).toBe(
+        "megareviewer read acme/shop at 9e8d7c6, from its own copy in ~/.megareviewer/repos/github/acme/shop.git. No code outside the pull request uses what it changes.",
+      ),
+    );
+  });
+
+  it("says nothing of the repository while the code's stages run", async () => {
+    const view = withCheckout("none");
+    renderReview({ view: { ...view, analysis: { ...view.analysis, status: "running" } } });
+    await screen.findByRole("heading", { level: 1 });
+    expect(document.querySelector("[data-slot=repository-status]")).toBeNull();
+  });
+
+  it("says nothing about the checkout in the details", async () => {
+    renderReview({ view: withCheckout("none") });
     await loaded();
     expect((await openDetails()).querySelector("[data-slot=checkout-note]")).toBeNull();
   });
