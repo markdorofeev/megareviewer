@@ -1,11 +1,13 @@
 import {
   type CallGraphHint,
   type CallSite,
+  type DefinitionCalls,
   type HunkPart,
   type PartId,
   partId,
   partsByHunk,
   renameCallSites,
+  renameDefinitionCalls,
   renameHints,
   type UnchangedCallers,
 } from "../diff/index.ts";
@@ -18,6 +20,7 @@ export interface JoinedParts {
   readonly callGraph: readonly CallGraphHint[];
   readonly unchangedCallers: readonly UnchangedCallers[];
   readonly callSites: readonly CallSite[];
+  readonly definitionCalls: readonly DefinitionCalls[];
 }
 
 /**
@@ -30,6 +33,7 @@ export const joinParts = (
   callGraph: readonly CallGraphHint[],
   unchangedCallers: readonly UnchangedCallers[] = [],
   callSites: readonly CallSite[] = [],
+  definitionCalls: readonly DefinitionCalls[] = [],
 ): JoinedParts => {
   const flowOf = new Map<PartId, number>();
   flows.forEach((flow, at) => {
@@ -78,5 +82,6 @@ export const joinParts = (
       partId: renamed(callers.partId),
     })),
     callSites: renameCallSites(callSites, renamed),
+    definitionCalls: renameDefinitionCalls(definitionCalls, renamed),
   };
 };

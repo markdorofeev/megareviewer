@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   CallGraphHint,
   CallSite,
+  DefinitionCalls,
   FileChange,
   FileLink,
   HunkPart,
@@ -212,6 +213,8 @@ export const Analysis = z.preprocess(
       callGraph: z.array(CallGraphHint).readonly(),
       /** Defaults for analyses stored before it existed. */
       callSites: z.array(CallSite).readonly().default([]),
+      /** What the overview's flow paths follow. Defaults for analyses stored before it existed. */
+      definitionCalls: z.array(DefinitionCalls).readonly().default([]),
       /** Changed files an import in another changed file reaches. */
       fileLinks: z.array(FileLink).readonly(),
       /** Paths whose first lines say a tool wrote them. Grouped and faded, never hidden. */

@@ -1,4 +1,12 @@
-import type { CallGraphHint, CallSite, DiffLine, FileChange, Hunk, HunkPart } from "./types.ts";
+import type {
+  CallGraphHint,
+  CallSite,
+  DefinitionCalls,
+  DiffLine,
+  FileChange,
+  Hunk,
+  HunkPart,
+} from "./types.ts";
 import { HunkId, PartId } from "./types.ts";
 
 /** A definition's name and new- or old-side lines, as `CodeParser.symbols` reports them. */
@@ -251,3 +259,14 @@ export const renameCallSites = (
     const toPartIds = [...new Set(site.toPartIds.map(rename))].filter((id) => id !== partId);
     return toPartIds.length === 0 ? [] : [{ ...site, partId, toPartIds }];
   });
+
+/** Definitions naming joined parts. Their calls stay, within a part too. */
+export const renameDefinitionCalls = (
+  definitions: readonly DefinitionCalls[],
+  rename: (id: PartId) => PartId,
+): DefinitionCalls[] =>
+  definitions.map((definition) => ({
+    ...definition,
+    partIds: [...new Set(definition.partIds.map(rename))],
+    requests: definition.requests.map((one) => ({ ...one, toPartId: rename(one.toPartId) })),
+  }));

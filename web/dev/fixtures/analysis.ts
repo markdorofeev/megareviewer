@@ -586,6 +586,7 @@ const analysis: Analysis = {
   parts,
   callGraph,
   callSites: callSitesOf(files, callGraph),
+  definitionCalls: [],
 
   fileLinks: [
     { from: "src/routes/orders.ts", to: "src/lib/money.ts" },

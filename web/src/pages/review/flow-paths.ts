@@ -1,11 +1,13 @@
 import {
+  type DefinitionCalls,
+  type FileChange,
   hunkIdOf,
   isTestFile,
   type PartId,
   partsByHunk,
   piecesOf,
 } from "../../../../src/domain/diff/index.ts";
-import type { Analysis } from "../../../../src/domain/review/index.ts";
+import type { Analysis, Flow } from "../../../../src/domain/review/index.ts";
 import { byTreePath, directoryOf, treePath } from "../../review/tree/paths.ts";
 import { uniqueLabels } from "./overview.ts";
 
@@ -86,7 +88,7 @@ export type FlowPathsInput = Pick<
   Analysis,
   "files" | "parts" | "proofs" | "callGraph" | "generated" | "flows"
 > &
-  Partial<Pick<Analysis, "unchangedCallers">>;
+  Partial<Pick<Analysis, "definitionCalls" | "unchangedCallers">>;
 
 const isDoc = (path: string): boolean => /\.(md|mdx|rst|adoc|txt)$/i.test(path);
 const withoutExtension = (label: string): string => {
@@ -96,14 +98,148 @@ const withoutExtension = (label: string): string => {
 };
 const unique = <T>(items: readonly T[]): T[] => [...new Set(items)];
 
+/** Names a label spells out before "and N more". */
+const MAX_NAMES = 3;
+
+const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
+const listed = (names: readonly string[]): string =>
+  names.length <= MAX_NAMES
+    ? names.join(", ")
+    : `${names.slice(0, MAX_NAMES).join(", ")} and ${names.length - MAX_NAMES} more`;
+
 /**
- * The pull request as flow paths. A path starts where a flow of the code does, at its entry points
- * or at the definition nothing in the pull request calls, and runs every changed file its calls
- * reach, so code several flows run is a stop on each. A file outside the pull request that uses a
- * changed definition starts a path of its own. Paths that run the same files and send the same
- * requests are one path with each one's label. Tests, docs, generated and mechanical files are
- * listed apart, and code no path runs is `unreached`: every changed file is in exactly one of them
- * or on a path.
+ * The changed definitions and what each runs. An analysis stored before they were kept has only the
+ * hints, a part to each definition; a part that holds no definition is one by itself.
+ */
+const definitionsOf = (analysis: FlowPathsInput): DefinitionCalls[] => {
+  const byHunk = partsByHunk(analysis.parts);
+  const ids = analysis.files.flatMap((file) => piecesOf(file, byHunk).map((piece) => piece.id));
+  const names = new Map(analysis.parts.map((part) => [part.id, part.definitions.join(", ")]));
+  const kept = analysis.definitionCalls ?? [];
+  if (kept.length > 0) {
+    const held = new Set(kept.flatMap((one) => one.partIds));
+    return [
+      ...kept,
+      ...ids
+        .filter((id) => !held.has(id))
+        .map((id) => ({ name: names.get(id) ?? "", partIds: [id], calls: [], requests: [] })),
+    ];
+  }
+  const place = new Map(ids.map((id, at) => [id, at]));
+  const hints = [...analysis.callGraph].sort((a, b) => a.line - b.line);
+  return ids.map((id) => {
+    const own = hints.filter((hint) => hint.fromPartId === id);
+    return {
+      name: names.get(id) ?? "",
+      partIds: [id],
+      calls: unique(
+        own.flatMap((hint) => (hint.use === "call" ? (place.get(hint.toPartId) ?? []) : [])),
+      ),
+      requests: own.flatMap(({ use, symbol, toPartId }) =>
+        use === "request" ? [{ symbol, toPartId }] : [],
+      ),
+    };
+  });
+};
+
+/** The definitions of the files that are code, by their place in the analysis's list. */
+const codeGraph = (analysis: FlowPathsInput, fileOf: ReadonlyMap<PartId, FileChange>) => {
+  const definitions = definitionsOf(analysis).map(({ name, partIds, calls, requests }) => ({
+    name,
+    partIds: partIds.filter((id) => fileOf.has(id)),
+    calls,
+    requests: requests.filter((request) => fileOf.has(request.toPartId)),
+  }));
+  const pathAt = (at: number): string | undefined => {
+    const [first] = definitions[at]?.partIds ?? [];
+    return first === undefined ? undefined : fileOf.get(first)?.path;
+  };
+  const calleesOf = (at: number): number[] =>
+    (definitions[at]?.calls ?? []).filter((to) => to !== at && pathAt(to) !== undefined);
+  const all = [...definitions.keys()].filter((at) => pathAt(at) !== undefined);
+  /** The definitions that run from `starts`, in the order calls reach them. */
+  const reach = (starts: readonly number[]): number[] => {
+    const seen = new Set<number>();
+    const visit = (at: number) => {
+      if (seen.has(at)) return;
+      seen.add(at);
+      for (const callee of calleesOf(at)) visit(callee);
+    };
+    for (const start of starts) visit(start);
+    return [...seen];
+  };
+  /** The files definitions are in. */
+  const pathsOf = (ats: readonly number[]) => unique(ats.flatMap((at) => pathAt(at) ?? []));
+  return { definitions, all, pathAt, calleesOf, reach, pathsOf };
+};
+
+/** A path before it's drawn: where it starts and the definitions it runs. */
+interface Walk {
+  readonly key: string;
+  readonly label: string;
+  /** Outside the pull request, the file it starts in. */
+  readonly from: string | null;
+  readonly runs: readonly number[];
+}
+
+/**
+ * The paths the pull request starts itself: at the flows' entries, then at each file's definitions
+ * that no changed code calls, those that run the most files first and only where no path yet runs
+ * every one, then in files that only call each other in a circle.
+ */
+const walksOf = (
+  flows: readonly Flow[],
+  graph: ReturnType<typeof codeGraph>,
+  files: readonly string[],
+): Walk[] => {
+  const { definitions, all, pathAt, calleesOf, reach, pathsOf } = graph;
+  const labels = uniqueLabels(files);
+  const walks: Walk[] = [];
+  const entered = new Set<number>();
+  for (const [at, flow] of flows.entries()) {
+    const starts = all.filter((one) =>
+      definitions[one]?.partIds.some((id) => flow.entries.includes(id)),
+    );
+    if (starts.length === 0) continue;
+    for (const start of starts) entered.add(start);
+    walks.push({ key: `flow:${at}`, label: flow.title, from: null, runs: reach(starts) });
+  }
+
+  const called = new Set(all.flatMap(calleesOf));
+  const walkFrom = (path: string, include: (at: number) => boolean): Walk[] => {
+    const starts = all.filter(
+      (at) => pathAt(at) === path && calleesOf(at).length > 0 && include(at),
+    );
+    if (starts.length === 0) return [];
+    const names = unique(starts.flatMap((at) => definitions[at]?.name || []));
+    const label =
+      names.length === 0 ? (labels.get(path) ?? path) : `${listed(names)} in ${basename(path)}`;
+    return [{ key: `file:${path}`, label, from: null, runs: reach(starts) }];
+  };
+  const candidates = files
+    .flatMap((path) => walkFrom(path, (at) => !called.has(at) && !entered.has(at)))
+    .sort((a, b) => pathsOf(b.runs).length - pathsOf(a.runs).length);
+  for (const one of candidates) {
+    const run = pathsOf(one.runs);
+    const known = walks.map((other) => pathsOf(other.runs));
+    if (!known.some((other) => run.every((path) => other.includes(path)))) walks.push(one);
+  }
+  for (const path of files) {
+    if (walks.some((one) => pathsOf(one.runs).includes(path))) continue;
+    walks.push(...walkFrom(path, () => true));
+  }
+  return walks;
+};
+
+/**
+ * The pull request as flow paths. A path starts at a flow's entry points, a route, a page or a
+ * command, or else at the definitions of a file that nothing in the pull request calls, and runs
+ * the definitions their calls reach: a file is a stop only where one of those is in it, so code
+ * several paths run is a stop on each. One that starts at no entry isn't drawn when another path
+ * runs every file on it. A file outside the pull request that uses a changed definition starts a
+ * path of its own. Paths that run the same files and send the same requests are one path with each
+ * one's label. Tests, docs, generated and mechanical files are listed apart, and code no path runs
+ * is `unreached`: every changed file is in exactly one of them or on a path.
  */
 export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
   const mechanical = new Set(analysis.proofs.flatMap((proof) => proof.hunkId ?? []));
@@ -132,7 +268,6 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
   });
 
   const byHunk = partsByHunk(analysis.parts);
-  const definitions = new Map(analysis.parts.map((part) => [part.id, part.definitions]));
   const fileOf = new Map(
     code.flatMap((file) =>
       piecesOf(file, byHunk)
@@ -142,50 +277,18 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
   );
   const labels = uniqueLabels(code.map((file) => file.path));
 
-  // Calls in the order they're made, and requests to the pull request's routes.
-  const callees = new Map<PartId, PartId[]>();
-  const requests = new Map<PartId, PathEnd[]>();
-  for (const hint of [...analysis.callGraph].sort((a, b) => a.line - b.line)) {
-    const { fromPartId: from, toPartId: to } = hint;
-    if (from === to || !fileOf.has(from) || !fileOf.has(to)) continue;
-    if (hint.use === "request") {
-      requests.set(from, [...(requests.get(from) ?? []), { label: hint.symbol, partId: to }]);
-    } else if (hint.use === "call" && !callees.get(from)?.includes(to)) {
-      callees.set(from, [...(callees.get(from) ?? []), to]);
-    }
-  }
-  const reach = (starts: readonly PartId[]): PartId[] => {
-    const seen = new Set<PartId>();
-    const visit = (id: PartId) => {
-      if (seen.has(id)) return;
-      seen.add(id);
-      for (const callee of callees.get(id) ?? []) visit(callee);
-    };
-    for (const start of starts) visit(start);
-    return [...seen];
-  };
-
-  interface Walked {
-    readonly key: string;
-    readonly label: string;
-    readonly from: string | null;
-    readonly partIds: readonly PartId[];
-  }
-  const walked: Walked[] = [];
-  for (const [at, flow] of (analysis.flows ?? []).entries()) {
-    // A shared section is code its flows run: it's a stop on their paths, not a path.
-    if (flow.kind !== "flow" || flow.title.startsWith("Shared:")) continue;
-    // Its entries first, then what the flow reads, each followed by the code its calls reach.
-    const starts = unique([...flow.entries, ...flow.partIds]).filter((id) => fileOf.has(id));
-    if (starts.length === 0) continue;
-    walked.push({ key: `flow:${at}`, label: flow.title, from: null, partIds: reach(starts) });
-  }
-  const outside = new Map<string, PartId[]>();
-  for (const { partId, uses } of analysis.unchangedCallers ?? []) {
-    if (!fileOf.has(partId)) continue;
+  const graph = codeGraph(analysis, fileOf);
+  const { definitions, all, pathAt, calleesOf, reach, pathsOf } = graph;
+  const inTreeOrder = code.map((file) => file.path).sort(byTreePath);
+  const walked = walksOf(analysis.flows ?? [], graph, inTreeOrder);
+  const outside = new Map<string, number[]>();
+  for (const { partId, symbol, uses } of analysis.unchangedCallers ?? []) {
+    const changing = all.filter((at) => definitions[at]?.partIds.includes(partId));
+    const named = changing.filter((at) => definitions[at]?.name === symbol);
+    const used = named.length > 0 ? named : changing;
     for (const use of uses) {
-      if (isTestFile(use.path)) continue;
-      outside.set(use.path, unique([...(outside.get(use.path) ?? []), partId]));
+      if (isTestFile(use.path) || used.length === 0) continue;
+      outside.set(use.path, unique([...(outside.get(use.path) ?? []), ...used]));
     }
   }
   const outsideLabels = uniqueLabels([...outside.keys()]);
@@ -194,37 +297,37 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
       key: `outside:${path}`,
       label: outsideLabels.get(path) ?? path,
       from: path,
-      partIds: reach(starts),
+      runs: reach(starts),
     });
   }
 
-  const pathsOf = (ids: readonly PartId[]) =>
-    unique(ids.flatMap((id) => fileOf.get(id)?.path ?? []));
   // How many flows and outside files run each file, before the ones alike become one path.
   const shared = new Map<string, number>();
   for (const one of walked) {
-    for (const path of pathsOf(one.partIds)) shared.set(path, (shared.get(path) ?? 0) + 1);
+    for (const path of pathsOf(one.runs)) shared.set(path, (shared.get(path) ?? 0) + 1);
   }
-  const stop = (path: string, partIds: readonly PartId[]): Stop => ({
+  const stop = (path: string, ats: readonly number[]): Stop => ({
     path,
     label: withoutExtension(labels.get(path) ?? path),
     layer: directoryOf(path),
     status: code.find((file) => file.path === path)?.status === "added" ? "new" : "changed",
-    names: unique(partIds.flatMap((id) => definitions.get(id) ?? [])),
-    partIds,
+    names: unique(ats.flatMap((at) => definitions[at]?.name || [])),
+    partIds: unique(ats.flatMap((at) => definitions[at]?.partIds ?? [])),
     shared: shared.get(path) ?? 0,
   });
   const merged = new Map<string, FlowPath>();
   for (const one of walked) {
-    const stops = pathsOf(one.partIds).map((path) =>
+    const stops = pathsOf(one.runs).map((path) =>
       stop(
         path,
-        one.partIds.filter((id) => fileOf.get(id)?.path === path),
+        one.runs.filter((at) => pathAt(at) === path),
       ),
     );
     const ends = [
       ...new Map(
-        one.partIds.flatMap((id) => requests.get(id) ?? []).map((end) => [end.label, end]),
+        one.runs
+          .flatMap((at) => definitions[at]?.requests ?? [])
+          .map(({ symbol, toPartId }) => [symbol, { label: symbol, partId: toPartId }]),
       ).values(),
     ];
     const same = [
@@ -245,24 +348,20 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
   }
   const paths = [...merged.values()];
 
-  const reached = new Set(walked.flatMap((one) => one.partIds));
   const calls = new Map<string, { from: string; to: string }>();
-  for (const from of reached) {
-    for (const to of callees.get(from) ?? []) {
-      const [a, b] = [fileOf.get(from)?.path, fileOf.get(to)?.path];
+  for (const from of new Set(walked.flatMap((one) => one.runs))) {
+    for (const to of calleesOf(from)) {
+      const [a, b] = [pathAt(from), pathAt(to)];
       if (a !== undefined && b !== undefined && a !== b)
         calls.set(`${a}\u0000${b}`, { from: a, to: b });
     }
   }
-  const unreached = code
-    .filter((file) => !shared.has(file.path))
-    .sort((a, b) => byTreePath(a.path, b.path))
-    .map((file) =>
+  const unreached = inTreeOrder
+    .filter((path) => !shared.has(path))
+    .map((path) =>
       stop(
-        file.path,
-        piecesOf(file, byHunk)
-          .map((piece) => piece.id)
-          .filter((id) => fileOf.has(id)),
+        path,
+        all.filter((at) => pathAt(at) === path),
       ),
     );
 

@@ -125,6 +125,7 @@ const newAnalysis = (
   parts: [],
   callGraph: [],
   callSites: [],
+  definitionCalls: [],
   fileLinks: [],
   generated: [],
   checkout: checkout.status,

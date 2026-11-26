@@ -272,7 +272,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual([...Array(6).fill("done"), "skipped"]);
-    expect(analysis.key.pipelineVersion).toBe("20");
+    expect(analysis.key.pipelineVersion).toBe("21");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
@@ -283,6 +283,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.proofs).toEqual([]);
     expect(analysis.callGraph.map((hint) => hint.symbol)).toContain("renderReceipt");
     expect(analysis.callSites.map((site) => site.symbol)).toContain("renderReceipt");
+    expect(analysis.definitionCalls.map((one) => one.name)).toContain("renderReceipt");
     expect(analysis.fileLinks).toEqual([
       { from: "src/routes/orders.ts", to: "src/services/receipts.ts" },
     ]);
@@ -1295,7 +1296,7 @@ describe("without the model", () => {
       decisions: "skipped",
       steps: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("20");
+    expect(analysis.key.pipelineVersion).toBe("21");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
@@ -1323,6 +1324,10 @@ describe("without the model", () => {
       placesEveryPartOnce(analysis);
       for (const hint of analysis.callGraph) {
         expect([known.has(hint.fromPartId), known.has(hint.toPartId)]).toEqual([true, true]);
+      }
+      for (const { partIds, calls } of analysis.definitionCalls) {
+        expect(partIds.filter((id) => !known.has(id))).toEqual([]);
+        expect(calls.filter((at) => analysis.definitionCalls[at] === undefined)).toEqual([]);
       }
       for (const site of analysis.callSites) {
         expect([site.partId, ...site.toPartIds].filter((id) => !known.has(id))).toEqual([]);
@@ -1384,7 +1389,7 @@ describe("with a local checkout", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
       expect(analysis.checkoutDir).toBe("/src/shop");
-      expect(analysis.key.pipelineVersion).toBe("20");
+      expect(analysis.key.pipelineVersion).toBe("21");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1470,7 +1475,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
       expect(analysis.checkoutDir).toBe(namesRepo ? "/src/shop" : null);
-      expect(analysis.key.pipelineVersion).toBe("20");
+      expect(analysis.key.pipelineVersion).toBe("21");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },
@@ -1717,7 +1722,7 @@ describe("callers brought to a complete analysis", () => {
     const storedAs = async (changes: Partial<Analysis>) => {
       const ready = setup({ modelEnabled: false });
       const made = await setup({ modelEnabled: false }).analyze();
-      const key = { ...made.key, pipelineVersion: "20+checkout" };
+      const key = { ...made.key, pipelineVersion: "21+checkout" };
       const old: Analysis = { ...made, id: analysisId(key), key, ...changes };
       await ready.store.saveAnalysis(old);
       return { ...ready, made, old };

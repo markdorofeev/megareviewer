@@ -4,7 +4,7 @@ import type { AnalysisKey, PipelineVersion, PullRequest } from "../../domain/rev
  * Bump whenever pipeline logic changes what an analysis contains. Whether a checkout was read isn't
  * in it, nor is the model: both add to the analysis.
  */
-export const PIPELINE_VERSION: PipelineVersion = "20";
+export const PIPELINE_VERSION: PipelineVersion = "21";
 
 /** Analyses stored while the key said a checkout was read have this after the version. */
 const CHECKOUT_READ = "+checkout";

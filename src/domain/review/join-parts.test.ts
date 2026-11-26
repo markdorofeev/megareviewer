@@ -85,4 +85,32 @@ describe("joinParts", () => {
     );
     expect(joined.callSites).toEqual([site(b, p(a, 1), p(a, 2)), site(p(a, 1), p(a, 2))]);
   });
+
+  it("renames the parts definitions are in, keeping their calls within a joined part", () => {
+    const joined = joinParts(
+      flows([p(a, 1), p(a, 2)], [p(a, 3), p(a, 4)]),
+      candidates,
+      [],
+      [],
+      [],
+      [
+        { name: "f1", partIds: [p(a, 1), p(a, 2)], calls: [1], requests: [] },
+        {
+          name: "f2",
+          partIds: [p(a, 2)],
+          calls: [],
+          requests: [{ symbol: "POST /orders", toPartId: p(a, 4) }],
+        },
+      ],
+    );
+    expect(joined.definitionCalls).toEqual([
+      { name: "f1", partIds: [p(a, 1)], calls: [1], requests: [] },
+      {
+        name: "f2",
+        partIds: [p(a, 1)],
+        calls: [],
+        requests: [{ symbol: "POST /orders", toPartId: p(a, 2) }],
+      },
+    ]);
+  });
 });

@@ -57,6 +57,7 @@ describe("measure-pr", () => {
     expect(found.callHints).toBe(measured.callGraph.filter((hint) => hint.use === "call").length);
     expect(found.callHints).toBeGreaterThan(0);
     expect(found.callSites).toBeGreaterThan(0);
+    expect(found.definitionCalls).toBeGreaterThan(0);
     const printed = report(measured);
     expect(printed).toContain("Flows\n  1. [flow] ");
     expect(printed).toContain(`  callHints: ${found.callHints}`);

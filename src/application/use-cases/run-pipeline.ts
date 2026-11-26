@@ -166,6 +166,7 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
     parts,
     callGraph,
     callSites,
+    definitionCalls,
     required,
     definitions,
     generated,
@@ -197,7 +198,14 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
     definitions,
     generated,
   });
-  const joined = joinParts(skeleton, parts, callGraph, unchangedCallers, callSites);
+  const joined = joinParts(
+    skeleton,
+    parts,
+    callGraph,
+    unchangedCallers,
+    callSites,
+    definitionCalls,
+  );
   return { prepared, proofRisk, ruleRisk, skeleton, joined };
 };
 

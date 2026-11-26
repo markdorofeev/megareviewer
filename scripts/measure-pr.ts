@@ -7,6 +7,7 @@ import { prep } from "../src/application/use-cases/prep.ts";
 import {
   type CallGraphHint,
   type CallSite,
+  type DefinitionCalls,
   type FileChange,
   type FileLink,
   type HunkPart,
@@ -39,6 +40,7 @@ export interface Measured {
   readonly risk: readonly RiskAssessment[];
   readonly callGraph: readonly CallGraphHint[];
   readonly callSites: readonly CallSite[];
+  readonly definitionCalls: readonly DefinitionCalls[];
   readonly fileLinks: readonly FileLink[];
   readonly generated: readonly string[];
   readonly proofs: readonly MechanicalProof[];
@@ -115,12 +117,14 @@ export const measure = async (
     prepared.callGraph,
     prepared.unchangedCallers,
     prepared.callSites,
+    prepared.definitionCalls,
   );
   return {
     files,
     risk,
     callGraph: joined.callGraph,
     callSites: joined.callSites,
+    definitionCalls: joined.definitionCalls,
     fileLinks: prepared.fileLinks,
     generated: [...prepared.generated].sort(),
     proofs: prepared.proofs,
@@ -173,6 +177,7 @@ export const counts = (measured: Measured) => {
     ).size,
     requestHints: callGraph.filter((hint) => hint.use === "request").length,
     callSites: measured.callSites.length,
+    definitionCalls: measured.definitionCalls.reduce((sum, one) => sum + one.calls.length, 0),
   };
 };
 

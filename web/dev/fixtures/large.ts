@@ -111,7 +111,7 @@ export const syntheticAnalysisView = ({
   const key: AnalysisKey = {
     ref: pullRequest.ref,
     headSha: pullRequest.headSha,
-    pipelineVersion: "20",
+    pipelineVersion: "21",
   };
 
   const risk: RiskAssessment[] = files.flatMap((file, at) =>
@@ -170,6 +170,7 @@ export const syntheticAnalysisView = ({
       .slice(0, -1)
       .map((file, at) => ({ from: file.path, to: files[at + 1]?.path ?? file.path })),
     callSites: callSitesOf(files, callGraph),
+    definitionCalls: [],
     generated: [],
     checkout: "none",
     unchangedCallers: [],

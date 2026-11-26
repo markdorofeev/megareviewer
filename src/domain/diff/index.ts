@@ -4,6 +4,7 @@ export {
   changedDefinitionNames,
   type FileSymbols,
 } from "./call-graph.ts";
+export { buildDefinitionCalls } from "./definition-calls.ts";
 export { FileLink, fileLinks } from "./file-links.ts";
 export { findFormattingProofs } from "./formatting.ts";
 export { hunkHasLine, hunkId } from "./hunk-id.ts";
@@ -19,6 +20,7 @@ export {
   partsByHunk,
   piecesOf,
   renameCallSites,
+  renameDefinitionCalls,
   renameHints,
   splitByDefinition,
   splitHunks,
@@ -37,6 +39,7 @@ export { isTestFile } from "./test-files.ts";
 export {
   CallGraphHint,
   CallSite,
+  DefinitionCalls,
   DiffLine,
   FileChange,
   FileStatus,

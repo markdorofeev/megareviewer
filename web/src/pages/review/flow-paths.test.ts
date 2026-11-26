@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type CallGraphHint,
+  type DefinitionCalls,
   type FileChange,
   HunkId,
   type UnchangedCallers,
@@ -131,7 +132,7 @@ describe("flowPaths", () => {
     expect(filesOf(paths).sort()).toEqual(shop.map((one) => one.path).sort());
   });
 
-  it("lists changed code no flow runs as unreached", () => {
+  it("lists changed code no path runs as unreached", () => {
     const paths = flowPaths(input(shop, { flows: [flow("POST /orders", [1], [1])] }));
     expect(shape(paths)).toEqual([["POST /orders", "OrderController"]]);
     expect(paths.unreached.map((stop) => stop.label)).toEqual(["OrderRepository", "OrderService"]);
@@ -154,6 +155,87 @@ describe("flowPaths", () => {
       ["GET /orders/{id}"],
     ]);
     expect(paths.unreached).toEqual([]);
+  });
+
+  // A recorder the pull request adds, one part: one method answers a question, another writes a
+  // profile. The encoder asks the question.
+  const encoder = file("src/code/Encoder.java", [1]);
+  const recorder = file("src/pgo/Recorder.java", [2], { status: "added" });
+  const writer = file("src/pgo/Writer.java", [3], { status: "added" });
+  const feature = file("src/hosted/Feature.java", [4], { status: "added" });
+  const defines = (name: string, n: number, calls: readonly number[] = []): DefinitionCalls => ({
+    name,
+    partIds: [h(n)],
+    calls,
+    requests: [],
+  });
+  const profiling = [
+    defines("encode", 1, [1]),
+    defines("needsSignatures", 2),
+    defines("dump", 2, [3]),
+    defines("write", 3),
+    defines("enable", 4, [1, 5]),
+    defines("register", 4, [2]),
+  ];
+
+  it("reaches the method a call names and what that calls, not the rest of its class", () => {
+    const paths = flowPaths(
+      input([encoder, recorder, writer], { definitionCalls: profiling.slice(0, 4) }),
+    );
+    expect(shape(paths)).toEqual([
+      ["encode in Encoder.java", "Encoder", "Recorder"],
+      ["dump in Recorder.java", "Recorder", "Writer"],
+    ]);
+    expect(paths.paths[0]?.stops[1]?.names).toEqual(["needsSignatures"]);
+    expect(paths.unreached).toEqual([]);
+  });
+
+  it("starts a path at a file's definitions nothing in the pull request calls", () => {
+    const paths = flowPaths(
+      input([encoder, recorder, writer, feature], { definitionCalls: profiling }),
+    );
+    // A path that runs no file another doesn't is drawn once: Recorder's own is on Feature's.
+    expect(shape(paths)).toEqual([
+      ["enable in Feature.java", "Feature", "Recorder", "Writer"],
+      ["encode in Encoder.java", "Encoder", "Recorder"],
+    ]);
+  });
+
+  it("names at most three of the definitions a path starts at", () => {
+    const starts = ["a", "b", "c", "d"].map((name) => defines(name, 4, [4]));
+    const paths = flowPaths(
+      input([feature, writer], { definitionCalls: [...starts, defines("write", 3)] }),
+    );
+    expect(shape(paths)).toEqual([["a, b, c and 1 more in Feature.java", "Feature", "Writer"]]);
+  });
+
+  it("starts a path in a circle of calls, which nothing outside it calls", () => {
+    const paths = flowPaths(
+      input([recorder, writer], {
+        definitionCalls: [defines("record", 2, [1]), defines("write", 3, [0])],
+      }),
+    );
+    expect(shape(paths)).toEqual([["record in Recorder.java", "Recorder", "Writer"]]);
+  });
+
+  it("starts where the code outside any definition calls, and names the file", () => {
+    const paths = flowPaths(
+      input([encoder, writer], { definitionCalls: [defines("", 1, [1]), defines("write", 3)] }),
+    );
+    expect(shape(paths)).toEqual([["Encoder.java", "Encoder", "Writer"]]);
+  });
+
+  it("takes a part no definition is in as one by itself", () => {
+    const paths = flowPaths(
+      input([encoder, recorder, writer], {
+        definitionCalls: profiling.slice(0, 2),
+        flows: [flow("Command: main", [3], [3])],
+      }),
+    );
+    expect(shape(paths)).toEqual([
+      ["Command: main", "Writer"],
+      ["encode in Encoder.java", "Encoder", "Recorder"],
+    ]);
   });
 
   it("joins the paths that run the same files into one, with each label", () => {
@@ -193,13 +275,10 @@ describe("flowPaths", () => {
     const paths = flowPaths(
       input(shop, { callGraph: calls, flows: [], unchangedCallers: callers }),
     );
-    expect(paths.paths).toHaveLength(1);
-    expect(paths.paths[0]).toMatchObject({
-      labels: ["RefundJob.java"],
-      inPullRequest: false,
-      outside: ["src/main/java/shop/jobs/RefundJob.java"],
-    });
-    expect(shape(paths)).toEqual([["RefundJob.java", "OrderService", "OrderRepository"]]);
+    expect(paths.paths.filter((path) => !path.inPullRequest)).toMatchObject([
+      { labels: ["RefundJob.java"], outside: ["src/main/java/shop/jobs/RefundJob.java"] },
+    ]);
+    expect(shape(paths)).toContainEqual(["RefundJob.java", "OrderService", "OrderRepository"]);
   });
 
   it("ends a path in the requests it sends, without following them", () => {
