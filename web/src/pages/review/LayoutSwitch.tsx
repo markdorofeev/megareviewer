@@ -5,8 +5,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import type { Layout } from "./model.ts";
 
 /**
- * The code or the overview, the tour's Understand when the tour is on, at the start of the bar so
- * it's in reach wherever the reader is. Its words go below 1280px, where the bar needs the room,
+ * The code or the overview, which shows the tour when it's on, at the start of the bar so it's in
+ * reach wherever the reader is. Its words go below 1280px, where the bar needs the room,
  * and stay its accessible names.
  */
 export const LayoutSwitch = ({
@@ -15,15 +15,13 @@ export const LayoutSwitch = ({
   onChange,
 }: {
   readonly layout: Layout;
-  /** The second layout is Understand. */
+  /** The overview shows the tour, with its icon. */
   readonly tour: boolean;
   readonly onChange: (layout: Layout) => void;
 }) => {
   const options: readonly { value: Layout; label: string; Icon: LucideIcon }[] = [
     { value: "map", label: "Code", Icon: CodeXmlIcon },
-    tour
-      ? { value: "overview", label: "Understand", Icon: RouteIcon }
-      : { value: "overview", label: "Overview", Icon: NetworkIcon },
+    { value: "overview", label: "Overview", Icon: tour ? RouteIcon : NetworkIcon },
   ];
   return (
     <fieldset data-slot="layout-switch" className="flex shrink-0 items-center gap-1">

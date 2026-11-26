@@ -1,11 +1,4 @@
-import {
-  ArrowLeftIcon,
-  ChevronRightIcon,
-  CodeIcon,
-  RouteIcon,
-  SparklesIcon,
-  XIcon,
-} from "lucide-react";
+import { ChevronRightIcon, CodeIcon, RouteIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Point, PointState } from "../../../../src/domain/review/index.ts";
 import { holdInPlace } from "../../lib/held-scroll.ts";
@@ -759,50 +752,3 @@ export const TourLanding = ({
     </span>
   </p>
 );
-
-/** The bar's second row in the map, once it was opened from a step: back to it, or put away. */
-/**
- * The bar's second row while the code was opened from the overview or the tour: back to it, as
- * the reader left it, or hidden.
- */
-export const BackRow = ({
-  name,
-  detail = null,
-  onBack,
-  onDismiss,
-}: {
-  /** What it goes back to, "Back to tour", which the button to hide it names too. */
-  readonly name: string;
-  /** Where there, "Step 2". */
-  readonly detail?: string | null;
-  readonly onBack: () => void;
-  readonly onDismiss: () => void;
-}) => (
-  <div
-    data-slot="bar-back"
-    className="sticky top-(--review-bar-row) z-20 -mt-px flex h-9 items-center gap-2 border-b bg-background"
-  >
-    <Button
-      variant="outline"
-      size="sm"
-      className="border-ai-soft-bd bg-ai-soft text-primary hover:bg-ai-soft-hover"
-      onClick={onBack}
-    >
-      <ArrowLeftIcon aria-hidden="true" />
-      {detail === null ? name : `${name} · ${detail}`}
-    </Button>
-    <Button variant="ghost" size="icon-sm" aria-label={`Hide ${name}`} onClick={onDismiss}>
-      <XIcon aria-hidden="true" />
-    </Button>
-  </div>
-);
-
-export const BackToTour = ({
-  step,
-  onBack,
-  onDismiss,
-}: {
-  readonly step: number;
-  readonly onBack: () => void;
-  readonly onDismiss: () => void;
-}) => <BackRow name="Back to tour" detail={`Step ${step}`} onBack={onBack} onDismiss={onDismiss} />;

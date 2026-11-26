@@ -4,7 +4,7 @@ import { pointsOf } from "../../../src/domain/review/index.ts";
 import { tourAnalysisView } from "../../dev/fixtures/index.ts";
 import { fileOverview } from "../pages/review/overview.ts";
 import { type TourExcerpt, tourOf } from "../pages/review/tour.ts";
-import { BackToTour, NoTourLine, TourLanding, Understand } from "../pages/review/Understand.tsx";
+import { NoTourLine, TourLanding, Understand } from "../pages/review/Understand.tsx";
 import { HunkCard, type PointLine } from "../review/index.ts";
 
 const analysis = tourAnalysisView.analysis;
@@ -59,8 +59,7 @@ export const TourDemo = () => {
         <NoTourLine busy>The tour is being written.</NoTourLine>
       </div>
       {step !== undefined && excerpt !== undefined && landed !== undefined && (
-        <div className="overflow-hidden rounded-lg border [--review-bar-row:0px]">
-          <BackToTour step={step.number} onBack={() => {}} onDismiss={() => {}} />
+        <div className="overflow-hidden rounded-lg border">
           <TourLanding step={step} excerpt={excerpt} />
           <HunkCard hunk={landed.hunk} file={landed.file} risk={null} inFile pointLines={marks} />
         </div>

@@ -119,7 +119,6 @@ for (const theme of ["light", "dark"] as const) {
     // Open in code lands on the lines, and Esc comes back to the step.
     await steps.getByRole("button", { name: /^Open src\/services\/receipts\.ts lines/ }).click();
     await expect(layout(page)).toHaveAttribute("data-layout", "map");
-    await expect(page.getByRole("button", { name: "Back to tour · Step 2" })).toBeVisible();
     await expect(page.locator("[data-slot=tour-landing]")).toContainText("Tour step 2");
     await expect(page.locator("[data-point-mark=step]").first()).toBeVisible();
     await expect(page.getByLabel("Changes").getByText("Why here?")).toBeVisible();

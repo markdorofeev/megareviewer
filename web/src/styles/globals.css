@@ -630,11 +630,6 @@
   scroll-padding-top: var(--review-bar-h);
 }
 
-/* The code opened from the overview or the tour: the bar's second row, which what sticks clears too. */
-:root:has([data-slot="bar-back"]) {
-  --review-bar-h: calc(var(--review-bar-row) + 2.25rem);
-}
-
 /* The hairline: a segment travelling along a faint track while Claude reads. */
 [data-slot="model-hairline"] {
   position: absolute;
