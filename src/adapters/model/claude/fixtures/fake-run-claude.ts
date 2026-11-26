@@ -4,11 +4,13 @@ import type { ClaudeRun, RunClaude, RunClaudeOptions } from "../run-claude.ts";
 import synthetic from "./claude-code/errors.synthetic.json" with { type: "json" };
 
 /**
- * A run's lines: a pass on small-feature, the suggestion call on the fixture history, or the
- * recording signed out. The findings and steps passes' are synthetic, in the recorded passes'
+ * A run's lines: a pass on small-feature, the suggestion call on the fixture history, a call with
+ * the read tool in /work, or the recording signed out. The findings and steps passes' are synthetic, in the recorded passes'
  * shape, until they're recorded.
  */
-export const recordedLines = (name: ModelPass | "suggest" | "not-signed-in"): string[] =>
+export const recordedLines = (
+  name: ModelPass | "suggest" | "not-signed-in" | "reads" | "read-outside",
+): string[] =>
   readFileSync(
     new URL(
       `./claude-code/${name === "findings" || name === "steps" ? `${name}.synthetic` : name}.jsonl`,
@@ -43,6 +45,7 @@ export const createFakeRunClaude = (
   const run: RunClaude = async (args, options = {}) => {
     const pass = ModelPass.safeParse(/^Task: (\w+)\./m.exec(options.stdin ?? "")?.[1]);
     const answered = answer(pass.success ? pass.data : null, args);
+    options.onStart?.("/work");
     let result: ClaudeRun;
     if (Array.isArray(answered)) {
       const lines: string[] = [];

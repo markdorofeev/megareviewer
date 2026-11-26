@@ -5,6 +5,7 @@ import type { OneCall } from "../shared/one-call.ts";
 import { passText } from "../shared/prompted-answer.ts";
 import { SYSTEM_PROMPT } from "../shared/prompts/system.ts";
 import { claudeModel, DEFAULT_MODEL, effortFor } from "./models.ts";
+import { READ_FILE } from "./read-file.ts";
 
 /** The model a run uses when none is chosen. */
 export const MODEL = DEFAULT_MODEL;
@@ -35,6 +36,8 @@ export const BETAS = [
 ] as const;
 
 type PassRequest = Anthropic.Beta.Messages.MessageCreateParamsStreaming;
+type ContentBlock = Anthropic.Beta.Messages.BetaContentBlock;
+type ToolResult = Anthropic.Beta.Messages.BetaToolResultBlockParam;
 
 /**
  * The request for one pass. Everything up to and including the PR data block is identical for
@@ -42,18 +45,23 @@ type PassRequest = Anthropic.Beta.Messages.MessageCreateParamsStreaming;
  *
  * It has no output format: the API refuses the passes' union as too large a grammar, and a format
  * per pass would miss that cache. Each pass's task ends with its own schema instead.
+ *
+ * A run with something to read sends the read tool on every pass: tools come before the PR in the
+ * prefix, so a pass without it would read nothing from the cache.
  */
 export const passRequest = (
   pass: ModelPass,
   renderedInput: string,
   message: string,
   model: string = MODEL,
+  reads = false,
 ): Omit<PassRequest, "stream"> => ({
   model,
   max_tokens: apiLimits(model).maxTokens,
   betas: [...BETAS],
   thinking: { type: "adaptive" },
   output_config: { effort: effortFor(claudeModel(model), BASE_EFFORT) },
+  ...(reads ? { tools: [READ_FILE] } : {}),
   system: SYSTEM_PROMPT,
   messages: [
     {
@@ -69,12 +77,56 @@ export const passRequest = (
   ],
 });
 
+/** One round of reading: what the model asked for, as it answered it, and what it was given. */
+export interface ReadRound {
+  readonly asked: readonly ContentBlock[];
+  readonly given: readonly ToolResult[];
+}
+
+/** The API takes four breakpoints a request, and the PR has one. */
+const CACHED_ROUNDS = 3;
+
+/**
+ * A pass's request after its rounds of reading, each a user message of every result, the last of
+ * which is cached so the next round doesn't pay for the file again. Only the latest rounds keep
+ * their breakpoints; what the others wrote is still read through them.
+ */
+export const afterReading = (
+  request: Omit<PassRequest, "stream">,
+  rounds: readonly ReadRound[],
+): Omit<PassRequest, "stream"> => ({
+  ...request,
+  messages: [
+    ...request.messages,
+    ...rounds.flatMap(({ asked, given }, round): PassRequest["messages"] => [
+      // Thinking goes back as it came: the API checks it against the conversation.
+      { role: "assistant", content: [...asked] },
+      {
+        role: "user",
+        content: given.map((result, index) =>
+          round >= rounds.length - CACHED_ROUNDS && index === given.length - 1
+            ? { ...result, cache_control: { type: "ephemeral" } }
+            : result,
+        ),
+      },
+    ]),
+  ],
+});
+
 /** The same request without what token counting doesn't take. */
 export const countTokensRequest = (
   request: Omit<PassRequest, "stream">,
 ): Anthropic.Beta.Messages.MessageCountTokensParams => {
-  const { model, betas, thinking, output_config, system, messages } = request;
-  return { model, betas, thinking, output_config, system, messages };
+  const { model, betas, thinking, output_config, tools, system, messages } = request;
+  return {
+    model,
+    betas,
+    thinking,
+    output_config,
+    ...(tools === undefined ? {} : { tools }),
+    system,
+    messages,
+  };
 };
 
 /**

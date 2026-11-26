@@ -337,7 +337,11 @@ export const runModel = async (
     }));
     await modelStages(
       deps,
-      { model: run.tour === true ? askingForTour(run.model) : run.model, advisor: run.advisor },
+      {
+        model: run.tour === true ? askingForTour(run.model) : run.model,
+        option: run.option,
+        advisor: run.advisor,
+      },
       run.tour === true,
       host,
       pullRequest,
@@ -357,7 +361,15 @@ const noProgress: OnFilesFetched = async () => {};
 
 const modelStages = async (
   deps: AppDeps,
-  { model, advisor }: { readonly model: AnalysisModel; readonly advisor: GuardrailAdvisor | null },
+  {
+    model,
+    option,
+    advisor,
+  }: {
+    readonly model: AnalysisModel;
+    readonly option: ModelRunOption;
+    readonly advisor: GuardrailAdvisor | null;
+  },
   tour: boolean,
   host: GitHost,
   pullRequest: PullRequest,
@@ -369,7 +381,10 @@ const modelStages = async (
   const { prepared } = await prepare(deps, collected.value, null);
   const { files } = collected.value;
 
-  const read = await runGuidance(deps, pullRequest);
+  const read = await runGuidance(deps, pullRequest, {
+    readsHarness: model.readsHarness,
+    name: `${option.modelName} through ${option.providerName}`,
+  });
   const { guidance } = read;
   await tracker.save((analysis) => ({
     guidance,
@@ -388,6 +403,7 @@ const modelStages = async (
       prepared,
       unchangedCallers: tracker.current.unchangedCallers,
       guidance: read.input,
+      harness: read.harness,
     }),
   );
   if (!fitted.ok) return tracker.failModel("intent", fitted.error);
@@ -416,18 +432,20 @@ const modelStages = async (
   // The intent pass writes the PR to the prompt cache; the steps pass starts once it's there, to
   // read it rather than write it again. A transport that can't tell starts it at the intent's end.
   const { promise: cached, resolve: cacheWritten } = Promise.withResolvers<void>();
-  const intentRun = runIntent(model, input, knownHunks, deps, cacheWritten).then(async (result) => {
-    cacheWritten();
-    await tracker.setStage(
-      "intent",
-      result.outcome.ok ? "done" : "failed",
-      ending((analysis) => ({
-        ...(result.outcome.ok ? { intent: result.outcome.value } : {}),
-        ...adding(result)(analysis),
-      })),
-    );
-    return result.outcome;
-  });
+  const intentRun = runIntent(model, input, knownHunks, deps, cacheWritten, guidance).then(
+    async (result) => {
+      cacheWritten();
+      await tracker.setStage(
+        "intent",
+        result.outcome.ok ? "done" : "failed",
+        ending((analysis) => ({
+          ...(result.outcome.ok ? { intent: result.outcome.value } : {}),
+          ...adding(result)(analysis),
+        })),
+      );
+      return result.outcome;
+    },
+  );
   // Findings read the intent's mismatches, to name the one a finding shows, so they wait for it.
   const findingsRun = intentRun.then(async (intent) => {
     const result = await runFindings(
@@ -465,6 +483,7 @@ const modelStages = async (
                 callGraph: prepared.callGraph,
               },
               deps,
+              guidance,
             ),
           )
           .then(async (result) => {

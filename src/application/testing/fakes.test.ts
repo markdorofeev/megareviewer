@@ -18,6 +18,8 @@ import {
   describeAnalysisStoreContract,
   describeFileCacheContract,
   describeGitHostContract,
+  describeHarnessSourceContract,
+  describeHarnessStoreContract,
   describeKnownCheckoutsContract,
   describeLocalCheckoutContract,
   describeLocalCheckoutsContract,
@@ -28,6 +30,7 @@ import {
   FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckout,
   FakeLocalCheckouts,
   FakeModelCatalog,
@@ -37,8 +40,10 @@ import {
   FakeTicketSource,
   FixedClock,
   fakeModelOption,
+  gitBlobHash,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   RecordingLogger,
@@ -113,6 +118,89 @@ describeTicketSourceContract("fake", {
 describeAnalysisStoreContract("in-memory", (clock) => new InMemoryAnalysisStore(clock));
 describeFileCacheContract("in-memory", () => new InMemoryFileCache());
 describePreferenceStoreContract("in-memory", () => new InMemoryPreferenceStore());
+describeHarnessStoreContract("in-memory", (clock) => new InMemoryHarnessStore(clock));
+
+const harnessRepo: RepoRef = { host: "github", owner: "acme", repo: "shop" };
+const harnessFiles = [
+  {
+    path: "CLAUDE.md",
+    content: "# Shop\n\n@docs/house-rules.md\n",
+    blob: "5b9e1baac9f3f69a1a4b342b7902abe1f5b8d66f",
+  },
+  {
+    path: "docs/house-rules.md",
+    content: "Naïve ✓\n",
+    blob: "40d9d769df381aca782cede3eb091065ae255470",
+  },
+];
+
+describe.each([
+  { lists: true, diffs: true },
+  { lists: true, diffs: false },
+  { lists: false, diffs: true },
+  { lists: false, diffs: false },
+])("a fake harness source that lists: $lists, and diffs: $diffs", ({ lists, diffs }) => {
+  const sha = "a".repeat(40);
+  const toSha = "b".repeat(40);
+  describeHarnessSourceContract("fake", () => ({
+    source: (scenario) => {
+      const source = new FakeHarnessSource({ lists, diffs });
+      source.setFiles(harnessRepo, sha, {
+        ...Object.fromEntries(harnessFiles.map(({ path, content }) => [path, content])),
+        "docs/logo.txt": { kind: "skipped", reason: "unreadable" },
+        "docs/old.md": "Moved\n",
+      });
+      source.setFiles(harnessRepo, toSha, {
+        ...Object.fromEntries(harnessFiles.map(({ path, content }) => [path, content])),
+        "docs/logo.txt": { kind: "skipped", reason: "unreadable" },
+        "docs/new.md": "Moved\n",
+        "AGENTS.md": "# Added\n",
+      });
+      if (scenario === "unauthorized") source.failAlways(unauthorized);
+      return source;
+    },
+    lists,
+    diffs,
+    repo: harnessRepo,
+    sha,
+    files: harnessFiles,
+    directory: "docs",
+    missingPath: "AGENTS.md",
+    skipped: { path: "docs/logo.txt", reason: "unreadable" },
+    change: diffs
+      ? { fromSha: sha, toSha, paths: ["AGENTS.md", "docs/new.md", "docs/old.md"] }
+      : null,
+  }));
+});
+
+describe("the fake harness source", () => {
+  it("hashes as git does, an empty file too", async () => {
+    expect(await gitBlobHash("")).toBe("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391");
+  });
+
+  it("counts what it's asked, fails as scripted, and waits while held", async () => {
+    const source = new FakeHarnessSource();
+    source.failNext("listFiles", network);
+    expect(await source.listFiles(harnessRepo, "sha")).toEqual(err(network));
+    expect(await source.listFiles(harnessRepo, "sha")).toEqual(ok(new Map()));
+
+    const release = source.hold();
+    let read = false;
+    const reading = source.readFiles(harnessRepo, "sha", ["a.md"]).then(() => {
+      read = true;
+    });
+    await Promise.resolve();
+    expect(read).toBe(false);
+    release();
+    await reading;
+
+    expect(source.calls).toEqual({
+      listFiles: ["sha", "sha"],
+      readFiles: [["a.md"]],
+      changedPaths: [],
+    });
+  });
+});
 
 const reviewedRepo: RepoRef = { host: "github", owner: "acme", repo: "shop" };
 const pastComment = (number: number, at: string, body: string): PastComment => ({

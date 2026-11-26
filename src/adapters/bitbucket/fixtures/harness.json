@@ -1,0 +1,225 @@
+[
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/bitbucket-upload-file/src/b467819f28a4ca3cfbbdb889bd1bc7ba6918522d/megareviewer-missing-file.txt"
+    },
+    "response": {
+      "status": 404,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\"type\":\"error\",\"error\":{\"message\":\"No such file or directory: megareviewer-missing-file.txt\"}}"
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/bitbucket-upload-file/src/b467819f28a4ca3cfbbdb889bd1bc7ba6918522d/README.md"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain"
+      },
+      "body": "# Bitbucket Pipe: bitbucket-upload-file\n\nUpload a file from Bitbucket Pipelines to [Bitbucket Downloads](https://confluence.atlassian.com/bitbucket/deploy-build-artifacts-to-bitbucket-downloads-872124574.html).\nSimple use cases include uploading an artifact, tar.gz file or storing generated test reports etc.\n\n\n## YAML Definition\n\nAdd the following snippet to the script section of your `bitbucket-pipelines.yml` file:\n\n```yaml\n- pipe: atlassian/bitbucket-upload-file:0.7.3\n  variables:\n    FILENAME: '<string>'\n    # BITBUCKET_USERNAME: \"<string>\" # Optional\n    # BITBUCKET_APP_PASSWORD: \"<string>\" # Optional\n    # BITBUCKET_ACCESS_TOKEN: '<string>' # Optional\n    # ACCOUNT: '<string>' # Optional\n    # REPOSITORY: '<string>' # Optional\n    # DEBUG: '<boolean>' # Optional\n```\n\n## Variables\n\n| Variable                   | Usage                                                                                                                                                                                                                                                       |\n|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|\n| FILENAME (*)               | Name of the local file to upload. Supports [glob patterns][glob patterns] \"\\*\". e.g. \\*.html. Limit max 10 files, if limit reached - build fails. Accepts files only from `BITBUCKET_CLONE_DIR` or any subfolders in this path.                             |\n| BITBUCKET_USERNAME (1)     | Bitbucket user that will be used to upload the file. Required unless `BITBUCKET_ACCESS_TOKEN` is used.                                                                                                                                                      |\n| BITBUCKET_APP_PASSWORD (1) | [Bitbucket app password][Bitbucket app password] of the user who will be used for authentication. Used with `BITBUCKET_USERNAME`. Required unless `BITBUCKET_ACCESS_TOKEN` is used. Permissions are required: `Repositories write` and `Repositories read`. |\n| BITBUCKET_ACCESS_TOKEN (1) | The [access token][Bitbucket access token] will be used for authentication. Required unless `BITBUCKET_USERNAME` and `BITBUCKET_APP_PASSWORD` are used. `Repositories write` and `Repositories read`                                                        |\n| ACCOUNT                    | Name of the Bitbucket account in which the file will be uploaded to. If empty, it will be uploaded to the same account where the pipeline runs. Default: `${BITBUCKET_REPO_OWNER}`.                                                                         |\n| REPOSITORY                 | Name of the Bitbucket repository in which the file will be uploaded to. If empty, it will be uploaded to the same repository where the pipeline runs. Default: `${BITBUCKET_REPO_SLUG}`.                                                                    |\n| DEBUG                      | Flag to turn on extra debug information. Default: `false`.                                                                                                                                                                                                  |\n\n_(*) = required variable._\n\n_(1) = required variable. Required one of the multiple options._\n\n\n## Prerequisites\nTo use this pipe, you need to generate an [app password][Bitbucket app password] or an [access token][Bitbucket access token].\nRemember to check the `Repositories write` and `Repositories read` permissions when generating the app password. If you want to upload a file to a repository owned by a team account, make sure you have the correct access to the repository.\n\n\n## Examples\n\n### Basic example\n\nUpload a file to Bitbucket Downloads for the current repository.\n\n```yaml\nscript:\n  - pipe: atlassian/bitbucket-upload-file:0.7.3\n    variables:\n      BITBUCKET_USERNAME: $BITBUCKET_USERNAME\n      BITBUCKET_APP_PASSWORD: $BITBUCKET_APP_PASSWORD\n      FILENAME: 'package.json'\n```\n\n\nUpload multiple files by pattern:\n\n```yaml\nscript:\n  - pipe: atlassian/bitbucket-upload-file:0.7.3\n    variables:\n      BITBUCKET_USERNAME: $BITBUCKET_USERNAME\n      BITBUCKET_APP_PASSWORD: $BITBUCKET_APP_PASSWORD\n      FILENAME: '*.html'\n```\n\nUpload a file to Bitbucket Downloads for the current repository. Authentication method is by `BITBUCKET_ACCESS_TOKEN`.\n\n```yaml\nscript:\n  - pipe: atlassian/bitbucket-upload-file:0.7.3\n    variables:\n      BITBUCKET_ACCESS_TOKEN: $BITBUCKET_ACCESS_TOKEN\n      FILENAME: 'package.json'\n```\n\n\n### Advanced example\n\nUpload a file to Bitbucket Downloads for the other repository in the other account where user has access.\n\n```yaml\nscript:\n  - pipe: atlassian/bitbucket-upload-file:0.7.3\n    variables:\n      BITBUCKET_USERNAME: $BITBUCKET_USERNAME\n      BITBUCKET_APP_PASSWORD: $BITBUCKET_APP_PASSWORD\n      FILENAME: 'package.json'\n      ACCOUNT: 'team-account'\n      REPOSITORY: 'awesome-repository-name'\n```\n\n\nUpload multiple `txt` files recursively with `**` pattern. Will match any files and zero or more directories, subdirectories and symbolic links to directories.\n\nNote! Using the `**` pattern in large directory trees may consume an inordinate amount of time.\n```yaml\nscript:\n  - pipe: atlassian/bitbucket-upload-file:0.7.3\n    variables:\n      BITBUCKET_USERNAME: $BITBUCKET_USERNAME\n      BITBUCKET_APP_PASSWORD: $BITBUCKET_APP_PASSWORD\n      FILENAME: '**/*.txt'\n```\n\n\n## Support\n\nIf you’d like help with this pipe, or you have an issue or feature request, [let us know on Community][community].\n\nIf you’re reporting an issue, please include:\n\n- the version of the pipe\n- relevant logs and error messages\n- steps to reproduce\n\n\n## License\nCopyright (c) 2018 Atlassian and others.\nApache 2.0 licensed, see [LICENSE.txt](LICENSE.txt) file.\n\n\n[community]: https://community.atlassian.com/t5/forums/postpage/board-id/bitbucket-questions?add-tags=bitbucket-pipelines,pipes,downloads,file\n[variables-in-pipelines]: https://support.atlassian.com/bitbucket-cloud/docs/variables-and-secrets/\n[Bitbucket app password]: https://support.atlassian.com/bitbucket-cloud/docs/app-passwords/\n[Bitbucket access token]: https://support.atlassian.com/bitbucket-cloud/docs/access-tokens/\n[glob patterns]: https://man7.org/linux/man-pages/man7/glob.7.html\n"
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/bitbucket-upload-file/src/b467819f28a4ca3cfbbdb889bd1bc7ba6918522d/.changes/next-release/patch-20241120112812901924.json"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "text/plain"
+      },
+      "body": "{\n  \"type\": \"patch\",\n  \"description\": \"Internal maintenance: Added logs and warnings about directory from upload.\"\n}\n"
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/bitbucket-upload-file/src/b467819f28a4ca3cfbbdb889bd1bc7ba6918522d/pipe"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": {
+        "values": []
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/bitbucket-upload-file/diffstat/b467819f28a4ca3cfbbdb889bd1bc7ba6918522d..9c2e7d9655b6ac495e905c8e20c933c8e45fa962?topic=false&pagelen=500&fields=next%2Cvalues.old.path%2Cvalues.new.path"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": {
+        "values": [
+          {
+            "old": null,
+            "new": {
+              "path": ".changes/next-release/patch-20241120112812901924.json"
+            }
+          },
+          {
+            "old": null,
+            "new": {
+              "path": ".changes/next-release/patch-20241120112831338496.json"
+            }
+          },
+          {
+            "old": {
+              "path": "bitbucket-pipelines.yml"
+            },
+            "new": {
+              "path": "bitbucket-pipelines.yml"
+            }
+          },
+          {
+            "old": {
+              "path": "pipe/pipe.py"
+            },
+            "new": {
+              "path": "pipe/pipe.py"
+            }
+          },
+          {
+            "old": {
+              "path": "test/test.py"
+            },
+            "new": {
+              "path": "test/test.py"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/aui/diffstat/e9ba9f6a61f9b5725fa08e571970108fa8a7e930..865f5463141f27cc3fc6631d6f064e817f0e0dcc?topic=false&pagelen=500&fields=next%2Cvalues.old.path%2Cvalues.new.path"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": {
+        "values": [
+          {
+            "old": null,
+            "new": {
+              "path": ".bitbucket/CODEOWNERS"
+            }
+          },
+          {
+            "old": {
+              "path": ".git-blame-ignore-revs"
+            },
+            "new": {
+              "path": ".git-blame-ignore-revs"
+            }
+          },
+          {
+            "old": {
+              "path": ".gitignore"
+            },
+            "new": {
+              "path": ".gitignore"
+            }
+          },
+          {
+            "old": {
+              "path": ".java-version"
+            },
+            "new": {
+              "path": ".java-version"
+            }
+          },
+          {
+            "old": null,
+            "new": {
+              "path": ".mvn/maven.config"
+            }
+          }
+        ],
+        "next": "https://api.bitbucket.org/2.0/repositories/atlassian/aui/diffstat/e9ba9f6a61f9b5725fa08e571970108fa8a7e930..865f5463141f27cc3fc6631d6f064e817f0e0dcc?topic=false&pagelen=500&fields=next%2Cvalues.old.path%2Cvalues.new.path&page=2"
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.bitbucket.org/2.0/repositories/atlassian/aui/diffstat/e9ba9f6a61f9b5725fa08e571970108fa8a7e930..865f5463141f27cc3fc6631d6f064e817f0e0dcc?topic=false&pagelen=500&fields=next%2Cvalues.old.path%2Cvalues.new.path&page=2"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": {
+        "values": [
+          {
+            "old": {
+              "path": "packages/iconfont/src/16px/sign-in.svg"
+            },
+            "new": {
+              "path": "packages/iconfont/src/16px/sign-in.svg"
+            }
+          },
+          {
+            "old": {
+              "path": "packages/iconfont/src/16px/sign-out.svg"
+            },
+            "new": {
+              "path": "packages/iconfont/src/16px/sign-out.svg"
+            }
+          },
+          {
+            "old": {
+              "path": "packages/iconfont/src/16px/single-column.svg"
+            },
+            "new": {
+              "path": "packages/iconfont/src/16px/single-column.svg"
+            }
+          },
+          {
+            "old": {
+              "path": "packages/iconfont/src/16px/source.svg"
+            },
+            "new": {
+              "path": "packages/iconfont/src/16px/source.svg"
+            }
+          },
+          {
+            "old": {
+              "path": "packages/iconfont/src/16px/split-merged-table-cells.svg"
+            },
+            "new": {
+              "path": "packages/iconfont/src/16px/split-merged-table-cells.svg"
+            }
+          },
+          {
+            "old": {
+              "path": "p2/pom.xml"
+            },
+            "new": {
+              "path": "pom.xml"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

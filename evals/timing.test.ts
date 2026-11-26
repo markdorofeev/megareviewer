@@ -10,6 +10,7 @@ const call = (pass: ModelPass, startedAt: string, durationMs: number, attempt = 
   outcome: "ok",
   problems: [],
   error: null,
+  reads: [],
 });
 
 const createdAt = "2026-11-14T10:01:28.000Z";

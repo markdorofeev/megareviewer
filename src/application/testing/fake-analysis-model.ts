@@ -1,4 +1,5 @@
 import type {
+  HarnessRead,
   Intent,
   ModelError,
   ModelPass,
@@ -10,6 +11,7 @@ import type {
   AnalysisInput,
   AnalysisModel,
   FindingDraft,
+  PassError,
   PassOptions,
   PassOutput,
 } from "../ports/index.ts";
@@ -21,7 +23,7 @@ export interface PassValues {
 }
 
 /** A scripted answer to one pass call: a value (valid or not) or an error. */
-export type ScriptedPass<P extends ModelPass> = Result<PassValues[P], ModelError>;
+export type ScriptedPass<P extends ModelPass> = Result<PassValues[P], PassError>;
 
 export interface ModelCall {
   readonly pass: ModelPass | "checkSize";
@@ -41,6 +43,7 @@ const filesToReview = (input: AnalysisInput) => input.files.filter((file) => fil
  */
 export class FakeAnalysisModel implements AnalysisModel {
   readonly version: string;
+  readonly readsHarness: boolean;
   readonly calls: ModelCall[] = [];
   private readonly maxInputTokens: number;
   private readonly scripts: { [P in ModelPass]: ScriptedPass<P>[] } = {
@@ -49,13 +52,25 @@ export class FakeAnalysisModel implements AnalysisModel {
     steps: [],
   };
 
-  constructor(options: { version?: string; maxInputTokens?: number } = {}) {
+  private readonly scriptedReads: { [P in ModelPass]: (readonly HarnessRead[])[] } = {
+    intent: [],
+    findings: [],
+    steps: [],
+  };
+
+  constructor(options: { version?: string; maxInputTokens?: number; readsHarness?: boolean } = {}) {
     this.version = options.version ?? "fake-model/1";
+    this.readsHarness = options.readsHarness ?? false;
     this.maxInputTokens = options.maxInputTokens ?? Number.POSITIVE_INFINITY;
   }
 
   script<P extends ModelPass>(pass: P, ...answers: ScriptedPass<P>[]): void {
     this.scripts[pass].push(...answers);
+  }
+
+  /** What the pass's next answer says it read. Queued beside the scripted answers. */
+  scriptReads(pass: ModelPass, ...reads: (readonly HarnessRead[])[]): void {
+    this.scriptedReads[pass].push(...reads);
   }
 
   callsTo(pass: ModelCall["pass"]): ModelCall[] {
@@ -76,7 +91,7 @@ export class FakeAnalysisModel implements AnalysisModel {
   async intent(
     input: AnalysisInput,
     options?: PassOptions,
-  ): Promise<Result<PassOutput<Intent>, ModelError>> {
+  ): Promise<Result<PassOutput<Intent>, PassError>> {
     return this.answer("intent", input, options, () => {
       const { description } = input.pullRequest;
       const sources = [
@@ -101,7 +116,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     input: AnalysisInput,
     _intent: Intent | null,
     options?: PassOptions,
-  ): Promise<Result<PassOutput<FindingDraft[]>, ModelError>> {
+  ): Promise<Result<PassOutput<FindingDraft[]>, PassError>> {
     return this.answer("findings", input, options, () =>
       filesToReview(input).flatMap((file) => {
         const added = file.hunks.flatMap((hunk) => {
@@ -128,7 +143,7 @@ export class FakeAnalysisModel implements AnalysisModel {
   async steps(
     input: AnalysisInput,
     options?: PassOptions,
-  ): Promise<Result<PassOutput<StepDraft[]>, ModelError>> {
+  ): Promise<Result<PassOutput<StepDraft[]>, PassError>> {
     return this.answer("steps", input, options, () => []);
   }
 
@@ -137,7 +152,7 @@ export class FakeAnalysisModel implements AnalysisModel {
     input: AnalysisInput,
     options: PassOptions | undefined,
     derive: () => PassValues[P],
-  ): Promise<Result<PassOutput<PassValues[P]>, ModelError>> {
+  ): Promise<Result<PassOutput<PassValues[P]>, PassError>> {
     this.calls.push({ pass, input, options });
     options?.onAnswering?.();
     const answer = this.scripts[pass].shift() ?? ok(derive());
@@ -151,6 +166,7 @@ export class FakeAnalysisModel implements AnalysisModel {
       costUsd: 0,
       billing: "api",
     };
-    return ok({ value: answer.value, usage });
+    const reads = this.scriptedReads[pass].shift();
+    return ok({ value: answer.value, usage, ...(reads === undefined ? {} : { reads }) });
   }
 }

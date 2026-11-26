@@ -62,7 +62,14 @@ describe("the judge's input", () => {
       ...smallFeatureInput,
       guidance: {
         preferences: [],
-        guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Migrations are reversible.\n" }],
+        guidelines: [
+          {
+            ref: "g1",
+            path: "REVIEW.md",
+            linkedFrom: null,
+            content: "Migrations are reversible.\n",
+          },
+        ],
       },
     };
     const prompt = judgeSystemPrompt(guided);
@@ -102,7 +109,9 @@ describe("the judge's input", () => {
           scope: "repo" as const,
         },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Migrations are reversible.\n" }],
+      guidelines: [
+        { ref: "g1", path: "REVIEW.md", linkedFrom: null, content: "Migrations are reversible.\n" },
+      ],
     };
     const rendered = [
       "p1 look-for (everywhere): Caches without a limit",

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, sep } from "node:path";
 
 export interface CommandRun {
   /** null when the process was killed or couldn't be started. */
@@ -16,10 +16,14 @@ export interface CommandRun {
 
 export interface RunCommandOptions {
   readonly stdin?: string;
-  /** Written by name to the new empty directory the process runs in. */
+  /** Written to the new empty directory, each a regular file at its path there. */
   readonly files?: Readonly<Record<string, string>>;
   /** Made, empty, in that directory. */
   readonly dirs?: readonly string[];
+  /** Where in that directory the process runs; itself by default. */
+  readonly workDir?: string;
+  /** Called with where the process runs, before it does. */
+  readonly onStart?: (cwd: string) => void;
   /** Called with each line of stdout as it comes; "stop" kills the process. */
   readonly onLine?: (line: string) => "continue" | "stop";
 }
@@ -52,14 +56,20 @@ export const createRunCommand = (settings: RunCommandSettings): RunCommand => {
   const timeoutMs = settings.timeoutMs ?? TIMEOUT_MS;
 
   return async (args, options = {}) => {
-    const dir = await mkdtemp(join(tmpdir(), settings.prefix));
+    const dir = await realpath(await mkdtemp(join(tmpdir(), settings.prefix)));
     try {
       for (const name of options.dirs ?? []) await mkdir(join(dir, name), { mode: 0o700 });
       for (const [name, content] of Object.entries(options.files ?? {})) {
-        await writeFile(join(dir, name), content, { mode: 0o600 });
+        const path = join(dir, name);
+        if (!path.startsWith(dir + sep)) throw new Error(`${name} isn't in the directory`);
+        await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+        // Never over another: two paths can be one file where case doesn't count.
+        await writeFile(path, content, { mode: 0o600, flag: "wx" });
       }
       const resolved = typeof args === "function" ? args(dir) : args;
-      return await run(settings, resolved, dir, options, timeoutMs);
+      const cwd = options.workDir === undefined ? dir : join(dir, options.workDir);
+      options.onStart?.(cwd);
+      return await run(settings, resolved, cwd, options, timeoutMs);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

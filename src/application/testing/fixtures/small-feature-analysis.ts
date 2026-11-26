@@ -158,6 +158,7 @@ export const smallFeatureInput: AnalysisInput = {
   ],
   unchangedCallers: [],
   guidance: NO_GUIDANCE,
+  harness: null,
 };
 
 const key: AnalysisKey = {
@@ -210,6 +211,7 @@ const answered = (pass: ModelPass, startedAt: string, durationMs: number): Model
   outcome: "ok",
   problems: [],
   error: null,
+  reads: [],
 });
 
 export const smallFeatureAnalysis: Analysis = {

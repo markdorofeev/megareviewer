@@ -5,13 +5,13 @@ import {
   CommentKey,
   canEnable,
   checkGuidanceMark,
-  type Guidance,
+  Guidance,
   guidanceOf,
   guidelineEnabled,
   guidelineFile,
   inCreationOrder,
   MAX_ENABLED_PREFERENCES,
-  MAX_GUIDELINE_BYTES,
+  MAX_INLINE_BYTES,
   mergeEvidence,
   type PastComment,
   PointId,
@@ -158,18 +158,18 @@ describe("guideline files", () => {
     expect(guidelineEnabled("CLAUDE.md", new Map([["CLAUDE.md", true]]))).toBe(true);
   });
 
-  it("measures a file in bytes, and marks one over 32 KB too large", () => {
+  it("measures a file in bytes, and marks one over 64 KB too large", () => {
     expect(guidelineFile("REVIEW.md", "é", new Map())).toEqual({
       path: "REVIEW.md",
       bytes: 2,
       enabled: true,
       tooLarge: false,
     });
-    const atLimit = guidelineFile("AGENTS.md", "x".repeat(MAX_GUIDELINE_BYTES), new Map());
-    expect(atLimit).toMatchObject({ bytes: 32_768, enabled: false, tooLarge: false });
+    const atLimit = guidelineFile("AGENTS.md", "x".repeat(MAX_INLINE_BYTES), new Map());
+    expect(atLimit).toMatchObject({ bytes: 65_536, enabled: false, tooLarge: false });
     const over = guidelineFile(
       "CLAUDE.md",
-      "x".repeat(MAX_GUIDELINE_BYTES + 1),
+      "x".repeat(MAX_INLINE_BYTES + 1),
       new Map([["CLAUDE.md", true]]),
     );
     expect(over).toMatchObject({ enabled: true, tooLarge: true });
@@ -182,7 +182,10 @@ const dontFlag = preference({
   text: "Naming",
   scope: { kind: "repo", repo: shop },
 });
-const guidance: Guidance = guidanceOf([lookFor, dontFlag], [{ path: "REVIEW.md", bytes: 120 }]);
+const guidance: Guidance = guidanceOf(
+  [lookFor, dontFlag],
+  [{ path: "REVIEW.md", bytes: 120, linkedFrom: null, given: "prompt" }],
+);
 
 describe("guidanceOf", () => {
   it("numbers the preferences from p1 and the guideline files from g1, in the order sent", () => {
@@ -197,9 +200,21 @@ describe("guidanceOf", () => {
         },
         { ref: "p2", id: dontFlag.id, kind: "dont-flag", text: "Naming", scope: dontFlag.scope },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 120 }],
       checks: [],
     });
+  });
+});
+
+describe("Guidance", () => {
+  it("parses one stored before files were linked, every file a root", () => {
+    const stored = {
+      preferences: [],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
+    };
+    expect(Guidance.parse(stored).guidelines).toEqual([
+      { ref: "g1", path: "REVIEW.md", bytes: 120, linkedFrom: null, given: "prompt" },
+    ]);
   });
 });
 
@@ -223,6 +238,23 @@ describe("checkGuidanceMark", () => {
   it("takes either effect from a guideline file", () => {
     expect(checkGuidanceMark({ ref: "g1", effect: "raised" }, guidance)).not.toBeNull();
     expect(checkGuidanceMark({ ref: "g1", effect: "left-out" }, guidance)).not.toBeNull();
+  });
+
+  it("takes a mark on a file a guideline file imports, and names that file", () => {
+    const linked = guidanceOf(
+      [],
+      [
+        { path: "CLAUDE.md", bytes: 40, linkedFrom: null, given: "prompt" },
+        { path: "ENGINEERING.md", bytes: 900, linkedFrom: "CLAUDE.md", given: "prompt" },
+      ],
+    );
+    const mark = { ref: "g2", effect: "raised" } as const;
+    expect(checkGuidanceMark(mark, linked)).toEqual(mark);
+    expect(resolveGuidanceMark(mark, linked)).toEqual({
+      effect: "raised",
+      label: "ENGINEERING.md",
+      preferenceId: null,
+    });
   });
 
   it("drops a ref the run didn't have, and every mark of a run without guidance", () => {

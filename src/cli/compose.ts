@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Hono } from "hono";
 import {
+  createBitbucketHarnessSource,
   createBitbucketHost,
   createBitbucketReviewHistory,
   createBitbucketReviewThreads,
@@ -16,6 +17,7 @@ import {
   remotesFor,
 } from "../adapters/git/index.ts";
 import {
+  createGitHubHarnessSource,
   createGitHubHost,
   createGitHubReviewHistory,
   createGitHubReviewThreads,
@@ -30,6 +32,7 @@ import { createAnalysisEvents } from "../application/events/index.ts";
 import type {
   Clock,
   GitHost,
+  HarnessSource,
   Logger,
   PullRequestStatusSource,
   ReviewHistory,
@@ -38,6 +41,7 @@ import type {
 } from "../application/ports/index.ts";
 import {
   retryingGitHost,
+  retryingHarnessSource,
   retryingReviewHistory,
   retryingReviewThreads,
   retryingStatusSource,
@@ -194,6 +198,38 @@ export const createReviewHistories = (
   };
 };
 
+/** The configured hosts a repository's harness can be read from; reads retried as the hosts' are. */
+export const createHarnessSources = (
+  config: Pick<Config, "github" | "bitbucket">,
+  options: { readonly version: string; readonly clock: Clock; readonly logger: Logger },
+): Partial<Record<HostKind, HarnessSource>> => {
+  const { github, bitbucket } = config;
+  const { clock, logger } = options;
+  const retrying = (source: HarnessSource) => retryingHarnessSource(source, { sleep, logger });
+  return {
+    ...(github !== null && {
+      github: retrying(
+        createGitHubHarnessSource({ token: github.token, version: options.version, clock, logger }),
+      ),
+    }),
+    ...(bitbucket !== null && {
+      bitbucket: retrying(
+        createBitbucketHarnessSource({
+          username: bitbucket.username,
+          password: bitbucket.password,
+          logger,
+        }),
+      ),
+    }),
+  };
+};
+
+/** Where a repository's harness is read from: its host's source, if the host has one. */
+export const harnessSourceIn =
+  (sources: Partial<Record<HostKind, HarnessSource>>): AppDeps["harnessSource"] =>
+  (repo) =>
+    sources[repo.host] ?? null;
+
 export const createTicketSource = (config: Pick<Config, "jira">, logger: Logger): TicketSource =>
   config.jira === null
     ? createUnconfiguredTicketSource()
@@ -293,6 +329,10 @@ export const compose = async (
           preferences: store,
           history: createReviewHistories(config, { version: options.version, clock, logger }),
           fileCache: store,
+          harnessSource: harnessSourceIn(
+            createHarnessSources(config, { version: options.version, clock, logger }),
+          ),
+          harnessStore: store,
           knownCheckouts: store,
           checkouts: createGitCheckouts({ dir: options.checkoutDir, search: options.search }),
           copies,

@@ -4,8 +4,11 @@ export {
   type AnalysisModel,
   FindingDraft,
   type InputGuidance,
+  type InputHarness,
   type InputUnchangedCallers,
+  MAX_READ_ROUNDS,
   NO_GUIDANCE,
+  type PassError,
   type PassOptions,
   type PassOutput,
 } from "./analysis-model.ts";
@@ -29,6 +32,8 @@ export {
   type AdvicePoint,
   type GuardrailAdvisor,
 } from "./guardrail-advisor.ts";
+export type { HarnessSource, HarnessSourceFile } from "./harness-source.ts";
+export type { HarnessBlob, HarnessStore } from "./harness-store.ts";
 export type { KnownCheckout, KnownCheckouts } from "./known-checkouts.ts";
 export {
   type CheckoutError,

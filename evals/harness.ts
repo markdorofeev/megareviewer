@@ -7,6 +7,7 @@ import type {
 } from "../src/application/ports/index.ts";
 import {
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckout,
   FakeLocalCheckouts,
   FakeModelCatalog,
@@ -15,6 +16,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   type PullRequestFixture,
@@ -45,7 +47,7 @@ export interface AnalyzeOptions {
   /** The reviewer's preferences and the repository's guideline files, for a case that has them. */
   readonly guidance?: CaseGuidance | undefined;
   /** The repository's files the PR doesn't change, for a case whose run has a checkout. */
-  readonly outside?: Readonly<Record<string, string>> | undefined;
+  readonly checkoutFiles?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface CaseRun {
@@ -62,6 +64,7 @@ const recordingInput = (model: AnalysisModel) => {
   };
   const recording: AnalysisModel = {
     version: model.version,
+    readsHarness: model.readsHarness,
     checkSize: (given) => {
       keep(given);
       return model.checkSize(given);
@@ -97,16 +100,17 @@ export const analyzeCase = async (
   const recorded = recordingInput(options.model);
   const store = new InMemoryAnalysisStore();
   const preferences = new InMemoryPreferenceStore();
+  const harnessSource = new FakeHarnessSource({ host });
   const gitHost = new FakeGitHost({ host, fixtures: [fixture], clock: systemClock });
   if (options.guidance !== undefined) {
-    await giveGuidance(options.guidance, fixture, { host: gitHost, preferences });
+    await giveGuidance(options.guidance, fixture, { host: gitHost, harnessSource, preferences });
   }
   const checkouts = new FakeLocalCheckouts(
-    options.outside === undefined
+    options.checkoutFiles === undefined
       ? null
       : {
           checkout: new FakeLocalCheckout({
-            [fixture.pullRequest.headSha]: { ...options.outside, ...fixture.headFiles },
+            [fixture.pullRequest.headSha]: { ...options.checkoutFiles, ...fixture.headFiles },
           }),
           dir: "/eval",
           namesRepo: true,
@@ -126,6 +130,8 @@ export const analyzeCase = async (
       preferences,
       history: {},
       checkouts,
+      harnessSource: () => harnessSource,
+      harnessStore: new InMemoryHarnessStore(),
       knownCheckouts: new InMemoryKnownCheckouts(),
       copies: new FakeRepositoryCopies(),
       threads: {},

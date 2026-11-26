@@ -37,4 +37,4 @@ export const fixture: PullRequestFixture = fixtureFromFiles(new URL(".", import.
   ],
 });
 
-export const outside = outsideFiles(new URL(".", import.meta.url));
+export const checkoutFiles = outsideFiles(new URL(".", import.meta.url));

@@ -1,9 +1,12 @@
 // Runs the golden set through the real pipeline and model, scores it and prints a summary:
 // node evals/run.ts [--case <name>]... [--via claude-code|api|codex] [--model <id>] [--effort <level>]
+//   [--reader on|off|index-alone] [--with-harness] [--runs <n>]
 //   [--baseline evals/baseline.json] [--write-baseline] --yes
 // Without --yes it prints the estimate and stops. The judge runs on a signed-in Claude Code, and so
 // do the passes, unless --via api runs them on the API (ANTHROPIC_API_KEY or `ant auth login`) or
-// --via codex on a signed-in Codex, GPT-6 Sol unless --model says otherwise.
+// --via codex on a signed-in Codex, GPT-6 Sol unless --model says otherwise. --reader says how the
+// passes read a case's harness, --with-harness attaches the large one to every case that has none,
+// and --runs repeats them all; node evals/harness-report.ts <results>... compares what they gave.
 // See evals/README.md.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -25,14 +28,25 @@ import {
 } from "../src/adapters/model/index.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import { PIPELINE_VERSION } from "../src/application/use-cases/index.ts";
-import { type Analysis, FindingType } from "../src/domain/review/index.ts";
+import { type Analysis, FindingType, MODEL_STAGES } from "../src/domain/review/index.ts";
 import { Baseline, COMPARED, compareWithBaseline, regressedCases, toBaseline } from "./baseline.ts";
 import { type EvalCase, evalCases } from "./cases/index.ts";
 import { estimateCost } from "./cost.ts";
 import { analyzeCase, quietLogger } from "./harness.ts";
+import { type HarnessScore, type RunSpend, scoreHarness, spentOn } from "./harness-score.ts";
 import { JUDGE_MODEL, JUDGE_VERSION, judgeCase } from "./judge.ts";
 import { countRatings, type JudgeVerdict } from "./judge-verdict.ts";
+import { largeHarness } from "./large-harness.ts";
 import { parseVia, preflight } from "./preflight.ts";
+import {
+  harnessRefsOf,
+  judgedInput,
+  makeOutside,
+  modelFor,
+  parseReader,
+  READERS,
+  runnerFor,
+} from "./reader.ts";
 import {
   type CaseCost,
   type CaseScore,
@@ -60,6 +74,12 @@ const { values } = parseArgs({
     model: { type: "string" },
     // One effort for every pass in place of each pass's own; not on the API.
     effort: { type: "string" },
+    // How the passes read a case's harness; only Claude Code's read one.
+    reader: { type: "string", default: "on" },
+    // The large harness on every selected case, none of which may have guidance of its own.
+    "with-harness": { type: "boolean", default: false },
+    // The whole selection this many times over.
+    runs: { type: "string", default: "1" },
     yes: { type: "boolean", default: false },
   },
 });
@@ -74,13 +94,39 @@ for (const name of values.case ?? evalCases.map((c) => c.name)) {
   selected.push(found);
 }
 
+const attached = values["with-harness"];
+const reader = parseReader(values.reader);
+if (reader === null) {
+  console.error(`--reader must be one of ${READERS.join(", ")}.`);
+  process.exit(1);
+}
+const runs = Number(values.runs);
+if (!Number.isInteger(runs) || runs < 1) {
+  console.error("--runs must be a whole number, 1 or more.");
+  process.exit(1);
+}
+if (attached && values.case === undefined) {
+  selected.splice(0, selected.length, ...selected.filter((c) => c.guidance === undefined));
+}
+const guided = selected.filter((c) => c.guidance !== undefined);
+if (attached && guided.length > 0) {
+  console.error(
+    `--with-harness is for cases without guidance: ${guided.map((c) => c.name).join(", ")} have it.`,
+  );
+  process.exit(1);
+}
+if (values["write-baseline"] && (attached || reader !== "on" || runs > 1)) {
+  console.error("--write-baseline is one run of the cases as they are.");
+  process.exit(1);
+}
+
 const baseline =
   values.baseline === undefined
     ? null
     : Baseline.parse(JSON.parse(readFileSync(values.baseline, "utf8")));
 
 const estimate = estimateCost(
-  selected.map((c) => c.name),
+  Array.from({ length: runs }, () => selected.map((c) => c.name)).flat(),
   baseline,
 );
 const via = parseVia(values.via);
@@ -97,6 +143,16 @@ if (values.effort !== undefined && effort === undefined) {
   console.error(`--effort must be one of ${EFFORTS.join(", ")}.`);
   process.exit(1);
 }
+if (reader === "index-alone" && via !== "claude-code") {
+  console.error("--reader index-alone runs on Claude Code only.");
+  process.exit(1);
+}
+const times = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+console.log(
+  `${times(selected.length, "case")} × ${times(runs, "run")} × ${MODEL_STAGES.length} passes = ` +
+    `${selected.length * runs * MODEL_STAGES.length} model runs, and ${selected.length * runs} of the judge, retries aside. ` +
+    `Reader: ${reader}${attached ? ", the large harness attached" : ""}.`,
+);
 console.log(
   `${selected.length} case${selected.length === 1 ? "" : "s"}, the passes on ${VIA_NAMES[via]}` +
     ` with ${values.model ?? `${via === "codex" ? DEFAULT_CODEX_MODEL : DEFAULT_MODEL}, the default`}` +
@@ -134,12 +190,17 @@ const parser = await createTreeSitterCodeParser({
 
 interface CaseResult {
   readonly name: string;
+  /** Which of the --runs it's from, from 1. */
+  readonly run: number;
   /** error: the analysis failed, timed out, threw, or the judge failed. Not scored. */
   readonly status: "scored" | "error";
   readonly error: string | null;
   readonly problems: readonly string[];
   readonly cost: CaseCost;
   readonly score: CaseScore | null;
+  /** How it used a harness; null for a case without one, or not scored. */
+  readonly harness: HarnessScore | null;
+  readonly spend: RunSpend | null;
   readonly verdict: JudgeVerdict | null;
   readonly judgeModels: readonly string[];
   readonly analysis: Pick<
@@ -153,17 +214,19 @@ interface CaseResult {
     | "usage"
     | "modelCalls"
     | "guidance"
+    | "steps"
   > | null;
   /** Null when the analysis never started. */
   readonly timing: CaseTiming | null;
 }
 
-const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) => {
+const runCase = async (evalCase: EvalCase, attempt: number, modelVersion: (v: string) => void) => {
+  const guidance = attached ? largeHarness : evalCase.guidance;
   const problems: string[] = [];
   const logger = quietLogger((line) => problems.push(line));
   const codexModel = values.model ?? DEFAULT_CODEX_MODEL;
   const offered = codex?.models.find((candidate) => candidate.slug === codexModel);
-  const model =
+  const passes =
     codex !== null
       ? createCodexAnalysisModel({
           run: runCodex,
@@ -176,7 +239,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
         })
       : client === null
         ? createClaudeCodeAnalysisModel({
-            run: runClaude,
+            run: runnerFor(reader, runClaude),
             billing: claudeCodeBilling,
             logger,
             ...(values.model === undefined ? {} : { model: values.model }),
@@ -187,6 +250,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
             logger,
             ...(values.model === undefined ? {} : { model: values.model }),
           });
+  const model = modelFor(reader, passes);
   modelVersion(model.version);
   const since = (started: number) => (performance.now() - started) / 1000;
   const analysisStarted = performance.now();
@@ -198,6 +262,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
     const latencyS = since(analysisStarted) - (judge?.s ?? 0);
     return {
       name: evalCase.name,
+      run: attempt,
       status: "error",
       error,
       problems,
@@ -207,6 +272,8 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
         latencyS,
       },
       score: null,
+      harness: null,
+      spend: analysis === null ? null : spentOn(analysis),
       verdict: null,
       judgeModels: [],
       analysis,
@@ -219,8 +286,8 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
     parser,
     logger,
     timeoutMs: CASE_TIMEOUT_MS,
-    guidance: evalCase.guidance,
-    outside: evalCase.outside,
+    guidance,
+    checkoutFiles: evalCase.checkoutFiles,
   });
   if (!result.ok) return failed(result.error, null);
   const { analysis, input } = result.value;
@@ -235,7 +302,8 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
 
   if (input === null) return failed("the model never ran, so there's nothing to judge", analysis);
   const judgeStarted = performance.now();
-  const judged = await judgeCase(runClaude, input, analysis, evalCase.labels, {
+  const read = judgedInput(input, guidance, attached);
+  const judged = await judgeCase(runClaude, read, analysis, evalCase.labels, {
     onPlan: claudeCodeBilling === "plan",
   });
   const judgeS = since(judgeStarted);
@@ -245,6 +313,7 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
   const { verdict, costUsd, models } = judged.value;
   return {
     name: evalCase.name,
+    run: attempt,
     status: "scored",
     error: null,
     problems,
@@ -254,6 +323,17 @@ const runCase = async (evalCase: EvalCase, modelVersion: (v: string) => void) =>
       latencyS,
     },
     score: scoreCase(analysis, evalCase.labels, verdict),
+    harness:
+      guidance === undefined
+        ? null
+        : scoreHarness(
+            analysis,
+            attached ? { ...evalCase.labels, guidance: [], reads: [] } : evalCase.labels,
+            verdict,
+            harnessRefsOf(guidance),
+            evalCase.outside ?? null,
+          ),
+    spend: spentOn(analysis),
     verdict,
     judgeModels: models,
     analysis,
@@ -277,6 +357,9 @@ const save = () =>
         modelVersion,
         pipelineVersion: PIPELINE_VERSION,
         judgeVersion: JUDGE_VERSION,
+        reader,
+        withHarness: attached,
+        runs,
         cases: results,
       },
       null,
@@ -285,25 +368,32 @@ const save = () =>
   );
 
 // A few cases at a time; each one's passes already run in parallel where the pipeline allows.
-const queue = [...selected];
+const queue = Array.from({ length: runs }, (_, index) =>
+  selected.map((evalCase) => ({ evalCase, attempt: index + 1 })),
+).flat();
+await makeOutside(selected.flatMap((c) => c.outside ?? []));
 await Promise.all(
   Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
     for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
-      console.log(`… ${next.name}`);
+      const { evalCase, attempt } = next;
+      console.log(`… ${evalCase.name}${runs > 1 ? ` · run ${attempt}` : ""}`);
       let result: CaseResult;
       try {
-        result = await runCase(next, (version) => {
+        result = await runCase(evalCase, attempt, (version) => {
           modelVersion = version;
         });
       } catch (error) {
         // An SDK error the adapter didn't map, or the judge's request failing.
         result = {
-          name: next.name,
+          name: evalCase.name,
+          run: attempt,
           status: "error",
           error: error instanceof Error ? error.message : String(error),
           problems: [],
           cost: { modelUsd: 0, judgeUsd: 0, latencyS: 0 },
           score: null,
+          harness: null,
+          spend: null,
           verdict: null,
           judgeModels: [],
           analysis: null,
@@ -324,11 +414,17 @@ await Promise.all(
   }),
 );
 
+const scored = results.flatMap((result) => result.score ?? []);
+// By case: a baseline is one run, so the last of several stands.
 const scores = new Map(
   results.flatMap((result) => (result.score === null ? [] : [[result.name, result.score]])),
 );
 const costs = new Map(results.map((result) => [result.name, result.cost]));
-const summary = summarize(selected.length, [...scores.values()], [...costs.values()]);
+const summary = summarize(
+  results.length,
+  scored,
+  results.map((result) => result.cost),
+);
 
 const show = (value: Ratio | number | null): string => {
   if (value === null) return "–";

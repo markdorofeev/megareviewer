@@ -36,7 +36,11 @@ export interface RecordedRequest {
   readonly body: {
     readonly messages: readonly {
       readonly role: string;
-      readonly content: readonly { readonly type: string; readonly text?: string }[];
+      readonly content: readonly {
+        readonly type: string;
+        readonly text?: string;
+        readonly [key: string]: unknown;
+      }[];
       readonly [key: string]: unknown;
     }[];
     readonly [key: string]: unknown;
@@ -83,6 +87,16 @@ export const toEventStream = (message: FixtureMessage): string => {
           delta: { type: "signature_delta", signature: block.signature },
         }),
       );
+    } else if (block.type === "tool_use") {
+      events.push(
+        event("content_block_start", { index, content_block: { ...block, input: {} } }),
+        ...chunks(JSON.stringify(block.input)).map((partial_json) =>
+          event("content_block_delta", {
+            index,
+            delta: { type: "input_json_delta", partial_json },
+          }),
+        ),
+      );
     } else {
       events.push(event("content_block_start", { index, content_block: block }));
     }
@@ -125,28 +139,33 @@ const respond = (answer: FixtureAnswer): Response => {
   });
 };
 
-/** The pass a request is for, from the instruction that ends it ("Task: risk."). */
+/** What a request asks for: its last text, which rounds of reading only add results after. */
+const taskOf = (request: RecordedRequest): string =>
+  request.body.messages
+    .filter((message) => message.role === "user")
+    .flatMap((message) => message.content.flatMap(({ text }) => (text === undefined ? [] : [text])))
+    .at(-1) ?? "";
+
+/** The pass a request is for, from its task ("Task: risk."). */
 export const passOf = (request: RecordedRequest): ModelPass | null => {
-  const text = request.body.messages.at(-1)?.content.at(-1)?.text ?? "";
-  const pass = ModelPass.safeParse(/^Task: (\w+)\.$/m.exec(text)?.[1]);
+  const pass = ModelPass.safeParse(/^Task: (\w+)\.$/m.exec(taskOf(request))?.[1]);
   return pass.success ? pass.data : null;
 };
 
 /** Which call of its own a request is, from the task that ends it, or null for a pass. */
 const callOf = (request: RecordedRequest): "suggestion" | "guardrails" | null => {
-  const task = /^Task: (suggest|guardrails)\.$/m.exec(
-    request.body.messages.at(-1)?.content.at(-1)?.text ?? "",
-  )?.[1];
+  const task = /^Task: (suggest|guardrails)\.$/m.exec(taskOf(request))?.[1];
   return task === "suggest" ? "suggestion" : task === "guardrails" ? "guardrails" : null;
 };
 
 /**
- * A fetch for the SDK client. Messages requests are answered per pass, the suggestion call from
+ * A fetch for the SDK client. Messages requests are answered per pass, one answer for each of its
+ * rounds where there's a list, the suggestion call from
  * `suggestion` and the guardrail call from `guardrails`, token counting from `countTokens`. Anything
  * else fails the test.
  */
 export const createAnthropicFetch = (answers: {
-  readonly passes?: Partial<Readonly<Record<ModelPass, FixtureAnswer>>>;
+  readonly passes?: Partial<Readonly<Record<ModelPass, FixtureAnswer | readonly FixtureAnswer[]>>>;
   readonly suggestion?: FixtureAnswer;
   readonly guardrails?: FixtureAnswer;
   readonly countTokens?: FixtureAnswer | TokenCount;
@@ -170,8 +189,10 @@ export const createAnthropicFetch = (answers: {
     if (pathname === "/v1/messages") {
       const pass = passOf(recorded);
       const call = callOf(recorded);
-      const answer =
+      const given =
         call !== null ? answers[call] : pass === null ? undefined : answers.passes?.[pass];
+      const round = recorded.body.messages.filter(({ role }) => role === "assistant").length;
+      const answer = Array.isArray(given) ? given[round] : given;
       if (answer === undefined) throw new Error(`No answer in the fixture for pass ${pass}`);
       return respond(answer);
     }

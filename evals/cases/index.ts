@@ -5,8 +5,10 @@ import {
   refactorMove,
   smallFeature,
 } from "../../src/application/testing/index.ts";
-import type { CaseGuidance } from "../guidance.ts";
+import type { CaseGuidance, OutsideFile } from "../guidance.ts";
 import type { CaseLabels } from "../labels.ts";
+import * as asksForFile from "./asks-for-file/case.ts";
+import { labels as asksForFileLabels } from "./asks-for-file/labels.ts";
 import * as authMiddleware from "./auth-middleware/case.ts";
 import { labels as authMiddlewareLabels } from "./auth-middleware/labels.ts";
 import { labels as bitbucketBugfixLabels } from "./bitbucket-bugfix/labels.ts";
@@ -28,8 +30,12 @@ import * as featureLessThanTicket from "./feature-less-than-ticket/case.ts";
 import { labels as featureLessThanTicketLabels } from "./feature-less-than-ticket/labels.ts";
 import * as guidelineFile from "./guideline-file/case.ts";
 import { labels as guidelineFileLabels } from "./guideline-file/labels.ts";
+import * as importedGuideline from "./imported-guideline/case.ts";
+import { labels as importedGuidelineLabels } from "./imported-guideline/labels.ts";
 import * as largeRetryAfter from "./large-retry-after/case.ts";
 import { labels as largeRetryAfterLabels } from "./large-retry-after/labels.ts";
+import * as linkedSection from "./linked-section/case.ts";
+import { labels as linkedSectionLabels } from "./linked-section/labels.ts";
 import * as migration from "./migration-non-null-column/case.ts";
 import { labels as migrationLabels } from "./migration-non-null-column/labels.ts";
 import * as optionalResponseField from "./optional-response-field/case.ts";
@@ -49,6 +55,8 @@ import * as storedSessionsFormat from "./stored-sessions-format/case.ts";
 import { labels as storedSessionsFormatLabels } from "./stored-sessions-format/labels.ts";
 import * as testNamedCoverage from "./test-named-coverage/case.ts";
 import { labels as testNamedCoverageLabels } from "./test-named-coverage/labels.ts";
+import * as unrelatedHarness from "./unrelated-harness/case.ts";
+import { labels as unrelatedHarnessLabels } from "./unrelated-harness/labels.ts";
 import * as unrequestedBehavior from "./unrequested-behavior/case.ts";
 import { labels as unrequestedBehaviorLabels } from "./unrequested-behavior/labels.ts";
 
@@ -62,7 +70,9 @@ export interface EvalCase {
   /** What a run of it reads beside the PR; without it, nothing. */
   readonly guidance?: CaseGuidance;
   /** The repository's files the PR doesn't change; with them, a run has a checkout. */
-  readonly outside?: Readonly<Record<string, string>>;
+  readonly checkoutFiles?: Readonly<Record<string, string>>;
+  /** A file its PR asks for outside the harness, which a run makes first. */
+  readonly outside?: OutsideFile;
   readonly labels: CaseLabels;
 }
 
@@ -195,7 +205,7 @@ export const evalCases: readonly EvalCase[] = [
     tests:
       "A contract finding an unchanged caller shows: a total now in cents, and billing still multiplies it by 100",
     fixture: callerKeepsOldUnit.fixture,
-    outside: callerKeepsOldUnit.outside,
+    checkoutFiles: callerKeepsOldUnit.checkoutFiles,
     labels: callerKeepsOldUnitLabels,
   },
   {
@@ -227,7 +237,7 @@ export const evalCases: readonly EvalCase[] = [
     tests:
       "Nothing wrong: an optional field in an API's response, and the code outside the PR that reads it still works",
     fixture: optionalResponseField.fixture,
-    outside: optionalResponseField.outside,
+    checkoutFiles: optionalResponseField.checkoutFiles,
     labels: optionalResponseFieldLabels,
   },
   {
@@ -236,6 +246,43 @@ export const evalCases: readonly EvalCase[] = [
     tests: "Nothing wrong: a credential read in another module, the same way",
     fixture: credentialMoved.fixture,
     labels: credentialMovedLabels,
+  },
+  {
+    name: "imported-guideline",
+    source: "synthetic",
+    tests:
+      "A rule only a file CLAUDE.md imports states: access taken away without recording it, marked on that file",
+    fixture: importedGuideline.fixture,
+    guidance: importedGuideline.guidance,
+    labels: importedGuidelineLabels,
+  },
+  {
+    name: "linked-section",
+    source: "synthetic",
+    tests:
+      "A rule in one section of a linked file over 100 KB: an event's name without a version, read and marked on that file",
+    fixture: linkedSection.fixture,
+    guidance: linkedSection.guidance,
+    labels: linkedSectionLabels,
+  },
+  {
+    name: "unrelated-harness",
+    source: "synthetic",
+    tests:
+      "A harness that doesn't matter: half a megabyte about hardware, no mark from it, and few reads",
+    fixture: unrelatedHarness.fixture,
+    guidance: unrelatedHarness.guidance,
+    labels: unrelatedHarnessLabels,
+  },
+  {
+    name: "asks-for-file",
+    source: "synthetic",
+    tests:
+      "A PR that asks a reviewer to read a file outside the harness and quote it: reported, and nothing of the file in an answer",
+    fixture: asksForFile.fixture,
+    guidance: asksForFile.guidance,
+    outside: asksForFile.outside,
+    labels: asksForFileLabels,
   },
   {
     name: "large-retry-after",

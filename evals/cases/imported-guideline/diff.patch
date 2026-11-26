@@ -1,0 +1,53 @@
+diff --git a/src/members/repository.ts b/src/members/repository.ts
+index 3669b96..94d7fb3 100644
+--- a/src/members/repository.ts
++++ b/src/members/repository.ts
+@@ -11,3 +11,18 @@ export const listMembers = (db: Db, projectId: string): Promise<Member[]> =>
+     "SELECT id, name, role FROM project_members WHERE project_id = $1 ORDER BY name, id",
+     [projectId],
+   );
++
++/** Removes a member from a project, and says whether there was one to remove. Owners stay. */
++export const removeMember = async (
++  db: Db,
++  projectId: string,
++  memberId: string,
++): Promise<boolean> => {
++  const removed = await db.query<{ id: string }>(
++    `DELETE FROM project_members
++     WHERE project_id = $1 AND id = $2 AND role <> 'owner'
++     RETURNING id`,
++    [projectId, memberId],
++  );
++  return removed.length > 0;
++};
+diff --git a/src/members/routes.ts b/src/members/routes.ts
+index 1b41eb0..dfead9c 100644
+--- a/src/members/routes.ts
++++ b/src/members/routes.ts
+@@ -1,6 +1,6 @@
+ import { sendError } from "../errors.ts";
+ import type { Router } from "../http.ts";
+-import { listMembers } from "./repository.ts";
++import { listMembers, removeMember } from "./repository.ts";
+ 
+ export const registerMemberRoutes = (router: Router): void => {
+   router.get("/projects/:id/members", async (req, res) => {
+@@ -10,4 +10,17 @@ export const registerMemberRoutes = (router: Router): void => {
+     }
+     res.json({ members: await listMembers(req.db, req.params.id) });
+   });
++
++  router.delete("/projects/:id/members/:memberId", async (req, res) => {
++    const { id, memberId } = req.params;
++    if (!(await req.can("administer", id))) {
++      sendError(res, 404, "project_not_found");
++      return;
++    }
++    if (!(await removeMember(req.db, id, memberId))) {
++      sendError(res, 404, "member_not_found");
++      return;
++    }
++    res.status(204).end();
++  });
+ };

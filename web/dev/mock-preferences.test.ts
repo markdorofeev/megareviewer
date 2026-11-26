@@ -162,8 +162,23 @@ describe("the mock API's preferences", () => {
       path: "REVIEW.md",
       enabled: false,
     });
+    for (const body of [{ path: "README.md" }, { path: "README.md", enabled: true }]) {
+      expect(send("PUT", "/api/preferences/guidelines", { repo: shop, ...body }).status).toBe(400);
+    }
+  });
+
+  it("switches a file a guideline file links, and answers the repository as it is then", () => {
+    const { send, view } = mock();
+    const { body } = send("PUT", "/api/preferences/guidelines", {
+      repo: shop,
+      path: "docs/testing.md",
+      enabled: false,
+    });
+    expect(body).toEqual(view().repositories[0]);
     expect(
-      send("PUT", "/api/preferences/guidelines", { repo: shop, path: "README.md" }).status,
-    ).toBe(400);
+      view().repositories[0]?.guidelineFiles?.[1]?.linked.find(
+        ({ path }) => path === "docs/testing.md",
+      ),
+    ).toMatchObject({ enabled: false, use: null });
   });
 });

@@ -49,6 +49,8 @@ export const ModelErrorKind = z.enum([
   "overloaded",
   "unauthorized",
   "network",
+  /** The pass's read tool failed, or it used up its rounds of reading. */
+  "reader",
   "unexpected",
 ]);
 export type ModelErrorKind = z.infer<typeof ModelErrorKind>;

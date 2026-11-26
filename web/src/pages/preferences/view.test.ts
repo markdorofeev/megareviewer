@@ -7,8 +7,11 @@ import {
 } from "../../../dev/fixtures/index.ts";
 import { GLOBAL, scopeOptions } from "./rule.tsx";
 import {
+  byLinking,
   formatBytes,
   isFirstRun,
+  linkedTotal,
+  linkedUses,
   listName,
   panelFor,
   plural,
@@ -20,11 +23,11 @@ import {
   sentence,
   suggestionSaid,
   whereAdded,
-  withGuidelineSwitch,
   withoutPreference,
   withoutProposal,
   withPreference,
   withProposals,
+  withRepository,
 } from "./view.ts";
 
 const [first] = view.preferences;
@@ -52,14 +55,24 @@ describe("the preferences view", () => {
     expect(added.proposals).toEqual([...view.proposals, fixtureImport]);
   });
 
-  it("switches one guideline file of one repository", () => {
-    const switched = withGuidelineSwitch(view, shop.repo, "CONTRIBUTING.md", true);
-    expect(switched.repositories[0]?.guidelineFiles?.map((file) => file.enabled)).toEqual([
-      true,
-      false,
-      true,
+  it("takes a repository as a switch left it, and leaves the others", () => {
+    const switched = { ...shop, guidelineFiles: [] };
+    const after = withRepository(view, switched);
+    expect(after.repositories[0]).toBe(switched);
+    expect(after.repositories.slice(1)).toEqual(view.repositories.slice(1));
+  });
+
+  it("groups linked files by the one that links them, and counts them by use", () => {
+    const linked = shop.guidelineFiles?.find((file) => file.path === "CLAUDE.md")?.linked ?? [];
+    expect(byLinking(linked).map(([path, files]) => [path, files.length])).toEqual([
+      ["CLAUDE.md", 4],
+      ["docs/house-rules.md", 1],
+      ["docs/runbooks/README.md", 2],
     ]);
-    expect(switched.repositories[1]).toBe(view.repositories[1]);
+    expect(linkedTotal(linked)).toBe("7 linked files, 88 KB");
+    expect(linkedTotal(linked.slice(0, 1))).toBe("1 linked file, 6.0 KB");
+    expect(linkedUses(linked)).toBe("2 in every review, 5 on request");
+    expect(linkedUses(linked.map((file) => ({ ...file, use: null })))).toBe("7 ignored");
   });
 
   it("lists a scope's preferences", () => {
@@ -105,6 +118,9 @@ describe("the preferences view", () => {
         repo,
         guidelineFiles: null,
         guidelineNote: "No pull request of this repository has been analyzed yet",
+        harnessCut: null,
+        harnessSkipped: [],
+        harnessNote: null,
       },
     ]);
     expect(repositoriesOf(view)).toEqual(view.repositories);

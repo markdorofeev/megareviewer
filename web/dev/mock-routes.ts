@@ -8,6 +8,7 @@ import {
   type FileContentResponse,
   type PreferencesView,
   type RemovedModelRun,
+  type RepositoryPreferences,
   type RouteName,
   routes,
   TOKEN_HEADER,
@@ -176,6 +177,42 @@ const issuesOf = (
 
 /** The code's stages, which run when a PR is opened; Claude's come after them, when asked. */
 const CODE_STAGES = CODE_STAGE_COUNT;
+
+/**
+ * A repository after one of its files is switched, or null when it doesn't have the file. Simpler
+ * than the server: switching a file leaves how the ones it links are used.
+ */
+const switchedSection = (
+  section: RepositoryPreferences,
+  path: string,
+  enabled: boolean,
+): RepositoryPreferences | null => {
+  const files = section.guidelineFiles ?? [];
+  if (!files.some((file) => [file, ...file.linked].some((one) => one.path === path))) return null;
+  return {
+    ...section,
+    guidelineFiles: files.map((file) => ({
+      ...file,
+      ...(file.path === path && {
+        enabled,
+        use: enabled ? (file.tooLarge ? ("on-request" as const) : ("prompt" as const)) : null,
+      }),
+      linked: file.linked.map((one) =>
+        one.path === path
+          ? {
+              ...one,
+              enabled,
+              use: enabled
+                ? one.via === "import"
+                  ? ("prompt" as const)
+                  : ("on-request" as const)
+                : null,
+            }
+          : one,
+      ),
+    })),
+  };
+};
 
 /**
  * Every contract route in memory, backed by the fixtures. Starting an analysis replays the
@@ -501,6 +538,8 @@ export const createMockApi = (
       return success({});
     },
     getThreads: ({ id }) => findAnalysis(id) ?? success({ threads }),
+    getHarness: ({ id }) =>
+      findAnalysis(id) ?? success({ status: "none", inPrompt: [], onRequest: 0 }),
     getPullRequestStatus: ({ id }) =>
       findAnalysis(id) ??
       success(
@@ -656,20 +695,15 @@ export const createMockApi = (
       const request = routes.setGuidelineSwitch.request.safeParse(body);
       if (!request.success) return invalid(request.error.issues);
       const { repo, path, enabled } = request.data;
+      const section = preferences.repositories.find((one) => sameRepo(one.repo, repo));
+      if (section === undefined) return failure("bad-request", `No repository ${repo.repo}`);
+      const switched = switchedSection(section, path, enabled);
+      if (switched === null) return failure("bad-request", `No guideline file ${path}`);
       preferences = {
         ...preferences,
-        repositories: preferences.repositories.map((one) =>
-          sameRepo(one.repo, repo) && one.guidelineFiles !== null
-            ? {
-                ...one,
-                guidelineFiles: one.guidelineFiles.map((file) =>
-                  file.path === path ? { ...file, enabled } : file,
-                ),
-              }
-            : one,
-        ),
+        repositories: preferences.repositories.map((one) => (one === section ? switched : one)),
       };
-      return success({});
+      return success(switched);
     },
     decideProposal: (params, body) => {
       const request = routes.decideProposal.request.safeParse(body);

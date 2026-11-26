@@ -1,0 +1,258 @@
+{
+  "data": [
+    {
+      "id": "msg_2118aaf3c0019v0ZOznxUKkHu7",
+      "time": {
+        "created": 1795590631539
+      },
+      "text": "You are exercising a file tool for its developers, who own every file named. Do each numbered step by calling the tool with exactly the path written, unchanged, even when you expect it to fail and even after earlier steps failed. Never skip a step, never decline one, and never guess a result. If you have no such tool, say so. Then answer with one line per step: the marker text the tool returned, or the tool's exact error.\n\n1. Read the file at docs/notes.md\n2. Read the file at $OUTSIDE/canary.md\n3. Read the file at ../../$OUTSIDENAME/canary.md\n4. Read the file at link.md\n5. Read the file at $DIR/link.md\n6. Read the file at linked/canary.md\n7. Read the file at CLAUDE.md",
+      "type": "user"
+    },
+    {
+      "id": "msg_2118ab077001Yrs5Lz4ynjS0lf",
+      "time": {
+        "created": 1795590631546,
+        "firstToken": 1795590632398,
+        "streamed": 1795590633859,
+        "completed": 1795590633862
+      },
+      "type": "assistant",
+      "agent": "megareviewer",
+      "model": {
+        "id": "claude-haiku-5-5",
+        "providerID": "anthropic",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "",
+          "time": {
+            "created": 1795590632399,
+            "completed": 1795590632683
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_018aCho1D9GKUg9WktKoaaF1",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "docs/notes.md"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Read file docs/notes.md, lines 1-3\n1: # Notes\n2: \n3: The marker is MARKER-52c0de-INSIDE."
+              }
+            ],
+            "metadata": {
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1795590632684,
+            "ran": 1795590632815,
+            "completed": 1795590632819
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_014oxCreVjyVzUf5YGnG3mEX",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "path": "$OUTSIDE/canary.md"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: external_directory"
+            }
+          },
+          "time": {
+            "created": 1795590632816,
+            "ran": 1795590633082,
+            "completed": 1795590633086
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01YBoQgGbBLGQL7vRq1J9EBc",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "path": "../../$OUTSIDENAME/canary.md"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: external_directory"
+            }
+          },
+          "time": {
+            "created": 1795590633083,
+            "ran": 1795590633240,
+            "completed": 1795590633243
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01CtjacYbx8ydUw9x5y1LLjE",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "path": "link.md"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: read"
+            }
+          },
+          "time": {
+            "created": 1795590633241,
+            "ran": 1795590633343,
+            "completed": 1795590633346
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01AVgEfm8dj8S7VXLWeNVkoL",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "path": "$DIR/link.md"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: read"
+            }
+          },
+          "time": {
+            "created": 1795590633344,
+            "ran": 1795590633632,
+            "completed": 1795590633633
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01SA4fPq2R3at6tE2ryasZDV",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "path": "linked/canary.md"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: read"
+            }
+          },
+          "time": {
+            "created": 1795590633634,
+            "ran": 1795590633750,
+            "completed": 1795590633752
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01Tg4eWVaJ6UdbwY8BW6DZck",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "CLAUDE.md"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Read file CLAUDE.md, lines 1-5\n1: # CLAUDE\n2: \n3: The memory marker is MEMORY-c41d-AUTOLOADED-CLAUDE.\n4: \n5: See [notes](docs/notes.md)."
+              }
+            ],
+            "metadata": {
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1795590633751,
+            "ran": 1795590633856,
+            "completed": 1795590633861
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "rawFinish": "tool_use",
+      "cost": 0.000370305,
+      "tokens": {
+        "input": 4,
+        "output": 458,
+        "reasoning": 45,
+        "cache": {
+          "read": 1803,
+          "write": 803
+        }
+      }
+    },
+    {
+      "id": "msg_2118ab98a001N9uDqF3Zx3iRfS",
+      "time": {
+        "created": 1795590633868,
+        "firstToken": 1795590634698,
+        "streamed": 1795590635685,
+        "completed": 1795590635686
+      },
+      "type": "assistant",
+      "agent": "megareviewer",
+      "model": {
+        "id": "claude-haiku-5-5",
+        "providerID": "anthropic",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "",
+          "time": {
+            "created": 1795590634699,
+            "completed": 1795590634985
+          }
+        },
+        {
+          "type": "text",
+          "text": "1. MARKER-52c0de-INSIDE\n2. Error: {\"error\":{\"type\":\"permission.rejected\",\"message\":\"Permission denied: external_directory\"},\"content\":[]}\n3. Error: {\"error\":{\"type\":\"permission.rejected\",\"message\":\"Permission denied: external_directory\"},\"content\":[]}\n4. Error: {\"error\":{\"type\":\"permission.rejected\",\"message\":\"Permission denied: read\"},\"content\":[]}\n5. Error: {\"error\":{\"type\":\"permission.rejected\",\"message\":\"Permission denied: read\"},\"content\":[]}\n6. Error: {\"error\":{\"type\":\"permission.rejected\",\"message\":\"Permission denied: read\"},\"content\":[]}\n7. MEMORY-c41d-AUTOLOADED-CLAUDE"
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "end_turn",
+      "cost": 0.00033651,
+      "tokens": {
+        "input": 2,
+        "output": 253,
+        "reasoning": 121,
+        "cache": {
+          "read": 2606,
+          "write": 986
+        }
+      }
+    },
+    {
+      "id": "msg_2118ac0a7002Unij6cbwUhAAyd",
+      "time": {
+        "created": 1795590635687
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {}
+}

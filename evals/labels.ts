@@ -2,6 +2,7 @@ import type {
   FindingType,
   GuidanceEffect,
   IntentMismatchKind,
+  ModelPass,
 } from "../src/domain/review/index.ts";
 
 /** Lines of a hunk, first to last, on the head ("new") or base side. */
@@ -40,6 +41,12 @@ export interface ExpectedGuidance {
   readonly alsoOn?: readonly number[];
 }
 
+/** A file of the harness a pass should open. */
+export interface ExpectedRead {
+  readonly pass: ModelPass;
+  readonly path: string;
+}
+
 /** What a reviewer expects the pipeline to produce for one case. */
 export interface CaseLabels {
   /** What looks wrong: a defect, or something the reviewer would ask the author to change. */
@@ -56,6 +63,11 @@ export interface CaseLabels {
    * A case with no labeled finding but without this may hold one nobody labeled.
    */
   readonly nothingWrong?: true;
+  /**
+   * For cases with files left to be read: the reads a pass should make, by the file's path in the
+   * repository. [] means none is asked for.
+   */
+  readonly reads?: readonly ExpectedRead[];
   /** For cases whose PR text tries to steer the model. */
   readonly injection?: { readonly reported: boolean };
 }

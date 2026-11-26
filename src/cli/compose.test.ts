@@ -10,6 +10,7 @@ import {
   allFixtures,
   FakeCodeParser,
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakeRepositoryCopies,
@@ -18,6 +19,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   RecordingLogger,
@@ -27,7 +29,9 @@ import {
   assemble,
   type Composition,
   compose,
+  createHarnessSources,
   createReviewHistories,
+  harnessSourceIn,
   newSessionToken,
 } from "./compose.ts";
 import type { Config } from "./config.ts";
@@ -67,6 +71,8 @@ const fakeComposition = () => {
       preferences: new InMemoryPreferenceStore(),
       history: {},
       checkouts: new FakeLocalCheckouts(),
+      harnessSource: () => null,
+      harnessStore: new InMemoryHarnessStore(),
       knownCheckouts: new InMemoryKnownCheckouts(),
       copies: new FakeRepositoryCopies(),
       threads: {},
@@ -126,6 +132,8 @@ describe("assemble and serve", () => {
         preferences: new InMemoryPreferenceStore(),
         history: {},
         checkouts: new FakeLocalCheckouts(),
+        harnessSource: () => null,
+        harnessStore: new InMemoryHarnessStore(),
         knownCheckouts: new InMemoryKnownCheckouts(),
         copies: new FakeRepositoryCopies(),
         threads: {},
@@ -150,6 +158,8 @@ describe("assemble and serve", () => {
         preferences: new InMemoryPreferenceStore(),
         history: {},
         checkouts: new FakeLocalCheckouts(),
+        harnessSource: () => null,
+        harnessStore: new InMemoryHarnessStore(),
         knownCheckouts: new InMemoryKnownCheckouts(),
         copies: new FakeRepositoryCopies(),
         threads: {},
@@ -247,6 +257,31 @@ describe("compose", () => {
     ]);
     expect(Object.keys(histories({ ...config, github: null }))).toEqual(["bitbucket"]);
     expect(histories({ github: null, bitbucket: null })).toEqual({});
+  });
+
+  it("reads harnesses from the configured hosts, and from no other", async () => {
+    const config = await configIn();
+    const sources = (hosts: Pick<Config, "github" | "bitbucket">) =>
+      createHarnessSources(hosts, {
+        version: "1.2.3",
+        clock: new FixedClock(),
+        logger: new RecordingLogger(),
+      });
+
+    expect(Object.values(sources(config)).map((source) => source.host)).toEqual([
+      "github",
+      "bitbucket",
+    ]);
+    expect(Object.keys(sources({ ...config, github: null }))).toEqual(["bitbucket"]);
+    expect(sources({ github: null, bitbucket: null })).toEqual({});
+  });
+
+  it("reads a repository's harness from its host's source, or from none", () => {
+    const github = new FakeHarnessSource({ host: "github" });
+    const harnessSource = harnessSourceIn({ github });
+
+    expect(harnessSource({ host: "github", owner: "acme", repo: "shop" })).toBe(github);
+    expect(harnessSource({ host: "bitbucket", owner: "acme", repo: "shop" })).toBeNull();
   });
 
   it("doesn't mount fake mode's control routes", async () => {

@@ -20,13 +20,20 @@ import {
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
-import type { AnalysisInput, CodeParser, FoundCheckout, PassOptions } from "../ports/index.ts";
+import type {
+  AnalysisInput,
+  CodeParser,
+  FoundCheckout,
+  HarnessSourceFile,
+  PassOptions,
+} from "../ports/index.ts";
 import {
   allFixtures,
   bitbucketBugfix,
   FakeAnalysisModel,
   FakeCodeParser,
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckout,
   FakeLocalCheckouts,
   FakeModelCatalog,
@@ -36,6 +43,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   type PullRequestFixture,
@@ -45,7 +53,7 @@ import {
   smallFeature,
   smallFeatureFiles,
 } from "../testing/index.ts";
-import { createUseCases } from "./index.ts";
+import { createUseCases, loadHarness } from "./index.ts";
 
 class RecordingStore extends InMemoryAnalysisStore {
   readonly saves: Analysis[] = [];
@@ -78,6 +86,7 @@ const setup = (
     /** The catalog's options; Sonnet 5.5 on Claude Code, available, unless given. */
     modelOptions?: readonly ModelOption[];
     checkouts?: FakeLocalCheckouts;
+    harnessSource?: FakeHarnessSource;
     copies?: FakeRepositoryCopies;
     clock?: FixedClock;
     /** The PRs GitHub has; every fixture unless given. */
@@ -103,6 +112,7 @@ const setup = (
   const preferences = new InMemoryPreferenceStore();
   const knownCheckouts = new InMemoryKnownCheckouts();
   const fileCache = options.fileCache ?? new InMemoryFileCache();
+  const harnessStore = new InMemoryHarnessStore(clock);
   const parser = options.parser ?? new FakeCodeParser();
   const logger = new RecordingLogger();
 
@@ -129,6 +139,8 @@ const setup = (
       models,
       store,
       fileCache,
+      harnessSource: () => options.harnessSource ?? null,
+      harnessStore,
       preferences,
       history: {},
       checkouts: options.checkouts ?? new FakeLocalCheckouts(),
@@ -188,6 +200,7 @@ const setup = (
     preferences,
     fileCache,
     knownCheckouts,
+    harnessStore,
     logger,
     emitted,
     useCases,
@@ -461,7 +474,7 @@ describe("the analysis pipeline", () => {
     const analysis = await analyze();
 
     const missing = `Finding 1 rests on ${unknownHunk}, which isn't a hunk of this pull request.`;
-    const call = { startedAt: clock.now(), durationMs: 0, problems: [], error: null };
+    const call = { startedAt: clock.now(), durationMs: 0, problems: [], error: null, reads: [] };
     expect(analysis.modelCalls).toEqual([
       {
         ...call,
@@ -469,6 +482,7 @@ describe("the analysis pipeline", () => {
         attempt: 1,
         outcome: "failed",
         error: modelError("overloaded", "Overloaded"),
+        reads: [],
       },
       { ...call, pass: "findings", attempt: 1, outcome: "problems", problems: [missing] },
       { ...call, pass: "findings", attempt: 2, outcome: "ok" },
@@ -964,6 +978,88 @@ describe("starting analyses", () => {
     expect(again.status).toBe("complete");
     expect(model.callsTo("intent")).toHaveLength(2);
     expect(await store.getAnalysis(complete.id)).toEqual(complete);
+  });
+});
+
+describe("loading the repository's harness", () => {
+  const { ref, baseSha, url } = smallFeature.pullRequest;
+  const networkError: HostError = {
+    kind: "network",
+    message: "socket hang up",
+    retryAfterSeconds: null,
+  };
+  const sourceWith = (files: Readonly<Record<string, string>>) => {
+    const source = new FakeHarnessSource();
+    source.setFiles(ref.repo, baseSha, files);
+    return source;
+  };
+  /** What's stored once the load already running ends: without a source, this starts none. */
+  const loaded = async (harnessStore: InMemoryHarnessStore) => {
+    const logger = new RecordingLogger();
+    await loadHarness({ harnessSource: () => null, harnessStore, logger }, ref.repo, baseSha);
+    return harnessStore.getHarness(ref.repo, baseSha);
+  };
+
+  it("starts with a new analysis, which doesn't wait for it", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "@docs/rules.md", "docs/rules.md": "" });
+    const release = harnessSource.hold();
+    const { analyze, harnessStore } = setup({ harnessSource, modelEnabled: false });
+
+    const analysis = await analyze();
+    expect(analysis.status).toBe("complete");
+    expect(await harnessStore.getHarness(ref.repo, baseSha)).toBeNull();
+
+    release();
+    const harness = await loaded(harnessStore);
+    expect(harness?.files.map((file) => file.path)).toEqual(["CLAUDE.md", "docs/rules.md"]);
+  });
+
+  it("asks the source for nothing when the commit's harness is stored", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "" });
+    const { analyze, harnessStore, useCases } = setup({ harnessSource, modelEnabled: false });
+    await analyze();
+    expect(await loaded(harnessStore)).toMatchObject({ baseSha });
+
+    await useCases.startAnalysis(url);
+    expect(harnessSource.calls.listFiles).toEqual([baseSha]);
+  });
+
+  it("starts again for a complete analysis whose harness hadn't loaded", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "" });
+    harnessSource.failNext("listFiles", networkError);
+    const { analyze, harnessStore, useCases, preps } = setup({
+      harnessSource,
+      modelEnabled: false,
+    });
+    await analyze();
+    expect(await harnessStore.getHarness(ref.repo, baseSha)).toBeNull();
+
+    await useCases.startAnalysis(url);
+    expect(await loaded(harnessStore)).toMatchObject({ baseSha });
+    expect(preps()).toBe(1);
+  });
+
+  it("starts for an analysis that has its callers, whose opening does nothing else", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "" });
+    harnessSource.failNext("listFiles", networkError);
+    const { analyze, harnessStore, store, useCases } = setup({
+      harnessSource,
+      modelEnabled: false,
+    });
+    await store.saveAnalysis({ ...(await analyze()), checkout: "read" });
+
+    await useCases.startAnalysis(url);
+    expect(await loaded(harnessStore)).toMatchObject({ baseSha });
+  });
+
+  it("completes the analysis, without a warning on it, when the load fails", async () => {
+    const harnessSource = sourceWith({ "CLAUDE.md": "" });
+    harnessSource.failAlways(networkError);
+    const { analyze } = setup({ harnessSource });
+
+    const analysis = await analyze();
+    expect(analysis).toMatchObject({ status: "complete", error: null, modelError: null });
+    expect(analysis.warnings.filter((warning) => warning.includes("hang up"))).toEqual([]);
   });
 });
 
@@ -2163,7 +2259,7 @@ describe("a model run's guidance", () => {
   const guidelines = withGuidelines({
     "REVIEW.md": "Migrations must be reversible.\n",
     "AGENTS.md": "Use pnpm.\n",
-    "CLAUDE.md": "x".repeat(40_000),
+    "CLAUDE.md": "x".repeat(70_000),
   });
   const added = smallFeatureFiles
     .flatMap((file) => file.hunks)
@@ -2200,7 +2296,14 @@ describe("a model run's guidance", () => {
         { ref: "p1", kind: "look-for", text: "Tenant isolation", scope: "global" },
         { ref: "p2", kind: "dont-flag", text: "Naming of test helpers", scope: "repo" },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Migrations must be reversible.\n" }],
+      guidelines: [
+        {
+          ref: "g1",
+          path: "REVIEW.md",
+          linkedFrom: null,
+          content: "Migrations must be reversible.\n",
+        },
+      ],
     };
     for (const pass of ["checkSize", ...MODEL_STAGES] as const) {
       expect(model.callsTo(pass).map((call) => call.input.guidance)).toEqual([guidance]);
@@ -2216,7 +2319,7 @@ describe("a model run's guidance", () => {
         },
         { ref: "p2", id: naming.id, kind: "dont-flag", text: naming.text, scope: naming.scope },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 31 }],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 31 }],
       checks: [],
     });
     expect(analysis.warnings).toEqual([]);
@@ -2250,12 +2353,14 @@ describe("a model run's guidance", () => {
     const analysis = await analyze();
 
     expect(firstInput(model, "intent").guidance.guidelines).toEqual([
-      { ref: "g1", path: "AGENTS.md", content: "Use pnpm.\n" },
+      { ref: "g1", path: "AGENTS.md", linkedFrom: null, content: "Use pnpm.\n" },
     ]);
-    expect(analysis.guidance?.guidelines).toEqual([{ ref: "g1", path: "AGENTS.md", bytes: 10 }]);
+    expect(analysis.guidance?.guidelines).toEqual([
+      { ref: "g1", path: "AGENTS.md", linkedFrom: null, given: "prompt", bytes: 10 },
+    ]);
   });
 
-  it("doesn't send a guideline file over 32 KB, and says so, once however often the run is tried", async () => {
+  it("doesn't send a guideline file that doesn't fit, and says so, once however often the run is tried", async () => {
     const model = new FakeAnalysisModel();
     model.script("intent", err(modelError("overloaded")));
     const { analyze, runModel, preferences } = setup({ fixtures: [guidelines], model });
@@ -2265,10 +2370,12 @@ describe("a model run's guidance", () => {
     const analysis = await runModel(failed.id);
 
     const warning =
-      "CLAUDE.md is 40 KB, over the 32 KB a guideline file can be, so the AI review ran without it";
+      "The AI review ran without some guideline files: CLAUDE.md is 69 KB and didn't fit in the 64 KB they can add up to";
     expect(failed.warnings).toEqual([warning]);
     expect(analysis.warnings).toEqual([warning]);
-    expect(analysis.guidance?.guidelines).toEqual([{ ref: "g1", path: "REVIEW.md", bytes: 31 }]);
+    expect(analysis.guidance?.guidelines).toEqual([
+      { ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 31 },
+    ]);
     expect(model.callsTo("findings")[0]?.input.guidance.guidelines.map((one) => one.path)).toEqual([
       "REVIEW.md",
     ]);
@@ -2299,6 +2406,285 @@ describe("a model run's guidance", () => {
       guidelines: [],
     });
     expect(analysis.guidance?.guidelines).toEqual([]);
+  });
+
+  describe("with a harness", () => {
+    const source = (files: Readonly<Record<string, string | HarnessSourceFile>>) => {
+      const harnessSource = new FakeHarnessSource();
+      harnessSource.setFiles(repo, baseSha, files);
+      return harnessSource;
+    };
+    const given = (analysis: Analysis) =>
+      analysis.guidance?.guidelines.map(({ ref, path, linkedFrom }) => [ref, path, linkedFrom]);
+    const FILES = {
+      "REVIEW.md": "Migrations must be reversible.\n",
+      "CLAUDE.md": "See docs/plan.md.\n\n@docs/rules.md\n@docs/naming.md\n",
+      "docs/rules.md": "# Rules\n\n@style.md\n",
+      "docs/naming.md": "# Naming\n",
+      "docs/style.md": "# Style\n",
+      "docs/plan.md": "# Plan\n",
+    };
+
+    it("gives the enabled roots and then the files they import, with what imports each", async () => {
+      const { analyze, model, preferences, github } = setup({ harnessSource: source(FILES) });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+      const analysis = await analyze();
+
+      expect(firstInput(model, "intent").guidance.guidelines).toEqual([
+        { ref: "g1", path: "REVIEW.md", linkedFrom: null, content: FILES["REVIEW.md"] },
+        { ref: "g2", path: "CLAUDE.md", linkedFrom: null, content: FILES["CLAUDE.md"] },
+        {
+          ref: "g3",
+          path: "docs/rules.md",
+          linkedFrom: "CLAUDE.md",
+          content: FILES["docs/rules.md"],
+        },
+        {
+          ref: "g4",
+          path: "docs/naming.md",
+          linkedFrom: "CLAUDE.md",
+          content: FILES["docs/naming.md"],
+        },
+        {
+          ref: "g5",
+          path: "docs/style.md",
+          linkedFrom: "docs/rules.md",
+          content: FILES["docs/style.md"],
+        },
+      ]);
+      expect(analysis.guidance?.guidelines[2]).toEqual({
+        ref: "g3",
+        path: "docs/rules.md",
+        linkedFrom: "CLAUDE.md",
+        given: "prompt",
+        bytes: 19,
+      });
+      // Nothing is asked of the host's files: the harness has them.
+      expect(github.getFilesCalls.flat().filter(({ path }) => path.endsWith(".md"))).toEqual([]);
+    });
+
+    it("leaves out a root that's off with what it imports, and an import that's off alone", async () => {
+      const { analyze, preferences } = setup({ harnessSource: source(FILES) });
+      expect(given(await analyze())).toEqual([["g1", "REVIEW.md", null]]);
+
+      const other = setup({ harnessSource: source(FILES) });
+      await other.preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      await other.preferences.setGuidelineSwitch(repo, "docs/naming.md", false);
+      expect(given(await other.analyze())?.map(([, path]) => path)).toEqual([
+        "REVIEW.md",
+        "CLAUDE.md",
+        "docs/rules.md",
+        "docs/style.md",
+      ]);
+      expect(await preferences.getGuidelineSwitches(repo)).toEqual(new Map());
+    });
+
+    it("passes over an import that doesn't fit, takes a smaller one after it, and names what it left out", async () => {
+      const { analyze, preferences } = setup({
+        harnessSource: source({
+          "CLAUDE.md": "@large.md @small.md @huge.md @image.txt @off.txt\n\n[See](link.txt)",
+          "large.md": "x".repeat(70_000),
+          "small.md": "Small.\n",
+          "huge.md": { kind: "skipped", reason: "too-large" },
+          "image.txt": { kind: "skipped", reason: "unreadable" },
+          "off.txt": { kind: "skipped", reason: "unreadable" },
+          "link.txt": { kind: "skipped", reason: "unreadable" },
+        }),
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      await preferences.setGuidelineSwitch(repo, "off.txt", false);
+
+      const analysis = await analyze();
+
+      expect(given(analysis)).toEqual([
+        ["g1", "CLAUDE.md", null],
+        ["g2", "small.md", "CLAUDE.md"],
+      ]);
+      // A file only linked isn't one a run always reads, so leaving it out says nothing.
+      expect(analysis.warnings).toEqual([
+        "The AI review ran without some guideline files: large.md is 69 KB and didn't fit in the 64 KB they can add up to; huge.md is over 1 MB; image.txt couldn't be read as text",
+      ]);
+    });
+
+    it("gives a root that's on only because a root that's on imports it", async () => {
+      const { analyze, preferences } = setup({
+        harnessSource: source({
+          "CLAUDE.md": "@AGENTS.md\n",
+          "AGENTS.md": "Use pnpm.\n\n@docs/rules.md\n",
+          "docs/rules.md": "# Rules\n",
+        }),
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      expect(given(await analyze())).toEqual([
+        ["g1", "CLAUDE.md", null],
+        ["g2", "AGENTS.md", null],
+        ["g3", "docs/rules.md", "AGENTS.md"],
+      ]);
+    });
+
+    it("lists the other enabled files for a model that reads them, as the copies it reads", async () => {
+      const long = `${"word ".repeat(400)}\n\n## After\n`;
+      const model = new FakeAnalysisModel({ readsHarness: true });
+      const { analyze, preferences } = setup({
+        harnessSource: source({
+          "CLAUDE.md": "@docs/rules.md @docs/large.md\n\nSee docs/plan.md.\n",
+          "docs/rules.md": "[Deep](deep.md)\n",
+          "docs/large.md": `# Large\n\n${"x ".repeat(40_000)}`,
+          "docs/plan.md": long,
+          "docs/deep.md": "# Deep\n",
+        }),
+        model,
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+      const analysis = await analyze();
+
+      expect(
+        analysis.guidance?.guidelines.map(({ ref, path, linkedFrom, given }) => [
+          ref,
+          path,
+          linkedFrom,
+          given,
+        ]),
+      ).toEqual([
+        ["g1", "CLAUDE.md", null, "prompt"],
+        ["g2", "docs/rules.md", "CLAUDE.md", "prompt"],
+        ["g3", "docs/large.md", "CLAUDE.md", "on-request"],
+        ["g4", "docs/plan.md", "CLAUDE.md", "on-request"],
+        ["g5", "docs/deep.md", "docs/rules.md", "on-request"],
+      ]);
+      const { harness, guidance } = firstInput(model, "intent");
+      expect(guidance.guidelines.map(({ ref }) => ref)).toEqual(["g1", "g2"]);
+      expect(harness?.files.map(({ ref, path }) => [ref, path])).toEqual([
+        ["g3", "harness/docs/large.md"],
+        ["g4", "harness/docs/plan.md"],
+        ["g5", "harness/docs/deep.md"],
+      ]);
+      const plan = harness?.contents.get("harness/docs/plan.md")?.split("\n") ?? [];
+      const [after] = harness?.files[1]?.headings ?? [];
+      expect(plan[(after?.line ?? 0) - 1]).toBe("## After");
+      expect(harness?.files[1]?.lines).toBe(plan.length - 1);
+      // What doesn't fit the prompt can be read, so nothing is left out.
+      expect(analysis.warnings).toEqual([]);
+    });
+
+    it("says how many files a model that doesn't read them ran without, and why", async () => {
+      const { analyze, model, preferences } = setup({ harnessSource: source(FILES) });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+      const analysis = await analyze();
+
+      expect(firstInput(model, "intent").harness).toBeNull();
+      expect(analysis.guidance?.guidelines.every((file) => file.given === "prompt")).toBe(true);
+      expect(analysis.warnings).toEqual([
+        "The AI review ran without 1 file the repository's guideline files link: Sonnet 5.5 through Claude Code can't read files on request",
+      ]);
+    });
+
+    it("has nothing to read when the harness can't be loaded, or every file is in the prompt", async () => {
+      const model = new FakeAnalysisModel({ readsHarness: true });
+      const harnessSource = source(FILES);
+      harnessSource.failAlways(hostError("network"));
+      const failing = setup({ harnessSource, model, fixtures: [withGuidelines(FILES)] });
+      await failing.analyze();
+      expect(firstInput(model, "intent").harness).toBeNull();
+
+      const other = new FakeAnalysisModel({ readsHarness: true });
+      await setup({ harnessSource: source({ "REVIEW.md": "Be kind." }), model: other }).analyze();
+      expect(firstInput(other, "intent").harness).toBeNull();
+    });
+
+    it("names the file that imports one, not the first that mentions it", async () => {
+      const { analyze, preferences } = setup({
+        harnessSource: source({
+          "REVIEW.md": "As rules.md says.",
+          "CLAUDE.md": "@rules.md",
+          "rules.md": "",
+        }),
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      expect(given(await analyze())?.at(-1)).toEqual(["g3", "rules.md", "CLAUDE.md"]);
+    });
+
+    it("waits for the load the analysis started, making no other", async () => {
+      const harnessSource = source(FILES);
+      const release = harnessSource.hold();
+      const { analyze, runModel, model, preferences } = setup({
+        harnessSource,
+        modelEnabled: false,
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      const { id } = await analyze();
+      const running = runModel(id);
+      release();
+      expect(given(await running)).toHaveLength(5);
+      expect(harnessSource.calls.listFiles).toEqual([baseSha]);
+      expect(model.callsTo("intent")).toHaveLength(1);
+    });
+
+    it("reads the roots alone when the harness can't be loaded, with one warning", async () => {
+      const harnessSource = source(FILES);
+      harnessSource.failAlways(hostError("rate-limited"));
+      const { analyze, preferences } = setup({
+        harnessSource,
+        fixtures: [withGuidelines(FILES)],
+      });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+
+      const analysis = await analyze();
+
+      expect(given(analysis)).toEqual([
+        ["g1", "REVIEW.md", null],
+        ["g2", "CLAUDE.md", null],
+      ]);
+      expect(analysis.warnings).toEqual([
+        "Couldn't load the files the repository's guideline files import, so the AI review ran without them: rate-limited from host",
+      ]);
+    });
+
+    it("warns once when neither the harness nor the roots can be read", async () => {
+      const harnessSource = source(FILES);
+      harnessSource.failAlways(hostError("network"));
+      const { analyze, runModel, github } = setup({ harnessSource, modelEnabled: false });
+      const { id } = await analyze();
+      github.failNext("getFiles", hostError("network"));
+      expect((await runModel(id)).warnings).toEqual([
+        "Couldn't read the repository's guideline files, so the AI review ran without them: network from host",
+      ]);
+    });
+
+    it("says nothing of a harness that can't be loaded for a repository without guideline files", async () => {
+      const harnessSource = source({});
+      harnessSource.failAlways(hostError("network"));
+      expect((await setup({ harnessSource }).analyze()).warnings).toEqual([]);
+    });
+
+    it("loads nothing for the run when every root is off", async () => {
+      const harnessSource = source(FILES);
+      const { analyze, runModel, preferences, harnessStore } = setup({
+        harnessSource,
+        modelEnabled: false,
+      });
+      await preferences.setGuidelineSwitch(repo, "REVIEW.md", false);
+      const { id } = await analyze();
+      await harnessStore.dropUnusedSince("2027-01-01T00:00:00Z");
+      const ran = await runModel(id);
+      expect(ran.guidance?.guidelines).toEqual([]);
+      expect(harnessSource.calls.listFiles).toHaveLength(1);
+    });
+
+    it("shows a point's mark as from the imported file the rule is in", async () => {
+      const model = new FakeAnalysisModel();
+      model.script("findings", ok([findingOn(0, { ref: "g3", effect: "raised" })]));
+      const { analyze, preferences } = setup({ harnessSource: source(FILES), model });
+      await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+      expect(pointsOf(await analyze())[0]?.guidance).toEqual({
+        effect: "raised",
+        label: "docs/rules.md",
+        preferenceId: null,
+      });
+    });
   });
 
   it("keeps the marks that check out and drops the others, never their points", async () => {

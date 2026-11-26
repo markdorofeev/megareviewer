@@ -14,7 +14,8 @@ import {
   smallFeatureInput,
   smallFeaturePublication,
 } from "../../application/testing/index.ts";
-import { CommentKey, SignalKey } from "../../domain/review/index.ts";
+import { loadHarness } from "../../application/use-cases/index.ts";
+import { CommentKey, harnessPlan, SignalKey } from "../../domain/review/index.ts";
 import {
   createFakeApp,
   failingIntentOnce,
@@ -22,6 +23,7 @@ import {
   intentFailsOnce,
 } from "./fake-app.ts";
 import { receiptsDownloaded } from "./receipts-downloaded.ts";
+import { receiptsHarness } from "./receipts-harness.ts";
 
 const PORT = 4823;
 const HOST = `127.0.0.1:${PORT}`;
@@ -146,6 +148,47 @@ describe("createFakeApp", () => {
     expect(response.status).toBe(200);
     const pullRequest = await fake.github.getPullRequest(smallFeature.pullRequest.ref);
     expect(pullRequest.ok && pullRequest.value.headSha).toBe(NEW_HEAD);
+  });
+
+  it("has a PR whose guideline files import, link and mention others", async () => {
+    const { fake } = await setup();
+    const { url, ref, baseSha } = receiptsHarness.pullRequest;
+
+    expect((await fake.composition.useCases.startAnalysis(url)).ok).toBe(true);
+    const loaded = await loadHarness(
+      {
+        harnessSource: () => fake.harnessSources.github,
+        harnessStore: fake.harnessStore,
+        logger: new RecordingLogger(),
+      },
+      ref.repo,
+      baseSha,
+    );
+
+    if (!loaded.ok || loaded.value === null) throw new Error("the harness didn't load");
+    const { harness } = loaded.value;
+    expect(harness.files.map(({ path, via }) => `${via} ${path}`)).toEqual([
+      "root REVIEW.md",
+      "root CLAUDE.md",
+      "import docs/house-rules.md",
+      "import docs/architecture.md",
+      "mention docs/testing.md",
+      "link docs/runbooks/README.md",
+      "import docs/naming.md",
+      "link docs/runbooks/refunds.md",
+      "link docs/runbooks/stock.md",
+    ]);
+    expect(harness.skipped).toEqual([{ path: "docs/changelog.md", reason: "too-large" }]);
+    const plan = harnessPlan(harness, new Map([["CLAUDE.md", true]]));
+    expect(plan.inPrompt.map(({ path }) => path)).toEqual([
+      "REVIEW.md",
+      "CLAUDE.md",
+      "docs/house-rules.md",
+      "docs/naming.md",
+    ]);
+    expect(plan.onRequest).toHaveLength(5);
+    // Starting the analysis had loaded it.
+    expect(fake.harnessSources.github.calls.listFiles).toEqual([baseSha]);
   });
 
   it.each([

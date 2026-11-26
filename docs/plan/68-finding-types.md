@@ -156,6 +156,17 @@ The Mac slept with its lid closed for most of the session, waking for about a mi
 - The type's chip is grey and the severity has the color; `PointTone` in `web/src/lib/status.ts` is a severity or `mismatch`, and the line marks, the card's bar and label, the bug, the stepper's and list's glyph, the tour's chips and the landing's wash take it.
 - The judge's prompt gains a section on the unchanged callers only for a case that has some, so the 18 cases without are judged by the prompt they were (`JUDGE_VERSION` 7).
 
+### After merging main, with the harness slice
+
+`main` had gained stages 75 to 82, the harness and a read tool in every pass, while this branch was built. Merged here, by hand where the two met:
+
+- **The read tool's tests run on the findings pass.** On `main` they replayed a recorded risk pass, on the API, Claude Code and opencode; `model-passes.test.ts`, which stage 67 deleted with the risk pass's tests, is back with `main`'s tests of refs and reads, less the ones about a risk or a decision.
+- **Prompt versions moved past both sides:** the API 20, Claude Code 17, Codex 13, opencode 14. The fingerprints of a run without guidance are this branch's; those of a run with something to read, and the guided messages', are new.
+- **`main`'s four eval cases have a type on each finding and no risk or decision labels:** asks-for-file, imported-guideline, linked-section and unrelated-harness. Their types were written at the merge and no run has scored them. The marks their labels allowed on a risk are a finding's alone now.
+- **An eval case's files outside its PR are `checkoutFiles`.** `main` uses `outside` for a file a PR asks a reviewer to read outside the harness.
+- **The harness scorer** counts the passes there are, and what a run could quote is its intent, findings and steps.
+- **The evals weren't run again.** The numbers above are of this branch before the merge: the merged prompts give the intent pass `main`'s line on guidance, and a run with a harness reads files, neither of which a run has measured with typed findings. The spikes in `evals/spikes/harness-read-tool/` name the findings and steps passes where they named risk and decisions, and weren't run again either.
+
 ### Left for later
 
 - delphi-code #2's three must-have findings, missed in every run since the findings pass has been measured on it.

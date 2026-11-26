@@ -160,3 +160,9 @@ export const BitbucketBuildStatus = z.object({
   url: z.string().nullish(),
 });
 export type BitbucketBuildStatus = z.infer<typeof BitbucketBuildStatus>;
+
+const DiffstatPath = z.object({ path: z.string().min(1) }).nullish();
+
+/** A file that differs between two commits: both its paths, one for an added or removed file. */
+export const BitbucketDiffstat = z.object({ old: DiffstatPath, new: DiffstatPath });
+export type BitbucketDiffstat = z.infer<typeof BitbucketDiffstat>;

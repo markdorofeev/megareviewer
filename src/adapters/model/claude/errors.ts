@@ -42,3 +42,7 @@ export const fromSdkError = (error: unknown): ModelError => {
   }
   throw error;
 };
+
+/** The API wouldn't take the request: malformed, or larger than it takes. */
+export const isRefusedRequest = (error: unknown): boolean =>
+  error instanceof Anthropic.APIError && (error.status === 400 || error.status === 413);

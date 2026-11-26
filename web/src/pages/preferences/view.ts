@@ -1,6 +1,10 @@
-import type { PreferencesView } from "../../../../contracts/index.ts";
+import type {
+  GuidelineUse,
+  LinkedGuidelineFile,
+  PreferencesView,
+  RepositoryPreferences,
+} from "../../../../contracts/index.ts";
 import {
-  type GuidelinePath,
   type Preference,
   type PreferenceId,
   type PreferenceProposal,
@@ -45,24 +49,57 @@ export const withoutProposal = (view: PreferencesView, id: ProposalId): Preferen
   proposals: view.proposals.filter((one) => one.id !== id),
 });
 
-export const withGuidelineSwitch = (
+/** A repository as a switch of its files left it. */
+export const withRepository = (
   view: PreferencesView,
-  repo: RepoRef,
-  path: GuidelinePath,
-  enabled: boolean,
+  switched: RepositoryPreferences,
 ): PreferencesView => ({
   ...view,
   repositories: view.repositories.map((one) =>
-    sameRepo(one.repo, repo) && one.guidelineFiles !== null
-      ? {
-          ...one,
-          guidelineFiles: one.guidelineFiles.map((file) =>
-            file.path === path ? { ...file, enabled } : file,
-          ),
-        }
-      : one,
+    sameRepo(one.repo, switched.repo) ? switched : one,
   ),
 });
+
+/** How a review uses a file, in words that name no transport. */
+export const USE_WORDS: Readonly<Record<GuidelineUse, string>> = {
+  prompt: "In every review",
+  "on-request": "Read when the model asks",
+};
+
+/** The same of a file whose guideline file is off. */
+export const WOULD_USE_WORDS: Readonly<Record<GuidelineUse, string>> = {
+  prompt: "When on, in every review",
+  "on-request": "When on, read on request",
+};
+
+/** Files by the one that links them, in the order they're first linked. */
+export const byLinking = (
+  linked: readonly LinkedGuidelineFile[],
+): readonly (readonly [string, readonly LinkedGuidelineFile[]])[] => {
+  const groups = new Map<string, LinkedGuidelineFile[]>();
+  for (const file of linked) {
+    groups.set(file.linkedFrom, [...(groups.get(file.linkedFrom) ?? []), file]);
+  }
+  return [...groups];
+};
+
+/** "8 linked files, 71 KB". */
+export const linkedTotal = (linked: readonly LinkedGuidelineFile[]): string =>
+  `${plural(linked.length, "linked file")}, ${formatBytes(linked.reduce((sum, file) => sum + file.bytes, 0))}`;
+
+/** "2 in every review, 5 on request, 1 ignored". */
+export const linkedUses = (linked: readonly LinkedGuidelineFile[]): string =>
+  (
+    [
+      ["prompt", "in every review"],
+      ["on-request", "on request"],
+      [null, "ignored"],
+    ] as const
+  )
+    .map(([use, words]) => [linked.filter((file) => file.use === use).length, words] as const)
+    .filter(([count]) => count > 0)
+    .map(([count, words]) => `${count} ${words}`)
+    .join(", ");
 
 export const preferencesIn = (
   view: PreferencesView,
@@ -177,16 +214,23 @@ export const repositoriesOf = (view: PreferencesView): PreferencesView["reposito
       repo: scope.repo,
       guidelineFiles: null,
       guidelineNote: "No pull request of this repository has been analyzed yet",
+      harnessCut: null,
+      harnessSkipped: [],
+      harnessNote: null,
     });
   }
   return listed;
 };
 
-/** "1.2 KB", "48 KB", "812 B". */
+/** "1.2 KB", "48 KB", "812 B", "1.1 MB". */
 export const formatBytes = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   const kilobytes = bytes / 1024;
-  return `${kilobytes < 10 ? kilobytes.toFixed(1) : Math.round(kilobytes)} KB`;
+  if (kilobytes < 1024) {
+    return `${kilobytes < 10 ? kilobytes.toFixed(1) : Math.round(kilobytes)} KB`;
+  }
+  const megabytes = kilobytes / 1024;
+  return `${megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes)} MB`;
 };
 
 /** A sentence from a server message, which may lack the final period. */

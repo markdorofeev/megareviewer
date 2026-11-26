@@ -4,7 +4,7 @@
  * output schema or the arguments change, and set CODEX_FINGERPRINT to the value the version test
  * prints. The version is part of the analysis cache key.
  */
-export const CODEX_PROMPT_VERSION = 12;
+export const CODEX_PROMPT_VERSION = 13;
 export const CODEX_FINGERPRINT = "7bfe66e7c5e9bd15";
 /** The same, of a run that asks for the tour. */
 export const CODEX_TOUR_FINGERPRINT = "df2cdca1a32bf2bb";

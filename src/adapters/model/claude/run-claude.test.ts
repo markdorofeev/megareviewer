@@ -18,6 +18,7 @@ describe("claudeEnv", () => {
       CLAUDECODE: "1",
       CLAUDE_CODE_ENTRYPOINT: "sdk",
       CLAUDE_CODE_USE_BEDROCK: "1",
+      CLAUDE_CODE_DISABLE_FILE_MENTIONS: "0",
       CLAUDE_CONFIG_DIR: "/home/me/.claude-work",
     });
     expect(env).toEqual({
@@ -25,7 +26,18 @@ describe("claudeEnv", () => {
       HOME: "/home/me",
       CLAUDE_CONFIG_DIR: "/home/me/.claude-work",
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+      CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1",
+      CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1",
+      CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: "60000",
     });
+  });
+
+  it("turns off @ mentions, which read files off the stream, whatever the server's environment", () => {
+    expect(claudeEnv({})).toHaveProperty("CLAUDE_CODE_DISABLE_FILE_MENTIONS", "1");
+    expect(claudeEnv({ CLAUDE_CODE_DISABLE_FILE_MENTIONS: "" })).toHaveProperty(
+      "CLAUDE_CODE_DISABLE_FILE_MENTIONS",
+      "1",
+    );
   });
 });
 
@@ -50,6 +62,43 @@ describe("runClaude", () => {
     expect(first.input).toBe("the message");
     expect(second.key).toBeNull();
     expect(existsSync(first.cwd)).toBe(false);
+  });
+
+  it("runs where asked in that directory, beside files at their own paths", async () => {
+    let cwd = "";
+    const run = await node()(
+      script(`
+        const fs = require("node:fs");
+        console.log(JSON.stringify({
+          cwd: process.cwd(),
+          above: fs.readdirSync("..").sort(),
+          rules: fs.readFileSync("harness/docs/rules.md", "utf8"),
+          regular: fs.lstatSync("harness/docs/rules.md").isFile(),
+        }));
+      `),
+      {
+        files: { "system.txt": "the prompt", "work/harness/docs/rules.md": "# Rules" },
+        workDir: "work",
+        onStart(dir) {
+          cwd = dir;
+        },
+      },
+    );
+    const [first] = run.lines.map((line) => JSON.parse(line));
+    expect(first).toEqual({
+      cwd,
+      above: ["system.txt", "work"],
+      rules: "# Rules",
+      regular: true,
+    });
+    expect(existsSync(cwd)).toBe(false);
+  });
+
+  it.each([
+    ["outside the directory", { "../escaped.md": "x" }, /isn't in the directory/],
+    ["over another", { "a/b.md": "x", "./a/b.md": "y" }, /EEXIST/],
+  ])("refuses to write a file %s", async (_, files, why) => {
+    await expect(node()(script(""), { files })).rejects.toThrow(why);
   });
 
   it("kills the process when a line is rejected", async () => {

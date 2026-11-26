@@ -8,6 +8,7 @@ export const withFindings = (
   findingsOf: (input: AnalysisInput) => FindingDraft[],
 ): AnalysisModel => ({
   version: model.version,
+  readsHarness: model.readsHarness,
   checkSize: (input) => model.checkSize(input),
   intent: (input, options) => model.intent(input, options),
   async findings(input, intent, options) {

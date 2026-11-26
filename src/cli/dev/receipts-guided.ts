@@ -28,8 +28,8 @@ const CONTRIBUTING_MD = `# Contributing
 Open a pull request against \`main\`. Keep it small, and link the ticket it's for.
 `;
 
-/** Over the 32 KB a guideline file can be, so the page says it's too large to send. */
-const CLAUDE_MD = `# Working on storefront\n\n${"- Keep route handlers thin; put the logic in a service.\n".repeat(700)}`;
+/** Over the 64 KB a prompt holds of guideline files, so the page says it's too large to send. */
+const CLAUDE_MD = `# Working on storefront\n\n${"- Keep route handlers thin; put the logic in a service.\n".repeat(1300)}`;
 
 /**
  * small-feature in a repository of its own, on the fake server only: the shared fixture is every

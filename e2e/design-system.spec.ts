@@ -237,7 +237,10 @@ for (const width of [375, 768, 1024]) {
     });
     expect(wide).toEqual([]);
   });
+}
 
+// At 790px the column reaches partway into a stop, which a focus alone doesn't scroll out.
+for (const width of [375, 768, 790, 1024]) {
   test(`never hides a focused stop of the lanes under their first column, at ${width}px`, async ({
     page,
   }) => {
@@ -250,12 +253,12 @@ for (const width of [375, 768, 1024]) {
       for (const button of [...box.querySelectorAll("button")].reverse()) {
         button.focus();
         const at = button.getBoundingClientRect();
-        const shown = [0.05, 0.5, 0.95].some((across) =>
-          button.contains(
-            document.elementFromPoint(at.left + at.width * across, at.top + at.height / 2),
-          ),
+        const there = [0.05, 0.5, 0.95].map((across) =>
+          document.elementFromPoint(at.left + at.width * across, at.top + at.height / 2),
         );
-        if (!shown) out.push(button.textContent ?? "");
+        const shown = there.some((element) => button.contains(element));
+        const covered = there.some((element) => element?.closest("th"));
+        if (!shown || covered) out.push(button.textContent ?? "");
       }
       return out;
     });

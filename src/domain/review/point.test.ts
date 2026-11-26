@@ -89,7 +89,7 @@ describe("pointsOf", () => {
         },
         { ref: "p2", id: naming, kind: "dont-flag", text: "Naming", scope: { kind: "global" } },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 120 }],
+      guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 120 }],
       checks: [],
     };
     it("says which preference raised a finding or left it out, and which file one is from", () => {

@@ -1,7 +1,7 @@
 import { PlusIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useId } from "react";
 import type { PreferencesView, RepositoryPreferences } from "../../../../contracts/index.ts";
-import type { GuidelinePath, HostKind, RepoRef } from "../../../../src/domain/review/index.ts";
+import type { HostKind, RepoRef } from "../../../../src/domain/review/index.ts";
 import { HOST_NAMES } from "../picker/PullRequestList.tsx";
 import { GuidelineFiles } from "./GuidelineFiles.tsx";
 import { HostIcon } from "./HostIcon.tsx";
@@ -21,7 +21,7 @@ export interface PanelContext {
   readonly add: (fields: RuleFields) => Promise<string | null>;
   readonly switchGuideline: (
     repo: RepoRef,
-    path: GuidelinePath,
+    path: string,
     enabled: boolean,
   ) => Promise<string | null>;
   /** Suggest from my reviews, for one repository. */
@@ -212,7 +212,7 @@ export const RepositoryPanel = ({
   readonly option: ScopeOption;
   readonly repository: RepositoryPreferences;
 }) => {
-  const { repo, guidelineFiles, guidelineNote } = repository;
+  const { repo } = repository;
   const suggest = context.suggest(repo);
   return (
     <>
@@ -230,8 +230,8 @@ export const RepositoryPanel = ({
       <AddPreference context={context} option={option} />
       <Section title="Guideline files">
         <GuidelineFiles
-          files={guidelineFiles}
-          note={guidelineNote}
+          key={option.key}
+          section={repository}
           onSwitch={(path, enabled) => context.switchGuideline(repo, path, enabled)}
         />
       </Section>

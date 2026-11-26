@@ -13,6 +13,7 @@ import {
   type AnalysisInputFile,
   type AnalysisModel,
   type InputGuidance,
+  type InputHarness,
   NO_GUIDANCE,
 } from "../ports/index.ts";
 import { appError, type UseCaseError } from "./errors.ts";
@@ -32,6 +33,8 @@ export const buildAnalysisInput = (input: {
   readonly unchangedCallers: readonly UnchangedCallers[];
   /** What the reviewer and the repository ask of the passes; none when left out. */
   readonly guidance?: InputGuidance;
+  /** The harness files the passes can read; null when left out. */
+  readonly harness?: InputHarness | null;
 }): AnalysisInput => {
   const { pullRequest, prepared } = input;
   const proofOf = new Map(
@@ -79,6 +82,7 @@ export const buildAnalysisInput = (input: {
       more,
     })),
     guidance: input.guidance ?? NO_GUIDANCE,
+    harness: input.harness ?? null,
   };
 };
 

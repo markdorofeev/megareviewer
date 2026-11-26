@@ -5,6 +5,7 @@ import { focusProblems, pageProblems, unnamedControls } from "./a11y.ts";
 import { expect, PR, TOKEN, test } from "./fake-server.ts";
 
 const GUIDED_TITLE = "Add receipt download endpoint, with guidance";
+const HARNESS_TITLE = "Add receipt download endpoint, with a harness";
 const STALE = "Serves a receipt rendered before a refund for up to an hour";
 const RATE_LIMIT = "Raises the rate limit tenfold without saying who asked for it";
 const NAMING = "`lines` could say what the lines are of";
@@ -12,6 +13,7 @@ const NAMING = "`lines` could say what the lines are of";
 const everywhere = (page: Page) => page.getByRole("region", { name: "Everywhere", exact: true });
 const storefront = (page: Page) =>
   page.getByRole("region", { name: "acme/storefront", exact: true });
+const warehouse = (page: Page) => page.getByRole("region", { name: "acme/warehouse", exact: true });
 const shop = (page: Page) => page.getByRole("region", { name: "acme/shop", exact: true });
 const suggestions = (page: Page) => page.getByRole("region", { name: "Suggestions", exact: true });
 const preferences = (section: ReturnType<typeof everywhere>) =>
@@ -187,14 +189,16 @@ test("switches a guideline file, which the next AI review doesn't read", async (
   await openScope(page, /^acme\/storefront/);
   const files = storefront(page).locator("[data-slot=guideline-file]");
   await expect(files).toHaveText([
-    /^REVIEW\.md\d+ BFollowed by AI reviews$/,
-    /^CLAUDE\.md\d+ KBToo large to send/,
+    /^REVIEW\.md\d+ BIn every review$/,
+    /^CLAUDE\.md\d+ KBIgnored$/,
     /^CONTRIBUTING\.md\d+ BIgnored$/,
   ]);
-  // A file too large to send has no switch.
-  await expect(
-    storefront(page).getByRole("switch", { name: /^Use .* in AI reviews$/ }),
-  ).toHaveCount(2);
+  // A file too large for a prompt is read when the model asks.
+  const claude = storefront(page).getByRole("switch", { name: "Use CLAUDE.md in AI reviews" });
+  await claude.click();
+  await expect(files.nth(1)).toHaveText(/^CLAUDE\.md\d+ KBRead when the model asks$/);
+  await claude.click();
+  await expect(files.nth(1)).toHaveText(/Ignored$/);
   const review = storefront(page).getByRole("switch", { name: "Use REVIEW.md in AI reviews" });
   await expect(review).toHaveAttribute("aria-checked", "true");
   await review.click();
@@ -207,6 +211,48 @@ test("switches a guideline file, which the next AI review doesn't read", async (
   await expect(page.locator("[data-slot=point-guidance]")).toHaveText([
     "From your preference: Caches with nothing that invalidates them",
   ]);
+});
+
+test("unfolds what a guideline file links, and switches a linked file off", async ({ page }) => {
+  await openReview(page, PR.receiptsHarness, HARNESS_TITLE, false);
+  const ask = page.getByRole("button", { name: "Request AI review" });
+  await expect(ask).toHaveAccessibleDescription(/\. Reads REVIEW\.md; 2 more on request$/);
+  await page.getByRole("link", { name: "Preferences" }).click();
+  await openScope(page, /^acme\/warehouse/);
+  const section = warehouse(page);
+  const fold = section.getByRole("button", { name: "7 linked files, 70 KB, from CLAUDE.md" });
+  const uses = section.locator("[data-slot=linked-uses]").nth(1);
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(uses).toHaveText("When on: 2 in every review, 5 on request");
+  await expect(section.locator("[data-slot=harness-notes]")).toHaveText(
+    "docs/changelog.md is over 1 MB, so AI reviews don't use it.",
+  );
+
+  await fold.focus();
+  await page.keyboard.press("Enter");
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    section.getByRole("list", { name: "Linked by docs/runbooks/README.md" }).getByRole("listitem"),
+  ).toHaveCount(2);
+  await section.getByRole("switch", { name: "Use CLAUDE.md in AI reviews" }).click();
+  await expect(uses).toHaveText("2 in every review, 5 on request");
+  const runbooks = section.getByRole("switch", {
+    name: "Use docs/runbooks/README.md in AI reviews",
+  });
+  await runbooks.click();
+  await expect(runbooks).toHaveAttribute("aria-checked", "false");
+  // The two it links have no other way in.
+  await expect(uses).toHaveText("2 in every review, 2 on request, 3 ignored");
+
+  await page.reload();
+  await expect(uses).toHaveText("2 in every review, 2 on request, 3 ignored");
+  await fold.click();
+  await expect(runbooks).toHaveAttribute("aria-checked", "false");
+
+  await openReview(page, PR.receiptsHarness, HARNESS_TITLE, false);
+  await expect(ask).toHaveAccessibleDescription(
+    /\. Reads REVIEW\.md, CLAUDE\.md, and 2 files they import; 2 more on request$/,
+  );
 });
 
 test("a point says what it's from, a left-out one is shown, and a rule is saved from one", async ({
@@ -274,10 +320,13 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
 });
 
 test("never scrolls sideways", async ({ page }) => {
-  await openReview(page, PR.receiptsGuided, GUIDED_TITLE, false);
+  await openReview(page, PR.receiptsHarness, HARNESS_TITLE, false);
   await page.getByRole("link", { name: "Preferences" }).click();
-  await openScope(page, /^acme\/storefront/);
-  await expect(storefront(page).locator("[data-slot=guideline-file]")).toHaveCount(3);
+  await openScope(page, /^acme\/warehouse/);
+  await warehouse(page)
+    .getByRole("button", { name: /from CLAUDE\.md$/ })
+    .click();
+  await expect(warehouse(page).locator("[data-slot=linked-file]")).toHaveCount(7);
   for (const width of [1440, 1024, 900, 768, 375]) {
     await page.setViewportSize({ width, height: 800 });
     await expect
@@ -309,7 +358,9 @@ for (const theme of ["light", "dark"] as const) {
         },
         [theme, palette],
       );
-      // A repository with proposals waiting, then one with preferences and guideline files.
+      // A repository with proposals waiting, one with preferences and guideline files, and one
+      // whose guideline file links others, unfolded.
+      await openReview(page, PR.receiptsHarness, HARNESS_TITLE, false);
       await openReview(page, PR.receiptsGuided, GUIDED_TITLE, false);
       await openReview(page, PR.smallFeature, "Add receipt download endpoint", false);
       await page.getByRole("link", { name: "Preferences" }).click();
@@ -320,6 +371,14 @@ for (const theme of ["light", "dark"] as const) {
       await openScope(page, /^acme\/storefront/);
       await expect(storefront(page).locator("[data-slot=guideline-file]")).toHaveCount(3);
       await storefront(page).getByRole("textbox").fill("x".repeat(310));
+      expect(await problems(page)).toEqual([]);
+      await openScope(page, /^acme\/warehouse/);
+      await warehouse(page)
+        .getByRole("button", { name: /from CLAUDE\.md$/ })
+        .click();
+      await warehouse(page)
+        .getByRole("switch", { name: "Use docs/testing.md in AI reviews" })
+        .click();
       expect(await problems(page)).toEqual([]);
     });
   }

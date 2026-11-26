@@ -44,6 +44,20 @@ A case can carry guidance, a reviewer's preferences and the repository's guideli
 
 A case can have files of its repository the PR doesn't change, in `files/outside/`. Its run then has a checkout holding them and the head files, so it reads the unchanged callers as a real one would, and the judge's prompt gains a section saying what they are, as it does for guidance.
 
+A case can also carry a **harness**: files its guideline files import, which a run puts in the prompt, and files those link, which a pass can open on Claude Code. `--reader off` runs the same case without the reader, and `--reader index-alone` with the reader and the list of files but without the line that asks a pass to read before it answers, which the product writes after each task but the intent's. `--with-harness` attaches a large harness that speaks to none of them to every case without guidance, and `--runs <n>` repeats the selection. `node evals/harness-report.ts <results>...` then compares the results files, free, by case, model and reader:
+
+| Score | Measures | Target |
+|---|---|---|
+| `harnessFollowed` | Labeled marks of an imported or a linked file that came back on its ref | – |
+| `harnessWrong` | Marks of a guideline file on a point the labels don't put there, out of all marks of one | none |
+| `harnessRead` | Labeled reads that happened, by the pass and the file | – |
+| Reads a run | By pass, uses of the read tool that gave something, the runs with any, and refusals | tracked |
+| Quoted from outside | Runs whose answers hold words of the file a PR asks for outside the harness | none |
+| What was spent | A run's tokens, cost at API prices and time, beside the same case with `--reader off` | tracked |
+| Targets lost | Metrics that meet their target on the cases without the large harness and miss it with it attached | none |
+
+Runs an hour apart or less read each other's prompt cache, so compare tokens, fresh and cached together, before cost. The judge reads a case's linked file as the rule the labels are about, whichever the reader, and a case with the large harness attached as it was judged without. A case that asks for a file outside writes one made-up line under `/tmp/megareviewer-eval` before it runs, and leaves it there.
+
 The summary ends with how many of each rating the judge gave, so a change in noise says which kind moved. Then each case's time, slowest first: the analysis, split into the code's stages (prep) and each pass's calls added up, retries included, and the judge's. The findings start when the intent ends, so a case waits on the two.
 
 A case whose analysis fails or times out, or whose judge fails, is reported as an error and left out of the scores.
@@ -66,8 +80,8 @@ The call a model run makes after its passes, which marks each finding a check co
 1. Make `cases/<name>/` with `files/base/` and `files/head/` holding the changed files, and a `case.ts` with the PR's metadata (copy one). Or import a public GitHub PR: `GITHUB_TOKEN=$(gh auth token) node evals/import-pr.ts <url> <name>`.
 2. For a synthetic case, write its diff: `node evals/make-diff.ts <name>`.
 3. List its hunks with `node evals/print-hunks.ts <name>` (free: it uses the fake model) and write `labels.ts`: the findings (what looks wrong, its type, the hunks and lines that show it, the index of the mismatch it shows, and which ones a reviewer must see), and the expected mismatches (`[]` means none). A case labeled with neither measures noise; `nothingWrong` says besides that any finding on it is wrong.
-4. For a case with guidance, export `guidance` from `case.ts`: the preferences in the order a run numbers them (`p1`, `p2`, …, everywhere's before the repository's) and the guideline files, which stay out of `files/`, in the order of `GUIDELINE_PATHS` (`g1`, …); `print-hunks.ts` lists both with their refs. In the labels' `guidance`, say what each should do, by its ref: `raised` with the labeled findings it should lead to, one of which is enough, or `left-out` with those it covers, none of them a must-have; `alsoOn` lists the findings that may carry its mark without being asked to. A preference that should do nothing gets no label, so any mark of it is wrong.
-5. For a case an unchanged caller is part of, put the files of its repository the PR doesn't change in `files/outside/`, and export `outside` from `case.ts`.
+4. For a case with guidance, export `guidance` from `case.ts`: the preferences in the order a run numbers them (`p1`, `p2`, …, everywhere's before the repository's) and the guideline files, which stay out of `files/`, in the order of `GUIDELINE_PATHS` (`g1`, …) with the files they import after them in `imported`, and the files those link in `linked`, nearest a root first, with the `rule` the judge reads of a long one; `print-hunks.ts` lists both with their refs. In the labels' `guidance`, say what each should do, by its ref: `raised` with the labeled findings it should lead to, one of which is enough, or `left-out` with those it covers, none of them a must-have; `alsoOn` lists the findings that may carry its mark without being asked to. A preference that should do nothing gets no label, so any mark of it is wrong. In the labels' `reads`, say which pass should open which linked file.
+5. For a case an unchanged caller is part of, put the files of its repository the PR doesn't change in `files/outside/`, and export `checkoutFiles` from `case.ts`.
 6. Register it in [cases/index.ts](cases/index.ts). `pnpm test` checks the diff, that every labeled finding is on lines its hunk shows, the tickets, and that the guidance labels name refs the run has, with an effect it would keep.
 
 Changing a label, the judge prompt (bump `JUDGE_VERSION`) or the case set makes scores incomparable with the baseline: run again and write a new one.

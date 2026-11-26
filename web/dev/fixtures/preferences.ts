@@ -1,4 +1,4 @@
-import type { PreferencesView } from "../../../contracts/index.ts";
+import type { PreferencesView, RepositoryPreferences } from "../../../contracts/index.ts";
 import {
   type Preference,
   PreferenceId,
@@ -69,6 +69,52 @@ export const fixtureImport: PreferenceProposal = proposal(3, {
   evidence: ['Comment: "The lookup isn\'t scoped to the signed-in user.", acme/shop #96'],
 });
 
+type Linked = NonNullable<RepositoryPreferences["guidelineFiles"]>[number]["linked"][number];
+
+const linked = (
+  path: string,
+  bytes: number,
+  linkedFrom: string,
+  via: Linked["via"],
+  use: Linked["use"] = via === "import" ? "prompt" : "on-request",
+): Linked => ({ path, bytes, linkedFrom, via, enabled: true, use });
+
+/** A repository whose CLAUDE.md, off, imports and links others, with a file too large to use. */
+export const fixtureHarnessSection: RepositoryPreferences = {
+  repo: shop,
+  guidelineFiles: [
+    { path: "REVIEW.md", bytes: 1_240, enabled: true, tooLarge: false, use: "prompt", linked: [] },
+    {
+      path: "CLAUDE.md",
+      bytes: 98_300,
+      enabled: false,
+      tooLarge: true,
+      use: null,
+      linked: [
+        linked("docs/house-rules.md", 6_140, "CLAUDE.md", "import"),
+        linked("docs/architecture.md", 71_200, "CLAUDE.md", "import", "on-request"),
+        linked("docs/testing.md", 3_480, "CLAUDE.md", "mention"),
+        linked("docs/runbooks/README.md", 910, "CLAUDE.md", "link"),
+        linked("docs/naming.md", 1_020, "docs/house-rules.md", "import"),
+        linked("docs/runbooks/refunds.md", 4_300, "docs/runbooks/README.md", "link"),
+        linked("docs/runbooks/stock.md", 2_750, "docs/runbooks/README.md", "link"),
+      ],
+    },
+    {
+      path: "CONTRIBUTING.md",
+      bytes: 6_020,
+      enabled: false,
+      tooLarge: false,
+      use: null,
+      linked: [],
+    },
+  ],
+  guidelineNote: null,
+  harnessCut: null,
+  harnessSkipped: [{ path: "docs/changelog.md", reason: "too-large" }],
+  harnessNote: null,
+};
+
 export const fixturePreferencesView: PreferencesView = {
   preferences: [
     preference(1, {
@@ -105,21 +151,26 @@ export const fixturePreferencesView: PreferencesView = {
   ],
   proposals: fixtureSuggestions,
   repositories: [
-    {
-      repo: shop,
-      guidelineFiles: [
-        { path: "REVIEW.md", bytes: 1_240, enabled: true, tooLarge: false },
-        { path: "CLAUDE.md", bytes: 48_900, enabled: false, tooLarge: true },
-        { path: "CONTRIBUTING.md", bytes: 6_020, enabled: false, tooLarge: false },
-      ],
-      guidelineNote: null,
-    },
+    fixtureHarnessSection,
     {
       repo: api,
       guidelineFiles: null,
       guidelineNote: "No pull request of this repository has been analyzed yet",
+      harnessCut: null,
+      harnessSkipped: [],
+      harnessNote: null,
     },
   ],
+};
+
+/** A repository with no preference, no proposal and no guideline file yet. */
+export const fixtureNothingYet: RepositoryPreferences = {
+  repo: { host: "github", owner: "acme", repo: "payments-ledger-reconciliation-service" },
+  guidelineFiles: [],
+  guidelineNote: null,
+  harnessCut: null,
+  harnessSkipped: [],
+  harnessNote: null,
 };
 
 /** A reviewer who hasn't written a preference or reviewed anything yet. */

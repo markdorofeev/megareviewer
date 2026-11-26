@@ -53,6 +53,7 @@ const stepsOf = (input: AnalysisInput): StepDraft[] => {
 /** The model, but receipts-tour's steps pass answers with its tour, after the model's own time. */
 export const withTour = (model: AnalysisModel, url: string): AnalysisModel => ({
   version: model.version,
+  readsHarness: model.readsHarness,
   checkSize: (input) => model.checkSize(input),
   intent: (input, options) => model.intent(input, options),
   findings: (input, intent, options) => model.findings(input, intent, options),

@@ -77,7 +77,9 @@ describe("analyzeCase", () => {
         { ref: "p1", kind: "look-for", text: "Unbounded caches", scope: "global" },
         { ref: "p2", kind: "dont-flag", text: "Naming of test helpers", scope: "repo" },
       ],
-      guidelines: [{ ref: "g1", path: "REVIEW.md", content: "Receipts are plain text.\n" }],
+      guidelines: [
+        { ref: "g1", path: "REVIEW.md", linkedFrom: null, content: "Receipts are plain text.\n" },
+      ],
     });
     expect(result.value.analysis.guidance?.preferences.map((p) => [p.ref, p.scope.kind])).toEqual([
       ["p1", "global"],
@@ -117,14 +119,14 @@ describe("analyzeCase", () => {
   it("gives a run the code outside the PR that uses what it changes", async () => {
     const found = evalCase("caller-keeps-old-unit");
     if (found === undefined) throw new Error("no case");
-    const run = async (outside: EvalCase["outside"]) => {
+    const run = async (checkoutFiles: EvalCase["checkoutFiles"]) => {
       const { model, given } = noting();
       const result = await analyzeCase(found.fixture, {
         model,
         parser,
         logger: quietLogger(),
         timeoutMs: 30_000,
-        outside,
+        checkoutFiles,
       });
       if (!result.ok) throw new Error(result.error);
       return given[0]?.unchangedCallers.map(({ symbol, uses }) => [
@@ -132,7 +134,7 @@ describe("analyzeCase", () => {
         uses.map(({ path, line }) => `${path}:${line}`),
       ]);
     };
-    expect(await run(found.outside)).toEqual([["orderTotal", ["src/billing/charge.ts:7"]]]);
+    expect(await run(found.checkoutFiles)).toEqual([["orderTotal", ["src/billing/charge.ts:7"]]]);
     expect(await run(undefined)).toEqual([]);
   });
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { HttpUrl, Sha, Timestamp } from "../../domain/review/index.ts";
+import { BlobHash, HttpUrl, Sha, Timestamp } from "../../domain/review/index.ts";
 
 // Only the fields the adapter reads. Zod drops the rest.
 
@@ -60,6 +60,32 @@ export const GitHubBlobs = z.object({
   repository: z.record(z.string(), GitHubObject.nullable()),
 });
 export type GitHubBlobs = z.infer<typeof GitHubBlobs>;
+
+/** The same of a harness's files: a blob also has git's hash of it and its size. */
+export const GitHubHarnessBlobs = z.object({
+  repository: z.record(
+    z.string(),
+    GitHubObject.extend({
+      oid: BlobHash.optional(),
+      byteSize: z.number().int().nonnegative().optional(),
+    }).nullable(),
+  ),
+});
+
+export type GitHubHarnessBlobs = z.infer<typeof GitHubHarnessBlobs>;
+
+/** A commit's tree, whole unless `truncated`. A submodule is a `commit`. */
+export const GitHubTree = z.object({
+  truncated: z.boolean(),
+  tree: z.array(
+    z.object({
+      path: z.string().min(1),
+      mode: z.string(),
+      type: z.string(),
+      sha: BlobHash,
+    }),
+  ),
+});
 
 export const GitHubSearchResult = z.object({
   total_count: z.number().int().nonnegative(),
