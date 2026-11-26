@@ -32,6 +32,8 @@ export interface Status {
   readonly model: ModelOptions;
   /** The folder searched for clones of a PR's repository; null when the search is off. */
   readonly cloneSearchFolder: string | null;
+  /** The folder megareviewer's own copies are downloaded to; null when downloading is off. */
+  readonly downloadFolder: string | null;
 }
 
 const HOSTS: readonly HostKind[] = HostKinds.options;
@@ -117,6 +119,7 @@ export const createStatusUseCases = (deps: AppDeps, version: string) => ({
       jira: { configured: deps.tickets.configured },
       model,
       cloneSearchFolder: deps.checkouts.searchFolder,
+      downloadFolder: deps.copies.downloadFolder,
     };
   },
 });
