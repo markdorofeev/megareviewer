@@ -216,6 +216,12 @@ export const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX harness_blobs_used_at ON harness_blobs (used_at);
   `,
+  // Harnesses walked before folders were links leave out what a folder named holds. The blobs stay,
+  // so walking them again reads only the new files.
+  `
+  DELETE FROM harness_files;
+  DELETE FROM harnesses;
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

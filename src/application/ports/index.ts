@@ -32,7 +32,11 @@ export {
   type AdvicePoint,
   type GuardrailAdvisor,
 } from "./guardrail-advisor.ts";
-export type { HarnessSource, HarnessSourceFile } from "./harness-source.ts";
+export type {
+  HarnessSource,
+  HarnessSourceFile,
+  HarnessSourceFolder,
+} from "./harness-source.ts";
 export type { HarnessBlob, HarnessStore } from "./harness-store.ts";
 export type { KnownCheckout, KnownCheckouts } from "./known-checkouts.ts";
 export {

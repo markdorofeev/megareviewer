@@ -97,6 +97,7 @@ export {
   harnessOutline,
   harnessPlan,
   harnessReach,
+  isHarnessFileInFolder,
   MAX_COPY_LINE,
   MAX_HARNESS_DEPTH,
   MAX_HARNESS_FILE_BYTES,

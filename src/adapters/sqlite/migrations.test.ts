@@ -187,6 +187,21 @@ describe("migrate", () => {
     expect(db.prepare("SELECT path FROM harness_files").all()).toEqual([]);
   });
 
+  it("drops the harnesses walked before folders were links, and keeps their blobs", () => {
+    const db = databaseAt(10);
+    db.exec(`INSERT INTO harnesses VALUES
+      ('github', 'acme', 'shop', 'sha', 't', NULL, '[]', '[]')`);
+    db.exec(`INSERT INTO harness_files VALUES
+      ('github', 'acme', 'shop', 'sha', 0, 'CLAUDE.md', 'blob', 1, 1, 'root', NULL, '[]', '[]')`);
+    db.exec("INSERT INTO harness_blobs VALUES ('github', 'acme', 'shop', 'blob', 'text', 't')");
+
+    expect(migrate(db, MIGRATIONS.slice(0, 11))).toEqual([11]);
+
+    expect(db.prepare("SELECT sha FROM harnesses").all()).toEqual([]);
+    expect(db.prepare("SELECT path FROM harness_files").all()).toEqual([]);
+    expect(db.prepare("SELECT blob FROM harness_blobs").all()).toEqual([{ blob: "blob" }]);
+  });
+
   it("rolls back a failed migration and stays at the last good version", () => {
     const db = databaseAt(MIGRATIONS.length);
     const broken = [

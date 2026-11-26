@@ -1,4 +1,9 @@
-import type { HarnessSource, HarnessSourceFile } from "../../application/ports/index.ts";
+import type { z } from "zod";
+import type {
+  HarnessSource,
+  HarnessSourceFile,
+  HarnessSourceFolder,
+} from "../../application/ports/index.ts";
 import {
   type BlobHash,
   type HostError,
@@ -69,30 +74,56 @@ export const createGitHubHarnessSource = (options: GitHubClientOptions): Harness
     return ok(files);
   };
 
+  /** A tree's files, at any depth, by their paths in it. */
+  const treeOf = (what: string, repo: RepoRef, treeish: string) =>
+    client.read(what, GitHubTree, async (request) => {
+      // Octokit would encode a path's slashes, and takes `:name` in a route for a parameter.
+      return (
+        await client.octokit.request(`GET /repos/{owner}/{repo}/git/trees/${treeish}`, {
+          owner: repo.owner,
+          repo: repo.repo,
+          recursive: "1",
+          request,
+        })
+      ).data;
+    });
+
+  const filesOf = (tree: z.infer<typeof GitHubTree>["tree"]) =>
+    tree.filter(({ type, mode }) => type === "blob" && mode !== SYMLINK_MODE);
+
   return {
     host: "github",
 
     async listFiles(repo, sha) {
-      const listed = await client.read("the files at a commit", GitHubTree, async (request) => {
-        return (
-          await client.octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
-            owner: repo.owner,
-            repo: repo.repo,
-            tree_sha: sha,
-            recursive: "1",
-            request,
-          })
-        ).data;
-      });
+      const listed = await treeOf("the files at a commit", repo, encodeURIComponent(sha));
       if (!listed.ok) return listed;
       // A partial list would read as a repository without the files it leaves out.
       if (listed.value.truncated) return ok(null);
       return ok(
         new Map<string, BlobHash>(
-          listed.value.tree
-            .filter(({ type, mode }) => type === "blob" && mode !== SYMLINK_MODE)
-            .map((entry) => [entry.path, entry.sha]),
+          filesOf(listed.value.tree).map((entry) => [entry.path, entry.sha]),
         ),
+      );
+    },
+
+    async listFolder(repo, sha, path): Promise<Result<HarnessSourceFolder | null, HostError>> {
+      const encoded = path.split("/").map(encodeURIComponent).join("/");
+      const listed = await treeOf(
+        `the files in ${path}`,
+        repo,
+        `${encodeURIComponent(sha)}%3A${encoded}`,
+      );
+      // A path that's a file there is refused as no tree.
+      if (!listed.ok) {
+        return listed.error.kind === "not-found" || listed.error.kind === "rejected"
+          ? ok(null)
+          : listed;
+      }
+      const files = filesOf(listed.value.tree).map((entry) => `${path}/${entry.path}`);
+      return ok(
+        files.length === 0 && !listed.value.truncated
+          ? null
+          : { files, complete: !listed.value.truncated },
       );
     },
 

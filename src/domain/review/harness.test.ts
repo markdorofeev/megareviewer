@@ -16,9 +16,15 @@ import {
   strongerLink,
 } from "./index.ts";
 
-/** Each link as "kind path", or "kind path | path" when its path in prose can mean two files. */
+/**
+ * Each link as "kind path", or "kind path | path" when its path in prose can mean two files, a
+ * folder's paths ending in a slash.
+ */
 const links = (path: string, content: string): string[] =>
-  harnessLinks(path, content).map(({ kind, paths }) => `${kind} ${paths.join(" | ")}`);
+  harnessLinks(path, content).map(
+    ({ kind, paths, folder }) =>
+      `${kind} ${paths.map((one) => (folder ? `${one}/` : one)).join(" | ")}`,
+  );
 
 describe("harnessLinks", () => {
   it.each([
@@ -99,7 +105,7 @@ describe("harnessLinks", () => {
   });
 
   it.each([
-    ["a code span", "Run `docs/a.md` and `@b.md`, or ``c.md ` d.md``."],
+    ["a code span with more than a path", "Run `pnpm a.md`, `docs/a.md:12` or ``c.md ` d.md``."],
     ["a code span over two lines", "`docs/a.md\n@b.md`"],
     ["a backtick fence", "```md\n@a.md\n[b](b.md) c.md\n```"],
     ["a tilde fence", "~~~\n@a.md\n~~~"],
@@ -118,6 +124,58 @@ describe("harnessLinks", () => {
     ["a path with a control character", "[a](a%00b.md) [b](a%0Ab.md)"],
     ["a path of more than 500 characters", `${"a/".repeat(260)}b.md`],
   ])("reads no link in %s", (_name, content) => {
+    expect(links("CLAUDE.md", content)).toEqual([]);
+  });
+
+  it("reads a code span that holds a path and nothing else as a path in prose", () => {
+    expect(links("docs/notes.md", "Follow `rules.md`, `@style.md.` and `plan/`.")).toEqual([
+      "mention docs/rules.md | rules.md",
+      "mention docs/style.md | style.md",
+      "mention docs/plan/ | plan/",
+    ]);
+  });
+
+  it.each([
+    [
+      "a Markdown link, with a slash or none",
+      "[Plan](docs/plan) [Rules](/docs/rules/)",
+      ["link docs/plan/", "link docs/rules/"],
+    ],
+    [
+      "an import ending in a slash",
+      "@docs/rules/ @.cursor/rules/",
+      ["import docs/rules/", "import .cursor/rules/"],
+    ],
+    [
+      "a path in prose ending in a slash",
+      "Rules are in docs/rules/, modules in com.oracle.svm.core/.",
+      ["mention docs/rules/", "mention com.oracle.svm.core/"],
+    ],
+    [
+      "a code span ending in a slash",
+      "Documentation lives under `docs/`, beside `compiler/` and `.ci/docker/`.",
+      ["mention docs/", "mention compiler/", "mention .ci/docker/"],
+    ],
+  ])("reads a folder named in %s", (_name, content, expected) => {
+    expect(links("CLAUDE.md", content)).toEqual(expected);
+  });
+
+  it("resolves a folder as a file: a link against its file, a path in prose then against the root", () => {
+    expect(links("docs/notes.md", "[here](./) [plan](plan) and plan/ [up](../)")).toEqual([
+      "link docs/",
+      "link docs/plan/",
+      "mention docs/plan/ | plan/",
+    ]);
+  });
+
+  it.each([
+    ["an import without a slash at its end", "Ask @someone, or install @anthropic-ai/sdk."],
+    ["a path in prose without one", "The plan is in docs/plan, before/after and I/O."],
+    ["a code span without one", "Run `docs/plan` or `claude/stage-51`."],
+    ["a pattern", "docs/*.md and src/**/*.ts"],
+    ["the repository's root", "[home](/) [here](./) [up](docs/..) `./`"],
+    ["a file of another kind", "src/index.ts and [b](b.png)"],
+  ])("reads no folder in %s", (_name, content) => {
     expect(links("CLAUDE.md", content)).toEqual([]);
   });
 
