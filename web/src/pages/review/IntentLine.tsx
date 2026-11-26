@@ -1,9 +1,8 @@
 import { CheckIcon, InfoIcon, Loader2Icon, RouteIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { hunkIdOf } from "../../../../src/domain/diff/index.ts";
 import { type Analysis, hasModelRun, runStages } from "../../../../src/domain/review/index.ts";
 import { Button } from "../../ui/button.tsx";
-import { codeSpans, type Reach, reachOf, type Through } from "./brief.ts";
+import { codeSpans } from "./brief.ts";
 
 const HEADING = /^#{1,6}\s+/;
 
@@ -60,51 +59,6 @@ export const ModelText = ({ text }: { readonly text: string }) => (
     )}
   </span>
 );
-
-/** The overview's rows in words: directories callers first, with where users reach them. */
-const ThroughText = ({ through }: { readonly through: Through }) => (
-  <span data-slot="through">
-    {through.rows.map((row, at) => (
-      // biome-ignore lint/suspicious/noArrayIndexKey: rows never reorder.
-      <span key={at}>
-        {at > 0 && " → "}
-        {row.map((stop, index) => (
-          <span key={stop.label}>
-            {index > 0 && ", "}
-            <code className="font-mono text-code-compact">{stop.label}</code>
-            {stop.entries.length > 0 && (
-              <span className="text-muted-foreground"> ({stop.entries.join(", ")})</span>
-            )}
-          </span>
-        ))}
-      </span>
-    ))}
-    {through.more > 0 && (
-      <span className="text-muted-foreground">
-        {" "}
-        · {through.more} more {through.more === 1 ? "directory" : "directories"}
-      </span>
-    )}
-  </span>
-);
-
-const ReachText = ({ reach }: { readonly reach: Reach }) => {
-  const shown = reach.symbols.slice(0, 3);
-  const rest = reach.symbols.length - shown.length;
-  const names = shown.map((symbol, at) => (
-    <span key={symbol}>
-      {at > 0 && (at === shown.length - 1 && rest === 0 ? " and " : ", ")}
-      <code className="font-mono text-code-compact">{symbol}</code>
-    </span>
-  ));
-  return (
-    <span data-slot="reach">
-      Changes {names}
-      {rest > 0 && ` and ${rest} more`}, used in {reach.uses}{" "}
-      {reach.uses === 1 ? "place" : "places"} the PR doesn't change.
-    </span>
-  );
-};
 
 const Line = ({ lead, children }: { readonly lead: string; readonly children: ReactNode }) => (
   <p className="min-w-0">
@@ -200,33 +154,29 @@ const AiStatus = ({
   );
 };
 
-/**
- * The intent's brief under the title, what to know before reading the code, in up to three
- * lines: what the change does, how it runs through the system, and what to keep in mind. Claude's
- * once it has run; before, the description's first sentence, the overview's directories in call
- * order, and the definitions the change reaches past itself. A line Claude left empty is the
- * code's. While Claude runs the code's brief stays; when the intent arrives it fades out and
- * Claude's fades in where it was, the room kept until the run ends so the header doesn't change
- * height. The Details button ends the first line, so it reads as more of it. A mismatch between
- * what was asked and what the code does is one of Claude's points, on the code it rests on.
- */
 /** The brief's way into the tour, once a run wrote one and the Tour switch is on. */
 export interface TourLink {
   readonly steps: number;
   readonly onOpen: () => void;
 }
 
+/**
+ * The intent's brief under the title, what to know before reading the code. Claude's once it has
+ * run, in up to three lines: what the change does, how it runs through the system, and what to
+ * keep in mind. Before, the description's first sentence. While Claude runs the description stays;
+ * when the intent arrives it fades out and Claude's brief fades in where it was, the room kept
+ * until the run ends so the header doesn't change height. The Details button ends the first line,
+ * so it reads as more of it. A mismatch between what was asked and what the code does is one of
+ * Claude's points, on the code it rests on.
+ */
 export const IntentLine = ({
   analysis,
-  through,
   running,
   stale = false,
   tour = null,
   onDetails,
 }: {
   readonly analysis: Analysis;
-  /** The overview's rows in words, once the code's analysis has them. */
-  readonly through: Through | null;
   /** Claude's run, as the page shows it. */
   readonly running: boolean;
   /** The PR has new commits since the analysis. */
@@ -258,34 +208,15 @@ export const IntentLine = ({
       <InfoIcon aria-hidden="true" />
     </Button>
   );
-  const pathOfHunk = new Map(
-    analysis.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, file.path] as const)),
-  );
-  const reach = reachOf(analysis.unchangedCallers, (id) => pathOfHunk.get(hunkIdOf(id)));
-  const throughLine = through !== null && (
-    <Line lead={through.linked ? "Through:" : "In:"}>
-      <ThroughText through={through} />
-    </Line>
-  );
-  const reachLine = reach !== null && (
-    <Line lead="Watch:">
-      <ReachText reach={reach} />
-    </Line>
-  );
-
   const stated = pullRequest !== null && (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <p className="min-w-0">
-        {description === "" ? (
-          <span className="text-muted-foreground">The pull request has no description.</span>
-        ) : (
-          <span>{description}</span>
-        )}
-        {!swapping && details}
-      </p>
-      {throughLine}
-      {reachLine}
-    </div>
+    <p className="min-w-0">
+      {description === "" ? (
+        <span className="text-muted-foreground">The pull request has no description.</span>
+      ) : (
+        <span>{description}</span>
+      )}
+      {!swapping && details}
+    </p>
   );
   const inferred = intent !== null && (
     <div data-arriving={swapping || undefined} className="flex min-w-0 flex-col gap-0.5">
@@ -306,16 +237,12 @@ export const IntentLine = ({
         <ModelText text={intent.inferred.summary} />
         {details}
       </p>
-      {intent.inferred.shape === "" ? (
-        throughLine
-      ) : (
+      {intent.inferred.shape !== "" && (
         <Line lead="Through:">
           <ModelText text={intent.inferred.shape} />
         </Line>
       )}
-      {intent.inferred.watch.length === 0 ? (
-        reachLine
-      ) : (
+      {intent.inferred.watch.length > 0 && (
         <Line lead="Watch:">
           {intent.inferred.watch.map((item, at) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: the list never reorders.

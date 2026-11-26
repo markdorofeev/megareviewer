@@ -31,7 +31,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Point | What the model asks the reviewer to look at: a finding, or an intent mismatch no finding names, with the hunk and lines it rests on |
 | Point state | What the reviewer did with a point: *open* (nothing, which means fine), *raised* or *dismissed* |
 | Verdict | What the published review says: approve, request changes or comment. The reviewer picks it |
-| Flow | An entry point a user or caller reaches and the changed code it runs, callers first, found from the call graph by the code; or a supporting flow of changes no flow runs, by kind. The code's flows order and label the overview: its order, its entry points and the Through line |
+| Flow | An entry point a user or caller reaches and the changed code it runs, callers first, found from the call graph by the code; or a supporting flow of changes no flow runs, by kind. The code's flows order and label the overview: its order and its entry points |
 | Definition call | A call from one changed definition into another, within a part too. What a flow path follows |
 | Flow path | Where a change is reached and the changed files it runs from there, in call order: a flow's entry points, or a file's definitions no changed code calls, with code several paths run on each. What the overview's preview forms draw |
 | Stop | A changed file on a flow path, under one that calls it there unless the path starts in it; *new* when the PR adds it and *changed* otherwise. Tests, docs, generated and mechanical files are never stops |

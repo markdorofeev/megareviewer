@@ -889,26 +889,19 @@ describe("intent", () => {
     ]);
   });
 
-  it("takes the code's lines where Claude left them empty", async () => {
+  it("leaves out a line Claude left empty", async () => {
     if (analysis.intent === null) throw new Error("the fixture has no intent");
     renderReview({
       view: withIntent({ inferred: { ...analysis.intent.inferred, shape: "", watch: [] } }),
     });
     await loaded();
-    expect(lines().slice(1)).toEqual([
-      "Through: routes (GET /orders/:id/receipt) → services · 1 more directory",
-      "Watch: Changes renderReceipt, used in 1 place the PR doesn't change.",
-    ]);
+    expect(lines()).toHaveLength(1);
   });
 
-  it("before Claude, is the description, the directories in call order and what the change reaches", async () => {
+  it("before Claude, is the description's first sentence alone", async () => {
     renderReview({ view: { ...fixture, analysis: { ...analysis, intent: null } } });
     await loaded();
-    expect(lines()).toEqual([
-      firstSentence(analysis.pullRequest?.description ?? ""),
-      "Through: routes (GET /orders/:id/receipt) → services · 1 more directory",
-      "Watch: Changes renderReceipt, used in 1 place the PR doesn't change.",
-    ]);
+    expect(lines()).toEqual([firstSentence(analysis.pullRequest?.description ?? "")]);
   });
 
   it("leaves the details' toggle out when there's nothing behind it", async () => {

@@ -2,7 +2,7 @@ import { hunkIdOf, isTestFile, type UnchangedCallers } from "../../../../src/dom
 import type { Analysis } from "../../../../src/domain/review/index.ts";
 
 /** The uses of a changed definition in code outside the pull request; a test's isn't one. */
-export const codeUses = (callers: UnchangedCallers): number => {
+const codeUses = (callers: UnchangedCallers): number => {
   const uses = callers.uses.filter((use) => !isTestFile(use.path)).length;
   // Uses past the limit are counted, not listed; code is kept first, so they're tests when any is.
   return uses + (callers.uses.length > uses ? 0 : callers.more);

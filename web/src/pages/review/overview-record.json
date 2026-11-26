@@ -35,25 +35,7 @@
         "partIds": ["h_6decefd2b26ee87a"],
         "row": -1
       }
-    ],
-    "through": {
-      "rows": [
-        [
-          {
-            "label": "routes",
-            "entries": ["GET /orders/:id/receipt"]
-          }
-        ],
-        [
-          {
-            "label": "services",
-            "entries": []
-          }
-        ]
-      ],
-      "linked": true,
-      "more": 1
-    }
+    ]
   },
   "large": {
     "rows": [
@@ -364,49 +346,7 @@
         }
       ]
     ],
-    "strip": [],
-    "through": {
-      "rows": [
-        [
-          {
-            "label": "module0",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "module1",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "module2",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "module3",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "module4",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "module5",
-            "entries": []
-          }
-        ]
-      ],
-      "linked": true,
-      "more": 0
-    }
+    "strip": []
   },
   "deep": {
     "rows": [
@@ -631,61 +571,7 @@
         }
       ]
     ],
-    "strip": [],
-    "through": {
-      "rows": [
-        [
-          {
-            "label": "avatar",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "profile",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "security",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "accounts/hooks",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "api",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "filters",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "invoices",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "payment-methods",
-            "entries": []
-          }
-        ]
-      ],
-      "linked": true,
-      "more": 14
-    }
+    "strip": []
   },
   "java": {
     "rows": [
@@ -880,61 +766,7 @@
         }
       ]
     ],
-    "strip": [],
-    "through": {
-      "rows": [
-        [
-          {
-            "label": ".",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "orders",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "config",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "main/java/com/acmecorp/fulfillment/orders/controllers",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "advice",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "main/java/com/acmecorp/fulfillment/orders/entities",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "repositories",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "orders/resources",
-            "entries": []
-          }
-        ]
-      ],
-      "linked": true,
-      "more": 11
-    }
+    "strip": []
   },
   "mono": {
     "rows": [
@@ -1137,52 +969,6 @@
         }
       ]
     ],
-    "strip": [],
-    "through": {
-      "rows": [
-        [
-          {
-            "label": ".changeset",
-            "entries": []
-          },
-          {
-            "label": "intents",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "settings",
-            "entries": []
-          },
-          {
-            "label": "supabase-js/src",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "checkout",
-            "entries": []
-          },
-          {
-            "label": "supabase-js/src/lib",
-            "entries": []
-          }
-        ],
-        [
-          {
-            "label": "hooks",
-            "entries": []
-          },
-          {
-            "label": "Button",
-            "entries": []
-          }
-        ]
-      ],
-      "linked": true,
-      "more": 13
-    }
+    "strip": []
   }
 }

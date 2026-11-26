@@ -62,7 +62,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import type { RuleFields } from "../preferences/PreferenceForm.tsx";
 import { scopeOptions, scopePath } from "../preferences/rule.tsx";
 import { failureReason } from "../preferences/view.ts";
-import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks } from "./calls.tsx";
 import { Dialog } from "./Dialog.tsx";
@@ -516,12 +515,6 @@ const Review = ({
   const tour = useMemo(
     () => (tourOn ? tourOf(analysis, tourOverview, points, (point) => stateOf(point.id)) : null),
     [tourOn, analysis, tourOverview, points, stateOf],
-  );
-
-  // The brief's line of directories, from the overview with none opened.
-  const through = useMemo(
-    () => (analysis.stages.prep === "done" ? throughOf(fileOverview(analysis)) : null),
-    [analysis],
   );
 
   const [layout, setLayout] = useLayout();
@@ -1500,7 +1493,6 @@ const Review = ({
         intent={
           <IntentLine
             analysis={live}
-            through={through}
             running={landing.running}
             stale={view.stale}
             tour={
