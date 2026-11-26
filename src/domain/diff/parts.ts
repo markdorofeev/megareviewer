@@ -14,6 +14,7 @@ export interface DefinitionSpan {
   readonly name: string;
   readonly startLine: number;
   readonly endLine: number;
+  readonly kind?: "function" | "method" | "class" | "type" | "variable";
 }
 
 /** A file's definitions in its head and base versions. */

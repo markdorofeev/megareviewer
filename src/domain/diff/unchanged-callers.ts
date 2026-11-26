@@ -1,6 +1,7 @@
-import type { FileSymbols } from "./call-graph.ts";
+import { type FileSymbols, isType, typeAround } from "./call-graph.ts";
 import { importReach, languageFamily, resolvesImports, sharesPackage } from "./imports.ts";
 import { type DefinitionSpan, type FileDefinitions, partsByHunk, piecesOf } from "./parts.ts";
+import { type ReceiverScope, receiverReaches } from "./receivers.ts";
 import { isTestFile } from "./test-files.ts";
 import type { FileChange, HunkPart, PartId, UnchangedCallers, UnchangedUse } from "./types.ts";
 
@@ -13,6 +14,8 @@ export interface ChangedDefinition {
   readonly partId: PartId;
   readonly path: string;
   readonly name: string;
+  /** The class or type it's in, for a member reached through a receiver. */
+  readonly owner: string | null;
 }
 
 /** A file the PR doesn't change, in a language whose imports are read, parsed at the head commit. */
@@ -62,7 +65,12 @@ export const changedDefinitions = (
           before.has(definition.name) &&
           !changed.some((known) => known.path === file.path && known.name === definition.name)
         ) {
-          changed.push({ partId: piece.id, path: file.path, name: definition.name });
+          changed.push({
+            partId: piece.id,
+            path: file.path,
+            name: definition.name,
+            owner: typeAround(definition, spans.head)?.name ?? null,
+          });
         }
       }
     }
@@ -96,15 +104,27 @@ export const findUnchangedCallers = (
     byName.set(definition.name, [...(byName.get(definition.name) ?? []), { definition, file }]);
   }
 
+  // The pull request's own classes, which a receiver can name.
+  const types = new Set(changed.flatMap((definition) => definition.owner ?? []));
   const usesOf = new Map<ChangedDefinition, Map<string, UnchangedUse>>();
   for (const caller of unchanged) {
     if (changedPaths.has(caller.path) || !resolvesImports(caller.language)) continue;
-    const reaches = caller.symbols.imports.flatMap(
-      (symbolImport) => importReach(caller.path, caller.language, symbolImport) ?? [],
+    const reached = caller.symbols.imports.map((symbolImport) =>
+      importReach(caller.path, caller.language, symbolImport),
     );
+    const reaches = reached.flatMap((reach) => reach ?? []);
+    const scope: ReceiverScope = {
+      language: caller.language,
+      types: new Set([
+        ...types,
+        ...caller.symbols.definitions.flatMap((one) => (isType(one) ? [one.name] : [])),
+      ]),
+      imports: caller.symbols.imports,
+      reaches: reached,
+    };
     const own = new Set(caller.symbols.definitions.map((definition) => definition.name));
     const lines = caller.content.split(/\r?\n/);
-    for (const { name, line, kind } of caller.symbols.references) {
+    for (const { name, line, kind, receiver } of caller.symbols.references) {
       if (kind !== "member" && own.has(name)) continue;
       for (const { definition, file } of byName.get(name) ?? []) {
         const visible =
@@ -115,7 +135,12 @@ export const findUnchangedCallers = (
                 ? reach.member(file.path)
                 : (reach.names === null || reach.names.includes(name)) && reach.name(file.path),
             ));
-        if (!visible || (kind === "type" && generated.has(file.path))) continue;
+        if (
+          !visible ||
+          (kind === "type" && generated.has(file.path)) ||
+          (kind === "member" && !receiverReaches(receiver, scope, file.path, definition.owner))
+        )
+          continue;
         const uses = usesOf.get(definition) ?? new Map<string, UnchangedUse>();
         const key = `${caller.path}:${line}`;
         const use = kind === "type" ? "type" : "call";

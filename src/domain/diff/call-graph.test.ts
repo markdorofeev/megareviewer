@@ -3,6 +3,7 @@ import { hunk } from "../../application/testing/index.ts";
 import {
   buildCallGraphHints,
   buildCallSites,
+  buildDefinitionCalls,
   changedDefinitionNames,
   type FileChange,
   type FileSymbols,
@@ -814,5 +815,162 @@ describe("buildCallSites", () => {
         toPartIds: [load],
       },
     ]);
+  });
+});
+
+describe("a member reached through its receiver", () => {
+  type Use = [name: string, line: number, kind: Kind, receiver?: string | null];
+  const javaSymbols = (
+    definitions: [
+      name: string,
+      kind: "class" | "method" | "variable",
+      start: number,
+      end: number,
+    ][],
+    references: Use[] = [],
+    imports: FileSymbols["imports"] = [],
+  ): FileSymbols => ({
+    definitions: definitions.map(([name, kind, startLine, endLine]) => ({
+      name,
+      kind,
+      startLine,
+      endLine,
+    })),
+    references: references.map(([name, line, kind, receiver]) => ({
+      name,
+      line,
+      kind,
+      columns: [0],
+      ...(receiver === undefined ? {} : { receiver }),
+    })),
+    imports,
+  });
+  const added = (path: string, lines: number) =>
+    hunk(
+      path,
+      `@@ -0,0 +1,${lines} @@`,
+      Array.from({ length: lines }, (_, at) => `+line ${at + 1}`),
+    );
+
+  // Two classes the PR adds in one package, each with a create, and a node class that calls
+  // create through a receiver of every kind.
+  const recorder = added("src/pgo/Recorder.java", 3);
+  const writer = added("src/pgo/Writer.java", 3);
+  const node = added("src/pgo/CounterNode.java", 8);
+  const files = [
+    file("src/pgo/Recorder.java", recorder),
+    file("src/pgo/Writer.java", writer),
+    file("src/pgo/CounterNode.java", node),
+  ];
+  const own = (name: string) =>
+    javaSymbols([
+      [name, "class", 1, 3],
+      ["create", "method", 2, 2],
+    ]);
+  const symbolsOf = new Map([
+    ["src/pgo/Recorder.java", own("Recorder")],
+    ["src/pgo/Writer.java", own("Writer")],
+    [
+      "src/pgo/CounterNode.java",
+      javaSymbols(
+        [
+          ["CounterNode", "class", 1, 8],
+          // TYPE = NodeClass.create(CounterNode.class);
+          ["TYPE", "variable", 2, 2],
+          ["make", "method", 3, 3],
+          ["other", "method", 4, 4],
+          ["outside", "method", 5, 5],
+          ["chained", "method", 6, 6],
+          ["write", "method", 7, 7],
+        ],
+        [
+          ["NodeClass", 2, "name"],
+          ["create", 2, "member", "NodeClass"],
+          ["Recorder", 3, "name"],
+          ["create", 3, "member", "Recorder"],
+          ["recorder", 4, "name"],
+          ["create", 4, "member", "recorder"],
+          ["Builder", 5, "name"],
+          ["create", 5, "member", "Builder"],
+          ["factory", 6, "name"],
+          ["create", 6, "member", null],
+          ["Writer", 7, "name"],
+          ["create", 7, "member", "Writer"],
+        ],
+        [{ module: "jdk.graal.compiler.graph.NodeClass", names: null }],
+      ),
+    ],
+  ]);
+  const reached = (line: number) =>
+    buildCallSites(files, symbolsOf)
+      .filter((site) => site.line === line && site.symbol === "create")
+      .flatMap((site) => site.toPartIds);
+
+  it("reaches nothing through a type outside the pull request, imported or not", () => {
+    expect(reached(2)).toEqual([]);
+    expect(reached(5)).toEqual([]);
+  });
+
+  it("reaches only the class the receiver names, when the pull request has it", () => {
+    expect(reached(3)).toEqual([recorder.id]);
+    expect(reached(7)).toEqual([writer.id]);
+  });
+
+  it("reaches as before through a variable, a call or nothing it can name", () => {
+    expect(reached(4)).toEqual([recorder.id, writer.id]);
+    expect(reached(6)).toEqual([recorder.id, writer.id]);
+  });
+
+  it("holds for hints and definition calls too", () => {
+    const hints = buildCallGraphHints(files, symbolsOf).filter((hint) => hint.symbol === "create");
+    expect(hints.map((hint) => [hint.line, hint.toPartId])).toEqual([
+      [3, recorder.id],
+      [4, writer.id],
+    ]);
+    const found = buildDefinitionCalls(files, symbolsOf);
+    expect(
+      found
+        .filter((one) => ["TYPE", "make", "outside", "write"].includes(one.name))
+        .map((one) => [
+          one.name,
+          one.calls.map(
+            (at) =>
+              `${found[at]?.partIds[0] === recorder.id ? "Recorder" : "Writer"}.${found[at]?.name}`,
+          ),
+        ]),
+    ).toEqual([
+      ["TYPE", []],
+      // Naming the class is a use of it; the create of the other class isn't reached.
+      ["make", ["Recorder.Recorder", "Recorder.create"]],
+      ["outside", []],
+      ["write", ["Writer.Writer", "Writer.create"]],
+    ]);
+  });
+
+  it("follows an imported module in Python, not a class imported from elsewhere, and self as before", () => {
+    const service = added("pkg/service.py", 2);
+    const caller = added("pkg/app.py", 2);
+    const reachedFrom = (receiver: string) =>
+      buildCallSites(
+        [file("pkg/service.py", service), file("pkg/app.py", caller)],
+        new Map([
+          ["pkg/service.py", javaSymbols([["run", "method", 1, 2]])],
+          [
+            "pkg/app.py",
+            javaSymbols(
+              [],
+              [["run", 1, "member", receiver]],
+              [
+                { module: "pkg", names: ["service"] },
+                { module: "pkg.cache", names: ["Cache"] },
+              ],
+            ),
+          ],
+        ]),
+      ).flatMap((site) => site.toPartIds);
+    expect(reachedFrom("service")).toEqual([service.id]);
+    expect(reachedFrom("Cache")).toEqual([]);
+    // `self` names no class or import, so a member through it reaches as before.
+    expect(reachedFrom("self")).toEqual([service.id]);
   });
 });

@@ -14,6 +14,7 @@
 (composite_literal type: (type_identifier) @reference.name)
 (composite_literal type: (qualified_type name: (type_identifier) @reference.member))
 (selector_expression operand: (identifier) @reference.name)
+(selector_expression operand: (_) @receiver field: (field_identifier) @reference.member)
 (selector_expression field: (field_identifier) @reference.member)
 (type_identifier) @reference.type
 

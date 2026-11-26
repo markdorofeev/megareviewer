@@ -285,6 +285,53 @@ describe("createTreeSitterCodeParser", () => {
   it.each([
     [
       "java",
+      "class A {\n  Object a = NodeClass.create(A.class);\n  void b() { this.c(); r.c(); f().c(); x.y.c(); }\n}\n",
+      [
+        ["create", 2, "NodeClass"],
+        ["c", 3, null],
+        ["c", 3, "r"],
+        ["y", 3, "x"],
+      ],
+    ],
+    [
+      "python",
+      "import mod\nmod.run(self.x, Store().y)\n",
+      [
+        ["run", 2, "mod"],
+        ["x", 2, "self"],
+        ["y", 2, null],
+      ],
+    ],
+    [
+      "typescript",
+      "store.get(this.a, api.b.c());\n",
+      [
+        ["a", 1, null],
+        ["b", 1, "api"],
+        ["c", 1, null],
+        ["get", 1, "store"],
+      ],
+    ],
+    [
+      "go",
+      "package p\n\nfunc f() { store.Get(s.c) }\n",
+      [
+        ["Get", 3, "store"],
+        ["c", 3, "s"],
+      ],
+    ],
+  ])("names the receiver of each %s member", async (language, source, members) => {
+    const { references } = await symbolsOf(source, language);
+    expect(
+      references
+        .filter((reference) => reference.kind === "member")
+        .map(({ name, line, receiver }) => [name, line, receiver]),
+    ).toEqual(members);
+  });
+
+  it.each([
+    [
+      "java",
       "/**\n * Counts.\n *\n */\nclass A {\n  int a; // one\n  /* b */ // c\n  /* d */ int d;\n}\n",
       [1, 2, 3, 4, 7],
     ],

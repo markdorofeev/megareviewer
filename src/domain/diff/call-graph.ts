@@ -6,7 +6,8 @@ import {
   type SymbolImport,
   sharesPackage,
 } from "./imports.ts";
-import { type Piece, partsByHunk, piecesOf } from "./parts.ts";
+import { type DefinitionSpan, type Piece, partsByHunk, piecesOf } from "./parts.ts";
+import { type ReceiverScope, receiverReaches } from "./receivers.ts";
 import { type Route, requestsOn, routesFor, routesOn } from "./requests.ts";
 import { isTestFile } from "./test-files.ts";
 import type { CallGraphHint, CallSite, FileChange, Hunk, HunkPart, PartId } from "./types.ts";
@@ -28,6 +29,11 @@ interface Reference {
   readonly name: string;
   readonly line: number;
   readonly kind: "name" | "member" | "type";
+  /**
+   * A member's receiver: the name it's written after, null when that isn't a name, as `this` or a
+   * call. Absent without a receiver, or where the parser doesn't say.
+   */
+  readonly receiver?: string | null;
   /** Where each use starts on the line. Without them, a reference makes hints but no call sites. */
   readonly columns?: readonly number[];
 }
@@ -194,6 +200,29 @@ export const linking = (
       ),
     ]),
   );
+  const types = new Set(
+    [...symbolsByPath.values()].flatMap((symbols) =>
+      symbols.definitions.flatMap((one) => (isType(one) ? [one.name] : [])),
+    ),
+  );
+  const scopes = new Map(
+    files.map((file): [string, ReceiverScope] => {
+      const imports = symbolsByPath.get(file.path)?.imports ?? [];
+      return [
+        file.path,
+        {
+          language: file.language ?? "",
+          types,
+          imports,
+          reaches: imports.map((one) =>
+            file.language === null ? null : importReach(file.path, file.language, one),
+          ),
+        },
+      ];
+    }),
+  );
+  const ownerOf = (path: string, definition: Definition): string | null =>
+    typeAround(definition, symbolsByPath.get(path)?.definitions ?? [])?.name ?? null;
   const visible = (from: FileChange, kind: "name" | "member", name: string, to: FileChange) =>
     from.path === to.path ||
     (canLink(from, to) &&
@@ -201,13 +230,20 @@ export const linking = (
         sharesPackage(from.language ?? "", from.path, to.path) ||
         (reaches.get(from.path) ?? []).some((reach) => reachesBy(reach, kind, name, to.path))));
 
-  const targetsOf = (from: Located, { name, line, kind }: Reference): readonly Change[] => {
+  const targetsOf = (
+    from: Located,
+    { name, line, kind, receiver }: Reference,
+  ): readonly Change[] => {
     const own = symbolsByPath.get(from.file.path);
+    const scope = scopes.get(from.file.path);
     // A method that calls a same-named one on another object delegates; it doesn't recurse.
     const reached = (changedBy.get(name) ?? []).filter(
       ({ at, definition }) =>
         visible(from.file, kind === "member" ? "member" : "name", name, at.file) &&
-        !(at.file.path === from.file.path && enclosesLine(definition, line)),
+        !(at.file.path === from.file.path && enclosesLine(definition, line)) &&
+        (kind !== "member" ||
+          scope === undefined ||
+          receiverReaches(receiver, scope, at.file.path, ownerOf(at.file.path, definition))),
     );
     const local = reached.filter(
       ({ at, definition }) =>
@@ -302,6 +338,26 @@ const changedDefinitions = (hunk: Hunk, symbols: FileSymbols | undefined): Set<D
   }
   return changed;
 };
+
+/** Whether a definition is a class or a type: what a receiver can name. */
+export const isType = ({ kind }: { readonly kind?: string }): boolean =>
+  kind === "class" || kind === "type";
+
+/** The innermost class or type around a definition. */
+export const typeAround = <T extends DefinitionSpan>(
+  definition: DefinitionSpan,
+  definitions: readonly T[],
+): T | undefined =>
+  definitions
+    .filter(
+      (other) =>
+        other !== definition &&
+        isType(other) &&
+        other.startLine <= definition.startLine &&
+        other.endLine >= definition.endLine &&
+        other.endLine - other.startLine > definition.endLine - definition.startLine,
+    )
+    .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine))[0];
 
 /** The innermost other definition around a definition, such as a method's class. */
 export const containerOf = (

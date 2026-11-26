@@ -272,7 +272,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual([...Array(6).fill("done"), "skipped"]);
-    expect(analysis.key.pipelineVersion).toBe("21");
+    expect(analysis.key.pipelineVersion).toBe("22");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
@@ -1296,7 +1296,7 @@ describe("without the model", () => {
       decisions: "skipped",
       steps: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("21");
+    expect(analysis.key.pipelineVersion).toBe("22");
     expect(analysis.intent).toBeNull();
     expect(analysis.decisions).toEqual([]);
     expect(analysis.usage).toEqual([]);
@@ -1389,7 +1389,7 @@ describe("with a local checkout", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
       expect(analysis.checkoutDir).toBe("/src/shop");
-      expect(analysis.key.pipelineVersion).toBe("21");
+      expect(analysis.key.pipelineVersion).toBe("22");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1475,7 +1475,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
       expect(analysis.checkoutDir).toBe(namesRepo ? "/src/shop" : null);
-      expect(analysis.key.pipelineVersion).toBe("21");
+      expect(analysis.key.pipelineVersion).toBe("22");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },
@@ -1722,7 +1722,7 @@ describe("callers brought to a complete analysis", () => {
     const storedAs = async (changes: Partial<Analysis>) => {
       const ready = setup({ modelEnabled: false });
       const made = await setup({ modelEnabled: false }).analyze();
-      const key = { ...made.key, pipelineVersion: "21+checkout" };
+      const key = { ...made.key, pipelineVersion: "22+checkout" };
       const old: Analysis = { ...made, id: analysisId(key), key, ...changes };
       await ready.store.saveAnalysis(old);
       return { ...ready, made, old };

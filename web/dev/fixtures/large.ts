@@ -111,7 +111,7 @@ export const syntheticAnalysisView = ({
   const key: AnalysisKey = {
     ref: pullRequest.ref,
     headSha: pullRequest.headSha,
-    pipelineVersion: "21",
+    pipelineVersion: "22",
   };
 
   const risk: RiskAssessment[] = files.flatMap((file, at) =>
