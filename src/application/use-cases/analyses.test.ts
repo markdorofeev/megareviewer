@@ -2194,14 +2194,81 @@ describe("a run with the tour", () => {
     expect(left.modelError).toBeNull();
   });
 
+  const station = (name: string, files: string[]) => ({
+    name,
+    when: null,
+    keeps: false,
+    files,
+    gives: null,
+    shapes: [],
+  });
+  const routeToReceipts = {
+    source: "a request",
+    stations: [
+      station("Find the order", ["src/routes/orders.ts"]),
+      station("Render the receipt", ["src/services/receipts.ts"]),
+    ],
+    end: "the response",
+  };
+
+  it("keeps the data flow the steps pass wrote, with or without a tour", async () => {
+    const model = new FakeAnalysisModel();
+    const { analysis, runModel } = await codeOnly(model);
+    model.script("steps", ok(tourOf(analysis).slice(0, 2)));
+    model.scriptFlow(routeToReceipts);
+    const after = await runModel(analysis.id, undefined, true);
+    expect(after.steps).toEqual([]);
+    expect(after.dataFlow).toEqual(routeToReceipts);
+    expect(model.callsTo("steps")).toHaveLength(1);
+  });
+
+  it("tells the model what's wrong with the flow once, then keeps what the checks pass", async () => {
+    const model = new FakeAnalysisModel();
+    const { analysis, runModel } = await codeOnly(model);
+    const wrong = {
+      ...routeToReceipts,
+      stations: [
+        ...routeToReceipts.stations,
+        station("Read the config", ["config/app.yaml", "src/made-up.ts"]),
+      ],
+    };
+    model.script("steps", ok(tourOf(analysis)), ok(tourOf(analysis)));
+    model.scriptFlow(wrong, wrong);
+    const after = await runModel(analysis.id, undefined, true);
+    expect(model.callsTo("steps")[1]?.options?.feedback).toEqual([
+      "Station 3 of the flow lists src/made-up.ts, which isn't a changed file of this pull request. Use paths as the data gives them.",
+      "Nothing in the code joins station 2 of the flow to station 3: none of their files calls, names or requests one of the other's. Order the stations as the data moves, or merge them.",
+    ]);
+    expect(after.steps).toHaveLength(3);
+    expect(after.dataFlow?.stations.map((one) => one.files)).toEqual([
+      ["src/routes/orders.ts"],
+      ["src/services/receipts.ts"],
+      ["config/app.yaml"],
+    ]);
+  });
+
+  it("has no flow when the checks leave fewer than two stations, and still has its tour", async () => {
+    const model = new FakeAnalysisModel();
+    const { analysis, runModel } = await codeOnly(model);
+    const made = { ...routeToReceipts, stations: [station("Made up", ["src/made-up.ts"])] };
+    model.script("steps", ok(tourOf(analysis)), ok(tourOf(analysis)));
+    model.scriptFlow(made, made);
+    const after = await runModel(analysis.id, undefined, true);
+    expect(after.dataFlow).toBeNull();
+    expect(after.steps).toHaveLength(3);
+    expect(after.stepsError).toBeNull();
+  });
+
   it("goes with the run when it's removed", async () => {
     const model = new FakeAnalysisModel();
     const { analysis, runModel, useCases } = await codeOnly(model);
     model.script("steps", ok(tourOf(analysis)));
+    model.scriptFlow(routeToReceipts);
     await runModel(analysis.id, undefined, true);
     const removed = await useCases.removeModelRun(analysis.id);
     if (!removed.ok) throw new Error(removed.error.message);
     expect(removed.value.analysis.steps).toBeNull();
+    expect(removed.value.analysis.dataFlow).toBeNull();
     expect(removed.value.analysis.stages.steps).toBe("skipped");
   });
 

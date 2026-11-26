@@ -10,6 +10,7 @@ import {
   UnchangedCallers,
 } from "../diff/index.ts";
 import { fnv1a64 } from "../shared/index.ts";
+import { DataFlow } from "./data-flow.ts";
 import { ModelError } from "./errors.ts";
 import { Flow, storedFlows } from "./flows.ts";
 import { HarnessRead } from "./harness.ts";
@@ -266,6 +267,11 @@ export const Analysis = z.preprocess(
        * than three steps. Never the run's `modelError`: the review is there without a tour.
        */
       stepsError: AnalysisError.nullable().default(null),
+      /**
+       * How data moves through the change, which the steps pass writes with the tour. Null when no
+       * run asked for it, the change moves no data along a path, or the checks left no flow.
+       */
+      dataFlow: DataFlow.nullable().default(null),
       warnings: z.array(z.string()).readonly(),
       usage: z.preprocess(withoutTourPass, z.array(ModelUsage)).readonly(),
       /** Defaults for analyses stored before model calls were traced. */
@@ -369,6 +375,7 @@ export const withoutModelRun = (
   risk: code.risk ?? analysis.risk,
   steps: null,
   stepsError: null,
+  dataFlow: null,
   warnings: code.warnings,
   usage: [],
   modelCalls: [],

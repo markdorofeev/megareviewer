@@ -8,7 +8,7 @@ import {
 } from "../../../../src/domain/review/index.ts";
 import { fixtureHunks, tourAnalysisView } from "../../../dev/fixtures/index.ts";
 import { fileOverview } from "./overview.ts";
-import { depthText, noTourOf, rowsOf, tourOf } from "./tour.ts";
+import { noTourOf, rowsOf, tourOf } from "./tour.ts";
 
 const analysis = tourAnalysisView.analysis;
 const overview = fileOverview(analysis);
@@ -68,36 +68,31 @@ describe("tourOf", () => {
     ]);
   });
 
-  it("follows the steps on the strip: steps one after another in a directory share a box", () => {
+  it("draws each directory the steps' lines are in once, with its steps' numbers", () => {
     const tour = view();
     expect(tour.boxes.map((box) => [box.label, box.steps])).toEqual([
       ["src/routes/", [1]],
       ["src/services/", [2, 3, 4]],
     ]);
-    expect(tour.spans).toEqual([]);
   });
 
-  it("gives a directory the tour comes back to a box of its own, so the numbers only rise", () => {
+  it("keeps one box for a directory the steps come back to, in the order they first reach it", () => {
     const tour = view({
       steps: [
-        step(1, { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 14, line: 17 }),
-        step(2, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 41, line: 50 }),
-        step(3, { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 18, line: 21 }),
-        step(4, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 29, line: 39 }),
+        step(1, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 41, line: 50 }),
+        step(2, { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 14, line: 17 }),
+        step(3, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 29, line: 39 }),
+        step(4, { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 18, line: 21 }),
         step(5, { hunkId: fixtureHunks.receiptFormatting, side: "new", startLine: 3, line: 13 }),
       ],
     });
     expect(tour.boxes.map((box) => [box.label, box.steps])).toEqual([
-      ["src/routes/", [1]],
-      ["src/services/", [2]],
-      ["src/routes/", [3]],
-      ["src/services/", [4, 5]],
+      ["src/services/", [1, 3, 5]],
+      ["src/routes/", [2, 4]],
     ]);
-    expect(new Set(tour.boxes.map((box) => box.key)).size).toBe(4);
-    expect(tour.boxes.flatMap((box) => box.steps)).toEqual([1, 2, 3, 4, 5]);
   });
 
-  it("groups the two boxes of a step that crosses into another process, apart from its neighbors", () => {
+  it("numbers a step with lines in two directories in both, and once for two places in one", () => {
     const tour = view({
       steps: [
         step(1, { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 14, line: 17 }),
@@ -106,18 +101,18 @@ describe("tourOf", () => {
           { hunkId: fixtureHunks.receiptRoute, side: "new", startLine: 18, line: 21 },
           { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 41, line: 50 },
         ),
-        step(3, { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 29, line: 39 }),
+        step(
+          3,
+          { hunkId: fixtureHunks.retryAndCache, side: "new", startLine: 29, line: 39 },
+          { hunkId: fixtureHunks.receiptFormatting, side: "new", startLine: 3, line: 13 },
+        ),
       ],
     });
     expect(tour.steps[1]?.boxes).toHaveLength(2);
     expect(tour.boxes.map((box) => [box.label, box.steps])).toEqual([
-      ["src/routes/", [1]],
-      ["src/routes/", [2]],
-      ["src/services/", [2]],
-      ["src/services/", [3]],
+      ["src/routes/", [1, 2]],
+      ["src/services/", [2, 3]],
     ]);
-    const [, from, to] = tour.boxes;
-    expect(tour.spans).toEqual([{ step: 2, keys: [from?.key, to?.key] }]);
   });
 
   it("chips the points on a step's lines", () => {
@@ -130,16 +125,6 @@ describe("tourOf", () => {
   it("lists the findings outside the steps", () => {
     const tour = view({ steps: (analysis.steps ?? []).slice(1) });
     expect(tour.outside.map((point) => point.id)).toEqual(["f1"]);
-    expect(tour.depth.findingsOutside).toBe(1);
-  });
-
-  it("suggests reading the steps with an open finding", () => {
-    const tour = view();
-    expect(tour.depth.read).toEqual([1, 2, 3]);
-    const dismissed = tourOf(analysis, overview, points, (point) =>
-      point.id === "f3" ? "dismissed" : "open",
-    );
-    expect(dismissed?.depth.read).toEqual([1, 2]);
   });
 
   it("is no tour under three steps", () => {
@@ -190,23 +175,5 @@ describe("noTourOf", () => {
       }),
     ).toEqual({ kind: "failed", message: "Overloaded" });
     expect(noTourOf(ran)).toBeNull();
-  });
-});
-
-describe("depthText", () => {
-  const depth = (read: number[], findingsOutside: number) => depthText({ read, findingsOutside });
-
-  it("names the steps to read, then what's outside them", () => {
-    expect(depth([1, 2, 3], 1)).toBe(
-      "Read steps 1, 2 and 3 in the code: each has an open finding. 1 finding is outside the steps.",
-    );
-    expect(depth([2], 2)).toBe(
-      "Read step 2 in the code: it has an open finding. 2 findings are outside the steps.",
-    );
-    expect(depth([], 1)).toBe("No step has an open finding. 1 finding is outside the steps.");
-  });
-
-  it("says nothing of outside the steps when nothing is", () => {
-    expect(depth([1], 0)).toBe("Read step 1 in the code: it has an open finding.");
   });
 });

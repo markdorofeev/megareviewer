@@ -11,6 +11,7 @@ export {
   type PassError,
   type PassOptions,
   type PassOutput,
+  type TourDraft,
 } from "./analysis-model.ts";
 export type { AnalysisStore, StoredPublication, ThreadPostKind } from "./analysis-store.ts";
 export type { Clock } from "./clock.ts";

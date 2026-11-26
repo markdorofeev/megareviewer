@@ -1,12 +1,5 @@
 import { z } from "zod";
-import {
-  type CallGraphHint,
-  type Hunk,
-  type HunkId,
-  type HunkPart,
-  hunkHasLine,
-  type PartId,
-} from "../diff/index.ts";
+import { type Hunk, type HunkId, hunkHasLine } from "../diff/index.ts";
 import { PointLines } from "./point-lines.ts";
 
 /** "t1", "t2", … in tour order. */
@@ -21,9 +14,8 @@ export const MIN_STEPS = 3;
 export const MAX_STEPS = 7;
 
 /**
- * A place on the page's tour: one sentence of what happens there, and the lines of one or two
- * hunks that decide it. Two only when the hop crosses into another process, such as a client call
- * and its route.
+ * A place on the page's tour: one sentence of what the change makes true, and the lines that show
+ * it, in one place or two.
  */
 export const Step = z
   .object({
@@ -46,17 +38,14 @@ export type StepProblem =
       readonly excerpt: number;
       readonly hunkId: HunkId;
     }
-  | { readonly kind: "same-file"; readonly step: number }
-  /** `step` comes before `caller`, whose code calls it: callers come first. */
-  | { readonly kind: "order"; readonly step: number; readonly caller: number }
+  /** Its two excerpts show some of the same lines. */
+  | { readonly kind: "overlap"; readonly step: number }
   | { readonly kind: "too-many"; readonly step: number };
 
 export interface StepContext {
   readonly hunks: ReadonlyMap<HunkId, Hunk>;
   /** Hunks with a mechanical proof, which the model was sent as stats only. */
   readonly mechanical: ReadonlySet<HunkId>;
-  readonly parts: readonly HunkPart[];
-  readonly callGraph: readonly CallGraphHint[];
 }
 
 const excerptProblem = (
@@ -72,53 +61,29 @@ const excerptProblem = (
     : "lines-outside";
 };
 
-/** The parts whose lines an excerpt shows: a hunk that isn't split is one part. */
-const partsOfExcerpt = (excerpt: PointLines, context: StepContext): PartId[] => {
-  const hunk = context.hunks.get(excerpt.hunkId);
-  if (hunk === undefined) return [];
-  const own = context.parts.filter((part) => part.hunkId === excerpt.hunkId);
-  if (own.length === 0) return [excerpt.hunkId];
+/** The rows of its hunk an excerpt shows, from its first line to its last, as the page draws it. */
+const rowsOf = (excerpt: PointLines, hunk: Hunk): { start: number; end: number } | null => {
   const shown = hunk.lines.flatMap((line, index) => {
     const number = excerpt.side === "new" ? line.newLine : line.oldLine;
     return number !== null && number >= excerpt.startLine && number <= excerpt.line ? [index] : [];
   });
-  return own
-    .filter((part) => shown.some((index) => index >= part.start && index < part.end))
-    .map((part) => part.id);
+  const [first] = shown;
+  const last = shown.at(-1);
+  return first === undefined || last === undefined ? null : { start: first, end: last + 1 };
 };
 
-/**
- * Pairs of steps out of call order: an earlier step whose code a later step's calls, by the call
- * graph's direct hints between their parts. Steps that call each other either way are left alone.
- */
-const orderProblems = (
-  steps: readonly StepDraft[],
-  context: StepContext,
-): { step: number; caller: number }[] => {
-  const partsOf = steps.map(
-    (step) => new Set(step.excerpts.flatMap((excerpt) => partsOfExcerpt(excerpt, context))),
-  );
-  const calls = (from: number, to: number) =>
-    context.callGraph.some(
-      (hint) =>
-        hint.use !== "type" &&
-        hint.fromPartId !== hint.toPartId &&
-        partsOf[from]?.has(hint.fromPartId) === true &&
-        partsOf[to]?.has(hint.toPartId) === true,
-    );
-  const problems: { step: number; caller: number }[] = [];
-  for (let step = 0; step < steps.length; step += 1) {
-    for (let caller = step + 1; caller < steps.length; caller += 1) {
-      if (calls(caller, step) && !calls(step, caller)) problems.push({ step, caller });
-    }
-  }
-  return problems;
+const overlap = ([first, second]: readonly PointLines[], { hunks }: StepContext): boolean => {
+  if (first === undefined || second === undefined || first.hunkId !== second.hunkId) return false;
+  const hunk = hunks.get(first.hunkId);
+  const a = hunk === undefined ? null : rowsOf(first, hunk);
+  const b = hunk === undefined ? null : rowsOf(second, hunk);
+  return a !== null && b !== null && a.start < b.end && b.start < a.end;
 };
 
 /**
  * Every problem with the model's steps: excerpts on hunks it wasn't sent in full or on lines
- * their hunk doesn't show, two excerpts in one file, steps out of call order, and steps past
- * the seventh.
+ * their hunk doesn't show, two excerpts of a step on the same lines, and steps past the seventh.
+ * Their order is the model's, by what matters most, and nothing checks it.
  */
 export const validateSteps = (steps: readonly StepDraft[], context: StepContext): StepProblem[] => [
   ...steps.flatMap((step, index): StepProblem[] => {
@@ -126,25 +91,16 @@ export const validateSteps = (steps: readonly StepDraft[], context: StepContext)
       const kind = excerptProblem(excerpt, context);
       return kind === null ? [] : [{ kind, step: index, excerpt: at, hunkId: excerpt.hunkId }];
     });
-    const paths = step.excerpts.map((excerpt) => context.hunks.get(excerpt.hunkId)?.path);
-    const sameFile =
-      paths.length === 2 && paths[0] !== undefined && paths[0] === paths[1]
-        ? [{ kind: "same-file" as const, step: index }]
-        : [];
-    return [...excerpts, ...sameFile];
+    return overlap(step.excerpts, context)
+      ? [...excerpts, { kind: "overlap", step: index }]
+      : excerpts;
   }),
-  ...orderProblems(steps, context).map(({ step, caller }) => ({
-    kind: "order" as const,
-    step,
-    caller,
-  })),
   ...steps.slice(MAX_STEPS).map((_, at) => ({ kind: "too-many" as const, step: MAX_STEPS + at })),
 ];
 
 /**
  * The steps kept after the retry, numbered: a bad excerpt is dropped, and so is a step left with
- * none, the second excerpt of two in one file, and every step past the seventh. An order still
- * wrong is kept, since the code is all there; the caller logs it.
+ * none, the second of two excerpts on the same lines, and every step past the seventh.
  */
 export const keptSteps = (
   steps: readonly StepDraft[],
@@ -159,14 +115,14 @@ export const keptSteps = (
         problem.step === step &&
         problem.excerpt === excerpt,
     );
-  const sameFile = (step: number) =>
-    problems.some((problem) => problem.kind === "same-file" && problem.step === step);
+  const overlapping = (step: number) =>
+    problems.some((problem) => problem.kind === "overlap" && problem.step === step);
   return steps
     .slice(0, MAX_STEPS)
     .flatMap((step, index) => {
       const excerpts = step.excerpts
         .filter((_, at) => !badExcerpt(index, at))
-        .slice(0, sameFile(index) ? 1 : 2);
+        .slice(0, overlapping(index) ? 1 : 2);
       return excerpts.length === 0 ? [] : [{ sentence: step.sentence, excerpts }];
     })
     .map((step, index) => ({ ...step, id: StepId.parse(`t${index + 1}`) }));

@@ -11,7 +11,6 @@ import {
   MIN_STEPS,
   type Point,
   type PointLines,
-  type PointState,
   type StepId,
 } from "../../../../src/domain/review/index.ts";
 import { directoryOf } from "../../review/tree/paths.ts";
@@ -41,7 +40,7 @@ export interface TourStep {
   readonly id: StepId;
   readonly number: number;
   readonly sentence: string;
-  /** The directories it reaches, by the overview's node keys: one, or two across a process. */
+  /** The directories its lines are in, by the overview's node keys: one or two. */
   readonly boxes: readonly string[];
   readonly excerpts: readonly TourExcerpt[];
   /** Claude's points on its lines. */
@@ -49,12 +48,10 @@ export interface TourStep {
 }
 
 export interface TourBox {
-  /** Its own on the strip: a directory the tour comes back to is a box each time. */
+  /** The directory, by the overview's node key: one box each. */
   readonly key: string;
-  /** The directory, by the overview's node key. */
-  readonly directory: string;
   readonly label: string;
-  /** The steps it holds, by number, one after another; none for a box off the tour. */
+  /** The steps with lines in it, by number. */
   readonly steps: readonly number[];
 }
 
@@ -76,29 +73,17 @@ export interface LedgerGroup {
 export interface TourView {
   readonly steps: readonly TourStep[];
   /**
-   * The strip, which follows the steps: a box for each run of steps in one directory, so their
-   * numbers only rise along it and a directory the tour comes back to is there again.
+   * The strip: the directories the steps' lines are in, each once, in the order the steps first
+   * reach them. The steps go by what matters most, so the strip says where they are, not a path.
    */
   readonly boxes: readonly TourBox[];
-  /** The two boxes of a step in two directories, by their keys. */
-  readonly spans: readonly { readonly step: number; readonly keys: readonly [string, string] }[];
   /** What the tour didn't show, a group each, empty ones left out. */
   readonly ledger: readonly LedgerGroup[];
   /** Claude's findings no step shows. */
   readonly outside: readonly Point[];
-  readonly depth: Depth;
   /** Changed lines: the steps' and the pull request's. */
   readonly shown: number;
   readonly total: number;
-}
-
-/**
- * Where to read in the code, by rule: the steps with an open finding, and how many findings are
- * outside the steps.
- */
-export interface Depth {
-  readonly read: readonly number[];
-  readonly findingsOutside: number;
 }
 
 const LEDGER_LABELS: Readonly<Record<LedgerGroupId, string>> = {
@@ -137,7 +122,6 @@ export const tourOf = (
   analysis: Pick<Analysis, "files" | "steps" | "proofs" | "generated" | "parts">,
   overview: FileOverview,
   points: readonly Point[],
-  stateOf: (point: Point) => PointState = () => "open",
 ): TourView | null => {
   if (analysis.steps === null || analysis.steps.length < MIN_STEPS) return null;
   const hunks = new Map(
@@ -200,31 +184,15 @@ export const tourOf = (
     };
   });
 
-  const boxes: TourBox[] = [];
-  const spans: { step: number; keys: readonly [string, string] }[] = [];
-  const boxOn = (directory: string, step: number): TourBox => ({
-    key: `${directory}#${step}`,
-    directory,
-    label: labelOf(directory),
-    steps: [step],
-  });
+  const stepsIn = new Map<string, number[]>();
   for (const step of steps) {
-    const [first, second] = step.boxes;
-    if (first === undefined) continue;
-    if (second !== undefined) {
-      const pair = [boxOn(first, step.number), boxOn(second, step.number)] as const;
-      boxes.push(...pair);
-      spans.push({ step: step.number, keys: [pair[0].key, pair[1].key] });
-      continue;
-    }
-    const last = boxes.at(-1);
-    const spanned = last !== undefined && spans.some((span) => span.keys.includes(last.key));
-    if (last !== undefined && last.directory === first && !spanned) {
-      boxes[boxes.length - 1] = { ...last, steps: [...last.steps, step.number] };
-    } else {
-      boxes.push(boxOn(first, step.number));
+    for (const directory of step.boxes) {
+      stepsIn.set(directory, [...(stepsIn.get(directory) ?? []), step.number]);
     }
   }
+  const boxes = [...stepsIn].map(
+    ([key, numbers]): TourBox => ({ key, label: labelOf(key), steps: numbers }),
+  );
 
   // The ledger: every changed line no step shows, by file, in groups.
   const stepFiles = new Set(steps.flatMap((step) => step.excerpts.map((excerpt) => excerpt.path)));
@@ -262,8 +230,6 @@ export const tourOf = (
   const outside = points.filter(
     (point) => point.guidance?.effect !== "left-out" && !chipped.has(point.id),
   );
-  const open = (point: Point) => stateOf(point) !== "dismissed";
-  const read = steps.filter((step) => step.points.some(open)).map((step) => step.number);
   const total = analysis.files.reduce(
     (sum, file) => sum + file.hunks.reduce((lines, hunk) => lines + changed(hunk), 0),
     0,
@@ -271,10 +237,8 @@ export const tourOf = (
   return {
     steps,
     boxes,
-    spans,
     ledger,
     outside,
-    depth: { read, findingsOutside: outside.filter(open).length },
     shown: shownRows.size,
     total,
   };
@@ -302,21 +266,8 @@ export const noTourOf = (
   return hasModelRun(analysis) ? { kind: "without-tour" } : { kind: "no-review" };
 };
 
-const counted = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
-
 /** "1, 2 and 3". */
 export const listOf = (numbers: readonly number[]): string =>
   numbers.length < 2
     ? numbers.join("")
     : `${numbers.slice(0, -1).join(", ")} and ${numbers.at(-1)}`;
-
-/** The suggested depth in words: the steps to read, then what's outside them, a zero left out. */
-export const depthText = (depth: Depth): string => {
-  const { read, findingsOutside } = depth;
-  const steps =
-    read.length === 0
-      ? "No step has an open finding."
-      : `Read ${read.length === 1 ? "step" : "steps"} ${listOf(read)} in the code: ${read.length === 1 ? "it has" : "each has"} an open finding.`;
-  if (findingsOutside === 0) return steps;
-  return `${steps} ${counted(findingsOutside, "finding")} ${findingsOutside === 1 ? "is" : "are"} outside the steps.`;
-};

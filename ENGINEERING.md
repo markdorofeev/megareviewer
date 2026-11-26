@@ -35,8 +35,10 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Definition call | A call from one changed definition into another, within a part too. What a flow path follows |
 | Flow path | Where a change is reached and the changed files it runs from there, in call order: a flow's entry points, or a file's definitions no changed code calls, with code several paths run on each. What the overview's preview forms draw |
 | Stop | A changed file on a flow path, under one that calls it there unless the path starts in it; *new* when the PR adds it and *changed* otherwise. Tests, docs, generated and mechanical files are never stops |
-| Tour | The page's tour of a PR: a few steps in call order, which the model writes and the Overview shows while the tour is on |
-| Step | A place on the page's tour: one sentence and the lines of one or two hunks that decide it, in call order. The model writes the steps and the server checks them |
+| Tour | The page's tour of a PR: a few steps, what matters most first, which the model writes and the Tour layout shows |
+| Step | A place on the page's tour: one sentence of something the change makes true, and the lines that show it, in one place or two. The model writes the steps and the server checks them |
+| Data flow | How data moves through a change: where it comes in, the stations it passes through in the order it moves, and where it ends up. The model writes it with the steps and the server checks it. What the Overview draws |
+| Station | A place on the data flow: a role, the changed files that play it, when it runs, whether it keeps data for a later station, and what it hands the next one, with the changed files that only define what's handed on |
 | Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed: the one megareviewer was pointed at, one it read before, or one found by searching the home folder |
 | Copy | megareviewer's own bare repository of a PR's repository, holding only the commits it downloaded. Read as a checkout |
 | Receiver | What a member is written after, `NodeClass` in `NodeClass.create()`: it decides which class's member a call can reach |

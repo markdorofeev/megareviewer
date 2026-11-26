@@ -1,6 +1,9 @@
 import type { Hunk, HunkId } from "../../domain/diff/index.ts";
 import {
   checkGuidanceMark,
+  type DataFlow,
+  type DataFlowContext,
+  type DataFlowProblem,
   type Finding,
   FindingId,
   type FindingProblem,
@@ -8,6 +11,7 @@ import {
   type GuidanceMark,
   HARNESS_ROOT,
   type Intent,
+  keptDataFlow,
   keptSteps,
   MIN_STEPS,
   type ModelCall,
@@ -21,6 +25,7 @@ import {
   type StepDraft,
   type StepProblem,
   strippable,
+  validateDataFlow,
   validateFindings,
   validateHunkReferences,
   validateSteps,
@@ -36,6 +41,7 @@ import type {
   PassError,
   PassOptions,
   PassOutput,
+  TourDraft,
 } from "../ports/index.ts";
 
 export interface PassResult<T> {
@@ -367,41 +373,93 @@ const describeStepProblem = (problem: StepProblem): string => {
       return `${step}'s excerpt ${problem.excerpt + 1} rests on ${problem.hunkId}, a mechanical hunk sent as stats only. Use hunks sent in full.`;
     case "lines-outside":
       return `${step}'s excerpt ${problem.excerpt + 1} has lines ${problem.hunkId} doesn't show on that side.`;
-    case "same-file":
-      return `${step} has two excerpts in one file. Give two only when the hop crosses into another process, each in its own file.`;
-    case "order":
-      return `${step} comes before step ${problem.caller + 1}, whose code calls it. Put callers first.`;
+    case "overlap":
+      return `${step}'s two excerpts show some of the same lines. Give one excerpt, or two that share no line.`;
     case "too-many":
       return `${step} is past the seventh. Merge neighboring steps into at most 7.`;
   }
 };
 
-const stepTexts: Rewrite<StepDraft[]> = (drafts, text) =>
-  drafts.map((draft) => ({ ...draft, sentence: text(draft.sentence) }));
+const describeFlowProblem = (problem: DataFlowProblem): string => {
+  const station = `Station ${problem.station + 1} of the flow`;
+  switch (problem.kind) {
+    case "unknown-file":
+      return `${station} lists ${problem.path}, which isn't a changed file of this pull request. Use paths as the data gives them.`;
+    case "repeated-file":
+      return `${station} lists ${problem.path}, which an earlier station or its own files already have. A file goes in one place.`;
+    case "unnamed":
+      return `${station} has no name.`;
+    case "no-files":
+      return `${station} has no changed file of this pull request in files.`;
+    case "too-many":
+      return `${station} is past the seventh. Merge neighboring stations into at most 7.`;
+    case "unlinked":
+      return `Nothing in the code joins station ${problem.station + 1} of the flow to station ${problem.next + 1}: none of their files calls, names or requests one of the other's. Order the stations as the data moves, or merge them.`;
+  }
+};
+
+const tourTexts: Rewrite<TourDraft> = ({ steps, flow }, text) => {
+  const optional = (one: string | null) => (one === null ? null : text(one));
+  return {
+    steps: steps.map((draft) => ({ ...draft, sentence: text(draft.sentence) })),
+    flow:
+      flow === null
+        ? null
+        : {
+            source: optional(flow.source),
+            stations: flow.stations.map((station) => ({
+              ...station,
+              name: text(station.name),
+              when: optional(station.when),
+              gives: optional(station.gives),
+            })),
+            end: optional(flow.end),
+          },
+  };
+};
+
+/** The steps pass's two results: the tour, or why there's none, and the data flow or none. */
+export interface TourResult extends PassResult<Step[]> {
+  readonly flow: DataFlow | null;
+}
 
 /**
- * The page's tour: the steps the model wrote, checked, with one retry for what the checks find.
- * After it, what's still wrong is repaired as `keptSteps` says and logged. An answer of fewer than
- * three steps is no tour: the change is too small for one. An answer the checks leave with fewer
- * than three is no tour either, and the reason is the pass's error, which the page shows.
+ * The page's tour and the change's data flow: what the model wrote, checked, with one retry for
+ * what the checks find in either. After it, what's still wrong is repaired as `keptSteps` and
+ * `keptDataFlow` say and logged. An answer of fewer than three steps is no tour: the change is too
+ * small for one. An answer the checks leave with fewer than three is no tour either, and the reason
+ * is the pass's error, which the page shows. The flow stands or falls by its own checks.
  */
 export const runSteps = async (
   model: AnalysisModel,
   input: AnalysisInput,
   context: StepContext,
+  flowContext: DataFlowContext,
   deps: PassDeps,
   guidance: Guidance | null = null,
-): Promise<PassResult<Step[]>> => {
+): Promise<TourResult> => {
+  const flowProblems = (flow: DataFlow | null) =>
+    flow === null ? [] : validateDataFlow(flow, flowContext);
   const { outcome, usage, modelCalls } = await callChecked(
     "steps",
     (options) => model.steps(input, options),
-    refsOutOf(guidance, input, stepTexts),
-    (drafts) => validateSteps(drafts, context).map(describeStepProblem),
+    refsOutOf(guidance, input, tourTexts),
+    ({ steps, flow }) => [
+      ...validateSteps(steps, context).map(describeStepProblem),
+      ...flowProblems(flow).map(describeFlowProblem),
+    ],
     deps,
   );
-  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
-  const drafts = outcome.value.value;
-  if (drafts.length < MIN_STEPS) return { outcome: ok([]), usage, modelCalls, warnings: [] };
+  if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [], flow: null };
+  const { steps: drafts, flow: drafted } = outcome.value.value;
+  const leftInFlow = flowProblems(drafted);
+  if (leftInFlow.length > 0) {
+    deps.logger.warn("Repaired the data flow the checks found wrong after the retry", {
+      problems: leftInFlow.map(describeFlowProblem),
+    });
+  }
+  const flow = drafted === null ? null : keptDataFlow(drafted, flowContext);
+  if (drafts.length < MIN_STEPS) return { outcome: ok([]), usage, modelCalls, warnings: [], flow };
   const problems = validateSteps(drafts, context);
   if (problems.length > 0) {
     deps.logger.warn("Repaired the steps the checks found wrong after the retry", {
@@ -418,7 +476,8 @@ export const runSteps = async (
       usage,
       modelCalls,
       warnings: [],
+      flow,
     };
   }
-  return { outcome: ok(steps), usage, modelCalls, warnings: [] };
+  return { outcome: ok(steps), usage, modelCalls, warnings: [], flow };
 };

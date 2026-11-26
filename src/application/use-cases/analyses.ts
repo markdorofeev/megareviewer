@@ -137,6 +137,7 @@ const newAnalysis = (
   flows: null,
   steps: null,
   stepsError: null,
+  dataFlow: null,
   warnings: [],
   usage: [],
   modelCalls: [],

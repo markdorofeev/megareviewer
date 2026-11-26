@@ -43,6 +43,7 @@ import {
   activeReviewerActivity,
   deepAppAnalysisView,
   fixtureAnalysisView,
+  fixtureDataFlow,
   fixtureImport,
   fixturePreferencesView,
   fixturePullRequestStatus,
@@ -268,7 +269,12 @@ export const createMockApi = (
     const ended = afterModelRun(fixtureView.analysis, scenario);
     if (modelStagesDone >= MODEL_STAGES.length) {
       return tourAsked
-        ? { ...ended, stages: { ...ended.stages, steps: "done" as const }, steps: fixtureSteps }
+        ? {
+            ...ended,
+            stages: { ...ended.stages, steps: "done" as const },
+            steps: fixtureSteps,
+            dataFlow: fixtureDataFlow,
+          }
         : ended;
     }
     const running = analysisInProgress(ended, CODE_STAGES + modelStagesDone);
