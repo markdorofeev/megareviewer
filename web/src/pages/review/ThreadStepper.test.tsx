@@ -19,19 +19,15 @@ const [tax, attempts, money, earlier] = fixtureThreads.threads as [
 ];
 // The page's order.
 const ORDERED = [earlier, attempts, tax, money];
-const NONE: ReadonlySet<ThreadId> = new Set();
 
 const stepper = (props: {
   readonly ordered?: readonly ReviewThread[];
   readonly current?: ThreadId | null;
-  readonly resolvedHere?: ReadonlySet<ThreadId>;
   readonly onGo?: (id: ThreadId) => void;
 }) =>
   render(
     <ThreadStepper
       ordered={props.ordered ?? ORDERED}
-      scope="unresolved"
-      resolvedHere={props.resolvedHere ?? NONE}
       current={props.current ?? null}
       onGo={props.onGo ?? (() => {})}
       onOpenList={() => {}}
@@ -63,15 +59,13 @@ describe("ThreadStepper", () => {
     );
   });
 
-  it("marks a thread resolved here, which stays a step", () => {
+  it("leaves out a resolved thread, and steps on from it by its place", () => {
+    const onGo = vi.fn();
     const resolved = { ...attempts, resolved: true };
-    stepper({
-      ordered: [earlier, resolved, tax, money],
-      current: "PRRT_attempts",
-      resolvedHere: new Set(["PRRT_attempts"]),
-    });
-    expect(position().textContent).toBe("2 of 3");
-    expect(screen.getByRole("status").textContent).toMatch(/line 29, resolved: /);
+    stepper({ ordered: [earlier, resolved, tax, money], current: "PRRT_attempts", onGo });
+    expect(position().textContent).toBe("2 unresolved");
+    fireEvent.click(screen.getByRole("button", { name: "Next thread" }));
+    expect(onGo).toHaveBeenCalledWith("PRRT_tax");
   });
 
   it("stays on the one thread there is", () => {
@@ -84,67 +78,42 @@ describe("ThreadStepper", () => {
 
   it("can't step when there are no steps", () => {
     stepper({ ordered: [money] });
-    // Every thread is resolved and the scope was chosen as unresolved: nothing to go round.
+    // Every thread is resolved: nothing to go round.
     expect(position().textContent).toBe("0 unresolved");
     expect(screen.getByRole("button", { name: "Next thread" }).hasAttribute("disabled")).toBe(true);
   });
 });
 
 describe("threadChip", () => {
-  it("counts the steps, and names what they are", () => {
-    expect(threadChip(ORDERED, "unresolved", NONE)).toEqual({
+  it("counts the unresolved threads, and is null without any", () => {
+    expect(threadChip(ORDERED)).toEqual({
       count: 3,
       words: ["unresolved", "unresolved"],
       label: "3 unresolved threads",
     });
-    expect(threadChip(ORDERED, "all", NONE)?.label).toBe("4 threads");
-    expect(threadChip([], "unresolved", NONE)).toBeNull();
+    expect(threadChip([money])).toBeNull();
+    expect(threadChip([])).toBeNull();
   });
 });
 
 describe("ThreadList", () => {
-  it("lists every thread under its file, in the page's order, and chooses what the steps cover", () => {
-    const onScope = vi.fn();
+  it("lists the unresolved threads under their file, in the page's order", () => {
     const onGo = vi.fn();
-    render(
-      <ThreadList
-        ordered={ORDERED}
-        scope="unresolved"
-        onScope={onScope}
-        onGo={onGo}
-        onClose={() => {}}
-      />,
-    );
-    const dialog = screen.getByRole("dialog", { name: "4 threads, 3 unresolved" });
+    render(<ThreadList ordered={ORDERED} onGo={onGo} onClose={() => {}} />);
+    const dialog = screen.getByRole("dialog", { name: "3 unresolved threads" });
     const files = within(dialog)
       .getAllByRole("region")
       .map((one) => one.getAttribute("aria-label"));
-    expect(files).toEqual(["src/routes/orders.ts", "src/services/receipts.ts", "src/lib/money.ts"]);
+    // money.ts has only a resolved thread.
+    expect(files).toEqual(["src/routes/orders.ts", "src/services/receipts.ts"]);
     const rows = within(dialog)
       .getAllByRole("listitem")
       .map((row) => row.textContent);
+    expect(rows).toHaveLength(3);
     expect(rows[0]).toBe("Lee Park: Return a 404 here too.Outdatedline 58");
-    expect(rows[3]).toBe("Lee Park: Rounds half-cents up?Resolvedline 2");
-    expect(
-      within(dialog).getByRole("button", { name: "Unresolved (3)" }).getAttribute("aria-pressed"),
-    ).toBe("true");
-    fireEvent.click(within(dialog).getByRole("button", { name: "All (4)" }));
-    expect(onScope).toHaveBeenCalledWith("all");
+    expect(within(dialog).queryByRole("button", { name: /^All/ })).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: /Name says what it counts/ }));
     expect(onGo).toHaveBeenCalledWith("PRRT_attempts");
-  });
-
-  it("offers no choice when every thread is unresolved", () => {
-    render(
-      <ThreadList
-        ordered={[tax, attempts]}
-        scope="unresolved"
-        onScope={() => {}}
-        onGo={() => {}}
-        onClose={() => {}}
-      />,
-    );
-    expect(screen.queryByRole("button", { name: /^All/ })).toBeNull();
   });
 });
 
@@ -195,7 +164,7 @@ describe("ClaudeElement with threads", () => {
         starting={false}
         error={null}
         points={props.points ?? []}
-        threads={threadChip(ORDERED, "unresolved", NONE)}
+        threads={threadChip(ORDERED)}
         narrowed={null}
         onNarrow={props.onNarrow ?? (() => {})}
         onRun={() => {}}

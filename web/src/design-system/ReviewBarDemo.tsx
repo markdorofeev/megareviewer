@@ -22,7 +22,7 @@ import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
 import { narrowTo } from "../pages/review/stepper.ts";
 import { ThreadStepper, threadChip } from "../pages/review/ThreadStepper.tsx";
-import { type ThreadScope, threadScopeOf, threadSteps } from "../pages/review/thread-steps.ts";
+import { threadSteps } from "../pages/review/thread-steps.ts";
 import { Button } from "../ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip.tsx";
 import { DESIGN_RUN, POINTS, PULL_REQUEST, THREADS, useDemoChoice } from "./fixtures.ts";
@@ -51,14 +51,6 @@ const PR_THREADS: readonly ReviewThread[] = [
   { ...THREADS.resolved, id: "PRRT_resolved", line: 24, originalLine: 24 },
   { ...THREADS.grouped, id: "PRRT_grouped", path: "src/http/client.ts", line: 8, originalLine: 8 },
 ];
-const ALL_RESOLVED: readonly ReviewThread[] = PR_THREADS.map((one) => ({
-  ...one,
-  resolved: true,
-}));
-
-const RESOLVED_HERE: readonly ReviewThread[] = PR_THREADS.filter(
-  (one) => one.id !== "PRRT_resolved",
-).map((one) => (one.id === "PRRT_grouped" ? { ...one, resolved: true } : one));
 
 const RAN: ClaudeRun = {
   ...DESIGN_RUN,
@@ -83,8 +75,6 @@ const BarDemo = ({
   published = false,
   threads = [],
   startThread = null,
-  resolvedHere = [],
-  scope = null,
   pending = 0,
   isAuthor = false,
   stale = false,
@@ -104,9 +94,6 @@ const BarDemo = ({
   /** The PR's threads, in the page's order. */
   readonly threads?: readonly ReviewThread[];
   readonly startThread?: ThreadId | null;
-  /** Threads resolved on the page, which stay steps. */
-  readonly resolvedHere?: readonly ThreadId[];
-  readonly scope?: ThreadScope | null;
   /** Line comments waiting for the review. */
   readonly pending?: number;
   readonly isAuthor?: boolean;
@@ -117,9 +104,8 @@ const BarDemo = ({
   const [thread, setThread] = useState<ThreadId | null>(startThread);
   const choice = useDemoChoice(models);
   const [narrowed, setNarrowed] = useState<Narrowing | null>(narrowedAt);
-  const here = new Set(resolvedHere);
-  const threadScope = threadScopeOf(scope, threads, here);
-  const walkingThreads = narrowed === "thread" || points.length === 0;
+  const unresolved = threadSteps(threads);
+  const walkingThreads = (narrowed === "thread" && unresolved.length > 0) || points.length === 0;
   const stateOf = (id: PointId): PointState => (dismissed.includes(id) ? "dismissed" : "open");
   return (
     <div className="flex flex-col gap-1">
@@ -141,12 +127,12 @@ const BarDemo = ({
               starting={false}
               error={null}
               points={points}
-              threads={threadChip(threads, threadScope, here)}
+              threads={threadChip(threads)}
               narrowed={narrowed}
               onNarrow={(kind) => {
                 setNarrowed(kind);
                 if (kind === "thread") {
-                  const [first] = threadSteps(threads, threadScope, here);
+                  const [first] = unresolved;
                   if (thread === null && first !== undefined) setThread(first.id);
                   return;
                 }
@@ -161,18 +147,16 @@ const BarDemo = ({
               {!walkingThreads ? (
                 <PointStepper
                   points={points}
-                  type={narrowed}
+                  type={narrowed === "thread" ? null : narrowed}
                   current={current}
                   stateOf={stateOf}
                   onGo={setCurrent}
                   onOpenList={() => {}}
                 />
               ) : (
-                threads.length > 0 && (
+                unresolved.length > 0 && (
                   <ThreadStepper
                     ordered={threads}
-                    scope={threadScope}
-                    resolvedHere={here}
                     current={thread}
                     onGo={setThread}
                     onOpenList={() => {}}
@@ -345,20 +329,6 @@ export const ReviewBarStates = (): ReactNode => (
       threads={PR_THREADS}
       narrowedAt="thread"
       startThread="PRRT_open"
-    />
-    <BarDemo
-      label="A thread resolved here stays a step, so the position doesn't jump"
-      run={DESIGN_RUN}
-      points={[]}
-      threads={RESOLVED_HERE}
-      resolvedHere={["PRRT_grouped"]}
-      startThread="PRRT_grouped"
-    />
-    <BarDemo
-      label="Every thread resolved: the stepper goes round all of them"
-      run={DESIGN_RUN}
-      points={[]}
-      threads={ALL_RESOLVED}
     />
     <BarDemo
       label="Comments pending: Publish is the filled button, with their count"

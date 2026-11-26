@@ -18,6 +18,7 @@ import {
   fixtureParts,
   fixturePullRequestStatus,
   fixtureStatus,
+  fixtureThreads,
   largeAnalysisView,
   lockedModelOptions,
   NO_API_CREDENTIALS,
@@ -2870,38 +2871,20 @@ describe("review threads", () => {
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_tax");
     });
 
-    it("opens a folded resolved thread gone to from the list, and steps on from it", async () => {
+    it("lists only the unresolved threads, and goes to one", async () => {
       renderReview({ view: codeOnly });
       await loaded();
       await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
-      const money = document.getElementById("thread-PRRT_money");
-      expect(
-        within(money as HTMLElement).getByRole("button", { name: "Show 1 comment" }),
-      ).toBeTruthy();
-
       await userEvent.click(position());
-      const list = screen.getByRole("dialog", { name: "4 threads, 3 unresolved" });
-      await userEvent.click(within(list).getByRole("button", { name: /Rounds half-cents up\?/ }));
+      const list = screen.getByRole("dialog", { name: "3 unresolved threads" });
+      expect(within(list).queryByRole("button", { name: /Rounds half-cents up\?/ })).toBeNull();
+      await userEvent.click(within(list).getByRole("button", { name: /Name says what it counts/ }));
       expect(screen.queryByRole("dialog")).toBeNull();
-      expect(scrolledTo().at(-1)).toBe("thread-PRRT_money");
-      await waitFor(() => expect(document.activeElement?.id).toBe("thread-PRRT_money"));
-      const opened = document.getElementById("thread-PRRT_money") as HTMLElement;
-      expect(within(opened).queryByRole("button", { name: "Show 1 comment" })).toBeNull();
-      expect(within(opened).getByRole("button", { name: "Hide" })).toBeTruthy();
-      // It isn't one of the steps, so the position is the count, and Next goes on down the page,
-      // round to the first.
-      expect(position().textContent).toBe("3 unresolved");
-      await step("Next thread");
-      expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier");
-
-      // Every thread is a step once the list says so.
-      await userEvent.click(position());
-      await userEvent.click(screen.getByRole("button", { name: "All (4)" }));
-      await userEvent.click(screen.getByRole("button", { name: "Close" }));
-      expect(position().getAttribute("aria-label")).toBe("Thread 1 of 4, show all");
+      expect(scrolledTo().at(-1)).toBe("thread-PRRT_attempts");
+      expect(position().textContent).toBe("2 of 3");
     });
 
-    it("keeps a thread resolved here as a step, so the position doesn't jump", async () => {
+    it("takes a thread resolved here out of the steps, and steps on from it", async () => {
       renderReview({ view: codeOnly });
       await loaded();
       await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
@@ -2910,11 +2893,29 @@ describe("review threads", () => {
       expect(position().textContent).toBe("2 of 3");
       const attempts = document.getElementById("thread-PRRT_attempts") as HTMLElement;
       await userEvent.click(within(attempts).getByRole("button", { name: "Resolve" }));
-      // Read again after the write: resolved now, still the second of three.
-      await waitFor(() => expect(barStatus()).toMatch(/^Thread 2 of 3, .*line 29, resolved: /));
-      expect(position().textContent).toBe("2 of 3");
+      // Read again after the write: no longer a step, so the position is the count.
+      await waitFor(() => expect(position().textContent).toBe("2 unresolved"));
       await step("Next thread");
-      expect(position().textContent).toBe("3 of 3");
+      expect(scrolledTo().at(-1)).toBe("thread-PRRT_tax");
+      expect(position().textContent).toBe("2 of 2");
+    });
+
+    it("shows no stepper when every thread is resolved", async () => {
+      const { requests } = renderReview({
+        view: codeOnly,
+        respond: (request) =>
+          request.url.endsWith("/threads")
+            ? jsonResponse(200, {
+                threads: fixtureThreads.threads.map((one) => ({ ...one, resolved: true })),
+              })
+            : undefined,
+      });
+      await loaded();
+      await waitFor(() =>
+        expect(requests.some((request) => request.url.endsWith("/threads"))).toBe(true),
+      );
+      await waitFor(() => expect(document.getElementById("thread-PRRT_tax")).not.toBeNull());
+      expect(reviewBar().querySelector("[data-slot=thread-stepper]")).toBeNull();
     });
 
     it("beside Claude's points, narrows the stepper to the threads with their chip", async () => {

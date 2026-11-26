@@ -3,9 +3,6 @@ import { commentPlace } from "../../review/index.ts";
 import type { FileGroup, PartIndex } from "./model.ts";
 import { placeKey, type ThreadPlacement } from "./threads.ts";
 
-/** Which threads the stepper walks: the unresolved ones, or every one. */
-export type ThreadScope = "unresolved" | "all";
-
 /**
  * The threads in the order the page shows them, top to bottom: each file's card in turn, its
  * threads under their lines in the lines' order, then its earlier comments; then the threads on
@@ -38,31 +35,9 @@ export const threadOrder = (
   return ordered;
 };
 
-/**
- * The threads the stepper walks. A thread the reviewer resolved on this page stays a step, marked
- * resolved, so the position doesn't jump under them, as a dismissed point does.
- */
-export const threadSteps = (
-  ordered: readonly ReviewThread[],
-  scope: ThreadScope,
-  resolvedHere: ReadonlySet<ThreadId>,
-): readonly ReviewThread[] =>
-  scope === "all"
-    ? ordered
-    : ordered.filter((thread) => !thread.resolved || resolvedHere.has(thread.id));
-
-/**
- * The scope the reviewer chose, else the unresolved threads; when every thread is resolved, all of
- * them, so a PR whose conversation is over can still be gone round.
- */
-export const threadScopeOf = (
-  chosen: ThreadScope | null,
-  ordered: readonly ReviewThread[],
-  resolvedHere: ReadonlySet<ThreadId>,
-): ThreadScope => {
-  if (chosen !== null) return chosen;
-  return threadSteps(ordered, "unresolved", resolvedHere).length > 0 ? "unresolved" : "all";
-};
+/** The threads the stepper walks and its list shows: the unresolved ones. */
+export const threadSteps = (ordered: readonly ReviewThread[]): readonly ReviewThread[] =>
+  ordered.filter((thread) => !thread.resolved);
 
 /**
  * The thread a step goes to, round from the last to the first and back. From a thread outside the

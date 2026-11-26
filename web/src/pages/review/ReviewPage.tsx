@@ -114,7 +114,7 @@ import { StatedIntent } from "./StatedIntent.tsx";
 import { narrowTo } from "./stepper.ts";
 import { parseBoolean, readSession, useStoredState, writeSession } from "./storage.ts";
 import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
-import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
+import { threadOrder, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
 import { noTourOf, type TourExcerpt, type TourStep, tourOf } from "./tour.ts";
 import { TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
@@ -477,18 +477,12 @@ const Review = ({
   const [currentPoint, setCurrentPoint] = useState<PointId | null>(null);
   // What a pressed chip has the stepper walk.
   const [narrowed, setNarrowed] = useState<Narrowing | null>(null);
-  // The thread last gone to, and what the stepper goes round of them.
+  // The thread last gone to.
   const [currentThread, setCurrentThread] = useState<ThreadId | null>(null);
-  const [threadScopeChosen, setThreadScope] = useState<ThreadScope | null>(null);
-  const [resolvedHere, setResolvedHere] = useState<ReadonlySet<ThreadId>>(new Set());
   const [showThreads, setShowThreads] = useState(false);
-  // The stepper walks the threads when their chip is pressed, or when Claude has no points.
-  const walkingThreads = narrowed === "thread" || walked.length === 0;
   // A run again may find none of the type a chip narrowed the stepper to.
   const walkedType =
     narrowed !== "thread" && walked.some((point) => point.type === narrowed) ? narrowed : null;
-  // One thing on the page is the current one: the point or the thread the stepper is on.
-  const activePoint = walkingThreads ? null : currentPoint;
   const [showPoints, setShowPoints] = useState(false);
   // When this page saw Claude's run start, for the time since.
   const [rerunning, setRerunning] = useState(false);
@@ -585,18 +579,14 @@ const Review = ({
     () => threadOrder(placement, files, index),
     [placement, files, index],
   );
-  const threadScope = threadScopeOf(threadScopeChosen, orderedThreads, resolvedHere);
+  const threadStepCount = threadSteps(orderedThreads).length;
+  // The stepper walks the unresolved threads when their chip is pressed, or when Claude has no
+  // points; once the last is resolved, the chip goes and the stepper is back on the points.
+  const walkingThreads = (narrowed === "thread" && threadStepCount > 0) || walked.length === 0;
+  // One thing on the page is the current one: the point or the thread the stepper is on.
+  const activePoint = walkingThreads ? null : currentPoint;
   const activeThread = walkingThreads ? currentThread : null;
   const { resolve } = threads;
-  const resolveThread = useCallback(
-    async (id: ThreadId, resolved: boolean) => {
-      const error = await resolve(id, resolved);
-      // A thread resolved here stays a step, so the stepper's position doesn't jump.
-      if (error === null && resolved) setResolvedHere((previous) => new Set(previous).add(id));
-      return error;
-    },
-    [resolve],
-  );
   const authorId = analysis.pullRequest?.author.id ?? null;
   const threadView = (thread: ReviewThread, covered: readonly string[] | null) => (
     <ReviewThreadView
@@ -608,7 +598,7 @@ const Review = ({
       covered={covered}
       mediaUrl={(url) => client.attachmentUrl(analysisId, url)}
       onReply={(body) => threads.reply(thread.id, body)}
-      onResolve={(resolved) => resolveThread(thread.id, resolved)}
+      onResolve={(resolved) => resolve(thread.id, resolved)}
       current={activeThread === thread.id}
       anchorId={threadAnchor(thread.id)}
       linesAbove={covered?.length ?? 0}
@@ -784,7 +774,7 @@ const Review = ({
   const narrow = (kind: Narrowing | null) => {
     setNarrowed(kind);
     if (kind === "thread") {
-      const steps = threadSteps(orderedThreads, threadScope, resolvedHere);
+      const steps = threadSteps(orderedThreads);
       const [first] = steps;
       if (first !== undefined && !steps.some((thread) => thread.id === currentThread)) {
         goToThread(first.id);
@@ -1480,8 +1470,8 @@ const Review = ({
             onRerun={() => setRerunning(true)}
             points={walked}
             leftOut={folded.size}
-            threads={threadChip(orderedThreads, threadScope, resolvedHere)}
-            narrowed={narrowed === "thread" ? narrowed : walkedType}
+            threads={threadChip(orderedThreads)}
+            narrowed={narrowed === "thread" && threadStepCount > 0 ? narrowed : walkedType}
             onNarrow={narrow}
             onRun={async () => {
               const optionId = modelChoice.chosen?.id;
@@ -1503,11 +1493,9 @@ const Review = ({
                 onOpenList={() => setShowPoints(true)}
               />
             ) : (
-              orderedThreads.length > 0 && (
+              threadStepCount > 0 && (
                 <ThreadStepper
                   ordered={orderedThreads}
-                  scope={threadScope}
-                  resolvedHere={resolvedHere}
                   current={currentThread}
                   onGo={goToThread}
                   onOpenList={() => setShowThreads(true)}
@@ -1851,8 +1839,6 @@ const Review = ({
       {showThreads && (
         <ThreadList
           ordered={orderedThreads}
-          scope={threadScope}
-          onScope={setThreadScope}
           onGo={(id) => {
             setShowThreads(false);
             goToThread(id);
