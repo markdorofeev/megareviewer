@@ -2293,6 +2293,9 @@ describe("a model run's guidance", () => {
   it("gives the passes the enabled preferences for the repository and REVIEW.md at the base commit, and keeps what it gave", async () => {
     const { analyze, model, preferences, github } = setup({ fixtures: [guidelines] });
     for (const one of [naming, elsewhere, off, tenant]) await preferences.savePreference(one);
+    for (const path of ["AGENTS.md", "CLAUDE.md"]) {
+      await preferences.setGuidelineSwitch(repo, path, false);
+    }
 
     const analysis = await analyze();
 
@@ -2369,7 +2372,7 @@ describe("a model run's guidance", () => {
     const model = new FakeAnalysisModel();
     model.script("intent", err(modelError("overloaded")));
     const { analyze, runModel, preferences } = setup({ fixtures: [guidelines], model });
-    await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+    await preferences.setGuidelineSwitch(repo, "AGENTS.md", false);
 
     const failed = await analyze();
     const analysis = await runModel(failed.id);
@@ -2469,12 +2472,22 @@ describe("a model run's guidance", () => {
       expect(github.getFilesCalls.flat().filter(({ path }) => path.endsWith(".md"))).toEqual([]);
     });
 
-    it("leaves out a root that's off with what it imports, and an import that's off alone", async () => {
+    it("gives CLAUDE.md unless it's off, leaving out what it imports with it, and an import that's off alone", async () => {
       const { analyze, preferences } = setup({ harnessSource: source(FILES) });
-      expect(given(await analyze())).toEqual([["g1", "REVIEW.md", null]]);
+      expect(given(await analyze())?.map(([, path]) => path)).toEqual([
+        "REVIEW.md",
+        "CLAUDE.md",
+        "docs/rules.md",
+        "docs/naming.md",
+        "docs/style.md",
+      ]);
+      expect(await preferences.getGuidelineSwitches(repo)).toEqual(new Map());
+
+      const off = setup({ harnessSource: source(FILES) });
+      await off.preferences.setGuidelineSwitch(repo, "CLAUDE.md", false);
+      expect(given(await off.analyze())).toEqual([["g1", "REVIEW.md", null]]);
 
       const other = setup({ harnessSource: source(FILES) });
-      await other.preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
       await other.preferences.setGuidelineSwitch(repo, "docs/naming.md", false);
       expect(given(await other.analyze())?.map(([, path]) => path)).toEqual([
         "REVIEW.md",
@@ -2482,7 +2495,6 @@ describe("a model run's guidance", () => {
         "docs/rules.md",
         "docs/style.md",
       ]);
-      expect(await preferences.getGuidelineSwitches(repo)).toEqual(new Map());
     });
 
     it("passes over an import that doesn't fit, takes a smaller one after it, and names what it left out", async () => {
@@ -2515,16 +2527,16 @@ describe("a model run's guidance", () => {
     it("gives a root that's on only because a root that's on imports it", async () => {
       const { analyze, preferences } = setup({
         harnessSource: source({
-          "CLAUDE.md": "@AGENTS.md\n",
-          "AGENTS.md": "Use pnpm.\n\n@docs/rules.md\n",
+          "CLAUDE.md": "@CONTRIBUTING.md\n",
+          "CONTRIBUTING.md": "Use pnpm.\n\n@docs/rules.md\n",
           "docs/rules.md": "# Rules\n",
         }),
       });
       await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
       expect(given(await analyze())).toEqual([
         ["g1", "CLAUDE.md", null],
-        ["g2", "AGENTS.md", null],
-        ["g3", "docs/rules.md", "AGENTS.md"],
+        ["g2", "CONTRIBUTING.md", null],
+        ["g3", "docs/rules.md", "CONTRIBUTING.md"],
       ]);
     });
 
@@ -2671,7 +2683,9 @@ describe("a model run's guidance", () => {
         harnessSource,
         modelEnabled: false,
       });
-      await preferences.setGuidelineSwitch(repo, "REVIEW.md", false);
+      for (const path of ["REVIEW.md", "AGENTS.md", "CLAUDE.md"]) {
+        await preferences.setGuidelineSwitch(repo, path, false);
+      }
       const { id } = await analyze();
       await harnessStore.dropUnusedSince("2027-01-01T00:00:00Z");
       const ran = await runModel(id);

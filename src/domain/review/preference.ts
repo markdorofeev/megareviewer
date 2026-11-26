@@ -119,8 +119,15 @@ export const GUIDELINE_PATHS = [
 export const GuidelinePath = z.enum(GUIDELINE_PATHS);
 export type GuidelinePath = z.infer<typeof GuidelinePath>;
 
-/** On unless switched off; the others are about writing code and can be long, so they're off. */
-export const DEFAULT_GUIDELINE_PATH: GuidelinePath = "REVIEW.md";
+/**
+ * On unless switched off: the review's own rules and the agents' instructions, which is what the
+ * code under review was written to. The others are for people and can be long, so they're off.
+ */
+export const DEFAULT_GUIDELINE_PATHS: readonly GuidelinePath[] = [
+  "REVIEW.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+];
 /**
  * What the files put in every pass's prompt can add up to. One that doesn't fit isn't cut, which
  * would drop rules without saying which.
@@ -228,7 +235,7 @@ export const canEnable = (
 
 /** Whether a run reads a guideline file, by the reviewer's switch for it or else its default. */
 export const guidelineEnabled = (path: string, switches: ReadonlyMap<string, boolean>): boolean =>
-  switches.get(path) ?? path === DEFAULT_GUIDELINE_PATH;
+  switches.get(path) ?? DEFAULT_GUIDELINE_PATHS.some((on) => on === path);
 
 const utf8 = new TextEncoder();
 

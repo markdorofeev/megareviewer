@@ -76,12 +76,12 @@ describe("receipts-harness over HTTP", () => {
 
     expect(roots(listed)).toEqual([
       ["REVIEW.md", true, "prompt"],
-      ["CLAUDE.md", false, null],
+      ["CLAUDE.md", true, "prompt"],
     ]);
-    // REVIEW.md only mentions the house rules, so without CLAUDE.md nothing is always loaded.
+    // REVIEW.md only mentions the house rules, which are always loaded since CLAUDE.md imports them.
     expect(linked(listed, "REVIEW.md")).toEqual([
-      ["docs/house-rules.md", "REVIEW.md", "mention", true, "on-request"],
-      ["docs/naming.md", "docs/house-rules.md", "import", true, "on-request"],
+      ["docs/house-rules.md", "REVIEW.md", "mention", true, "prompt"],
+      ["docs/naming.md", "docs/house-rules.md", "import", true, "prompt"],
     ]);
     expect(linked(listed, "CLAUDE.md")).toEqual([
       ["docs/house-rules.md", "CLAUDE.md", "import", true, "prompt"],
@@ -103,19 +103,27 @@ describe("receipts-harness over HTTP", () => {
   it("switches a root and its linked files, and answers how every file is used then", async () => {
     const { loaded, section, switchFile, use } = await setup();
     await loaded();
-    expect(await use()).toEqual({ status: "ready", inPrompt: ["REVIEW.md"], onRequest: 2 });
-
-    const on = await switchFile("CLAUDE.md", true);
-    expect(roots(on)).toEqual([
-      ["REVIEW.md", true, "prompt"],
-      ["CLAUDE.md", true, "prompt"],
-    ]);
-    expect(linked(on, "REVIEW.md").map((file) => file[4])).toEqual(["prompt", "prompt"]);
-    expect(await use()).toEqual({
+    const all = {
       status: "ready",
       inPrompt: ["REVIEW.md", "CLAUDE.md", "docs/house-rules.md", "docs/naming.md"],
       onRequest: 5,
-    });
+    };
+    expect(await use()).toEqual(all);
+
+    const claudeOff = await switchFile("CLAUDE.md", false);
+    expect(roots(claudeOff)).toEqual([
+      ["REVIEW.md", true, "prompt"],
+      ["CLAUDE.md", false, null],
+    ]);
+    // REVIEW.md only mentions the house rules, so without CLAUDE.md nothing is always loaded.
+    expect(linked(claudeOff, "REVIEW.md").map((file) => file[4])).toEqual([
+      "on-request",
+      "on-request",
+    ]);
+    expect(await use()).toEqual({ status: "ready", inPrompt: ["REVIEW.md"], onRequest: 2 });
+
+    await switchFile("CLAUDE.md", true);
+    expect(await use()).toEqual(all);
 
     const off = await switchFile("docs/runbooks/README.md", false);
     expect(

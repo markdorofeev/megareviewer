@@ -188,15 +188,13 @@ test("switches a guideline file, which the next AI review doesn't read", async (
   await page.getByRole("link", { name: "Preferences" }).click();
   await openScope(page, /^acme\/storefront/);
   const files = storefront(page).locator("[data-slot=guideline-file]");
+  // A file too large for a prompt is read when the model asks.
   await expect(files).toHaveText([
     /^REVIEW\.md\d+ BIn every review$/,
-    /^CLAUDE\.md\d+ KBIgnored$/,
+    /^CLAUDE\.md\d+ KBRead when the model asks$/,
     /^CONTRIBUTING\.md\d+ BIgnored$/,
   ]);
-  // A file too large for a prompt is read when the model asks.
   const claude = storefront(page).getByRole("switch", { name: "Use CLAUDE.md in AI reviews" });
-  await claude.click();
-  await expect(files.nth(1)).toHaveText(/^CLAUDE\.md\d+ KBRead when the model asks$/);
   await claude.click();
   await expect(files.nth(1)).toHaveText(/Ignored$/);
   const review = storefront(page).getByRole("switch", { name: "Use REVIEW.md in AI reviews" });
@@ -216,14 +214,16 @@ test("switches a guideline file, which the next AI review doesn't read", async (
 test("unfolds what a guideline file links, and switches a linked file off", async ({ page }) => {
   await openReview(page, PR.receiptsHarness, HARNESS_TITLE, false);
   const ask = page.getByRole("button", { name: "Request AI review" });
-  await expect(ask).toHaveAccessibleDescription(/\. Reads REVIEW\.md; 2 more on request$/);
+  await expect(ask).toHaveAccessibleDescription(
+    /\. Reads REVIEW\.md, CLAUDE\.md, and 2 files they import; 5 more on request$/,
+  );
   await page.getByRole("link", { name: "Preferences" }).click();
   await openScope(page, /^acme\/warehouse/);
   const section = warehouse(page);
   const fold = section.getByRole("button", { name: "7 linked files, 70 KB, from CLAUDE.md" });
   const uses = section.locator("[data-slot=linked-uses]").nth(1);
   await expect(fold).toHaveAttribute("aria-expanded", "false");
-  await expect(uses).toHaveText("When on: 2 in every review, 5 on request");
+  await expect(uses).toHaveText("2 in every review, 5 on request");
   await expect(section.locator("[data-slot=harness-notes]")).toHaveText(
     "docs/changelog.md is over 1 MB, so AI reviews don't use it.",
   );
@@ -234,7 +234,10 @@ test("unfolds what a guideline file links, and switches a linked file off", asyn
   await expect(
     section.getByRole("list", { name: "Linked by docs/runbooks/README.md" }).getByRole("listitem"),
   ).toHaveCount(2);
-  await section.getByRole("switch", { name: "Use CLAUDE.md in AI reviews" }).click();
+  const claude = section.getByRole("switch", { name: "Use CLAUDE.md in AI reviews" });
+  await claude.click();
+  await expect(uses).toHaveText("When on: 2 in every review, 5 on request");
+  await claude.click();
   await expect(uses).toHaveText("2 in every review, 5 on request");
   const runbooks = section.getByRole("switch", {
     name: "Use docs/runbooks/README.md in AI reviews",
