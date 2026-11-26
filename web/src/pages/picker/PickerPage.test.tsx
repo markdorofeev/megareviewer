@@ -238,6 +238,20 @@ describe("PickerPage's lists", () => {
     visible();
     expect(reads()).toBe(2);
   });
+
+  it("counts the lists as read when they arrive, not when the status does", async () => {
+    let now = NOW;
+    const slowStatus = held();
+    const { requests } = renderPicker({ "GET /api/status": slowStatus.respond }, () => now);
+    await within(toReview()).findByRole("link", { name: /Add order receipts/ });
+    const reads = () => requests.filter((request) => request.url === "/api/pull-requests").length;
+    now += 60_000;
+    slowStatus.release(jsonResponse(200, fixtureStatus));
+    await screen.findByRole("button", { name: /^Connections: (?!checking)/ });
+    now += 90_000;
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(reads()).toBe(2);
+  });
 });
 
 describe("PickerPage's field", () => {
