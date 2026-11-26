@@ -106,10 +106,13 @@ describe("pointsOf", () => {
       });
 
       expect(points.map((point) => [point.id, point.guidance])).toEqual([
-        ["f1", { effect: "raised", label: "Tenant isolation", preferenceId: tenant }],
-        ["f2", { effect: "left-out", label: "Naming", preferenceId: naming }],
+        [
+          "f1",
+          { effect: "raised", label: "Tenant isolation", preferenceId: tenant, everywhere: true },
+        ],
+        ["f2", { effect: "left-out", label: "Naming", preferenceId: naming, everywhere: true }],
         ["f3", undefined],
-        ["f4", { effect: "raised", label: "REVIEW.md", preferenceId: null }],
+        ["f4", { effect: "raised", label: "REVIEW.md", preferenceId: null, everywhere: false }],
       ]);
     });
 

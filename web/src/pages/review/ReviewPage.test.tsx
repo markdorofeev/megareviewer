@@ -1390,9 +1390,10 @@ describe("points", () => {
   });
 });
 
+/** The bar's switch between the code and the overview. */
+const layoutSwitch = () => within(screen.getByRole("group", { name: "Layout" }));
 const openOverview = async () => {
-  await userEvent.click(screen.getByRole("button", { name: "Display" }));
-  await userEvent.click(await screen.findByRole("menuitemradio", { name: "Understand" }));
+  await userEvent.click(layoutSwitch().getByRole("button", { name: "Understand" }));
   return overviewBox();
 };
 /** The diagram's file nodes by row, as their labels. */
@@ -1560,8 +1561,7 @@ describe("overview", () => {
     window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
     renderReview();
     await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    await userEvent.click(await screen.findByRole("menuitemradio", { name: "Understand" }));
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Understand" }));
     expect(screen.getByRole("region", { name })).toBeTruthy();
   });
 });
@@ -1575,17 +1575,15 @@ describe("the tour", () => {
   it("is the Understand layout unless the Tour switch is off", async () => {
     const first = renderReview();
     await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    expect(await screen.findByRole("menuitemradio", { name: "Understand" })).toBeTruthy();
-    expect(screen.queryByRole("menuitemradio", { name: "Overview" })).toBeNull();
+    expect(layoutSwitch().getByRole("button", { name: "Understand" })).toBeTruthy();
+    expect(layoutSwitch().queryByRole("button", { name: "Overview" })).toBeNull();
     first.unmount();
 
     window.localStorage.setItem("megareviewer:tour", "false");
     renderReview();
     await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    expect(await screen.findByRole("menuitemradio", { name: "Overview" })).toBeTruthy();
-    expect(screen.queryByRole("menuitemradio", { name: "Understand" })).toBeNull();
+    expect(layoutSwitch().getByRole("button", { name: "Overview" })).toBeTruthy();
+    expect(layoutSwitch().queryByRole("button", { name: "Understand" })).toBeNull();
   });
 
   it("shows the steps in order, their points, and what the tour didn't show", async () => {
@@ -1732,25 +1730,45 @@ describe("the tour", () => {
 });
 
 describe("layouts", () => {
-  it("are chosen in the Display menu, which shows the one in use", async () => {
+  it("are switched in the bar, which shows the one in use, and not in the Display menu", async () => {
     renderReview();
     await loaded();
-    expect(screen.queryByRole("group", { name: "Layout" })).toBeNull();
-    const display = screen.getByRole("button", { name: "Display" });
-    await userEvent.click(display);
-    const map = await screen.findByRole("menuitemradio", { name: "Map" });
-    expect(map.getAttribute("aria-checked")).toBe("true");
-    await userEvent.click(screen.getByRole("menuitemradio", { name: "Understand" }));
+    const code = layoutSwitch().getByRole("button", { name: "Code" });
+    const understand = layoutSwitch().getByRole("button", { name: "Understand" });
+    expect(code.getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(understand);
     expect(overviewBox()).toBeTruthy();
-    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-    // The overview takes the focus to the file in view; closing doesn't hand it back to the menu.
-    expect(document.activeElement).not.toBe(display);
-    await userEvent.click(display);
-    expect(
-      (await screen.findByRole("menuitemradio", { name: "Understand" })).getAttribute(
-        "aria-checked",
-      ),
-    ).toBe("true");
+    expect(understand.getAttribute("aria-pressed")).toBe("true");
+    expect(window.location.search).toBe("?view=overview");
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    await screen.findByRole("menuitemcheckbox", { name: "Decisions" });
+    expect(screen.queryByRole("menuitemradio", { name: "Understand" })).toBeNull();
+  });
+
+  it("are entries of the browser's history, so Back goes from the code to the overview", async () => {
+    renderReview();
+    await loaded();
+    expect(window.location.search).toBe("?view=code");
+    await openOverview();
+    await userEvent.click(nodeOf("group:src/routes"));
+    expect(layoutIs("map")).toBe(true);
+    expect(window.location.search).toBe("?view=code");
+    act(() => window.history.back());
+    await waitFor(() => expect(layoutIs("overview")).toBe(true));
+    act(() => window.history.back());
+    await waitFor(() => expect(layoutIs("map")).toBe(true));
+  });
+
+  it("go back to where the reader was when nothing moved in the overview", async () => {
+    renderReview();
+    await loaded();
+    await userEvent.click(cardOf(h.routeImports));
+    await userEvent.keyboard("v");
+    expect(layoutIs("overview")).toBe(true);
+    const back = vi.spyOn(window.history, "back");
+    await userEvent.keyboard("v");
+    expect(back).toHaveBeenCalledOnce();
+    await waitFor(() => expect(layoutIs("map")).toBe(true));
   });
 
   it("switch with v, keeping the file the reviewer is on", async () => {
@@ -1775,6 +1793,7 @@ describe("layouts", () => {
     await openOverview();
     expect(window.localStorage.getItem("megareviewer:review-layout")).toBe('"overview"');
     first.unmount();
+    window.history.replaceState(null, "", "/");
 
     window.localStorage.setItem("megareviewer:review-layout", '"tree"');
     renderReview();

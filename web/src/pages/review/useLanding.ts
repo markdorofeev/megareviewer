@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PointId } from "../../../../src/domain/review/index.ts";
-import { holdTopLine } from "./heldScroll.ts";
+import { holdTopLine } from "../../lib/held-scroll.ts";
 
 /**
  * Where the landing of Claude's results is. "measure" is one render that's never painted: the

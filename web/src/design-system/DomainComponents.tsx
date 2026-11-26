@@ -562,6 +562,7 @@ const PointStates = () => {
             effect: "raised",
             label: "Waits a caller can't see or cancel",
             preferenceId: PreferenceId.parse("pref_00000000000000d1"),
+            everywhere: true,
           },
         }}
         {...actions}
@@ -582,6 +583,7 @@ const PointStates = () => {
             effect: "left-out",
             label: "Naming",
             preferenceId: PreferenceId.parse("pref_00000000000000d2"),
+            everywhere: true,
           },
         }}
         {...actions}
@@ -600,7 +602,7 @@ const PointStates = () => {
           type: "contract",
           severity: "blocking",
           suggestion: null,
-          guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null },
+          guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null, everywhere: false },
         }}
         {...actions}
         inReview={false}

@@ -24,13 +24,12 @@ export interface PageChoice {
 }
 
 /**
- * A choice of views a page puts in the header's Display menu, such as the review page's layout,
- * with the page's switches under it. The page owns the values; the menu shows them and reports the
- * reviewer's pick.
+ * What a page puts in the header's Display menu: its switches, such as the review page's decisions,
+ * then a choice. The page owns the values; the menu shows them and reports the reviewer's pick.
  */
-export interface PageDisplay extends PageChoice {
+export interface PageDisplay {
   readonly toggles?: readonly PageToggle[];
-  /** A second choice after the switches, such as the form a preview takes. It keeps the menu open. */
+  /** A choice after the switches, such as the form a preview takes. It keeps the menu open. */
   readonly more?: PageChoice;
 }
 
@@ -53,11 +52,8 @@ export const usePageDisplayChoice = (): PageDisplay | null => useContext(ChoiceC
 /** Puts the page's choice in the Display menu while the page is mounted. */
 export const usePageDisplay = (display: PageDisplay): void => {
   const set = useContext(SetterContext);
-  const onChange = useRef(display.onChange);
-  onChange.current = display.onChange;
   const onToggles = useRef((display.toggles ?? []).map((toggle) => toggle.onChange));
   onToggles.current = (display.toggles ?? []).map((toggle) => toggle.onChange);
-  const { label, options, value } = display;
   const onMore = useRef(display.more?.onChange);
   onMore.current = display.more?.onChange;
   const moreLabel = display.more?.label;
@@ -73,10 +69,6 @@ export const usePageDisplay = (display: PageDisplay): void => {
       onChange: (next: boolean) => onToggles.current[at]?.(next),
     }));
     return {
-      label,
-      options,
-      value,
-      onChange: (next) => onChange.current(next),
       ...(toggles.length === 0 ? {} : { toggles }),
       ...(moreLabel === undefined || moreOptions === undefined || moreValue === undefined
         ? {}
@@ -89,7 +81,7 @@ export const usePageDisplay = (display: PageDisplay): void => {
             },
           }),
     };
-  }, [label, options, value, labels, checks, moreLabel, moreOptions, moreValue]);
+  }, [labels, checks, moreLabel, moreOptions, moreValue]);
   useEffect(() => set(shown), [set, shown]);
   useEffect(() => () => set(null), [set]);
 };

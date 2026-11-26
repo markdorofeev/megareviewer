@@ -32,7 +32,7 @@ const openReview = async (page: Page, url: string, title: string, claude = true)
   await openPicker(page);
   await page.getByRole("textbox", { name: "Pull request link" }).fill(url);
   await page.getByRole("button", { name: "Review", exact: true }).click();
-  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+(\?view=\w+)?$/);
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
   // The progress strip goes once the analysis is complete.
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
@@ -835,8 +835,10 @@ test.describe("without the model", () => {
     await expect(page.locator("[data-slot=review-thread]").first()).toBeVisible();
 
     // A click on the route's directory in the overview opens its first file in the map.
-    await page.getByRole("button", { name: "Display" }).click();
-    await page.getByRole("menuitemradio", { name: "Understand" }).click();
+    await page
+      .getByRole("group", { name: "Layout" })
+      .getByRole("button", { name: "Understand" })
+      .click();
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
     await overview.getByRole("button", { name: /^src\/routes\/, / }).click();
     await expect(page.locator("[data-slot=review-page]")).toHaveAttribute("data-layout", "map");
@@ -888,8 +890,10 @@ const showForm = async (page: Page, form: (typeof FLOW_FORMS)[number]) => {
 
 test("shows the overview in each preview form, whose stops open the map", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
-  await page.getByRole("button", { name: "Display" }).click();
-  await page.getByRole("menuitemradio", { name: "Understand" }).click();
+  await page
+    .getByRole("group", { name: "Layout" })
+    .getByRole("button", { name: "Understand" })
+    .click();
   for (const form of FLOW_FORMS) {
     const view = await showForm(page, form);
     const stop = view.getByRole("button", { name: /^receipts, / }).first();
@@ -930,8 +934,10 @@ for (const width of [720, 1024, 1440]) {
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
     expect(await overflows()).toBe(false);
     await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeInViewport();
-    await page.getByRole("button", { name: "Display" }).click();
-    await page.getByRole("menuitemradio", { name: "Understand" }).click();
+    await page
+      .getByRole("group", { name: "Layout" })
+      .getByRole("button", { name: "Understand" })
+      .click();
     await expect(page.locator("[data-slot=overview-scroll]")).toBeVisible();
     expect(await overflows()).toBe(false);
   });
@@ -964,7 +970,7 @@ for (const [size, viewport] of [
   test(`the publish dialog fits ${size}, its comments scrolling inside it`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
-    const analysisId = page.url().split("/").at(-1) ?? "";
+    const analysisId = new URL(page.url()).pathname.split("/").at(-1) ?? "";
     await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [
       `megareviewer:hunk-comments:${analysisId}`,
       JSON.stringify(longComments()),

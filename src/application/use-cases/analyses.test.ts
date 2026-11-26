@@ -2688,6 +2688,7 @@ describe("a model run's guidance", () => {
         effect: "raised",
         label: "docs/rules.md",
         preferenceId: null,
+        everywhere: false,
       });
     });
   });
@@ -2749,6 +2750,7 @@ describe("a model run's guidance", () => {
       effect: "raised",
       label: "Tenant isolation",
       preferenceId: tenant.id,
+      everywhere: true,
     });
   });
 

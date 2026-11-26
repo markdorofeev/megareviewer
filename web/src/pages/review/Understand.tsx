@@ -8,10 +8,10 @@ import {
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Point, PointState } from "../../../../src/domain/review/index.ts";
+import { holdInPlace } from "../../lib/held-scroll.ts";
 import { FINDING_STATUS, POINT_TONE, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
-import { holdInPlace } from "./heldScroll.ts";
 import { ModelText } from "./IntentLine.tsx";
 import {
   depthText,
@@ -659,7 +659,12 @@ export const Understand = ({
   /** Told the step now current as the window scrolls, to come back to it. */
   readonly onCurrentStep?: (number: number | null) => void;
   /** A step to go to once drawn, as when coming back from the code; 0 for the tour's top. */
-  readonly landOn?: { readonly step: number; readonly n: number } | null;
+  readonly landOn?: {
+    readonly step: number;
+    readonly n: number;
+    /** Back from the code, where the window is put back as the reader left it: focus only. */
+    readonly inPlace?: boolean;
+  } | null;
 }) => {
   const container = useRef<HTMLDivElement>(null);
   const sticky = useCallback(
@@ -723,6 +728,14 @@ export const Understand = ({
   useEffect(() => {
     if (landOn === null || landed.current === landOn.n) return;
     landed.current = landOn.n;
+    if (landOn.inPlace === true) {
+      document
+        .getElementById(stepAnchor(landOn.step))
+        ?.querySelector<HTMLElement>("h2")
+        ?.focus({ preventScroll: true });
+      if (landOn.step > 0) pin(landOn.step);
+      return;
+    }
     if (landOn.step > 0) return goToStep(landOn.step);
     const root = container.current;
     if (root === null) return;
@@ -730,7 +743,7 @@ export const Understand = ({
       document.querySelector("[data-slot=review-bar]")?.getBoundingClientRect().height ?? 0;
     const top = window.scrollY + root.getBoundingClientRect().top - bar - 8;
     window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
-  }, [landOn, goToStep]);
+  }, [landOn, goToStep, pin]);
 
   return (
     <div ref={container} data-slot="understand" className="flex min-w-0 flex-col">
@@ -825,17 +838,25 @@ export const TourLanding = ({
 );
 
 /** The bar's second row in the map, once it was opened from a step: back to it, or put away. */
-export const BackToTour = ({
-  step,
+/**
+ * The bar's second row while the code was opened from the overview or the tour: back to it, as
+ * the reader left it, or hidden.
+ */
+export const BackRow = ({
+  name,
+  detail = null,
   onBack,
   onDismiss,
 }: {
-  readonly step: number;
+  /** What it goes back to, "Back to tour", which the button to hide it names too. */
+  readonly name: string;
+  /** Where there, "Step 2". */
+  readonly detail?: string | null;
   readonly onBack: () => void;
   readonly onDismiss: () => void;
 }) => (
   <div
-    data-slot="back-to-tour"
+    data-slot="bar-back"
     className="sticky top-(--review-bar-row) z-20 -mt-px flex h-9 items-center gap-2 border-b bg-background"
   >
     <Button
@@ -845,10 +866,20 @@ export const BackToTour = ({
       onClick={onBack}
     >
       <ArrowLeftIcon aria-hidden="true" />
-      Back to tour · Step {step}
+      {detail === null ? name : `${name} · ${detail}`}
     </Button>
-    <Button variant="ghost" size="icon-sm" aria-label="Hide Back to tour" onClick={onDismiss}>
+    <Button variant="ghost" size="icon-sm" aria-label={`Hide ${name}`} onClick={onDismiss}>
       <XIcon aria-hidden="true" />
     </Button>
   </div>
 );
+
+export const BackToTour = ({
+  step,
+  onBack,
+  onDismiss,
+}: {
+  readonly step: number;
+  readonly onBack: () => void;
+  readonly onDismiss: () => void;
+}) => <BackRow name="Back to tour" detail={`Step ${step}`} onBack={onBack} onDismiss={onDismiss} />;

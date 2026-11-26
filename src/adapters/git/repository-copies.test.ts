@@ -10,7 +10,9 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { createServer } from "node:http";
+import type { Socket } from "node:net";
+import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
@@ -475,6 +477,32 @@ describe("a download that's cut off", () => {
     git(copy, "update-ref", "-d", `refs/megareviewer/${sha}`);
     expect(await copies.find(repo, sha)).toBeNull();
     expect((await copies.download(repo, sha)).ok).toBe(true);
+  });
+
+  it("kills the helper git talks to the host through, when the host never answers", async () => {
+    const dir = folder("megareviewer-stalled-");
+    git(dir, "init", "-q", "--bare");
+    const { promise: connected, resolve: connect } = Promise.withResolvers<Socket>();
+    const server = createServer((request) => connect(request.socket));
+    await new Promise<void>((listening) => server.listen(0, "127.0.0.1", listening));
+    const stop = new AbortController();
+    try {
+      const address = server.address();
+      const port = typeof address === "object" ? address?.port : null;
+      const running = runDownload({
+        args: ["--git-dir", dir, "fetch", "-q", `http://127.0.0.1:${port}/shop.git`],
+        env: { PATH: process.env.PATH ?? "", GIT_CONFIG_GLOBAL: devNull, HOME: dir },
+        signal: stop.signal,
+      });
+      const socket = await connected;
+      const hungUp = new Promise((closed) => socket.once("close", closed));
+      stop.abort();
+      expect((await running).code).not.toBe(0);
+      await hungUp;
+    } finally {
+      server.closeAllConnections();
+      server.close();
+    }
   });
 
   it("kills the git that's running, and starts none after", async () => {

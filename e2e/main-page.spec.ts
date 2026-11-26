@@ -16,14 +16,14 @@ const openPicker = async (page: Page) => {
 test("opens a review from a row", async ({ page }) => {
   await openPicker(page);
   await toReview(page).locator("[data-pr-row]").first().click();
-  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+(\?view=\w+)?$/);
 });
 
 test("opens a review from a link without its scheme", async ({ page }) => {
   await openPicker(page);
   await field(page).fill(PR.smallFeature.replace("https://", ""));
   await page.getByRole("button", { name: "Review", exact: true }).click();
-  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+(\?view=\w+)?$/);
 });
 
 test("opens three PRs in three new tabs, with no trip to the terminal", async ({
@@ -49,7 +49,7 @@ test("opens three PRs in three new tabs, with no trip to the terminal", async ({
     tabs.push({ tab: await opened, name });
   }
   for (const { tab, name } of tabs) {
-    await expect(tab).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+    await expect(tab).toHaveURL(/\/review\/a_[0-9a-f]+(\?view=\w+)?$/);
     await expect(tab.getByRole("heading", { level: 1, name })).toBeVisible();
   }
   // The main page stays, and started nothing itself.
@@ -63,7 +63,7 @@ test("opens a pasted link in a new tab on ⌘↵, keeping the field", async ({ p
   const opened = context.waitForEvent("page");
   await field(page).press("ControlOrMeta+Enter");
   const tab = await opened;
-  await expect(tab).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  await expect(tab).toHaveURL(/\/review\/a_[0-9a-f]+(\?view=\w+)?$/);
   await expect(page).toHaveURL(/\/$/);
   await expect(field(page)).toHaveValue(PR.refactorMove);
 });
@@ -75,7 +75,7 @@ test("opens a review's address in a new window, but not in another browser", asy
 }) => {
   await openPicker(page);
   await toReview(page).locator("[data-pr-row]").first().click();
-  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+(\?view=\w+)?$/);
   const address = page.url();
   expect(address).not.toContain(TOKEN);
 

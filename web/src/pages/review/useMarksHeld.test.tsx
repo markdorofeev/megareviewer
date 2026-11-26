@@ -6,7 +6,7 @@ import { useMarksHeld } from "./useMarksHeld.ts";
 
 const restore = vi.fn();
 const hold = vi.fn((_area: string) => restore);
-vi.mock("./heldScroll.ts", () => ({ holdTopLine: (area: string) => hold(area) }));
+vi.mock("../../lib/held-scroll.ts", () => ({ holdTopLine: (area: string) => hold(area) }));
 
 const base = fixtureAnalysisView.analysis;
 const running: Analysis = { ...base, guardrails: "running" };

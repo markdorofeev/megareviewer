@@ -8,7 +8,7 @@ const openReview = async (page: Page, url: string, title: string) => {
   await page.goto(`/?token=${TOKEN}`);
   await page.getByRole("textbox", { name: "Pull request link" }).fill(url);
   await page.getByRole("button", { name: "Review", exact: true }).click();
-  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+(\?view=\w+)?$/);
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
   await page.getByRole("button", { name: "Request AI review" }).click();
@@ -31,7 +31,9 @@ test("with the Tour switch off, a run asks for no tour and the layout is Overvie
     "aria-checked",
     "false",
   );
-  await expect(page.getByRole("menuitemradio", { name: "Overview" })).toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Layout" }).getByRole("button", { name: "Overview" }),
+  ).toBeVisible();
 });
 
 test("scrolling the tour moves its steps by what was scrolled, under a compact strip", async ({

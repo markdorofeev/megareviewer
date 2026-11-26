@@ -6,6 +6,7 @@ import {
   parsePullRequestUrl,
   pullRequestUrl,
 } from "../../../src/domain/review/index.ts";
+import { saveScroll } from "./scroll-memory.ts";
 
 export type Route =
   | { readonly page: "picker" }
@@ -86,9 +87,14 @@ export const usePathname = (): string =>
 export const useSearch = (): string =>
   useSyncExternalStore(subscribe, () => window.location.search);
 
-export const navigate = (path: string): void => {
-  window.history.pushState(null, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
+/**
+ * Goes to `path` on a new history entry, at the top, keeping this page's place for Back. `state`
+ * is what the page keeps on the new entry, such as where it was opened from.
+ */
+export const navigate = (path: string, state: Record<string, unknown> | null = null): void => {
+  saveScroll();
+  window.history.pushState(state, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate", { state }));
 };
 
 /** Goes to `path` in place of the current entry, so Back skips the page that redirected. */

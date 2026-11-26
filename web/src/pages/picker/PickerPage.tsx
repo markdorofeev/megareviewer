@@ -56,10 +56,13 @@ export const PickerPage = ({ now = Date.now }: { readonly now?: () => number }) 
     readAgain();
   }, [checks, readAgain]);
 
+  // Apart from the effect below, which runs again when the status arrives: that isn't a read.
   useEffect(() => {
-    if (lists.loading) return;
-    lastRead.current = now();
-    if (lists.pullRequests === null) return;
+    if (!lists.loading) lastRead.current = now();
+  }, [lists.loading, now]);
+
+  useEffect(() => {
+    if (lists.loading || lists.pullRequests === null) return;
     const failed = new Set(lists.pullRequests.errors.map((failure) => failure.host));
     const counts: Partial<Record<HostKind, number>> = {};
     for (const host of HOSTS) {

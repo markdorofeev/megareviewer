@@ -373,7 +373,7 @@ describe("what a run read", () => {
       "REVIEW.md1.2 KB",
     ]);
     expect(within(read).getByRole("link", { name: "Preferences" }).getAttribute("href")).toBe(
-      "/preferences",
+      "/preferences?scope=github/acme/shop",
     );
   });
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { holdInView } from "./heldScroll.ts";
+import { holdInView } from "./held-scroll.ts";
 
 describe("holdInView", () => {
   afterEach(() => {

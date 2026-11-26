@@ -77,9 +77,11 @@ export const chronological = (calls: readonly ModelCall[]): ModelCall[] =>
 const GuidanceRead = ({
   guidance,
   leftOut,
+  preferences,
 }: {
   readonly guidance: Guidance;
   readonly leftOut: number;
+  readonly preferences: string;
 }) => {
   const read = guidanceRead(guidance);
   if (read === null) return null;
@@ -91,7 +93,7 @@ const GuidanceRead = ({
         {leftOut === 0
           ? "No point was left out by them."
           : `${leftOut} ${leftOut === 1 ? "point was" : "points were"} left out by them, folded where ${leftOut === 1 ? "its card" : "their cards"} would be.`}{" "}
-        <Link to={PREFERENCES_PATH} className="underline">
+        <Link to={preferences} className="underline">
           Preferences
         </Link>
       </p>
@@ -133,6 +135,7 @@ export const ModelCalls = ({
   option,
   guidance = null,
   leftOut = 0,
+  preferences = PREFERENCES_PATH,
 }: {
   readonly calls: readonly ModelCall[];
   /** The option of the latest run. */
@@ -141,6 +144,8 @@ export const ModelCalls = ({
   readonly guidance?: Guidance | null;
   /** How many of its points a preference or a guideline file left out. */
   readonly leftOut?: number;
+  /** The preferences page on the PR's repository. */
+  readonly preferences?: string;
 }) => {
   const [open, setOpen] = useState(false);
   const ordered = chronological(calls);
@@ -204,7 +209,9 @@ export const ModelCalls = ({
               })}
             </tbody>
           </table>
-          {guidance !== null && <GuidanceRead guidance={guidance} leftOut={leftOut} />}
+          {guidance !== null && (
+            <GuidanceRead guidance={guidance} leftOut={leftOut} preferences={preferences} />
+          )}
         </Dialog>
       )}
     </>

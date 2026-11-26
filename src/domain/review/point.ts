@@ -100,7 +100,12 @@ export const Point = z
      * one the reviewer asked not to be flagged, which the page folds.
      */
     guidance: z
-      .object({ effect: GuidanceEffect, label: z.string(), preferenceId: PreferenceId.nullable() })
+      .object({
+        effect: GuidanceEffect,
+        label: z.string(),
+        preferenceId: PreferenceId.nullable(),
+        everywhere: z.boolean(),
+      })
       .readonly()
       .optional(),
     /** On a finding: a check that could catch its kind. */

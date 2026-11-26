@@ -254,6 +254,7 @@ describe("checkGuidanceMark", () => {
       effect: "raised",
       label: "ENGINEERING.md",
       preferenceId: null,
+      everywhere: false,
     });
   });
 
@@ -271,11 +272,20 @@ describe("resolveGuidanceMark", () => {
       effect: "left-out",
       label: "Naming",
       preferenceId: dontFlag.id,
+      everywhere: false,
     });
     expect(resolveGuidanceMark({ ref: "g1", effect: "raised" }, guidance)).toEqual({
       effect: "raised",
       label: "REVIEW.md",
       preferenceId: null,
+      everywhere: false,
+    });
+  });
+
+  it("says a preference for every repository is everywhere's", () => {
+    expect(resolveGuidanceMark({ ref: "p1", effect: "raised" }, guidance)).toMatchObject({
+      preferenceId: lookFor.id,
+      everywhere: true,
     });
   });
 });

@@ -30,6 +30,7 @@ import {
 import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from "../../api/index.ts";
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
+import { holdInView } from "../../lib/held-scroll.ts";
 import { type ShortcutHandlers, type ShortcutId, useShortcuts } from "../../lib/keymap.ts";
 import { usePageDisplay } from "../../lib/page-display.tsx";
 import { type PointTone, pointTone } from "../../lib/status.ts";
@@ -59,7 +60,7 @@ import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import type { RuleFields } from "../preferences/PreferenceForm.tsx";
-import { scopeOptions } from "../preferences/rule.tsx";
+import { scopeOptions, scopePath } from "../preferences/rule.tsx";
 import { failureReason } from "../preferences/view.ts";
 import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
@@ -72,9 +73,9 @@ import { flowPaths } from "./flow-paths.ts";
 import { DraftGuardrail } from "./Guardrail.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { barButtons, verdictAfter, verdictLabel } from "./header-buttons.ts";
-import { holdInView } from "./heldScroll.ts";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
+import { LayoutSwitch } from "./LayoutSwitch.tsx";
 import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
 import { ModelCalls } from "./ModelCalls.tsx";
 import {
@@ -85,7 +86,6 @@ import {
   mechanicalCount,
   OVERVIEW_FORMS,
   openedOn,
-  parseLayout,
   parseOverviewForm,
   partIndex,
   pointPlaces,
@@ -118,11 +118,12 @@ import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
 import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
 import { type NoTour, noTourOf, type TourExcerpt, type TourStep, tourOf } from "./tour.ts";
-import { BackToTour, NoTourLine, TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
+import { BackRow, NoTourLine, TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
 import { useHarness } from "./useHarness.ts";
 import { useLanding } from "./useLanding.ts";
+import { cameFrom, useLayout } from "./useLayout.ts";
 import { useMarksHeld } from "./useMarksHeld.ts";
 import { usePoints } from "./usePoints.ts";
 import { usePullRequestStatus } from "./usePullRequestStatus.ts";
@@ -213,15 +214,10 @@ const MAP_GRID = "grid items-start gap-5 lg:grid-cols-[17rem_minmax(0,1fr)]";
 
 const NO_POINTS: readonly Point[] = [];
 
-const LAYOUTS: readonly { readonly value: Layout; readonly label: string }[] = [
-  { value: "map", label: "Map" },
-  { value: "overview", label: "Overview" },
-];
-/** With the Tour switch on, the second layout is the tour's; it's stored as the overview still. */
-const TOUR_LAYOUTS: readonly { readonly value: Layout; readonly label: string }[] = [
-  { value: "map", label: "Map" },
-  { value: "overview", label: "Understand" },
-];
+/** What the code was opened from: the overview on a node, or the tour on a step. */
+type ReturnTo =
+  | { readonly kind: "overview"; readonly node: string | null }
+  | { readonly kind: "tour"; readonly step: number };
 
 /** Why Understand shows the overview instead of a tour. */
 const noTourText = (reason: NoTour): string => {
@@ -455,7 +451,7 @@ const Review = ({
     [analysis],
   );
 
-  const [layout, setLayout] = useStoredState("review-layout", "map", parseLayout);
+  const [layout, setLayout] = useLayout();
   // The overview as its directories, or as one of the previews of the pull request's flow paths.
   const [overviewForm, setOverviewForm] = useStoredState(
     "overview-form",
@@ -498,8 +494,9 @@ const Review = ({
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
   const overviewAt = useRef<string | null>(null);
-  // The overview node the map was opened from, for Esc to go back to.
-  const [openedFrom, setOpenedFrom] = useState<string | null>(null);
+  // What the code was opened from, for the bar's second row to go back to: the overview, on the
+  // node to focus there, or the tour, on its step.
+  const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
   const [currentPoint, setCurrentPoint] = useState<PointId | null>(null);
   // What a pressed chip has the stepper walk.
   const [narrowed, setNarrowed] = useState<Narrowing | null>(null);
@@ -704,10 +701,7 @@ const Review = ({
       if (cardPart !== undefined) showHunk(cardPart);
     } else {
       // The tour has no point cards: its points open the map.
-      if (layout === "overview") {
-        setLayout(() => "map");
-        setOpenedFrom(null);
-      }
+      toCode();
       scrollTo(pointAnchor(id));
     }
     setCurrentPoint(id);
@@ -718,7 +712,11 @@ const Review = ({
     readonly step: TourStep;
     readonly excerpt: TourExcerpt;
   } | null>(null);
-  const [landOn, setLandOn] = useState<{ readonly step: number; readonly n: number } | null>(null);
+  const [landOn, setLandOn] = useState<{
+    readonly step: number;
+    readonly n: number;
+    readonly inPlace?: boolean;
+  } | null>(null);
   // Cards above a step's lines take their size after the map scrolled to it: hold it in place.
   const [landingHeld, setLandingHeld] = useState(0);
   useEffect(() => {
@@ -731,19 +729,52 @@ const Review = ({
     return typeof stored === "number" ? stored : 0;
   };
   const tourReady = tourOn && noTour === null && tour !== null;
-  /** Understand, on step `step`, or at its top for 0. */
-  const enterTour = (step: number) => {
-    setLayout(() => "overview");
-    setOpenedFrom(null);
+  /**
+   * To the code from the overview or the tour, on a history entry of its own that Back, Esc and
+   * the bar's second row go back from; nothing while the code is shown.
+   */
+  const toCode = (
+    from: ReturnTo = understand
+      ? { kind: "tour", step: readStoredStep() }
+      : { kind: "overview", node: overviewAt.current },
+  ) => {
+    if (layout !== "overview") return;
+    setLayout("map", { from: "overview" });
+    setReturnTo(from);
+  };
+  /** Back to the overview or the tour the code was opened from, as the reader left it. */
+  const backFromCode = () => {
+    if (cameFrom()?.from === "overview") window.history.back();
+  };
+  // Back on the overview or the tour, however: the node or the step the code was opened from takes
+  // the focus again, and the code's marks of where it was opened from go.
+  const shownLayout = useRef(layout);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the layout changes.
+  useEffect(() => {
+    if (shownLayout.current === layout) return;
+    shownLayout.current = layout;
+    if (layout === "map") return;
+    if (returnTo?.kind === "overview" && returnTo.node !== null) {
+      const node = returnTo.node;
+      setOverviewFocus((previous) => ({ key: node, n: (previous?.n ?? 0) + 1 }));
+    }
+    if (returnTo?.kind === "tour") {
+      const { step } = returnTo;
+      setLandOn((previous) => ({ step, n: (previous?.n ?? 0) + 1, inPlace: true }));
+    }
+    setReturnTo(null);
     setFromStep(null);
     setHighlight(new Set());
+  }, [layout]);
+  /** Understand from the code, on step `step`, or at its top for 0. */
+  const enterTour = (step: number) => {
+    setReturnTo(null);
+    setLayout("overview", { from: "code", step });
     setLandOn((previous) => ({ step, n: (previous?.n ?? 0) + 1 }));
   };
-  const backToTour = () => enterTour(fromStep?.step.number ?? readStoredStep());
   /** The map on an excerpt's lines, marked, under a label naming its step. */
   const openInCode = (step: TourStep, excerpt: TourExcerpt) => {
-    setLayout(() => "map");
-    setOpenedFrom(null);
+    toCode({ kind: "tour", step: step.number });
     setFromStep({ step, excerpt });
     setFocusedHunkId(excerpt.partId);
     writeSession(storedStepKey, step.number);
@@ -752,8 +783,7 @@ const Review = ({
     setLandingHeld((previous) => previous + 1);
   };
   const openFileFromTour = (path: string) => {
-    setLayout(() => "map");
-    setOpenedFrom(null);
+    toCode(understand ? undefined : { kind: "overview", node: path });
     scrollTo(
       files.some((group) => group.file.path === path) ? fileAnchor(path) : MECHANICAL_ANCHOR,
     );
@@ -766,7 +796,7 @@ const Review = ({
     setNarrowed("thread");
     setCurrentThread(id);
     setHighlight(new Set());
-    if (layout === "overview") setLayout(() => "map");
+    toCode();
     scrollTo(threadAnchor(id));
   };
   /** Has the stepper walk a type's findings or the threads, going to the first unless on one. */
@@ -800,8 +830,11 @@ const Review = ({
       "[aria-label=Changes] [data-slot=file-card]",
     );
     const path = focused?.dataset.path ?? fileInView;
-    setLayout(() => "overview");
-    setOpenedFrom(null);
+    const at = path === null ? null : (overview.placeOf.get(path) ?? path);
+    // Where it opens, whether or not the focus gets there: a hidden tab reports no focus.
+    overviewAt.current = at;
+    setReturnTo(null);
+    setLayout("overview", { from: "code", at });
     if (path !== null) focusInOverview(path);
   };
   /** Opens a directory's or a file's first file in the map. */
@@ -809,44 +842,47 @@ const Review = ({
     const [path] = node.paths;
     const first = files.find((group) => group.file.path === path)?.partIds[0];
     if (path === undefined || first === undefined) return;
-    setLayout(() => "map");
-    setOpenedFrom(node.key);
+    toCode({ kind: "overview", node: node.key });
     setFocusedHunkId(first);
     scrollTo(fileAnchor(path));
   };
   /** Opens a part from a flow path in the map; Esc comes back to its file's stop. */
   const openFlowPart = (id: PartId, path: string | null) => {
-    setLayout(() => "map");
-    setOpenedFrom(path ?? index.parts.get(id)?.file.path ?? null);
+    toCode({ kind: "overview", node: path ?? index.parts.get(id)?.file.path ?? null });
     setFocusedHunkId(id);
     showHunk(id, "map");
   };
   const switchLayout = () => {
     if (layout === "map") {
+      // Opened from the overview or the tour: back to it, as the reader left it.
+      if (cameFrom()?.from === "overview") return window.history.back();
       // With a tour, to the step last current; else the overview, on the file in view.
-      if (tourReady) return enterTour(fromStep?.step.number ?? readStoredStep());
+      if (tourReady) return enterTour(readStoredStep());
       return openOverview();
+    }
+    // Opened from the code and not moved since: back to the very line the reader left.
+    const came = cameFrom();
+    if (came?.from === "code") {
+      const unmoved =
+        "step" in came
+          ? understand && came.step === readStoredStep()
+          : !understand && (flow !== null || came.at === overviewAt.current);
+      if (unmoved) return window.history.back();
     }
     if (understand) {
       // To the current step's lines, as its Open in code.
       const step = tour?.steps.find((one) => one.number === readStoredStep());
       const [excerpt] = step?.excerpts ?? [];
       if (step !== undefined && excerpt !== undefined) return openInCode(step, excerpt);
-      return setLayout(() => "map");
+      return toCode();
     }
     const node = [...overview.rows.flat(), ...overview.strip].find(
       (one) => one.key === overviewAt.current,
     );
     if (node !== undefined) return openNode(node);
-    setLayout(() => "map");
+    toCode();
   };
   usePageDisplay({
-    label: "Layout",
-    options: tourOn ? TOUR_LAYOUTS : LAYOUTS,
-    value: layout,
-    onChange: (next) => {
-      if (next !== layout) switchLayout();
-    },
     toggles: [{ label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) }],
     more: {
       label: "Overview (preview)",
@@ -958,13 +994,7 @@ const Review = ({
   };
   const onEscape = () => {
     if (highlight.size > 0) return setHighlight(new Set());
-    if (layout === "map" && fromStep !== null) return backToTour();
-    if (layout === "map" && openedFrom !== null) {
-      // Back to the overview, on the file the map was opened from.
-      setLayout(() => "overview");
-      setOverviewFocus((previous) => ({ key: openedFrom, n: (previous?.n ?? 0) + 1 }));
-      setOpenedFrom(null);
-    }
+    if (layout === "map") backFromCode();
   };
   // The verdict is the reviewer's own, so a complete analysis can always be published.
   const canPublish = complete;
@@ -1425,6 +1455,17 @@ const Review = ({
         now={Date.now()}
       />
       <ReviewBar
+        layout={
+          analysis.stages.prep === "done" ? (
+            <LayoutSwitch
+              layout={layout}
+              tour={tourOn}
+              onChange={(next) => {
+                if (next !== layout) switchLayout();
+              }}
+            />
+          ) : null
+        }
         title={live.pullRequest?.title ?? null}
         claude={
           <ClaudeElement
@@ -1584,11 +1625,15 @@ const Review = ({
         verdict={verdictLabel(yourVerdict, verdictKnown, publication)}
         hairline={landing.running ? "running" : landing.phase === "landing" ? "finishing" : null}
       />
-      {layout === "map" && fromStep !== null && (
-        <BackToTour
-          step={fromStep.step.number}
-          onBack={backToTour}
-          onDismiss={() => setFromStep(null)}
+      {layout === "map" && returnTo !== null && (
+        <BackRow
+          name={returnTo.kind === "tour" ? "Back to tour" : "Back to overview"}
+          detail={returnTo.kind === "tour" ? `Step ${returnTo.step}` : null}
+          onBack={backFromCode}
+          onDismiss={() => {
+            setReturnTo(null);
+            setFromStep(null);
+          }}
         />
       )}
 
@@ -1785,6 +1830,7 @@ const Review = ({
           option={live.modelOption}
           guidance={live.guidance}
           leftOut={points.filter((point) => point.guidance?.effect === "left-out").length}
+          preferences={scopePath({ kind: "repo", repo: analysis.key.ref.repo })}
         />
         {complete && !modelRunning && hasModelRun(live) && (
           // A new run of the code's stages under the same ID: the page starts afresh to follow it.

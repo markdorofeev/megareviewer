@@ -1,5 +1,4 @@
 import { SlidersHorizontalIcon } from "lucide-react";
-import { useRef } from "react";
 import { usePageDisplayChoice } from "../lib/page-display.tsx";
 import { type ThemePreference, useTheme } from "../lib/theme.ts";
 import { cn } from "../lib/utils.ts";
@@ -25,45 +24,18 @@ const THEMES: readonly { readonly value: ThemePreference; readonly label: string
   { value: "system", label: "System" },
 ];
 
-/** The page's own choice of view and switch, if it has them, then the theme and the diff palette. */
+/** The page's own switches and choice, if it has them, then the theme and the diff palette. */
 export const DisplayMenu = () => {
   const { theme, diffPalette, setTheme, setDiffPalette } = useTheme();
   const page = usePageDisplayChoice();
-  // A view the page switches to takes the focus itself, so closing on it doesn't move it back.
-  const pickedView = useRef(false);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="max-sm:px-1.5" />}>
         Display
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-56"
-        finalFocus={() => {
-          const picked = pickedView.current;
-          pickedView.current = false;
-          return !picked;
-        }}
-      >
+      <DropdownMenuContent align="end" className="w-56">
         {page !== null && (
           <>
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>{page.label}</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={page.value}
-                onValueChange={(value) => {
-                  pickedView.current = true;
-                  page.onChange(value);
-                }}
-              >
-                {page.options.map((option) => (
-                  <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
-                    {option.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
             {page.toggles !== undefined && (
               <>
                 {page.toggles.map((toggle) => (
