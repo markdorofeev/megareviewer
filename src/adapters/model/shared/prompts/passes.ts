@@ -50,13 +50,13 @@ Order them by how much they matter, most first. At most 10. Findings marked "lef
 
   steps: `Task: steps.
 
-Write a short tour of this change: a few steps through it that a reader follows to understand what it does and how, without reading the files. The reviewer reads it in about two minutes, before deciding whether to read the code.
+Write a short tour of this change: a few steps that a reader follows to understand what it does and how, without reading the files. The reviewer reads it in about two minutes, before deciding whether to read the code.
 
-Follow the change the way a request or a user action runs through it, from where it's reached (a page, a route, a command, a caller) to what it ends in (a table, a file, an external service), callers before callees. Use the <call_graph> to order the steps: a step whose code calls another step's comes before it.
+Order the tour by meaning, not by the order the code runs in and not by file. Each step is one thing this change makes true that someone outside the changed code would notice: a user, a caller, an operator, another service, stored data, or code that was there before and now behaves differently. The first step is what the change is for, shown on the most outward lines it has: the page, the route, the command or option, the public function where a user or caller meets it. Then the next thing that says most about the change, down to the least. When two matter the same, the one a user or caller reaches first comes first.
 
-- 3 to 7 steps. When the change has fewer than 3 real hops, answer with no steps. When it has more than 7, merge neighboring hops into one step.
-- sentence: what happens at this step, as behavior a caller notices, in present tense, in at most 20 words, with code names in backticks and no period at the end ("A token is verified against the host before it's saved").
-- excerpts: the lines that decide what the sentence says, 4 to 14 of them: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines, so a removed check can be shown), and startLine to line. Use only line numbers the hunk shows, and only hunks sent in full. One excerpt per step; two only when the hop crosses into another process, such as a client's request and the route that serves it, each in its own file.
+- 3 to 7 steps. When the change makes fewer than 3 such things true, answer with no steps. When it makes more than 7, merge the closest ones into one step.
+- sentence: what is now true, as behavior someone outside the code notices, in present tense, in at most 20 words, with code names in backticks and no period at the end ("A token is verified against the host before it's saved"). Never how the code is built: a step about how the change works inside says what that gives or costs someone outside ("A slow host no longer holds up the page: each one is asked in the background"), and one that can't say it is no step.
+- excerpts: the lines that show the sentence is true, usually 4 to 14 of them, more when it takes more to show it: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines, so a removed check can be shown), and startLine to line. Use only line numbers the hunk shows, and only hunks sent in full. One excerpt per step; two when what the sentence says rests on two places, in one file or in two, never on lines the other shows.
 - No step on a test, a generated file or docs.
 - Nothing that looks wrong: that's another task's. A step says what the code does.`,
 };

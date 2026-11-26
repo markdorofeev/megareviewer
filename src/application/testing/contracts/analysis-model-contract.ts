@@ -56,7 +56,7 @@ export const describeAnalysisModelContract = (
       expectUsage(result.value, "findings");
     });
 
-    it("returns steps on lines of the PR's hunks sent in full, in call order", async () => {
+    it("returns steps on lines of the PR's hunks sent in full", async () => {
       const result = await model.steps(smallFeatureInput, { tour: true });
       if (!result.ok) throw new Error(`steps failed: ${result.error.message}`);
 
@@ -67,8 +67,7 @@ export const describeAnalysisModelContract = (
       const mechanical = new Set(
         smallFeatureInput.files.flatMap((file) => file.mechanicalHunks.map((hunk) => hunk.hunkId)),
       );
-      const context = { hunks, mechanical, parts: [], callGraph: smallFeatureInput.callGraph };
-      expect(validateSteps(result.value.value, context)).toEqual([]);
+      expect(validateSteps(result.value.value, { hunks, mechanical })).toEqual([]);
       expectUsage(result.value, "steps");
     });
   });

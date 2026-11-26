@@ -39,10 +39,7 @@ describe("compactLabels", () => {
     ]);
   });
 
-  it("keeps a lone directory's name, and names a directory the tour comes back to the same each time", () => {
+  it("keeps a lone directory's name", () => {
     expect(compactLabels(["src/routes/"])).toEqual(["routes"]);
-    expect(
-      compactLabels(["svm/core/pgo/", "svm/core/thread/", "svm/core/pgo/", "svm/hosted/pgo/"]),
-    ).toEqual(["core/pgo", "thread", "core/pgo", "hosted/pgo"]);
   });
 });

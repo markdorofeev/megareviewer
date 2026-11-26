@@ -81,7 +81,10 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "Tour · 3 steps" }).click();
     await expect(layout(page)).toHaveAttribute("data-layout", "tour");
     const steps = page.getByRole("region", { name: "Tour steps" });
-    await expect(steps.getByRole("heading", { level: 2 })).toHaveCount(4);
+    await expect(steps.getByRole("heading", { level: 2, name: /^Step \d/ })).toHaveCount(3);
+    await expect(
+      steps.getByRole("region", { name: "After the tour" }).getByRole("heading", { level: 2 }),
+    ).toHaveText([/^Not in the tour/, "Findings outside the steps"]);
 
     // The changed lines the steps show and the ledger's add up to the pull request's.
     const shown = await steps

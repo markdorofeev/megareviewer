@@ -49,21 +49,17 @@ const withoutSharedPackage = (names: readonly string[]): string[] => {
 /**
  * The compact strip's names: each directory by as few of its last directories as tell it from
  * the other directories on the tour, and a Java module among them without the package they all
- * start with, so two `pgo` read as `core/pgo` and `hosted/pgo`. A directory the tour comes back
- * to has the same name each time.
+ * start with, so two `pgo` read as `core/pgo` and `hosted/pgo`.
  */
 export const compactLabels = (labels: readonly string[]): string[] => {
   const paths = labels.map((label) => bare(label).split("/"));
   const names = paths.map((parts) => {
-    const whole = parts.join("/");
     for (let take = 1; take < parts.length; take += 1) {
       const name = parts.slice(-take).join("/");
-      const taken = paths.some(
-        (other) => other.join("/") !== whole && other.slice(-take).join("/") === name,
-      );
+      const taken = paths.some((other) => other !== parts && other.slice(-take).join("/") === name);
       if (!taken) return name;
     }
-    return whole;
+    return parts.join("/");
   });
   return withoutSharedPackage(names).map((name) => shortenPath(name, within(COMPACT_CHARS)));
 };

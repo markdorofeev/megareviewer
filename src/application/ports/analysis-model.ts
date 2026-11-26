@@ -162,7 +162,7 @@ export interface AnalysisModel {
     intent: Intent | null,
     options?: PassOptions,
   ): Promise<Result<PassOutput<FindingDraft[]>, PassError>>;
-  /** The page's tour, in call order; only a run that asks for the tour calls it. */
+  /** The page's tour, what matters most first; only a run that asks for the tour calls it. */
   steps(
     input: AnalysisInput,
     options?: PassOptions,

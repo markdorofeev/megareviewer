@@ -19,14 +19,7 @@ describe("receipts-tour on the fake server", () => {
     const hunks = new Map(
       smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
     );
-    expect(
-      validateSteps(steps, {
-        hunks,
-        mechanical: new Set(),
-        parts: [],
-        callGraph: smallFeatureInput.callGraph,
-      }),
-    ).toEqual([]);
+    expect(validateSteps(steps, { hunks, mechanical: new Set() })).toEqual([]);
     expect(steps.every((step) => step.excerpts.every((one) => one.line - one.startLine >= 3))).toBe(
       true,
     );
