@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { type FocusEvent, useRef, useState } from "react";
 import { cn } from "../../lib/utils.ts";
 import {
   EndChip,
@@ -15,6 +15,13 @@ import type { FlowPath, Stop } from "./flow-paths.ts";
 
 /** A cell shows this many stops before folding the rest behind a button. */
 const SHOWN = 3;
+
+// Focus alone leaves a stop that's partly under the first column where it is. Not on a click,
+// where scrolling would move the stop from under the pointer.
+const showFocused = ({ target }: FocusEvent<HTMLElement>) => {
+  if (target.matches(":focus-visible"))
+    target.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+};
 
 /**
  * The pull request as lanes: a column per directory, callers before callees, and a row per flow
@@ -74,7 +81,10 @@ export const FlowLanes = ({
           data-slot="flow-lanes-scroll"
           className="overflow-x-auto rounded-lg border bg-card sm:scroll-pl-64"
         >
-          <table className="w-full border-separate border-spacing-0 text-left">
+          <table
+            className="w-full border-separate border-spacing-0 text-left"
+            onFocus={showFocused}
+          >
             <thead>
               <tr>
                 <th

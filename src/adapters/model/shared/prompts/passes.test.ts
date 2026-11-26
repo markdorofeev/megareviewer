@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { smallFeatureIntent } from "../../../../application/testing/index.ts";
-import { InferredIntent } from "../../../../domain/review/index.ts";
+import { smallFeatureInput, smallFeatureIntent } from "../../../../application/testing/index.ts";
+import { InferredIntent, ModelPass } from "../../../../domain/review/index.ts";
+import { fnv1a64 } from "../../../../domain/shared/index.ts";
+import { guidance, linkedGuidance, withHarness } from "../fixtures/guidance.ts";
 import { PASS_INSTRUCTIONS, passMessage } from "./passes.ts";
 import { SYSTEM_PROMPT } from "./system.ts";
 
@@ -90,6 +92,69 @@ describe("the reviewer's guidance", () => {
     for (const pass of ["decisions", "intent"] as const) {
       expect(PASS_INSTRUCTIONS[pass]).not.toMatch(/"raised"|"left-out"/);
     }
+  });
+});
+
+describe("what guidance adds to a task", () => {
+  const READ_FIRST = "First go through <readable_files>";
+  const notIntent = "The reviewer's guidance isn't what was asked for";
+  const withPreferences = {
+    ...smallFeatureInput,
+    guidance: { ...guidance, guidelines: [] },
+  };
+  const withFiles = { ...smallFeatureInput, guidance: linkedGuidance };
+  const reading = withHarness(withFiles);
+
+  it("is nothing on a run without any", () => {
+    for (const pass of ModelPass.options) {
+      const task = passMessage(pass, null, undefined, smallFeatureInput);
+      expect(task).toBe(PASS_INSTRUCTIONS[pass]);
+      expect(passMessage(pass, null, undefined)).toBe(task);
+    }
+  });
+
+  it("tells the intent task, and no other, that a rule isn't what was asked for", () => {
+    for (const given of [withPreferences, withFiles, reading, withHarness(smallFeatureInput)]) {
+      for (const pass of ModelPass.options) {
+        const message = passMessage(pass, null, undefined, given);
+        expect(message.includes(notIntent)).toBe(pass === "intent");
+        expect(message.startsWith(PASS_INSTRUCTIONS[pass])).toBe(true);
+      }
+    }
+  });
+
+  it("asks every pass to keep refs out of what the reviewer reads", () => {
+    for (const given of [withPreferences, withFiles, reading]) {
+      for (const pass of ModelPass.options) {
+        expect(passMessage(pass, null, undefined, given)).toContain(
+          "name a guideline file by its path in the repository, and a preference by what it says",
+        );
+      }
+    }
+  });
+
+  it("asks every pass but the intent to read first, where there's something to read", () => {
+    for (const pass of ModelPass.options) {
+      const asks = passMessage(pass, null, undefined, reading).includes(READ_FIRST);
+      expect(asks).toBe(pass !== "intent");
+      expect(passMessage(pass, null, undefined, withFiles)).not.toContain(READ_FIRST);
+    }
+  });
+
+  it("is versioned: the transports' fingerprints have no guided run without something to read", () => {
+    const messages = [withPreferences, withFiles].map((given) =>
+      ModelPass.options.map((pass) => passMessage(pass, null, undefined, given)),
+    );
+    expect(
+      fnv1a64(JSON.stringify(messages)),
+      "A run with guidance sends something else. Bump every transport's prompt version.",
+    ).toBe("1cfdc0f1a8c9816f");
+  });
+
+  it("comes before the problems with an earlier answer", () => {
+    expect(passMessage("risk", null, ["h_1 is missing"], reading)).toMatch(
+      /Then answer\.\n\nYour previous answer had these problems: h_1 is missing\. Fix them\.$/,
+    );
   });
 });
 

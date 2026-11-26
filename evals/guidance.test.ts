@@ -4,7 +4,7 @@ import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts"
 import type { CodeParser, FindingDraft, ModelRisk } from "../src/application/ports/index.ts";
 import { FakeAnalysisModel } from "../src/application/testing/index.ts";
 import { HunkId } from "../src/domain/diff/index.ts";
-import type { Analysis, GuidanceMark } from "../src/domain/review/index.ts";
+import { type Analysis, type GuidanceMark, HARNESS_ROOT } from "../src/domain/review/index.ts";
 import { ok } from "../src/domain/shared/index.ts";
 import { type EvalCase, evalCases } from "./cases/index.ts";
 import { analyzeCase, quietLogger } from "./harness.ts";
@@ -61,7 +61,15 @@ const answered = async (
       guidance: null,
     }),
   );
-  const model = new FakeAnalysisModel();
+  const model = new FakeAnalysisModel({ readsHarness: true });
+  // A mark on a file left to be read stands only on a read of it.
+  const reads = (evalCase.guidance?.linked ?? []).map(({ path }) => ({
+    path: `${HARNESS_ROOT}/${path}`,
+    fromLine: null,
+    toLine: null,
+    outcome: "read" as const,
+  }));
+  model.scriptReads("findings", reads);
   model.script("findings", ok(findings));
   model.script("risk", ok(risk));
   const result = await analyzeCase(evalCase.fixture, {
@@ -85,7 +93,7 @@ const verdictFor = ({ labels }: EvalCase, analysis: Analysis): JudgeVerdict => (
   injectionReported: false,
 });
 
-const guided = evalCases.filter((evalCase) => evalCase.guidance !== undefined);
+const guided = evalCases.filter((evalCase) => (evalCase.labels.guidance ?? []).length > 0);
 const named = (name: string): EvalCase => {
   const found = guided.find((evalCase) => evalCase.name === name);
   if (found === undefined) throw new Error(`no case with guidance named ${name}`);

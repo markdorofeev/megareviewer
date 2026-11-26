@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -1260,7 +1260,6 @@ describe("points", () => {
     await userEvent.click(decisionChip(PLAIN_TEXT));
     const note = screen.getByRole("article", { name: PLAIN_TEXT });
     expect(note.textContent).toContain("plain text needs no renderer");
-    // The click is the chip's, not the line's: no comment box opens.
     expect(within(mainArea()).queryByRole("textbox", { name: /^Comment on/ })).toBeNull();
   });
 
@@ -2158,6 +2157,51 @@ describe("comments on hunks", () => {
       ).toMatchObject({ hunkComments: [{ side: "new", line, body: "Why this?" }] }),
     );
     expect(requests.some((request) => request.url === `${viewPath}/publication`)).toBe(false);
+  });
+
+  const numbers = () =>
+    within(mainArea()).getAllByRole("button", { name: /^Comment on line \d+$/ });
+
+  it("draws the box's range again when only its first line changes", async () => {
+    renderReview({ view: withoutDecisions });
+    await loaded();
+    const [first, second] = numbers();
+    if (first === undefined || second === undefined) throw new Error("no commentable lines");
+    const user = userEvent.setup();
+    await user.click(second);
+    await user.keyboard("{Shift>}");
+    await user.click(first);
+    await user.keyboard("{/Shift}");
+    expect(
+      within(mainArea()).getByRole("textbox", {
+        name: `Comment on lines ${first.textContent}–${second.textContent}`,
+      }),
+    ).toBeTruthy();
+  });
+
+  it("opens the box on the lines a selection of code covers", async () => {
+    Range.prototype.getClientRects = () =>
+      Object.assign([new DOMRect(0, 0, 10, 10)], { item: () => null });
+    document.elementFromPoint = () => numbers()[0]?.closest("[data-line]") ?? null;
+    renderReview({ view: withoutDecisions });
+    await loaded();
+    const row = numbers()[0]?.closest<HTMLElement>("[data-line]");
+    const code = row?.querySelector("[data-slot=line-code]");
+    if (row == null || code == null) throw new Error("no line");
+    const comment = await waitFor(() => {
+      window.getSelection()?.selectAllChildren(code);
+      fireEvent(document, new Event("selectionchange"));
+      const shown = document.querySelector("[data-slot=selection-comment]");
+      if (shown === null) throw new Error("no Comment button");
+      return shown;
+    });
+    await userEvent.click(comment);
+    const line = row.dataset.place?.split(":")[1];
+    expect(document.activeElement).toBe(
+      within(mainArea()).getByRole("textbox", { name: `Comment on line ${line}` }),
+    );
+    Reflect.deleteProperty(Range.prototype, "getClientRects");
+    Reflect.deleteProperty(document, "elementFromPoint");
   });
 
   it("removes a comment that's emptied, and c opens one on the focused hunk", async () => {

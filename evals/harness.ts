@@ -7,6 +7,7 @@ import type {
 } from "../src/application/ports/index.ts";
 import {
   FakeGitHost,
+  FakeHarnessSource,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakeRepositoryCopies,
@@ -14,6 +15,7 @@ import {
   fakeModelOption,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   type PullRequestFixture,
@@ -59,6 +61,7 @@ const recordingInput = (model: AnalysisModel) => {
   };
   const recording: AnalysisModel = {
     version: model.version,
+    readsHarness: model.readsHarness,
     checkSize: (given) => {
       keep(given);
       return model.checkSize(given);
@@ -102,9 +105,10 @@ export const analyzeCase = async (
   const recorded = recordingInput(options.model);
   const store = new InMemoryAnalysisStore();
   const preferences = new InMemoryPreferenceStore();
+  const harnessSource = new FakeHarnessSource({ host });
   const gitHost = new FakeGitHost({ host, fixtures: [fixture], clock: systemClock });
   if (options.guidance !== undefined) {
-    await giveGuidance(options.guidance, fixture, { host: gitHost, preferences });
+    await giveGuidance(options.guidance, fixture, { host: gitHost, harnessSource, preferences });
   }
   const events = createAnalysisEvents();
   const useCases = createUseCases(
@@ -120,6 +124,8 @@ export const analyzeCase = async (
       preferences,
       history: {},
       checkouts: new FakeLocalCheckouts(),
+      harnessSource: () => harnessSource,
+      harnessStore: new InMemoryHarnessStore(),
       knownCheckouts: new InMemoryKnownCheckouts(),
       copies: new FakeRepositoryCopies(),
       threads: {},

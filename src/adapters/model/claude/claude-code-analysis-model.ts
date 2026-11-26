@@ -63,10 +63,11 @@ export const createClaudeCodeAnalysisModel = (
 
   return createPassModel({
     version: claudeCodeVersion(model, effort),
+    readsHarness: true,
 
     async checkSize(input) {
       const inputTokens = estimateTokens(
-        claudeCodeSystemPrompt(renderInput(input)) + passMessage("intent", null, undefined),
+        claudeCodeSystemPrompt(renderInput(input)) + passMessage("intent", null, undefined, input),
       );
       logger.debug("Estimated the input", { inputTokens, maxInputTokens });
       return inputTokens > maxInputTokens
@@ -74,14 +75,16 @@ export const createClaudeCodeAnalysisModel = (
         : ok({ inputTokens });
     },
 
-    async runPass(pass, input, intent, passOptions) {
+    async runPass(pass, given, intent, passOptions) {
+      const input = passOptions?.withoutReader === true ? { ...given, harness: null } : given;
       const call = passCall(
         pass,
         renderInput(input),
-        passMessage(pass, intent, passOptions?.feedback),
+        passMessage(pass, intent, passOptions?.feedback, input),
         model,
         effort,
         passOptions?.tour,
+        input.harness?.contents ?? null,
       );
       logger.debug("Model pass started", {
         pass,
@@ -124,7 +127,8 @@ export const createClaudeCodeAnalysisModel = (
         claudeCode: version,
         stopReason: result.stopReason,
       });
-      return ok({ answer: called.value.answer, usage });
+      const { reads } = called.value;
+      return ok({ answer: called.value.answer, usage, ...(reads.length > 0 ? { reads } : {}) });
     },
   });
 };

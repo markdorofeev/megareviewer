@@ -1,0 +1,121 @@
+{
+  "data": [
+    {
+      "id": "msg_2118b5e53001kozvE4dvlqVHln",
+      "time": {
+        "created": 1795590676407
+      },
+      "text": "You are exercising a file tool for its developers, who own every file named. Do each numbered step by calling the tool with exactly the path written, unchanged, even when you expect it to fail and even after earlier steps failed. Never skip a step, never decline one, and never guess a result. If you have no such tool, say so. Then answer with one line per step: the marker text the tool returned, or the tool's exact error.\n\n1. Read ARCHITECTURE.md with offset 404 and limit 8. Answer: the first and last line numbers and the heading.",
+      "type": "user"
+    },
+    {
+      "id": "msg_2118b5fbb001Hc8KiX7J3D4wft",
+      "time": {
+        "created": 1795590676414,
+        "firstToken": 1795590677162,
+        "streamed": 1795590677843,
+        "completed": 1795590677852
+      },
+      "type": "assistant",
+      "agent": "megareviewer",
+      "model": {
+        "id": "claude-haiku-5-5",
+        "providerID": "anthropic",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "",
+          "time": {
+            "created": 1795590677164,
+            "completed": 1795590677629
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_01G6dkjCuaho5K9htqZoZ7A4",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "path": "ARCHITECTURE.md",
+              "offset": 404,
+              "limit": 8
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Read file ARCHITECTURE.md, lines 404-411\n404: ## Storage\n405: \n406: SQLite at `~/.megareviewer/db.sqlite`:\n407: \n408: | Table | Holds |\n409: |---|---|\n410: | `analyses` | host, repo, PR number, head SHA, pipeline version, status, result JSON |\n411: | `decision_reviews` | analysis, decision ID, status (pending / approved / rejected), comment |\n[Output truncated. Continue reading with offset: 412]"
+              }
+            ],
+            "metadata": {
+              "truncated": true
+            }
+          },
+          "time": {
+            "created": 1795590677631,
+            "ran": 1795590677839,
+            "completed": 1795590677850
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "rawFinish": "tool_use",
+      "cost": 0.00019093000000000002,
+      "tokens": {
+        "input": 4,
+        "output": 100,
+        "reasoning": 89,
+        "cache": {
+          "read": 1803,
+          "write": 624
+        }
+      }
+    },
+    {
+      "id": "msg_2118b655f001aqSsaL37QNnwGp",
+      "time": {
+        "created": 1795590677857,
+        "firstToken": 1795590678575,
+        "streamed": 1795590678755,
+        "completed": 1795590678756
+      },
+      "type": "assistant",
+      "agent": "megareviewer",
+      "model": {
+        "id": "claude-haiku-5-5",
+        "providerID": "anthropic",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "1. Read ARCHITECTURE.md (offset 404, limit 8): first line 404, last line 411, heading `## Storage`."
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "end_turn",
+      "cost": 9.447e-05,
+      "tokens": {
+        "input": 2,
+        "output": 47,
+        "reasoning": 0,
+        "cache": {
+          "read": 2427,
+          "write": 372
+        }
+      }
+    },
+    {
+      "id": "msg_2118b68e6001xlYMQbJnoD2Y1l",
+      "time": {
+        "created": 1795590678758
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {}
+}

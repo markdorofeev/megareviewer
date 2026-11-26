@@ -34,7 +34,7 @@ export const fixtureGuidance: Guidance = {
       scope: { kind: "repo", repo: ref.repo },
     },
   ],
-  guidelines: [{ ref: "g1", path: "REVIEW.md", bytes: 1_240 }],
+  guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 1_240 }],
   checks: [],
 };
 

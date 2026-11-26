@@ -2,7 +2,6 @@ import { GlobeIcon, SparklesIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { PreferencesView } from "../../../../contracts/index.ts";
 import type {
-  GuidelinePath,
   ModelOptionId,
   PreferenceId,
   ProposalId,
@@ -51,11 +50,11 @@ import {
   SUGGESTIONS,
   suggestionSaid,
   whereAdded,
-  withGuidelineSwitch,
   withoutPreference,
   withoutProposal,
   withPreference,
   withProposals,
+  withRepository,
 } from "./view.ts";
 
 const LoadingPreferences = () => (
@@ -188,10 +187,10 @@ export const PreferencesPage = ({
       ),
   };
 
-  const switchGuideline = async (repo: RepoRef, path: GuidelinePath, enabled: boolean) =>
+  const switchGuideline = async (repo: RepoRef, path: string, enabled: boolean) =>
     settle(
       await client.setGuidelineSwitch({ repo, path, enabled }),
-      (previous) => withGuidelineSwitch(previous, repo, path, enabled),
+      withRepository,
       enabled ? `${path} switched on` : `${path} switched off`,
     );
 

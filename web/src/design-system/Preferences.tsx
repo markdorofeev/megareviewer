@@ -1,10 +1,11 @@
 import { PlusIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import type { PreferencesView } from "../../../contracts/index.ts";
-import type { RepoRef } from "../../../src/domain/review/index.ts";
+import type { PreferencesView, RepositoryPreferences } from "../../../contracts/index.ts";
 import {
   emptyPreferencesView,
+  fixtureHarnessSection,
   fixtureModelOptions,
+  fixtureNothingYet,
   fixturePreferencesView,
   lockedModelOptions,
 } from "../../dev/fixtures/index.ts";
@@ -12,6 +13,7 @@ import { mockFetch } from "../../dev/mock-fetch.ts";
 import { createMockApi, MOCK_TOKEN } from "../../dev/mock-routes.ts";
 import { type Api, ApiContext, createApiClient } from "../api/index.ts";
 import { ConnectionsProvider } from "../app/connections-context.tsx";
+import { GuidelineFiles } from "../pages/preferences/GuidelineFiles.tsx";
 import { ModelAction } from "../pages/preferences/ModelAction.tsx";
 import { PreferenceForm } from "../pages/preferences/PreferenceForm.tsx";
 import { PreferencesPage } from "../pages/preferences/PreferencesPage.tsx";
@@ -85,23 +87,58 @@ const Page = ({
   );
 };
 
-/** A repository with no preference, no proposal and no guideline file yet. */
-const ledger: RepoRef = {
-  host: "github",
-  owner: "acme",
-  repo: "payments-ledger-reconciliation-service",
-};
 const withFirstRun: PreferencesView = {
   ...fixturePreferencesView,
-  repositories: [
-    ...fixturePreferencesView.repositories,
-    {
-      repo: ledger,
-      guidelineFiles: [],
-      guidelineNote: null,
-    },
-  ],
+  repositories: [...fixturePreferencesView.repositories, fixtureNothingYet],
 };
+
+/** The fixture's CLAUDE.md switched on, with one of the files it links off. */
+const switchedOn: RepositoryPreferences = {
+  ...fixtureHarnessSection,
+  guidelineFiles: (fixtureHarnessSection.guidelineFiles ?? []).map((file) =>
+    file.path === "CLAUDE.md"
+      ? {
+          ...file,
+          enabled: true,
+          use: "on-request",
+          linked: file.linked.map((one) =>
+            one.path === "docs/runbooks/README.md"
+              ? { ...one, enabled: false, use: null }
+              : one.linkedFrom === "docs/runbooks/README.md"
+                ? { ...one, use: null }
+                : one,
+          ),
+        }
+      : file,
+  ),
+};
+
+/** A harness that reached a limit, with a file that couldn't be read, and a load that failed since. */
+const cutShort: RepositoryPreferences = {
+  ...fixtureHarnessSection,
+  harnessCut: "files",
+  harnessSkipped: [
+    { path: "docs/changelog.md", reason: "too-large" },
+    { path: "docs/diagram.md", reason: "unreadable" },
+  ],
+  harnessNote:
+    "Couldn't load the latest pull request's, so these are an earlier one's: GitHub's rate limit is reached",
+};
+
+/** Guideline files with what they link: folded, open, and cut by a limit. */
+const Harnesses = () => (
+  <div className="grid gap-4 rounded-xl border bg-background p-4">
+    <Example title="Linked files, folded">
+      <GuidelineFiles section={fixtureHarnessSection} onSwitch={noSave} />
+    </Example>
+    <Example title="Linked files, open">
+      <GuidelineFiles section={switchedOn} startOpen={["CLAUDE.md"]} onSwitch={noSave} />
+    </Example>
+    <Example title="Cut by a limit">
+      <GuidelineFiles section={cutShort} onSwitch={noSave} />
+    </Example>
+  </div>
+);
 
 /** The button that asks a model for proposals, in each state a run leaves it in. */
 const SuggestStates = () => {
@@ -162,6 +199,9 @@ export const Preferences = () => (
     </Group>
     <Group title="A repository's first run">
       <Page view={withFirstRun} startOn="github/acme/payments-ledger-reconciliation-service" />
+    </Group>
+    <Group title="Guideline files and what they link">
+      <Harnesses />
     </Group>
     <Group title="Suggestions">
       <Page view={fixturePreferencesView} startOn="suggestions" />

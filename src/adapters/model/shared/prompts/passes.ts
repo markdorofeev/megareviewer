@@ -1,3 +1,4 @@
+import { type AnalysisInput, NO_GUIDANCE } from "../../../../application/ports/index.ts";
 import type { Intent, ModelPass } from "../../../../domain/review/index.ts";
 import { escapeText } from "../render-input.ts";
 
@@ -127,14 +128,43 @@ const renderIntent = (intent: Intent): string[] => [
   "</intent>",
 ];
 
+/** Beside the intent task: its watch line says a broken rule, and asks what it says to be a mismatch. */
+const RULES_ARENT_INTENT =
+  "The reviewer's guidance isn't what was asked for: code that breaks a preference, or a rule of a guideline file or of a document one links, is the findings task's and never a mismatch, even when watch says it. Only the description, tickets, commits and branch say what was asked.";
+
+/** The refs number what the prompt gives, and name nothing on the page. */
+const NO_REFS =
+  'A ref ("p1", "g1", "m1") goes only in a field that takes one. In text the reviewer reads, name a guideline file by its path in the repository, and a preference by what it says.';
+
+/** Beside the task, since the list of files is far above it and alone led no pass to read any. */
+const READ_FIRST =
+  "First go through <readable_files> in the reviewer's guidance and open the parts that speak of the code this change touches, with the tool that reads them. Then answer.";
+
+type GivenGuidance = Pick<AnalysisInput, "guidance" | "harness">;
+const NOTHING_GIVEN: GivenGuidance = { guidance: NO_GUIDANCE, harness: null };
+
+const isGuided = ({ guidance, harness }: GivenGuidance): boolean =>
+  guidance.preferences.length > 0 || guidance.guidelines.length > 0 || harness !== null;
+
+/**
+ * What's added to the task on a run with guidance, and on one with something to read. The others
+ * wait for the intent, so it isn't asked to read.
+ */
+const guided = (pass: ModelPass, given: GivenGuidance): string[] => [
+  ...(isGuided(given) ? ["", ...(pass === "intent" ? [RULES_ARENT_INTENT, ""] : []), NO_REFS] : []),
+  ...(given.harness !== null && pass !== "intent" ? ["", READ_FIRST] : []),
+];
+
 /**
  * The pass's own message: the intent's answer when the pass reads it (model output, so escaped
- * like PR content), the instruction, and what was wrong with the previous attempt, if anything.
+ * like PR content), the instruction, what guidance adds to it, and what was wrong with the previous
+ * attempt, if anything.
  */
 export const passMessage = (
   pass: ModelPass,
   intent: Intent | null,
   feedback: readonly string[] | undefined,
+  given: GivenGuidance = NOTHING_GIVEN,
 ): string => {
   const earlier =
     intent === null
@@ -150,5 +180,5 @@ export const passMessage = (
     feedback === undefined || feedback.length === 0
       ? []
       : ["", `Your previous answer had these problems: ${feedback.join("; ")}. Fix them.`];
-  return [...earlier, PASS_INSTRUCTIONS[pass], ...problems].join("\n");
+  return [...earlier, PASS_INSTRUCTIONS[pass], ...guided(pass, given), ...problems].join("\n");
 };

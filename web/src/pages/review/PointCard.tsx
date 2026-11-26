@@ -780,7 +780,7 @@ export const RiskNote = memo(function RiskNote({
 
 /**
  * A decision's chip at the end of the line that makes the choice: the question it answers, which
- * opens its footnote. It stops the click, which on the line would open the comment box.
+ * opens its footnote.
  */
 export const DecisionChip = ({
   point,
@@ -814,10 +814,7 @@ export const DecisionChip = ({
         state === "dismissed" && "line-through",
         current && RING,
       )}
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggle(point.id);
-      }}
+      onClick={() => onToggle(point.id)}
     >
       <Icon aria-hidden="true" className="size-3" />
       {point.title}

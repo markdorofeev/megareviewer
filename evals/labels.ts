@@ -1,4 +1,4 @@
-import type { GuidanceEffect, IntentMismatchKind } from "../src/domain/review/index.ts";
+import type { GuidanceEffect, IntentMismatchKind, ModelPass } from "../src/domain/review/index.ts";
 
 /** "either": a hunk that could fairly go both ways, which counts in no risk metric. */
 export type RiskLabel = "logic" | "contract" | "either";
@@ -44,6 +44,12 @@ export interface ExpectedGuidance extends GuidedPoints {
   readonly alsoOn?: GuidedPoints;
 }
 
+/** A file of the harness a pass should open. */
+export interface ExpectedRead {
+  readonly pass: ModelPass;
+  readonly path: string;
+}
+
 /** What a reviewer expects the pipeline to produce for one case. */
 export interface CaseLabels {
   /** By hunk ID, every hunk the risk pass classifies: every hunk without a mechanical proof. */
@@ -70,6 +76,11 @@ export interface CaseLabels {
   }[];
   /** For cases with guidance: what each preference or guideline file the labels are about should do. */
   readonly guidance?: readonly ExpectedGuidance[];
+  /**
+   * For cases with files left to be read: the reads a pass should make, by the file's path in the
+   * repository. [] means none is asked for.
+   */
+  readonly reads?: readonly ExpectedRead[];
   /** For cases whose PR text tries to steer the model. */
   readonly injection?: { readonly reported: boolean };
 }

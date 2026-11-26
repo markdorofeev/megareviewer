@@ -8,6 +8,7 @@ import {
   SparklesIcon,
 } from "lucide-react";
 import { type ReactNode, useId } from "react";
+import type { HarnessUse } from "../../../../contracts/index.ts";
 import {
   type Analysis,
   hasModelRun,
@@ -31,6 +32,7 @@ import { Button } from "../../ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import { ModelMenu } from "./ModelMenu.tsx";
 import type { ModelChoice } from "./model-choice.ts";
+import { harnessLine } from "./useHarness.ts";
 
 const KIND_WORDS: Readonly<Record<PointKind, [string, string]>> = {
   finding: ["finding", "findings"],
@@ -116,6 +118,7 @@ const AiSplit = ({
   icon: Icon,
   label,
   note,
+  detail = null,
   locked = false,
   disabled = false,
   busy = null,
@@ -129,6 +132,8 @@ const AiSplit = ({
   readonly icon: LucideIcon;
   readonly label: ReactNode;
   readonly note: string | null;
+  /** A line under the note. */
+  readonly detail?: string | null;
   /** Nothing can run: the note says why. */
   readonly locked?: boolean;
   readonly disabled?: boolean;
@@ -168,13 +173,20 @@ const AiSplit = ({
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start">
           {locked && <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />}
-          {note}
+          {detail === null ? (
+            note
+          ) : (
+            <span className="flex flex-col gap-0.5">
+              <span>{note}</span>
+              <span>{detail}</span>
+            </span>
+          )}
         </TooltipContent>
       </Tooltip>
       {/* The tooltip is for the eye; a screen reader reads the same words as the description. */}
       {note !== null && (
         <span id={descriptionId} hidden>
-          {note}
+          {detail === null ? note : `${note}. ${detail}`}
         </span>
       )}
       <ModelMenu
@@ -227,6 +239,7 @@ export const ClaudeElement = ({
   onRerun,
   reanalyze = null,
   filesChanged = null,
+  harness = null,
   children,
 }: {
   readonly analysis: ClaudeRun;
@@ -256,6 +269,8 @@ export const ClaudeElement = ({
   readonly reanalyze?: Reanalyze | null;
   /** How many files the PR changes, for what a run would cover. */
   readonly filesChanged?: number | null;
+  /** What a run would read of the repository's harness. */
+  readonly harness?: HarnessUse | null;
   /** After the chips: the stepper through the points or the threads. */
   readonly children?: ReactNode;
 }) => {
@@ -265,6 +280,7 @@ export const ClaudeElement = ({
   const { chosen, locked } = choice;
   const runNote =
     locked ?? (chosen === null ? null : `Runs ${chosen.modelName} through ${chosen.via}`);
+  const runDetail = locked !== null || chosen === null ? null : harnessLine(harness);
   const runDisabled = starting || locked !== null || chosen === null;
   const ran = hasModelRun(analysis);
   const runnable = modelRunnable(analysis);
@@ -327,6 +343,7 @@ export const ClaudeElement = ({
         )
       }
       note={runNote}
+      detail={runDetail}
       locked={locked !== null}
       disabled={runDisabled}
       slot="request-review"
@@ -344,6 +361,7 @@ export const ClaudeElement = ({
           locked ??
           (chosen === null ? null : `Runs ${chosen.modelName} through ${chosen.via} again`)
         }
+        detail={runDetail}
         locked={locked !== null}
         disabled={runDisabled}
         slot="rerun"

@@ -1,12 +1,12 @@
 import type { ModelError } from "../../../domain/review/index.ts";
-import { modelError, refusal } from "../shared/errors.ts";
+import { modelError, readerFailed, readTooMuch, refusal } from "../shared/errors.ts";
 import { describeHttpError, type OpencodeHttpError } from "./opencode-client.ts";
 import type { OpencodeError, OpencodeTurn } from "./opencode-output.ts";
 
 export const NOT_INSTALLED =
   "opencode isn't installed. Install it (https://opencode.ai), connect a provider with `opencode auth login`, then try again.";
 
-/** A tool ran, or was asked for: the answer is discarded. */
+/** The session did more than answer: its answer is discarded. */
 export const usedTool = (tools: readonly string[]): ModelError =>
   modelError(
     "unexpected",
@@ -72,4 +72,17 @@ export const fromTurn = (turn: OpencodeTurn): ModelError | null => {
     return modelError("max-tokens", "The answer was cut off at the model's output limit.");
   }
   return null;
+};
+
+/**
+ * A pass's failure after it read, when it's the reading's: the provider took the same request
+ * without what was read the round before, and then refused it or ran out of room.
+ */
+export const readingFailure = (turn: OpencodeTurn, failure: ModelError): ModelError | null => {
+  if (turn.rounds === 0) return null;
+  if (failure.kind === "too-large") return readTooMuch();
+  const status = turn.error?.status;
+  return status === 400 || status === 413
+    ? readerFailed(`The provider refused what it read: ${turn.error?.message}`)
+    : null;
 };

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisView } from "../../../../contracts/index.ts";
-import { PointId } from "../../../../src/domain/review/index.ts";
+import { type Guidance, PointId } from "../../../../src/domain/review/index.ts";
 import {
   fixtureAnalysisView,
   fixtureGuidance,
@@ -297,10 +297,65 @@ describe("what a run read", () => {
     expect(
       guidanceRead({
         ...fixtureGuidance,
-        guidelines: [...fixtureGuidance.guidelines, { ref: "g2", path: "AGENTS.md", bytes: 2_000 }],
+        guidelines: [
+          ...fixtureGuidance.guidelines,
+          { ref: "g2", path: "AGENTS.md", linkedFrom: null, given: "prompt", bytes: 2_000 },
+        ],
       }),
     ).toBe("2 preferences, REVIEW.md, and AGENTS.md");
     expect(runLine(null, fixtureGuidance)).toBe("With 2 preferences and REVIEW.md");
+  });
+
+  it("counts the files the guideline files import, and names the ones that import them", () => {
+    const given = (...files: readonly (readonly [string, string | null])[]) =>
+      guidanceRead({
+        ...fixtureGuidance,
+        guidelines: files.map(([path, linkedFrom], index) => ({
+          ref: `g${index + 1}`,
+          path,
+          linkedFrom,
+          given: "prompt" as const,
+          bytes: 100,
+        })),
+      });
+    const imported = ["a.md", "b.md", "c.md"].map((path) => [path, "CLAUDE.md"] as const);
+    expect(given(["CLAUDE.md", null], ...imported)).toBe(
+      "2 preferences, CLAUDE.md, and 3 files it imports",
+    );
+    expect(given(["REVIEW.md", null], ["CLAUDE.md", null], ["a.md", "CLAUDE.md"])).toBe(
+      "2 preferences, REVIEW.md, CLAUDE.md, and 1 file they import",
+    );
+    expect(given(["a.md", "CLAUDE.md"])).toBe("2 preferences and 1 file imported");
+  });
+
+  it("doesn't count the files left to be read, and says how many the passes opened", () => {
+    const left = { ref: "g2", path: "docs/plan.md", linkedFrom: "REVIEW.md", bytes: 9 };
+    const guidance: Guidance = {
+      ...fixtureGuidance,
+      guidelines: [...fixtureGuidance.guidelines, { ...left, given: "on-request" }],
+    };
+    expect(guidanceRead(guidance)).toBe("2 preferences and REVIEW.md");
+    const [call] = modelCalls;
+    if (call === undefined) throw new Error("the fixture has calls");
+    const reading = (...paths: string[]) => ({
+      ...call,
+      reads: paths.map((path) => ({
+        path,
+        fromLine: null,
+        toLine: null,
+        outcome: path.startsWith("/") ? ("refused" as const) : ("read" as const),
+      })),
+    });
+    const calls = [reading("harness/a.md", "harness/b.md"), reading("harness/a.md", "/etc/hosts")];
+    expect(runLine(modelOption, guidance, calls)).toBe(
+      "Sonnet 5.5 through Claude Code with 2 preferences and REVIEW.md, read 2 harness files",
+    );
+    expect(runLine(null, null, [reading("harness/a.md")])).toBe("read 1 harness file");
+    expect(runLine(modelOption, guidance, [reading("/etc/hosts")])).toBe(
+      "Sonnet 5.5 through Claude Code with 2 preferences and REVIEW.md",
+    );
+    render(<UsageFooter usage={usage} option={modelOption} guidance={guidance} calls={calls} />);
+    expect(screen.getByRole("button").textContent).toContain(", read 2 harness files · Usage: ");
   });
 
   it("is listed in Run details, with how many points were left out", async () => {

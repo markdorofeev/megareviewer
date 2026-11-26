@@ -13,6 +13,7 @@ import {
   allFixtures,
   FakeAnalysisModel,
   FakeGitHost,
+  type FakeHarnessSource,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakePreferenceSuggester,
@@ -25,6 +26,7 @@ import {
   fixtureReviewers,
   InMemoryAnalysisStore,
   InMemoryFileCache,
+  InMemoryHarnessStore,
   InMemoryKnownCheckouts,
   InMemoryPreferenceStore,
   type PullRequestFixture,
@@ -33,6 +35,7 @@ import {
   smallFeatureThreadList,
 } from "../../application/testing/index.ts";
 import {
+  type HostKind,
   type HostUser,
   type PastComment,
   type PullRequestRef,
@@ -42,12 +45,19 @@ import {
   Sha,
 } from "../../domain/review/index.ts";
 import { err } from "../../domain/shared/index.ts";
-import { allowedHosts, assemble, type Composition, systemClock } from "../compose.ts";
+import {
+  allowedHosts,
+  assemble,
+  type Composition,
+  harnessSourceIn,
+  systemClock,
+} from "../compose.ts";
 import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
 import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./model-recording.ts";
 import { checkedAdvisor, receiptsChecked, withGuardrails } from "./receipts-checked.ts";
 import { downloadedCommits, receiptsDownloaded } from "./receipts-downloaded.ts";
 import { receiptsGuided, withGuidance } from "./receipts-guided.ts";
+import { fakeHarnessSources, receiptsHarness } from "./receipts-harness.ts";
 import { receiptsTested, withCheckingTests } from "./receipts-tested.ts";
 import { receiptsTour, withTour } from "./receipts-tour.ts";
 
@@ -75,6 +85,7 @@ export const fakeFixtures: readonly PullRequestFixture[] = [
   receiptsGuided,
   receiptsChecked,
   receiptsTour,
+  receiptsHarness,
   receiptsDownloaded,
 ];
 
@@ -169,6 +180,7 @@ export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisMo
   let failed = false;
   return {
     version: model.version,
+    readsHarness: model.readsHarness,
     checkSize: (input) => model.checkSize(input),
     async intent(input, options) {
       if (failed || input.pullRequest.url !== url) return model.intent(input, options);
@@ -273,6 +285,8 @@ export interface FakeApp {
   readonly bitbucket: FakeGitHost;
   readonly threads: { readonly github: FakeReviewThreads; readonly bitbucket: FakeReviewThreads };
   readonly preferences: InMemoryPreferenceStore;
+  readonly harnessSources: Record<HostKind, FakeHarnessSource>;
+  readonly harnessStore: InMemoryHarnessStore;
   /** The API and UI like the real CLI's, plus the control routes. */
   app(port: number): Hono;
 }
@@ -328,6 +342,8 @@ export const createFakeApp = async (options: {
   };
   statuses.github.setStatus(smallFeature.pullRequest.ref, smallFeatureStatus);
   const preferences = new InMemoryPreferenceStore();
+  const harnessSources = fakeHarnessSources(fakeFixtures);
+  const harnessStore = new InMemoryHarnessStore(clock);
   const composition = await assemble(
     {
       hosts: { github, bitbucket },
@@ -342,7 +358,10 @@ export const createFakeApp = async (options: {
             withGuidance(
               withCheckingTests(
                 options.scenario === undefined
-                  ? failingIntentOnce(new FakeAnalysisModel(), intentFailsOnce.pullRequest.url)
+                  ? failingIntentOnce(
+                      new FakeAnalysisModel({ readsHarness: true }),
+                      intentFailsOnce.pullRequest.url,
+                    )
                   : createReplayAnalysisModel(recording, { scenario: options.scenario }),
                 receiptsTested.pullRequest.url,
               ),
@@ -358,6 +377,8 @@ export const createFakeApp = async (options: {
       preferences,
       history: { github: new FakeReviewHistory({ host: "github", comments: fakePastComments }) },
       fileCache: new InMemoryFileCache(),
+      harnessSource: harnessSourceIn(harnessSources),
+      harnessStore,
       checkouts: new FakeLocalCheckouts(),
       knownCheckouts: new InMemoryKnownCheckouts(),
       copies,
@@ -378,6 +399,8 @@ export const createFakeApp = async (options: {
     bitbucket,
     threads,
     preferences,
+    harnessSources,
+    harnessStore,
     app: (port) => {
       const real = composition.app(port);
       const control = controlRoutes({

@@ -98,6 +98,8 @@ export const PR = {
   receiptsTested: "https://github.com/acme/shop/pull/105",
   /** small-feature in a repository with guideline files and two of the reviewer's preferences. */
   receiptsGuided: "https://github.com/acme/storefront/pull/7",
+  /** small-feature in a repository whose guideline files import, link and mention others. */
+  receiptsHarness: "https://github.com/acme/warehouse/pull/8",
   /** small-feature in a repository with a biome.json, whose finding a Biome rule could catch. */
   receiptsChecked: "https://github.com/acme/checkout/pull/31",
   /** small-feature whose steps pass writes a tour of three steps. */

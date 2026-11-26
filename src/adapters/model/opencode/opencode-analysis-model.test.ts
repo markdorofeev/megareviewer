@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { stat } from "node:fs/promises";
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import type { InputHarness } from "../../../application/ports/index.ts";
 import {
   describeAnalysisModelContract,
   RecordingLogger,
@@ -6,13 +9,20 @@ import {
   smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelErrorKind } from "../../../domain/review/index.ts";
+import { ok } from "../../../domain/shared/index.ts";
 import { withGuidance } from "../shared/fixtures/guidance.ts";
 import {
   createFakeOpencodeClient,
   recorded,
+  recordedReads,
   sessionWith,
 } from "./fixtures/fake-opencode-client.ts";
-import { createOpencodeAnalysisModel, OVERHEAD_TOKENS } from "./opencode-analysis-model.ts";
+import {
+  createOpencodeAnalysisModel,
+  OVERHEAD_TOKENS,
+  runOpencodeCall,
+} from "./opencode-analysis-model.ts";
+import type { OpencodeClient } from "./opencode-client.ts";
 import { readTurn } from "./opencode-output.ts";
 import { AGENT, PR_ENTRY } from "./opencode-request.ts";
 
@@ -22,9 +32,17 @@ const guidedInput = withGuidance(smallFeatureInput);
 
 const modelWith = (
   answer?: Parameters<typeof createFakeOpencodeClient>[0],
-  options: { priced?: boolean; contextTokens?: number } = {},
+  options: {
+    priced?: boolean;
+    contextTokens?: number;
+    wait?: (id: string) => Promise<void>;
+    roundsPollMs?: number;
+  } = {},
 ) => {
-  const fake = createFakeOpencodeClient(answer);
+  const fake = createFakeOpencodeClient(
+    answer,
+    options.wait === undefined ? {} : { wait: options.wait },
+  );
   const logger = new RecordingLogger();
   const model = createOpencodeAnalysisModel({
     client: fake.client,
@@ -34,6 +52,7 @@ const modelWith = (
     variants: HAIKU_VARIANTS,
     contextTokens: options.contextTokens ?? 1_000_000,
     priced: options.priced ?? true,
+    ...(options.roundsPollMs === undefined ? {} : { roundsPollMs: options.roundsPollMs }),
     logger,
   });
   return { model, calls: fake.calls, logger };
@@ -310,6 +329,217 @@ describe("OpencodeAnalysisModel", () => {
         "unauthorized",
         /isn't installed/,
       );
+    });
+  });
+
+  describe("with a harness", () => {
+    const harness: InputHarness = {
+      files: ["docs/notes.md", "CLAUDE.md"].map((path, index) => ({
+        ref: `g${index + 1}`,
+        path: `harness/${path}`,
+        bytes: 10,
+        lines: 3,
+        linkedFrom: null,
+        headings: [],
+      })),
+      contents: new Map([
+        ["harness/docs/notes.md", "# Notes"],
+        ["harness/CLAUDE.md", "# Rules"],
+      ]),
+    };
+    const input = { ...smallFeatureInput, harness };
+    const Created = z.object({
+      location: z.object({ directory: z.string() }),
+      permissions: z.array(z.record(z.string(), z.string())),
+    });
+    const sessionsOf = (calls: ReturnType<typeof modelWith>["calls"]) =>
+      calls
+        .filter((call) => call.method === "POST" && call.path === "/api/session")
+        .map((call) => call.body);
+
+    /** The recorded session of two reads and an answer, its paths under `harness/`. */
+    const readingIntent = (): unknown =>
+      JSON.parse(
+        JSON.stringify(recordedReads("reads-answer"))
+          .replaceAll('"path":"docs/', '"path":"harness/docs/')
+          .replaceAll('"path":"CLAUDE', '"path":"harness/CLAUDE'),
+      );
+    const rounds = (count: number) => ({
+      data: Array.from({ length: count }, (_, index) => ({
+        type: "assistant",
+        finish: "tool-calls",
+        content: [
+          {
+            type: "tool",
+            id: `t${index}`,
+            name: "read",
+            state: { status: "completed", input: { path: "harness/CLAUDE.md" }, content: [] },
+          },
+        ],
+      })),
+    });
+
+    it("reads it", () => {
+      expect(modelWith().model.readsHarness).toBe(true);
+    });
+
+    it("gives every pass one directory, gone afterwards, and leave to read each file by name", async () => {
+      const { model, calls } = modelWith();
+      await model.intent(input);
+      await Promise.all([model.risk(input), model.decisions(input)]);
+
+      const sessions = sessionsOf(calls).map((body) => Created.parse(body));
+      expect(sessions).toHaveLength(3);
+      expect(new Set(sessions.map((session) => session.location.directory)).size).toBe(1);
+      for (const { permissions, location } of sessions) {
+        expect(permissions).toEqual([
+          { action: "read", resource: "harness/docs/notes.md", effect: "allow" },
+          { action: "read", resource: "harness/CLAUDE.md", effect: "allow" },
+        ]);
+        await expect(stat(location.directory)).rejects.toThrow("ENOENT");
+      }
+    });
+
+    it("asks for the reading after the task, and lists the files before the PR", async () => {
+      const { model, calls } = modelWith();
+      await model.decisions(input);
+      const bodyOf = (suffix: string) =>
+        JSON.stringify(calls.find((call) => call.path.endsWith(suffix))?.body);
+      expect(bodyOf("/prompt")).toContain("First go through <readable_files>");
+      expect(bodyOf(`/entries/${PR_ENTRY}-00`)).toContain("harness/docs/notes.md");
+    });
+
+    it("returns what the pass read beside its answer, from every message of the session", async () => {
+      const { model, calls } = modelWith(() => readingIntent());
+      const result = await model.intent(input);
+      if (!result.ok) throw new Error(result.error.message);
+      expect(result.value.value.inferred).not.toBeNull();
+      expect(result.value.reads?.map(({ path, outcome }) => [path, outcome])).toEqual([
+        ["harness/docs/notes.md", "read"],
+        ["harness/CLAUDE.md", "read"],
+      ]);
+      const pages = calls.filter((call) => call.path.endsWith("/message"));
+      expect(pages[0]?.query).toBe("order=asc&limit=200");
+    });
+
+    it("follows the messages to the last page, which is empty", async () => {
+      const fake = createFakeOpencodeClient();
+      const pages = [
+        { data: rounds(1).data, cursor: { next: "two" } },
+        { data: rounds(1).data, cursor: { next: "three" } },
+        { data: [{ type: "idle", outcome: "succeeded" }], cursor: { next: "four" } },
+        { data: [], cursor: {} },
+      ];
+      const queries: string[] = [];
+      const client: OpencodeClient = {
+        async request(method, path, request) {
+          if (!path.includes("/message?")) return fake.client.request(method, path, request);
+          queries.push(path.split("?")[1] ?? "");
+          return ok(pages[queries.length - 1]);
+        },
+      };
+      const result = await runOpencodeCall(
+        client,
+        { session: {}, entries: [], prompt: "Task: intent." },
+        1_000,
+        { harness: { directory: "/tmp/run", files: new Set(["harness/CLAUDE.md"]) } },
+      );
+      expect(queries).toEqual([
+        "order=asc&limit=200",
+        "cursor=two&limit=200",
+        "cursor=three&limit=200",
+        "cursor=four&limit=200",
+      ]);
+      expect(result.ok ? [] : result.error.reads).toHaveLength(2);
+    });
+
+    it("discards the answer of a pass that read outside or used another tool, for a run without the reader", async () => {
+      for (const name of ["reads-refused", "reads-grep"] as const) {
+        const { model, calls } = modelWith(() => recordedReads(name));
+        const result = await model.intent(input);
+        expect(result.ok ? null : result.error.kind).toBe("reader");
+        expect(result.ok ? null : result.error.message).toMatch(/used a tool/);
+        expect(calls.at(-1)?.method).toBe("DELETE");
+      }
+    });
+
+    it("runs a pass without the reader as one with nothing to read", async () => {
+      const without = modelWith();
+      await without.model.risk(input, { withoutReader: true });
+      const plain = modelWith();
+      await plain.model.risk(smallFeatureInput);
+      expect(without.calls).toEqual(plain.calls);
+      expect(Created.safeParse(sessionsOf(without.calls)[0]).success).toBe(false);
+    });
+
+    it("runs on when the files can't be written, without the reader", async () => {
+      const broken = { ...harness, contents: new Map([["../out.md", "x"]]) };
+      const { model, calls } = modelWith();
+      const result = await model.intent({ ...smallFeatureInput, harness: broken });
+      expect(result.ok ? null : result.error).toMatchObject({
+        kind: "reader",
+        message: "The harness's files couldn't be written: ../out.md isn't in the directory",
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it("stops a pass at its ninth round of reading, keeping what it read", async () => {
+      const ended = Promise.withResolvers<void>();
+      const { model, calls } = modelWith(() => rounds(9), {
+        roundsPollMs: 1,
+        wait: () => ended.promise,
+      });
+      const passing = model.intent(input);
+      await vi.waitFor(() =>
+        expect(calls.some((call) => call.path.endsWith("/interrupt"))).toBe(true),
+      );
+      ended.resolve();
+      const result = await passing;
+      expect(result.ok ? null : result.error).toMatchObject({
+        kind: "reader",
+        message: "It used up its rounds of reading before it answered.",
+      });
+      expect(result.ok ? [] : result.error.reads).toHaveLength(9);
+    });
+
+    it("lets a pass use all eight rounds", async () => {
+      const ended = Promise.withResolvers<void>();
+      const { model, calls } = modelWith(() => rounds(8), {
+        roundsPollMs: 1,
+        wait: () => ended.promise,
+      });
+      const passing = model.intent(input);
+      await vi.waitFor(() =>
+        expect(calls.filter((call) => call.path.endsWith("/message")).length).toBeGreaterThan(2),
+      );
+      expect(calls.some((call) => call.path.endsWith("/interrupt"))).toBe(false);
+      ended.resolve();
+      expect((await passing).ok).toBe(false);
+    });
+
+    it.each<[Record<string, unknown>, ModelErrorKind, ModelErrorKind]>([
+      [
+        { type: "provider.context-overflow", message: "prompt is too long", status: 400 },
+        "reader",
+        "too-large",
+      ],
+      [{ type: "provider.invalid", message: "bad block", status: 400 }, "reader", "unexpected"],
+      [{ type: "provider.invalid", message: "bad block", status: 413 }, "reader", "unexpected"],
+      [{ type: "provider.overloaded", message: "Busy", status: 529 }, "overloaded", "overloaded"],
+      [
+        { type: "provider.rate-limit", message: "Too many requests", status: 429 },
+        "rate-limited",
+        "rate-limited",
+      ],
+      [{ type: "provider.content-filter", message: "blocked" }, "refusal", "refusal"],
+    ])("takes %o after a read for %s, and before any for %s", async (error, after, before) => {
+      const failing = async (data: unknown[]) => {
+        const result = await modelWith(() => ({ data })).model.intent(input);
+        return result.ok ? null : result.error.kind;
+      };
+      const failed = { type: "assistant", content: [], error };
+      expect(await failing([...rounds(1).data, failed])).toBe(after);
+      expect(await failing([failed])).toBe(before);
     });
   });
 

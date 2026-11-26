@@ -13,6 +13,7 @@ import { fnv1a64 } from "../shared/index.ts";
 import { Decision } from "./decision.ts";
 import { ModelError } from "./errors.ts";
 import { Flow, storedFlows } from "./flows.ts";
+import { HarnessRead } from "./harness.ts";
 import { Intent, Ticket } from "./intent.ts";
 import { ModelRunOption } from "./model-option.ts";
 import { Finding } from "./point.ts";
@@ -107,9 +108,11 @@ export const ModelCall = z
     startedAt: Timestamp,
     durationMs: z.number().int().nonnegative(),
     outcome: ModelCallOutcome,
-    /** What the checks found wrong with the answer: what a retry is told, or what was dropped. */
+    /** What the checks found wrong with the answer: what a retry is told, or what was dropped or mended. */
     problems: z.array(z.string()).readonly(),
     error: ModelError.nullable(),
+    /** What it read of the harness, in order. Empty for a call without the read tool. */
+    reads: z.array(HarnessRead).readonly().default([]),
   })
   .readonly();
 export type ModelCall = z.infer<typeof ModelCall>;

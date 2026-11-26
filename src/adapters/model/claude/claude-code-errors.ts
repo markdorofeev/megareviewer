@@ -14,14 +14,20 @@ export const NOT_SIGNED_IN =
 
 /**
  * Why a pass's session isn't locked down, or null when it is: StructuredOutput is its only
- * tool, it has no MCP servers, and on a plan no API key is in use. Checked on the first event,
+ * tool but for `readTools`, which a pass that reads has, it has no MCP servers, and on a plan no API key is in use. Checked on the first event,
  * before the model answers, so a Claude Code update that changes a flag's meaning fails here
  * instead of handing PR text a shell.
  */
-export const lockdownProblem = (init: ClaudeCodeInit, onPlan: boolean): string | null => {
-  const extraTools = init.tools.filter((tool) => tool !== STRUCTURED_OUTPUT_TOOL);
+export const lockdownProblem = (
+  init: ClaudeCodeInit,
+  onPlan: boolean,
+  readTools: readonly string[] = [],
+): string | null => {
+  const expected = [STRUCTURED_OUTPUT_TOOL, ...readTools];
+  const extraTools = init.tools.filter((tool) => !expected.includes(tool));
   if (extraTools.length > 0) return `it had tools: ${extraTools.join(", ")}`;
-  if (!init.tools.includes(STRUCTURED_OUTPUT_TOOL)) return "it had no StructuredOutput tool";
+  const missing = expected.find((tool) => !init.tools.includes(tool));
+  if (missing !== undefined) return `it had no ${missing} tool`;
   if (init.mcpServers.length > 0) return `it had MCP servers: ${init.mcpServers.join(", ")}`;
   if (onPlan && init.apiKeySource !== null && init.apiKeySource !== "none") {
     return `it would bill an API key (${init.apiKeySource}) instead of the Claude plan`;

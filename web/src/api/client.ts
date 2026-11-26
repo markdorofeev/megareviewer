@@ -98,6 +98,7 @@ export const createApiClient = (options: ApiClientOptions) => {
     revokeApproval: (id: AnalysisId) => send(routes.revokeApproval, { id }),
     getThreads: (id: AnalysisId) => send(routes.getThreads, { id }),
     getPullRequestStatus: (id: AnalysisId) => send(routes.getPullRequestStatus, { id }),
+    getHarness: (id: AnalysisId) => send(routes.getHarness, { id }),
     replyToThread: (id: AnalysisId, threadId: ThreadId, body: ReplyRequest) =>
       send(routes.replyToThread, { id, threadId }, body),
     resolveThread: (id: AnalysisId, threadId: ThreadId, body: ResolveRequest) =>

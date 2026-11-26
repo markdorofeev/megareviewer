@@ -175,6 +175,7 @@ export const createReplayAnalysisModel = (
 
   return {
     version: `replay/${scenario}`,
+    readsHarness: true,
     async checkSize() {
       return ok({ inputTokens: recording.passes.intent.usage.inputTokens });
     },

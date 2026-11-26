@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { HostError } from "../../domain/review/index.ts";
 import {
   FakeGitHost,
+  FakeHarnessSource,
   FakePullRequestStatusSource,
   FakeReviewHistory,
   FakeReviewThreads,
@@ -12,6 +13,7 @@ import {
 } from "../testing/index.ts";
 import {
   retryingGitHost,
+  retryingHarnessSource,
   retryingReviewHistory,
   retryingReviewThreads,
   retryingStatusSource,
@@ -233,5 +235,43 @@ describe("retryingReviewHistory", () => {
       error: refused,
     });
     expect(delays).toEqual([1000]);
+  });
+});
+
+describe("retryingHarnessSource", () => {
+  it("retries each read after a network failure, but not after a refusal", async () => {
+    const fake = new FakeHarnessSource({ host: "github" });
+    const sha = "a".repeat(40);
+    fake.setFiles(ref.repo, sha, { "CLAUDE.md": "Name the test." });
+    const logger = new RecordingLogger();
+    const delays: number[] = [];
+    const source = retryingHarnessSource(fake, {
+      logger,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    });
+
+    for (const method of ["listFiles", "readFiles", "changedPaths"] as const) {
+      fake.failNext(method, networkError);
+    }
+    const listed = await source.listFiles(ref.repo, sha);
+    expect(listed.ok && [...(listed.value?.keys() ?? [])]).toEqual(["CLAUDE.md"]);
+    expect(await source.readFiles(ref.repo, sha, ["CLAUDE.md"])).toMatchObject({
+      ok: true,
+      value: [{ kind: "text", content: "Name the test." }],
+    });
+    expect(await source.changedPaths(ref.repo, sha, sha)).toEqual({ ok: true, value: [] });
+    expect(delays).toEqual([1000, 1000, 1000]);
+    expect(logger.entries.map((entry) => entry.message)).toEqual([
+      "Retrying the files at a commit after a network error",
+      "Retrying 1 files after a network error",
+      "Retrying the changed files after a network error",
+    ]);
+    expect(source.host).toBe("github");
+
+    fake.failNext("listFiles", { kind: "rate-limited", message: "no", retryAfterSeconds: 60 });
+    expect((await source.listFiles(ref.repo, sha)).ok).toBe(false);
+    expect(delays).toHaveLength(3);
   });
 });

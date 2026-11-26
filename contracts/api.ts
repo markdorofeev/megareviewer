@@ -3,7 +3,8 @@ import {
   Analysis,
   AnalysisId,
   GuidelineFile,
-  GuidelinePath,
+  Harness,
+  HarnessLinkKind,
   HostKind,
   HostUser,
   HunkComment,
@@ -168,13 +169,48 @@ export type ResolveRequest = z.infer<typeof ResolveRequest>;
 export const ResolveResponse = ResolveRequest;
 export type ResolveResponse = z.infer<typeof ResolveResponse>;
 
-/** A repository the preferences page lists, with the guideline files it has. */
+/** Put in every pass's prompt, or left for a pass to read. */
+export const GuidelineUse = z.enum(["prompt", "on-request"]);
+export type GuidelineUse = z.infer<typeof GuidelineUse>;
+
+/** A file a guideline file reaches. */
+export const LinkedGuidelineFile = z
+  .object({
+    path: z.string(),
+    bytes: z.number().int().nonnegative(),
+    /** The file nearest the guideline file that links it, and how. */
+    linkedFrom: z.string(),
+    via: HarnessLinkKind,
+    /** Its own switch; a guideline file's, whether a run uses it. */
+    enabled: z.boolean(),
+    /** How a run uses it when the guideline file is on; null when it doesn't. */
+    use: GuidelineUse.nullable(),
+  })
+  .readonly();
+export type LinkedGuidelineFile = z.infer<typeof LinkedGuidelineFile>;
+
+export const RepositoryGuidelineFile = GuidelineFile.unwrap()
+  .extend({
+    /** Null when it's off, or when it's on and no run can be given it. */
+    use: GuidelineUse.nullable(),
+    /** Nearest first; none while the harness isn't loaded. */
+    linked: z.array(LinkedGuidelineFile).readonly(),
+  })
+  .readonly();
+export type RepositoryGuidelineFile = z.infer<typeof RepositoryGuidelineFile>;
+
+/** A repository the preferences page lists, with the guideline files it has and what they link. */
 export const RepositoryPreferences = z
   .object({
     repo: RepoRef,
     /** Null when they couldn't be looked for, with why in `guidelineNote`. */
-    guidelineFiles: z.array(GuidelineFile).readonly().nullable(),
+    guidelineFiles: z.array(RepositoryGuidelineFile).readonly().nullable(),
     guidelineNote: z.string().nullable(),
+    /** The limit the search for linked files stopped at, and the files it left out. */
+    harnessCut: Harness.unwrap().shape.cut,
+    harnessSkipped: Harness.unwrap().shape.skipped,
+    /** Why the linked files aren't here, or aren't the latest analysis's. */
+    harnessNote: z.string().nullable(),
   })
   .readonly();
 export type RepositoryPreferences = z.infer<typeof RepositoryPreferences>;
@@ -248,13 +284,24 @@ export type DecideProposalRequest = z.infer<typeof DecideProposalRequest>;
 export const ProposalDecided = z.object({ preference: Preference.nullable() }).readonly();
 export type ProposalDecided = z.infer<typeof ProposalDecided>;
 
+/** A guideline file, or any file of the repository's latest harness. */
 export const GuidelineSwitchRequest = z
-  .object({ repo: RepoRef, path: GuidelinePath, enabled: z.boolean() })
+  .object({ repo: RepoRef, path: z.string().min(1), enabled: z.boolean() })
   .readonly();
 export type GuidelineSwitchRequest = z.infer<typeof GuidelineSwitchRequest>;
 
-export const GuidelineSwitched = z.object({}).readonly();
-export type GuidelineSwitched = z.infer<typeof GuidelineSwitched>;
+/** How an AI review of an analysis's pull request would use its harness: read live. */
+export const HarnessUse = z
+  .object({
+    /** none: nothing has loaded it. */
+    status: z.enum(["loading", "ready", "none", "failed"]),
+    /** The files put in every pass's prompt. */
+    inPrompt: z.array(z.string()).readonly(),
+    /** How many more a pass can read. */
+    onRequest: z.number().int().nonnegative(),
+  })
+  .readonly();
+export type HarnessUse = z.infer<typeof HarnessUse>;
 
 export const ErrorCode = z.enum([
   "bad-request",
@@ -444,6 +491,14 @@ export const routes = {
     request: null,
     response: PullRequestStatus,
   },
+  /** The harness an AI review of the analysis's pull request would use. Not part of the analysis. */
+  getHarness: {
+    method: "GET",
+    path: "/api/analyses/:id/harness",
+    params: AnalysisParams,
+    request: null,
+    response: HarnessUse,
+  },
   /** Posts a reply at once; never retried. */
   replyToThread: {
     method: "POST",
@@ -504,13 +559,16 @@ export const routes = {
     request: SuggestPreferencesRequest,
     response: SuggestedPreferences,
   },
-  /** Switches a repository's guideline file on or off for the model runs on its pull requests. */
+  /**
+   * Switches a file of a repository's harness on or off for the model runs on its pull requests,
+   * and answers the repository as it is then: one switch can change how other files are used.
+   */
   setGuidelineSwitch: {
     method: "PUT",
     path: "/api/preferences/guidelines",
     params: NoParams,
     request: GuidelineSwitchRequest,
-    response: GuidelineSwitched,
+    response: RepositoryPreferences,
   },
   /** Accepts a pending proposal, which makes it a preference, or rejects it. */
   decideProposal: {

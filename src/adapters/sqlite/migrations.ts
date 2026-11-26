@@ -177,6 +177,45 @@ export const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (host, owner, repo, dir)
   );
   `,
+  // A harness's list per commit, and its files' contents once per blob. Neither references
+  // analyses: a harness is for every pull request on its base commit.
+  `
+  CREATE TABLE harnesses (
+    host TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
+    sha TEXT NOT NULL,
+    loaded_at TEXT NOT NULL,
+    cut TEXT CHECK (cut IN ('depth', 'files')),   -- NULL: the walk hit no limit
+    skipped TEXT NOT NULL,          -- a JSON array of paths with why
+    missing TEXT NOT NULL,          -- a JSON array of paths
+    PRIMARY KEY (host, owner, repo, sha)
+  );
+
+  CREATE TABLE harness_files (
+    host TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
+    sha TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    path TEXT NOT NULL,
+    blob TEXT NOT NULL,
+    bytes INTEGER NOT NULL,
+    lines INTEGER NOT NULL,
+    via TEXT NOT NULL CHECK (via IN ('root', 'import', 'link', 'mention')),
+    linked_from TEXT,               -- NULL for a root
+    headings TEXT NOT NULL,         -- a JSON array
+    links TEXT NOT NULL,            -- a JSON array
+    PRIMARY KEY (host, owner, repo, sha, position),
+    FOREIGN KEY (host, owner, repo, sha)
+      REFERENCES harnesses (host, owner, repo, sha) ON DELETE CASCADE
+  );
+
+  CREATE TABLE harness_blobs (
+    host TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
+    blob TEXT NOT NULL,
+    content TEXT NOT NULL,
+    used_at TEXT NOT NULL,
+    PRIMARY KEY (host, owner, repo, blob)
+  );
+  CREATE INDEX harness_blobs_used_at ON harness_blobs (used_at);
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

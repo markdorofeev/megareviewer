@@ -42,6 +42,7 @@ const capturingModel = (onInput: (input: AnalysisInput) => void): AnalysisModel 
   const fail = async () => err({ kind: "unexpected" as const, message: "not run" });
   return {
     version: "calibration",
+    readsHarness: false,
     async checkSize(input) {
       onInput(input);
       return err({ kind: "too-large" as const, message: "captured" });

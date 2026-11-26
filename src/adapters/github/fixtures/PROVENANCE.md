@@ -9,10 +9,17 @@ Each JSON file is a list of exchanges in the format of `createFixtureFetch` (`sr
 | `open.synthetic.ts` | Written from GitHub's GraphQL docs: the state of #210, merged, and of a missing PR in the same query, which fails only its own alias. A TypeScript file, since its query is built by the adapter. |
 | `publish.synthetic.json` | Written from GitHub's docs for creating a review and listing its comments, against #210's head SHA. Recording would post a real review. |
 | `history.synthetic.ts` | Written from GitHub's docs for `GET /search/issues` and `GET /repos/{owner}/{repo}/pulls/{n}/comments` and from the shapes of live answers, for a made-up `octo-org`: the reviewer's comments on three reviewed PRs, one of them on two pages, a repository with nothing reviewed, and the 422 for one the token can't search. Recording would capture the token owner's own comments; `record-history.ts` records a read with every comment's text and every login replaced, from a public repository. |
+| `harness.json` | Recorded with `record-harness.ts` from [sindresorhus/is](https://github.com/sindresorhus/is) at `e9c026c`, whose `CLAUDE.md` is a symlink: its tree, and a file query with `oid` for three files, a missing one, a directory and a binary one. Then the tree of [torvalds/linux](https://github.com/torvalds/linux) v6.12, which GitHub cuts short, with its first three entries kept. Bodies keep only the fields the adapter reads. |
 | `unauthorized.synthetic.json`, `rate-limited.synthetic.json` | Written from GitHub's docs: a 401 for every method, including the GraphQL file read, and a 403 with `x-ratelimit-remaining: 0`. |
 
 To re-record `read.json`:
 
 ```bash
 GITHUB_TOKEN=$(gh auth token) node src/adapters/github/fixtures/record.ts https://github.com/sindresorhus/is/pull/210
+```
+
+To re-record `harness.json`:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) node src/adapters/github/fixtures/record-harness.ts
 ```

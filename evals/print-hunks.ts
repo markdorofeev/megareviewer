@@ -21,7 +21,7 @@ const parser = await createTreeSitterCodeParser({
   grammarsDir: fileURLToPath(new URL("../src/adapters/treesitter/grammars", import.meta.url)),
 });
 const result = await analyzeCase(found.fixture, {
-  model: new FakeAnalysisModel(),
+  model: new FakeAnalysisModel({ readsHarness: true }),
   parser,
   logger: quietLogger((line) => console.error(line)),
   timeoutMs: 60_000,

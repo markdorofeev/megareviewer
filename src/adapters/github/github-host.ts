@@ -9,7 +9,7 @@ import type {
   RepoRef,
 } from "../../domain/review/index.ts";
 import { ok, type Result } from "../../domain/shared/index.ts";
-import { createGitHubClient, type GitHubClientOptions } from "./client.ts";
+import { createGitHubClient, type GitHubClient, type GitHubClientOptions } from "./client.ts";
 import { graphqlPartialData } from "./errors.ts";
 import {
   byUpdatedAtDesc,
@@ -45,16 +45,38 @@ const SEARCH_PAGE_SIZE = 50;
 const FILES_PER_QUERY = 25;
 
 /** Reads `count` files, each named by a "sha:path" variable so paths are never interpolated. */
-const blobsQuery = (count: number): string => {
+export const blobsQuery = (count: number, fields = "text isBinary isTruncated"): string => {
   const indexes = Array.from({ length: count }, (_, i) => i);
   const variables = indexes.map((i) => `$e${i}: String!`).join(", ");
   const objects = indexes
-    .map(
-      (i) =>
-        `f${i}: object(expression: $e${i}) { __typename ... on Blob { text isBinary isTruncated } }`,
-    )
+    .map((i) => `f${i}: object(expression: $e${i}) { __typename ... on Blob { ${fields} } }`)
     .join("\n    ");
   return `query ($owner: String!, $repo: String!, ${variables}) {\n  repository(owner: $owner, name: $repo) {\n    ${objects}\n  }\n}`;
+};
+
+/** One file through the REST API, which gives files of any size; null when it isn't there. */
+export const rawFile = async (
+  { octokit, read }: GitHubClient,
+  repo: RepoRef,
+  { sha, path }: FileAt,
+): Promise<Result<string | null, HostError>> => {
+  // Octokit would encode the slashes of a {path} parameter, so the path goes in as is.
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const content = await read(`${path} at ${sha}`, GitHubText, async (request) => {
+    return (
+      await octokit.request(`GET /repos/{owner}/{repo}/contents/${encodedPath}`, {
+        owner: repo.owner,
+        repo: repo.repo,
+        ref: sha,
+        headers: { accept: RAW },
+        request,
+      })
+    ).data;
+  });
+  if (!content.ok && (content.error.kind === "not-found" || content.error.kind === "too-large")) {
+    return ok(null);
+  }
+  return content;
 };
 
 /** PRs per GraphQL query: each is an alias, so one request reads them all. */
@@ -86,31 +108,8 @@ export const openPullRequestsVariables = (
 
 export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
   const { clock, logger } = options;
-  const { octokit, read } = createGitHubClient(options);
-
-  /** One file through the REST API, which gives files of any size; null when it isn't there. */
-  const fileOverRest = async (
-    repo: RepoRef,
-    { sha, path }: FileAt,
-  ): Promise<Result<string | null, HostError>> => {
-    // Octokit would encode the slashes of a {path} parameter, so the path goes in as is.
-    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-    const content = await read(`${path} at ${sha}`, GitHubText, async (request) => {
-      return (
-        await octokit.request(`GET /repos/{owner}/{repo}/contents/${encodedPath}`, {
-          owner: repo.owner,
-          repo: repo.repo,
-          ref: sha,
-          headers: { accept: RAW },
-          request,
-        })
-      ).data;
-    });
-    if (!content.ok && (content.error.kind === "not-found" || content.error.kind === "too-large")) {
-      return ok(null);
-    }
-    return content;
-  };
+  const client = createGitHubClient(options);
+  const { octokit, read } = client;
 
   let cachedUser: HostUser | null = null;
 
@@ -222,7 +221,7 @@ export const createGitHubHost = (options: GitHubHostOptions): GitHost => {
             found.push(object.text);
           } else {
             // Large, binary or not a plain file: the REST API gives it whole, as before.
-            const content = await fileOverRest(repo, file);
+            const content = await rawFile(client, repo, file);
             if (!content.ok) return content;
             found.push(content.value);
           }

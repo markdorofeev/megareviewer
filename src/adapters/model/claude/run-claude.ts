@@ -7,7 +7,7 @@ import {
 export type ClaudeRun = CommandRun;
 export type RunClaudeOptions = RunCommandOptions;
 
-/** Runs Claude Code without a shell, in an empty directory removed afterwards. */
+/** Runs Claude Code without a shell, in a new directory removed afterwards. */
 export type RunClaude = (args: readonly string[], options?: RunClaudeOptions) => Promise<ClaudeRun>;
 
 /**
@@ -23,8 +23,17 @@ export const claudeEnv = (env: NodeJS.ProcessEnv): Record<string, string> => {
       ? []
       : [[name, value] as const],
   );
-  // Turns off Claude Code's own telemetry, error reporting and update checks.
-  return { ...Object.fromEntries(kept), CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" };
+  return {
+    ...Object.fromEntries(kept),
+    // Turns off Claude Code's own telemetry, error reporting and update checks.
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+    // An `@/path` in the message attaches that file, with no tool and nothing on the stream.
+    CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1",
+    // A harness file named CLAUDE.md is read only when a pass asks for it.
+    CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1",
+    // A plain Read otherwise stops at 25,000 tokens of a file, without an error.
+    CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: "60000",
+  };
 };
 
 export const createRunClaude = (
