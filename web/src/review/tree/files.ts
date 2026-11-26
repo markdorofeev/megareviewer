@@ -1,5 +1,4 @@
 import type { FileStatus } from "../../../../src/domain/diff/index.ts";
-import type { PointKind } from "../../../../src/domain/review/index.ts";
 
 export interface FileEntry {
   readonly path: string;
@@ -10,8 +9,8 @@ export interface FileEntry {
   readonly oldPath?: string | null;
   /** Unresolved review threads on the file. */
   readonly threads?: number;
-  /** Claude's points on the file, by kind. */
-  readonly points?: Readonly<Partial<Record<PointKind, number>>>;
+  /** Claude's findings on the file. */
+  readonly findings?: number;
 }
 
 /**

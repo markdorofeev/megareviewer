@@ -114,7 +114,7 @@
         },
         {
           "type": "text",
-          "text": "{\"answer\":{\"pass\":\"risk\",\"assessments\":[{\"hunkId\":\"h_fbaf18305007c20a\",\"riskClass\":\"mechanical\",\"reason\":\"Only reformats code.\"}]}}",
+          "text": "{\"answer\":{\"pass\":\"findings\",\"findings\":[{\"title\":\"Serves a stale receipt\",\"explanation\":\"The cache is keyed by order ID alone.\",\"lines\":{\"hunkId\":\"h_fbaf18305007c20a\",\"side\":\"new\",\"startLine\":9,\"line\":9},\"severity\":\"critical\",\"suggestion\":null,\"mismatch\":null,\"guidance\":null}]}}",
           "citations": null
         }
       ],

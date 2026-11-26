@@ -57,8 +57,6 @@ describe("the Request AI review tooltip's line", () => {
             ...analysis.stages,
             intent: "skipped",
             findings: "skipped",
-            risk: "skipped",
-            decisions: "skipped",
             steps: "skipped",
           },
         }}

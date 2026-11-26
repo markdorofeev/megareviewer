@@ -10,9 +10,7 @@ import { err, ok, type Result } from "../../domain/shared/index.ts";
 import type {
   AnalysisInput,
   AnalysisModel,
-  DecisionDraft,
   FindingDraft,
-  ModelRisk,
   PassError,
   PassOptions,
   PassOutput,
@@ -21,8 +19,6 @@ import type {
 export interface PassValues {
   intent: Intent;
   findings: FindingDraft[];
-  risk: ModelRisk[];
-  decisions: DecisionDraft[];
   steps: StepDraft[];
 }
 
@@ -43,8 +39,7 @@ const filesToReview = (input: AnalysisInput) => input.files.filter((file) => fil
 
 /**
  * Returns scripted answers per pass, in order, and derives plausible ones from the input
- * when none are left: a finding on the first added line, every hunk sent in full is logic, one
- * decision per file.
+ * when none are left: a finding on the first added line of each file.
  */
 export class FakeAnalysisModel implements AnalysisModel {
   readonly version: string;
@@ -54,16 +49,12 @@ export class FakeAnalysisModel implements AnalysisModel {
   private readonly scripts: { [P in ModelPass]: ScriptedPass<P>[] } = {
     intent: [],
     findings: [],
-    risk: [],
-    decisions: [],
     steps: [],
   };
 
   private readonly scriptedReads: { [P in ModelPass]: (readonly HarnessRead[])[] } = {
     intent: [],
     findings: [],
-    risk: [],
-    decisions: [],
     steps: [],
   };
 
@@ -127,58 +118,24 @@ export class FakeAnalysisModel implements AnalysisModel {
     options?: PassOptions,
   ): Promise<Result<PassOutput<FindingDraft[]>, PassError>> {
     return this.answer("findings", input, options, () =>
-      input.files
-        .flatMap((file) => file.hunks)
-        .flatMap((hunk) => {
+      filesToReview(input).flatMap((file) => {
+        const added = file.hunks.flatMap((hunk) => {
           const line = hunk.lines.find((one) => one.kind === "add")?.newLine;
           return line == null
             ? []
-            : [
-                {
-                  title: `Check ${hunk.path}`,
-                  explanation: "Derived by the fake model.",
-                  lines: { hunkId: hunk.id, side: "new" as const, startLine: line, line },
-                  severity: "major" as const,
-                  suggestion: null,
-                  mismatch: null,
-                  guidance: null,
-                },
-              ];
-        })
-        .slice(0, 1),
-    );
-  }
-
-  async risk(
-    input: AnalysisInput,
-    options?: PassOptions,
-  ): Promise<Result<PassOutput<ModelRisk[]>, PassError>> {
-    return this.answer("risk", input, options, () =>
-      input.files.flatMap((file) =>
-        file.hunks.map((hunk) => ({
-          hunkId: hunk.id,
-          riskClass: "logic" as const,
-          reason: "Ordinary code change",
-          lines: null,
-          checkedBy: null,
+            : [{ hunkId: hunk.id, side: "new" as const, startLine: line, line }];
+        });
+        return added.slice(0, 1).map((lines) => ({
+          title: `Check ${file.path}`,
+          explanation: "Derived by the fake model.",
+          lines,
+          type: "logic" as const,
+          severity: "major" as const,
+          suggestion: null,
+          mismatch: null,
           guidance: null,
-        })),
-      ),
-    );
-  }
-
-  async decisions(
-    input: AnalysisInput,
-    options?: PassOptions,
-  ): Promise<Result<PassOutput<DecisionDraft[]>, PassError>> {
-    return this.answer("decisions", input, options, () =>
-      filesToReview(input).map((file) => ({
-        title: `Changes ${file.path}`,
-        category: "behavior" as const,
-        whyItMatters: "Derived by the fake model.",
-        hunkIds: file.hunks.map((hunk) => hunk.id),
-        lines: null,
-      })),
+        }));
+      }),
     );
   }
 

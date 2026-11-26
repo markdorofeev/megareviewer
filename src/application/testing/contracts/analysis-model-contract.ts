@@ -6,13 +6,7 @@ import {
   validateFindings,
   validateSteps,
 } from "../../../domain/review/index.ts";
-import {
-  type AnalysisModel,
-  DecisionDraft,
-  FindingDraft,
-  ModelRisk,
-  type PassOutput,
-} from "../../ports/index.ts";
+import { type AnalysisModel, FindingDraft, type PassOutput } from "../../ports/index.ts";
 import { smallFeatureInput, smallFeatureIntent } from "../fixtures/index.ts";
 
 const expectUsage = (output: PassOutput<unknown>, pass: ModelUsage["pass"]) => {
@@ -60,22 +54,6 @@ export const describeAnalysisModelContract = (
         validateFindings(result.value.value, hunks, smallFeatureIntent.mismatches.length),
       ).toEqual([]);
       expectUsage(result.value, "findings");
-    });
-
-    it("returns risk classifications", async () => {
-      const result = await model.risk(smallFeatureInput);
-      if (!result.ok) throw new Error(`risk failed: ${result.error.message}`);
-
-      for (const item of result.value.value) expect(ModelRisk.parse(item)).toEqual(item);
-      expectUsage(result.value, "risk");
-    });
-
-    it("returns decisions", async () => {
-      const result = await model.decisions(smallFeatureInput);
-      if (!result.ok) throw new Error(`decisions failed: ${result.error.message}`);
-
-      for (const item of result.value.value) expect(DecisionDraft.parse(item)).toEqual(item);
-      expectUsage(result.value, "decisions");
     });
 
     it("returns steps on lines of the PR's hunks sent in full, in call order", async () => {

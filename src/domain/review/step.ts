@@ -1,6 +1,12 @@
 import { z } from "zod";
-import type { CallGraphHint, Hunk, HunkId, HunkPart, PartId } from "../diff/index.ts";
-import { pointLinesFit } from "./point.ts";
+import {
+  type CallGraphHint,
+  type Hunk,
+  type HunkId,
+  type HunkPart,
+  hunkHasLine,
+  type PartId,
+} from "../diff/index.ts";
 import { PointLines } from "./point-lines.ts";
 
 /** "t1", "t2", … in tour order. */
@@ -57,9 +63,13 @@ const excerptProblem = (
   excerpt: PointLines,
   { hunks, mechanical }: StepContext,
 ): "unknown-hunk" | "mechanical" | "lines-outside" | null => {
-  if (!hunks.has(excerpt.hunkId)) return "unknown-hunk";
+  const hunk = hunks.get(excerpt.hunkId);
+  if (hunk === undefined) return "unknown-hunk";
   if (mechanical.has(excerpt.hunkId)) return "mechanical";
-  return pointLinesFit([excerpt.hunkId], excerpt, hunks) ? null : "lines-outside";
+  return hunkHasLine(hunk, excerpt.side, excerpt.startLine) &&
+    hunkHasLine(hunk, excerpt.side, excerpt.line)
+    ? null
+    : "lines-outside";
 };
 
 /** The parts whose lines an excerpt shows: a hunk that isn't split is one part. */

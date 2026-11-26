@@ -23,7 +23,7 @@ import {
 /** The fingerprint was taken on Haiku 5.5, the model the prompts were tuned on. */
 const HAIKU = "claude-haiku-5-5";
 
-/** The review's four passes, or with the tour every pass, the steps pass among them. */
+/** The review's two passes, or with the tour every pass, the steps pass among them. */
 const requests = (model: string = HAIKU, tour = false) =>
   (tour ? ModelPass.options : MODEL_STAGES).map((pass) =>
     claudeCodeRequest(
@@ -40,9 +40,8 @@ const flag = (args: readonly string[], name: string) => args[args.indexOf(name) 
 describe("Claude Code request", () => {
   it.each([
     ["intent", "medium"],
-    ["risk", "low"],
     ["findings", "high"],
-    ["decisions", "high"],
+    ["steps", "medium"],
   ] as const)("runs the %s pass at %s effort", (pass, effort) => {
     const args = claudeCodePassArgs(pass, HAIKU);
     expect(flag(args, "--model")).toBe(HAIKU);

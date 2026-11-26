@@ -6,6 +6,7 @@ import { chronological, formatOffset, ModelCalls } from "./ModelCalls.tsx";
 
 const calls = fixtureAnalysisView.analysis.modelCalls;
 
+/** A pass of a run stored while there was one. */
 const failed: ModelCall = {
   pass: "decisions",
   attempt: 1,
@@ -20,7 +21,7 @@ const failed: ModelCall = {
 describe("ModelCalls", () => {
   it("lists every call in the order it started, a retry after its first try", () => {
     const passes = chronological(calls).map((call) => `${call.pass}/${call.attempt}`);
-    expect(passes).toEqual(["intent/1", "findings/1", "risk/1", "decisions/1", "findings/2"]);
+    expect(passes).toEqual(["intent/1", "findings/1", "findings/2"]);
   });
 
   it("says why a pass ran again, and why one failed", () => {
@@ -40,7 +41,9 @@ describe("ModelCalls", () => {
     expect(findings?.textContent).toContain(
       "Finding 4's explanation is longer than 300 characters.",
     );
-    expect(within(dialog).getByText("✕ Failed: overloaded")).toBeTruthy();
+    expect(within(dialog).getByRole("row", { name: /Decisions/ }).textContent).toContain(
+      "✕ Failed: overloaded",
+    );
     expect(within(dialog).getByText("Anthropic is overloaded or failing: 529")).toBeTruthy();
   });
 

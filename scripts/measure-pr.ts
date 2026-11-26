@@ -103,8 +103,6 @@ export const measure = async (
             riskClass: "mechanical",
             reason: proof.detail,
             source: "proof",
-            lines: null,
-            guidance: null,
           },
         ],
   );

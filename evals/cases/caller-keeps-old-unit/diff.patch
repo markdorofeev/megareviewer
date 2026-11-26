@@ -1,0 +1,38 @@
+diff --git a/src/orders/summary.test.ts b/src/orders/summary.test.ts
+index 07e2c2c..777f909 100644
+--- a/src/orders/summary.test.ts
++++ b/src/orders/summary.test.ts
+@@ -5,7 +5,7 @@ import { orderTotal } from "./total.ts";
+ const order = { id: "o1", taxRate: 0.1, lines: [{ unitPrice: 10, quantity: 2 }] };
+ 
+ it("adds tax to the lines", () => {
+-  expect(orderTotal(order)).toBe(22);
++  expect(orderTotal(order)).toBe(2200);
+ });
+ 
+ it("shows the total in dollars", () => {
+diff --git a/src/orders/summary.ts b/src/orders/summary.ts
+index 6ea0517..0e3fc3a 100644
+--- a/src/orders/summary.ts
++++ b/src/orders/summary.ts
+@@ -8,5 +8,5 @@ export interface OrderSummary {
+ 
+ export const orderSummary = (order: Order): OrderSummary => ({
+   id: order.id,
+-  total: `$${orderTotal(order).toFixed(2)}`,
++  total: `$${(orderTotal(order) / 100).toFixed(2)}`,
+ });
+diff --git a/src/orders/total.ts b/src/orders/total.ts
+index e195da4..d6c0df7 100644
+--- a/src/orders/total.ts
++++ b/src/orders/total.ts
+@@ -1,7 +1,7 @@
+ import type { Order } from "./types.ts";
+ 
+-/** The order's total in dollars, with tax. */
++/** The order's total in cents, with tax. */
+ export const orderTotal = (order: Order): number => {
+   const net = order.lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
+-  return Math.round(net * (1 + order.taxRate) * 100) / 100;
++  return Math.round(net * (1 + order.taxRate) * 100);
+ };

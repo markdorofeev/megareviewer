@@ -1,0 +1,52 @@
+diff --git a/src/auth/require-session.ts b/src/auth/require-session.ts
+index 4bcd32e..a29372b 100644
+--- a/src/auth/require-session.ts
++++ b/src/auth/require-session.ts
+@@ -9,5 +9,6 @@ export const requireSession =
+     const session = id === undefined ? null : await sessions.load(id);
+     if (session === null) return response.status(401).json({ error: "not_signed_in" });
+     request.userId = session.userId;
++    request.organizationId = session.organizationId;
+     return next();
+   };
+diff --git a/src/auth/session-store.ts b/src/auth/session-store.ts
+index 2013578..8fbf251 100644
+--- a/src/auth/session-store.ts
++++ b/src/auth/session-store.ts
+@@ -5,16 +5,15 @@ const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+ export interface Session {
+   readonly userId: string;
+   readonly signedInAt: string;
++  /** The organization the user is acting for, or null for their personal account. */
++  readonly organizationId: string | null;
+ }
+ 
+ const keyOf = (id: string): string => `session:${id}`;
+ 
+-const encode = (session: Session): string => `${session.userId}|${session.signedInAt}`;
++const encode = (session: Session): string => JSON.stringify(session);
+ 
+-const decode = (raw: string): Session => {
+-  const [userId = "", signedInAt = ""] = raw.split("|");
+-  return { userId, signedInAt };
+-};
++const decode = (raw: string): Session => JSON.parse(raw);
+ 
+ export const createSessionStore = (redis: RedisClient) => ({
+   async save(id: string, session: Session): Promise<void> {
+diff --git a/src/auth/sign-in.ts b/src/auth/sign-in.ts
+index 87e39c7..84d1e42 100644
+--- a/src/auth/sign-in.ts
++++ b/src/auth/sign-in.ts
+@@ -8,6 +8,10 @@ export const signIn = async (
+   user: User,
+ ): Promise<string> => {
+   const id = randomUUID();
+-  await sessions.save(id, { userId: user.id, signedInAt: new Date().toISOString() });
++  await sessions.save(id, {
++    userId: user.id,
++    signedInAt: new Date().toISOString(),
++    organizationId: user.currentOrganizationId,
++  });
+   return id;
+ };

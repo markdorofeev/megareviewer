@@ -7,7 +7,5 @@ export type Effort = (typeof EFFORTS)[number];
 export const PASS_EFFORT: Readonly<Record<ModelPass, Effort>> = {
   intent: "medium",
   findings: "high",
-  risk: "low",
-  decisions: "high",
   steps: "medium",
 };

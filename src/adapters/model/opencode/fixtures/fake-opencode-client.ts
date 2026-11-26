@@ -51,7 +51,7 @@ export const recordedReads = (
 
 const Session = z.object({ data: z.array(z.record(z.string(), z.unknown())) }).loose();
 
-const PASS = /^Task: (intent|findings|risk|decisions|steps)\./m;
+const PASS = /^Task: (intent|findings|steps)\./m;
 
 const isFailure = (answer: unknown): answer is { readonly fail: OpencodeHttpError } =>
   typeof answer === "object" && answer !== null && "fail" in answer;

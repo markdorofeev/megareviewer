@@ -28,7 +28,7 @@ import {
 } from "../src/adapters/model/index.ts";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
 import { PIPELINE_VERSION } from "../src/application/use-cases/index.ts";
-import { type Analysis, MODEL_STAGES } from "../src/domain/review/index.ts";
+import { type Analysis, FindingType, MODEL_STAGES } from "../src/domain/review/index.ts";
 import { Baseline, COMPARED, compareWithBaseline, regressedCases, toBaseline } from "./baseline.ts";
 import { type EvalCase, evalCases } from "./cases/index.ts";
 import { estimateCost } from "./cost.ts";
@@ -209,8 +209,6 @@ interface CaseResult {
     | "error"
     | "intent"
     | "findings"
-    | "risk"
-    | "decisions"
     | "flows"
     | "warnings"
     | "usage"
@@ -289,6 +287,7 @@ const runCase = async (evalCase: EvalCase, attempt: number, modelVersion: (v: st
     logger,
     timeoutMs: CASE_TIMEOUT_MS,
     guidance,
+    checkoutFiles: evalCase.checkoutFiles,
   });
   if (!result.ok) return failed(result.error, null);
   const { analysis, input } = result.value;
@@ -438,7 +437,7 @@ console.log(`\nScored ${summary.scored} of ${summary.cases} cases.\n`);
 const comparison = baseline === null ? null : compareWithBaseline(summary, baseline);
 const showDelta = (metric: string, delta: number | null | undefined, worse: boolean): string => {
   if (delta === null || delta === undefined) return "";
-  const count = metric === "mismatchFalsePositives";
+  const count = metric === "mismatchFalsePositives" || metric === "unwantedFindings";
   const amount = count ? delta.toFixed(0) : `${(delta * 100).toFixed(0)} pts`;
   return `  ${delta >= 0 ? "+" : ""}${amount}${worse ? " worse" : ""}`;
 };
@@ -452,8 +451,14 @@ for (const metric of COMPARED) {
 const ratings = countRatings(results.flatMap((result) => result.verdict ?? []));
 const tally = (counts: readonly (readonly [string, number])[]) =>
   counts.map(([rating, n]) => `${rating} ${n}`).join(" · ");
-console.log(`\nFinding ratings: ${tally(ratings.findings)}`);
-console.log(`Decision ratings: ${tally(ratings.decisions)}`);
+console.log("\nBy the finding's type:");
+for (const type of FindingType.options) {
+  console.log(
+    `  ${type.padEnd(14)} recall ${show(summary.findingRecallByType[type])}` +
+      ` · noise ${show(summary.findingNoiseByType[type])}`,
+  );
+}
+console.log(`\nFinding ratings: ${tally(ratings)}`);
 console.log(
   `\nCost at API prices: $${summary.modelCostUsd.toFixed(2)} model + $${summary.judgeCostUsd.toFixed(2)} judge, the judge's on the Claude plan` +
     ` ($${summary.modelCostPerCaseUsd.toFixed(2)} model per case).` +

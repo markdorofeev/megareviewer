@@ -22,18 +22,13 @@ describe("the answer format", () => {
   const { schema } = PASS_ANSWER_FORMAT;
   const json = JSON.stringify(schema);
 
-  it("is a union of the four passes, one variant each", () => {
-    expect(json.match(/"const":"(intent|findings|risk|decisions)"/g)).toEqual([
-      '"const":"intent"',
-      '"const":"findings"',
-      '"const":"risk"',
-      '"const":"decisions"',
-    ]);
+  it("is a union of the two passes, one variant each", () => {
+    expect(json.match(/"const":"\w+"/g)).toEqual(['"const":"intent"', '"const":"findings"']);
     expect(json).not.toContain("oneOf");
   });
 
   it("keeps the enums, so the model can't answer outside them", () => {
-    expect(json).toContain('"enum":["logic","contract"]');
+    expect(json).toContain('"enum":["minor","major","blocking"]');
     expect(json).toContain('"enum":["unrequested","missing","contradicts"]');
   });
 
@@ -44,25 +39,11 @@ describe("the answer format", () => {
     expect(intent?.required).toEqual(["summary", "shape", "behaviorChanges", "watch"]);
   });
 
-  it("asks each risk for its checking test, or null, by its test's name, lines and what it checks", () => {
-    const [risk] = objects(schema).filter(
-      (node) => isObject(node.properties) && "riskClass" in node.properties,
-    );
-    expect(risk?.required).toContain("checkedBy");
-    const [test] = objects(schema).filter(
-      (node) => isObject(node.properties) && "checks" in node.properties,
-    );
-    expect(test?.required).toEqual(["hunkId", "test", "startLine", "line", "checks"]);
-  });
-
-  it("asks each finding and each risk for the guidance that shaped it, or null", () => {
+  it("asks each finding for the guidance that shaped it, or null", () => {
     const marked = objects(schema).filter(
       (node) => isObject(node.properties) && "guidance" in node.properties,
     );
-    expect(marked.map((node) => Object.keys(node.properties ?? {})[0])).toEqual([
-      "title",
-      "hunkId",
-    ]);
+    expect(marked.map((node) => Object.keys(node.properties ?? {})[0])).toEqual(["title"]);
     for (const node of marked) {
       expect(node.required).toContain("guidance");
       expect(isObject(node.properties) ? node.properties.guidance : null).toEqual({
@@ -87,6 +68,7 @@ describe("the answer format", () => {
       title: "Serves another tenant's receipt",
       explanation: "The query has no tenant filter.",
       lines: { hunkId: "h_0123456789abcdef", side: "new", startLine: 4, line: 4 },
+      type: "contract",
       severity: "blocking",
       suggestion: null,
       mismatch: null,
@@ -110,6 +92,33 @@ describe("the answer format", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("asks for a finding's type, and reads one from before there were any as logic", () => {
+    const findings = objects(schema).filter(
+      (node) => isObject(node.properties) && "severity" in node.properties,
+    );
+    expect(findings.length).toBeGreaterThan(0);
+    for (const node of findings) {
+      expect(isObject(node.properties) && node.properties.type).toEqual({
+        type: "string",
+        enum: ["logic", "contract", "architecture"],
+      });
+      expect(node.required).toContain("type");
+    }
+    const parsed = PassAnswer.parse({
+      answer: {
+        pass: "findings",
+        findings: [
+          {
+            title: "Skips the first page",
+            explanation: "",
+            lines: { hunkId: "h_0123456789abcdef", side: "new", startLine: 4, line: 4 },
+          },
+        ],
+      },
+    });
+    expect(parsed.answer.pass === "findings" && parsed.answer.findings[0]?.type).toBe("logic");
   });
 
   it("closes every object and drops keywords structured outputs don't support", () => {
@@ -137,12 +146,10 @@ describe("toStrictJsonSchema", () => {
 describe("the answer format of a run with the tour", () => {
   const json = JSON.stringify(TOUR_PASS_ANSWER_FORMAT.schema);
 
-  it("adds the steps pass's variant after the four, which it leaves as they were", () => {
-    expect(json.match(/"const":"(intent|findings|risk|decisions|steps)"/g)).toEqual([
+  it("adds the steps pass's variant after the two, which it leaves as they were", () => {
+    expect(json.match(/"const":"\w+"/g)).toEqual([
       '"const":"intent"',
       '"const":"findings"',
-      '"const":"risk"',
-      '"const":"decisions"',
       '"const":"steps"',
     ]);
     const variants = (schema: unknown): unknown[] => {
@@ -150,7 +157,7 @@ describe("the answer format of a run with the tour", () => {
         isObject(schema) && isObject(schema.properties) ? schema.properties.answer : null;
       return isObject(answer) && Array.isArray(answer.anyOf) ? answer.anyOf : [];
     };
-    expect(variants(TOUR_PASS_ANSWER_FORMAT.schema).slice(0, 4)).toEqual(
+    expect(variants(TOUR_PASS_ANSWER_FORMAT.schema).slice(0, 2)).toEqual(
       variants(PASS_ANSWER_FORMAT.schema),
     );
   });
@@ -161,7 +168,7 @@ describe("the answer format of a run with the tour", () => {
     expect(passAnswerFormat(true)).toBe(TOUR_PASS_ANSWER_FORMAT);
   });
 
-  it("parses a steps answer, and every answer of the four", () => {
+  it("parses a steps answer, and refuses a step without an excerpt", () => {
     const step = {
       sentence: "A token is saved",
       excerpts: [{ hunkId: "h_0123456789abcdef", side: "new", startLine: 1, line: 4 }],

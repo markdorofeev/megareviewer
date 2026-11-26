@@ -123,32 +123,26 @@ describe("tourOf", () => {
     expect(tour.spans).toEqual([{ step: 2, keys: [from?.key, to?.key] }]);
   });
 
-  it("chips the points on a step's lines, findings first, decisions too", () => {
-    const [route, cache] = view().steps;
-    expect(route?.points.map((point) => [point.kind, point.id])).toEqual(
-      expect.arrayContaining([
-        ["finding", "f1"],
-        ["decision", "d1"],
-      ]),
-    );
-    expect(route?.points[0]?.kind).toBe("finding");
-    expect(cache?.points.map((point) => point.id)).toContain("f2");
+  it("chips the points on a step's lines", () => {
+    const [route, cache, retry] = view().steps;
+    expect(route?.points.map((point) => point.id)).toEqual(["f1"]);
+    expect(cache?.points.map((point) => point.id)).toEqual(["f2"]);
+    expect(retry?.points.map((point) => point.id)).toEqual(["f3"]);
   });
 
-  it("lists the findings and risks outside the steps, never decisions", () => {
-    const tour = view();
-    const chipped = new Set(tour.steps.flatMap((one) => one.points.map((point) => point.id)));
-    expect(tour.outside.every((point) => point.kind !== "decision")).toBe(true);
-    expect(tour.outside.every((point) => !chipped.has(point.id))).toBe(true);
+  it("lists the findings outside the steps", () => {
+    const tour = view({ steps: (analysis.steps ?? []).slice(1) });
+    expect(tour.outside.map((point) => point.id)).toEqual(["f1"]);
+    expect(tour.depth.findingsOutside).toBe(1);
   });
 
-  it("suggests reading the steps with an open finding or an unchecked risk", () => {
+  it("suggests reading the steps with an open finding", () => {
     const tour = view();
     expect(tour.depth.read).toEqual([1, 2, 3]);
     const dismissed = tourOf(analysis, overview, points, (point) =>
-      point.kind === "finding" ? "dismissed" : "open",
+      point.id === "f3" ? "dismissed" : "open",
     );
-    expect(dismissed?.depth.read).not.toContain(3);
+    expect(dismissed?.depth.read).toEqual([1, 2]);
   });
 
   it("is no tour under three steps", () => {
@@ -183,8 +177,6 @@ describe("noTourOf", () => {
         ...skipped,
         intent: "skipped" as const,
         findings: "skipped" as const,
-        risk: "skipped" as const,
-        decisions: "skipped" as const,
       },
       usage: [],
     };
@@ -205,24 +197,19 @@ describe("noTourOf", () => {
 });
 
 describe("depthText", () => {
-  const depth = (read: number[], findingsOutside: number, risksOutside: number) =>
-    depthText({ read, findingsOutside, risksOutside });
+  const depth = (read: number[], findingsOutside: number) => depthText({ read, findingsOutside });
 
-  it("names the steps to read, and leaves a zero count out", () => {
-    expect(depth([1, 2, 3], 0, 1)).toBe(
-      "Read steps 1, 2 and 3 in the code: each has an open finding or a risk no test checks. 1 risk is outside the steps.",
+  it("names the steps to read, then what's outside them", () => {
+    expect(depth([1, 2, 3], 1)).toBe(
+      "Read steps 1, 2 and 3 in the code: each has an open finding. 1 finding is outside the steps.",
     );
-    expect(depth([2], 2, 0)).toBe(
-      "Read step 2 in the code: it has an open finding or a risk no test checks. 2 findings are outside the steps.",
+    expect(depth([2], 2)).toBe(
+      "Read step 2 in the code: it has an open finding. 2 findings are outside the steps.",
     );
-    expect(depth([], 1, 2)).toBe(
-      "No step has an open finding or a risk no test checks. 1 finding and 2 risks are outside the steps.",
-    );
+    expect(depth([], 1)).toBe("No step has an open finding. 1 finding is outside the steps.");
   });
 
   it("says nothing of outside the steps when nothing is", () => {
-    expect(depth([1], 0, 0)).toBe(
-      "Read step 1 in the code: it has an open finding or a risk no test checks.",
-    );
+    expect(depth([1], 0)).toBe("Read step 1 in the code: it has an open finding.");
   });
 });

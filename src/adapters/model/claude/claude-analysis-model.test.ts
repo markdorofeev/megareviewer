@@ -6,7 +6,7 @@ import {
   smallFeatureInput,
   smallFeatureIntent,
 } from "../../../application/testing/index.ts";
-import type { ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
+import { type ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import { GUIDANCE_BLOCK, withGuidance } from "../shared/fixtures/guidance.ts";
 import { passSchema } from "../shared/prompted-answer.ts";
 import { createClaudeAnalysisModel } from "./claude-analysis-model.ts";
@@ -51,11 +51,9 @@ const runPass = (pass: ModelPass, answer: FixtureAnswer, feedback?: readonly str
   const result =
     pass === "intent"
       ? model.intent(smallFeatureInput, options)
-      : pass === "risk"
-        ? model.risk(smallFeatureInput, options)
-        : pass === "decisions"
-          ? model.decisions(smallFeatureInput, options)
-          : model.findings(smallFeatureInput, smallFeatureIntent, options);
+      : pass === "steps"
+        ? model.steps(smallFeatureInput, options)
+        : model.findings(smallFeatureInput, smallFeatureIntent, options);
   return { ...setup, result };
 };
 
@@ -73,25 +71,20 @@ describe("ClaudeAnalysisModel", () => {
     expect(answering).toBe(1);
   });
 
-  it("returns the guidance a finding and a risk name, and null for the others", async () => {
+  it("returns the guidance a finding names, and null for one that names none", async () => {
     const { model } = modelWith(recorded());
     const findings = await model.findings(guidedInput, smallFeatureIntent);
-    const risks = await model.risk(guidedInput);
-    if (!findings.ok || !risks.ok) throw new Error("expected both passes to answer");
+    if (!findings.ok) throw new Error(findings.error.message);
     expect(findings.value.value.map((finding) => finding.guidance)).toEqual([
       { ref: "p1", effect: "raised" },
       null,
-    ]);
-    expect(risks.value.value.map((risk) => risk.guidance)).toEqual([
-      { ref: "p2", effect: "left-out" },
-      ...Array(5).fill(null),
     ]);
   });
 
   it("sends the reviewer's guidance before the PR, in the cached block every pass shares", async () => {
     const { model, requests } = modelWith(recorded());
     await model.intent(guidedInput);
-    await model.risk(guidedInput);
+    await model.findings(guidedInput, smallFeatureIntent);
     const blocks = requests.map((request) => request.body.messages[0]?.content[0]?.text ?? "");
     expect(blocks[0]).toMatch(GUIDANCE_BLOCK);
     expect(blocks[0]?.startsWith("<reviewer_guidance>")).toBe(true);
@@ -109,8 +102,8 @@ describe("ClaudeAnalysisModel", () => {
     const runAllPasses = async () => {
       const { model, requests } = modelWith(recorded());
       await model.intent(smallFeatureInput);
-      await model.risk(smallFeatureInput);
-      await model.decisions(smallFeatureInput);
+      await model.findings(smallFeatureInput, smallFeatureIntent);
+      await model.steps(smallFeatureInput, { tour: true });
       return requests;
     };
 
@@ -143,7 +136,7 @@ describe("ClaudeAnalysisModel", () => {
     it("sets each pass's effort after the cached prefix", async () => {
       const requests = await runAllPasses();
       expect(requests.map((request) => request.body.messages[1])).toEqual(
-        ["medium", "low", "high"].map((effort) => ({
+        ["medium", "high", "medium"].map((effort) => ({
           role: "system",
           content: [],
           output_config: { effort },
@@ -175,7 +168,7 @@ describe("ClaudeAnalysisModel", () => {
 
     it("ends each pass's task with the schema of its own answer", async () => {
       const requests = await runAllPasses();
-      for (const [index, pass] of (["intent", "risk", "decisions"] as const).entries()) {
+      for (const [index, pass] of ModelPass.options.entries()) {
         const task = requests[index]?.body.messages[2]?.content[0]?.text ?? "";
         expect(task).toMatch(/Answer with one JSON object and nothing else/);
         expect(task.endsWith(JSON.stringify(passSchema(pass)))).toBe(true);
@@ -199,49 +192,53 @@ describe("ClaudeAnalysisModel", () => {
       expect(task.endsWith(JSON.stringify(passSchema("steps")))).toBe(true);
     });
 
-    it("asks each pass for its own task alone, so the passes can run side by side", async () => {
+    it("asks each pass for its own task, and only the findings with the intent's answer", async () => {
       const requests = await runAllPasses();
       const instructions = requests.map(
         (request) => request.body.messages[2]?.content[0]?.text ?? "",
       );
-      expect(instructions.map((text) => /^Task: (\w+)\./.exec(text)?.[1])).toEqual([
+      expect(instructions.map((text) => /^Task: (\w+)\./m.exec(text)?.[1])).toEqual([
         "intent",
-        "risk",
-        "decisions",
+        "findings",
+        "steps",
       ]);
-      for (const text of instructions) expect(text).not.toContain("<earlier_results>");
+      expect(instructions.map((text) => text.includes("<earlier_results>"))).toEqual([
+        false,
+        true,
+        false,
+      ]);
     });
 
     it("appends the feedback on the previous answer when given", async () => {
       const instruction = async (feedback?: readonly string[]) => {
-        const { result, requests } = runPass("risk", smallFeature.passes.risk, feedback);
+        const { result, requests } = runPass("findings", smallFeature.passes.findings, feedback);
         await result;
         return requests[0]?.body.messages[2]?.content[0]?.text ?? "";
       };
       expect(await instruction(["h_1 is not a hunk", "h_2 missing"])).toMatch(
         /\n\nYour previous answer had these problems: h_1 is not a hunk; h_2 missing\. Fix them\.\n\nAnswer with one JSON object/,
       );
-      expect(await instruction()).toMatch(/^Task: risk\.$/m);
+      expect(await instruction()).toMatch(/^Task: findings\.$/m);
       expect(await instruction()).not.toContain("previous answer");
     });
   });
 
   describe("usage", () => {
     it("reports tokens and cost per pass", async () => {
-      const { result, logger } = runPass("risk", smallFeature.passes.risk);
+      const { result, logger } = runPass("findings", smallFeature.passes.findings);
       const output = await result;
       if (!output.ok) throw new Error(output.error.message);
 
       const tokens = {
-        inputTokens: 238,
+        inputTokens: 244,
         cacheReadTokens: 6012,
         cacheWriteTokens: 0,
-        outputTokens: 261,
+        outputTokens: 688,
       };
       const price = PRICES["claude-haiku-5-5"];
       if (price === undefined) throw new Error("no price for the model");
       expect(output.value.usage).toEqual({
-        pass: "risk",
+        pass: "findings",
         ...tokens,
         costUsd: costUsd(price, tokens),
         billing: "api",
@@ -249,7 +246,7 @@ describe("ClaudeAnalysisModel", () => {
       expect(logger.entries).toContainEqual(
         expect.objectContaining({
           level: "info",
-          fields: expect.objectContaining({ pass: "risk", model: "claude-haiku-5-5" }),
+          fields: expect.objectContaining({ pass: "findings", model: "claude-haiku-5-5" }),
         }),
       );
     });
@@ -284,7 +281,7 @@ describe("ClaudeAnalysisModel", () => {
       failsWith("intent", errors.messages.refusal, "refusal", /category: cyber/));
 
     it("reports an answer cut off at the output limit", () =>
-      failsWith("decisions", errors.messages.maxTokens, "max-tokens", /64000/));
+      failsWith("findings", errors.messages.maxTokens, "max-tokens", /64000/));
 
     it("reports an answer that isn't JSON", () =>
       failsWith("intent", errors.messages.malformed, "invalid-output", /isn't one JSON object/));
@@ -299,14 +296,14 @@ describe("ClaudeAnalysisModel", () => {
     });
 
     it("reports an answer outside the schema", () =>
-      failsWith("risk", errors.messages.outsideSchema, "invalid-output", /riskClass/));
+      failsWith("findings", errors.messages.outsideSchema, "invalid-output", /severity/));
 
     it("reports an answer to another pass", () =>
       failsWith(
-        "risk",
+        "findings",
         errors.messages.wrongPass,
         "invalid-output",
-        /intent task instead of risk/,
+        /intent task instead of findings/,
       ));
 
     it.each([
@@ -317,7 +314,7 @@ describe("ClaudeAnalysisModel", () => {
       ["server error", errors.http.serverError, "overloaded"],
       ["bad request", errors.http.badRequest, "unexpected"],
       ["no network", "no-network", "network"],
-    ] as const)("maps %s", (_, answer, kind) => failsWith("decisions", answer, kind));
+    ] as const)("maps %s", (_, answer, kind) => failsWith("findings", answer, kind));
 
     it("logs the failure", async () => {
       const { result, logger } = runPass("intent", errors.http.overloaded);
@@ -358,7 +355,7 @@ describe("ClaudeAnalysisModel", () => {
     };
     /** The model asking for files, after thinking, as a round of reading starts. */
     const asks = (...inputs: readonly unknown[]): FixtureMessage => ({
-      ...smallFeature.passes.risk,
+      ...smallFeature.passes.findings,
       content: [
         { type: "thinking", thinking: "", signature: "c2lnbmF0dXJl" },
         { type: "text", text: "Reading the rules {first}." },
@@ -373,12 +370,15 @@ describe("ClaudeAnalysisModel", () => {
       usage,
     });
 
-    const riskWith = async (
+    const findingsWith = async (
       answers: readonly FixtureAnswer[],
-      options?: Parameters<ReturnType<typeof modelWith>["model"]["risk"]>[1],
+      options?: Parameters<ReturnType<typeof modelWith>["model"]["findings"]>[2],
     ) => {
-      const setup = modelWith({ passes: { risk: answers } });
-      return { ...setup, result: await setup.model.risk(reading, options) };
+      const setup = modelWith({ passes: { findings: answers } });
+      return {
+        ...setup,
+        result: await setup.model.findings(reading, smallFeatureIntent, options),
+      };
     };
 
     const resultsIn = (request: RecordedRequest | undefined) =>
@@ -423,12 +423,12 @@ describe("ClaudeAnalysisModel", () => {
     });
 
     it("serves one read, then takes the answer, with what was read", async () => {
-      const { result, requests } = await riskWith([
+      const { result, requests } = await findingsWith([
         asks({ path: RULES }),
-        smallFeature.passes.risk,
+        smallFeature.passes.findings,
       ]);
       if (!result.ok) throw new Error(result.error.message);
-      expect(result.value.value).toHaveLength(6);
+      expect(result.value.value).toHaveLength(2);
       expect(result.value.reads).toEqual([
         { path: RULES, fromLine: null, toLine: null, outcome: "read" },
       ]);
@@ -454,16 +454,16 @@ describe("ClaudeAnalysisModel", () => {
     });
 
     it("takes only the last round's text as the answer", async () => {
-      const { result } = await riskWith([asks({ path: RULES }), errors.messages.malformed]);
+      const { result } = await findingsWith([asks({ path: RULES }), errors.messages.malformed]);
       if (result.ok) throw new Error("expected no answer");
       expect(result.error.kind).toBe("invalid-output");
       expect(result.error.reads).toHaveLength(1);
     });
 
     it("answers a round's parallel reads in one message, the last of them cached", async () => {
-      const { result, requests } = await riskWith([
+      const { result, requests } = await findingsWith([
         asks({ path: RULES }, { path: PLAN, first_line: 3, last_line: 3 }, { path: "/etc/hosts" }),
-        smallFeature.passes.risk,
+        smallFeature.passes.findings,
       ]);
       if (!result.ok) throw new Error(result.error.message);
       expect(result.value.reads).toEqual([
@@ -481,9 +481,9 @@ describe("ClaudeAnalysisModel", () => {
     });
 
     it("goes on after a refused path, recorded as refused", async () => {
-      const { result, requests } = await riskWith([
+      const { result, requests } = await findingsWith([
         asks({ path: "../../.ssh/id_rsa" }),
-        smallFeature.passes.risk,
+        smallFeature.passes.findings,
       ]);
       expect(result.ok && result.value.reads).toEqual([
         { path: "../../.ssh/id_rsa", fromLine: null, toLine: null, outcome: "refused" },
@@ -494,13 +494,13 @@ describe("ClaudeAnalysisModel", () => {
     const reads = (times: number) => Array.from({ length: times }, () => asks({ path: RULES }));
 
     it("reads for eight rounds and answers on the next", async () => {
-      const { result, requests } = await riskWith([...reads(8), smallFeature.passes.risk]);
+      const { result, requests } = await findingsWith([...reads(8), smallFeature.passes.findings]);
       expect(result.ok && result.value.reads).toHaveLength(8);
       expect(requests).toHaveLength(9);
     });
 
     it("never sends more than the API's four breakpoints: the PR's and the latest rounds'", async () => {
-      const { requests } = await riskWith([...reads(8), smallFeature.passes.risk]);
+      const { requests } = await findingsWith([...reads(8), smallFeature.passes.findings]);
       expect(requests.map(breakpoints)).toEqual([1, 2, 3, 4, 4, 4, 4, 4, 4]);
       for (const request of requests) {
         expect(request.body.messages[0]?.content[0]).toHaveProperty("cache_control");
@@ -511,7 +511,7 @@ describe("ClaudeAnalysisModel", () => {
     });
 
     it("fails as a reader's when the rounds run out, with what it read", async () => {
-      const { result, requests } = await riskWith(reads(9));
+      const { result, requests } = await findingsWith(reads(9));
       if (result.ok) throw new Error("expected the rounds to run out");
       expect(result.error).toMatchObject({
         kind: "reader",
@@ -522,7 +522,7 @@ describe("ClaudeAnalysisModel", () => {
     });
 
     it("fails as a reader's when the API refuses the request with what it read", async () => {
-      const { result } = await riskWith([asks({ path: RULES }), errors.http.badRequest]);
+      const { result } = await findingsWith([asks({ path: RULES }), errors.http.badRequest]);
       if (result.ok) throw new Error("expected the request to be refused");
       expect(result.error.kind).toBe("reader");
       expect(result.error.message).toMatch(/^The API refused what it read: Anthropic answered 400/);
@@ -530,9 +530,9 @@ describe("ClaudeAnalysisModel", () => {
     });
 
     it("fails as a reader's when what it read fills the context window", async () => {
-      const { result } = await riskWith([
+      const { result } = await findingsWith([
         asks({ path: RULES }),
-        { ...smallFeature.passes.risk, stop_reason: "model_context_window_exceeded" },
+        { ...smallFeature.passes.findings, stop_reason: "model_context_window_exceeded" },
       ]);
       expect(result.ok ? null : result.error.kind).toBe("reader");
     });
@@ -545,7 +545,7 @@ describe("ClaudeAnalysisModel", () => {
     ] as const)(
       "keeps a later round's own failure, a %s, with what it read",
       async (_, answer, kind) => {
-        const { result } = await riskWith([asks({ path: RULES }), answer]);
+        const { result } = await findingsWith([asks({ path: RULES }), answer]);
         if (result.ok) throw new Error("expected the pass to fail");
         expect(result.error.kind).toBe(kind);
         expect(result.error.reads).toHaveLength(1);
@@ -554,7 +554,7 @@ describe("ClaudeAnalysisModel", () => {
 
     it("says once that the answer has begun, on the first round", async () => {
       let answering = 0;
-      await riskWith([...reads(2), smallFeature.passes.risk], {
+      await findingsWith([...reads(2), smallFeature.passes.findings], {
         onAnswering: () => {
           answering += 1;
         },
@@ -564,7 +564,7 @@ describe("ClaudeAnalysisModel", () => {
 
     it("adds up the rounds' usage, each priced on its own", async () => {
       const long = { ...asks({ path: RULES }), usage: { ...usage, input_tokens: 100_000 } };
-      const { result, logger } = await riskWith([long, smallFeature.passes.risk]);
+      const { result, logger } = await findingsWith([long, smallFeature.passes.findings]);
       if (!result.ok) throw new Error(result.error.message);
       const price = PRICES["claude-haiku-5-5"];
       if (price === undefined) throw new Error("no price for the model");
@@ -575,17 +575,17 @@ describe("ClaudeAnalysisModel", () => {
         outputTokens: 40,
       };
       const last = {
-        inputTokens: 238,
+        inputTokens: 244,
         cacheReadTokens: 6012,
         cacheWriteTokens: 0,
-        outputTokens: 261,
+        outputTokens: 688,
       };
       expect(result.value.usage).toEqual({
-        pass: "risk",
-        inputTokens: 100_238,
+        pass: "findings",
+        inputTokens: 100_244,
         cacheReadTokens: 12_012,
         cacheWriteTokens: 100,
-        outputTokens: 301,
+        outputTokens: 728,
         costUsd: costUsd(price, first) + costUsd(price, last),
         billing: "api",
       });
@@ -594,8 +594,8 @@ describe("ClaudeAnalysisModel", () => {
           .filter((entry) => entry.message === "Model round finished")
           .map((entry) => entry.fields),
       ).toEqual([
-        expect.objectContaining({ pass: "risk", round: 1, ...first }),
-        expect.objectContaining({ pass: "risk", round: 2, ...last }),
+        expect.objectContaining({ pass: "findings", round: 1, ...first }),
+        expect.objectContaining({ pass: "findings", round: 2, ...last }),
       ]);
     });
 
@@ -603,10 +603,8 @@ describe("ClaudeAnalysisModel", () => {
       const { model, requests } = modelWith(recorded());
       await model.intent(reading);
       await model.findings(reading, smallFeatureIntent);
-      await model.risk(reading);
-      await model.decisions(reading);
       await model.steps(reading, { tour: true });
-      expect(requests).toHaveLength(5);
+      expect(requests).toHaveLength(3);
       const prefix = ({ body }: RecordedRequest) => {
         const { messages, ...settings } = body;
         return JSON.stringify([settings, messages[0]]);
@@ -625,8 +623,8 @@ describe("ClaudeAnalysisModel", () => {
 
     it("sends what a run without a harness does when run without the reader", async () => {
       const { model, requests } = modelWith(recorded());
-      const result = await model.risk(reading, { withoutReader: true });
-      await model.risk(smallFeatureInput);
+      const result = await model.intent(reading, { withoutReader: true });
+      await model.intent(smallFeatureInput);
       expect(result.ok && result.value.reads).toBeUndefined();
       expect(requests[0]?.body).toEqual(requests[1]?.body);
       expect(requests[0]?.body).not.toHaveProperty("tools");

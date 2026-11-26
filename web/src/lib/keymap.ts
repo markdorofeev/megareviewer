@@ -66,7 +66,7 @@ export const KEYMAP: readonly Shortcut[] = [
   {
     id: "comment",
     chords: [{ key: "c" }],
-    action: "Comment on the selected decision, or on the focused change",
+    action: "Comment on the focused change",
     scope: "diff",
   },
   {

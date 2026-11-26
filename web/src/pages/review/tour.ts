@@ -44,7 +44,7 @@ export interface TourStep {
   /** The directories it reaches, by the overview's node keys: one, or two across a process. */
   readonly boxes: readonly string[];
   readonly excerpts: readonly TourExcerpt[];
-  /** Claude's points on its lines, findings, then risks, then decisions. */
+  /** Claude's points on its lines. */
   readonly points: readonly Point[];
 }
 
@@ -86,7 +86,7 @@ export interface TourView {
   readonly others: readonly (TourBox & { readonly group: LedgerGroupId | null })[];
   /** What the tour didn't show, a group each, empty ones left out. */
   readonly ledger: readonly LedgerGroup[];
-  /** Claude's findings and risks no step shows. */
+  /** Claude's findings no step shows. */
   readonly outside: readonly Point[];
   readonly depth: Depth;
   /** Changed lines: the steps' and the pull request's. */
@@ -95,13 +95,12 @@ export interface TourView {
 }
 
 /**
- * Where to read in the code, by rule: the steps with an open finding or a risk no test checks,
- * and how many findings and risks are outside the steps.
+ * Where to read in the code, by rule: the steps with an open finding, and how many findings are
+ * outside the steps.
  */
 export interface Depth {
   readonly read: readonly number[];
   readonly findingsOutside: number;
-  readonly risksOutside: number;
 }
 
 const LEDGER_LABELS: Readonly<Record<LedgerGroupId, string>> = {
@@ -199,9 +198,7 @@ export const tourOf = (
       sentence: step.sentence,
       boxes: [...new Set(excerpts.map((excerpt) => boxOf(excerpt.path)))],
       excerpts,
-      points: (["finding", "risk", "decision"] as const).flatMap((kind) =>
-        onIt.filter((point) => point.kind === kind),
-      ),
+      points: onIt,
     };
   });
 
@@ -277,21 +274,10 @@ export const tourOf = (
 
   const chipped = new Set(steps.flatMap((step) => step.points.map((point) => point.id)));
   const outside = points.filter(
-    (point) =>
-      (point.kind === "finding" || point.kind === "risk") &&
-      point.guidance?.effect !== "left-out" &&
-      !chipped.has(point.id),
+    (point) => point.guidance?.effect !== "left-out" && !chipped.has(point.id),
   );
   const open = (point: Point) => stateOf(point) !== "dismissed";
-  const read = steps
-    .filter((step) =>
-      step.points.some(
-        (point) =>
-          open(point) &&
-          (point.kind === "finding" || (point.kind === "risk" && point.checkedBy === undefined)),
-      ),
-    )
-    .map((step) => step.number);
+  const read = steps.filter((step) => step.points.some(open)).map((step) => step.number);
   const total = analysis.files.reduce(
     (sum, file) => sum + file.hunks.reduce((lines, hunk) => lines + changed(hunk), 0),
     0,
@@ -303,11 +289,7 @@ export const tourOf = (
     others,
     ledger,
     outside,
-    depth: {
-      read,
-      findingsOutside: outside.filter((point) => point.kind === "finding" && open(point)).length,
-      risksOutside: outside.filter((point) => point.kind === "risk" && open(point)).length,
-    },
+    depth: { read, findingsOutside: outside.filter(open).length },
     shown: shownRows.size,
     total,
   };
@@ -345,16 +327,11 @@ export const listOf = (numbers: readonly number[]): string =>
 
 /** The suggested depth in words: the steps to read, then what's outside them, a zero left out. */
 export const depthText = (depth: Depth): string => {
-  const { read, findingsOutside, risksOutside } = depth;
+  const { read, findingsOutside } = depth;
   const steps =
     read.length === 0
-      ? "No step has an open finding or a risk no test checks."
-      : `Read ${read.length === 1 ? "step" : "steps"} ${listOf(read)} in the code: ${read.length === 1 ? "it has" : "each has"} an open finding or a risk no test checks.`;
-  const outside = [
-    ...(findingsOutside > 0 ? [counted(findingsOutside, "finding")] : []),
-    ...(risksOutside > 0 ? [counted(risksOutside, "risk")] : []),
-  ];
-  if (outside.length === 0) return steps;
-  const many = outside.length > 1 || findingsOutside + risksOutside > 1;
-  return `${steps} ${outside.join(" and ")} ${many ? "are" : "is"} outside the steps.`;
+      ? "No step has an open finding."
+      : `Read ${read.length === 1 ? "step" : "steps"} ${listOf(read)} in the code: ${read.length === 1 ? "it has" : "each has"} an open finding.`;
+  if (findingsOutside === 0) return steps;
+  return `${steps} ${counted(findingsOutside, "finding")} ${findingsOutside === 1 ? "is" : "are"} outside the steps.`;
 };

@@ -3,6 +3,7 @@ import {
   type AnalysisInputFile,
   type InputGuidance,
   type InputHarness,
+  type InputUnchangedCallers,
   MAX_READ_ROUNDS,
 } from "../../../application/ports/index.ts";
 import type { DiffLine, Hunk } from "../../../domain/diff/index.ts";
@@ -27,10 +28,11 @@ const TAGS = [
   "mechanical_hunk",
   "file_content",
   "call_graph",
+  "unchanged_callers",
+  "changed_definition",
+  "unchanged_use",
   "earlier_results",
   "intent",
-  "risk",
-  "decisions",
   "tour_skeleton",
   "step",
 ];
@@ -98,6 +100,24 @@ const renderFile = (file: AnalysisInputFile): string => {
         ];
   return [open, ...file.hunks.map(renderHunk), ...mechanical, ...content, "</file>"].join("\n");
 };
+
+/** Each use's lines by their numbers in the file, as a hunk's are. */
+const renderCallers = ({ symbol, hunkId, uses, more }: InputUnchangedCallers): string =>
+  [
+    `<changed_definition${attributes({ symbol, hunk: hunkId })}>`,
+    ...uses.map(({ path, line, use, excerpt }) => {
+      const width = String(excerpt.start + excerpt.lines.length - 1).length;
+      return [
+        `<unchanged_use${attributes({ file: path, line, kind: use })}>`,
+        ...excerpt.lines.map(
+          (text, index) => `${String(excerpt.start + index).padStart(width)} | ${escapeText(text)}`,
+        ),
+        "</unchanged_use>",
+      ].join("\n");
+    }),
+    ...(more === 0 ? [] : [`and ${more} more`]),
+    "</changed_definition>",
+  ].join("\n");
 
 const block = (tag: string, lines: readonly string[]): string[] => [
   `<${tag}>`,
@@ -182,7 +202,7 @@ const renderGuidance = (
  * full; mechanical ones as stats only.
  */
 export const renderInput = (input: AnalysisInput): string => {
-  const { pullRequest, tickets, files, callGraph } = input;
+  const { pullRequest, tickets, files, callGraph, unchangedCallers } = input;
   const lines = [
     ...renderGuidance(input.guidance, input.harness),
     "<pull_request_data>",
@@ -217,6 +237,9 @@ export const renderInput = (input: AnalysisInput): string => {
         ({ fromPartId, toPartId, symbol }) => `${fromPartId} → ${toPartId} (${escapeText(symbol)})`,
       ),
     ),
+    ...(unchangedCallers.length === 0
+      ? []
+      : block("unchanged_callers", unchangedCallers.map(renderCallers))),
     "</pull_request_data>",
   ];
   return lines.join("\n");

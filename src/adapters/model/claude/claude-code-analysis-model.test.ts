@@ -89,7 +89,7 @@ describe("ClaudeCodeAnalysisModel", () => {
     const { model, calls } = modelWith(recorded, { effort: "medium" });
     expect(model.version).toMatch(/^claude-code\/claude-haiku-5-5@medium\/p\d+$/);
     await model.intent(smallFeatureInput);
-    await model.decisions(smallFeatureInput);
+    await model.findings(smallFeatureInput, smallFeatureIntent);
     const efforts = calls.map((call) => call.args[call.args.indexOf("--effort") + 1]);
     expect(efforts).toEqual(["medium", "medium"]);
   });
@@ -122,14 +122,18 @@ describe("ClaudeCodeAnalysisModel", () => {
   it("runs every pass with the same system prompt file, which holds the PR data", async () => {
     const { model, calls } = modelWith();
     await model.intent(smallFeatureInput);
-    await model.risk(smallFeatureInput);
-    await model.decisions(smallFeatureInput);
+    await model.findings(smallFeatureInput, smallFeatureIntent);
+    await model.steps(smallFeatureInput);
     expect(calls).toHaveLength(3);
     const prompts = calls.map((call) => call.options.files?.[SYSTEM_PROMPT_FILE]);
     expect(new Set(prompts).size).toBe(1);
     expect(prompts[0]).toContain("<pull_request_data>");
-    expect(calls[1]?.options.stdin).toMatch(/^Task: risk\./m);
-    expect(calls[1]?.options.stdin).not.toContain("<earlier_results>");
+    expect(calls[1]?.options.stdin).toMatch(/^Task: findings\./m);
+    expect(calls.map((call) => call.options.stdin?.includes("<earlier_results>"))).toEqual([
+      false,
+      true,
+      false,
+    ]);
   });
 
   it("puts the reviewer's guidance in that file, before the PR, the same for every pass", async () => {
@@ -149,13 +153,6 @@ describe("ClaudeCodeAnalysisModel", () => {
       { ref: "p1", effect: "raised" },
       null,
     ]);
-  });
-
-  it("reads a risk recorded before there was guidance as having none", async () => {
-    const result = await modelWith().model.risk(smallFeatureInput);
-    if (!result.ok) throw new Error(result.error.message);
-    expect(result.value.value.length).toBeGreaterThan(0);
-    expect(result.value.value.every((risk) => risk.guidance === null)).toBe(true);
   });
 
   it("reports what the pass used, at API prices, billed to the plan", async () => {
@@ -179,7 +176,7 @@ describe("ClaudeCodeAnalysisModel", () => {
   });
 
   it("fails an answer to another pass as invalid output", async () => {
-    await expectFailure(recordedLines("risk"), "invalid-output", /answered the risk task/);
+    await expectFailure(recordedLines("findings"), "invalid-output", /answered the findings task/);
   });
 
   describe("with a harness to read", () => {
@@ -209,7 +206,7 @@ describe("ClaudeCodeAnalysisModel", () => {
       expect(made?.options.files?.["work/harness/docs/rules.md"]).toBe("# Rules\n");
       expect(made?.options.files?.[SYSTEM_PROMPT_FILE]).toContain("<readable_files>");
       expect(made?.options.stdin).not.toContain("First go through <readable_files>");
-      await model.decisions(reading);
+      await model.steps(reading);
       expect(calls[1]?.options.stdin).toContain("First go through <readable_files>");
     });
 
@@ -226,7 +223,7 @@ describe("ClaudeCodeAnalysisModel", () => {
     it("says what a pass whose answer doesn't parse had read", async () => {
       const { model } = modelWith(() => [
         ...recordedLines("reads").slice(0, -1),
-        ...recorded("risk").slice(1),
+        ...recorded("findings").slice(1),
       ]);
       const result = await model.intent(reading);
       if (result.ok) throw new Error("expected the wrong pass's answer to fail");

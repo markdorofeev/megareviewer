@@ -35,8 +35,6 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
       prep: status("prep"),
       intent: status("intent"),
       findings: status("findings"),
-      risk: status("risk"),
-      decisions: status("decisions"),
       steps: "skipped",
     },
     pullRequest: done("collect") ? analysis.pullRequest : null,
@@ -48,15 +46,13 @@ export const analysisInProgress = (analysis: Analysis, stagesDone: number): Anal
     callGraph: done("prep") ? analysis.callGraph : [],
     intent: done("intent") ? analysis.intent : null,
     findings: done("findings") ? analysis.findings : [],
-    risk: done("risk")
-      ? analysis.risk
-      : done("prep")
-        ? analysis.risk.filter((assessment) => assessment.source === "proof")
-        : [],
-    decisions: done("decisions") ? analysis.decisions : [],
+    risk: done("prep") ? analysis.risk : [],
     flows: done("prep") ? analysis.flows : null,
     warnings: [],
-    usage: analysis.usage.filter((usage) => usage.pass !== "guardrails" && done(usage.pass)),
+    usage: analysis.usage.filter(({ pass }) => {
+      const stage = StageName.safeParse(pass);
+      return stage.success && done(stage.data);
+    }),
     error: null,
   };
 };

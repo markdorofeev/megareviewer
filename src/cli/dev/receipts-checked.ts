@@ -1,7 +1,6 @@
 import type {
   AdviceDraft,
   AnalysisInput,
-  AnalysisModel,
   FindingDraft,
   GuardrailAdvisor,
 } from "../../application/ports/index.ts";
@@ -12,7 +11,7 @@ import {
 } from "../../application/testing/index.ts";
 import { pullRequestUrl, sameRepo } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
-import { hunkWith, lineOf } from "./receipts-tested.ts";
+import { hunkWith, lineOf } from "./hunks.ts";
 
 const repo = { ...smallFeature.pullRequest.ref.repo, repo: "checkout" };
 const ref = { repo, number: 31 };
@@ -59,19 +58,17 @@ export const checkedAdvisor = (delayMs = MARKS_DELAY_MS): GuardrailAdvisor => {
       // After the landing, so the page is seen putting the marks in without moving the code.
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       const answer: AdviceDraft = {
-        marks: input.points
-          .filter((point) => point.kind === "finding")
-          .map((point) => ({
-            point: point.ref,
-            guardrail: {
-              kind: "lint-rule",
-              tool: "biome",
-              engine: "Biome",
-              rule: "noMisusedPromises",
-              on: false,
-              does: "Reports a promise passed where its result is ignored.",
-            },
-          })),
+        marks: input.points.map((point) => ({
+          point: point.ref,
+          guardrail: {
+            kind: "lint-rule",
+            tool: "biome",
+            engine: "Biome",
+            rule: "noMisusedPromises",
+            on: false,
+            does: "Reports a promise passed where its result is ignored.",
+          },
+        })),
       };
       return ok({ ...answered.value, value: answer });
     },
@@ -79,7 +76,7 @@ export const checkedAdvisor = (delayMs = MARKS_DELAY_MS): GuardrailAdvisor => {
 };
 
 /** The fake model's finding on the checked PR, which a Biome rule would have caught. */
-const findingsOf = (input: AnalysisInput): FindingDraft[] => {
+export const checkedFindings = (input: AnalysisInput): FindingDraft[] => {
   const route = hunkWith(input, "src/routes/orders.ts", 'get("/orders/:id/receipt"');
   if (route === undefined) return [];
   const line = lineOf(route, 'get("/orders/:id/receipt"');
@@ -89,6 +86,7 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
       explanation:
         "Express 4 ignores the promise an `async` handler returns, so when `findOrder` rejects, nothing answers the request.",
       lines: { hunkId: route.id, side: "new", startLine: line, line },
+      type: "logic",
       severity: "major",
       suggestion: null,
       mismatch: null,
@@ -96,19 +94,3 @@ const findingsOf = (input: AnalysisInput): FindingDraft[] => {
     },
   ];
 };
-
-/** The model, but the checked PR's findings pass answers the above, after its own time. */
-export const withGuardrails = (model: AnalysisModel, url: string): AnalysisModel => ({
-  version: model.version,
-  readsHarness: model.readsHarness,
-  checkSize: (input) => model.checkSize(input),
-  intent: (input, options) => model.intent(input, options),
-  async findings(input, intent, options) {
-    const answer = await model.findings(input, intent, options);
-    if (!answer.ok || input.pullRequest.url !== url) return answer;
-    return ok({ ...answer.value, value: findingsOf(input) });
-  },
-  risk: (input, options) => model.risk(input, options),
-  decisions: (input, options) => model.decisions(input, options),
-  steps: (input, options) => model.steps(input, options),
-});

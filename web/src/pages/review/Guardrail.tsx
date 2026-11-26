@@ -32,7 +32,7 @@ export const guardrailSentence = (guardrail: Guardrail): string => {
 const LINE = "flex items-start gap-1.5 text-caption text-muted-foreground";
 
 /**
- * A check that could catch a finding's or a risk's kind: a rule megareviewer verified against the
+ * A check that could catch a finding's kind: a rule megareviewer verified against the
  * repository's config, or the model's suggestion, said as such. Model output, so text.
  */
 export const GuardrailLine = ({

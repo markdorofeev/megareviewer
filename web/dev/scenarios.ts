@@ -1,7 +1,7 @@
 import { isScenario, type Scenario } from "../../src/cli/dev/model-recording.ts";
 import {
   type Analysis,
-  DecisionId,
+  FindingId,
   mapModelStages,
   type StageName,
   type StageStatus,
@@ -15,30 +15,26 @@ export const withoutModel = (analysis: Analysis): Analysis => ({
   stages: mapModelStages(analysis.stages, () => "skipped"),
   intent: null,
   findings: [],
-  decisions: [],
-  risk: analysis.risk.map((risk) =>
-    risk.source === "model" ? { ...risk, source: "rule" as const } : risk,
-  ),
   modelError: null,
   modelOption: null,
 });
 
 const rateLimited = {
-  stage: "risk" as StageName,
+  stage: "findings" as StageName,
   code: "model-error",
   message: "Your Claude plan's usage limit is reached. It resets at 2026-11-13 18:00.",
 };
 
-const pad = (decisions: Analysis["decisions"], to: number): Analysis["decisions"] =>
-  decisions.length === 0
-    ? decisions
+const pad = (findings: Analysis["findings"], to: number): Analysis["findings"] =>
+  findings.length === 0
+    ? findings
     : Array.from({ length: to }, (_, index) => {
-        const decision = decisions[index % decisions.length];
-        if (decision === undefined) throw new Error("unreachable: decisions is not empty");
+        const finding = findings[index % findings.length];
+        if (finding === undefined) throw new Error("unreachable: findings is not empty");
         return {
-          ...decision,
-          id: DecisionId.parse(`d${index + 1}`),
-          title: `${decision.title} (${index + 1})`,
+          ...finding,
+          id: FindingId.parse(`f${index + 1}`),
+          title: `${finding.title} (${index + 1})`,
         };
       });
 
@@ -66,19 +62,14 @@ export const afterModelRun = (analysis: Analysis, scenario: Scenario): Analysis 
         // Nothing found means nothing to raise: no mismatch either.
         intent: analysis.intent === null ? null : { ...analysis.intent, mismatches: [] },
         findings: [],
-        decisions: [],
-        risk: analysis.risk.map((risk) =>
-          risk.source === "model" ? { ...risk, riskClass: "logic" as const } : risk,
-        ),
       };
     case "many":
-      return { ...analysis, decisions: pad(analysis.decisions, MANY) };
-    case "limit-after-findings":
+      return { ...analysis, findings: pad(analysis.findings, MANY) };
+    case "limit-after-intent":
       return {
         ...analysis,
-        decisions: [],
-        risk: analysis.risk.filter((risk) => risk.source !== "model"),
-        stages: stages(analysis.stages, { risk: "failed", decisions: "skipped" }),
+        findings: [],
+        stages: stages(analysis.stages, { findings: "failed" }),
         modelError: rateLimited,
       };
     case "refusal":

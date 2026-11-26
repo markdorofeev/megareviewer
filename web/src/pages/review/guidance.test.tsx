@@ -31,7 +31,6 @@ const { analysis } = guided;
 const SCOPED = /Any signed-in user can read every customer's receipt/;
 const STALE = /Keeps serving a receipt rendered before a refund/;
 const RETRIES = /Retries the tax service back to back/;
-const DEPENDENCY = /Adds a runtime dependency/;
 
 /** Never finishes, so cards stay plain text and Shiki never loads. */
 const pendingHighlighter: Highlighter = { highlight: () => new Promise(() => {}) };
@@ -87,11 +86,11 @@ const position = () => {
 const pointCard = (title: RegExp) => screen.getByRole("article", { name: title });
 const guidanceOf = (title: RegExp) =>
   pointCard(title).querySelector("[data-slot=point-guidance]")?.textContent;
-/** The finding marks on the numbers of the hunk that adds the retry and the cache. */
+/** The points' marks on the numbers of the hunk that adds the retry and the cache. */
 const retryMarks = () =>
   [...document.querySelectorAll(`[id^="hunk-${fixtureHunks.retryAndCache}"] [data-point-mark]`)]
     .map((cell) => cell.getAttribute("data-point-mark"))
-    .filter((kind) => kind === "finding");
+    .filter((kind) => kind !== "step");
 const stepTitle = () => reviewBar().querySelector("[data-slot=stepper-title]")?.textContent ?? null;
 
 beforeEach(() => {
@@ -111,8 +110,7 @@ describe("a review whose run read guidance", () => {
     expect(guidanceOf(SCOPED)).toBe(
       "From your preference: Lookups that aren't scoped to the signed-in user",
     );
-    expect(guidanceOf(DEPENDENCY)).toBe("From REVIEW.md");
-    expect(guidanceOf(STALE)).toBeUndefined();
+    expect(guidanceOf(STALE)).toBe("From REVIEW.md");
     const link = within(pointCard(SCOPED)).getByRole("link", { name: /^Lookups that aren't/ });
     expect(link.getAttribute("href")).toBe("/preferences");
   });
@@ -123,17 +121,17 @@ describe("a review whose run read guidance", () => {
     const folded = pointCard(RETRIES);
     expect(folded.dataset.leftOut).toBe("true");
     expect(folded.textContent).toContain("Left out by your preference: Retries without backoff");
-    await waitFor(() => expect(chips()).toEqual(["2 findings", "2 risks"]));
-    expect(position().textContent).toBe("4 points");
+    await waitFor(() => expect(chips()).toEqual(["ƒ1 logic", "◆1 contract"]));
+    expect(position().textContent).toBe("2 points");
     // Only the stale receipt's two lines are marked; the retry's six aren't.
     expect(retryMarks()).toHaveLength(2);
     // Round the steps, twice over: the folded point is never one of them.
     const titles = new Set<string | null>();
-    for (let step = 0; step < 8; step += 1) {
+    for (let step = 0; step < 4; step += 1) {
       await userEvent.click(within(reviewBar()).getByRole("button", { name: "Next point" }));
       titles.add(stepTitle());
     }
-    expect(titles.size).toBe(4);
+    expect(titles.size).toBe(2);
     expect([...titles].some((title) => RETRIES.test(title ?? ""))).toBe(false);
     // The files beside the code count what the chips count.
     const counted = [...document.querySelectorAll("[role=treeitem][aria-label*='1 finding']")];
@@ -141,7 +139,7 @@ describe("a review whose run read guidance", () => {
 
     await userEvent.click(position());
     const list = within(await screen.findByRole("dialog")).getByRole("list", { name: "Points" });
-    expect(within(list).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(list.textContent).not.toMatch(RETRIES);
   });
 
@@ -153,8 +151,8 @@ describe("a review whose run read guidance", () => {
     expect(card.dataset.leftOut).toBeUndefined();
     expect(document.activeElement).toBe(card);
     expect(guidanceOf(RETRIES)).toBe("Left out by your preference: Retries without backoff");
-    await waitFor(() => expect(chips()).toEqual(["3 findings", "2 risks"]));
-    expect(position().textContent).toBe("5 points");
+    await waitFor(() => expect(chips()).toEqual(["ƒ2 logic", "◆1 contract"]));
+    expect(position().textContent).toBe("3 points");
     expect(retryMarks()).toHaveLength(8);
 
     // Dismissed and undone, it stays shown: the reviewer has seen it.
@@ -174,7 +172,7 @@ describe("a review whose run read guidance", () => {
     });
     await loaded();
     expect(pointCard(RETRIES).dataset.leftOut).toBeUndefined();
-    await waitFor(() => expect(chips()).toEqual(["3 findings", "2 risks"]));
+    await waitFor(() => expect(chips()).toEqual(["ƒ2 logic", "◆1 contract"]));
   });
 
   it("says when everything Claude found was left out", async () => {
@@ -184,9 +182,6 @@ describe("a review whose run read guidance", () => {
         ...analysis,
         intent: analysis.intent === null ? null : { ...analysis.intent, mismatches: [] },
         findings: analysis.findings.filter((finding) => finding.id === "f3"),
-        risk: analysis.risk.map((risk) =>
-          risk.source === "model" ? { ...risk, riskClass: "logic" as const } : risk,
-        ),
       },
     });
     await loaded();
@@ -237,9 +232,9 @@ describe("Don't flag things like this, on the review page", () => {
   it("does neither on Cancel", async () => {
     const { requests } = renderReview();
     await loaded();
-    const form = await openRule(DEPENDENCY);
+    const form = await openRule(STALE);
     await userEvent.click(within(form).getByRole("button", { name: "Cancel" }));
-    expect(pointCard(DEPENDENCY).dataset.state).toBe("open");
+    expect(pointCard(STALE).dataset.state).toBe("open");
     expect(sent(requests, "POST", "/api/preferences")).toHaveLength(0);
     expect(requests.filter((request) => request.method === "PUT")).toHaveLength(0);
   });

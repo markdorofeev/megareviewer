@@ -28,7 +28,7 @@ const fixture = makeFixture();
 const rendered = `${renderInput(smallFeatureInput)}\n<!-- ${Date.now()} ${"filler ".repeat(4000)}-->`;
 const log: unknown[] = [];
 
-const run = async (pass: "intent" | "risk", tools: boolean) => {
+const run = async (pass: "intent" | "findings", tools: boolean) => {
   const task = `Before answering, call read_harness_file once with path docs/notes.md.\n\n${passMessage(pass, null, undefined)}`;
   const request = passRequest(
     pass,
@@ -78,9 +78,9 @@ const run = async (pass: "intent" | "risk", tools: boolean) => {
 };
 
 await run("intent", true);
-await run("risk", true);
+await run("findings", true);
 // The control: the same PR without the tool is another prefix.
-await run("risk", false);
+await run("findings", false);
 writeFileSync(
   new URL("../../results/harness-read-tool/anthropic-api.json", import.meta.url),
   JSON.stringify(log, null, 1),

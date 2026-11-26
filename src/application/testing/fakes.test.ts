@@ -6,7 +6,7 @@ import {
   type Publication,
   type PullRequestRef,
   type RepoRef,
-  validateRiskCoverage,
+  validateFindings,
 } from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import type { AnalysisInput, ProposalDraft, SuggestionInput } from "../ports/index.ts";
@@ -390,18 +390,16 @@ describe("FakeTicketSource", () => {
 });
 
 describe("FakeAnalysisModel", () => {
-  const required = new Set(smallFeatureInput.files.flatMap((f) => f.hunks.map((h) => h.id)));
-
-  it("derives outputs that pass validation", async () => {
-    const model = new FakeAnalysisModel();
-    const risk = await model.risk(smallFeatureInput);
-    const decisions = await model.decisions(smallFeatureInput);
-
-    expect(risk.ok && validateRiskCoverage(risk.value.value, required)).toEqual([]);
-    expect(decisions.ok && decisions.value.value.map((d) => d.title)).toEqual([
-      "Changes config/app.yaml",
-      "Changes src/routes/orders.ts",
-      "Changes src/services/receipts.ts",
+  it("derives a finding per file that passes validation", async () => {
+    const result = await new FakeAnalysisModel().findings(smallFeatureInput, null);
+    const hunks = new Map(
+      smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
+    );
+    expect(result.ok && validateFindings(result.value.value, hunks)).toEqual([]);
+    expect(result.ok && result.value.value.map((finding) => finding.title)).toEqual([
+      "Check config/app.yaml",
+      "Check src/routes/orders.ts",
+      "Check src/services/receipts.ts",
     ]);
   });
 
@@ -418,15 +416,15 @@ describe("FakeAnalysisModel", () => {
   it("answers from the script first, in order, then derives", async () => {
     const model = new FakeAnalysisModel();
     const overloaded = { kind: "overloaded" as const, message: "529" };
-    model.script("risk", err(overloaded), ok([]));
+    model.script("findings", err(overloaded), ok([]));
 
-    expect(await model.risk(smallFeatureInput)).toEqual(err(overloaded));
-    const scripted = await model.risk(smallFeatureInput, { feedback: ["missing h_1"] });
+    expect(await model.findings(smallFeatureInput, null)).toEqual(err(overloaded));
+    const scripted = await model.findings(smallFeatureInput, null, { feedback: ["missing h_1"] });
     expect(scripted.ok && scripted.value.value).toEqual([]);
-    const derived = await model.risk(smallFeatureInput);
-    expect(derived.ok && derived.value.value).toHaveLength(required.size);
+    const derived = await model.findings(smallFeatureInput, null);
+    expect(derived.ok && derived.value.value).toHaveLength(3);
 
-    expect(model.callsTo("risk").map((call) => call.options)).toEqual([
+    expect(model.callsTo("findings").map((call) => call.options)).toEqual([
       undefined,
       { feedback: ["missing h_1"] },
       undefined,

@@ -11,7 +11,6 @@ import {
   PullRequest,
   Ticket,
   validateHunkReferences,
-  validateRiskCoverage,
 } from "../../../domain/review/index.ts";
 import {
   allFixtures,
@@ -103,13 +102,12 @@ describe("small-feature analysis", () => {
   });
 
   it("is a valid, complete analysis", () => {
-    const { flows, risk, decisions, intent, callGraph } = smallFeatureAnalysis;
+    const { flows, risk, intent, callGraph } = smallFeatureAnalysis;
 
     expect(Analysis.parse(smallFeatureAnalysis)).toEqual(smallFeatureAnalysis);
     expect(new Set(flows?.flatMap((flow) => flow.partIds))).toEqual(hunkIds);
-    expect(validateRiskCoverage(risk, hunkIds)).toEqual([]);
+    expect(risk.map((assessment) => assessment.hunkId).sort()).toEqual([...hunkIds].sort());
     const referenced = [
-      ...decisions.flatMap((decision) => decision.hunkIds),
       ...(intent?.mismatches.flatMap((mismatch) => mismatch.hunkIds) ?? []),
       ...callGraph.flatMap((hint) => [hunkIdOf(hint.fromPartId), hunkIdOf(hint.toPartId)]),
     ];

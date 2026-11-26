@@ -94,8 +94,6 @@ export const PR = {
   refactorMove: "https://github.com/acme/shop/pull/102",
   /** small-feature again; Claude's first run on it fails at the intent stage. */
   intentFailsOnce: "https://github.com/acme/shop/pull/104",
-  /** small-feature with a test, which checks one of its two risks. */
-  receiptsTested: "https://github.com/acme/shop/pull/105",
   /** small-feature in a repository with guideline files and two of the reviewer's preferences. */
   receiptsGuided: "https://github.com/acme/storefront/pull/7",
   /** small-feature in a repository whose guideline files import, link and mention others. */
@@ -106,6 +104,8 @@ export const PR = {
   receiptsTour: "https://github.com/acme/shop/pull/106",
   /** small-feature with a changed function that code outside the PR calls, in no clone. */
   receiptsDownloaded: "https://github.com/acme/shop/pull/107",
+  /** small-feature whose review has a finding of each type, one of each severity. */
+  receiptsTyped: "https://github.com/acme/shop/pull/108",
 } as const;
 
 /** What the fake hosts received, as GET /__fake/publications reports it. */

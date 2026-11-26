@@ -50,7 +50,7 @@ export const opencodeConfig = (): Record<string, unknown> => ({
       SUGGESTION_CALL.systemPrompt,
     ),
     [GUARDRAILS_AGENT]: agent(
-      "megareviewer's marks of the checks that could catch a review's findings and risks",
+      "megareviewer's marks of the checks that could catch a review's findings",
       GUARDRAIL_CALL.systemPrompt,
     ),
   },

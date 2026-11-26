@@ -308,6 +308,17 @@ megareviewer may later read a repository from a clone of its own, or from the re
 
 Not built here: the checkout-backed source and code in the read tool. Stage 66 has since built a copy megareviewer keeps, and stage 75's notes say what a source over it would need.
 
+## Twentieth slice: findings only
+
+An AI review's risks ask the reviewer to stop where nothing is wrong, and its decisions are footnotes nobody opens. This slice removes both, then has the findings say what kind each is, logic, contract or architecture, ranked by severity.
+
+| # | Stage | Depends on | Owns |
+|---|---|---|---|
+| 67 | [Findings only](67-findings-only.md) | 45, 50, 56, 58, 59, 63, 64 | The risk and decisions passes and everything that shows them, to remove them; their labels and metrics in `evals/` |
+| 68 | [A type on every finding](68-finding-types.md) | 30, 66, 67 | `FindingType`, the unchanged callers in the model's input, the findings task, a finding's type and severity on the page, the findings' eval cases |
+
+One after the other, for one agent. Stage 67 only removes, and leaves the findings' and the intent's prompts as they are, so its eval run is the baseline stage 68 is measured against. Stage 68 can stop at its evals: an architecture type that can't be kept from wrong findings isn't shipped.
+
 ## How to pick up a stage
 
 1. Check the stage doc's **Status** line. Only start a stage that says *Not started* and whose dependencies say *Done*.

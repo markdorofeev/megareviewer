@@ -24,7 +24,7 @@ import {
 
 const haiku = { providerID: "anthropic", id: "claude-haiku-5-5" };
 
-/** The review's four passes, or every pass, the steps pass among them. */
+/** The review's passes, or every pass, the steps pass among them. */
 const requests = (passes: readonly ModelPass[] = MODEL_STAGES) =>
   passes.map((pass) =>
     opencodeRequest(
@@ -58,7 +58,7 @@ describe("opencodeRequest", () => {
 
   it("gives a session with a harness its directory and leave to read each file, after the agent's denials", () => {
     const files = new Set(["harness/CLAUDE.md", "harness/docs/a.md"]);
-    const request = opencodeRequest("risk", "", "Task: risk.", haiku, {
+    const request = opencodeRequest("findings", "", "Task: findings.", haiku, {
       harness: { directory: "/tmp/run", files },
     });
     expect(request.session).toEqual({

@@ -293,7 +293,7 @@ export const createReviewUseCases = (deps: AppDeps) => {
           kind: state,
           at: saved.updatedAt,
           pullRequest: analysis.value.key.ref,
-          pointKind: point.kind,
+          pointKind: "finding",
           title: point.title,
           text: point.explanation,
           path: point.path,

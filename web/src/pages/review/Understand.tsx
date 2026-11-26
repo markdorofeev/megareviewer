@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Point, PointState } from "../../../../src/domain/review/index.ts";
-import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
+import { FINDING_STATUS, POINT_TONE, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { holdInPlace } from "./heldScroll.ts";
@@ -309,7 +309,7 @@ const CompactStrip = ({
   </div>
 );
 
-/** One of Claude's points as a chip: its glyph and kind in words, its title, a click to its card. */
+/** One of Claude's points as a chip: its icon and word, its title, a click to its card. */
 const PointChip = ({
   point,
   state,
@@ -323,8 +323,7 @@ const PointChip = ({
   readonly wide?: boolean;
   readonly after?: ReactNode;
 }) => {
-  const status = POINT_STATUS[point.kind];
-  const Icon = POINT_ICON[point.kind];
+  const { icon: Icon, label } = FINDING_STATUS;
   const dismissed = state === "dismissed";
   return (
     <button
@@ -334,11 +333,11 @@ const PointChip = ({
       className={cn(
         "flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body",
         wide ? "w-full max-w-4xl" : "w-fit max-w-full",
-        status.className,
+        POINT_TONE[pointTone(point)].chip,
       )}
     >
       <Icon aria-hidden="true" className="mt-1 size-3.5 shrink-0" />
-      <span className="font-semibold">{status.label}</span>
+      <span className="font-semibold">{label}</span>
       <span className={cn("min-w-0", dismissed && "line-through")}>
         <ModelText text={point.title} />
         {dismissed && <span className="sr-only">, dismissed</span>}
@@ -525,7 +524,7 @@ const TourEnd = ({
       )}
       {tour.outside.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <h3 className="font-semibold text-body">Findings and risks outside the steps</h3>
+          <h3 className="font-semibold text-body">Findings outside the steps</h3>
           {tour.outside.map((point) => (
             <PointChip
               key={point.id}

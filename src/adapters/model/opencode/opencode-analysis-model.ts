@@ -202,7 +202,7 @@ export interface OpencodeAnalysisModelOptions {
 }
 
 /**
- * The four passes through the reviewer's opencode, a session each on one server. opencode answers
+ * The passes through the reviewer's opencode, a session each on one server. opencode answers
  * only once the session is idle, so `onAnswering` is never called: the other passes wait for the
  * intent's end, as on Codex.
  */

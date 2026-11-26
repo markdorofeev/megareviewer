@@ -15,7 +15,6 @@ import {
   type PullRequest,
   type ReadCheckConfig,
   type RepoRef,
-  type RiskAssessment,
 } from "../../domain/review/index.ts";
 import { err, type Result } from "../../domain/shared/index.ts";
 import type { AdvicePoint, GuardrailAdvisor } from "../ports/index.ts";
@@ -30,14 +29,6 @@ export const MAX_POINT_LINES = 40;
 const utf8 = new TextEncoder();
 
 const kilobytes = (bytes: number): string => `${Math.ceil(bytes / 1024)} KB`;
-
-/** A risk the page shows as a point: the model's contract. Only those are asked about. */
-export const askableRisk = (risk: RiskAssessment): boolean =>
-  risk.source === "model" && risk.riskClass === "contract";
-
-/** Whether a run has anything for the guardrail call to read: a finding or a risk it raised. */
-export const askable = (findings: readonly Finding[], risk: readonly RiskAssessment[]): boolean =>
-  findings.length > 0 || risk.some(askableRisk);
 
 interface ReadFiles {
   readonly configs: readonly CheckConfig[];
@@ -102,12 +93,11 @@ const readChecks = async (
 const MARKER = { add: "+", del: "-", context: " " } as const;
 
 /**
- * The lines a point rests on as its hunk shows them, each with its diff marker, or the hunk's
- * changed lines without lines of its own; at most MAX_POINT_LINES, the rest counted.
+ * The lines a finding rests on as its hunk shows them, each with its diff marker; at most
+ * MAX_POINT_LINES, the rest counted.
  */
-export const codeOf = (hunk: Hunk, lines: PointLines | null): string[] => {
+export const codeOf = (hunk: Hunk, lines: PointLines): string[] => {
   const shown = hunk.lines.filter((line) => {
-    if (lines === null) return line.kind !== "context";
     const number = lines.side === "new" ? line.newLine : line.oldLine;
     return number !== null && number >= lines.startLine && number <= lines.line;
   });
@@ -120,8 +110,6 @@ export const codeOf = (hunk: Hunk, lines: PointLines | null): string[] => {
 export interface GuardrailCall {
   /** The run's findings, each the call marked with its guardrail. */
   readonly findings: readonly Finding[];
-  /** The run's risk, each model risk the call marked with its guardrail. */
-  readonly risk: readonly RiskAssessment[];
   /** The check configs and build files the call read. */
   readonly checks: readonly ReadCheckConfig[];
   readonly warnings: readonly string[];
@@ -136,8 +124,8 @@ const TIMED_OUT: ModelError = {
 };
 
 /**
- * The guardrail call of a model run, after its passes: asks which of the run's findings and model
- * risks a check could catch, and marks each with the check the server can stand behind. Its
+ * The guardrail call of a model run, after its passes: asks which of the run's findings a check
+ * could catch, and marks each with the check the server can stand behind. Its
  * failure, an answer outside the schema or a call over GUARDRAIL_CALL_MS leaves the points as they
  * were, with the call's record saying why. Never throws.
  */
@@ -148,42 +136,15 @@ export const runGuardrailCall = async (
   changedPaths: readonly string[],
   hunks: ReadonlyMap<HunkId, Hunk>,
   findings: readonly Finding[],
-  risk: readonly RiskAssessment[],
 ): Promise<GuardrailCall> => {
   const { repo } = pullRequest.ref;
   const startedAt = deps.clock.now();
-  const asked = risk.filter(askableRisk);
-  const riskRefs = new Map(asked.map((one, index) => [`r${index + 1}`, one.hunkId]));
-  const points: AdvicePoint[] = [
-    ...findings.flatMap((finding): AdvicePoint[] => {
-      const hunk = hunks.get(finding.lines.hunkId);
-      if (hunk === undefined) return [];
-      return [
-        {
-          ref: finding.id,
-          kind: "finding",
-          path: hunk.path,
-          title: finding.title,
-          text: finding.explanation,
-          code: codeOf(hunk, finding.lines),
-        },
-      ];
-    }),
-    ...asked.flatMap((one, index): AdvicePoint[] => {
-      const hunk = hunks.get(one.hunkId);
-      if (hunk === undefined) return [];
-      return [
-        {
-          ref: `r${index + 1}`,
-          kind: "risk",
-          path: hunk.path,
-          title: "",
-          text: one.reason,
-          code: codeOf(hunk, one.lines),
-        },
-      ];
-    }),
-  ];
+  const points = findings.flatMap((finding): AdvicePoint[] => {
+    const hunk = hunks.get(finding.lines.hunkId);
+    if (hunk === undefined) return [];
+    const { id: ref, title, explanation } = finding;
+    return [{ ref, path: hunk.path, title, explanation, code: codeOf(hunk, finding.lines) }];
+  });
   const files = await readChecks(deps, repo, pullRequest.baseSha, [
     ...new Set(points.map((point) => point.path)),
   ]);
@@ -210,7 +171,6 @@ export const runGuardrailCall = async (
     return {
       ...base,
       findings,
-      risk,
       usage: [],
       modelCalls: [
         {
@@ -251,12 +211,6 @@ export const runGuardrailCall = async (
     }
     marked.set(point, guardrail);
   }
-  const riskMarks = new Map(
-    [...riskRefs].flatMap(([ref, hunkId]) => {
-      const guardrail = marked.get(ref);
-      return guardrail === undefined ? [] : [[hunkId, guardrail] as const];
-    }),
-  );
   deps.logger.info("Model call answered", {
     pass: "guardrails",
     attempt: 1,
@@ -269,10 +223,6 @@ export const runGuardrailCall = async (
     findings: findings.map((finding) => {
       const guardrail = marked.get(finding.id);
       return guardrail === undefined ? finding : { ...finding, guardrail };
-    }),
-    risk: risk.map((one) => {
-      const guardrail = askableRisk(one) ? riskMarks.get(one.hunkId) : undefined;
-      return guardrail === undefined ? one : { ...one, guardrail };
     }),
     usage: [{ ...answered.value.usage, pass: "guardrails", startedAt, durationMs }],
     modelCalls: [

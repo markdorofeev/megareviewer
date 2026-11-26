@@ -63,7 +63,7 @@ export interface PartItem extends HunkItem {
 
 /**
  * Parts and their files by ID, with each one's hunk's risk: a split hunk is one entry per part, any
- * other hunk one entry. A hunk without an assessment yet (the risk pass hasn't run) reads as logic:
+ * other hunk one entry. A hunk without an assessment reads as logic:
  * shown in full, never collapsed.
  */
 export const partIndex = (analysis: Analysis) => {
@@ -113,9 +113,7 @@ export const partIndex = (analysis: Analysis) => {
         hunkId,
         riskClass: "logic",
         reason: UNCLASSIFIED,
-        source: "fallback",
-        lines: null,
-        guidance: null,
+        source: "rule",
       }
     );
   };

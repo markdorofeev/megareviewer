@@ -54,12 +54,13 @@ import {
 } from "../compose.ts";
 import recordingJson from "./fixtures/model-run-small-feature.synthetic.json" with { type: "json" };
 import { createReplayAnalysisModel, ModelRecording, type Scenario } from "./model-recording.ts";
-import { checkedAdvisor, receiptsChecked, withGuardrails } from "./receipts-checked.ts";
+import { checkedAdvisor, checkedFindings, receiptsChecked } from "./receipts-checked.ts";
 import { downloadedCommits, receiptsDownloaded } from "./receipts-downloaded.ts";
-import { receiptsGuided, withGuidance } from "./receipts-guided.ts";
+import { guidedFindings, receiptsGuided } from "./receipts-guided.ts";
 import { fakeHarnessSources, receiptsHarness } from "./receipts-harness.ts";
-import { receiptsTested, withCheckingTests } from "./receipts-tested.ts";
 import { receiptsTour, withTour } from "./receipts-tour.ts";
+import { receiptsTyped, typedFindings } from "./receipts-typed.ts";
+import { withFindings } from "./with-findings.ts";
 
 /** The recorded run the scenarios play, read once at startup. */
 const recording = ModelRecording.parse(recordingJson);
@@ -81,12 +82,12 @@ export const intentFailsOnce: PullRequestFixture = {
 export const fakeFixtures: readonly PullRequestFixture[] = [
   ...allFixtures,
   intentFailsOnce,
-  receiptsTested,
   receiptsGuided,
   receiptsChecked,
   receiptsTour,
   receiptsHarness,
   receiptsDownloaded,
+  receiptsTyped,
 ];
 
 const FAKE_MODELS = [
@@ -191,8 +192,6 @@ export const failingIntentOnce = (model: AnalysisModel, url: string): AnalysisMo
       });
     },
     findings: (input, intent, options) => model.findings(input, intent, options),
-    risk: (input, options) => model.risk(input, options),
-    decisions: (input, options) => model.decisions(input, options),
     steps: (input, options) => model.steps(input, options),
   };
 };
@@ -354,20 +353,23 @@ export const createFakeApp = async (options: {
       }),
       models: fakeModels(
         withTour(
-          withGuardrails(
-            withGuidance(
-              withCheckingTests(
+          withFindings(
+            withFindings(
+              withFindings(
                 options.scenario === undefined
                   ? failingIntentOnce(
                       new FakeAnalysisModel({ readsHarness: true }),
                       intentFailsOnce.pullRequest.url,
                     )
                   : createReplayAnalysisModel(recording, { scenario: options.scenario }),
-                receiptsTested.pullRequest.url,
+                receiptsGuided.pullRequest.url,
+                guidedFindings,
               ),
-              receiptsGuided.pullRequest.url,
+              receiptsChecked.pullRequest.url,
+              checkedFindings,
             ),
-            receiptsChecked.pullRequest.url,
+            receiptsTyped.pullRequest.url,
+            typedFindings,
           ),
           receiptsTour.pullRequest.url,
         ),

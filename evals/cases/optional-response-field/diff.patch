@@ -1,0 +1,35 @@
+diff --git a/src/customers/customer-view.test.ts b/src/customers/customer-view.test.ts
+index 0a65438..ee6ce53 100644
+--- a/src/customers/customer-view.test.ts
++++ b/src/customers/customer-view.test.ts
+@@ -3,6 +3,11 @@ import { customerView } from "./customer-view.ts";
+ 
+ const customer = { id: "c1", name: "Ada", email: "ada@example.com", lastOrderAt: null };
+ 
+-it("says who the customer is", () => {
++it("says who the customer is, and nothing of orders when there are none", () => {
+   expect(customerView(customer)).toEqual({ id: "c1", name: "Ada", email: "ada@example.com" });
+ });
++
++it("says when the customer last ordered", () => {
++  const lastOrderAt = new Date("2026-10-02T08:00:00Z");
++  expect(customerView({ ...customer, lastOrderAt }).lastOrderAt).toBe("2026-10-02T08:00:00.000Z");
++});
+diff --git a/src/customers/customer-view.ts b/src/customers/customer-view.ts
+index ad85fc7..e5ed931 100644
+--- a/src/customers/customer-view.ts
++++ b/src/customers/customer-view.ts
+@@ -5,10 +5,13 @@ export interface CustomerView {
+   readonly id: string;
+   readonly name: string;
+   readonly email: string;
++  /** Absent when the customer has never ordered. */
++  readonly lastOrderAt?: string;
+ }
+ 
+ export const customerView = (customer: Customer): CustomerView => ({
+   id: customer.id,
+   name: customer.name,
+   email: customer.email,
++  ...(customer.lastOrderAt === null ? {} : { lastOrderAt: customer.lastOrderAt.toISOString() }),
+ });

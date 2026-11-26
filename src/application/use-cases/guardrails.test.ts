@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Hunk } from "../../domain/diff/index.ts";
-import { type Analysis, type AnalysisId, FindingId, pointsOf } from "../../domain/review/index.ts";
+import {
+  type Analysis,
+  type AnalysisId,
+  FindingId,
+  MODEL_STAGES,
+  pointsOf,
+} from "../../domain/review/index.ts";
 import { err, ok } from "../../domain/shared/index.ts";
 import { type AnalysisEvent, createAnalysisEvents } from "../events/index.ts";
-import type { AdviceDraft, ModelRisk } from "../ports/index.ts";
+import type { AdviceDraft } from "../ports/index.ts";
 import {
   FakeAnalysisModel,
   FakeCodeParser,
@@ -42,26 +48,23 @@ const [firstHunk, secondHunk] = hunks.filter(
   (hunk) => hunk.path.endsWith(".ts") && hunk.lines.some((line) => line.kind === "add"),
 );
 if (firstHunk === undefined || secondHunk === undefined) throw new Error("small-feature has hunks");
-const findingLine = firstHunk.lines.find((line) => line.kind === "add")?.newLine ?? 1;
+
+const findingOn = (hunk: Hunk, title: string) => {
+  const line = hunk.lines.find((one) => one.kind === "add")?.newLine ?? 1;
+  return {
+    title,
+    explanation: "Nobody hears if it rejects.",
+    lines: { hunkId: hunk.id, side: "new" as const, startLine: line, line },
+    type: "logic" as const,
+    severity: "major" as const,
+    suggestion: null,
+    mismatch: null,
+    guidance: null,
+  };
+};
 
 /** The fake model's findings, one on the first TypeScript hunk. */
-const tsFinding = () =>
-  ok([
-    {
-      title: "Drops a promise",
-      explanation: "Nobody hears if it rejects.",
-      lines: {
-        hunkId: firstHunk.id,
-        side: "new" as const,
-        startLine: findingLine,
-        line: findingLine,
-      },
-      severity: "major" as const,
-      suggestion: null,
-      mismatch: null,
-      guidance: null,
-    },
-  ]);
+const tsFinding = () => ok([findingOn(firstHunk, "Drops a promise")]);
 
 class RecordingStore extends InMemoryAnalysisStore {
   readonly saves: Analysis[] = [];
@@ -81,17 +84,6 @@ const lintRule = (overrides: Partial<AdviceDraft["marks"][number]["guardrail"]> 
   does: "Reports a promise that is neither awaited nor handled.",
   ...overrides,
 });
-
-/** Every hunk logic but the second, which is contract with the lines it shows first. */
-const oneContract = (): ModelRisk[] =>
-  hunks.map((hunk) => ({
-    hunkId: hunk.id,
-    riskClass: hunk.id === secondHunk.id ? ("contract" as const) : ("logic" as const),
-    reason: hunk.id === secondHunk.id ? "Changes what callers of the route get." : "Logic.",
-    lines: null,
-    checkedBy: null,
-    guidance: null,
-  }));
 
 const setup = (
   options: { answer?: AdviceDraft; advisor?: FakeGuardrailAdvisor; model?: FakeAnalysisModel } = {},
@@ -194,7 +186,7 @@ const setup = (
 };
 
 describe("a model run's guardrail call", () => {
-  it("isn't made when the run has no finding and no risk it raised", async () => {
+  it("isn't made when the run has no finding", async () => {
     const model = new FakeAnalysisModel();
     model.script("findings", ok([]));
     const { analyzed, run, advisor } = setup({ model });
@@ -206,10 +198,11 @@ describe("a model run's guardrail call", () => {
     expect(analysis.modelCalls.map((call) => call.pass)).not.toContain("guardrails");
   });
 
-  it("reads the run's findings and risks with their code, and marks the ones it names", async () => {
+  it("reads the run's findings with their code, and marks the ones it names", async () => {
     const model = new FakeAnalysisModel();
-    model.script("findings", tsFinding());
-    model.script("risk", ok(oneContract()));
+    const broken = findingOn(secondHunk, "Breaks the route's callers");
+    const kept = findingOn(secondHunk, "Reads the order twice");
+    model.script("findings", ok([findingOn(firstHunk, "Drops a promise"), broken, kept]));
     const suggested = {
       kind: "ci-check",
       tool: null,
@@ -223,7 +216,7 @@ describe("a model run's guardrail call", () => {
       answer: {
         marks: [
           { point: "f1", guardrail: lintRule() },
-          { point: "r1", guardrail: suggested },
+          { point: "f2", guardrail: suggested },
         ],
       },
     });
@@ -231,14 +224,15 @@ describe("a model run's guardrail call", () => {
     const analysis = await run(await analyzed());
 
     const [input] = advisor.calls;
-    expect(input?.points.map((point) => [point.ref, point.kind, point.path])).toEqual([
-      ["f1", "finding", firstHunk.path],
-      ["r1", "risk", secondHunk.path],
+    expect(input?.points.map((point) => [point.ref, point.path])).toEqual([
+      ["f1", firstHunk.path],
+      ["f2", secondHunk.path],
+      ["f3", secondHunk.path],
     ]);
     expect(input?.points[1]).toMatchObject({
-      title: "",
-      text: "Changes what callers of the route get.",
-      code: codeOf(secondHunk, null),
+      title: broken.title,
+      explanation: broken.explanation,
+      code: codeOf(secondHunk, broken.lines),
     });
     expect(input?.configs.map((config) => config.path)).toEqual(["biome.json"]);
     expect(input?.buildFiles).toEqual([{ path: "package.json", content: PACKAGE }]);
@@ -250,16 +244,15 @@ describe("a model run's guardrail call", () => {
       configPath: "biome.json",
     } as const;
     expect(analysis.findings[0]?.guardrail).toEqual(rule);
-    expect(analysis.risk.find((one) => one.hunkId === secondHunk.id)?.guardrail).toEqual({
+    expect(analysis.findings[1]?.guardrail).toEqual({
       is: "suggested",
       kind: "ci-check",
       engine: "oasdiff",
       does: "Fails a change that breaks the API's contract.",
     });
-    expect(analysis.risk.filter((one) => one.guardrail !== undefined)).toHaveLength(1);
-    expect(pointsOf(analysis).flatMap((point) => (point.guardrail ? [point.kind] : []))).toEqual([
-      "finding",
-      "risk",
+    expect(pointsOf(analysis).flatMap((point) => (point.guardrail ? [point.id] : []))).toEqual([
+      "f1",
+      "f2",
     ]);
     expect(analysis.guardrails).toBe("done");
     expect(analysis.guidance?.checks).toEqual([
@@ -303,17 +296,7 @@ describe("a model run's guardrail call", () => {
     const advisor = new FakeGuardrailAdvisor({
       answer: { marks: [{ point: "f1", guardrail: lintRule() }] },
     });
-    const line = firstHunk.lines.find((one) => one.newLine !== null)?.newLine ?? 1;
-    const finding = {
-      id: FindingId.parse("f1"),
-      title: "Drops a promise",
-      explanation: "Nobody hears if it rejects.",
-      lines: { hunkId: firstHunk.id, side: "new" as const, startLine: line, line },
-      severity: "major" as const,
-      suggestion: null,
-      mismatch: null,
-      guidance: null,
-    };
+    const finding = { ...findingOn(firstHunk, "Drops a promise"), id: FindingId.parse("f1") };
     const call = (changedPaths: readonly string[]) =>
       runGuardrailCall(
         {
@@ -327,7 +310,6 @@ describe("a model run's guardrail call", () => {
         changedPaths,
         new Map(hunks.map((hunk) => [hunk.id, hunk])),
         [finding],
-        [],
       );
 
     expect((await call([firstHunk.path])).findings[0]?.guardrail?.is).toBe("rule");
@@ -351,7 +333,7 @@ describe("a model run's guardrail call", () => {
     await settled(() => advisor.calls.length > 0);
 
     const landed = await stored(id);
-    for (const stage of ["intent", "findings", "risk", "decisions"] as const) {
+    for (const stage of MODEL_STAGES) {
       expect(landed.stages[stage]).toBe("done");
     }
     expect(landed.guardrails).toBe("running");
@@ -370,12 +352,8 @@ describe("a model run's guardrail call", () => {
     await until(() => doneCount(id) > before);
 
     const saves = store.saves.filter((saved) => saved.id === id);
-    const ended = saves.findIndex(
-      (saved) =>
-        saved.stages.intent === "done" &&
-        saved.stages.findings === "done" &&
-        saved.stages.risk === "done" &&
-        saved.stages.decisions === "done",
+    const ended = saves.findIndex((saved) =>
+      MODEL_STAGES.every((stage) => saved.stages[stage] === "done"),
     );
     expect(saves[ended]?.guardrails).toBe("running");
   });
@@ -474,7 +452,7 @@ describe("codeOf", () => {
   });
 
   it("is at most the limit, the rest counted", () => {
-    const code = codeOf(long, null);
+    const code = codeOf(long, { hunkId: long.id, side: "new", startLine: 1, line: 45 });
     expect(code).toHaveLength(MAX_POINT_LINES + 1);
     expect(code.at(-1)).toBe("… 5 more lines");
   });

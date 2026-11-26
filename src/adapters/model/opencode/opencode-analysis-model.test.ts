@@ -106,11 +106,11 @@ describe("OpencodeAnalysisModel", () => {
     const { model, calls } = modelWith();
     await model.intent(smallFeatureInput);
     await model.findings(smallFeatureInput, smallFeatureIntent);
-    await model.risk(smallFeatureInput);
+    await model.steps(smallFeatureInput);
 
     const created = calls.filter((call) => call.method === "POST" && call.path === "/api/session");
     expect(created.map((call) => call.body)).toEqual(
-      ["medium", "high", "low"].map((variant) => ({
+      ["medium", "high", "medium"].map((variant) => ({
         agent: AGENT,
         title: "megareviewer",
         model: { providerID: "anthropic", id: "claude-haiku-5-5", variant },
@@ -132,7 +132,7 @@ describe("OpencodeAnalysisModel", () => {
   it("puts the reviewer's guidance in the PR's entry, before the PR, and asks for its mark", async () => {
     const { model, calls } = modelWith();
     await model.findings(guidedInput, smallFeatureIntent);
-    await model.risk(guidedInput);
+    await model.intent(guidedInput);
     const entries = calls
       .filter((call) => call.path.endsWith(`/entries/${PR_ENTRY}-00`))
       .map((call) => JSON.stringify(call.body));
@@ -143,9 +143,8 @@ describe("OpencodeAnalysisModel", () => {
       entries[0]?.indexOf("<pull_request_data>") ?? 0,
     );
     expect(entries[1]).toBe(entries[0]);
-    for (const prompt of calls.filter((call) => call.path.endsWith("/prompt"))) {
-      expect(JSON.stringify(prompt.body)).toContain('\\"enum\\":[\\"raised\\",\\"left-out\\"]');
-    }
+    const [findings] = calls.filter((call) => call.path.endsWith("/prompt"));
+    expect(JSON.stringify(findings?.body)).toContain('\\"enum\\":[\\"raised\\",\\"left-out\\"]');
   });
 
   it("returns the guidance a finding names in its answer's text", async () => {
@@ -236,9 +235,9 @@ describe("OpencodeAnalysisModel", () => {
   it("fails an answer that isn't JSON, or isn't the pass's, as invalid output", async () => {
     await expectFailure(intentSaying("I can't do that."), "invalid-output", /one JSON object/);
     await expectFailure(
-      intentSaying('{"answer":{"pass":"risk","assessments":[]}}'),
+      intentSaying('{"answer":{"pass":"findings","findings":[]}}'),
       "invalid-output",
-      /answered the risk task instead of intent/,
+      /answered the findings task instead of intent/,
     );
   });
 
@@ -386,7 +385,7 @@ describe("OpencodeAnalysisModel", () => {
     it("gives every pass one directory, gone afterwards, and leave to read each file by name", async () => {
       const { model, calls } = modelWith();
       await model.intent(input);
-      await Promise.all([model.risk(input), model.decisions(input)]);
+      await Promise.all([model.findings(input, null), model.steps(input)]);
 
       const sessions = sessionsOf(calls).map((body) => Created.parse(body));
       expect(sessions).toHaveLength(3);
@@ -402,7 +401,7 @@ describe("OpencodeAnalysisModel", () => {
 
     it("asks for the reading after the task, and lists the files before the PR", async () => {
       const { model, calls } = modelWith();
-      await model.decisions(input);
+      await model.steps(input);
       const bodyOf = (suffix: string) =>
         JSON.stringify(calls.find((call) => call.path.endsWith(suffix))?.body);
       expect(bodyOf("/prompt")).toContain("First go through <readable_files>");
@@ -465,9 +464,9 @@ describe("OpencodeAnalysisModel", () => {
 
     it("runs a pass without the reader as one with nothing to read", async () => {
       const without = modelWith();
-      await without.model.risk(input, { withoutReader: true });
+      await without.model.intent(input, { withoutReader: true });
       const plain = modelWith();
-      await plain.model.risk(smallFeatureInput);
+      await plain.model.intent(smallFeatureInput);
       expect(without.calls).toEqual(plain.calls);
       expect(Created.safeParse(sessionsOf(without.calls)[0]).success).toBe(false);
     });

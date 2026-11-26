@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-/** A switch a page puts in the Display menu under its choice, such as the review page's decisions. */
+/** A switch a page puts in the Display menu under its choice, such as the review page's tour. */
 export interface PageToggle {
   readonly label: string;
   readonly checked: boolean;

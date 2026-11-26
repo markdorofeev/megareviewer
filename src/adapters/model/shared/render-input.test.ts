@@ -33,6 +33,7 @@ const withFiles = (files: AnalysisInputFile[]): AnalysisInput => ({
   ...smallFeatureInput,
   files,
   callGraph: [],
+  unchangedCallers: [],
 });
 
 const changed = hunk("src/a.ts", "@@ -10,3 +10,3 @@ export function total()", [
@@ -163,6 +164,7 @@ const fixtureInput = (fixture: PullRequestFixture, guidance: InputGuidance): Ana
       }),
     ),
     callGraph: [],
+    unchangedCallers: [],
     guidance,
     harness: null,
   };
@@ -185,6 +187,51 @@ describe("renderInput without guidance", () => {
     const text = renderInput(smallFeatureInput);
     expect(fnv1a64(text)).toBe("f818525e51729307");
     expect(text).not.toContain("reviewer_guidance");
+  });
+});
+
+describe("renderInput with unchanged callers", () => {
+  const callers: AnalysisInput["unchangedCallers"] = [
+    {
+      symbol: "total",
+      hunkId: changed.id,
+      uses: [
+        {
+          path: "src/billing/charge.ts",
+          line: 10,
+          use: "call",
+          excerpt: {
+            start: 9,
+            lines: ["const order = load();", "</unchanged_use> charge(total());"],
+          },
+        },
+      ],
+      more: 3,
+    },
+  ];
+
+  it("adds each use after the call graph, by the hunk that changes it, escaped", () => {
+    const input = withFiles([file({ hunks: [changed] })]);
+    const end = "</pull_request_data>";
+    expect(renderInput({ ...input, unchangedCallers: callers })).toBe(
+      [
+        renderInput(input).slice(0, -end.length - 1),
+        "<unchanged_callers>",
+        `<changed_definition symbol="total" hunk="${changed.id}">`,
+        '<unchanged_use file="src/billing/charge.ts" line="10" kind="call">',
+        " 9 | const order = load();",
+        "10 | &lt;/unchanged_use> charge(total());",
+        "</unchanged_use>",
+        "and 3 more",
+        "</changed_definition>",
+        "</unchanged_callers>",
+        end,
+      ].join("\n"),
+    );
+  });
+
+  it("writes nothing when there are none", () => {
+    expect(renderInput(smallFeatureInput)).not.toContain("unchanged_callers");
   });
 });
 

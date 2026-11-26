@@ -1,0 +1,82 @@
+diff --git a/src/app.ts b/src/app.ts
+index e3ed688..78faef1 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -8,6 +8,6 @@ import { requireUser } from "./require-user.ts";
+ export const createApp = (database: Database) => {
+   const app = express();
+   const projects = createProjectService(createProjectRepository(database));
+-  app.use(requireUser, projectRoutes(projects));
++  app.use(requireUser, projectRoutes(projects, database));
+   return app;
+ };
+diff --git a/src/projects/repository.ts b/src/projects/repository.ts
+index c78bad1..472fd94 100644
+--- a/src/projects/repository.ts
++++ b/src/projects/repository.ts
+@@ -17,6 +17,14 @@ export const createProjectRepository = (database: Database) => ({
+     );
+     return rows[0] ?? null;
+   },
++
++  async setArchivedAt(id: string, ownerId: string, at: Date | null): Promise<Project | null> {
++    const { rows } = await database.query(
++      `UPDATE projects SET archived_at = $3 WHERE id = $1 AND owner_id = $2 RETURNING ${COLUMNS}`,
++      [id, ownerId, at],
++    );
++    return rows[0] ?? null;
++  },
+ });
+ 
+ export type ProjectRepository = ReturnType<typeof createProjectRepository>;
+diff --git a/src/projects/routes.ts b/src/projects/routes.ts
+index a31d47a..04c0a41 100644
+--- a/src/projects/routes.ts
++++ b/src/projects/routes.ts
+@@ -1,7 +1,8 @@
+ import { Router } from "express";
++import type { Database } from "../database.ts";
+ import type { ProjectService } from "./service.ts";
+ 
+-export const projectRoutes = (projects: ProjectService): Router => {
++export const projectRoutes = (projects: ProjectService, database: Database): Router => {
+   const router = Router();
+ 
+   router.get("/projects/:id", async (request, response) => {
+@@ -10,5 +11,23 @@ export const projectRoutes = (projects: ProjectService): Router => {
+     return response.json(project);
+   });
+ 
++  router.post("/projects/:id/archive", async (request, response) => {
++    const project = await projects.archive(request.params.id, request.userId);
++    if (project === null) return response.status(404).json({ error: "project_not_found" });
++    return response.json(project);
++  });
++
++  router.post("/projects/:id/restore", async (request, response) => {
++    const { rows } = await database.query(
++      `UPDATE projects SET archived_at = NULL
++       WHERE id = $1 AND owner_id = $2
++       RETURNING id, name, archived_at AS "archivedAt"`,
++      [request.params.id, request.userId],
++    );
++    const project = rows[0] ?? null;
++    if (project === null) return response.status(404).json({ error: "project_not_found" });
++    return response.json(project);
++  });
++
+   return router;
+ };
+diff --git a/src/projects/service.ts b/src/projects/service.ts
+index 72f8c9d..bd8d2c0 100644
+--- a/src/projects/service.ts
++++ b/src/projects/service.ts
+@@ -3,6 +3,8 @@ import type { Project, ProjectRepository } from "./repository.ts";
+ /** What can be done with a project. Routes and jobs go through it, never to the repository. */
+ export const createProjectService = (repository: ProjectRepository) => ({
+   get: (id: string, ownerId: string): Promise<Project | null> => repository.find(id, ownerId),
++  archive: (id: string, ownerId: string): Promise<Project | null> =>
++    repository.setArchivedAt(id, ownerId, new Date()),
+ });
+ 
+ export type ProjectService = ReturnType<typeof createProjectService>;

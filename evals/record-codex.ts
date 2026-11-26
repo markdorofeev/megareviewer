@@ -1,6 +1,6 @@
 // Records the Codex transport's fixtures from real runs of the signed-in `codex`:
 // node evals/record-codex.ts
-// The four passes on small-feature, as the AnalysisModel contract suite sends them, on GPT-6 Luna
+// The review's two passes on small-feature, as the AnalysisModel contract suite sends them, on GPT-6 Luna
 // and the reviewer's ChatGPT plan, then one pass signed out (an empty CODEX_HOME), which spends
 // about a minute on Codex's own retries. Every line is kept: the stream holds no account or path.
 
@@ -39,8 +39,6 @@ const record = async (name: string, pass: ModelPass, intent: Intent | null = nul
 await record("intent", "intent");
 // The contract suite's intent: the fixture analysis's own, not this model's.
 await record("findings", "findings", smallFeatureIntent);
-await record("risk", "risk");
-await record("decisions", "decisions");
 
 // An empty CODEX_HOME is a Codex nobody signed in to.
 const empty = mkdtempSync(join(tmpdir(), "megareviewer-signed-out-"));

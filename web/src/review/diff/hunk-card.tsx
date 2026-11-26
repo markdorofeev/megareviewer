@@ -16,12 +16,8 @@ import type {
   PartId,
   UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
-import {
-  type PointKind,
-  parseBody,
-  type RiskAssessment,
-} from "../../../../src/domain/review/index.ts";
-import { RISK_STATUS } from "../../lib/status.ts";
+import { parseBody, type RiskAssessment } from "../../../../src/domain/review/index.ts";
+import { type PointTone, RISK_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
@@ -83,24 +79,6 @@ export const PINNED = "sticky left-0 w-[100cqw]";
 
 /** A comment or thread under a line starts where its code does, past both numbers and the marker. */
 const CODE_INSET = "pr-3 pl-29";
-
-/** A row of a card's lines that isn't a line: above or under one, as wide as the card shows. */
-export const LineRow = ({
-  inset,
-  children,
-}: {
-  /** Starts where the code does, past the line numbers, as a comment does. */
-  readonly inset: boolean;
-  readonly children: ReactNode;
-}) => (
-  <div
-    role="row"
-    data-slot="line-row"
-    className={cn(inset && cn(CODE_INSET, "py-2"), "font-sans", PINNED)}
-  >
-    <div role="cell">{children}</div>
-  </div>
-);
 
 /** A hunk to show, with its file and risk; a mechanical one has proofs and shows collapsed. */
 export interface HunkItem {
@@ -171,7 +149,7 @@ export interface HunkCardProps {
    * the draft's text.
    */
   readonly draftNote?: (comment: LineComment, edit: (body: string) => void) => ReactNode;
-  /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
+  /** Shown between the header and the lines, e.g. the points on none of its lines. */
   readonly afterHeader?: ReactNode;
   /** The host's threads on a line, shown under it. */
   readonly threadsAt?: (place: LinePlace) => ReactNode;
@@ -186,15 +164,13 @@ export interface HunkCardProps {
   readonly marks?: ReadonlyMap<number, readonly LineMark[]>;
   /** Lines one of Claude's points rests on, by "side:line", each with its kind. */
   readonly pointLines?: ReadonlyMap<string, PointLine>;
-  /** Claude's findings and risks under the last of their lines. */
+  /** Claude's findings under the last of their lines. */
   readonly pointsAt?: (place: LinePlace) => ReactNode;
-  /** After a line's code, e.g. a decision's chip. */
-  readonly pointsAtEnd?: (place: LinePlace) => ReactNode;
-  /** Lines with a finding's card under them, by "side:line": a bug in the number cell. */
-  readonly flagged?: ReadonlySet<string>;
+  /** Lines with a point's card under them, by "side:line": a bug in the number cell. */
+  readonly flags?: ReadonlyMap<string, PointTone>;
 }
 
-/** A line a point rests on: the kind that wins there, and how the line lands when it does. */
+/** A line a point rests on: the tone that wins there, and how the line lands when it does. */
 export interface PointLine {
   readonly kind: LineMarkKind;
   readonly landing?: PointLanding;
@@ -226,8 +202,7 @@ export const HunkCard = memo(function HunkCard({
   marks,
   pointLines,
   pointsAt,
-  pointsAtEnd,
-  flagged,
+  flags,
 }: HunkCardProps) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -318,7 +293,7 @@ export const HunkCard = memo(function HunkCard({
       className={cn(
         "relative scroll-mt-24 bg-card -outline-offset-2",
         !inFile && "overflow-hidden rounded-lg border",
-        // The selected decision's code: a tint and an inset bar, not only a color.
+        // The code of a point the reviewer went to: a tint and an inset bar, not only a color.
         highlighted && "bg-primary/5 shadow-[inset_0_0_0_2px_var(--ring)]",
       )}
       aria-label={`${file.path}, ${hunkLocation(hunk)}`}
@@ -355,7 +330,7 @@ export const HunkCard = memo(function HunkCard({
               {proof.detail}
             </span>
           ))}
-          {!inFile && risk !== null && (
+          {!inFile && risk !== null && risk.riskClass !== "contract" && (
             <span className="ml-auto" title={risk.reason === "" ? undefined : risk.reason}>
               <StatusBadge status={RISK_STATUS[risk.riskClass]} />
               {risk.reason !== "" && <span className="sr-only">: {risk.reason}</span>}
@@ -389,7 +364,6 @@ export const HunkCard = memo(function HunkCard({
             const commentAt = open ? openComment : comment;
             const threads = place === null ? null : (threadsAt?.(place) ?? null);
             const points = place === null ? null : (pointsAt?.(place) ?? null);
-            const end = place === null ? null : (pointsAtEnd?.(place) ?? null);
             const key = place === null ? null : placeKey(place);
             const point = key === null ? undefined : pointLines?.get(key);
             return (
@@ -398,8 +372,7 @@ export const HunkCard = memo(function HunkCard({
                   line={line}
                   cellRole="cell"
                   pointKind={point?.kind ?? null}
-                  flagged={key !== null && flagged?.has(key) === true}
-                  {...(end === null ? {} : { end })}
+                  flag={(key === null ? undefined : flags?.get(key)) ?? null}
                   {...(point?.landing === undefined ? {} : { pointLanding: point.landing })}
                   marks={
                     (line.kind === "del" || line.newNo === null

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fileChange, hunk, smallFeatureAnalysis } from "../../application/testing/index.ts";
-import { type FileChange, HunkId } from "../diff/index.ts";
+import { smallFeatureAnalysis } from "../../application/testing/index.ts";
+import { HunkId } from "../diff/index.ts";
 import {
   Finding,
   FindingId,
@@ -8,7 +8,7 @@ import {
   MismatchId,
   PreferenceId,
   pointsOf,
-  type RiskAssessment,
+  type Severity,
   strippable,
   validateFindings,
 } from "./index.ts";
@@ -24,6 +24,7 @@ const finding = (lines: Partial<Finding["lines"]> = {}): Finding => ({
   title: "Serves a stale receipt",
   explanation: "Keyed by order ID alone.",
   lines: { hunkId: receiptsHunk.id, side: "new", startLine: 9, line: 11, ...lines },
+  type: "logic",
   severity: "major",
   suggestion: null,
   mismatch: null,
@@ -31,7 +32,30 @@ const finding = (lines: Partial<Finding["lines"]> = {}): Finding => ({
 });
 
 describe("pointsOf", () => {
-  it("orders findings, then mismatches, then the model's risks, then decisions", () => {
+  it("orders findings by severity, the model's order within one, then mismatches", () => {
+    const of = (id: string, severity: Severity): Finding => ({
+      ...finding(),
+      id: FindingId.parse(id),
+      severity,
+    });
+    const points = pointsOf({
+      ...smallFeatureAnalysis,
+      findings: [
+        of("f1", "minor"),
+        of("f2", "major"),
+        of("f3", "blocking"),
+        of("f4", "major"),
+        of("f5", "blocking"),
+      ],
+      intent: smallFeatureAnalysis.intent && {
+        ...smallFeatureAnalysis.intent,
+        mismatches: [{ kind: "unrequested", description: "Raises the rate limit.", hunkIds: [] }],
+      },
+    });
+    expect(points.map((point) => point.id)).toEqual(["f3", "f5", "f2", "f4", "f1", "m1"]);
+  });
+
+  it("orders findings, then mismatches", () => {
     const points = pointsOf({
       ...smallFeatureAnalysis,
       intent: smallFeatureAnalysis.intent && {
@@ -39,15 +63,7 @@ describe("pointsOf", () => {
         mismatches: [{ kind: "unrequested", description: "Raises the rate limit.", hunkIds: [] }],
       },
     });
-    expect(points.map((point) => [point.kind, point.id])).toEqual([
-      ["finding", "f1"],
-      ["finding", "m1"],
-      ...[0, 1, 2, 4].map((at) => ["risk", `r:${smallFeatureAnalysis.risk[at]?.hunkId}`]),
-      ["decision", "d1"],
-      ["decision", "d2"],
-      ["decision", "d3"],
-      ["decision", "d4"],
-    ]);
+    expect(points.map((point) => point.id)).toEqual(["f1", "m1"]);
   });
 
   it("lands a finding on its own lines", () => {
@@ -76,10 +92,7 @@ describe("pointsOf", () => {
       guidelines: [{ ref: "g1", path: "REVIEW.md", linkedFrom: null, given: "prompt", bytes: 120 }],
       checks: [],
     };
-    const contractRisk = smallFeatureAnalysis.risk[0];
-    if (contractRisk === undefined) throw new Error("small-feature has risks");
-
-    it("says which preference raised a finding or left it out, and which file a risk is from", () => {
+    it("says which preference raised a finding or left it out, and which file one is from", () => {
       const points = pointsOf({
         ...smallFeatureAnalysis,
         intent: null,
@@ -88,16 +101,15 @@ describe("pointsOf", () => {
           { ...finding(), guidance: { ref: "p1", effect: "raised" } },
           { ...finding(), id: FindingId.parse("f2"), guidance: { ref: "p2", effect: "left-out" } },
           { ...finding(), id: FindingId.parse("f3") },
+          { ...finding(), id: FindingId.parse("f4"), guidance: { ref: "g1", effect: "raised" } },
         ],
-        risk: [{ ...contractRisk, guidance: { ref: "g1", effect: "raised" } }],
-        decisions: [],
       });
 
       expect(points.map((point) => [point.id, point.guidance])).toEqual([
         ["f1", { effect: "raised", label: "Tenant isolation", preferenceId: tenant }],
         ["f2", { effect: "left-out", label: "Naming", preferenceId: naming }],
         ["f3", undefined],
-        [`r:${contractRisk.hunkId}`, { effect: "raised", label: "REVIEW.md", preferenceId: null }],
+        ["f4", { effect: "raised", label: "REVIEW.md", preferenceId: null }],
       ]);
     });
 
@@ -110,11 +122,9 @@ describe("pointsOf", () => {
           { ...finding(), guidance: { ref: "p9", effect: "raised" } },
           { ...finding(), id: FindingId.parse("f2"), guidance: { ref: "p1", effect: "left-out" } },
         ],
-        risk: [{ ...contractRisk, guidance: { ref: "p2", effect: "raised" } }],
-        decisions: [],
       });
 
-      expect(points.map((point) => point.id)).toEqual(["f1", "f2", `r:${contractRisk.hunkId}`]);
+      expect(points.map((point) => point.id)).toEqual(["f1", "f2"]);
       expect(points.every((point) => !("guidance" in point))).toBe(true);
     });
 
@@ -125,8 +135,6 @@ describe("pointsOf", () => {
           files: smallFeatureAnalysis.files,
           intent: null,
           findings: [marked],
-          risk: [],
-          decisions: [],
           ...without,
         });
         expect(point?.id).toBe("f1");
@@ -139,8 +147,6 @@ describe("pointsOf", () => {
     const points = pointsOf({
       ...smallFeatureAnalysis,
       findings: [],
-      risk: [],
-      decisions: [],
       intent: smallFeatureAnalysis.intent && {
         ...smallFeatureAnalysis.intent,
         mismatches: [
@@ -156,24 +162,24 @@ describe("pointsOf", () => {
     expect(points).toEqual([
       {
         id: "m1",
-        kind: "finding",
         title: "The lifetime isn't configurable.",
         explanation: "Asked for, not done.",
         path: null,
         lines: null,
         hunkIds: [],
+        type: null,
         severity: null,
         suggestion: null,
         mismatch: null,
       },
       {
         id: "m2",
-        kind: "finding",
         title: "Hard-codes the lifetime.",
         explanation: "Contradicts what was asked.",
         path: "src/services/receipts.ts",
         lines: { hunkId: receiptsHunk.id, side: "new", startLine: 1, line: 20 },
         hunkIds: [receiptsHunk.id],
+        type: null,
         severity: null,
         suggestion: null,
         mismatch: null,
@@ -184,8 +190,6 @@ describe("pointsOf", () => {
   it("folds a mismatch a finding names into that finding, and keeps the others", () => {
     const points = pointsOf({
       ...smallFeatureAnalysis,
-      risk: [],
-      decisions: [],
       findings: [{ ...finding(), mismatch: MismatchId.parse("m2") }],
       intent: smallFeatureAnalysis.intent && {
         ...smallFeatureAnalysis.intent,
@@ -200,6 +204,23 @@ describe("pointsOf", () => {
       kind: "contradicts",
       description: "Hard-codes the lifetime.",
     });
+  });
+
+  it("carries a finding's type, which a mismatch doesn't have", () => {
+    const points = pointsOf({
+      ...smallFeatureAnalysis,
+      findings: [{ ...finding(), type: "contract" }],
+      intent: smallFeatureAnalysis.intent && {
+        ...smallFeatureAnalysis.intent,
+        mismatches: [{ kind: "unrequested", description: "Raises the rate limit.", hunkIds: [] }],
+      },
+    });
+    expect(points.map((point) => point.type)).toEqual(["contract", null]);
+  });
+
+  it("reads a finding stored before findings had a type as logic", () => {
+    const { type: _, ...stored } = finding();
+    expect(Finding.parse(stored)).toEqual(finding());
   });
 
   it("carries a finding's severity and suggestion, but no suggestion for old-side lines", () => {
@@ -245,215 +266,6 @@ describe("pointsOf", () => {
       expect(parsed.guardrail).toBeUndefined();
       expect("repeated" in parsed).toBe(false);
     }
-  });
-
-  it("puts a decision on its own line when one of its hunks shows it, else its hunk's", () => {
-    const [decision] = smallFeatureAnalysis.decisions;
-    if (decision === undefined) throw new Error("small-feature has decisions");
-    const onLine = {
-      ...decision,
-      hunkIds: [receiptsHunk.id],
-      lines: { hunkId: receiptsHunk.id, side: "new" as const, startLine: 10, line: 10 },
-    };
-    const outside = { ...onLine, lines: { ...onLine.lines, startLine: 99, line: 99 } };
-    const decided = (one: typeof onLine) =>
-      pointsOf({
-        ...smallFeatureAnalysis,
-        intent: null,
-        findings: [],
-        risk: [],
-        decisions: [one],
-      })[0]?.lines;
-    expect(decided(onLine)).toEqual(onLine.lines);
-    expect(decided(outside)).toEqual({
-      hunkId: receiptsHunk.id,
-      side: "new",
-      startLine: 1,
-      line: 20,
-    });
-  });
-
-  it("makes the model's contract a risk on a path the rules mark too, and leaves out its logic", () => {
-    const auth = fileChange(
-      { path: "src/auth/session.ts", status: "modified", language: "typescript" },
-      [hunk("src/auth/session.ts", "@@ -1,1 +1,1 @@", ["-const ttl = 1;", "+const ttl = 2;"])],
-    );
-    const authHunk = auth.hunks[0];
-    if (authHunk === undefined) throw new Error("built with a hunk");
-    const points = pointsOf({
-      files: [auth, ...smallFeatureAnalysis.files],
-      intent: null,
-      findings: [],
-      decisions: [],
-      risk: [
-        {
-          hunkId: authHunk.id,
-          riskClass: "contract",
-          reason: "Session TTL.",
-          source: "model",
-          lines: null,
-          guidance: null,
-        },
-        {
-          hunkId: receiptsHunk.id,
-          riskClass: "logic",
-          reason: "Renders.",
-          source: "model",
-          lines: null,
-          guidance: null,
-        },
-        {
-          hunkId: receiptsHunk.id,
-          riskClass: "contract",
-          reason: "A path rule.",
-          source: "rule",
-          lines: null,
-          guidance: null,
-        },
-      ],
-    });
-    expect(points.map((point) => [point.id, point.title])).toEqual([
-      [`r:${authHunk.id}`, "Session TTL."],
-    ]);
-  });
-
-  it("lands a deletion-only hunk on its old lines", () => {
-    const removed = fileChange({ path: "src/a.ts", status: "modified", language: "typescript" }, [
-      hunk("src/a.ts", "@@ -4,3 +4,1 @@", [" keep();", "-check();", "-guard();"]),
-    ]);
-    const removedHunk = removed.hunks[0];
-    if (removedHunk === undefined) throw new Error("built with a hunk");
-    const [point] = pointsOf({
-      files: [removed],
-      intent: null,
-      findings: [],
-      decisions: [],
-      risk: [
-        {
-          hunkId: removedHunk.id,
-          riskClass: "contract",
-          reason: "x",
-          source: "model",
-          lines: null,
-          guidance: null,
-        },
-      ],
-    });
-    expect(point?.lines).toEqual({ hunkId: removedHunk.id, side: "old", startLine: 5, line: 6 });
-  });
-
-  it("lands a risk on the lines the model names, or on its hunk's changes when it shows none of them", () => {
-    const routes = fileChange(
-      { path: "src/routes.ts", status: "modified", language: "typescript" },
-      [
-        hunk("src/routes.ts", "@@ -1,1 +1,4 @@", [
-          " const router = Router();",
-          '+import { save } from "./tokens";',
-          "+",
-          '+router.put("/token", save);',
-        ]),
-      ],
-    );
-    const routeHunk = routes.hunks[0];
-    if (routeHunk === undefined) throw new Error("built with a hunk");
-    const riskOn = (startLine: number, line: number) =>
-      pointsOf({
-        files: [routes],
-        intent: null,
-        findings: [],
-        decisions: [],
-        risk: [
-          {
-            hunkId: routeHunk.id,
-            riskClass: "contract",
-            reason: "Accepts a token.",
-            source: "model",
-            lines: { hunkId: routeHunk.id, side: "new", startLine, line },
-            guidance: null,
-          },
-        ],
-      })[0]?.lines;
-    expect(riskOn(4, 4)).toEqual({ hunkId: routeHunk.id, side: "new", startLine: 4, line: 4 });
-    expect(riskOn(4, 9)).toEqual({ hunkId: routeHunk.id, side: "new", startLine: 2, line: 4 });
-  });
-});
-
-describe("a risk's checking test", () => {
-  const routes = fileChange({ path: "src/routes.ts", status: "modified", language: "typescript" }, [
-    hunk("src/routes.ts", "@@ -1,1 +1,2 @@", [
-      " const router = Router();",
-      '+router.put("/token", save);',
-    ]),
-  ]);
-  const tests = fileChange(
-    { path: "src/routes.test.ts", status: "added", language: "typescript" },
-    [
-      hunk("src/routes.test.ts", "@@ -0,0 +1,2 @@", [
-        '+it("refuses another origin", () => {',
-        "+  expect(status).toBe(403);",
-      ]),
-    ],
-  );
-  const [routeHunk] = routes.hunks;
-  const [testHunk] = tests.hunks;
-  if (routeHunk === undefined || testHunk === undefined) throw new Error("built with hunks");
-  const checkedBy = {
-    test: "refuses another origin",
-    checks: "A PUT from another origin gets 403.",
-    lines: { hunkId: testHunk.id, side: "new" as const, startLine: 2, line: 2 },
-  };
-  const analysisRisk: RiskAssessment[] = [
-    {
-      hunkId: routeHunk.id,
-      riskClass: "contract",
-      reason: "Another site could overwrite a saved token.",
-      source: "model",
-      lines: null,
-      checkedBy,
-      guidance: null,
-    },
-  ];
-  const riskOf = (files: readonly FileChange[]) =>
-    pointsOf({ files, intent: null, findings: [finding()], decisions: [], risk: analysisRisk });
-
-  it("carries a risk's guardrail beside its checking test", () => {
-    const guardrail = {
-      is: "suggested",
-      kind: "ci-check",
-      engine: "oasdiff",
-      does: "Fails a change that breaks the API's contract.",
-    } as const;
-    const [routeRisk] = analysisRisk;
-    if (routeRisk === undefined) throw new Error("unreachable: a risk");
-    const points = pointsOf({
-      files: [routes, tests, ...smallFeatureAnalysis.files],
-      intent: null,
-      findings: [],
-      decisions: [],
-      risk: [{ ...routeRisk, guardrail }],
-    });
-    expect(points[0]).toMatchObject({
-      kind: "risk",
-      guardrail,
-      checkedBy: { test: checkedBy.test },
-    });
-  });
-
-  it("is on its risk with the test's file, and the risk keeps its place after the findings", () => {
-    const points = riskOf([routes, tests, ...smallFeatureAnalysis.files]);
-    expect(points.map((point) => point.kind)).toEqual(["finding", "risk"]);
-    expect(points[1]).toMatchObject({
-      title: "Another site could overwrite a saved token.",
-      lines: { hunkId: routeHunk.id, side: "new", startLine: 2, line: 2 },
-      checkedBy: { ...checkedBy, path: "src/routes.test.ts" },
-    });
-    expect(points[0]?.checkedBy).toBeUndefined();
-  });
-
-  it("goes when its test isn't in the files, and the risk stays", () => {
-    const [risk] = riskOf([routes]);
-    expect(risk?.kind).toBe("risk");
-    expect(risk?.checkedBy).toBeUndefined();
   });
 });
 
