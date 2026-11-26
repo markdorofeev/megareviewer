@@ -549,26 +549,6 @@
           "partIds": ["h_880613e4fd0f3068"],
           "row": 19
         }
-      ],
-      [
-        {
-          "key": "group:web/tests/e2e/accounts",
-          "label": "web/tests/e2e/accounts/",
-          "entries": [],
-          "flows": ["web/tests/e2e/accounts"],
-          "partIds": ["h_b891397724d5dc1a"],
-          "row": 20
-        }
-      ],
-      [
-        {
-          "key": "group:web/tests/e2e/billing",
-          "label": "web/tests/e2e/billing/",
-          "entries": [],
-          "flows": ["web/tests/e2e/billing"],
-          "partIds": ["h_fdad61dcc7e619d7"],
-          "row": 21
-        }
       ]
     ],
     "strip": []
@@ -713,56 +693,6 @@
           "flows": ["src/main/resources/db/migration"],
           "partIds": ["h_aa13e70325f6e6b4"],
           "row": 13
-        }
-      ],
-      [
-        {
-          "key": "group:src/test/java/com/acmecorp/fulfillment/orders/controllers",
-          "label": "src/test/java/com/acmecorp/fulfillment/orders/controllers/",
-          "entries": [],
-          "flows": ["src/test/java/com/acmecorp/fulfillment/orders/controllers"],
-          "partIds": ["h_489ff36ff0e0fffa"],
-          "row": 14
-        }
-      ],
-      [
-        {
-          "key": "group:src/test/java/com/acmecorp/fulfillment/orders/entities",
-          "label": "src/test/java/com/acmecorp/fulfillment/orders/entities/",
-          "entries": [],
-          "flows": ["src/test/java/com/acmecorp/fulfillment/orders/entities"],
-          "partIds": ["h_d9cea1bc82475b90"],
-          "row": 15
-        }
-      ],
-      [
-        {
-          "key": "group:src/test/java/com/acmecorp/fulfillment/orders/services/payment",
-          "label": "src/test/java/com/acmecorp/fulfillment/orders/services/payment/",
-          "entries": [],
-          "flows": ["src/test/java/com/acmecorp/fulfillment/orders/services/payment"],
-          "partIds": ["h_950cc78003b9c8ca"],
-          "row": 16
-        }
-      ],
-      [
-        {
-          "key": "group:src/test/java/com/acmecorp/fulfillment/orders/services/shipping",
-          "label": "src/test/java/com/acmecorp/fulfillment/orders/services/shipping/",
-          "entries": [],
-          "flows": ["src/test/java/com/acmecorp/fulfillment/orders/services/shipping"],
-          "partIds": ["h_11f2827d8c6e6f0a"],
-          "row": 17
-        }
-      ],
-      [
-        {
-          "key": "group:src/test/resources/fixtures",
-          "label": "src/test/resources/fixtures/",
-          "entries": [],
-          "flows": ["src/test/resources/fixtures"],
-          "partIds": ["h_429520e83afbedb9"],
-          "row": 18
         }
       ]
     ],

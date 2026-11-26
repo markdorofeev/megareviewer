@@ -1638,15 +1638,15 @@ describe("the tour", () => {
       "Step 2: cachedReceipt keeps each order's receipt in memory once it's rendered",
       "Step 3: Tax lines are fetched up to 3 times before the receipt fails",
       "Step 4: Receipt lines show prices through formatMoney and dates through dayjs",
-      "After the tour",
+      "Not in the tour · 7 files",
     ]);
     expect(steps.getByText("lines 14–21 · 8 of 18 changed lines")).toBeTruthy();
     const [firstChip] = steps.getAllByRole("button", { name: /^Finding/ });
     expect(firstChip?.textContent).toContain(
       "Any signed-in user can read every customer's receipt",
     );
-    expect(steps.getByText("Not in the tour")).toBeTruthy();
-    expect(steps.getByText("Suggested depth")).toBeTruthy();
+    expect(steps.getByRole("region", { name: "After the tour" })).toBeTruthy();
+    expect(steps.queryByText("Suggested depth")).toBeNull();
     const strip = screen.getByRole("group", { name: "Directories on the tour" });
     expect(within(strip).getByRole("button", { name: /^src\/routes\/, step 1/ })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();

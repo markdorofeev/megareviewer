@@ -425,8 +425,8 @@ const Review = ({
   const tourOverview = useMemo(() => fileOverview(analysis), [analysis]);
   const noTour = tourOn ? noTourOf(live) : null;
   const tour = useMemo(
-    () => (tourOn ? tourOf(analysis, tourOverview, points, (point) => stateOf(point.id)) : null),
-    [tourOn, analysis, tourOverview, points, stateOf],
+    () => (tourOn ? tourOf(analysis, tourOverview, points) : null),
+    [tourOn, analysis, tourOverview, points],
   );
 
   const tourReady = tourOn && noTour === null && tour !== null;
@@ -1785,6 +1785,7 @@ const Review = ({
               onFocusNode={(key) => {
                 overviewAt.current = key;
               }}
+              onOpenFile={openFileFromTour}
             />
           ) : overviewForm === "lanes" ? (
             <FlowLanes

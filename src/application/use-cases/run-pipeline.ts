@@ -489,8 +489,6 @@ const modelStages = async (
               {
                 hunks,
                 mechanical: new Set(prepared.proofs.flatMap((proof) => proof.hunkId ?? [])),
-                parts: prepared.parts,
-                callGraph: prepared.callGraph,
               },
               dataFlowContext({
                 files,

@@ -170,8 +170,8 @@ export interface AnalysisModel {
     options?: PassOptions,
   ): Promise<Result<PassOutput<FindingDraft[]>, PassError>>;
   /**
-   * The page's tour, in call order, and how data moves through the change; only a run that asks
-   * for the tour calls it.
+   * The page's tour, what matters most first, and how data moves through the change; only a run
+   * that asks for the tour calls it.
    */
   steps(
     input: AnalysisInput,

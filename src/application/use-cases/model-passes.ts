@@ -373,10 +373,8 @@ const describeStepProblem = (problem: StepProblem): string => {
       return `${step}'s excerpt ${problem.excerpt + 1} rests on ${problem.hunkId}, a mechanical hunk sent as stats only. Use hunks sent in full.`;
     case "lines-outside":
       return `${step}'s excerpt ${problem.excerpt + 1} has lines ${problem.hunkId} doesn't show on that side.`;
-    case "same-file":
-      return `${step} has two excerpts in one file. Give two only when the hop crosses into another process, each in its own file.`;
-    case "order":
-      return `${step} comes before step ${problem.caller + 1}, whose code calls it. Put callers first.`;
+    case "overlap":
+      return `${step}'s two excerpts show some of the same lines. Give one excerpt, or two that share no line.`;
     case "too-many":
       return `${step} is past the seventh. Merge neighboring steps into at most 7.`;
   }

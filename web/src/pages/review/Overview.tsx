@@ -160,6 +160,7 @@ export const Overview = ({
   onCollapse,
   expandedGroups,
   onFocusNode,
+  onOpenFile,
 }: {
   readonly overview: FileOverview;
   /** The file last in view in the code: its directory is outlined. */
@@ -171,6 +172,8 @@ export const Overview = ({
   readonly onCollapse: (groupKey: string) => void;
   readonly expandedGroups: readonly string[];
   readonly onFocusNode: (key: string) => void;
+  /** Opens a file in the map: a test that reaches no changed code. */
+  readonly onOpenFile: (path: string) => void;
 }) => {
   const id = useId();
   const box = useRef<HTMLDivElement>(null);
@@ -219,6 +222,7 @@ export const Overview = ({
     const key = (event.target as HTMLElement).dataset.key;
     if (key === undefined) return;
     const row = grid.findIndex((one) => one.some((node) => node.key === key));
+    if (row === -1) return;
     const at = grid[row]?.findIndex((node) => node.key === key) ?? -1;
     const centerOf = (node: OverviewNode) => {
       const rect = box.current
@@ -266,8 +270,8 @@ export const Overview = ({
       <p data-slot="overview-legend" className="text-muted-foreground">
         Each box is a directory. Directories that nothing in the pull request calls are on top; each
         sits below its callers. Solid lines are calls, dash-dot ones HTTP requests to a route,
-        dashed ones imports, dotted ones types. Tests show on the directories they call. The
-        outlined box holds the file last in view in the code.
+        dashed ones imports, dotted ones types. Tests show on the directories they call, and the
+        others are listed under them. The outlined box holds the file last in view in the code.
       </p>
       {expandedGroups.length > 0 && (
         <p className="flex flex-wrap gap-2">
@@ -358,6 +362,28 @@ export const Overview = ({
           <div className="flex flex-wrap gap-2">
             {overview.strip.map((node) => (
               <NodeButton key={node.key} {...nodeProps(node)} />
+            ))}
+          </div>
+        </section>
+      )}
+      {overview.tests.length > 0 && (
+        <section aria-label="Tests that call no changed code" className="flex flex-col gap-2">
+          <h3 className="text-caption font-medium text-muted-foreground">
+            Tests that call no changed code · {overview.tests.length}
+          </h3>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {overview.tests.map((path) => (
+              <button
+                key={path}
+                type="button"
+                data-slot="overview-test"
+                data-key={path}
+                className="min-h-6 text-left font-mono text-code-compact wrap-anywhere text-foreground underline decoration-input underline-offset-2 hover:decoration-foreground"
+                title={path}
+                onClick={() => onOpenFile(path)}
+              >
+                {basename(path)}
+              </button>
             ))}
           </div>
         </section>
