@@ -9,8 +9,8 @@ import {
 } from "../../../src/domain/review/index.ts";
 import { DEEP_APP_PATHS, JAVA_SERVICE_PATHS, MONOREPO_PATHS } from "../../dev/fixtures/index.ts";
 import { useShortcuts } from "../lib/keymap.ts";
-import { VERDICT_STATUS } from "../lib/status.ts";
-import { DecisionChip, DecisionNote, FindingCard, RiskNote } from "../pages/review/PointCard.tsx";
+import { type PointTone, VERDICT_STATUS } from "../lib/status.ts";
+import { FindingCard } from "../pages/review/PointCard.tsx";
 import {
   CiSummary,
   CollapsedHunk,
@@ -35,6 +35,7 @@ import {
   ReviewSubmitPanel,
   type ReviewThreadProps,
   ReviewThreadView,
+  SelectionComment,
   ShortcutsDialog,
   TreeSkeleton,
   useSyntax,
@@ -86,12 +87,11 @@ export const DomainComponents = () => {
             intent={
               <span>
                 Retries back off exponentially instead of waiting a fixed second.{" "}
-                <span className="text-risk-contract">▲ AbortError is no longer retried</span>
+                <span className="text-severity-major">▲ AbortError is no longer retried</span>
               </span>
             }
             tabs={[
               { value: "files", label: "Files", count: 8 },
-              { value: "decisions", label: "Decisions", count: 4 },
               { value: "overview", label: "Overview" },
             ]}
             actions={<Button variant="outline">Details</Button>}
@@ -194,7 +194,7 @@ export const DomainComponents = () => {
         </div>
       </Group>
 
-      <Group title="A draft on a line: click a line to write one, Edit to change it">
+      <Group title="A draft on a line: click a line's number or select code to write one, Edit to change it">
         <DraftDemo />
       </Group>
 
@@ -206,7 +206,7 @@ export const DomainComponents = () => {
         <LandingDemo />
       </Group>
 
-      <Group title="Claude's points, one of each kind">
+      <Group title="Claude's points">
         <PointStates />
       </Group>
 
@@ -241,7 +241,6 @@ export const DomainComponents = () => {
           <span className="text-muted-foreground">As a reviewer:</span>
           <ReviewSubmitPanel
             pending={PENDING_COMMENTS}
-            decided={[3, 4]}
             canApprove
             defaultVerdict="request_changes"
             onSubmit={() => new Promise((resolve) => setTimeout(resolve, 600))}
@@ -275,7 +274,7 @@ export const DomainComponents = () => {
             <EmptyState
               tone="done"
               glyph="✓"
-              title="Every decision has a verdict"
+              title="Every finding is in your review"
               body="Publish the review to post it on the pull request."
               actions={[{ label: "Publish", onClick: () => undefined, shortcut: "openReview" }]}
             />
@@ -398,7 +397,7 @@ const manyFolders = (paths: readonly string[]): FileEntry[] =>
     status: at % 9 === 4 ? "added" : at % 11 === 7 ? "renamed" : "modified",
     additions: (at * 37) % 240,
     deletions: (at * 13) % 60,
-    ...(at % 3 === 1 ? { points: { finding: 1, risk: 2, decision: 1 }, threads: 2 } : {}),
+    ...(at % 3 === 1 ? { findings: 1 + (at % 2), threads: 2 } : {}),
   }));
 
 const ManyFoldersDemo = ({
@@ -422,13 +421,7 @@ const ManyFoldersDemo = ({
 };
 
 const AuthorPanel = () => (
-  <ReviewSubmitPanel
-    pending={[]}
-    decided={[0, 4]}
-    canApprove={false}
-    shortcut={false}
-    onSubmit={() => undefined}
-  />
+  <ReviewSubmitPanel pending={[]} canApprove={false} shortcut={false} onSubmit={() => undefined} />
 );
 
 /** Drafts on a hunk's lines, kept in memory, as the review page keeps them in local storage. */
@@ -463,6 +456,7 @@ const DraftDemo = () => {
           setComments(empty ? rest : [...rest, comment]);
         }}
       />
+      <SelectionComment onComment={(_, place) => setOpen(place)} />
     </div>
   );
 };
@@ -509,16 +503,14 @@ const Card = ({ children }: { readonly children: ReactNode }) => (
 
 /**
  * Claude's points one by one: a finding's card, then folded into the review and dismissed; a
- * risk's note, a dismissed one and one a test checks; a finding a preference raised, one a
- * preference left out, folded until Show, and a risk from a guideline file; a decision's chip and
- * its footnote; and the marks a finding's and a risk's lines take on their numbers, on unchanged,
- * deleted and added lines.
+ * mismatch no finding names; a finding a preference raised, one a preference left out, folded until
+ * Show, and one from a guideline file; and the marks a finding's lines take on their numbers, on
+ * unchanged, deleted and added lines.
  */
 const PointStates = () => {
-  const [finding, risk, decision] = POINTS;
-  const [open, setOpen] = useState(true);
+  const [finding, mismatch] = POINTS;
   const [shown, setShown] = useState(false);
-  if (finding === undefined || risk === undefined || decision === undefined) return null;
+  if (finding === undefined || mismatch === undefined) return null;
   const actions = {
     state: "open",
     saving: false,
@@ -559,32 +551,7 @@ const PointStates = () => {
         removed={null}
         language={null}
       />
-      <RiskNote point={risk} {...actions} />
-      <RiskNote
-        point={{
-          ...risk,
-          id: PointId.parse("r:h_00000000000000ff"),
-          title: "Changes the default timeout for every request.",
-        }}
-        {...actions}
-        state="dismissed"
-      />
-      <RiskNote
-        point={{
-          ...risk,
-          id: PointId.parse("r:h_00000000000000fe"),
-          title: "Callers that relied on three attempts now wait up to 31 s before an error.",
-          ...(risk.lines !== null && {
-            checkedBy: {
-              test: "gives up after the fifth attempt",
-              checks: "A call that always fails is tried five times, then throws.",
-              lines: risk.lines,
-              path: "src/http/retry.test.ts",
-            },
-          }),
-        }}
-        {...actions}
-      />
+      <FindingCard point={mismatch} {...actions} inReview={false} removed={null} language={null} />
       <FindingCard
         point={{
           ...finding,
@@ -609,6 +576,7 @@ const PointStates = () => {
           id: PointId.parse("f10"),
           title: "`attempt` could be `tries`",
           explanation: "The loop counts tries from zero; `attempt + 1` reads as an off-by-one.",
+          type: "architecture",
           severity: "minor",
           suggestion: null,
           guidance: {
@@ -625,26 +593,22 @@ const PointStates = () => {
         removed={null}
         language={null}
       />
-      <RiskNote
+      <FindingCard
         point={{
-          ...risk,
-          id: PointId.parse("r:h_00000000000000fd"),
-          title: "Retries a request that isn't idempotent, so a payment could be taken twice.",
+          ...finding,
+          id: PointId.parse("f11"),
+          title: "Retries a request that isn't idempotent",
+          explanation: "A payment whose answer was lost is taken again.",
+          type: "contract",
+          severity: "blocking",
+          suggestion: null,
           guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null, everywhere: false },
         }}
         {...actions}
+        inReview={false}
+        removed={null}
+        language={null}
       />
-      <p className="font-mono text-code">
-        await sleep(delay);
-        <DecisionChip
-          point={decision}
-          state="open"
-          open={open}
-          current={false}
-          onToggle={() => setOpen((previous) => !previous)}
-        />
-      </p>
-      {open && <DecisionNote point={decision} {...actions} />}
       {hunk !== undefined && (
         <Card>
           <HunkCard
@@ -652,7 +616,7 @@ const PointStates = () => {
             file={RETRY_FILE}
             risk={null}
             pointLines={MARKED_LINES}
-            flagged={new Set(["new:16", "new:23"])}
+            flags={MARK_FLAGS}
           />
         </Card>
       )}
@@ -660,13 +624,23 @@ const PointStates = () => {
   );
 };
 
-const mark = (kind: PointLine["kind"], keys: readonly string[]) =>
-  keys.map((key) => [key, { kind }] as const);
-
-/** A finding's and a risk's lines on the retry file's first hunk, by "side:line". */
+/** Points' lines on the retry file's first hunk, by "side:line", in each severity's color. */
 const MARKED_LINES: ReadonlyMap<string, PointLine> = new Map([
-  ...mark("risk", ["old:14", "new:14", "new:19", "new:20"]),
-  ...mark("finding", ["new:15", "new:16", "old:21", "new:21", "new:22", "new:23"]),
+  ["old:14", { kind: "blocking" }],
+  ["new:14", { kind: "blocking" }],
+  ["new:15", { kind: "major" }],
+  ["new:16", { kind: "major" }],
+  ["new:18", { kind: "mismatch" }],
+  ["old:21", { kind: "minor" }],
+  ["new:21", { kind: "minor" }],
+  ["new:22", { kind: "minor" }],
+  ["new:23", { kind: "mismatch" }],
+]);
+const MARK_FLAGS: ReadonlyMap<string, PointTone> = new Map([
+  ["new:14", "blocking"],
+  ["new:16", "major"],
+  ["new:18", "mismatch"],
+  ["new:22", "minor"],
 ]);
 
 const HEAD = "9e8d7c6b5a49382716051f2e3d4c5b6a79881726";

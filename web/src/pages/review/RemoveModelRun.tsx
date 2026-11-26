@@ -36,9 +36,9 @@ export const RemoveModelRun = ({
           }}
         >
           <p className="text-ui">
-            {family}'s intent, findings, risks and decisions go, with what you did with them, and
-            the code's analysis is back as it was. Your comments stay. Request AI review runs a
-            model again, the same or another.
+            {family}'s intent and findings go, with what you did with them, and the code's analysis
+            is back as it was. Your comments stay. Request AI review runs a model again, the same or
+            another.
           </p>
           {remove.error !== null && (
             <p className={DANGER} role="alert">

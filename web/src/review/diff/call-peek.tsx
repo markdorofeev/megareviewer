@@ -1,4 +1,4 @@
-import { type ReactElement, type ReactNode, useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import type { FileChange, Hunk, PartId } from "../../../../src/domain/diff/index.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
@@ -35,8 +35,6 @@ export interface CallTarget {
 export interface CallPayload {
   readonly symbol: string;
   readonly targets: readonly CallTarget[];
-  /** The card's name for a screen reader, when it isn't the code a call runs: a test's. */
-  readonly label?: string;
 }
 
 export type CallPeekHandle = HoverCardHandle<CallPayload>;
@@ -53,15 +51,12 @@ export const CallTrigger = ({
   handle,
   payload,
   id,
-  render = <span />,
   children,
 }: {
   readonly handle: CallPeekHandle;
   readonly payload: CallPayload;
   /** For the keyboard to open the card on this call. */
   readonly id: string;
-  /** A button where the name isn't in code the keyboard moves through by line, so it takes the focus. */
-  readonly render?: ReactElement;
   readonly children: ReactNode;
 }) => (
   <HoverCardTrigger
@@ -70,7 +65,7 @@ export const CallTrigger = ({
     id={id}
     delay={PEEK_OPEN_MS}
     closeDelay={PEEK_CLOSE_MS}
-    render={render}
+    render={<span />}
     data-slot="call"
     className="underline decoration-current decoration-dotted underline-offset-3 hover:decoration-primary hover:decoration-solid data-popup-open:decoration-primary data-popup-open:decoration-solid"
   >
@@ -95,7 +90,7 @@ export const CallPeek = ({
         <HoverCardContent
           side="bottom"
           align="start"
-          aria-label={payload.label ?? `Code ${payload.symbol} runs`}
+          aria-label={`Code ${payload.symbol} runs`}
           className="flex max-h-[min(26rem,60vh)] w-[min(44rem,calc(100vw-2rem))] flex-col overflow-hidden p-0"
         >
           <PeekBody

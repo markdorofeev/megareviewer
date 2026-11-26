@@ -2,14 +2,13 @@ import { z } from "zod";
 import {
   type AnalysisInput,
   type AnalysisModel,
-  DecisionDraft,
   FindingDraft,
-  ModelRisk,
   type PassOptions,
   type PassOutput,
 } from "../../application/ports/index.ts";
 import {
   Intent,
+  MODEL_STAGES,
   type ModelError,
   type ModelErrorKind,
   type ModelPass,
@@ -38,8 +37,6 @@ export const ModelRecording = z
     passes: z.object({
       intent: RecordedPass,
       findings: RecordedPass,
-      risk: RecordedPass,
-      decisions: RecordedPass,
       /** Recordings made before the steps pass have none; a replay then writes no tour. */
       steps: RecordedPass.optional(),
     }),
@@ -53,7 +50,7 @@ export const SCENARIOS = [
   "slow",
   "nothing-found",
   "many",
-  "limit-after-findings",
+  "limit-after-intent",
   "refusal",
   "invalid-then-ok",
   "not-signed-in",
@@ -74,19 +71,15 @@ const modelError = (kind: ModelErrorKind, message: string): ModelError => ({ kin
 const RESET_AT = "2026-11-13 18:00";
 
 const SCENARIO_ERRORS: Partial<Record<Scenario, Partial<Record<ModelPass, ModelError>>>> = {
-  "limit-after-findings": {
-    risk: modelError(
-      "rate-limited",
-      `Your Claude plan's usage limit is reached. It resets at ${RESET_AT}.`,
-    ),
-    decisions: modelError(
+  "limit-after-intent": {
+    findings: modelError(
       "rate-limited",
       `Your Claude plan's usage limit is reached. It resets at ${RESET_AT}.`,
     ),
   },
   refusal: { findings: modelError("refusal", "Claude declined to answer this task.") },
   "not-signed-in": Object.fromEntries(
-    (["intent", "findings", "risk", "decisions"] as const).map((pass) => [
+    MODEL_STAGES.map((pass) => [
       pass,
       modelError("unauthorized", "Claude Code isn't signed in. Run `claude` and sign in."),
     ]),
@@ -118,7 +111,7 @@ const wait = (ms: number): Promise<void> =>
 
 /**
  * An `AnalysisModel` that answers from a recording of a real run, with its timing, times a speed
- * factor. A scenario changes what it answers: nothing found, a plan limit after the findings, a
+ * factor. A scenario changes what it answers: nothing found, a plan limit after the intent, a
  * refusal, an invalid answer that the retry fixes, or no sign-in. Never bundled.
  */
 export const createReplayAnalysisModel = (
@@ -154,10 +147,6 @@ export const createReplayAnalysisModel = (
 
   const findingsOf = (answer: unknown): FindingDraft[] => {
     const recorded = parsed(z.array(FindingDraft), answer, "findings");
-    return scenario === "nothing-found" ? [] : recorded;
-  };
-  const decisionsOf = (answer: unknown): DecisionDraft[] => {
-    const recorded = parsed(z.array(DecisionDraft), answer, "decisions");
     if (scenario === "nothing-found") return [];
     if (scenario !== "many" || recorded.length === 0) return recorded;
     return Array.from({ length: MANY }, (_, index) => {
@@ -165,12 +154,6 @@ export const createReplayAnalysisModel = (
       if (draft === undefined) throw new Error("unreachable: recorded is not empty");
       return { ...draft, title: `${draft.title} (${index + 1})` };
     });
-  };
-  const riskOf = (answer: unknown): ModelRisk[] => {
-    const recorded = parsed(z.array(ModelRisk), answer, "risk");
-    return scenario === "nothing-found"
-      ? recorded.map((risk) => ({ ...risk, riskClass: "logic" as const }))
-      : recorded;
   };
 
   return {
@@ -194,14 +177,6 @@ export const createReplayAnalysisModel = (
         findingsOf(recording.passes.findings.answer).map((finding) => ({
           ...finding,
           lines: { ...finding.lines, startLine: 100_000, line: 100_001 },
-        })),
-      ),
-    risk: (_input, passOptions) => play("risk", passOptions, riskOf, () => []),
-    decisions: (_input, passOptions) =>
-      play("decisions", passOptions, decisionsOf, () =>
-        decisionsOf(recording.passes.decisions.answer).map((draft) => ({
-          ...draft,
-          hunkIds: ["h_ffffffffffffffff"],
         })),
       ),
     steps: async (_input, passOptions) =>

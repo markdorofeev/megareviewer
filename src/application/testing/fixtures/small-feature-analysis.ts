@@ -5,7 +5,6 @@ import {
   type AnalysisKey,
   analysisId,
   CommentKey,
-  DecisionId,
   FindingId,
   type Intent,
   type ModelCall,
@@ -157,6 +156,7 @@ export const smallFeatureInput: AnalysisInput = {
       use: "call",
     },
   ],
+  unchangedCallers: [],
   guidance: NO_GUIDANCE,
   harness: null,
 };
@@ -164,7 +164,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "20",
+  pipelineVersion: "23",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -203,8 +203,6 @@ export const smallFeatureIntent: Intent = {
   ],
 };
 
-const d = DecisionId.parse;
-
 const answered = (pass: ModelPass, startedAt: string, durationMs: number): ModelCall => ({
   pass,
   attempt: 1,
@@ -225,8 +223,6 @@ export const smallFeatureAnalysis: Analysis = {
     prep: "done",
     intent: "done",
     findings: "done",
-    risk: "done",
-    decisions: "done",
     steps: "skipped",
   },
   filesFetched: { done: 5, total: 5 },
@@ -238,6 +234,7 @@ export const smallFeatureAnalysis: Analysis = {
   parts: [],
   callGraph: smallFeatureInput.callGraph,
   callSites: [],
+  definitionCalls: [],
   fileLinks: [{ from: "src/routes/orders.ts", to: "src/services/receipts.ts" }],
   generated: [],
   checkout: "none",
@@ -252,6 +249,7 @@ export const smallFeatureAnalysis: Analysis = {
       explanation:
         "The cache is keyed by order ID alone, so a refund or an edited item still shows the receipt rendered before it until the entry expires.",
       lines: { hunkId: receiptServiceHunk.id, side: "new", startLine: 9, line: 11 },
+      type: "logic",
       severity: "major",
       suggestion: null,
       mismatch: null,
@@ -263,83 +261,37 @@ export const smallFeatureAnalysis: Analysis = {
       hunkId: rateLimitHunk.id,
       riskClass: "contract",
       reason: "Changes the rate limit.",
-      source: "model",
-      lines: null,
-      guidance: null,
+      source: "rule",
     },
     {
       hunkId: cacheTtlHunk.id,
       riskClass: "contract",
       reason: "Adds a config setting.",
-      source: "model",
-      lines: null,
-      guidance: null,
+      source: "rule",
     },
     {
       hunkId: receiptsConfigHunk.id,
       riskClass: "contract",
       reason: "Adds a config section.",
-      source: "model",
-      lines: null,
-      guidance: null,
+      source: "rule",
     },
     {
       hunkId: importHunk.id,
       riskClass: "logic",
       reason: "Imports the new service.",
-      source: "model",
-      lines: null,
-      guidance: null,
+      source: "rule",
     },
     {
       hunkId: receiptRouteHunk.id,
-      riskClass: "contract",
+      riskClass: "logic",
       reason: "Adds a public endpoint.",
-      source: "model",
-      lines: null,
-      guidance: null,
+      source: "rule",
     },
     {
       hunkId: receiptServiceHunk.id,
       riskClass: "logic",
       reason: "Renders and caches receipts.",
-      source: "model",
-      lines: null,
-      guidance: null,
-    },
-  ],
-  decisions: [
-    {
-      id: d("d1"),
-      title: "Adds GET /orders/:id/receipt, scoped to the signed-in user's orders",
-      category: "api",
-      whyItMatters: "A new public endpoint is a contract clients will depend on.",
-      hunkIds: [receiptRouteHunk.id, importHunk.id],
-      lines: null,
-    },
-    {
-      id: d("d2"),
-      title: "Caches receipts in process memory with no eviction",
-      category: "performance",
-      whyItMatters: "The cache grows with every order viewed and isn't shared between instances.",
-      hunkIds: [receiptServiceHunk.id],
-      lines: null,
-    },
-    {
-      id: d("d3"),
-      title: "Raises the rate limit from 60 to 600 requests per minute",
-      category: "configuration",
-      whyItMatters: "Nobody asked for it, and it weakens abuse protection for every endpoint.",
-      hunkIds: [rateLimitHunk.id],
-      lines: null,
-    },
-    {
-      id: d("d4"),
-      title: "Hard-codes the receipt cache lifetime instead of reading config",
-      category: "configuration",
-      whyItMatters: "The ticket asks for a configurable lifetime, and the new setting is ignored.",
-      hunkIds: [receiptServiceHunk.id, cacheTtlHunk.id],
-      lines: null,
+      source: "rule",
     },
   ],
   flows: [
@@ -371,16 +323,7 @@ export const smallFeatureAnalysis: Analysis = {
       billing: "api",
     },
     {
-      pass: "risk",
-      inputTokens: 380,
-      cacheReadTokens: 5800,
-      cacheWriteTokens: 0,
-      outputTokens: 260,
-      costUsd: 0.02,
-      billing: "api",
-    },
-    {
-      pass: "decisions",
+      pass: "findings",
       inputTokens: 420,
       cacheReadTokens: 5800,
       cacheWriteTokens: 0,
@@ -391,8 +334,7 @@ export const smallFeatureAnalysis: Analysis = {
   ],
   modelCalls: [
     answered("intent", "2026-10-21T09:00:20Z", 9_400),
-    answered("risk", "2026-10-21T09:00:30Z", 8_100),
-    answered("decisions", "2026-10-21T09:00:30Z", 21_600),
+    answered("findings", "2026-10-21T09:00:30Z", 21_600),
   ],
   error: null,
   modelError: null,

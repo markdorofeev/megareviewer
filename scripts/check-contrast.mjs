@@ -117,7 +117,7 @@ const PAIRS = [
   ["AI label on quiet press", "primary", "ai-quiet-active", 4.5],
   ["AI label on card", "primary", "card", 4.5],
   ["New-commits border (non-text)", "ai-soft-bd-strong", "background", 3],
-  // The tour: a box on it, the current one and its pill, the three kinds of chip, a step's lines
+  // The tour: a box on it, the current one and its pill, a finding's chip, a step's lines
   // marked in the map and the label over them, and the ledger's counts on its cards.
   ["Tour box name on its tint", "foreground", "ai-soft-bg", 4.5],
   ["Tour box number on its tint", "primary", "ai-soft-bg", 4.5],
@@ -126,8 +126,6 @@ const PAIRS = [
   ["Current step pill and filled number", "primary-foreground", "primary", 4.5],
   ["Box off the tour, dashed (non-text)", "input", "background", 3],
   ["Finding chip", "review-changes", "review-changes-bg", 4.5],
-  ["Risk chip", "risk-contract", "risk-contract-bg", 4.5],
-  ["Decision chip", "muted-foreground", "muted", 4.5],
   ["Step line's number in the map", "primary", "ai-soft-bg", 4.5],
   ["Step line's rail (non-text)", "primary", "ai-soft-bg", 3],
   ["Tour landing sentence", "foreground", "ai-soft-bg", 4.5],
@@ -167,8 +165,6 @@ const PAIRS = [
   ["Section heading on background", "diff-hunk-fg", "background", 4.5],
   ["Section heading on card", "diff-hunk-fg", "card", 4.5],
   ["Section heading on active row", "diff-hunk-fg", "surface-row", 4.5],
-  ["Contract count on active row", "risk-contract", "surface-row", 4.5],
-  ["Contract count on background", "risk-contract", "background", 4.5],
   ["Gap text", "muted-foreground", "surface-subtle", 4.5],
   ["Error on a fold", "destructive", "surface-subtle", 4.5],
   ["Muted text on directory hover", "muted-foreground", "accent", 4.5],
@@ -191,7 +187,6 @@ const PAIRS = [
     [`+ lines on ${row} row`, "stat-add", fill, 4.5],
     [`− lines on ${row} row`, "stat-del", fill, 4.5],
     [`Finding dot on ${row} row (non-text)`, "severity-minor", fill, 3],
-    [`Risk ring on ${row} row (non-text)`, "risk-contract-solid", fill, 3],
     [`Focus outline on ${row} row (non-text)`, "ring", fill, 3],
   ]),
   ["Current row bar (non-text)", "primary", "diff-hunk-bg", 3],
@@ -201,6 +196,17 @@ const PAIRS = [
   ["Focused line bar on diff-gutter-bg (non-text)", "ring", "diff-gutter-bg", 3],
   ["Focused line bar on diff-add-gutter (non-text)", "ring", "diff-add-gutter", 3],
   ["Focused line bar on diff-del-gutter (non-text)", "ring", "diff-del-gutter", 3],
+  // hunk: the plus a line's number shows while the pointer is on its row.
+  ...[
+    "diff-gutter-bg",
+    "diff-add-gutter",
+    "diff-del-gutter",
+    "review-changes-bg",
+    "severity-major-bg",
+    "review-pending-bg",
+    "muted",
+    "ai-soft-bg",
+  ].map((cell) => [`Comment plus on ${cell} (non-text)`, "muted-foreground", cell, 3]),
   // hunk: a file's status chip: new, deleted or renamed, on its own tint.
   ["New file chip", "diff-add-fg", "diff-add-bg", 4.5],
   ["Deleted file chip", "diff-del-fg", "diff-del-bg", 4.5],
@@ -209,20 +215,9 @@ const PAIRS = [
   ["Pressed toggle border (non-text)", "muted-foreground", "background", 3],
   // hunk: risk classes. A bar on its own tint is under 3:1 for logic in light, so bars sit on
   // background or card only.
-  ["Contract label on its tint", "risk-contract", "risk-contract-bg", 4.5],
-  ["Contract label on card", "risk-contract", "card", 4.5],
-  // hunk: a point's bar at the edge of the lines it rests on, by kind.
-  ["Finding bar on card (non-text)", "review-changes", "card", 3],
-  ["Decision bar on card (non-text)", "review-pending", "card", 3],
-  // The stepper's kind glyph, beside the current point's title in the review bar.
-  ["Finding glyph in the review bar (non-text)", "review-changes", "background", 3],
-  ["Decision glyph in the review bar (non-text)", "review-pending", "background", 3],
-  // A pressed point chip's border is its text's color, on the chip's own tint.
-  ["Pressed finding chip border (non-text)", "review-changes", "review-changes-bg", 3],
-  ["Pressed risk chip border (non-text)", "risk-contract", "risk-contract-bg", 3],
-  ["Pressed decision chip border (non-text)", "review-pending", "review-pending-bg", 3],
-  ["Contract bar on background (non-text)", "risk-contract-solid", "background", 3],
-  ["Contract bar on card (non-text)", "risk-contract-solid", "card", 3],
+  // hunk: a pressed chip in the review bar is told by its border, in its text's color.
+  ["Pressed chip border (non-text)", "foreground", "background", 3],
+  ["Finding's type chip", "foreground", "secondary", 4.5],
   ["Logic label on its tint", "risk-logic", "risk-logic-bg", 4.5],
   ["Logic label on card", "risk-logic", "card", 4.5],
   ["Logic bar on background (non-text)", "risk-logic-solid", "background", 3],
@@ -236,23 +231,33 @@ const PAIRS = [
   ["Resolved label on thread", "review-approved", "thread-bg", 4.5],
   ["Suggested change title", "primary", "thread-bg", 4.5],
   ["Draft comment bar (non-text)", "review-pending", "thread-bg", 3],
-  // hunk: Claude's points on the lines: a finding's card, a risk's note, a bug in the gutter.
-  ["Finding label on its card", "review-changes", "thread-bg", 4.5],
-  ["Risk label on its note", "risk-contract", "thread-bg", 4.5],
-  // The rail of a point's mark on a line's number, on the mark's tint and on the row beside it.
+  // hunk: Claude's points on the lines, each in its severity's color, a mismatch's in grey.
   ...[
-    ["Finding", "review-changes", "review-changes-bg"],
-    ["Risk", "risk-contract-solid", "risk-contract-bg"],
-  ].flatMap(([kind, rail, tint]) =>
-    [tint, "diff-add-bg", "diff-del-bg", "background"].map((surface) => [
-      `${kind} mark's rail on ${surface} (non-text)`,
-      rail,
+    ["Blocking", "severity-blocker", "review-changes-bg"],
+    ["Major", "severity-major", "severity-major-bg"],
+    ["Minor", "severity-minor", "review-pending-bg"],
+    ["Mismatch", "muted-foreground", "muted"],
+  ].flatMap(([name, color, tint]) => [
+    [`${name} point's label on its card`, color, "thread-bg", 4.5],
+    [`${name} point's bar on its card (non-text)`, color, "thread-bg", 3],
+    [`${name} point's glyph in the review bar (non-text)`, color, "background", 3],
+    [`${name} point's glyph in the list (non-text)`, color, "popover", 3],
+    // A marked line's number on its tint, and its rail on the tint and on the row beside it.
+    [`${name} mark's number`, name === "Mismatch" ? "foreground" : color, tint, 4.5],
+    ...[tint, "diff-add-bg", "diff-del-bg", "background", "surface-subtle"].map((surface) => [
+      `${name} mark's rail on ${surface} (non-text)`,
+      color,
       surface,
       3,
     ]),
-  ),
-  ["Finding flag on added gutter (non-text)", "review-changes", "diff-add-gutter", 3],
-  ["Finding flag on unchanged gutter (non-text)", "review-changes", "diff-gutter-bg", 3],
+    // The bug at the end of a point's lines: on the mark's tint, or the gutter it stands in.
+    ...[tint, "diff-add-gutter", "diff-gutter-bg"].map((surface) => [
+      `${name} flag on ${surface} (non-text)`,
+      color,
+      surface,
+      3,
+    ]),
+  ]),
   ["Open thread bar (non-text)", "thread-marker", "thread-bg", 3],
   ["Resolved thread bar (non-text)", "review-approved", "thread-bg", 3],
   ["Outdated thread bar (non-text)", "muted-foreground", "thread-bg", 3],

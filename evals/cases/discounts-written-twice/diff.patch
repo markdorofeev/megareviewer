@@ -1,0 +1,57 @@
+diff --git a/src/pricing/discounts.test.ts b/src/pricing/discounts.test.ts
+index f7b53fa..4bd2f3a 100644
+--- a/src/pricing/discounts.test.ts
++++ b/src/pricing/discounts.test.ts
+@@ -5,6 +5,8 @@ it.each([
+   [19, 0],
+   [20, 0.1],
+   [100, 0.15],
++  [499, 0.15],
++  [500, 0.2],
+ ])("takes the rate of %i units", (quantity, rate) => {
+   expect(discountRate(quantity)).toBe(rate);
+ });
+diff --git a/src/pricing/discounts.ts b/src/pricing/discounts.ts
+index 13da650..94e7100 100644
+--- a/src/pricing/discounts.ts
++++ b/src/pricing/discounts.ts
+@@ -5,6 +5,7 @@ export interface Tier {
+ 
+ /** Largest quantity first, so the first that fits is the one that applies. */
+ const TIERS: readonly Tier[] = [
++  { minQuantity: 500, rate: 0.2 },
+   { minQuantity: 100, rate: 0.15 },
+   { minQuantity: 20, rate: 0.1 },
+ ];
+diff --git a/src/quotes/estimate.ts b/src/quotes/estimate.ts
+new file mode 100644
+index 0000000..d8aed60
+--- /dev/null
++++ b/src/quotes/estimate.ts
+@@ -0,0 +1,26 @@
++export interface QuoteLine {
++  readonly sku: string;
++  readonly unitPriceCents: number;
++  readonly quantity: number;
++}
++
++export interface Estimate {
++  readonly lines: readonly { readonly sku: string; readonly priceCents: number }[];
++  readonly totalCents: number;
++}
++
++const rateFor = (quantity: number): number => {
++  if (quantity >= 500) return 0.2;
++  if (quantity >= 100) return 0.15;
++  if (quantity >= 20) return 0.1;
++  return 0;
++};
++
++/** What an order of these lines would cost, for the quote page. */
++export const estimate = (quote: readonly QuoteLine[]): Estimate => {
++  const lines = quote.map(({ sku, unitPriceCents, quantity }) => ({
++    sku,
++    priceCents: Math.round(unitPriceCents * quantity * (1 - rateFor(quantity))),
++  }));
++  return { lines, totalCents: lines.reduce((sum, line) => sum + line.priceCents, 0) };
++};

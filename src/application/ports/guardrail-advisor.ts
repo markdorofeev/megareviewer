@@ -8,16 +8,13 @@ import {
 } from "../../domain/review/index.ts";
 import type { Result } from "../../domain/shared/index.ts";
 
-/** A finding or a risk of the run, as the guardrail call reads it. */
+/** A finding of the run, as the guardrail call reads it. */
 export interface AdvicePoint {
-  /** "f1" for a finding, "r1" for the first risk. */
+  /** "f1" for the first finding. */
   readonly ref: string;
-  readonly kind: "finding" | "risk";
   readonly path: string;
-  /** A finding's title; empty for a risk. */
   readonly title: string;
-  /** A finding's explanation or a risk's reason. */
-  readonly text: string;
+  readonly explanation: string;
   /** The lines it rests on as its hunk shows them, at most 40, the rest counted in one line. */
   readonly code: readonly string[];
 }
@@ -66,7 +63,7 @@ export interface AdviceOutput {
   readonly usage: Omit<ModelUsage, "pass">;
 }
 
-/** The guardrail call: which of a run's findings and risks a check could catch, and the check. */
+/** The guardrail call: which of a run's findings a check could catch, and the check. */
 export interface GuardrailAdvisor {
   advise(input: AdviceInput): Promise<Result<AdviceOutput, ModelError>>;
 }

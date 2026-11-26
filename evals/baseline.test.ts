@@ -4,17 +4,21 @@ import { estimateCost, UNMEASURED_COST_PER_CASE_USD } from "./cost.ts";
 import { type CaseScore, summarize } from "./score.ts";
 
 const score = (overrides: Partial<CaseScore> = {}): CaseScore => ({
-  contractRecall: { hit: 2, total: 2 },
-  riskAccuracy: { hit: 4, total: 5 },
-  riskNoise: { hit: 1, total: 3 },
-  riskPlaced: { hit: 2, total: 2 },
-  coverageWrong: { hit: 0, total: 1 },
-  coverageRecall: { hit: 1, total: 1 },
   findingRecall: { hit: 1, total: 1 },
   findingNoise: { hit: 0, total: 2 },
+  findingRecallByType: {
+    logic: { hit: 1, total: 1 },
+    contract: { hit: 0, total: 0 },
+    architecture: { hit: 0, total: 0 },
+  },
+  findingNoiseByType: {
+    logic: { hit: 0, total: 2 },
+    contract: { hit: 0, total: 0 },
+    architecture: { hit: 0, total: 0 },
+  },
   findingPlaced: { hit: 1, total: 1 },
-  decisionRecall: { hit: 1, total: 1 },
-  decisionNoise: { hit: 1, total: 4 },
+  typeRight: { hit: 1, total: 1 },
+  unwantedFindings: null,
   mismatchRecall: { hit: 1, total: 1 },
   mismatchNamed: { hit: 1, total: 1 },
   mismatchFalsePositives: null,
@@ -22,8 +26,6 @@ const score = (overrides: Partial<CaseScore> = {}): CaseScore => ({
   guidanceFollowed: { hit: 1, total: 1 },
   leftOutRight: { hit: 3, total: 3 },
   guidanceWrong: { hit: 0, total: 2 },
-  firstTryValid: true,
-  fallbackUsed: false,
   ...overrides,
 });
 
@@ -53,7 +55,7 @@ describe("baseline", () => {
     const parsed = Baseline.parse(JSON.parse(JSON.stringify(baseline)));
     expect(parsed).toEqual(baseline);
     expect(parsed.cases.a?.costUsd).toBeCloseTo(1.1);
-    expect(JSON.stringify(parsed)).not.toContain('decisions":[{');
+    expect(JSON.stringify(parsed)).not.toContain('findings":[{');
   });
 
   it("compares each metric, knowing which way is worse", () => {
@@ -61,9 +63,8 @@ describe("baseline", () => {
       2,
       [
         score({
-          contractRecall: { hit: 1, total: 2 },
+          mismatchRecall: { hit: 0, total: 1 },
           findingNoise: { hit: 1, total: 2 },
-          decisionNoise: { hit: 0, total: 4 },
           guidanceFollowed: { hit: 0, total: 1 },
           guidanceWrong: { hit: 1, total: 2 },
         }),
@@ -72,9 +73,8 @@ describe("baseline", () => {
       [],
     );
     const rows = new Map(compareWithBaseline(now, baseline).map((row) => [row.metric, row]));
-    expect(rows.get("contractRecall")).toMatchObject({ baseline: 1, current: 0.75, worse: true });
+    expect(rows.get("mismatchRecall")).toMatchObject({ baseline: 1, current: 0.5, worse: true });
     expect(rows.get("findingNoise")).toMatchObject({ delta: 0.25, worse: true });
-    expect(rows.get("decisionNoise")).toMatchObject({ delta: -0.125, worse: false });
     expect(rows.get("mismatchFalsePositives")).toMatchObject({ delta: 2, worse: true });
     expect(rows.get("injectionResistance")).toMatchObject({ delta: 0, worse: false });
     expect(rows.get("guidanceFollowed")).toMatchObject({ delta: -0.5, worse: true });
@@ -114,16 +114,14 @@ describe("baseline", () => {
         score({
           findingRecall: { hit: 0, total: 1 },
           findingNoise: { hit: 1, total: 2 },
-          decisionNoise: { hit: 3, total: 4 },
         }),
       ],
       ["b", score({ injectionResisted: false, mismatchFalsePositives: 1 })],
-      ["new", score({ contractRecall: { hit: 0, total: 2 } })],
+      ["new", score({ findingRecall: { hit: 0, total: 2 } })],
     ]);
     expect(regressedCases(now, baseline)).toEqual([
       { name: "a", metric: "findingRecall" },
       { name: "a", metric: "findingNoise" },
-      { name: "a", metric: "decisionNoise" },
       { name: "b", metric: "mismatchFalsePositives" },
       { name: "b", metric: "injectionResistance" },
     ]);

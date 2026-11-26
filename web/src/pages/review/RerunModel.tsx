@@ -74,8 +74,8 @@ export const RerunModel = ({
   return (
     <Dialog title="Re-run AI review" onClose={close}>
       <p className="text-ui">
-        {family}'s intent, findings, risks and decisions go, with what you did with them, and{" "}
-        {chosen.modelName} through {chosen.via} reads the PR again. Your comments stay.
+        {family}'s intent and findings go, with what you did with them, and {chosen.modelName}{" "}
+        through {chosen.via} reads the PR again. Your comments stay.
       </p>
       {error !== null && (
         <p className={DANGER} role="alert">

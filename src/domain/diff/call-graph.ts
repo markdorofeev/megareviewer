@@ -6,7 +6,8 @@ import {
   type SymbolImport,
   sharesPackage,
 } from "./imports.ts";
-import { type Piece, partsByHunk, piecesOf } from "./parts.ts";
+import { type DefinitionSpan, type Piece, partsByHunk, piecesOf } from "./parts.ts";
+import { type ReceiverScope, receiverReaches } from "./receivers.ts";
 import { type Route, requestsOn, routesFor, routesOn } from "./requests.ts";
 import { isTestFile } from "./test-files.ts";
 import type { CallGraphHint, CallSite, FileChange, Hunk, HunkPart, PartId } from "./types.ts";
@@ -17,6 +18,8 @@ export interface FileSymbols {
     readonly name: string;
     readonly startLine: number;
     readonly endLine: number;
+    /** Without it, a definition isn't taken to run the ones inside it. */
+    readonly kind?: "function" | "method" | "class" | "type" | "variable";
   }[];
   readonly references: readonly Reference[];
   readonly imports: readonly SymbolImport[];
@@ -26,15 +29,20 @@ interface Reference {
   readonly name: string;
   readonly line: number;
   readonly kind: "name" | "member" | "type";
+  /**
+   * A member's receiver: the name it's written after, null when that isn't a name, as `this` or a
+   * call. Absent without a receiver, or where the parser doesn't say.
+   */
+  readonly receiver?: string | null;
   /** Where each use starts on the line. Without them, a reference makes hints but no call sites. */
   readonly columns?: readonly number[];
 }
 
 const MAX_HINTS_PER_HUNK = 10;
 
-type Definition = FileSymbols["definitions"][number];
+export type Definition = FileSymbols["definitions"][number];
 
-interface Located {
+export interface Located {
   readonly file: FileChange;
   readonly piece: Piece;
   /** Position in the diff, for a stable order. */
@@ -42,7 +50,7 @@ interface Located {
 }
 
 /** A definition the PR changes: `at` is the first piece that changes it, `all` every one. */
-interface Change {
+export interface Change {
   readonly at: Located;
   readonly all: readonly Located[];
   readonly definition: Definition;
@@ -60,17 +68,11 @@ export const buildCallGraphHints = (
   parts: readonly HunkPart[] = [],
 ): CallGraphHint[] => {
   const { hunks, targetsOf } = linking(files, symbolsByPath, parts);
-  const routes = hunks.flatMap((at) =>
-    at.file.language === null
-      ? []
-      : at.piece.hunk.lines.flatMap((line) =>
-          line.kind === "add" ? routesOn(line.text).map((route) => ({ ...route, at })) : [],
-        ),
-  );
+  const routes = addedRoutes(hunks);
 
   return hunks.flatMap((from): CallGraphHint[] => {
     const requests = requestHints(from, routes);
-    const lines = new Set(newLines(from.piece.hunk, ["add", "context"]));
+    const lines = new Set(shownLines(from));
     // The first line each symbol is used on, per use and hunk it reaches.
     const firstUse = { call: new Map<Located, Map<string, number>>(), type: new Map() };
     for (const reference of symbolsByPath.get(from.file.path)?.references ?? []) {
@@ -127,7 +129,7 @@ export const buildCallSites = (
 ): CallSite[] => {
   const { hunks, targetsOf } = linking(files, symbolsByPath, parts);
   return hunks.flatMap((from): CallSite[] => {
-    const lines = new Set(newLines(from.piece.hunk, ["add", "context"]));
+    const lines = new Set(shownLines(from));
     return (symbolsByPath.get(from.file.path)?.references ?? [])
       .filter((reference) => lines.has(reference.line))
       .flatMap((reference) => {
@@ -153,16 +155,17 @@ export const buildCallSites = (
 };
 
 /**
- * The pieces of the PR in diff order, and what a reference in one of them reaches: definitions the
- * PR changes, in its own file or in a file its imports reach, and in its own class when its file
- * has several of that name.
+ * The pieces of the PR in diff order, the definitions they change, and which of those a reference in
+ * a piece reaches: in its own file or in a file its imports reach, and in its own class when its
+ * file has several of that name.
  */
-const linking = (
+export const linking = (
   files: readonly FileChange[],
   symbolsByPath: ReadonlyMap<string, FileSymbols>,
   parts: readonly HunkPart[],
 ): {
   readonly hunks: readonly Located[];
+  readonly changes: readonly Change[];
   readonly targetsOf: (from: Located, reference: Reference) => readonly Change[];
 } => {
   const byHunk = partsByHunk(parts);
@@ -197,6 +200,29 @@ const linking = (
       ),
     ]),
   );
+  const types = new Set(
+    [...symbolsByPath.values()].flatMap((symbols) =>
+      symbols.definitions.flatMap((one) => (isType(one) ? [one.name] : [])),
+    ),
+  );
+  const scopes = new Map(
+    files.map((file): [string, ReceiverScope] => {
+      const imports = symbolsByPath.get(file.path)?.imports ?? [];
+      return [
+        file.path,
+        {
+          language: file.language ?? "",
+          types,
+          imports,
+          reaches: imports.map((one) =>
+            file.language === null ? null : importReach(file.path, file.language, one),
+          ),
+        },
+      ];
+    }),
+  );
+  const ownerOf = (path: string, definition: Definition): string | null =>
+    typeAround(definition, symbolsByPath.get(path)?.definitions ?? [])?.name ?? null;
   const visible = (from: FileChange, kind: "name" | "member", name: string, to: FileChange) =>
     from.path === to.path ||
     (canLink(from, to) &&
@@ -204,13 +230,20 @@ const linking = (
         sharesPackage(from.language ?? "", from.path, to.path) ||
         (reaches.get(from.path) ?? []).some((reach) => reachesBy(reach, kind, name, to.path))));
 
-  const targetsOf = (from: Located, { name, line, kind }: Reference): readonly Change[] => {
+  const targetsOf = (
+    from: Located,
+    { name, line, kind, receiver }: Reference,
+  ): readonly Change[] => {
     const own = symbolsByPath.get(from.file.path);
+    const scope = scopes.get(from.file.path);
     // A method that calls a same-named one on another object delegates; it doesn't recurse.
     const reached = (changedBy.get(name) ?? []).filter(
       ({ at, definition }) =>
         visible(from.file, kind === "member" ? "member" : "name", name, at.file) &&
-        !(at.file.path === from.file.path && enclosesLine(definition, line)),
+        !(at.file.path === from.file.path && enclosesLine(definition, line)) &&
+        (kind !== "member" ||
+          scope === undefined ||
+          receiverReaches(receiver, scope, at.file.path, ownerOf(at.file.path, definition))),
     );
     const local = reached.filter(
       ({ at, definition }) =>
@@ -219,39 +252,54 @@ const linking = (
     );
     return local.length > 0 ? local : reached;
   };
-  return { hunks, targetsOf };
+  return { hunks, changes: [...changedBy.values()].flat(), targetsOf };
 };
 
-/** The requests a part sends, each to the parts that add a route serving it. */
-const requestHints = (
+export type AddedRoute = Route & { readonly at: Located };
+
+/** The routes the PR's added lines declare. */
+export const addedRoutes = (hunks: readonly Located[]): AddedRoute[] =>
+  hunks.flatMap((at) =>
+    at.file.language === null
+      ? []
+      : at.piece.hunk.lines.flatMap((line) =>
+          line.kind === "add" ? routesOn(line.text).map((route) => ({ ...route, at })) : [],
+        ),
+  );
+
+/** The requests a part sends, each to a part that adds a route serving it, in line order. */
+export const requestLinks = (
   from: Located,
-  routes: readonly (Route & { readonly at: Located })[],
-): CallGraphHint[] => {
-  if (from.file.language === null) return [];
+  routes: readonly AddedRoute[],
+): { readonly line: number; readonly symbol: string; readonly toPartId: PartId }[] =>
+  from.file.language === null
+    ? []
+    : from.piece.hunk.lines.flatMap(({ kind, newLine, text }) =>
+        kind === "del" || newLine === null
+          ? []
+          : requestsOn(text, from.file.path).flatMap((request) =>
+              routesFor(request, routes)
+                .filter(
+                  ({ at }) =>
+                    at.piece.id !== from.piece.id &&
+                    // Production code never links into tests.
+                    (!isTestFile(at.file.path) || isTestFile(from.file.path)),
+                )
+                .map((route) => ({
+                  line: newLine,
+                  symbol: `${route.method} ${route.path}`,
+                  toPartId: route.at.piece.id,
+                })),
+            ),
+      );
+
+/** A part's requests as hints, the first of each to a route. */
+const requestHints = (from: Located, routes: readonly AddedRoute[]): CallGraphHint[] => {
   const first = new Map<string, CallGraphHint>();
-  for (const line of from.piece.hunk.lines) {
-    if (line.kind === "del" || line.newLine === null) continue;
-    for (const request of requestsOn(line.text, from.file.path)) {
-      for (const route of routesFor(request, routes)) {
-        const to = route.at;
-        // Production code never links into tests.
-        if (
-          to.piece.id === from.piece.id ||
-          (isTestFile(to.file.path) && !isTestFile(from.file.path))
-        )
-          continue;
-        const symbol = `${route.method} ${route.path}`;
-        const key = `${to.piece.id} ${symbol}`;
-        if (!first.has(key)) {
-          first.set(key, {
-            fromPartId: from.piece.id,
-            toPartId: to.piece.id,
-            symbol,
-            line: line.newLine,
-            use: "request",
-          });
-        }
-      }
+  for (const { line, symbol, toPartId } of requestLinks(from, routes)) {
+    const key = `${toPartId} ${symbol}`;
+    if (!first.has(key)) {
+      first.set(key, { fromPartId: from.piece.id, toPartId, symbol, line, use: "request" });
     }
   }
   return [...first.values()].slice(0, MAX_HINTS_PER_HUNK);
@@ -291,8 +339,28 @@ const changedDefinitions = (hunk: Hunk, symbols: FileSymbols | undefined): Set<D
   return changed;
 };
 
+/** Whether a definition is a class or a type: what a receiver can name. */
+export const isType = ({ kind }: { readonly kind?: string }): boolean =>
+  kind === "class" || kind === "type";
+
+/** The innermost class or type around a definition. */
+export const typeAround = <T extends DefinitionSpan>(
+  definition: DefinitionSpan,
+  definitions: readonly T[],
+): T | undefined =>
+  definitions
+    .filter(
+      (other) =>
+        other !== definition &&
+        isType(other) &&
+        other.startLine <= definition.startLine &&
+        other.endLine >= definition.endLine &&
+        other.endLine - other.startLine > definition.endLine - definition.startLine,
+    )
+    .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine))[0];
+
 /** The innermost other definition around a definition, such as a method's class. */
-const containerOf = (
+export const containerOf = (
   definition: Definition,
   definitions: readonly Definition[],
 ): Definition | undefined =>
@@ -306,7 +374,7 @@ const containerOf = (
     )
     .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine))[0];
 
-const enclosesLine = (definition: Definition | undefined, line: number): boolean =>
+export const enclosesLine = (definition: Definition | undefined, line: number): boolean =>
   definition !== undefined && line >= definition.startLine && line <= definition.endLine;
 
 /** Code links within a language family, and tests point at code, never code at tests. */
@@ -325,6 +393,9 @@ const reachesBy = (
   kind === "member"
     ? reach.member(path)
     : (reach.names === null || reach.names.includes(name)) && reach.name(path);
+
+/** The head lines of a part that references are read on: added and context ones. */
+export const shownLines = (at: Located): number[] => newLines(at.piece.hunk, ["add", "context"]);
 
 const newLines = (hunk: Hunk, kinds: readonly string[]): number[] =>
   hunk.lines.flatMap((line) =>

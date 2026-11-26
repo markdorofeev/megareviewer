@@ -23,7 +23,7 @@ export interface PrHeaderProps {
   readonly pr: PrSummary;
   readonly additions: number;
   readonly deletions: number;
-  /** The review's state so far, e.g. 2 decisions rejected. */
+  /** The review's state so far, e.g. changes requested. */
   readonly status?: StatusStyle;
   /** One line under the title: the intent, the mismatch chip, Details. */
   readonly intent?: ReactNode;

@@ -7,6 +7,7 @@ import { prep } from "../src/application/use-cases/prep.ts";
 import {
   type CallGraphHint,
   type CallSite,
+  type DefinitionCalls,
   type FileChange,
   type FileLink,
   type HunkPart,
@@ -24,6 +25,7 @@ import {
   PullRequest,
   type RiskAssessment,
 } from "../src/domain/review/index.ts";
+import { usedOutside } from "../web/src/pages/review/outside-uses.ts";
 import { type FileOverview, fileOverview } from "../web/src/pages/review/overview.ts";
 
 // Every stage of the flows slice measures itself on one real PR. This runs today's prep, rule
@@ -39,6 +41,7 @@ export interface Measured {
   readonly risk: readonly RiskAssessment[];
   readonly callGraph: readonly CallGraphHint[];
   readonly callSites: readonly CallSite[];
+  readonly definitionCalls: readonly DefinitionCalls[];
   readonly fileLinks: readonly FileLink[];
   readonly generated: readonly string[];
   readonly proofs: readonly MechanicalProof[];
@@ -100,8 +103,6 @@ export const measure = async (
             riskClass: "mechanical",
             reason: proof.detail,
             source: "proof",
-            lines: null,
-            guidance: null,
           },
         ],
   );
@@ -115,12 +116,14 @@ export const measure = async (
     prepared.callGraph,
     prepared.unchangedCallers,
     prepared.callSites,
+    prepared.definitionCalls,
   );
   return {
     files,
     risk,
     callGraph: joined.callGraph,
     callSites: joined.callSites,
+    definitionCalls: joined.definitionCalls,
     fileLinks: prepared.fileLinks,
     generated: [...prepared.generated].sort(),
     proofs: prepared.proofs,
@@ -173,6 +176,7 @@ export const counts = (measured: Measured) => {
     ).size,
     requestHints: callGraph.filter((hint) => hint.use === "request").length,
     callSites: measured.callSites.length,
+    definitionCalls: measured.definitionCalls.reduce((sum, one) => sum + one.calls.length, 0),
   };
 };
 
@@ -182,8 +186,8 @@ export const overviewOf = (measured: Measured): FileOverview => fileOverview(mea
 export const overviewLines = ({ rows, strip }: FileOverview): string[] => {
   const name = (node: FileOverview["rows"][number][number]) => {
     const notes = [
-      ...(node.kind === "outside" ? ["outside"] : []),
       ...node.entries,
+      ...(node.uses > 0 ? [usedOutside(node.uses)] : []),
       ...(node.generated ? ["generated"] : []),
     ];
     const badges = node.badges.length > 0 ? ` [${node.badges.map(basename).join(", ")}]` : "";

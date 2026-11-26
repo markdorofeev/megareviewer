@@ -193,24 +193,6 @@ const IMPORT =
 const textOf = (hunk: Hunk, kind: "add" | "del"): string[] =>
   hunk.lines.flatMap((line) => (line.kind === kind ? [line.text] : []));
 
-/**
- * The model's risk raised by the rules: a hunk is contract if either says so. A rule's contract
- * over the model's logic keeps the rule's assessment; when both say contract, the model's stands,
- * since its reason is about the code and the page shows it.
- */
-export const raiseByRules = (
-  assessments: readonly RiskAssessment[],
-  rules: readonly RiskAssessment[],
-): RiskAssessment[] => {
-  const byHunk = new Map(rules.map((rule) => [rule.hunkId, rule]));
-  return assessments.map((assessment) => {
-    const rule = byHunk.get(assessment.hunkId);
-    return rule?.riskClass === "contract" && assessment.riskClass !== "contract"
-      ? rule
-      : assessment;
-  });
-};
-
 /** The reasons the path rules give for a file: they hold for every hunk in it. */
 export const pathReasons = (file: FileChange): string[] => {
   const paths = file.oldPath === null ? [file.path] : [file.path, file.oldPath];
@@ -248,16 +230,12 @@ export const classifyByRules = (
               riskClass: "logic",
               reason: NO_RULE,
               source: "rule",
-              lines: null,
-              guidance: null,
             }
           : {
               hunkId: hunk.id,
               riskClass: "contract",
               reason: reasons.join("; "),
               source: "rule",
-              lines: null,
-              guidance: null,
             };
       }),
   );

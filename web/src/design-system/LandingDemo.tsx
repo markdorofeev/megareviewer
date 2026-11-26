@@ -1,8 +1,9 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { mapModelStages, type Point, PointId } from "../../../src/domain/review/index.ts";
 import { fixtureModelOptions } from "../../dev/fixtures/index.ts";
+import { pointTone } from "../lib/status.ts";
 import { ClaudeElement } from "../pages/review/ClaudeElement.tsx";
-import { DecisionChip, FindingCard, PointFold, RiskNote } from "../pages/review/PointCard.tsx";
+import { FindingCard, PointFold } from "../pages/review/PointCard.tsx";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { tokenMs, useLanding } from "../pages/review/useLanding.ts";
 import { FileTree, HunkCard, type LinePlace, PINNED, type PointLine } from "../review/index.ts";
@@ -19,15 +20,8 @@ import {
 /** The point card's points again, under ids of their own: the cards' anchors are ids on the page. */
 const LANDED: readonly Point[] = POINTS.map((point) => ({
   ...point,
-  id: PointId.parse(point.kind === "risk" ? `${point.id}-2` : `${point.id.slice(0, 1)}101`),
+  id: PointId.parse(`${point.id.slice(0, 1)}101`),
 }));
-
-const RANK: Readonly<Record<PointLine["kind"], number>> = {
-  finding: 0,
-  risk: 1,
-  decision: 2,
-  step: 3,
-};
 
 /**
  * Claude's run on made-up data, played as the review page plays it: Play starts a run, which
@@ -48,15 +42,13 @@ export const LandingDemo = () => {
   const [hunk] = RETRY_FILE.hunks;
   const pointLines = new Map<string, PointLine>();
   for (const point of points) {
-    // A decision is a footnote, and marks no line.
-    if (point.lines === null || point.kind === "decision") continue;
+    if (point.lines === null) continue;
     const { side, startLine, line: last } = point.lines;
     const at = landing.inView.get(point.id);
     for (let line = startLine; line <= last; line += 1) {
-      const held = pointLines.get(`${side}:${line}`);
-      if (held !== undefined && RANK[point.kind] >= RANK[held.kind]) continue;
+      if (pointLines.has(`${side}:${line}`)) continue;
       pointLines.set(`${side}:${line}`, {
-        kind: point.kind,
+        kind: pointTone(point),
         ...(at === undefined
           ? {}
           : { landing: { at, line: line - startLine, lines: last - startLine + 1 } }),
@@ -72,27 +64,16 @@ export const LandingDemo = () => {
     onState: () => {},
     ...POINT_GUIDANCE,
   } as const;
-  const card = (point: Point) =>
-    point.kind === "risk" ? (
-      <RiskNote key={point.id} point={point} {...actions} />
-    ) : (
-      <FindingCard
-        key={point.id}
-        point={point}
-        {...actions}
-        inReview={false}
-        removed={null}
-        language="typescript"
-      />
-    );
-  const on = (place: LinePlace, kind: Point["kind"]) =>
-    points.filter(
-      (point) =>
-        point.kind === kind &&
-        point.lines !== null &&
-        point.lines.side === place.side &&
-        point.lines.line === place.line,
-    );
+  const card = (point: Point) => (
+    <FindingCard
+      key={point.id}
+      point={point}
+      {...actions}
+      inReview={false}
+      removed={null}
+      language="typescript"
+    />
+  );
   const fold = (together: readonly Point[], row: boolean, children: ReactNode) => {
     const [first] = together;
     return first === undefined ? null : (
@@ -113,29 +94,21 @@ export const LandingDemo = () => {
     );
   };
   const pointsAt = (place: LinePlace) => {
-    const here = [...on(place, "finding"), ...on(place, "risk")];
+    const here = points.filter(
+      (point) =>
+        point.lines !== null && point.lines.side === place.side && point.lines.line === place.line,
+    );
     return fold(here, true, here.map(card));
   };
-  const pointsAtEnd = (place: LinePlace) =>
-    on(place, "decision").map((point) => (
-      <DecisionChip
-        key={point.id}
-        point={point}
-        state="open"
-        open={false}
-        current={false}
-        onToggle={() => {}}
-      />
-    ));
-  const flagged = new Set(
+  const flags = new Map(
     points.flatMap((point) =>
-      point.kind === "finding" && point.lines !== null
-        ? [`${point.lines.side}:${point.lines.line}`]
-        : [],
+      point.lines === null
+        ? []
+        : [[`${point.lines.side}:${point.lines.line}`, pointTone(point)] as const],
     ),
   );
   const unlined = points.filter((point) => point.lines === null);
-  const tree = run === "after" ? TREE_FILES : TREE_FILES.map(({ points: _, ...file }) => file);
+  const tree = run === "after" ? TREE_FILES : TREE_FILES.map(({ findings: _, ...file }) => file);
   const ran = { ...DESIGN_RUN, stages: mapModelStages(DESIGN_RUN.stages, () => "done" as const) };
 
   return (
@@ -175,7 +148,6 @@ export const LandingDemo = () => {
             points={points}
             current={null}
             stateOf={() => "open"}
-            kind={null}
             onGo={() => {}}
             onOpenList={() => {}}
           />
@@ -191,8 +163,7 @@ export const LandingDemo = () => {
             afterHeader={fold(unlined, false, unlined.map(card))}
             pointLines={pointLines}
             pointsAt={pointsAt}
-            pointsAtEnd={pointsAtEnd}
-            flagged={flagged}
+            flags={flags}
           />
         )}
       </div>

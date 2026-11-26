@@ -14,7 +14,6 @@ import {
   mapModelStages,
   modelFamily,
   type PullRequest,
-  raiseByRules,
   STEPS_STAGE,
   type StageName,
   type StageStatus,
@@ -24,17 +23,10 @@ import type { AnalysisModel, GitHost, GuardrailAdvisor } from "../ports/index.ts
 import { type Collected, collect, type OnFilesFetched } from "./collect.ts";
 import type { AppDeps } from "./deps.ts";
 import type { UseCaseError } from "./errors.ts";
-import { askable, type GuardrailCall, runGuardrailCall } from "./guardrails.ts";
+import { type GuardrailCall, runGuardrailCall } from "./guardrails.ts";
 import { runGuidance } from "./guidance.ts";
 import { buildAnalysisInput, fitToModel } from "./model-input.ts";
-import {
-  askingForTour,
-  runDecisions,
-  runFindings,
-  runIntent,
-  runRisk,
-  runSteps,
-} from "./model-passes.ts";
+import { askingForTour, runFindings, runIntent, runSteps } from "./model-passes.ts";
 import { prep } from "./prep.ts";
 import type { CheckoutAt } from "./unchanged-callers.ts";
 
@@ -96,7 +88,7 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
         status === "pending" ? "skipped" : status,
       ),
     }));
-    announceEnd("decisions");
+    announceEnd("findings");
   };
   /** Ends a run's guardrail call, with what came of it, or as failed when the run crashed. */
   const finishGuardrails = async (call: GuardrailCall | null) => {
@@ -106,7 +98,7 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
       ...(call === null
         ? {}
         : {
-            ...(call.ok ? { findings: call.findings, risk: call.risk } : {}),
+            ...(call.ok ? { findings: call.findings } : {}),
             ...(current.guidance === null
               ? {}
               : { guidance: { ...current.guidance, checks: call.checks } }),
@@ -117,7 +109,7 @@ const createTracker = (deps: AppDeps, initial: Analysis) => {
             })(current),
           }),
     }));
-    announceEnd("decisions");
+    announceEnd("findings");
   };
   return {
     get lastStage() {
@@ -166,6 +158,7 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
     parts,
     callGraph,
     callSites,
+    definitionCalls,
     required,
     definitions,
     generated,
@@ -180,14 +173,11 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
             riskClass: "mechanical" as const,
             reason: proof.detail,
             source: "proof" as const,
-            lines: null,
-            guidance: null,
           },
         ],
   );
   const ruleRisk = classifyByRules(collected.files, new Set(proofRisk.map((risk) => risk.hunkId)));
-  // The flows are the code's with or without the model, ordered by the rules' risk; the model
-  // only titles it.
+  // Ordered by the rules' risk.
   const skeleton = codeFlows({
     files: collected.files,
     required,
@@ -197,7 +187,14 @@ const prepare = async (deps: AppDeps, collected: Collected, checkout: CheckoutAt
     definitions,
     generated,
   });
-  const joined = joinParts(skeleton, parts, callGraph, unchangedCallers, callSites);
+  const joined = joinParts(
+    skeleton,
+    parts,
+    callGraph,
+    unchangedCallers,
+    callSites,
+    definitionCalls,
+  );
   return { prepared, proofRisk, ruleRisk, skeleton, joined };
 };
 
@@ -224,7 +221,7 @@ export const codeFields = async (
   host: GitHost,
   pullRequest: PullRequest,
   checkout: CheckoutAt | null,
-): Promise<Result<Partial<Analysis> & BeforeModel, UseCaseError>> => {
+): Promise<Result<Partial<Analysis> & Required<BeforeModel>, UseCaseError>> => {
   const collected = await collect(deps, host, pullRequest);
   if (!collected.ok) return collected;
   const { files, tickets, missingTicketKeys, warnings } = collected.value;
@@ -311,11 +308,11 @@ const codeStages = async (
 };
 
 /**
- * Runs the model's passes on a complete analysis, side by side, adding intent, findings, decisions
- * and the model's risk to it. Collects and preps again from the stored PR first: files come from
- * the file cache, and prep is deterministic. The passes read the reviewer's preferences and the
+ * Runs the model's passes on a complete analysis, adding intent and findings to it. Collects and
+ * preps again from the stored PR first: files come from the file cache, and prep is deterministic.
+ * The passes read the reviewer's preferences and the
  * repository's guideline files, which the analysis keeps as the run's guidance. A run that asks for
- * the tour runs the steps pass beside them. A failure of the four is the analysis's `modelError`,
+ * the tour runs the steps pass beside them. A failure of the two is the analysis's `modelError`,
  * and the steps pass's is its `stepsError`; its status stays complete. Never throws.
  */
 export const runModel = async (
@@ -330,7 +327,6 @@ export const runModel = async (
     readonly advisor: GuardrailAdvisor | null;
     readonly tour?: boolean;
   },
-  checkout: CheckoutAt | null = null,
 ): Promise<void> => {
   const tracker = createTracker(deps, analysis);
   try {
@@ -357,7 +353,6 @@ export const runModel = async (
       run.tour === true,
       host,
       pullRequest,
-      checkout,
       tracker,
     );
   } catch (error) {
@@ -386,12 +381,12 @@ const modelStages = async (
   tour: boolean,
   host: GitHost,
   pullRequest: PullRequest,
-  checkout: CheckoutAt | null,
   tracker: Tracker,
 ): Promise<void> => {
   const collected = await collect(deps, host, pullRequest, noProgress);
   if (!collected.ok) return tracker.failModel("intent", collected.error);
-  const { prepared, proofRisk, ruleRisk } = await prepare(deps, collected.value, checkout);
+  // The analysis holds what the checkout gave it, so it isn't read again.
+  const { prepared } = await prepare(deps, collected.value, null);
   const { files } = collected.value;
 
   const read = await runGuidance(deps, pullRequest, {
@@ -414,6 +409,7 @@ const modelStages = async (
       files,
       headContents: collected.value.headContents,
       prepared,
+      unchangedCallers: tracker.current.unchangedCallers,
       guidance: read.input,
       harness: read.harness,
     }),
@@ -436,13 +432,13 @@ const modelStages = async (
       ended += 1;
       if (advisor === null || ended < MODEL_STAGES.length) return changes;
       const next = { ...analysis, ...changes };
-      return askable(next.findings, next.risk) ? { ...changes, guardrails: "running" } : changes;
+      return next.findings.length > 0 ? { ...changes, guardrails: "running" } : changes;
     };
 
   for (const stage of MODEL_STAGES) await tracker.setStage(stage, "running");
   if (tour) await tracker.setStage(STEPS_STAGE, "running");
-  // The intent pass writes the PR to the prompt cache; risk and decisions start once it's there, to
-  // read it rather than each write it again. A transport that can't tell starts them at its end.
+  // The intent pass writes the PR to the prompt cache; the steps pass starts once it's there, to
+  // read it rather than write it again. A transport that can't tell starts it at the intent's end.
   const { promise: cached, resolve: cacheWritten } = Promise.withResolvers<void>();
   const intentRun = runIntent(model, input, knownHunks, deps, cacheWritten, guidance).then(
     async (result) => {
@@ -458,7 +454,6 @@ const modelStages = async (
       return result.outcome;
     },
   );
-  await Promise.race([cached, intentRun]);
   // Findings read the intent's mismatches, to name the one a finding shows, so they wait for it.
   const findingsRun = intentRun.then(async (intent) => {
     const result = await runFindings(
@@ -479,71 +474,49 @@ const modelStages = async (
     );
     return result.outcome;
   });
-  const [intent, findings, risk, decisions] = await Promise.all([
+  const [intent, findings] = await Promise.all([
     intentRun,
     findingsRun,
-    runRisk(model, input, prepared.required, hunks, deps, guidance).then(async (result) => {
-      await tracker.setStage(
-        "risk",
-        result.outcome.ok ? "done" : "failed",
-        ending((analysis) => ({
-          ...(result.outcome.ok
-            ? { risk: [...proofRisk, ...raiseByRules(result.outcome.value, ruleRisk)] }
-            : {}),
-          ...adding(result)(analysis),
-        })),
-      );
-      return result.outcome;
-    }),
-    runDecisions(model, input, hunks, deps, guidance).then(async (result) => {
-      await tracker.setStage(
-        "decisions",
-        result.outcome.ok ? "done" : "failed",
-        ending((analysis) => ({
-          ...(result.outcome.ok ? { decisions: result.outcome.value } : {}),
-          ...adding(result)(analysis),
-        })),
-      );
-      return result.outcome;
-    }),
     // The tour is optional to the run: its failure is its own, never the run's.
     tour
-      ? runSteps(
-          model,
-          input,
-          {
-            hunks,
-            mechanical: new Set(prepared.proofs.flatMap((proof) => proof.hunkId ?? [])),
-            parts: prepared.parts,
-            callGraph: prepared.callGraph,
-          },
-          deps,
-          guidance,
-        ).then(async (result) => {
-          await tracker.setStage(
-            STEPS_STAGE,
-            result.outcome.ok ? "done" : "failed",
-            (analysis) => ({
-              steps: result.outcome.ok ? result.outcome.value : [],
-              stepsError: result.outcome.ok
-                ? null
-                : {
-                    stage: STEPS_STAGE,
-                    code: "model-error",
-                    message: result.outcome.error.message,
-                  },
-              ...adding(result)(analysis),
-            }),
-          );
-        })
+      ? Promise.race([cached, intentRun])
+          .then(() =>
+            runSteps(
+              model,
+              input,
+              {
+                hunks,
+                mechanical: new Set(prepared.proofs.flatMap((proof) => proof.hunkId ?? [])),
+                parts: prepared.parts,
+                callGraph: prepared.callGraph,
+              },
+              deps,
+              guidance,
+            ),
+          )
+          .then(async (result) => {
+            await tracker.setStage(
+              STEPS_STAGE,
+              result.outcome.ok ? "done" : "failed",
+              (analysis) => ({
+                steps: result.outcome.ok ? result.outcome.value : [],
+                stepsError: result.outcome.ok
+                  ? null
+                  : {
+                      stage: STEPS_STAGE,
+                      code: "model-error",
+                      message: result.outcome.error.message,
+                    },
+                ...adding(result)(analysis),
+              }),
+            );
+          })
       : null,
   ]);
   // What finished stays; the first failure is the run's error.
   const failure = [
     { stage: "intent" as const, outcome: intent },
     { stage: "findings" as const, outcome: findings },
-    { stage: "risk" as const, outcome: risk },
-    { stage: "decisions" as const, outcome: decisions },
   ].find(({ outcome }) => !outcome.ok);
   await tracker.finishModel(
     failure === undefined || failure.outcome.ok
@@ -552,7 +525,7 @@ const modelStages = async (
   );
   const passed = tracker.current;
   if (advisor === null || passed.guardrails !== "running") return;
-  // The call reads the risks too, so it starts once the passes have ended.
+  // The call starts once the passes have ended, the steps pass among them.
   await tracker.finishGuardrails(
     await runGuardrailCall(
       deps,
@@ -561,7 +534,6 @@ const modelStages = async (
       files.map((file) => file.path),
       hunks,
       passed.findings,
-      passed.risk,
     ),
   );
 };

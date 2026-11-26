@@ -23,7 +23,7 @@ describe("timingOf", () => {
         modelCalls: [
           call("findings", "2026-11-14T10:01:43.000Z", 100_000),
           call("intent", "2026-11-14T10:01:28.400Z", 14_600),
-          call("risk", "2026-11-14T10:01:43.000Z", 30_000),
+          call("steps", "2026-11-14T10:01:43.000Z", 30_000),
           call("findings", "2026-11-14T10:03:23.000Z", 47_500, 2),
         ],
       },
@@ -34,7 +34,7 @@ describe("timingOf", () => {
     expect(timing.passes).toEqual([
       { pass: "intent", seconds: 14.6, calls: 1 },
       { pass: "findings", seconds: 147.5, calls: 2 },
-      { pass: "risk", seconds: 30, calls: 1 },
+      { pass: "steps", seconds: 30, calls: 1 },
     ]);
     expect(timing.judgeS).toBe(18);
   });

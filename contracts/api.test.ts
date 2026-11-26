@@ -327,8 +327,8 @@ describe("routes", () => {
 
 describe("events", () => {
   it("accept realistic payloads", () => {
-    expect(AnalysisUpdatedEvent.parse({ stage: "risk", status: "running" })).toEqual({
-      stage: "risk",
+    expect(AnalysisUpdatedEvent.parse({ stage: "findings", status: "running" })).toEqual({
+      stage: "findings",
       status: "running",
     });
     expect(AnalysisDoneEvent.parse({})).toEqual({});

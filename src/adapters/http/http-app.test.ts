@@ -291,17 +291,6 @@ class GatedModel extends FakeAnalysisModel {
     await this.gate.promise;
     return super.intent(input, options);
   }
-
-  // Risk and decisions start beside the intent, so they wait for the gate too.
-  override async risk(input: AnalysisInput, options?: PassOptions) {
-    await this.gate.promise;
-    return super.risk(input, options);
-  }
-
-  override async decisions(input: AnalysisInput, options?: PassOptions) {
-    await this.gate.promise;
-    return super.decisions(input, options);
-  }
 }
 
 /** Counts live subscriptions, to see that a closed stream unsubscribes. */
@@ -500,17 +489,6 @@ describe("PUT /api/analyses/:id/points/:pointId", () => {
     expect(view.body?.pointReviews).toEqual([body]);
   });
 
-  it("takes a risk's point ID, with its colon, through the path", async () => {
-    const { call } = await seeded();
-    const risk = smallFeatureAnalysis.risk.find((one) => one.reason === "Adds a public endpoint.");
-    const pointId = `r:${risk?.hunkId}`;
-    const { body } = await call("putPointState", {
-      params: { id, pointId },
-      body: { state: "dismissed" },
-    });
-    expect(body?.pointId).toBe(pointId);
-  });
-
   it("validates params and body", async () => {
     const { call } = await seeded();
     const put = async (pointId: string, body: unknown) =>
@@ -524,12 +502,12 @@ describe("PUT /api/analyses/:id/points/:pointId", () => {
     const complete = await seeded();
     const state = { state: "raised" };
     expect(
-      (await complete.call("putPointState", { params: { id, pointId: "d99" }, body: state })).error
+      (await complete.call("putPointState", { params: { id, pointId: "f99" }, body: state })).error
         ?.code,
     ).toBe("not-found");
     const notComplete = await seeded(running);
     expect(
-      (await notComplete.call("putPointState", { params: { id, pointId: "d1" }, body: state }))
+      (await notComplete.call("putPointState", { params: { id, pointId: "f1" }, body: state }))
         .error?.code,
     ).toBe("analysis-not-complete");
   });
@@ -542,7 +520,6 @@ describe("POST /api/analyses/:id/publication/preview", () => {
       params: { id },
       body: { summary: "Looks good" },
     });
-    // Every decision is still pending, so the review only comments.
     expect(body?.verdict).toBe("comment");
     expect(body?.summary).toContain("Looks good");
   });
@@ -1205,8 +1182,6 @@ describe("GET /api/analyses/:id/events", () => {
           prep: "failed" as const,
           intent: "pending" as const,
           findings: "pending" as const,
-          risk: "pending" as const,
-          decisions: "pending" as const,
         },
       },
     ]) {

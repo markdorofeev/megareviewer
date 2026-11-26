@@ -142,6 +142,27 @@ export const CallSite = z
 export type CallSite = z.infer<typeof CallSite>;
 
 /**
+ * A definition the PR changes, or lines of one part outside any definition, and what it runs.
+ * Finer than the hints: a call into one method of an added class reaches that method, where a hint
+ * reaches the whole class, which is one part.
+ */
+export const DefinitionCalls = z
+  .object({
+    /** "" for lines outside any definition. */
+    name: z.string(),
+    /** The parts that hold its lines, in diff order. */
+    partIds: z.array(PartId).min(1).readonly(),
+    /** The definitions it calls, by their place in the list, in the order it calls them. */
+    calls: z.array(z.number().int().nonnegative()).readonly(),
+    /** The requests it sends to the PR's routes, by method and path. */
+    requests: z
+      .array(z.object({ symbol: z.string().min(1), toPartId: PartId }).readonly())
+      .readonly(),
+  })
+  .readonly();
+export type DefinitionCalls = z.infer<typeof DefinitionCalls>;
+
+/**
  * A use, in a file the PR doesn't change, of a definition the PR changes: a call, or a type use.
  * `excerpt` is at most 5 lines around it, the first being line `excerpt.start`.
  */

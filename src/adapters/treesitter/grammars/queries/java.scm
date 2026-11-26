@@ -13,9 +13,11 @@
 
 (object_creation_expression type: (type_identifier) @reference.name)
 (method_invocation !object name: (identifier) @reference.name)
+(method_invocation object: (_) @receiver name: (identifier) @reference.member)
 (method_invocation name: (identifier) @reference.member)
 (method_invocation object: (identifier) @reference.name)
 (field_access object: (identifier) @reference.name)
+(field_access object: (_) @receiver field: (identifier) @reference.member)
 (field_access field: (identifier) @reference.member)
 (type_identifier) @reference.type
 

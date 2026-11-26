@@ -22,8 +22,8 @@ const ROOT = { ref: "g1", path: "CLAUDE.md", linkedFrom: null, content: "" };
 /** What a pass that can read is asked after its task, taken from the prompts so it can't drift. */
 export const readFirstLine = (): string => {
   const guidance = { preferences: [], guidelines: [ROOT] };
-  const task = passMessage("risk", null, undefined, { guidance, harness: null });
-  const asked = passMessage("risk", null, undefined, {
+  const task = passMessage("findings", null, undefined, { guidance, harness: null });
+  const asked = passMessage("findings", null, undefined, {
     guidance,
     harness: { files: [], contents: new Map() },
   });
@@ -55,8 +55,6 @@ export const modelFor = (reader: Reader, model: AnalysisModel): AnalysisModel =>
         checkSize: (input) => model.checkSize(input),
         intent: (input, options) => model.intent(input, options),
         findings: (input, intent, options) => model.findings(input, intent, options),
-        risk: (input, options) => model.risk(input, options),
-        decisions: (input, options) => model.decisions(input, options),
         steps: (input, options) => model.steps(input, options),
       };
 

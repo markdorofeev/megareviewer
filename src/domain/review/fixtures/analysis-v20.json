@@ -1,0 +1,1050 @@
+{
+  "analysis": {
+    "id": "a_0f6b17f1e1f8e128",
+    "key": {
+      "ref": {
+        "repo": {
+          "host": "github",
+          "owner": "acme",
+          "repo": "shop"
+        },
+        "number": 101
+      },
+      "headSha": "ec7f8e0489e3011a207691eeef6ad1840f4a9259",
+      "pipelineVersion": "20"
+    },
+    "status": "complete",
+    "stages": {
+      "collect": "done",
+      "prep": "done",
+      "intent": "done",
+      "findings": "done",
+      "risk": "done",
+      "decisions": "done",
+      "steps": "skipped"
+    },
+    "filesFetched": {
+      "done": 5,
+      "total": 5
+    },
+    "pullRequest": {
+      "ref": {
+        "repo": {
+          "host": "github",
+          "owner": "acme",
+          "repo": "shop"
+        },
+        "number": 101
+      },
+      "url": "https://github.com/acme/shop/pull/101",
+      "title": "Add receipt download endpoint",
+      "description": "Customers want to download a receipt for an order (SHOP-123).\n\nAdds `GET /orders/:id/receipt`, which renders a plain-text receipt for one of the user's orders. Receipts are cached for an hour, configurable in `config/app.yaml`.",
+      "author": {
+        "id": "dana-kim",
+        "name": "Dana Kim"
+      },
+      "sourceBranch": "feature/receipts",
+      "targetBranch": "main",
+      "baseSha": "307ac3d26d595d8183b57c1e0f368e17ec42d7bc",
+      "headSha": "ec7f8e0489e3011a207691eeef6ad1840f4a9259",
+      "commits": [
+        {
+          "sha": "be10d932a62c305d4bcbcf43be6d33a0d19f2097",
+          "message": "Add receipt rendering service",
+          "author": "Dana Kim"
+        },
+        {
+          "sha": "13fa1b41650d3dc4e2fd7f7d928af0a02fdd25cf",
+          "message": "Expose GET /orders/:id/receipt",
+          "author": "Dana Kim"
+        },
+        {
+          "sha": "ec7f8e0489e3011a207691eeef6ad1840f4a9259",
+          "message": "Add receipt settings to config",
+          "author": "Dana Kim"
+        }
+      ],
+      "diff": "diff --git a/config/app.yaml b/config/app.yaml\nindex ab8739e..b08a563 100644\n--- a/config/app.yaml\n+++ b/config/app.yaml\n@@ -10,7 +10,7 @@ database:\n \n rateLimit:\n   enabled: true\n-  perMinute: 60\n+  perMinute: 600\n   burst: 20\n \n cache:\n@@ -19,6 +19,7 @@ cache:\n   ttlSeconds:\n     orders: 60\n     products: 300\n+    receipts: 3600\n \n logging:\n   level: info\n@@ -28,3 +29,7 @@ logging:\n     - cardNumber\n     - email\n     - phone\n+\n+receipts:\n+  currency: USD\n+  footer: \"Thank you for shopping with Acme.\"\ndiff --git a/src/routes/orders.ts b/src/routes/orders.ts\nindex 6197da4..7fc6c84 100644\n--- a/src/routes/orders.ts\n+++ b/src/routes/orders.ts\n@@ -1,6 +1,7 @@\n import { Router } from \"express\";\n import { requireUser } from \"../auth.ts\";\n import { cancelOrder, findOrder, listOrders } from \"../services/orders.ts\";\n+import { renderReceipt } from \"../services/receipts.ts\";\n \n export const ordersRouter = Router();\n \n@@ -28,3 +29,12 @@ ordersRouter.post(\"/orders/:id/cancel\", async (req, res) => {\n   }\n   res.status(204).end();\n });\n+\n+ordersRouter.get(\"/orders/:id/receipt\", async (req, res) => {\n+  const order = await findOrder(req.user.id, req.params.id);\n+  if (!order) {\n+    res.status(404).json({ error: \"not found\" });\n+    return;\n+  }\n+  res.type(\"text/plain\").send(renderReceipt(order));\n+});\ndiff --git a/src/services/receipts.ts b/src/services/receipts.ts\nnew file mode 100644\nindex 0000000..289de22\n--- /dev/null\n+++ b/src/services/receipts.ts\n@@ -0,0 +1,20 @@\n+import type { Order } from \"./orders.ts\";\n+\n+const RECEIPT_TTL_MS = 60 * 60 * 1000;\n+const cache = new Map<string, { text: string; expiresAt: number }>();\n+\n+const formatCents = (cents: number): string => (cents / 100).toFixed(2);\n+\n+export function renderReceipt(order: Order, now: number = Date.now()): string {\n+  const cached = cache.get(order.id);\n+  if (cached && cached.expiresAt > now) {\n+    return cached.text;\n+  }\n+  const lines = order.items.map(\n+    (item) => `${item.quantity} x ${item.name}  ${formatCents(item.priceCents)}`,\n+  );\n+  const total = order.items.reduce((sum, item) => sum + item.quantity * item.priceCents, 0);\n+  const text = [`Receipt for order ${order.id}`, ...lines, `Total: ${formatCents(total)}`].join(\"\\n\");\n+  cache.set(order.id, { text, expiresAt: now + RECEIPT_TTL_MS });\n+  return text;\n+}\n",
+      "createdAt": "2026-10-19T08:12:00Z",
+      "updatedAt": "2026-10-20T16:45:30Z"
+    },
+    "files": [
+      {
+        "path": "config/app.yaml",
+        "oldPath": null,
+        "status": "modified",
+        "binary": false,
+        "oldMode": null,
+        "newMode": null,
+        "language": "yaml",
+        "hunks": [
+          {
+            "id": "h_fbaf18305007c20a",
+            "path": "config/app.yaml",
+            "oldStart": 10,
+            "oldLines": 7,
+            "newStart": 10,
+            "newLines": 7,
+            "sectionHeading": "database:",
+            "lines": [
+              {
+                "kind": "context",
+                "oldLine": 10,
+                "newLine": 10,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 11,
+                "newLine": 11,
+                "text": "rateLimit:",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 12,
+                "newLine": 12,
+                "text": "  enabled: true",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "del",
+                "oldLine": 13,
+                "newLine": null,
+                "text": "  perMinute: 60",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 13,
+                "text": "  perMinute: 600",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 14,
+                "newLine": 14,
+                "text": "  burst: 20",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 15,
+                "newLine": 15,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 16,
+                "newLine": 16,
+                "text": "cache:",
+                "noNewlineAtEnd": false
+              }
+            ]
+          },
+          {
+            "id": "h_2e2332fa455a2146",
+            "path": "config/app.yaml",
+            "oldStart": 19,
+            "oldLines": 6,
+            "newStart": 19,
+            "newLines": 7,
+            "sectionHeading": "cache:",
+            "lines": [
+              {
+                "kind": "context",
+                "oldLine": 19,
+                "newLine": 19,
+                "text": "  ttlSeconds:",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 20,
+                "newLine": 20,
+                "text": "    orders: 60",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 21,
+                "newLine": 21,
+                "text": "    products: 300",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 22,
+                "text": "    receipts: 3600",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 22,
+                "newLine": 23,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 23,
+                "newLine": 24,
+                "text": "logging:",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 24,
+                "newLine": 25,
+                "text": "  level: info",
+                "noNewlineAtEnd": false
+              }
+            ]
+          },
+          {
+            "id": "h_3822ea0f7192c70e",
+            "path": "config/app.yaml",
+            "oldStart": 28,
+            "oldLines": 3,
+            "newStart": 29,
+            "newLines": 7,
+            "sectionHeading": "logging:",
+            "lines": [
+              {
+                "kind": "context",
+                "oldLine": 28,
+                "newLine": 29,
+                "text": "    - cardNumber",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 29,
+                "newLine": 30,
+                "text": "    - email",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 30,
+                "newLine": 31,
+                "text": "    - phone",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 32,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 33,
+                "text": "receipts:",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 34,
+                "text": "  currency: USD",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 35,
+                "text": "  footer: \"Thank you for shopping with Acme.\"",
+                "noNewlineAtEnd": false
+              }
+            ]
+          }
+        ],
+        "additions": 6,
+        "deletions": 1
+      },
+      {
+        "path": "src/routes/orders.ts",
+        "oldPath": null,
+        "status": "modified",
+        "binary": false,
+        "oldMode": null,
+        "newMode": null,
+        "language": "typescript",
+        "hunks": [
+          {
+            "id": "h_88747b653fc82f6d",
+            "path": "src/routes/orders.ts",
+            "oldStart": 1,
+            "oldLines": 6,
+            "newStart": 1,
+            "newLines": 7,
+            "sectionHeading": null,
+            "lines": [
+              {
+                "kind": "context",
+                "oldLine": 1,
+                "newLine": 1,
+                "text": "import { Router } from \"express\";",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 2,
+                "newLine": 2,
+                "text": "import { requireUser } from \"../auth.ts\";",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 3,
+                "newLine": 3,
+                "text": "import { cancelOrder, findOrder, listOrders } from \"../services/orders.ts\";",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 4,
+                "text": "import { renderReceipt } from \"../services/receipts.ts\";",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 4,
+                "newLine": 5,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 5,
+                "newLine": 6,
+                "text": "export const ordersRouter = Router();",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 6,
+                "newLine": 7,
+                "text": "",
+                "noNewlineAtEnd": false
+              }
+            ]
+          },
+          {
+            "id": "h_5c94b39812b2e8f8",
+            "path": "src/routes/orders.ts",
+            "oldStart": 28,
+            "oldLines": 3,
+            "newStart": 29,
+            "newLines": 12,
+            "sectionHeading": "ordersRouter.post(\"/orders/:id/cancel\", async (req, res) => {",
+            "lines": [
+              {
+                "kind": "context",
+                "oldLine": 28,
+                "newLine": 29,
+                "text": "  }",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 29,
+                "newLine": 30,
+                "text": "  res.status(204).end();",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "context",
+                "oldLine": 30,
+                "newLine": 31,
+                "text": "});",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 32,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 33,
+                "text": "ordersRouter.get(\"/orders/:id/receipt\", async (req, res) => {",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 34,
+                "text": "  const order = await findOrder(req.user.id, req.params.id);",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 35,
+                "text": "  if (!order) {",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 36,
+                "text": "    res.status(404).json({ error: \"not found\" });",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 37,
+                "text": "    return;",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 38,
+                "text": "  }",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 39,
+                "text": "  res.type(\"text/plain\").send(renderReceipt(order));",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 40,
+                "text": "});",
+                "noNewlineAtEnd": false
+              }
+            ]
+          }
+        ],
+        "additions": 10,
+        "deletions": 0
+      },
+      {
+        "path": "src/services/receipts.ts",
+        "oldPath": null,
+        "status": "added",
+        "binary": false,
+        "oldMode": null,
+        "newMode": null,
+        "language": "typescript",
+        "hunks": [
+          {
+            "id": "h_a2e0236601ffc778",
+            "path": "src/services/receipts.ts",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 20,
+            "sectionHeading": null,
+            "lines": [
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 1,
+                "text": "import type { Order } from \"./orders.ts\";",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 2,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 3,
+                "text": "const RECEIPT_TTL_MS = 60 * 60 * 1000;",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 4,
+                "text": "const cache = new Map<string, { text: string; expiresAt: number }>();",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 5,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 6,
+                "text": "const formatCents = (cents: number): string => (cents / 100).toFixed(2);",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 7,
+                "text": "",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 8,
+                "text": "export function renderReceipt(order: Order, now: number = Date.now()): string {",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 9,
+                "text": "  const cached = cache.get(order.id);",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 10,
+                "text": "  if (cached && cached.expiresAt > now) {",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 11,
+                "text": "    return cached.text;",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 12,
+                "text": "  }",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 13,
+                "text": "  const lines = order.items.map(",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 14,
+                "text": "    (item) => `${item.quantity} x ${item.name}  ${formatCents(item.priceCents)}`,",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 15,
+                "text": "  );",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 16,
+                "text": "  const total = order.items.reduce((sum, item) => sum + item.quantity * item.priceCents, 0);",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 17,
+                "text": "  const text = [`Receipt for order ${order.id}`, ...lines, `Total: ${formatCents(total)}`].join(\"\\n\");",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 18,
+                "text": "  cache.set(order.id, { text, expiresAt: now + RECEIPT_TTL_MS });",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 19,
+                "text": "  return text;",
+                "noNewlineAtEnd": false
+              },
+              {
+                "kind": "add",
+                "oldLine": null,
+                "newLine": 20,
+                "text": "}",
+                "noNewlineAtEnd": false
+              }
+            ]
+          }
+        ],
+        "additions": 20,
+        "deletions": 0
+      }
+    ],
+    "tickets": [
+      {
+        "key": "SHOP-123",
+        "url": "https://example.atlassian.net/browse/SHOP-123",
+        "summary": "Let customers download order receipts",
+        "description": "Customers ask support for receipts several times a day. Add a way to download a plain-text receipt for any order from the order page. Receipts should be cached so repeated downloads are cheap; the cache lifetime must be configurable.",
+        "type": "Story",
+        "status": "In Review"
+      }
+    ],
+    "missingTicketKeys": [],
+    "proofs": [],
+    "parts": [],
+    "callGraph": [
+      {
+        "fromPartId": "h_88747b653fc82f6d",
+        "toPartId": "h_a2e0236601ffc778",
+        "symbol": "renderReceipt",
+        "line": 4,
+        "use": "call"
+      },
+      {
+        "fromPartId": "h_5c94b39812b2e8f8",
+        "toPartId": "h_a2e0236601ffc778",
+        "symbol": "renderReceipt",
+        "line": 39,
+        "use": "call"
+      }
+    ],
+    "callSites": [],
+    "fileLinks": [
+      {
+        "from": "src/routes/orders.ts",
+        "to": "src/services/receipts.ts"
+      }
+    ],
+    "generated": [],
+    "checkout": "none",
+    "checkoutDir": null,
+    "checkoutError": null,
+    "unchangedCallers": [],
+    "intent": {
+      "stated": {
+        "summary": "Let customers download a plain-text receipt for one of their orders, cached for a configurable time.",
+        "sources": [
+          {
+            "kind": "description",
+            "ref": null
+          },
+          {
+            "kind": "ticket",
+            "ref": "SHOP-123"
+          }
+        ]
+      },
+      "inferred": {
+        "summary": "Adds GET /orders/:id/receipt, which renders a receipt and caches it in memory for a hard-coded hour. Also raises the rate limit tenfold.",
+        "shape": "`GET /orders/:id/receipt` in `ordersRouter` calls `findOrder`, then `renderReceipt`, which reads or fills an in-process `Map` cache.",
+        "behaviorChanges": [
+          "New endpoint GET /orders/:id/receipt returns a plain-text receipt for the user's own order, or 404.",
+          "Receipts are cached in process memory for one hour, with no eviction.",
+          "The rate limit goes from 60 to 600 requests per minute."
+        ],
+        "watch": [
+          "Rate limit raised tenfold, which nobody asked for"
+        ]
+      },
+      "mismatches": [
+        {
+          "kind": "unrequested",
+          "description": "The rate limit is raised from 60 to 600 requests per minute.",
+          "hunkIds": [
+            "h_fbaf18305007c20a"
+          ]
+        },
+        {
+          "kind": "missing",
+          "description": "The cache lifetime should be configurable. Config adds cache.ttlSeconds.receipts, but the code uses a hard-coded hour.",
+          "hunkIds": [
+            "h_2e2332fa455a2146",
+            "h_a2e0236601ffc778"
+          ]
+        }
+      ]
+    },
+    "findings": [
+      {
+        "id": "f1",
+        "title": "Serves a stale receipt for an hour after its order changes",
+        "explanation": "The cache is keyed by order ID alone, so a refund or an edited item still shows the receipt rendered before it until the entry expires.",
+        "lines": {
+          "hunkId": "h_a2e0236601ffc778",
+          "side": "new",
+          "startLine": 9,
+          "line": 11
+        },
+        "severity": "major",
+        "suggestion": null,
+        "mismatch": null,
+        "guidance": null,
+        "guardrail": {
+          "is": "suggested",
+          "kind": "architecture-rule",
+          "engine": "ArchUnit",
+          "does": "Services never import a controller."
+        }
+      }
+    ],
+    "risk": [
+      {
+        "hunkId": "h_fbaf18305007c20a",
+        "riskClass": "contract",
+        "reason": "Changes the rate limit.",
+        "source": "model",
+        "lines": null,
+        "guidance": null
+      },
+      {
+        "hunkId": "h_2e2332fa455a2146",
+        "riskClass": "contract",
+        "reason": "Adds a config setting.",
+        "source": "model",
+        "lines": null,
+        "guidance": null
+      },
+      {
+        "hunkId": "h_3822ea0f7192c70e",
+        "riskClass": "contract",
+        "reason": "Adds a config section.",
+        "source": "model",
+        "lines": null,
+        "guidance": null
+      },
+      {
+        "hunkId": "h_88747b653fc82f6d",
+        "riskClass": "logic",
+        "reason": "Imports the new service.",
+        "source": "model",
+        "lines": null,
+        "guidance": null
+      },
+      {
+        "hunkId": "h_5c94b39812b2e8f8",
+        "riskClass": "contract",
+        "reason": "Adds a public endpoint.",
+        "source": "model",
+        "lines": {
+          "hunkId": "h_5c94b39812b2e8f8",
+          "side": "new",
+          "startLine": 32,
+          "line": 32
+        },
+        "checkedBy": {
+          "test": "answers 404 for another user's order",
+          "lines": {
+            "hunkId": "h_5c94b39812b2e8f8",
+            "side": "new",
+            "startLine": 32,
+            "line": 32
+          },
+          "checks": "Another user's order gets 404."
+        },
+        "guidance": {
+          "ref": "p1",
+          "effect": "raised"
+        },
+        "guardrail": {
+          "is": "suggested",
+          "kind": "architecture-rule",
+          "engine": "ArchUnit",
+          "does": "Services never import a controller."
+        }
+      },
+      {
+        "hunkId": "h_a2e0236601ffc778",
+        "riskClass": "logic",
+        "reason": "Renders and caches receipts.",
+        "source": "model",
+        "lines": null,
+        "guidance": null
+      }
+    ],
+    "decisions": [
+      {
+        "id": "d1",
+        "title": "Adds GET /orders/:id/receipt, scoped to the signed-in user's orders",
+        "category": "api",
+        "whyItMatters": "A new public endpoint is a contract clients will depend on.",
+        "hunkIds": [
+          "h_5c94b39812b2e8f8",
+          "h_88747b653fc82f6d"
+        ],
+        "lines": null
+      },
+      {
+        "id": "d2",
+        "title": "Caches receipts in process memory with no eviction",
+        "category": "performance",
+        "whyItMatters": "The cache grows with every order viewed and isn't shared between instances.",
+        "hunkIds": [
+          "h_a2e0236601ffc778"
+        ],
+        "lines": null
+      },
+      {
+        "id": "d3",
+        "title": "Raises the rate limit from 60 to 600 requests per minute",
+        "category": "configuration",
+        "whyItMatters": "Nobody asked for it, and it weakens abuse protection for every endpoint.",
+        "hunkIds": [
+          "h_fbaf18305007c20a"
+        ],
+        "lines": null
+      },
+      {
+        "id": "d4",
+        "title": "Hard-codes the receipt cache lifetime instead of reading config",
+        "category": "configuration",
+        "whyItMatters": "The ticket asks for a configurable lifetime, and the new setting is ignored.",
+        "hunkIds": [
+          "h_a2e0236601ffc778",
+          "h_2e2332fa455a2146"
+        ],
+        "lines": null
+      }
+    ],
+    "flows": [
+      {
+        "title": "GET /orders/:id/receipt",
+        "partIds": [
+          "h_5c94b39812b2e8f8",
+          "h_88747b653fc82f6d"
+        ],
+        "kind": "flow",
+        "entries": [
+          "h_5c94b39812b2e8f8"
+        ]
+      },
+      {
+        "title": "renderReceipt",
+        "partIds": [
+          "h_a2e0236601ffc778"
+        ],
+        "kind": "flow",
+        "entries": []
+      },
+      {
+        "title": "Other changes in config",
+        "partIds": [
+          "h_2e2332fa455a2146",
+          "h_3822ea0f7192c70e",
+          "h_fbaf18305007c20a"
+        ],
+        "kind": "supporting",
+        "entries": []
+      }
+    ],
+    "steps": null,
+    "stepsError": null,
+    "warnings": [],
+    "usage": [
+      {
+        "pass": "intent",
+        "inputTokens": 6120,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 5800,
+        "outputTokens": 410,
+        "costUsd": 0.07,
+        "billing": "api"
+      },
+      {
+        "pass": "risk",
+        "inputTokens": 380,
+        "cacheReadTokens": 5800,
+        "cacheWriteTokens": 0,
+        "outputTokens": 260,
+        "costUsd": 0.02,
+        "billing": "api"
+      },
+      {
+        "pass": "decisions",
+        "inputTokens": 420,
+        "cacheReadTokens": 5800,
+        "cacheWriteTokens": 0,
+        "outputTokens": 690,
+        "costUsd": 0.03,
+        "billing": "api"
+      }
+    ],
+    "modelCalls": [
+      {
+        "pass": "intent",
+        "attempt": 1,
+        "startedAt": "2026-10-21T09:00:20Z",
+        "durationMs": 9400,
+        "outcome": "ok",
+        "problems": [],
+        "error": null
+      },
+      {
+        "pass": "risk",
+        "attempt": 1,
+        "startedAt": "2026-10-21T09:00:30Z",
+        "durationMs": 8100,
+        "outcome": "ok",
+        "problems": [],
+        "error": null
+      },
+      {
+        "pass": "decisions",
+        "attempt": 1,
+        "startedAt": "2026-10-21T09:00:30Z",
+        "durationMs": 21600,
+        "outcome": "ok",
+        "problems": [],
+        "error": null
+      }
+    ],
+    "error": null,
+    "modelError": null,
+    "modelOption": {
+      "provider": "anthropic-api",
+      "providerName": "Anthropic API",
+      "model": "claude-haiku-5-5",
+      "modelName": "Haiku 5.5",
+      "family": "Claude"
+    },
+    "guidance": {
+      "preferences": [
+        {
+          "ref": "p1",
+          "id": "pref_00000000000000a1",
+          "kind": "look-for",
+          "text": "Any change to the public API",
+          "scope": {
+            "kind": "global"
+          }
+        }
+      ],
+      "guidelines": [],
+      "checks": []
+    },
+    "beforeModel": {
+      "risk": [
+        {
+          "hunkId": "h_fbaf18305007c20a",
+          "riskClass": "contract",
+          "reason": "Changes the rate limit.",
+          "source": "rule",
+          "lines": null,
+          "guidance": null
+        },
+        {
+          "hunkId": "h_2e2332fa455a2146",
+          "riskClass": "contract",
+          "reason": "Adds a config setting.",
+          "source": "rule",
+          "lines": null,
+          "guidance": null
+        },
+        {
+          "hunkId": "h_3822ea0f7192c70e",
+          "riskClass": "contract",
+          "reason": "Adds a config section.",
+          "source": "rule",
+          "lines": null,
+          "guidance": null
+        },
+        {
+          "hunkId": "h_88747b653fc82f6d",
+          "riskClass": "logic",
+          "reason": "Imports the new service.",
+          "source": "rule",
+          "lines": null,
+          "guidance": null
+        },
+        {
+          "hunkId": "h_5c94b39812b2e8f8",
+          "riskClass": "logic",
+          "reason": "Adds a public endpoint.",
+          "source": "rule",
+          "lines": null,
+          "guidance": null
+        },
+        {
+          "hunkId": "h_a2e0236601ffc778",
+          "riskClass": "logic",
+          "reason": "Renders and caches receipts.",
+          "source": "rule",
+          "lines": null,
+          "guidance": null
+        }
+      ],
+      "warnings": []
+    },
+    "guardrails": "done",
+    "createdAt": "2026-10-21T09:00:00Z",
+    "updatedAt": "2026-10-21T09:01:10Z"
+  },
+  "pointReviews": [
+    {
+      "pointId": "r:h_5c94b39812b2e8f8",
+      "state": "dismissed",
+      "updatedAt": "2026-10-21T09:05:00Z"
+    },
+    {
+      "pointId": "d1",
+      "state": "raised",
+      "updatedAt": "2026-10-21T09:06:00Z"
+    }
+  ],
+  "signals": [
+    {
+      "kind": "dismissed",
+      "at": "2026-10-21T09:05:00Z",
+      "pullRequest": {
+        "repo": {
+          "host": "github",
+          "owner": "acme",
+          "repo": "shop"
+        },
+        "number": 101
+      },
+      "pointKind": "risk",
+      "title": "Adds a public endpoint.",
+      "text": "",
+      "path": "src/routes/orders.ts"
+    },
+    {
+      "kind": "raised",
+      "at": "2026-10-21T09:06:00Z",
+      "pullRequest": {
+        "repo": {
+          "host": "github",
+          "owner": "acme",
+          "repo": "shop"
+        },
+        "number": 101
+      },
+      "pointKind": "decision",
+      "title": "Adds GET /orders/:id/receipt, scoped to the signed-in user's orders",
+      "text": "A new public endpoint is a contract clients will depend on.",
+      "path": "src/routes/orders.ts"
+    }
+  ]
+}

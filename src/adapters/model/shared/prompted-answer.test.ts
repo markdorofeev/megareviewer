@@ -25,11 +25,11 @@ describe("passSchema", () => {
 
 describe("passText", () => {
   it("ends the pass's message with how to answer and the pass's schema", () => {
-    const text = passText("risk", "Task: risk.");
-    expect(text.startsWith("Task: risk.\n\nAnswer with one JSON object and nothing else")).toBe(
+    const text = passText("findings", "Task: findings.");
+    expect(text.startsWith("Task: findings.\n\nAnswer with one JSON object and nothing else")).toBe(
       true,
     );
-    expect(text.endsWith(`\n${JSON.stringify(passSchema("risk"))}`)).toBe(true);
+    expect(text.endsWith(`\n${JSON.stringify(passSchema("findings"))}`)).toBe(true);
   });
 });
 

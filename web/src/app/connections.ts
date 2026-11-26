@@ -109,7 +109,7 @@ const MODEL_TOOLS: Readonly<
   claude: {
     name: "Claude",
     providers: ["claude-code", "anthropic-api"],
-    adds: "Adds intent, findings, risks and decisions with Request AI review.",
+    adds: "Adds intent and findings with Request AI review.",
     connect: "Run `claude` and sign in, or set ANTHROPIC_API_KEY.",
   },
   codex: {

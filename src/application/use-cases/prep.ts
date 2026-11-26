@@ -1,10 +1,12 @@
 import {
   buildCallGraphHints,
   buildCallSites,
+  buildDefinitionCalls,
   type CallGraphHint,
   type CallSite,
   changedDefinitionNames,
   changedDefinitions,
+  type DefinitionCalls,
   type FileDefinitions,
   type FileLink,
   type FileSymbols,
@@ -36,6 +38,8 @@ export interface Prepared {
   readonly callGraph: readonly CallGraphHint[];
   /** Every use of what the PR changes, naming candidate parts like the hints. */
   readonly callSites: readonly CallSite[];
+  /** What each changed definition runs among the others, naming candidate parts like the hints. */
+  readonly definitionCalls: readonly DefinitionCalls[];
   readonly fileLinks: readonly FileLink[];
   /** Each part's changed definitions, for the flows' entry points. Not stored. */
   readonly definitions: ReadonlyMap<PartId, readonly string[]>;
@@ -107,6 +111,10 @@ export const prep = async (
     definitionsByPath.set(file.path, {
       head: headSymbols?.ok ? headSymbols.value.definitions : [],
       base: baseSymbols?.ok ? baseSymbols.value.definitions : [],
+      comments: {
+        head: new Set(headSymbols?.ok ? headSymbols.value.commentLines : []),
+        base: new Set(baseSymbols?.ok ? baseSymbols.value.commentLines : []),
+      },
     });
   }
 
@@ -139,6 +147,7 @@ export const prep = async (
     parts,
     callGraph: buildCallGraphHints(files, symbolsByPath, parts),
     callSites: buildCallSites(files, symbolsByPath, parts),
+    definitionCalls: buildDefinitionCalls(files, symbolsByPath, parts),
     fileLinks: fileLinks(files, symbolsByPath),
     definitions: changedDefinitionNames(files, symbolsByPath, parts),
     generated,

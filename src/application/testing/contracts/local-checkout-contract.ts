@@ -89,7 +89,7 @@ export const describeLocalCheckoutContract = (
           deletions: 1,
         },
       ];
-      const definitions = [{ partId: changed.id, path, name: "items" }];
+      const definitions = [{ partId: changed.id, path, name: "items", owner: null }];
       const parser = new FakeCodeParser();
       const callersIn = async (paths: readonly string[]) => {
         const read = await checkout.readFiles(sha, paths);

@@ -3,6 +3,7 @@ import {
   describeAnalysisModelContract,
   RecordingLogger,
   smallFeatureInput,
+  smallFeatureIntent,
 } from "../../../application/testing/index.ts";
 import type { ModelBilling, ModelErrorKind, ModelPass } from "../../../domain/review/index.ts";
 import { GUIDANCE_BLOCK, withGuidance } from "../shared/fixtures/guidance.ts";
@@ -69,29 +70,33 @@ describe("CodexAnalysisModel", () => {
   it("runs every pass with the same instructions and schema, the PR in the instructions", async () => {
     const { model, calls } = modelWith();
     await model.intent(smallFeatureInput);
-    await model.risk(smallFeatureInput);
-    await model.decisions(smallFeatureInput);
+    await model.findings(smallFeatureInput, smallFeatureIntent);
+    await model.steps(smallFeatureInput);
     expect(calls).toHaveLength(3);
     const instructions = calls.map((call) => call.options.files?.[INSTRUCTIONS_FILE]);
     expect(new Set(instructions).size).toBe(1);
     expect(instructions[0]).toContain("<pull_request_data>");
     expect(new Set(calls.map((call) => call.options.files?.[SCHEMA_FILE])).size).toBe(1);
-    expect(calls[1]?.options.stdin).toMatch(/^Task: risk\./m);
-    expect(calls[1]?.options.stdin).not.toContain("<earlier_results>");
+    expect(calls[1]?.options.stdin).toMatch(/^Task: findings\./m);
+    expect(calls.map((call) => call.options.stdin?.includes("<earlier_results>"))).toEqual([
+      false,
+      true,
+      false,
+    ]);
     const efforts = calls.map((call) =>
       call.args.find((arg) => arg.startsWith("model_reasoning_effort=")),
     );
     expect(efforts).toEqual([
       "model_reasoning_effort=medium",
-      "model_reasoning_effort=low",
       "model_reasoning_effort=high",
+      "model_reasoning_effort=medium",
     ]);
   });
 
   it("puts the reviewer's guidance in the instructions, before the PR, and asks for its mark", async () => {
     const { model, calls } = modelWith();
     await model.intent(guidedInput);
-    await model.risk(guidedInput);
+    await model.findings(guidedInput, smallFeatureIntent);
     const instructions = calls.map((call) => call.options.files?.[INSTRUCTIONS_FILE] ?? "");
     expect(instructions[0]).toMatch(GUIDANCE_BLOCK);
     expect(instructions[0]).toContain("</reviewer_guidance>\n<pull_request_data>\n<pull_request>");
@@ -128,7 +133,7 @@ describe("CodexAnalysisModel", () => {
   });
 
   it("fails an answer to another pass as invalid output", async () => {
-    await expectFailure(recordedLines("risk"), "invalid-output", /answered the risk task/);
+    await expectFailure(recordedLines("findings"), "invalid-output", /answered the findings task/);
   });
 
   describe("lockdown", () => {

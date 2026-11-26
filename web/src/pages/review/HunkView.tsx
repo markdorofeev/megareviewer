@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { PartId, UnchangedCallers } from "../../../../src/domain/diff/index.ts";
+import type { PointTone } from "../../lib/status.ts";
 import {
   HunkCard,
   type LineComment,
@@ -33,14 +34,12 @@ export interface HunkDeps {
   readonly onFocusHunk: (id: PartId) => void;
   /** Claude's point cards and links that go under a part's header. */
   readonly pointsOn: (id: PartId) => ReactNode;
-  /** Claude's findings and risks under the last of their lines. */
+  /** Claude's findings under the last of their lines. */
   readonly pointsAt: (id: PartId, place: LinePlace) => ReactNode;
-  /** The lines of a part Claude's points rest on, by "side:line", each with its kind. */
+  /** The lines of a part Claude's points rest on, by "side:line", each with its color. */
   readonly pointLinesOf: (id: PartId) => ReadonlyMap<string, PointLine> | undefined;
-  /** After a line's code: a decision's chip. */
-  readonly pointsAtEnd: (id: PartId, place: LinePlace) => ReactNode;
-  /** The lines of a part with a finding's card under them. */
-  readonly flaggedOf: (id: PartId) => ReadonlySet<string> | undefined;
+  /** The lines of a part with a point's card under them, each with its color. */
+  readonly flagsOf: (id: PartId) => ReadonlyMap<string, PointTone> | undefined;
   /** The host's threads on a line of a part, shown under it. */
   readonly threadsAt: (id: PartId, place: LinePlace) => ReactNode;
   /** A file's threads its card can't put on a line, under "Earlier comments". */
@@ -101,8 +100,7 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       {...(deps.pointLinesOf(id) === undefined ? {} : { pointLines: deps.pointLinesOf(id) })}
       threadsAt={(place) => deps.threadsAt(id, place)}
       pointsAt={(place) => deps.pointsAt(id, place)}
-      pointsAtEnd={(place) => deps.pointsAtEnd(id, place)}
-      {...(deps.flaggedOf(id) === undefined ? {} : { flagged: deps.flaggedOf(id) })}
+      {...(deps.flagsOf(id) === undefined ? {} : { flags: deps.flagsOf(id) })}
       {...(deps.rangeNote === undefined ? {} : { rangeNote: deps.rangeNote })}
       {...markProps(deps.marksOf(id))}
     />

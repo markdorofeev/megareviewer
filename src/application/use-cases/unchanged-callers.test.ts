@@ -35,7 +35,9 @@ const files: FileChange[] = [
     deletions: 1,
   },
 ];
-const changed: ChangedDefinition[] = [{ partId: changedHunk.id, path: "src/a.ts", name: "save" }];
+const changed: ChangedDefinition[] = [
+  { partId: changedHunk.id, path: "src/a.ts", name: "save", owner: null },
+];
 
 describe("lookUpCheckout", () => {
   const has = new FakeLocalCheckout({ [SHA]: {} });

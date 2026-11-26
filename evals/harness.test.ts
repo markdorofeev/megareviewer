@@ -4,6 +4,7 @@ import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts"
 import type { AnalysisInput, CodeParser } from "../src/application/ports/index.ts";
 import { FakeAnalysisModel, smallFeature } from "../src/application/testing/index.ts";
 import { ok } from "../src/domain/shared/index.ts";
+import { type EvalCase, evalCase } from "./cases/index.ts";
 import type { CaseGuidance } from "./guidance.ts";
 import { analyzeCase, quietLogger } from "./harness.ts";
 
@@ -102,7 +103,7 @@ describe("analyzeCase", () => {
     model.script(
       "findings",
       ok(
-        unmarked.value.analysis.findings.map(({ id: _, ...finding }) => ({
+        unmarked.value.analysis.findings.slice(0, 1).map(({ id: _, ...finding }) => ({
           ...finding,
           guidance: { ref: "p1", effect: "raised" as const },
         })),
@@ -113,6 +114,28 @@ describe("analyzeCase", () => {
     expect(marked.value.analysis.findings.map((finding) => finding.guidance)).toEqual([
       { ref: "p1", effect: "raised" },
     ]);
+  });
+
+  it("gives a run the code outside the PR that uses what it changes", async () => {
+    const found = evalCase("caller-keeps-old-unit");
+    if (found === undefined) throw new Error("no case");
+    const run = async (checkoutFiles: EvalCase["checkoutFiles"]) => {
+      const { model, given } = noting();
+      const result = await analyzeCase(found.fixture, {
+        model,
+        parser,
+        logger: quietLogger(),
+        timeoutMs: 30_000,
+        checkoutFiles,
+      });
+      if (!result.ok) throw new Error(result.error);
+      return given[0]?.unchangedCallers.map(({ symbol, uses }) => [
+        symbol,
+        uses.map(({ path, line }) => `${path}:${line}`),
+      ]);
+    };
+    expect(await run(found.checkoutFiles)).toEqual([["orderTotal", ["src/billing/charge.ts:7"]]]);
+    expect(await run(undefined)).toEqual([]);
   });
 
   it("gives a run no guidance without any", async () => {

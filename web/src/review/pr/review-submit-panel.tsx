@@ -63,8 +63,6 @@ const isNarrow = () => window.matchMedia(NARROW).matches;
 
 export interface ReviewSubmitPanelProps {
   readonly pending: readonly PendingComment[];
-  /** Decisions given a verdict, of all of them. */
-  readonly decided: readonly [number, number];
   /** False on the author's own PR: hosts don't let authors approve or reject it. */
   readonly canApprove: boolean;
   readonly onSubmit: (verdict: PublicationVerdict, body: string) => Promise<void> | void;
@@ -76,7 +74,6 @@ export interface ReviewSubmitPanelProps {
 /** Publishing the review: what will be posted, a summary, a verdict, then ⌘↵. */
 export const ReviewSubmitPanel = ({
   pending,
-  decided,
   canApprove,
   onSubmit,
   defaultVerdict = "comment",
@@ -103,7 +100,6 @@ export const ReviewSubmitPanel = ({
         )
       }
       pending={pending}
-      decided={decided}
       canApprove={canApprove}
       defaultVerdict={canApprove ? defaultVerdict : "comment"}
       onCancel={() => setOpen(false)}
@@ -136,7 +132,6 @@ export const ReviewSubmitPanel = ({
 export const ReviewSubmitForm = ({
   title,
   pending,
-  decided,
   canApprove,
   defaultVerdict,
   onCancel,
@@ -144,7 +139,6 @@ export const ReviewSubmitForm = ({
 }: {
   readonly title: ReactNode;
   readonly pending: readonly PendingComment[];
-  readonly decided: readonly [number, number];
   readonly canApprove: boolean;
   readonly defaultVerdict: PublicationVerdict;
   readonly onCancel: () => void;
@@ -168,12 +162,7 @@ export const ReviewSubmitForm = ({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-2 pr-8">
-        {title}
-        <span className="tabular text-caption text-muted-foreground">
-          {decided[0]} of {decided[1]} decisions given
-        </span>
-      </div>
+      <div className="pr-8">{title}</div>
       <section aria-label="Comments to post" className="flex flex-col gap-1">
         <h3 className="text-caption font-medium text-muted-foreground">
           {pending.length === 0

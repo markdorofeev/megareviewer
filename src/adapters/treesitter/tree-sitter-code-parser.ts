@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Language, Parser, Query, type Tree } from "web-tree-sitter";
 import type { CodeParser, CodeParserError } from "../../application/ports/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
+import { commentLines } from "./comments.ts";
 import { type LanguageSpec, languageSpecFor, languageSpecNamed } from "./languages.ts";
 import { findSymbols } from "./symbols.ts";
 import { syntaxNodes } from "./syntax-nodes.ts";
@@ -68,7 +69,10 @@ export const createTreeSitterCodeParser = async (
     syntaxNodes: (source, language) =>
       withTree(source, language, (tree) => syntaxNodes(tree, source)),
     symbols: (source, language) =>
-      withTree(source, language, (tree, { symbolsQuery }) => findSymbols(tree, symbolsQuery)),
+      withTree(source, language, (tree, { symbolsQuery }) => ({
+        ...findSymbols(tree, symbolsQuery),
+        commentLines: commentLines(tree, source),
+      })),
   };
 };
 

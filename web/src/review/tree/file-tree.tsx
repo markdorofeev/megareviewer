@@ -28,7 +28,7 @@ export interface FileTreeProps {
   readonly className?: string;
 }
 
-type Show = "all" | "finding" | "risk";
+type Show = "all" | "findings";
 
 type Row = (
   | {
@@ -64,7 +64,7 @@ const renamedFrom = (file: FileEntry): string | null =>
 
 /** What a row says to a screen reader: everything its marks show, in words. */
 const spoken = (file: FileEntry): string => {
-  const { finding = 0, risk = 0 } = file.points ?? {};
+  const findings = file.findings ?? 0;
   const old = renamedFrom(file);
   const from = old === null ? "" : ` from ${old}`;
   return [
@@ -73,8 +73,7 @@ const spoken = (file: FileEntry): string => {
     file.additions > 0 ? `${plural(file.additions, "line")} added` : "",
     file.deletions > 0 ? `${plural(file.deletions, "line")} removed` : "",
     (file.threads ?? 0) > 0 ? plural(file.threads ?? 0, "open thread") : "",
-    finding > 0 ? plural(finding, "finding") : "",
-    risk > 0 ? plural(risk, "risk") : "",
+    findings > 0 ? plural(findings, "finding") : "",
     directoryOf(file.path) === "" ? "" : `in ${directoryOf(file.path)}`,
   ]
     .filter(Boolean)
@@ -88,7 +87,7 @@ const tooltip = (file: FileEntry): string => {
   return `${file.path}\n${word[0]?.toUpperCase()}${word.slice(1)}${was}`;
 };
 
-/** The changed files: filtered with `/` or by Claude's points, each with its status and counts. */
+/** The changed files: filtered with `/` or by Claude's findings, each with its status and counts. */
 export const FileTree = ({
   files,
   activePath,
@@ -118,14 +117,13 @@ export const FileTree = ({
 
   const byPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
   const tree = useMemo(() => fileTree(files.map((file) => file.path)), [files]);
-  const withFindings = files.filter((file) => (file.points?.finding ?? 0) > 0).length;
-  const withRisks = files.filter((file) => (file.points?.risk ?? 0) > 0).length;
+  const withFindings = files.filter((file) => (file.findings ?? 0) > 0).length;
   const visible = useMemo(() => {
     const matched = new Set(filterFiles(files, query).map((file) => file.path));
     return new Set(
       files
         .filter((file) => matched.has(file.path))
-        .filter((file) => show === "all" || (file.points?.[show] ?? 0) > 0)
+        .filter((file) => show === "all" || (file.findings ?? 0) > 0)
         .map((file) => file.path),
     );
   }, [files, query, show]);
@@ -184,10 +182,7 @@ export const FileTree = ({
   const order = useMemo(() => treeOrder(tree).filter((path) => visible.has(path)), [tree, visible]);
   // Landing, the marks drop in row by row from the top: each marked row's place among them.
   const marked = useMemo(() => {
-    const paths = order.filter((path) => {
-      const { finding = 0, risk = 0 } = byPath.get(path)?.points ?? {};
-      return finding + risk > 0;
-    });
+    const paths = order.filter((path) => (byPath.get(path)?.findings ?? 0) > 0);
     return new Map(paths.map((path, at) => [path, at]));
   }, [order, byPath]);
   const step = (by: 1 | -1) => {
@@ -327,8 +322,7 @@ export const FileTree = ({
             {(
               [
                 ["all", "All"],
-                ["finding", `Findings ${withFindings}`],
-                ["risk", `Risks ${withRisks}`],
+                ["findings", `Findings ${withFindings}`],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -565,7 +559,7 @@ const FileName = ({ file }: { readonly file: FileEntry }) => {
 
 /**
  * A file's row: its type's icon, its name colored by its status, and its marks: open threads,
- * Claude's findings and risks, and its changed lines. A click selects it.
+ * Claude's findings, and its changed lines. A click selects it.
  */
 const FileRow = ({
   file,
@@ -581,11 +575,11 @@ const FileRow = ({
   readonly inset: boolean;
   readonly active: boolean;
   readonly tabbable: boolean;
-  /** The row's place among the rows with points, for their landing. */
+  /** The row's place among the rows with findings, for their landing. */
   readonly landing?: { readonly at: number; readonly of: number };
   readonly onActivate: () => void;
 }) => {
-  const { finding = 0, risk = 0 } = file.points ?? {};
+  const findings = file.findings ?? 0;
   const threads = file.threads ?? 0;
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the tree handles the keys of all its rows.
@@ -619,27 +613,15 @@ const FileRow = ({
             {threads}
           </span>
         )}
-        {finding + risk > 0 && (
+        {findings > 0 && (
           <span
+            data-slot="finding-count"
             data-land="drop"
             style={cssVars({ "--landing-i": landing?.at ?? 0, "--landing-n": landing?.of ?? 1 })}
-            className="inline-flex items-center gap-1.5"
+            className="inline-flex items-center gap-[2.5px]"
           >
-            {finding > 0 && (
-              <span
-                data-slot="point-count"
-                data-kind="finding"
-                className="inline-flex items-center gap-[2.5px]"
-              >
-                <i className="size-1.5 rounded-full bg-severity-minor" />
-                {finding > 1 && finding}
-              </span>
-            )}
-            {risk > 0 && (
-              <span data-slot="point-count" data-kind="risk" className="inline-flex items-center">
-                <i className="size-[7px] rounded-full ring-[1.5px] ring-risk-contract-solid ring-inset" />
-              </span>
-            )}
+            <i className="size-1.5 rounded-full bg-severity-minor" />
+            {findings > 1 && findings}
           </span>
         )}
         {(file.additions > 0 || file.deletions > 0) && (

@@ -25,6 +25,11 @@ export interface SymbolReference {
   readonly kind: "name" | "member" | "type";
   /** Where each use of the name with this kind starts on the line, in UTF-16 units from 0. */
   readonly columns: readonly number[];
+  /**
+   * A member's receiver: the name it's written after, or null when that isn't a name, as `this` or
+   * a call. Absent without one, and in languages whose receivers aren't read.
+   */
+  readonly receiver?: string | null;
 }
 
 export interface CodeSymbols {
@@ -32,6 +37,8 @@ export interface CodeSymbols {
   readonly references: SymbolReference[];
   /** Empty for languages whose imports aren't read. */
   readonly imports: SymbolImport[];
+  /** The lines that hold a comment and nothing else. */
+  readonly commentLines: number[];
 }
 
 export interface CodeParserError {

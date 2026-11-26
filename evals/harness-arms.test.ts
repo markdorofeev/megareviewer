@@ -4,18 +4,15 @@ import type { Reader } from "./reader.ts";
 import type { CaseScore } from "./score.ts";
 
 const none = { hit: 0, total: 0 };
+const byType = { logic: none, contract: none, architecture: none };
 const caseScore = (findingRecall = none): CaseScore => ({
-  contractRecall: none,
-  riskAccuracy: none,
-  riskNoise: none,
-  riskPlaced: none,
-  coverageWrong: none,
-  coverageRecall: none,
   findingRecall,
+  findingRecallByType: byType,
   findingNoise: none,
+  findingNoiseByType: byType,
+  typeRight: none,
+  unwantedFindings: null,
   findingPlaced: none,
-  decisionRecall: none,
-  decisionNoise: none,
   mismatchRecall: none,
   mismatchNamed: none,
   mismatchFalsePositives: null,
@@ -23,8 +20,6 @@ const caseScore = (findingRecall = none): CaseScore => ({
   guidanceFollowed: none,
   leftOutRight: none,
   guidanceWrong: none,
-  firstTryValid: true,
-  fallbackUsed: false,
 });
 
 const row = (name: string, run: number, reads: number, costUsd: number, more: object = {}) => ({

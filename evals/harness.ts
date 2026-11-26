@@ -8,6 +8,7 @@ import type {
 import {
   FakeGitHost,
   FakeHarnessSource,
+  FakeLocalCheckout,
   FakeLocalCheckouts,
   FakeModelCatalog,
   FakeRepositoryCopies,
@@ -45,6 +46,8 @@ export interface AnalyzeOptions {
   readonly timeoutMs: number;
   /** The reviewer's preferences and the repository's guideline files, for a case that has them. */
   readonly guidance?: CaseGuidance | undefined;
+  /** The repository's files the PR doesn't change, for a case whose run has a checkout. */
+  readonly checkoutFiles?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface CaseRun {
@@ -74,14 +77,6 @@ const recordingInput = (model: AnalysisModel) => {
       keep(given);
       return model.findings(given, intent, options);
     },
-    risk: (given, options) => {
-      keep(given);
-      return model.risk(given, options);
-    },
-    decisions: (given, options) => {
-      keep(given);
-      return model.decisions(given, options);
-    },
     steps: (given, options) => {
       keep(given);
       return model.steps(given, options);
@@ -92,8 +87,8 @@ const recordingInput = (model: AnalysisModel) => {
 
 /**
  * Runs the analysis pipeline on one case, as the CLI would: the case's PR on a fake host, its
- * tickets in a fake Jira, the given model and parser, an in-memory store, and the case's guidance
- * where a run reads it. Once the code's analysis completes, runs the model on it, as "Request AI
+ * tickets in a fake Jira, the given model and parser, an in-memory store, the case's guidance
+ * where a run reads it, and a checkout when the case has files outside its PR. Once the code's analysis completes, runs the model on it, as "Request AI
  * review" does. Resolves with the analysis and the model's input once both end; an error only
  * when it didn't start or ran out of time.
  */
@@ -110,6 +105,17 @@ export const analyzeCase = async (
   if (options.guidance !== undefined) {
     await giveGuidance(options.guidance, fixture, { host: gitHost, harnessSource, preferences });
   }
+  const checkouts = new FakeLocalCheckouts(
+    options.checkoutFiles === undefined
+      ? null
+      : {
+          checkout: new FakeLocalCheckout({
+            [fixture.pullRequest.headSha]: { ...options.checkoutFiles, ...fixture.headFiles },
+          }),
+          dir: "/eval",
+          namesRepo: true,
+        },
+  );
   const events = createAnalysisEvents();
   const useCases = createUseCases(
     {
@@ -123,7 +129,7 @@ export const analyzeCase = async (
       fileCache: new InMemoryFileCache(),
       preferences,
       history: {},
-      checkouts: new FakeLocalCheckouts(),
+      checkouts,
       harnessSource: () => harnessSource,
       harnessStore: new InMemoryHarnessStore(),
       knownCheckouts: new InMemoryKnownCheckouts(),

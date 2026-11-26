@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { smallFeatureInput, smallFeatureIntent } from "../../../../application/testing/index.ts";
-import { InferredIntent, ModelPass } from "../../../../domain/review/index.ts";
+import { FindingType, InferredIntent, ModelPass } from "../../../../domain/review/index.ts";
 import { fnv1a64 } from "../../../../domain/shared/index.ts";
 import { guidance, linkedGuidance, withHarness } from "../fixtures/guidance.ts";
 import { PASS_INSTRUCTIONS, passMessage } from "./passes.ts";
@@ -23,35 +23,35 @@ describe("the intent task", () => {
 });
 
 describe("plain words", () => {
-  it("are asked of every task whose words the reviewer reads as a point, without being vague", () => {
-    for (const pass of ["findings", "risk", "decisions"] as const) {
-      expect(PASS_INSTRUCTIONS[pass]).toContain("in plain words: the ones you'd use");
-      expect(PASS_INSTRUCTIONS[pass]).toContain(
-        "Plain isn't vague: still name the exact function, value, input and result.",
-      );
-    }
-  });
-
-  it("never change what a risk or a decision is about", () => {
-    expect(PASS_INSTRUCTIONS.risk).toContain("The wording never changes what was decided.");
-    expect(PASS_INSTRUCTIONS.decisions).toContain(
-      "The wording never changes which choice a decision is about, or drops its reason.",
-    );
-  });
-
-  it("are the author's in a finding, which posts as a comment", () => {
+  it("are asked of a finding, which posts as the reviewer's comment, without being vague", () => {
     expect(PASS_INSTRUCTIONS.findings).toContain("write it to the author, in plain words");
+    expect(PASS_INSTRUCTIONS.findings).toContain(
+      "Plain isn't vague: still name the exact function, value, input and result.",
+    );
   });
 });
 
-describe("the risk task", () => {
-  it("asks for a checking test only when its assertions would fail if the risk's behavior broke", () => {
-    expect(PASS_INSTRUCTIONS.risk).toMatch(/^checkedBy: for a contract hunk/m);
-    expect(PASS_INSTRUCTIONS.risk).toContain("would this test fail?");
-    expect(PASS_INSTRUCTIONS.risk).toContain(
-      "never by its name, its comments, or what the description or a comment says is tested",
+describe("a finding's types", () => {
+  it("are each asked for, with what counts and what doesn't", () => {
+    for (const type of FindingType.options) {
+      expect(PASS_INSTRUCTIONS.findings).toMatch(
+        new RegExp(`^- "${type}": .+\\n {2}Counts: .+ Doesn't: .+`, "m"),
+      );
+    }
+    expect(PASS_INSTRUCTIONS.findings).toMatch(/^- type: "logic", "contract" or "architecture"/m);
+  });
+
+  it("hold every finding to what the data shows", () => {
+    expect(PASS_INSTRUCTIONS.findings).toContain("list only what the code in the data shows");
+    expect(PASS_INSTRUCTIONS.findings).toContain("Prefer no finding over a speculative one");
+    expect(PASS_INSTRUCTIONS.findings).toContain(
+      "When you can't name what breaks, there is no finding.",
     );
-    expect(PASS_INSTRUCTIONS.risk).toContain("When unsure, null");
+    expect(PASS_INSTRUCTIONS.findings).toContain("Not style, not naming, not missing tests");
+  });
+
+  it("read the code outside the pull request, which the system prompt explains", () => {
+    expect(SYSTEM_PROMPT).toContain("- <unchanged_callers>, when it's there, is code this pull");
   });
 });
 
@@ -74,24 +74,9 @@ describe("the reviewer's guidance", () => {
     );
   });
 
-  it("marks a risk only on a contract hunk, which the code still decides for a dont-flag one", () => {
-    expect(PASS_INSTRUCTIONS.risk).toMatch(/^guidance: null, unless/m);
-    expect(PASS_INSTRUCTIONS.risk).toContain(
-      "when the reason can still say what could break outside this pull request",
-    );
-    expect(PASS_INSTRUCTIONS.risk).toContain(
-      "Classify it by the code all the same, and mark it only when it's contract.",
-    );
-  });
-
-  it("orders the decisions and the brief's watch by it, without a mark", () => {
-    expect(PASS_INSTRUCTIONS.decisions).toContain(
-      "the choices in what a look-for preference or a guideline file names come first",
-    );
+  it("orders the brief's watch by it, without a mark", () => {
     expect(PASS_INSTRUCTIONS.intent).toContain("within the same 2 things and 12 words");
-    for (const pass of ["decisions", "intent"] as const) {
-      expect(PASS_INSTRUCTIONS[pass]).not.toMatch(/"raised"|"left-out"/);
-    }
+    expect(PASS_INSTRUCTIONS.intent).not.toMatch(/"raised"|"left-out"/);
   });
 });
 
@@ -148,11 +133,11 @@ describe("what guidance adds to a task", () => {
     expect(
       fnv1a64(JSON.stringify(messages)),
       "A run with guidance sends something else. Bump every transport's prompt version.",
-    ).toBe("1cfdc0f1a8c9816f");
+    ).toBe("b9100f1f5f4a0091");
   });
 
   it("comes before the problems with an earlier answer", () => {
-    expect(passMessage("risk", null, ["h_1 is missing"], reading)).toMatch(
+    expect(passMessage("findings", null, ["h_1 is missing"], reading)).toMatch(
       /Then answer\.\n\nYour previous answer had these problems: h_1 is missing\. Fix them\.$/,
     );
   });

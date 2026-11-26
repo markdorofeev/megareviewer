@@ -41,11 +41,9 @@ for (const file of analysis.files) {
   }
   for (const hunk of file.hunks) {
     const proof = proofOf.get(hunk.id);
-    const label = found.labels.risk[hunk.id];
     console.log(
       `  ${hunk.id} @@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines}` +
-        (proof === undefined ? "" : ` · mechanical: ${proof.kind}`) +
-        (label === undefined ? "" : ` · labeled ${label}`),
+        (proof === undefined ? "" : ` · mechanical: ${proof.kind}`),
     );
     const changed = hunk.lines.filter((line) => line.kind !== "context");
     for (const line of changed.slice(0, LINES)) {

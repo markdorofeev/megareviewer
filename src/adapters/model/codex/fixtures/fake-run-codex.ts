@@ -34,7 +34,7 @@ export interface FakeRunCall {
 
 type Answer = readonly string[] | Partial<CodexRun>;
 
-const PASS = /^Task: (intent|findings|risk|decisions|steps)\./m;
+const PASS = /^Task: (intent|findings|steps)\./m;
 
 /**
  * Answers each run with the lines `answer` gives for its pass, read from the message on stdin,
@@ -72,10 +72,4 @@ export const createFakeRunCodex = (
 };
 
 const ModelPassOf = (name: string | undefined): ModelPass | null =>
-  name === "intent" ||
-  name === "findings" ||
-  name === "risk" ||
-  name === "decisions" ||
-  name === "steps"
-    ? name
-    : null;
+  name === "intent" || name === "findings" || name === "steps" ? name : null;

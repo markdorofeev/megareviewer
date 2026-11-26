@@ -20,47 +20,75 @@ const stop = (layer: string, label: string, more: Partial<Stop> = {}): Stop => (
   names: [],
   partIds: [partId()],
   shared: 1,
+  uses: 0,
+  from: null,
+  calledBy: [],
   ...more,
 });
 
+/** A stop on a path that reaches it from others, under the first. */
+const under = (one: Stop, caller: Stop, ...others: Stop[]): Stop => ({
+  ...one,
+  from: caller.path,
+  calledBy: [caller, ...others].map((each) => each.label),
+});
+const call = (from: Stop, to: Stop) => ({ from: from.path, to: to.path });
+
 const page = stop("pages", "RefundPage", { names: ["RefundPage"] });
 const route = stop("routes", "refunds", { names: ["POST /refunds"] });
-const refundService = stop("services", "refundService", { names: ["refund"], shared: 2 });
+const refundService = stop("services", "refundService", {
+  names: ["refund"],
+  shared: 2,
+  uses: 4,
+});
 const ledger = stop("services", "ledger", { status: "new", names: ["record"] });
 const limits = stop("services", "limits", { status: "new" });
 const tax = stop("services", "tax");
 const refundStore = stop("stores", "refundStore", { status: "new", shared: 2 });
 const ledgerStore = stop("stores", "ledgerStore");
 
+const CALLS = [
+  ...[refundService, ledger, limits, tax].map((to) => call(route, to)),
+  call(refundService, ledger),
+  call(refundService, refundStore),
+  call(ledger, ledgerStore),
+];
+
 const FLOW: FlowPaths = {
   paths: [
     {
       key: "flow:0",
       labels: ["POST /refunds", "POST /refunds/{id}/retry"],
-      inPullRequest: true,
-      outside: [],
-      stops: [route, refundService, ledger, limits, tax, refundStore, ledgerStore],
+      stops: [
+        route,
+        under(refundService, route),
+        under(ledger, route, refundService),
+        under(limits, route),
+        under(tax, route),
+        under(refundStore, refundService),
+        under(ledgerStore, ledger),
+      ],
+      calls: CALLS,
       ends: [],
     },
     {
       key: "flow:1",
       labels: ["Page: RefundPage"],
-      inPullRequest: true,
-      outside: [],
       stops: [page],
+      calls: [],
       ends: [
         {
           label: "POST /refunds/{refundId}/approvals/{approvalId}/retries",
           partId: route.partIds[0] ?? partId(),
+          from: page.path,
         },
       ],
     },
     {
-      key: "outside:src/jobs/nightlyRefunds.ts",
-      labels: ["nightlyRefunds.ts"],
-      inPullRequest: false,
-      outside: ["src/jobs/nightlyRefunds.ts"],
-      stops: [refundService, refundStore],
+      key: "file:src/services/refundService.ts",
+      labels: ["retryRefunds in refundService.ts"],
+      stops: [refundService, under(refundStore, refundService)],
+      calls: [call(refundService, refundStore)],
       ends: [],
     },
   ],
@@ -70,11 +98,7 @@ const FLOW: FlowPaths = {
     { key: "src/services", label: "services" },
     { key: "src/stores", label: "stores" },
   ],
-  calls: [
-    ...[refundService, ledger, limits, tax].map((to) => ({ from: route.path, to: to.path })),
-    { from: refundService.path, to: refundStore.path },
-    { from: ledger.path, to: ledgerStore.path },
-  ],
+  calls: CALLS,
   unreached: [stop("config", "refundWindow", { shared: 0 })],
   also: {
     tests: [
@@ -115,7 +139,7 @@ const useFolds = (start: readonly string[] = []): FlowFolds => {
 export const FlowPathsDemo = () => {
   const lanes = useFolds();
   const bowTie = useFolds();
-  const openedBowTie = useFolds(["end:src/services", "end:src/stores"]);
+  const openedBowTie = useFolds(["through:src/services", "end:src/services", "end:src/stores"]);
   return (
     <div className="flex flex-col gap-10">
       <Form title="Lanes">

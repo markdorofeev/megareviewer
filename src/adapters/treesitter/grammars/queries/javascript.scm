@@ -20,6 +20,7 @@
 (new_expression constructor: (identifier) @reference.name)
 (class_heritage (identifier) @reference.name)
 (member_expression object: (identifier) @reference.name)
+(member_expression object: (_) @receiver property: (property_identifier) @reference.member)
 (member_expression property: (property_identifier) @reference.member)
 (arguments (identifier) @reference.name)
 

@@ -30,26 +30,22 @@ describe("the replayed model's scenarios", () => {
     expect(waits).toEqual([recording.passes.intent.durationMs * 3]);
   });
 
-  it("finds nothing, and marks every hunk logic", async () => {
-    const nothing = model("nothing-found");
-    const findings = await nothing.findings(smallFeatureInput, null);
-    const risk = await nothing.risk(smallFeatureInput);
+  it("finds nothing", async () => {
+    const findings = await model("nothing-found").findings(smallFeatureInput, null);
     expect(findings.ok && findings.value.value).toEqual([]);
-    expect(risk.ok && risk.value.value.every((one) => one.riskClass === "logic")).toBe(true);
   });
 
   it("makes 40 points, to test the list, Next and the tree", async () => {
-    const result = await model("many").decisions(smallFeatureInput);
+    const result = await model("many").findings(smallFeatureInput, null);
     expect(result.ok && result.value.value).toHaveLength(40);
   });
 
-  it("reaches the plan's limit after the findings, with when it resets", async () => {
-    const limited = model("limit-after-findings");
-    expect((await limited.findings(smallFeatureInput, null)).ok).toBe(true);
-    const risk = await limited.risk(smallFeatureInput);
-    expect(risk.ok).toBe(false);
-    expect(!risk.ok && risk.error).toMatchObject({ kind: "rate-limited" });
-    expect(!risk.ok && risk.error.message).toContain("resets at");
+  it("reaches the plan's limit after the intent, with when it resets", async () => {
+    const limited = model("limit-after-intent");
+    expect((await limited.intent(smallFeatureInput)).ok).toBe(true);
+    const findings = await limited.findings(smallFeatureInput, null);
+    expect(!findings.ok && findings.error).toMatchObject({ kind: "rate-limited" });
+    expect(!findings.ok && findings.error.message).toContain("resets at");
   });
 
   it("declines the findings pass", async () => {

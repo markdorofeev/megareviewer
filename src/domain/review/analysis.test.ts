@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { smallFeatureAnalysis } from "../../application/testing/index.ts";
+import v20 from "./fixtures/analysis-v20.json" with { type: "json" };
 import {
   Analysis,
   type AnalysisKey,
@@ -9,6 +10,9 @@ import {
   inProgress,
   MODEL_STAGES,
   modelRunnable,
+  PointReview,
+  pointsOf,
+  ReviewSignal,
   runStages,
   withoutModelRun,
 } from "./index.ts";
@@ -52,7 +56,7 @@ describe("analysisId", () => {
 describe("inProgress", () => {
   const codeStages = { collect: "done", prep: "done" } as const;
   const modelStages = (status: "pending" | "running" | "skipped") =>
-    ({ intent: status, findings: status, risk: status, decisions: status, steps: status }) as const;
+    ({ intent: status, findings: status, steps: status }) as const;
   const at = (
     status: Analysis["status"],
     stages: Analysis["stages"],
@@ -83,8 +87,6 @@ describe("following", () => {
     prep: "done",
     intent: "done",
     findings: "done",
-    risk: "done",
-    decisions: "done",
     steps: "skipped",
   } as const;
 
@@ -119,11 +121,9 @@ describe("the steps pass", () => {
     prep: "done",
     intent: "done",
     findings: "done",
-    risk: "done",
-    decisions: "done",
   } as const;
 
-  it("keeps the analysis in progress while it runs after the review's four", () => {
+  it("keeps the analysis in progress while it runs after the review's two", () => {
     expect(inProgress({ status: "complete", stages: { ...ran, steps: "running" } })).toBe(true);
     expect(inProgress({ status: "complete", stages: { ...ran, steps: "done" } })).toBe(false);
   });
@@ -131,7 +131,7 @@ describe("the steps pass", () => {
   it("isn't counted by whether the model can run again", () => {
     expect(modelRunnable({ status: "complete", stages: { ...ran, steps: "failed" } })).toBe(false);
     expect(
-      modelRunnable({ status: "complete", stages: { ...ran, risk: "failed", steps: "done" } }),
+      modelRunnable({ status: "complete", stages: { ...ran, findings: "failed", steps: "done" } }),
     ).toBe(true);
   });
 
@@ -157,11 +157,7 @@ describe("the steps pass", () => {
       steps: [],
       stepsError: { stage: "steps", code: "model-error", message: "No answer" },
     };
-    const removed = withoutModelRun(
-      withSteps,
-      { risk: [], warnings: [] },
-      smallFeatureAnalysis.updatedAt,
-    );
+    const removed = withoutModelRun(withSteps, { warnings: [] }, smallFeatureAnalysis.updatedAt);
     expect(removed.stages.steps).toBe("skipped");
     expect(removed.steps).toBeNull();
     expect(removed.stepsError).toBeNull();
@@ -200,5 +196,71 @@ describe("the code's flows", () => {
     expect(stored({ flows: { steps, builtBy: "code" } }).flows).toEqual(flows);
     expect(stored({ flows }).flows).toEqual(flows);
     expect(stored({ flows: null }).flows).toBeNull();
+  });
+});
+
+describe("an analysis stored with risks, a checking test and decisions", () => {
+  const stored = v20.analysis;
+
+  it("shows its findings and its brief, and no risk or decision", () => {
+    const parsed = Analysis.parse(stored);
+    expect(pointsOf(parsed).map((point) => point.id)).toEqual(["f1", "m1", "m2"]);
+    expect(pointsOf(parsed)[0]?.guardrail).toBeDefined();
+    expect(parsed.intent?.inferred.summary).toBe(stored.intent.inferred.summary);
+    expect(parsed).not.toHaveProperty("decisions");
+    for (const risk of parsed.risk) {
+      expect(Object.keys(risk).sort()).toEqual(["hunkId", "reason", "riskClass", "source"]);
+    }
+  });
+
+  it("has the stages of the passes there are, done, and the calls it made", () => {
+    const parsed = Analysis.parse(stored);
+    expect(parsed.stages).toEqual({
+      collect: "done",
+      prep: "done",
+      intent: "done",
+      findings: "done",
+      steps: "skipped",
+    });
+    expect(modelRunnable(parsed)).toBe(false);
+    expect(parsed.usage.map((usage) => usage.pass)).toEqual(["intent", "risk", "decisions"]);
+    expect(parsed.modelCalls.map((call) => call.pass)).toEqual(["intent", "risk", "decisions"]);
+  });
+
+  it("gets the code's risk back when its run is removed", () => {
+    const parsed = Analysis.parse(stored);
+    expect(parsed.beforeModel?.risk?.every((risk) => risk.source === "rule")).toBe(true);
+    const removed = withoutModelRun(
+      parsed,
+      parsed.beforeModel ?? { warnings: [] },
+      parsed.updatedAt,
+    );
+    expect(removed.risk).toEqual(parsed.beforeModel?.risk);
+  });
+
+  it("keeps the risk it has when its run kept none", () => {
+    const parsed = Analysis.parse({ ...stored, beforeModel: { warnings: [] } });
+    const removed = withoutModelRun(parsed, { warnings: [] }, parsed.updatedAt);
+    expect(removed.risk).toEqual(parsed.risk);
+  });
+
+  it("drops the error of a pass that's gone, unless the findings or the intent didn't finish", () => {
+    const modelError = { stage: "risk", code: "model-error", message: "Overloaded" };
+    expect(Analysis.parse({ ...stored, modelError }).modelError).toBeNull();
+    const stages = { ...stored.stages, findings: "failed" };
+    expect(Analysis.parse({ ...stored, stages, modelError }).modelError).toEqual({
+      ...modelError,
+      stage: "findings",
+    });
+  });
+
+  it("keeps the states and signals of its risks and decisions readable", () => {
+    expect(v20.pointReviews.map((review) => PointReview.parse(review).pointId)).toEqual(
+      v20.pointReviews.map((review) => review.pointId),
+    );
+    expect(v20.signals.map((signal) => ReviewSignal.parse(signal).pointKind)).toEqual([
+      "risk",
+      "decision",
+    ]);
   });
 });

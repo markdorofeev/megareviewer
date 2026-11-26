@@ -53,15 +53,13 @@ const call = (
   ...more,
 });
 
-/** An analysis of two findings with the given marks, no risk of its own, and the given calls. */
+/** An analysis of two findings with the given marks, and the given calls. */
 const analysisWith = (
   marks: readonly (GuidanceMark | null)[],
   modelCalls: readonly ModelCall[] = [],
 ): Analysis => ({
   ...smallFeatureAnalysis,
   findings: marks.map((guidance) => ({ ...first, guidance })),
-  risk: [],
-  decisions: [],
   modelCalls: [...modelCalls],
   guidance: {
     preferences: [],
@@ -76,13 +74,10 @@ const analysisWith = (
 
 const at = [{ hunkId: first.lines.hunkId, side: "new" as const, lines: [1, 99] as const }];
 const labels: CaseLabels = {
-  risk: {},
-  riskAt: {},
   findings: [
-    { description: "The rule is broken", at, mustHave: true },
-    { description: "Something else", at, mustHave: false },
+    { description: "The rule is broken", type: "logic", at, mustHave: true },
+    { description: "Something else", type: "logic", at, mustHave: false },
   ],
-  decisions: [],
   mismatches: [],
   guidance: [{ ref: "g3", effect: "raised", findings: [0] }],
   reads: [{ pass: "findings", path: "docs/handbook.md" }],
@@ -95,8 +90,6 @@ const verdict: JudgeVerdict = {
     { expected: 1, produced: 1 },
   ],
   findingRatings: [],
-  decisions: [],
-  ratings: [],
   mismatches: [],
   injectionReported: false,
 };
@@ -148,7 +141,7 @@ describe("scoreHarness", () => {
     const handbook = read("harness/docs/handbook.md");
     expect(readBy(call("findings", [handbook]))).toEqual({ hit: 1, total: 1 });
     expect(readBy(call("findings"), call("findings", [handbook], { attempt: 2 })).hit).toBe(1);
-    expect(readBy(call("decisions", [handbook])).hit).toBe(0);
+    expect(readBy(call("steps", [handbook])).hit).toBe(0);
     expect(readBy(call("findings", [read("harness")])).hit).toBe(0);
     expect(readBy(call("findings", [read("harness/docs/handbook.md", "refused")])).hit).toBe(0);
   });
@@ -285,12 +278,12 @@ describe("newlyMissed", () => {
     const without = {
       ...base,
       findingRecall: { hit: 9, total: 10 },
-      riskNoise: { hit: 5, total: 10 },
+      findingNoise: { hit: 5, total: 10 },
     };
     const attached = {
       ...base,
       findingRecall: { hit: 8, total: 10 },
-      riskNoise: { hit: 9, total: 10 },
+      findingNoise: { hit: 9, total: 10 },
     };
     expect(newlyMissed(without, attached)).toEqual(["findingRecall"]);
     expect(newlyMissed(without, without)).toEqual([]);

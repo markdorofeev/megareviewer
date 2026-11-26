@@ -15,7 +15,7 @@ export interface CommentComposerProps {
   readonly className?: string;
 }
 
-/** A comment on lines or a decision: Markdown, ⌘↵ to send, Esc to cancel. */
+/** A comment on lines: Markdown, ⌘↵ to send, Esc to cancel. */
 export const CommentComposer = ({
   anchor,
   onSubmit,

@@ -242,8 +242,8 @@ describe("mock API", () => {
       ),
     ).toEqual([
       ["f1", "raised"],
+      ["f2", "raised"],
       ["f3", "left-out"],
-      [`r:${fixtureHunks.dependency}`, "raised"],
     ]);
   });
 
@@ -278,10 +278,14 @@ describe("analysisInProgress", () => {
     // The code's stages are done: the analysis is complete, and the model runs on it.
     const afterPrep = analysisInProgress(analysis, 2);
     expect(afterPrep.status).toBe("complete");
-    expect(afterPrep.stages).toMatchObject({ prep: "done", intent: "running", risk: "pending" });
+    expect(afterPrep.stages).toMatchObject({
+      prep: "done",
+      intent: "running",
+      findings: "pending",
+    });
     expect(afterPrep.files).toEqual(analysis.files);
     expect(afterPrep.intent).toBeNull();
-    expect(afterPrep.risk.every((assessment) => assessment.source === "proof")).toBe(true);
+    expect(afterPrep.risk).toEqual(fixtureAnalysisView.analysis.risk);
     expect(afterPrep.usage).toEqual([]);
     expect(AnalysisView.safeParse({ ...fixtureAnalysisView, analysis: afterPrep }).success).toBe(
       true,
@@ -289,14 +293,14 @@ describe("analysisInProgress", () => {
   });
 
   it("keeps earlier stages' results when a model stage fails, leaving the analysis complete", () => {
-    const failed = analysisFailed(analysis, "risk", "Bad output");
+    const failed = analysisFailed(analysis, "findings", "Bad output");
     expect(failed.status).toBe("complete");
-    expect(failed.stages).toMatchObject({ intent: "done", risk: "failed", decisions: "skipped" });
+    expect(failed.stages).toMatchObject({ intent: "done", findings: "failed" });
     expect(failed.intent).toEqual(analysis.intent);
-    expect(failed.decisions).toEqual([]);
+    expect(failed.findings).toEqual([]);
     expect(failed.error).toBeNull();
     expect(failed.modelError).toEqual({
-      stage: "risk",
+      stage: "findings",
       code: "model-error",
       message: "Bad output",
     });
@@ -355,12 +359,12 @@ describe("a scenario", () => {
   it("plays Claude's run to each scenario's end", () => {
     expect(pointsOf(run("ready")).length).toBeGreaterThan(0);
     expect(pointsOf(run("nothing-found"))).toEqual([]);
-    expect(pointsOf(run("many")).length).toBeGreaterThan(40);
+    expect(pointsOf(run("many"))).toHaveLength(40);
 
-    const limited = run("limit-after-findings");
-    expect(limited.stages.risk).toBe("failed");
+    const limited = run("limit-after-intent");
+    expect(limited.stages.findings).toBe("failed");
     expect(limited.modelError?.message).toContain("resets at");
-    expect(pointsOf(limited).every((point) => point.kind === "finding")).toBe(true);
+    expect(limited.intent).not.toBeNull();
 
     const refused = run("refusal");
     expect(refused.findings).toEqual([]);
@@ -386,16 +390,16 @@ describe("a scenario", () => {
   });
 
   it("plays Claude's run again on Try again", () => {
-    const api = createMockApi({ now: () => NOW, scenario: "limit-after-findings" });
+    const api = createMockApi({ now: () => NOW, scenario: "limit-after-intent" });
     const view = () => AnalysisView.parse(api.handle(request("GET", `/api/analyses/${id}`)).body);
     api.handle(request("POST", `/api/analyses/${id}/model`));
     vi.advanceTimersByTime(MOCK_STAGE_MS * 10);
-    expect(view().analysis.stages.risk).toBe("failed");
+    expect(view().analysis.stages.findings).toBe("failed");
 
     api.handle(request("POST", `/api/analyses/${id}/model`));
     expect(view().analysis.stages.intent).toBe("running");
     vi.advanceTimersByTime(MOCK_STAGE_MS * 10);
-    expect(view().analysis.stages.risk).toBe("failed");
+    expect(view().analysis.stages.findings).toBe("failed");
     api.close();
   });
 });

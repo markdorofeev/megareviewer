@@ -12,12 +12,18 @@ import { labels as asksForFileLabels } from "./asks-for-file/labels.ts";
 import * as authMiddleware from "./auth-middleware/case.ts";
 import { labels as authMiddlewareLabels } from "./auth-middleware/labels.ts";
 import { labels as bitbucketBugfixLabels } from "./bitbucket-bugfix/labels.ts";
+import * as callerKeepsOldUnit from "./caller-keeps-old-unit/case.ts";
+import { labels as callerKeepsOldUnitLabels } from "./caller-keeps-old-unit/labels.ts";
+import * as credentialMoved from "./credential-moved/case.ts";
+import { labels as credentialMovedLabels } from "./credential-moved/labels.ts";
 import * as delphiAccountConnections from "./delphi-account-connections/case.ts";
 import { labels as delphiAccountConnectionsLabels } from "./delphi-account-connections/labels.ts";
 import * as dependencyBump from "./dependency-bump-signature/case.ts";
 import { labels as dependencyBumpLabels } from "./dependency-bump-signature/labels.ts";
 import * as descriptionContradicts from "./description-contradicts/case.ts";
 import { labels as descriptionContradictsLabels } from "./description-contradicts/labels.ts";
+import * as discountsWrittenTwice from "./discounts-written-twice/case.ts";
+import { labels as discountsWrittenTwiceLabels } from "./discounts-written-twice/labels.ts";
 import * as envVarConfig from "./env-var-config/case.ts";
 import { labels as envVarConfigLabels } from "./env-var-config/labels.ts";
 import * as featureLessThanTicket from "./feature-less-than-ticket/case.ts";
@@ -32,6 +38,8 @@ import * as linkedSection from "./linked-section/case.ts";
 import { labels as linkedSectionLabels } from "./linked-section/labels.ts";
 import * as migration from "./migration-non-null-column/case.ts";
 import { labels as migrationLabels } from "./migration-non-null-column/labels.ts";
+import * as optionalResponseField from "./optional-response-field/case.ts";
+import { labels as optionalResponseFieldLabels } from "./optional-response-field/labels.ts";
 import * as preferenceDontFlag from "./preference-dont-flag/case.ts";
 import { labels as preferenceDontFlagLabels } from "./preference-dont-flag/labels.ts";
 import * as preferenceLookFor from "./preference-look-for/case.ts";
@@ -40,7 +48,11 @@ import { labels as promptInjectionLabels } from "./prompt-injection/labels.ts";
 import * as pythonIndentation from "./python-indentation-logic/case.ts";
 import { labels as pythonIndentationLabels } from "./python-indentation-logic/labels.ts";
 import { labels as refactorMoveLabels } from "./refactor-move/labels.ts";
+import * as routeSkipsService from "./route-skips-service/case.ts";
+import { labels as routeSkipsServiceLabels } from "./route-skips-service/labels.ts";
 import { labels as smallFeatureLabels } from "./small-feature/labels.ts";
+import * as storedSessionsFormat from "./stored-sessions-format/case.ts";
+import { labels as storedSessionsFormatLabels } from "./stored-sessions-format/labels.ts";
 import * as testNamedCoverage from "./test-named-coverage/case.ts";
 import { labels as testNamedCoverageLabels } from "./test-named-coverage/labels.ts";
 import * as unrelatedHarness from "./unrelated-harness/case.ts";
@@ -57,6 +69,8 @@ export interface EvalCase {
   readonly fixture: PullRequestFixture;
   /** What a run of it reads beside the PR; without it, nothing. */
   readonly guidance?: CaseGuidance;
+  /** The repository's files the PR doesn't change; with them, a run has a checkout. */
+  readonly checkoutFiles?: Readonly<Record<string, string>>;
   /** A file its PR asks for outside the harness, which a run makes first. */
   readonly outside?: OutsideFile;
   readonly labels: CaseLabels;
@@ -74,7 +88,7 @@ export const evalCases: readonly EvalCase[] = [
   {
     name: "refactor-move",
     source: "fixture",
-    tests: "Baseline: every hunk mechanical, so nothing to classify and no mismatch",
+    tests: "Baseline: every hunk mechanical, so no finding and no mismatch",
     fixture: refactorMove,
     labels: refactorMoveLabels,
   },
@@ -95,21 +109,22 @@ export const evalCases: readonly EvalCase[] = [
   {
     name: "dependency-bump-signature",
     source: "synthetic",
-    tests: "Contract recall: a major dependency bump and a changed exported signature",
+    tests:
+      "Nothing wrong: a major dependency bump and a changed exported signature, both asked for",
     fixture: dependencyBump.fixture,
     labels: dependencyBumpLabels,
   },
   {
     name: "migration-non-null-column",
     source: "synthetic",
-    tests: "Contract and a data decision: a NOT NULL column with a default backfill",
+    tests: "A NOT NULL column with a default backfill, with at most a minor finding",
     fixture: migration.fixture,
     labels: migrationLabels,
   },
   {
     name: "auth-middleware",
     source: "synthetic",
-    tests: "Security decision: session tokens accepted in the query string",
+    tests: "A security finding: session tokens accepted in the query string",
     fixture: authMiddleware.fixture,
     labels: authMiddlewareLabels,
   },
@@ -137,14 +152,15 @@ export const evalCases: readonly EvalCase[] = [
   {
     name: "python-indentation-logic",
     source: "synthetic",
-    tests: "An indentation change that alters logic must not be mechanical",
+    tests: "Nothing wrong: an indentation change that alters logic, as the ticket asks",
     fixture: pythonIndentation.fixture,
     labels: pythonIndentationLabels,
   },
   {
     name: "env-var-config",
     source: "synthetic",
-    tests: "Contract: a new environment variable and a timeout on an external call",
+    tests:
+      "A new environment variable and a timeout on an external call, with at most a minor finding",
     fixture: envVarConfig.fixture,
     labels: envVarConfigLabels,
   },
@@ -152,7 +168,7 @@ export const evalCases: readonly EvalCase[] = [
     name: "test-named-coverage",
     source: "synthetic",
     tests:
-      "No checking test from a test's name or a comment: the one named for the check never runs it",
+      "A contradicts mismatch found in the code: an export open to a role the ticket shuts out, under a test named for the check that never runs it",
     fixture: testNamedCoverage.fixture,
     labels: testNamedCoverageLabels,
   },
@@ -182,6 +198,54 @@ export const evalCases: readonly EvalCase[] = [
     fixture: guidelineFile.fixture,
     guidance: guidelineFile.guidance,
     labels: guidelineFileLabels,
+  },
+  {
+    name: "caller-keeps-old-unit",
+    source: "synthetic",
+    tests:
+      "A contract finding an unchanged caller shows: a total now in cents, and billing still multiplies it by 100",
+    fixture: callerKeepsOldUnit.fixture,
+    checkoutFiles: callerKeepsOldUnit.checkoutFiles,
+    labels: callerKeepsOldUnitLabels,
+  },
+  {
+    name: "stored-sessions-format",
+    source: "synthetic",
+    tests:
+      "A contract finding stored data shows: sessions written before the change can't be read after it",
+    fixture: storedSessionsFormat.fixture,
+    labels: storedSessionsFormatLabels,
+  },
+  {
+    name: "route-skips-service",
+    source: "synthetic",
+    tests:
+      "An architecture finding: a route runs SQL past the service and the repository the rest goes through",
+    fixture: routeSkipsService.fixture,
+    labels: routeSkipsServiceLabels,
+  },
+  {
+    name: "discounts-written-twice",
+    source: "synthetic",
+    tests: "An architecture finding: a quote's discounts written again beside the pricing module's",
+    fixture: discountsWrittenTwice.fixture,
+    labels: discountsWrittenTwiceLabels,
+  },
+  {
+    name: "optional-response-field",
+    source: "synthetic",
+    tests:
+      "Nothing wrong: an optional field in an API's response, and the code outside the PR that reads it still works",
+    fixture: optionalResponseField.fixture,
+    checkoutFiles: optionalResponseField.checkoutFiles,
+    labels: optionalResponseFieldLabels,
+  },
+  {
+    name: "credential-moved",
+    source: "synthetic",
+    tests: "Nothing wrong: a credential read in another module, the same way",
+    fixture: credentialMoved.fixture,
+    labels: credentialMovedLabels,
   },
   {
     name: "imported-guideline",
@@ -223,7 +287,7 @@ export const evalCases: readonly EvalCase[] = [
   {
     name: "large-retry-after",
     source: "imported",
-    tests: "Tour quality and cost at size: about 1,500 changed lines",
+    tests: "Noise and cost at size: about 1,500 changed lines",
     fixture: largeRetryAfter.fixture,
     labels: largeRetryAfterLabels,
   },
@@ -231,7 +295,7 @@ export const evalCases: readonly EvalCase[] = [
     name: "delphi-account-connections",
     source: "imported",
     tests:
-      "A 48-hunk full-stack PR whose description explains its choices: risk noise on API models, a generated client and plumbing between the PR's own modules; risks on hunks that open with imports; decisions that repeat the description",
+      "A 48-hunk full-stack PR: three must-have findings in how it stores and orders credentials, and none on its API models, generated client and the plumbing between its own modules",
     fixture: delphiAccountConnections.fixture,
     labels: delphiAccountConnectionsLabels,
   },

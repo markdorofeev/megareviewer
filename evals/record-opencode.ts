@@ -67,8 +67,6 @@ try {
   const passes: [ModelPass, Intent | null][] = [
     ["intent", null],
     ["findings", smallFeatureIntent],
-    ["risk", null],
-    ["decisions", null],
   ];
   for (const [pass, intent] of passes) {
     const request = opencodeRequest(

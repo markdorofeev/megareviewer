@@ -43,10 +43,10 @@ const advise = async (mention: string) => {
     points: [
       {
         ref: "f1",
-        kind: "finding",
         path: "src/banner.ts",
         title: "The banner string is hard-coded",
-        text: "The string printed in the banner is a literal, so it drifts from the file that defines it.",
+        explanation:
+          "The string printed in the banner is a literal, so it drifts from the file that defines it.",
         code: [
           "+// The banner must equal the marker line of",
           `+// ${mention}`,

@@ -3,13 +3,13 @@ import {
   EyeOffIcon,
   FileTextIcon,
   FlagOffIcon,
-  FlaskConicalIcon,
   PencilIcon,
   SlidersHorizontalIcon,
   XIcon,
 } from "lucide-react";
 import { memo, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import {
+  type FindingType,
   type IntentMismatchKind,
   type Point,
   type PointId,
@@ -19,9 +19,15 @@ import {
   type Severity,
 } from "../../../../src/domain/review/index.ts";
 import { Link } from "../../app/Link.tsx";
-import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
+import {
+  FINDING_STATUS,
+  FINDING_TYPE_STATUS,
+  POINT_TONE,
+  type PointTone,
+  pointTone,
+  SEVERITY_STATUS,
+} from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
-import { type CallPayload, type CallPeekHandle, CallTrigger } from "../../review/index.ts";
 import { CHIP, lineRef, RefChip, SuggestionDiff, ThreadBody } from "../../review/thread/index.ts";
 import { Button } from "../../ui/button.tsx";
 import {
@@ -40,13 +46,6 @@ const MISMATCH_LABEL: Readonly<Record<IntentMismatchKind, string>> = {
   contradicts: "Contradicts what was asked",
   missing: "Asked for, not done",
   unrequested: "Done, not asked for",
-};
-
-// Spelled out because Tailwind only generates the classes it finds whole in the source.
-const KIND_TEXT: Readonly<Record<Point["kind"], string>> = {
-  finding: "text-review-changes",
-  risk: "text-risk-contract",
-  decision: "text-muted-foreground",
 };
 
 /** What every point's actions need. */
@@ -78,15 +77,14 @@ export interface PointActions {
   readonly onRule: (point: Point, rule: RuleFields) => Promise<string | null>;
 }
 
-const Kind = ({ kind }: { readonly kind: Point["kind"] }) => {
-  const Icon = POINT_ICON[kind];
-  return (
-    <span className={cn("inline-flex items-center gap-1 font-medium", KIND_TEXT[kind])}>
-      <Icon aria-hidden="true" className="size-3.5" />
-      {POINT_STATUS[kind].label}
-    </span>
-  );
-};
+const FindingIcon = FINDING_STATUS.icon;
+
+const FindingLabel = ({ tone }: { readonly tone: PointTone }) => (
+  <span className={cn("inline-flex items-center gap-1 font-medium", POINT_TONE[tone].text)}>
+    <FindingIcon aria-hidden="true" className="size-3.5" />
+    {FINDING_STATUS.label}
+  </span>
+);
 
 /**
  * A point folded to one line with a way back: dismissed, already in the review, or left out by a
@@ -108,35 +106,31 @@ const Folded = ({
   readonly action: ReactNode;
   readonly className?: string;
   readonly leftOut?: boolean;
-}) => {
-  const Icon = POINT_ICON[point.kind];
-  return (
-    <article
-      id={pointAnchor(point.id)}
-      data-slot="point"
-      data-kind={point.kind}
-      data-state={state}
-      data-left-out={leftOut || undefined}
-      data-current={current || undefined}
-      aria-label={point.title}
-      className={cn(
-        "flex scroll-mt-24 flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground",
-        className,
-        current && RING,
-      )}
+}) => (
+  <article
+    id={pointAnchor(point.id)}
+    data-slot="point"
+    data-state={state}
+    data-left-out={leftOut || undefined}
+    data-current={current || undefined}
+    aria-label={point.title}
+    className={cn(
+      "flex scroll-mt-24 flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground",
+      className,
+      current && RING,
+    )}
+  >
+    <FindingIcon aria-hidden="true" className="size-3.5 shrink-0" />
+    <span className="sr-only">{FINDING_STATUS.label}: </span>
+    <span
+      className={cn("min-w-0 flex-1 basis-40 truncate", state === "dismissed" && "line-through")}
     >
-      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="sr-only">{POINT_STATUS[point.kind].label}: </span>
-      <span
-        className={cn("min-w-0 flex-1 basis-40 truncate", state === "dismissed" && "line-through")}
-      >
-        {point.title}
-      </span>
-      <span className="max-w-full min-w-0 truncate text-caption">{note}</span>
-      {action}
-    </article>
-  );
-};
+      {point.title}
+    </span>
+    <span className="max-w-full min-w-0 truncate text-caption">{note}</span>
+    {action}
+  </article>
+);
 
 /** What a guidance mark says before the preference's text or the guideline file's path. */
 const guidanceWords = ({ effect, preferenceId }: NonNullable<Point["guidance"]>): string => {
@@ -236,13 +230,11 @@ const useShown = (leftOut: boolean, onShow: (id: PointId) => void, id: PointId) 
  */
 const Dismiss = ({
   point,
-  size,
   disabled,
   onDismiss,
   onRule,
 }: {
   readonly point: Point;
-  readonly size: "xs" | "sm";
   readonly disabled: boolean;
   readonly onDismiss: () => void;
   readonly onRule: () => void;
@@ -250,13 +242,13 @@ const Dismiss = ({
   <span className="flex items-center">
     <Button
       variant="ghost"
-      size={size}
+      size="sm"
       disabled={disabled}
       aria-label={`Dismiss: ${point.title}`}
       className="rounded-r-none"
       onClick={onDismiss}
     >
-      {size === "sm" && <XIcon aria-hidden="true" />}
+      <XIcon aria-hidden="true" />
       Dismiss
     </Button>
     <DropdownMenu>
@@ -264,7 +256,7 @@ const Dismiss = ({
         render={
           <Button
             variant="ghost"
-            size={size}
+            size="sm"
             data-slot="dismiss-menu"
             disabled={disabled}
             aria-label={`More ways to dismiss: ${point.title}`}
@@ -350,34 +342,24 @@ const dismissedNote = (savedTo: PreferenceScope | null): ReactNode =>
     "Dismissed"
   );
 
-// Spelled out because Tailwind only generates the classes it finds whole in the source.
-const SEVERITY: Readonly<Record<Severity, { readonly glyph: string; readonly className: string }>> =
-  {
-    blocking: {
-      glyph: "■",
-      className: "text-severity-blocker bg-review-changes-bg border-severity-blocker/25",
-    },
-    major: {
-      glyph: "▲",
-      className: "text-severity-major bg-severity-major-bg border-severity-major/25",
-    },
-    minor: {
-      glyph: "●",
-      className: "text-severity-minor bg-review-pending-bg border-severity-minor/25",
-    },
-  };
-
-/** How much Claude thinks a finding matters, while it's Claude's. */
-const SeverityChip = ({ severity }: { readonly severity: Severity }) => (
-  <span data-slot="severity" className={cn(CHIP, SEVERITY[severity].className)}>
-    <span aria-hidden="true">{SEVERITY[severity].glyph}</span>
-    {severity}
+/** What a finding is about, in a word. */
+export const TypeChip = ({ type }: { readonly type: FindingType }) => (
+  <span data-slot="finding-type" className={cn(CHIP, FINDING_TYPE_STATUS[type].className)}>
+    <span aria-hidden="true">{FINDING_TYPE_STATUS[type].glyph}</span>
+    {FINDING_TYPE_STATUS[type].label}
   </span>
 );
 
-const MOTION = "animate-in duration-(--duration-slow) fade-in-0 slide-in-from-top-1";
+/** How much Claude thinks a finding matters, while it's Claude's. */
+export const SeverityChip = ({ severity }: { readonly severity: Severity }) => (
+  <span data-slot="severity" className={cn(CHIP, SEVERITY_STATUS[severity].className)}>
+    <span aria-hidden="true">{SEVERITY_STATUS[severity].glyph}</span>
+    {SEVERITY_STATUS[severity].label}
+  </span>
+);
+
 const RING = "shadow-[inset_0_0_0_2px_var(--ring)]";
-/** The card a finding and a risk share, in the code's column. */
+/** A finding's card, in the code's column. */
 const SHELL = "relative max-w-3xl rounded-lg border bg-thread-bg";
 /** Going to a card keeps the lines it rests on, above it, in view. */
 const SCROLL_UNDER_LINES =
@@ -385,23 +367,9 @@ const SCROLL_UNDER_LINES =
 /** A card folded to one line. */
 const FOLDED = cn(SHELL, "px-3 py-1.5");
 
-// Spelled out because Tailwind only generates the classes it finds whole in the source.
-const KIND_BAR: Readonly<Record<"finding" | "risk", string>> = {
-  finding: "bg-review-changes",
-  risk: "bg-risk-contract-solid",
-};
-
-/** The kind's bar inside a card's left edge. */
-const KindBar = ({ kind }: { readonly kind: "finding" | "risk" }) => (
-  <span
-    aria-hidden="true"
-    className={cn("absolute top-2 bottom-2 left-1.5 w-[3px] rounded-full", KIND_BAR[kind])}
-  />
-);
-
 /**
- * A finding: what looks wrong, as a draft comment under the line it rests on, with its severity
- * and suggested change. Add to review saves it as the reviewer's draft on its lines; Edit opens
+ * A finding: what looks wrong, as a draft comment under the line it rests on, with its type, its
+ * severity and suggested change. Add to review saves it as the reviewer's draft on its lines; Edit opens
  * the comment box on it first; Dismiss folds it. Saying nothing means it's fine.
  */
 export const FindingCard = memo(function FindingCard({
@@ -486,7 +454,6 @@ export const FindingCard = memo(function FindingCard({
       ref={card}
       id={pointAnchor(point.id)}
       data-slot="point"
-      data-kind="finding"
       data-state={state}
       data-current={current || undefined}
       aria-labelledby={`${id}-title`}
@@ -499,9 +466,17 @@ export const FindingCard = memo(function FindingCard({
         current && RING,
       )}
     >
-      <KindBar kind="finding" />
+      {/* Inside the card's left edge. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute top-2 bottom-2 left-1.5 w-[3px] rounded-full",
+          POINT_TONE[pointTone(point)].bar,
+        )}
+      />
       <header className="flex flex-wrap items-center gap-2">
-        <Kind kind="finding" />
+        <FindingLabel tone={pointTone(point)} />
+        {point.type !== null && <TypeChip type={point.type} />}
         {point.severity !== null && <SeverityChip severity={point.severity} />}
         <span
           className={cn(CHIP, "border-review-pending/25 bg-review-pending-bg text-review-pending")}
@@ -561,7 +536,6 @@ export const FindingCard = memo(function FindingCard({
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Dismiss
             point={point}
-            size="sm"
             disabled={disabled}
             onDismiss={() => onState(point.id, "dismissed")}
             onRule={() => rule.setWriting(true)}
@@ -594,307 +568,6 @@ export const FindingCard = memo(function FindingCard({
   );
 });
 
-/** What a checking test's name opens: its code, in the card a call opens. */
-export interface TestPeek {
-  readonly handle: CallPeekHandle;
-  readonly payload: CallPayload;
-}
-
-const fileName = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
-
-/**
- * The test that checks a risk, by its name and what it asserts: what was found, never a promise
- * that the risk is safe. Resting on or focusing the name opens the test's code where the reviewer
- * is, as a call opens the code it runs.
- */
-const CheckedBy = ({
-  checkedBy,
-  peek,
-  id,
-}: {
-  readonly checkedBy: NonNullable<Point["checkedBy"]>;
-  readonly peek: TestPeek | null;
-  readonly id: string;
-}) => {
-  const name = <span className="font-code text-code-compact">{checkedBy.test}</span>;
-  return (
-    <p data-slot="checked-by" className="flex items-start gap-1.5 pb-0.5 text-muted-foreground">
-      <FlaskConicalIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-      <span className="min-w-0">
-        <span className="font-medium text-foreground">Checked by</span>{" "}
-        {peek === null ? (
-          name
-        ) : (
-          <CallTrigger
-            handle={peek.handle}
-            payload={peek.payload}
-            id={id}
-            render={<button type="button" className="text-left text-foreground" />}
-          >
-            {name}
-          </CallTrigger>
-        )}{" "}
-        in {fileName(checkedBy.path)}, which asserts: {checkedBy.checks}
-      </span>
-    </p>
-  );
-};
-
-/**
- * A risk: code worth reading closely, as a note under the last of its lines, with what could
- * break outside the PR and the test that checks it, if one does. Comment opens the comment box on
- * it; Dismiss folds it. A checked risk is a step like any other: a test reading doesn't replace
- * the reviewer's.
- */
-export const RiskNote = memo(function RiskNote({
-  point,
-  state,
-  saving,
-  readOnly,
-  current,
-  onRaise,
-  onState,
-  leftOut,
-  onShow,
-  ruleScopes,
-  onRule,
-  linesAbove = 0,
-  test = null,
-  family = "Claude",
-}: PointActions & {
-  readonly point: Point;
-  /** Who suggests a guardrail, as the bar names the run's model. */
-  readonly family?: string;
-  /** The lines of code above the note that it's about, which going to it keeps in view. */
-  readonly linesAbove?: number;
-  /** Where the checking test's name opens its code; null shows the name alone. */
-  readonly test?: TestPeek | null;
-}) {
-  const id = useId();
-  const { card, show } = useShown(leftOut, onShow, point.id);
-  const rule = useRule(point, onRule);
-  if (state === "dismissed") {
-    return (
-      <Folded
-        point={point}
-        state={state}
-        current={current}
-        note={dismissedNote(rule.saved)}
-        className={FOLDED}
-        action={
-          <Button
-            variant="ghost"
-            size="xs"
-            disabled={readOnly}
-            onClick={() => onState(point.id, "open")}
-          >
-            Undo
-          </Button>
-        }
-      />
-    );
-  }
-  if (leftOut && point.guidance !== undefined) {
-    return (
-      <LeftOut
-        point={point}
-        guidance={point.guidance}
-        state={state}
-        current={current}
-        onShow={show}
-      />
-    );
-  }
-  const disabled = readOnly || saving;
-  return (
-    <article
-      ref={card}
-      id={pointAnchor(point.id)}
-      data-slot="point"
-      data-kind="risk"
-      data-state={state}
-      data-current={current || undefined}
-      aria-labelledby={`${id}-title`}
-      tabIndex={-1}
-      style={cssVars({ "--lines-above": linesAbove })}
-      className={cn(
-        SHELL,
-        SCROLL_UNDER_LINES,
-        "flex flex-col gap-0.5 py-1.5 pr-2 pl-5",
-        current && RING,
-      )}
-    >
-      <KindBar kind="risk" />
-      <header className="flex flex-wrap items-center gap-2">
-        <Kind kind="risk" />
-        {point.lines !== null && (
-          <RefChip>{lineRef(point.lines.side, point.lines.startLine, point.lines.line)}</RefChip>
-        )}
-        {state === "raised" && (
-          <span className="text-caption text-muted-foreground">
-            <span aria-hidden="true">✓ </span>Commented
-          </span>
-        )}
-        <span className="ml-auto flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="xs"
-            disabled={disabled || point.lines === null}
-            aria-label={`Comment: ${point.title}`}
-            onClick={() => onRaise(point, false)}
-          >
-            Comment
-          </Button>
-          <Dismiss
-            point={point}
-            size="xs"
-            disabled={disabled}
-            onDismiss={() => onState(point.id, "dismissed")}
-            onRule={() => rule.setWriting(true)}
-          />
-        </span>
-      </header>
-      <h3 id={`${id}-title`} className="pb-0.5 font-normal">
-        {point.title}
-      </h3>
-      {point.checkedBy !== undefined && (
-        <CheckedBy checkedBy={point.checkedBy} peek={test} id={`${pointAnchor(point.id)}-test`} />
-      )}
-      {point.guidance !== undefined && (
-        <GuidanceLine guidance={point.guidance} scopes={ruleScopes} className="pb-0.5" />
-      )}
-      {point.guardrail !== undefined && (
-        <GuardrailLine guardrail={point.guardrail} family={family} className="pb-0.5" />
-      )}
-      {rule.writing && (
-        <div className="py-1.5 pr-2">
-          <RuleForm
-            point={point}
-            scopes={ruleScopes}
-            onSave={rule.save}
-            onCancel={() => {
-              rule.setWriting(false);
-              card.current?.focus();
-            }}
-          />
-        </div>
-      )}
-    </article>
-  );
-});
-
-/**
- * A decision's chip at the end of the line that makes the choice: the question it answers, which
- * opens its footnote. It stops the click, which on the line would open the comment box.
- */
-export const DecisionChip = ({
-  point,
-  state,
-  open,
-  current,
-  onToggle,
-}: {
-  readonly point: Point;
-  readonly state: PointState;
-  readonly open: boolean;
-  readonly current: boolean;
-  readonly onToggle: (id: PointId) => void;
-}) => {
-  const Icon = POINT_ICON.decision;
-  return (
-    <button
-      type="button"
-      id={pointAnchor(point.id)}
-      data-slot="decision-chip"
-      // As tall as its line of code: WCAG 2.5.8's inline exception, as for the line number.
-      data-inline-target
-      data-state={state}
-      data-current={current || undefined}
-      aria-expanded={open}
-      aria-label={`Decision: ${point.title}`}
-      className={cn(
-        // From the line's top with a pixel over it: the middle of a 22px line of code sits above
-        // the chip's own, and aligned to it the chip made its line a fraction taller.
-        "mt-px ml-3 inline-flex min-h-5 scroll-mt-24 items-center gap-1 rounded-full border bg-background px-2 align-top font-sans text-caption text-muted-foreground hover:text-foreground",
-        state === "dismissed" && "line-through",
-        current && RING,
-      )}
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggle(point.id);
-      }}
-    >
-      <Icon aria-hidden="true" className="size-3" />
-      {point.title}
-    </button>
-  );
-};
-
-/** A decision's footnote under its line: the answer, muted, with a way to comment or hide it. */
-export const DecisionNote = ({
-  point,
-  state,
-  saving,
-  readOnly,
-  onRaise,
-  onState,
-}: Omit<PointActions, "current"> & { readonly point: Point }) => {
-  const disabled = readOnly || saving;
-  return (
-    <article
-      data-slot="decision-note"
-      data-state={state}
-      aria-label={point.title}
-      className={cn(
-        "flex max-w-3xl flex-wrap items-baseline gap-x-2 border-l pl-3 text-caption",
-        MOTION,
-      )}
-    >
-      <p className="min-w-0 flex-1 basis-80 text-muted-foreground">
-        <span className="font-medium text-foreground">{point.title}.</span> {point.explanation}
-      </p>
-      <span className="flex items-center gap-1">
-        {state === "dismissed" ? (
-          <Button
-            variant="ghost"
-            size="xs"
-            disabled={readOnly}
-            onClick={() => onState(point.id, "open")}
-          >
-            Show again
-          </Button>
-        ) : (
-          <>
-            {state === "raised" && (
-              <span className="text-muted-foreground">
-                <span aria-hidden="true">✓ </span>Commented
-              </span>
-            )}
-            <Button
-              variant="ghost"
-              size="xs"
-              disabled={disabled || point.lines === null}
-              aria-label={`Comment: ${point.title}`}
-              onClick={() => onRaise(point, false)}
-            >
-              Comment
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              disabled={disabled}
-              aria-label={`Hide: ${point.title}`}
-              onClick={() => onState(point.id, "dismissed")}
-            >
-              Hide
-            </Button>
-          </>
-        )}
-      </span>
-    </article>
-  );
-};
-
 /** On another hunk a point rests on: one line back to it. */
 export const PointMention = ({
   point,
@@ -902,22 +575,19 @@ export const PointMention = ({
 }: {
   readonly point: Point;
   readonly onGo: (id: PointId) => void;
-}) => {
-  const Icon = POINT_ICON[point.kind];
-  return (
-    <p data-slot="point-mention" className="flex items-center gap-1.5 text-muted-foreground">
-      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
-      {POINT_STATUS[point.kind].label}:{" "}
-      <button
-        type="button"
-        className="min-h-6 rounded-sm text-left whitespace-pre-line text-primary underline-offset-2 hover:underline"
-        onClick={() => onGo(point.id)}
-      >
-        {point.title}
-      </button>
-    </p>
-  );
-};
+}) => (
+  <p data-slot="point-mention" className="flex items-center gap-1.5 text-muted-foreground">
+    <FindingIcon aria-hidden="true" className="size-3.5 shrink-0" />
+    {FINDING_STATUS.label}:{" "}
+    <button
+      type="button"
+      className="min-h-6 rounded-sm text-left whitespace-pre-line text-primary underline-offset-2 hover:underline"
+      onClick={() => onGo(point.id)}
+    >
+      {point.title}
+    </button>
+  </p>
+);
 
 /**
  * Where point cards unfold when they land: in height from nothing, under the lines they rest on

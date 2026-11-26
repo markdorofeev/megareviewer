@@ -15,6 +15,10 @@ const isReferenceKind = (kind: string): kind is SymbolReference["kind"] =>
 
 const startLine = (node: Node): number => node.startPosition.row + 1;
 
+/** A receiver's name, or null when it's something else: `this`, a call, a longer path. */
+const receiverName = (node: Node): string | null =>
+  node.type === "identifier" || node.type === "type_identifier" ? node.text : null;
+
 // A node that ends at column 0 ends with a newline, which isn't on the next line.
 const endLine = (node: Node): number => {
   const { row, column } = node.endPosition;
@@ -23,10 +27,11 @@ const endLine = (node: Node): number => {
 
 /**
  * Captures a symbols query uses: `@definition.<kind>` with `@name`, `@reference.<kind>` (name,
- * member or type), and `@import.module` with optional `@import.name`s. On overlap the first pattern
- * wins; captures starting with `_` are for predicates only.
+ * member or type) with an optional `@receiver` for a member, and `@import.module` with optional
+ * `@import.name`s. On overlap the first pattern wins; captures starting with `_` are for predicates
+ * only.
  */
-export const findSymbols = (tree: Tree, query: Query): CodeSymbols => {
+export const findSymbols = (tree: Tree, query: Query): Omit<CodeSymbols, "commentLines"> => {
   const definitions = new Map<number, { patternIndex: number; definition: SymbolDefinition }>();
   const references = new Map<number, { patternIndex: number; reference: SymbolReference }>();
   const imports = new Map<number, { module: string; names: string[] | null }>();
@@ -37,6 +42,7 @@ export const findSymbols = (tree: Tree, query: Query): CodeSymbols => {
     const whole = captures.find((capture) => capture.name.startsWith("definition."));
     const reference = captures.find((capture) => capture.name.startsWith("reference."));
     const module = captures.find((capture) => capture.name === "import.module")?.node;
+    const receiver = captures.find((capture) => capture.name === "receiver")?.node;
     if (name !== undefined && whole !== undefined) {
       const kind = whole.name.slice("definition.".length);
       if (!isKind(kind)) throw new Error(`unknown definition kind in query: ${whole.name}`);
@@ -63,6 +69,7 @@ export const findSymbols = (tree: Tree, query: Query): CodeSymbols => {
           line: startLine(reference.node),
           kind,
           columns: [reference.node.startPosition.column],
+          ...(receiver === undefined ? {} : { receiver: receiverName(receiver) }),
         },
       });
     } else if (module !== undefined) {
@@ -86,12 +93,12 @@ export const findSymbols = (tree: Tree, query: Query): CodeSymbols => {
     }
   }
 
-  // One reference per name, kind and line, with the column of each use on it.
+  // One reference per name, kind, receiver and line, with the column of each use on it.
   const unique = new Map<string, SymbolReference>();
   for (const [position, { reference }] of references) {
     // A type's name is a type identifier too; it doesn't reference itself.
     if (definitions.has(position)) continue;
-    const key = `${reference.line}:${reference.name}:${reference.kind}`;
+    const key = `${reference.line}:${reference.name}:${reference.kind}:${reference.receiver}`;
     const existing = unique.get(key);
     unique.set(
       key,

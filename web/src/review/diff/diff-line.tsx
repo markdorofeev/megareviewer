@@ -1,6 +1,6 @@
 import { BugIcon } from "lucide-react";
-import { Fragment, type MouseEvent, memo, type ReactNode } from "react";
-import type { PointKind } from "../../../../src/domain/review/index.ts";
+import { Fragment, type MouseEvent, memo, type PointerEvent, type ReactNode } from "react";
+import { POINT_TONE, type PointTone } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import type { CharRange } from "./intra-line.ts";
 import type { LineKind, ViewLine } from "./rows.ts";
@@ -132,13 +132,17 @@ export type LineLayout = "unified" | "split-old" | "split-new";
 // Spelled out because Tailwind only generates the classes it finds whole in the source. The mark
 // is a pseudo-element rather than the cell's background so the landing can draw it down the lines.
 /** What marks a line's number: one of Claude's points, or the tour's step the map was opened from. */
-export type LineMarkKind = PointKind | "step";
+export type LineMarkKind = PointTone | "step";
 
 const POINT_MARK: Readonly<Record<LineMarkKind, string>> = {
-  finding:
-    "isolate font-medium text-review-changes before:absolute before:inset-0 before:-z-1 before:bg-review-changes-bg before:shadow-[inset_-3px_0_0_var(--review-changes)]",
-  risk: "isolate font-medium text-risk-contract before:absolute before:inset-0 before:-z-1 before:bg-risk-contract-bg before:shadow-[inset_-3px_0_0_var(--risk-contract-solid)]",
-  decision: "",
+  blocking:
+    "isolate font-medium text-severity-blocker before:absolute before:inset-0 before:-z-1 before:bg-review-changes-bg before:shadow-[inset_-3px_0_0_var(--severity-blocker)]",
+  major:
+    "isolate font-medium text-severity-major before:absolute before:inset-0 before:-z-1 before:bg-severity-major-bg before:shadow-[inset_-3px_0_0_var(--severity-major)]",
+  minor:
+    "isolate font-medium text-severity-minor before:absolute before:inset-0 before:-z-1 before:bg-review-pending-bg before:shadow-[inset_-3px_0_0_var(--severity-minor)]",
+  mismatch:
+    "isolate font-medium text-foreground before:absolute before:inset-0 before:-z-1 before:bg-muted before:shadow-[inset_-3px_0_0_var(--muted-foreground)]",
   step: "isolate font-medium text-primary before:absolute before:inset-0 before:-z-1 before:bg-ai-soft before:shadow-[inset_-3px_0_0_var(--primary)]",
 };
 
@@ -154,8 +158,8 @@ export interface DiffLineProps {
   /** A line an open comment box is on, marked by a bar at its edge. */
   readonly marked?: boolean;
   /**
-   * A line one of Claude's points rests on: the number beside the code takes the kind's tint and
-   * color, with a rail on its code side. A decision's lines take none.
+   * A line one of Claude's points rests on: the number beside the code takes the mark's tint
+   * and color, with a rail on its code side.
    */
   readonly pointKind?: LineMarkKind | null;
   /**
@@ -177,15 +181,15 @@ export interface DiffLineProps {
     readonly side: "old" | "new";
     readonly label: string;
     readonly onClick: (event: MouseEvent<HTMLButtonElement>) => void;
+    /** The press a drag down the numbers begins with. */
+    readonly onPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void;
   };
-  /** A click anywhere on the row, e.g. to comment on it. */
-  readonly onRowClick?: (event: MouseEvent<HTMLDivElement>) => void;
+  /** Where a comment on the line goes, as "side:line": a selection of its code finds it by this. */
+  readonly place?: string;
   /** Ranges of the code to wrap, e.g. calls; a new array each render re-renders the row. */
   readonly marks?: readonly LineMark[];
-  /** A finding's card is under this line: a bug in the new number's cell. */
-  readonly flagged?: boolean;
-  /** After the code, e.g. a decision's chip; a new element each render re-renders the row. */
-  readonly end?: ReactNode;
+  /** A point's card is under this line: a bug in the new number's cell, in its color. */
+  readonly flag?: PointTone | null;
 }
 
 export interface PointLanding {
@@ -209,24 +213,23 @@ export const DiffLine = memo(function DiffLine({
   onComment,
   onGutterClick,
   numberButton,
-  onRowClick,
+  place,
   cellRole = "gridcell",
   marks = NO_MARKS,
-  flagged = false,
-  end,
+  flag = null,
 }: DiffLineProps) {
   const kind = KIND[line.kind];
   const number = line.newNo ?? line.oldNo;
   const markSide = layout === "split-old" ? "old" : "new";
+  const showsFlag = (value: number, side: "old" | "new") =>
+    side === "new" && flag !== null && value < 1000;
   const gutter = (value: number | null, side: "old" | "new") => (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the grid's ↑ and ↓, with shift, do the same.
     // biome-ignore lint/a11y/noStaticElementInteractions: a cell of the grid; only the grid clicks it.
     <span
       role={cellRole}
       onClick={onGutterClick === undefined ? undefined : (event) => onGutterClick(line, event)}
-      data-point-mark={
-        pointKind !== null && pointKind !== "decision" && side === markSide ? pointKind : undefined
-      }
+      data-point-mark={pointKind !== null && side === markSide ? pointKind : undefined}
       className={cn(
         "tabular relative w-12 shrink-0 select-none text-right",
         GUTTER_SIZE[density],
@@ -242,19 +245,17 @@ export const DiffLine = memo(function DiffLine({
           type="button"
           aria-label={numberButton.label}
           onClick={numberButton.onClick}
+          onPointerDown={numberButton.onPointerDown}
           // As tall as a line of code: WCAG 2.5.8's inline exception, as for a link in a sentence.
           data-inline-target
           className={cn(
-            "h-full w-full pr-2 text-right hover:bg-primary hover:text-primary-foreground focus-visible:-outline-offset-2",
-            // Under the mouse the whole cell fills, square and full height, so it and the row's
-            // tint read as one band; a chip inside the gutter read as apart from the line.
-            onRowClick !== undefined &&
-              "group-hover/line:bg-primary group-hover/line:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground",
+            "peer/number h-full w-full cursor-pointer pr-2 text-right hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground focus-visible:-outline-offset-2",
             // A plus beside the number says a click comments; the cell fits it only up to four
             // digits, so from 10,000 the fill alone says it.
-            onRowClick !== undefined &&
-              value < 10_000 &&
-              "before:mr-1 before:content-none group-hover/line:before:content-['+'] focus-visible:before:content-['+']",
+            value < 10_000 &&
+              "before:mr-1 before:content-none before:text-muted-foreground hover:before:text-primary-foreground hover:before:content-['+'] focus-visible:before:text-primary-foreground focus-visible:before:content-['+']",
+            // With the pointer elsewhere on the row, only the plus; a finding's bug has its place.
+            value < 10_000 && !showsFlag(value, side) && "group-hover/line:before:content-['+']",
           )}
         >
           {value}
@@ -262,12 +263,15 @@ export const DiffLine = memo(function DiffLine({
       ) : (
         (value ?? "")
       )}
-      {side === "new" && flagged && value !== null && value < 1000 && (
-        // Gives way to the plus the row shows under the mouse.
+      {flag !== null && value !== null && showsFlag(value, side) && (
+        // Gives way to the plus and the fill of the number under the mouse, where its color is lost.
         <BugIcon
           aria-hidden="true"
           data-slot="finding-flag"
-          className="pointer-events-none absolute top-1/2 left-1 size-3 -translate-y-1/2 text-review-changes group-hover/line:hidden"
+          className={cn(
+            "pointer-events-none absolute top-1/2 left-1 size-3 -translate-y-1/2 peer-hover/number:hidden peer-focus-visible/number:hidden",
+            POINT_TONE[flag].text,
+          )}
         />
       )}
       {side === "new" && onComment !== undefined && numberButton === undefined && (
@@ -288,13 +292,12 @@ export const DiffLine = memo(function DiffLine({
   );
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the line number is the keyboard's way to the same action.
     <div
       role="row"
       id={id}
-      onClick={onRowClick}
       aria-selected={selected || undefined}
       data-line={line.key}
+      data-place={place}
       data-kind={line.kind}
       data-focused={focused || undefined}
       data-marked={marked || undefined}
@@ -311,17 +314,12 @@ export const DiffLine = memo(function DiffLine({
       }
       className={cn(
         "group/line relative flex min-w-full font-code",
-        onRowClick !== undefined && "cursor-pointer",
         DENSITY[density],
         kind.row,
         // A tint over the row's own, so a selected added line still reads as added.
         // Above the gutters, which are positioned and would paint over them otherwise.
         selected &&
           "before:pointer-events-none before:absolute before:inset-0 before:z-[1] before:bg-primary/15",
-        // The same tint, fainter, says the row under the mouse can be commented on.
-        !selected &&
-          onRowClick !== undefined &&
-          "hover:before:pointer-events-none hover:before:absolute hover:before:inset-0 hover:before:z-[1] hover:before:bg-primary/8",
         (focused || marked) &&
           "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px] after:bg-ring",
       )}
@@ -340,6 +338,7 @@ export const DiffLine = memo(function DiffLine({
       </span>
       <span
         role={cellRole}
+        data-slot="line-code"
         className={cn(
           "pr-4",
           wrap ? "min-w-0 flex-1 whitespace-pre-wrap break-all" : "whitespace-pre",
@@ -372,7 +371,6 @@ export const DiffLine = memo(function DiffLine({
             {note}
           </span>
         ))}
-        {end}
       </span>
     </div>
   );

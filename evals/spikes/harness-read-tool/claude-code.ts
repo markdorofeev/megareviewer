@@ -434,8 +434,8 @@ const CASES: Record<string, () => Promise<void>> = {
     const read = "Before answering, Read docs/notes.md in your working directory.\n\n";
     for (const [name, pass, effort, prefix] of [
       ["cache-1-intent-reads", "intent", "medium", read],
-      ["cache-2-risk-reads", "risk", "low", read],
-      ["cache-3-decisions-no-read", "decisions", "high", ""],
+      ["cache-2-steps-reads", "steps", "medium", read],
+      ["cache-3-findings-no-read", "findings", "high", ""],
     ] as const) {
       const fixture = makeFixture();
       const { events } = await run(

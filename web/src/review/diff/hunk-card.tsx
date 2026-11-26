@@ -1,7 +1,7 @@
 import {
   Fragment,
-  type MouseEvent,
   memo,
+  type PointerEvent,
   type ReactNode,
   useEffect,
   useMemo,
@@ -16,12 +16,8 @@ import type {
   PartId,
   UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
-import {
-  type PointKind,
-  parseBody,
-  type RiskAssessment,
-} from "../../../../src/domain/review/index.ts";
-import { RISK_STATUS } from "../../lib/status.ts";
+import { parseBody, type RiskAssessment } from "../../../../src/domain/review/index.ts";
+import { type PointTone, RISK_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { StatusBadge } from "../../ui/status-badge.tsx";
@@ -40,7 +36,7 @@ import { DiffLine, type LineMark, type LineMarkKind, type PointLanding } from ".
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { languageOf } from "./languages.ts";
 import { hunkLocation, lineCounts } from "./lines.ts";
-import { viewLines } from "./rows.ts";
+import { type ViewLine, viewLines } from "./rows.ts";
 import { useHunkTokens, useNearViewport } from "./syntax.ts";
 
 /**
@@ -72,6 +68,9 @@ export const commentPlace = (
       ? null
       : { side: "new", line: line.newLine };
 
+const placeOf = (line: ViewLine): LinePlace | null =>
+  commentPlace({ kind: line.kind, oldLine: line.oldNo, newLine: line.newNo });
+
 /**
  * Keeps a row that isn't a line, such as a divider or a button, at the visible width of a file
  * card's lines, which scroll sideways together inside an `@container`.
@@ -81,24 +80,6 @@ export const PINNED = "sticky left-0 w-[100cqw]";
 /** A comment or thread under a line starts where its code does, past both numbers and the marker. */
 const CODE_INSET = "pr-3 pl-29";
 
-/** A row of a card's lines that isn't a line: above or under one, as wide as the card shows. */
-export const LineRow = ({
-  inset,
-  children,
-}: {
-  /** Starts where the code does, past the line numbers, as a comment does. */
-  readonly inset: boolean;
-  readonly children: ReactNode;
-}) => (
-  <div
-    role="row"
-    data-slot="line-row"
-    className={cn(inset && cn(CODE_INSET, "py-2"), "font-sans", PINNED)}
-  >
-    <div role="cell">{children}</div>
-  </div>
-);
-
 /** A hunk to show, with its file and risk; a mechanical one has proofs and shows collapsed. */
 export interface HunkItem {
   readonly hunk: Hunk;
@@ -106,6 +87,9 @@ export interface HunkItem {
   readonly risk: RiskAssessment;
   readonly proofs?: readonly MechanicalProof[];
 }
+
+/** A line's place as its row and its points name it: "side:line". */
+const placeKey = (place: LinePlace) => `${place.side}:${place.line}`;
 
 const samePlace = (a: LinePlace, b: LinePlace) => a.side === b.side && a.line === b.line;
 
@@ -165,7 +149,7 @@ export interface HunkCardProps {
    * the draft's text.
    */
   readonly draftNote?: (comment: LineComment, edit: (body: string) => void) => ReactNode;
-  /** Shown between the header and the lines, e.g. the decisions resting on this hunk. */
+  /** Shown between the header and the lines, e.g. the points on none of its lines. */
   readonly afterHeader?: ReactNode;
   /** The host's threads on a line, shown under it. */
   readonly threadsAt?: (place: LinePlace) => ReactNode;
@@ -180,15 +164,13 @@ export interface HunkCardProps {
   readonly marks?: ReadonlyMap<number, readonly LineMark[]>;
   /** Lines one of Claude's points rests on, by "side:line", each with its kind. */
   readonly pointLines?: ReadonlyMap<string, PointLine>;
-  /** Claude's findings and risks under the last of their lines. */
+  /** Claude's findings under the last of their lines. */
   readonly pointsAt?: (place: LinePlace) => ReactNode;
-  /** After a line's code, e.g. a decision's chip. */
-  readonly pointsAtEnd?: (place: LinePlace) => ReactNode;
-  /** Lines with a finding's card under them, by "side:line": a bug in the number cell. */
-  readonly flagged?: ReadonlySet<string>;
+  /** Lines with a point's card under them, by "side:line": a bug in the number cell. */
+  readonly flags?: ReadonlyMap<string, PointTone>;
 }
 
-/** A line a point rests on: the kind that wins there, and how the line lands when it does. */
+/** A line a point rests on: the tone that wins there, and how the line lands when it does. */
 export interface PointLine {
   readonly kind: LineMarkKind;
   readonly landing?: PointLanding;
@@ -220,8 +202,7 @@ export const HunkCard = memo(function HunkCard({
   marks,
   pointLines,
   pointsAt,
-  pointsAtEnd,
-  flagged,
+  flags,
 }: HunkCardProps) {
   const id = givenId ?? hunk.id;
   const ref = useRef<HTMLElement>(null);
@@ -263,16 +244,56 @@ export const HunkCard = memo(function HunkCard({
     }
     onOpenComment?.(id, place);
   };
+  /** A drag down the numbers: the line it began on and the one it's at, on one side. */
+  const [drag, setDrag] = useState<{ readonly from: LinePlace; readonly to: number } | null>(null);
+  const dragged: LinePlace | null =
+    drag === null || drag.to === drag.from.line
+      ? null
+      : {
+          side: drag.from.side,
+          startLine: Math.min(drag.from.line, drag.to),
+          line: Math.max(drag.from.line, drag.to),
+        };
+  const startDrag = (place: LinePlace, event: PointerEvent) => {
+    // A finger's drag scrolls.
+    if (event.button !== 0 || event.shiftKey || event.pointerType === "touch") return;
+    setDrag({ from: place, to: place.line });
+  };
+  const dragOver = (event: PointerEvent) => {
+    if (drag === null || !(event.target instanceof Element)) return;
+    const key = event.target.closest<HTMLElement>("[data-place]")?.dataset.place;
+    const over = lines.map(placeOf).find((one) => one !== null && placeKey(one) === key);
+    if (over?.side === drag.from.side) setDrag({ ...drag, to: over.line });
+  };
+  const endDrag = useRef(() => {});
+  endDrag.current = () => {
+    setDrag(null);
+    if (dragged !== null) onOpenComment?.(id, dragged);
+  };
+  const dragging = drag !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const end = () => endDrag.current();
+    const cancel = () => setDrag(null);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", cancel);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", cancel);
+    };
+  }, [dragging]);
+  const markedPlace = dragged ?? (onComment === undefined ? null : openComment);
   return (
     <section
       ref={ref}
       data-slot="hunk-card"
+      data-part={id}
       data-risk={risk?.riskClass}
       data-highlighted={highlighted || undefined}
       className={cn(
         "relative scroll-mt-24 bg-card -outline-offset-2",
         !inFile && "overflow-hidden rounded-lg border",
-        // The selected decision's code: a tint and an inset bar, not only a color.
+        // The code of a point the reviewer went to: a tint and an inset bar, not only a color.
         highlighted && "bg-primary/5 shadow-[inset_0_0_0_2px_var(--ring)]",
       )}
       aria-label={`${file.path}, ${hunkLocation(hunk)}`}
@@ -309,7 +330,7 @@ export const HunkCard = memo(function HunkCard({
               {proof.detail}
             </span>
           ))}
-          {!inFile && risk !== null && (
+          {!inFile && risk !== null && risk.riskClass !== "contract" && (
             <span className="ml-auto" title={risk.reason === "" ? undefined : risk.reason}>
               <StatusBadge status={RISK_STATUS[risk.riskClass]} />
               {risk.reason !== "" && <span className="sr-only">: {risk.reason}</span>}
@@ -332,22 +353,18 @@ export const HunkCard = memo(function HunkCard({
         className={cn("[content-visibility:auto]", !inFile && "overflow-x-auto")}
         // Off screen, the lines are as tall as they will be, so the scrollbar doesn't jump.
         style={{ containIntrinsicSize: `auto ${shown.length * 20}px` }}
+        onPointerOver={dragging ? dragOver : undefined}
       >
         <div className="w-max min-w-full">
           {shown.map((line) => {
-            const place = commentPlace({
-              kind: line.kind,
-              oldLine: line.oldNo,
-              newLine: line.newNo,
-            });
+            const place = placeOf(line);
             const comment =
               place === null ? undefined : comments.find((one) => samePlace(one, place));
             const open = place !== null && openComment !== null && samePlace(openComment, place);
             const commentAt = open ? openComment : comment;
             const threads = place === null ? null : (threadsAt?.(place) ?? null);
             const points = place === null ? null : (pointsAt?.(place) ?? null);
-            const end = place === null ? null : (pointsAtEnd?.(place) ?? null);
-            const key = place === null ? null : `${place.side}:${place.line}`;
+            const key = place === null ? null : placeKey(place);
             const point = key === null ? undefined : pointLines?.get(key);
             return (
               <Fragment key={line.key}>
@@ -355,8 +372,7 @@ export const HunkCard = memo(function HunkCard({
                   line={line}
                   cellRole="cell"
                   pointKind={point?.kind ?? null}
-                  flagged={key !== null && flagged?.has(key) === true}
-                  {...(end === null ? {} : { end })}
+                  flag={(key === null ? undefined : flags?.get(key)) ?? null}
                   {...(point?.landing === undefined ? {} : { pointLanding: point.landing })}
                   marks={
                     (line.kind === "del" || line.newNo === null
@@ -365,31 +381,20 @@ export const HunkCard = memo(function HunkCard({
                   }
                   marked={
                     place !== null &&
-                    onComment !== undefined &&
-                    openComment !== null &&
-                    openComment.side === place.side &&
-                    place.line >= (openComment.startLine ?? openComment.line) &&
-                    place.line <= openComment.line
+                    markedPlace !== null &&
+                    markedPlace.side === place.side &&
+                    place.line >= (markedPlace.startLine ?? markedPlace.line) &&
+                    place.line <= markedPlace.line
                   }
-                  numberButton={
-                    place === null || !commentable
-                      ? undefined
-                      : {
+                  {...(place === null || key === null || !commentable
+                    ? {}
+                    : {
+                        place: key,
+                        numberButton: {
                           side: place.side,
                           label: placeLabel(place),
                           onClick: (event) => toggleComment(place, event.shiftKey),
-                        }
-                  }
-                  {...(place === null || !commentable
-                    ? {}
-                    : {
-                        onRowClick: (event: MouseEvent<HTMLDivElement>) => {
-                          // Selecting code isn't asking to comment.
-                          if (window.getSelection()?.isCollapsed === false) return;
-                          // The line number's own click already handled it.
-                          if (event.target instanceof Element && event.target.closest("button"))
-                            return;
-                          toggleComment(place, event.shiftKey);
+                          onPointerDown: (event) => startDrag(place, event),
                         },
                       })}
                 />

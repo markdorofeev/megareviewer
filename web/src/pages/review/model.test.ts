@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { type Analysis, type Point, PointId } from "../../../../src/domain/review/index.ts";
+import {
+  type Analysis,
+  type HunkComment,
+  type Point,
+  PointId,
+} from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
+import type { LinePlace } from "../../review/index.ts";
 import {
   byTreePath,
   changeTotals,
   gapBetween,
   mapFiles,
   mechanicalCount,
+  openedOn,
   parseLayout,
   partIndex,
   pointPlaces,
@@ -27,16 +34,14 @@ describe("partIndex", () => {
     ]);
   });
 
-  it("reads a hunk the risk pass hasn't classified yet as logic, never mechanical", () => {
+  it("reads a hunk without an assessment as logic, never mechanical", () => {
     const early: Analysis = { ...analysis, risk: [] };
     const [item] = partIndex(early).items([h.receiptRoute]);
     expect(item?.risk).toEqual({
       hunkId: h.receiptRoute,
       riskClass: "logic",
       reason: "Not classified yet.",
-      source: "fallback",
-      lines: null,
-      guidance: null,
+      source: "rule",
     });
   });
 
@@ -94,21 +99,19 @@ describe("gapBetween", () => {
 });
 
 describe("a split part's risk", () => {
-  it("is its hunk's, whether the rules or the model made it", () => {
-    for (const source of ["rule", "model"] as const) {
-      const assessed: Analysis = {
-        ...analysis,
-        risk: analysis.risk.map((risk) =>
-          risk.hunkId === h.retryAndCache
-            ? { ...risk, riskClass: "contract" as const, reason: "Whole hunk.", source }
-            : risk,
-        ),
-      };
-      expect(partIndex(assessed).items([p.cache])[0]?.risk).toMatchObject({
-        riskClass: "contract",
-        reason: "Whole hunk.",
-      });
-    }
+  it("is its hunk's", () => {
+    const assessed: Analysis = {
+      ...analysis,
+      risk: analysis.risk.map((risk) =>
+        risk.hunkId === h.retryAndCache
+          ? { ...risk, riskClass: "contract" as const, reason: "Whole hunk." }
+          : risk,
+      ),
+    };
+    expect(partIndex(assessed).items([p.cache])[0]?.risk).toMatchObject({
+      riskClass: "contract",
+      reason: "Whole hunk.",
+    });
   });
 });
 
@@ -117,23 +120,23 @@ describe("pointPlaces", () => {
   const order = mapFiles(analysis, index).flatMap((group) => group.partIds);
   const point = (id: string, hunkIds: readonly (typeof h)[keyof typeof h][]): Point => ({
     id: PointId.parse(id),
-    kind: "decision",
     title: id,
     explanation: "w",
     path: null,
     lines: null,
     hunkIds,
+    type: null,
     severity: null,
     suggestion: null,
     mismatch: null,
   });
 
   it("puts each card on the point's first hunk in the page's order, and links the others", () => {
-    const d5 = point("d5", [h.dependency, h.receiptFormatting]);
-    const places = pointPlaces([d5], order, index);
-    expect(places.cards.get(h.receiptFormatting)).toEqual([d5]);
-    expect(places.mentions.get(h.dependency)).toEqual([d5]);
-    expect(places.cardPart.get(d5.id)).toBe(h.receiptFormatting);
+    const m5 = point("m5", [h.dependency, h.receiptFormatting]);
+    const places = pointPlaces([m5], order, index);
+    expect(places.cards.get(h.receiptFormatting)).toEqual([m5]);
+    expect(places.mentions.get(h.dependency)).toEqual([m5]);
+    expect(places.cardPart.get(m5.id)).toBe(h.receiptFormatting);
     expect(places.unplaced).toEqual([]);
   });
 
@@ -143,7 +146,6 @@ describe("pointPlaces", () => {
     if (line == null) throw new Error("the cache part has an added line");
     const onCache: Point = {
       ...point("f1", [h.retryAndCache]),
-      kind: "finding",
       lines: { hunkId: h.retryAndCache, side: "new", startLine: line, line },
     };
     const places = pointPlaces([onCache], order, index);
@@ -153,8 +155,8 @@ describe("pointPlaces", () => {
   });
 
   it("never puts a card on a mechanical hunk, and keeps points on none apart", () => {
-    const moved = point("d1", [h.formatMoneyRemoved, h.retryAndCache]);
-    const nowhere = point("d2", [h.formatMoneyAdded]);
+    const moved = point("m1", [h.formatMoneyRemoved, h.retryAndCache]);
+    const nowhere = point("m2", [h.formatMoneyAdded]);
     const places = pointPlaces([moved, nowhere], order, index);
     // The card goes on the split hunk's first part on the page, and its other part links to it.
     expect(places.cards.get(p.retry)).toEqual([moved]);
@@ -221,5 +223,47 @@ describe("totals", () => {
     const totals = changeTotals(analysis.files);
     expect(totals).toEqual({ files: 7, additions: 58, deletions: 13 });
     expect(changeTotals([])).toEqual({ files: 0, additions: 0, deletions: 0 });
+  });
+});
+
+describe("openedOn", () => {
+  const hunkId = h.routeImports;
+  const range = { side: "new" as const, startLine: 10, line: 12 };
+  const draft = { hunkId, side: "new" as const, line: 11, body: "Why?" };
+
+  it("takes the open box's draft along to the range's last line, when the range covers it", () => {
+    expect(openedOn([draft], hunkId, range, { side: "new", line: 11 })).toEqual({
+      place: range,
+      comments: [{ ...draft, line: 12, startLine: 10 }],
+    });
+    const last = { ...draft, line: 12 };
+    expect(openedOn([last], hunkId, range, { side: "new", line: 12 }).comments).toEqual([
+      { ...last, startLine: 10 },
+    ]);
+  });
+
+  it("leaves a draft the range doesn't cover, or on the other side or hunk, where it is", () => {
+    const stays = (drafts: readonly HunkComment[], open: LinePlace | null) =>
+      expect(openedOn(drafts, hunkId, range, open)).toEqual({ place: range, comments: drafts });
+    stays([{ ...draft, line: 14 }], { side: "new", line: 14 });
+    stays([{ ...draft, startLine: 8 }], { side: "new", startLine: 8, line: 11 });
+    stays([{ ...draft, side: "old" }], { side: "old", line: 11 });
+    stays([{ ...draft, hunkId: h.dependency }], { side: "new", line: 11 });
+    stays([draft], null);
+  });
+
+  it("opens the draft a line already has, on its own lines, and puts no second one on it", () => {
+    const last = { ...draft, startLine: 8, line: 12, body: "And this?" };
+    const own = { side: "new", line: 12, startLine: 8 };
+    for (const open of [null, { side: "new" as const, line: 11 }]) {
+      expect(openedOn([draft, last], hunkId, range, open)).toEqual({
+        place: own,
+        comments: [draft, last],
+      });
+    }
+    // From the line's number, and from a selection within the open box's own last line.
+    const line = { side: "new" as const, line: 12 };
+    expect(openedOn([last], hunkId, line, null).place).toEqual(own);
+    expect(openedOn([last], hunkId, line, { ...line, startLine: 8 }).place).toEqual(own);
   });
 });

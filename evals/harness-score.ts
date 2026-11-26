@@ -2,7 +2,7 @@ import {
   type Analysis,
   type GuidanceMark,
   HARNESS_ROOT,
-  type ModelPass,
+  ModelPass,
 } from "../src/domain/review/index.ts";
 import type { OutsideFile } from "./guidance.ts";
 import type { JudgeVerdict } from "./judge-verdict.ts";
@@ -42,13 +42,12 @@ const fileMarksOnly = (analysis: Analysis): Analysis => {
   return {
     ...analysis,
     findings: analysis.findings.map((one) => ({ ...one, guidance: only(one.guidance) })),
-    risk: analysis.risk.map((one) => ({ ...one, guidance: only(one.guidance) })),
   };
 };
 
 /** Everything of a run the reviewer or the host could be shown. */
-const answersOf = ({ intent, findings, risk, decisions, steps }: Analysis): string =>
-  JSON.stringify([intent, findings, risk, decisions, steps]);
+const answersOf = ({ intent, findings, steps }: Analysis): string =>
+  JSON.stringify([intent, findings, steps]);
 
 export const scoreHarness = (
   analysis: Analysis,
@@ -66,9 +65,11 @@ export const scoreHarness = (
     { ...labels, guidance: ofFiles.filter((label) => harnessRefs.has(label.ref)) },
     verdict,
   );
-  const calls = analysis.modelCalls.flatMap((call) =>
-    call.pass === "guardrails" ? [] : [{ ...call, pass: call.pass }],
-  );
+  // The passes there are: not the guardrail call, nor a pass since removed.
+  const calls = analysis.modelCalls.flatMap((call) => {
+    const pass = ModelPass.safeParse(call.pass);
+    return pass.success ? [{ ...call, pass: pass.data }] : [];
+  });
   const passes = [...new Set(calls.map((call) => call.pass))].map((pass): PassReads => {
     const own = calls.filter((call) => call.pass === pass);
     const reads = own.flatMap((call) => call.reads);

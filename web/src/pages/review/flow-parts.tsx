@@ -1,17 +1,17 @@
-import { ArrowRightIcon, PencilIcon, PlusIcon } from "lucide-react";
+import { ArrowRightIcon, LogInIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { type RefObject, useEffect, useRef } from "react";
 import type { PartId } from "../../../../src/domain/diff/index.ts";
 import { cn } from "../../lib/utils.ts";
 import type { AlsoChanged, FlowPath, FlowPaths, PathEnd, Stop, StopStatus } from "./flow-paths.ts";
+import { usedOutside } from "./outside-uses.ts";
 
 // What the overview's three preview layouts share: a stop's chip, a path's label, the legend, and
 // the changed files that are on no path.
 
 /** A stop by its status, from the tokens: a new file as the tree colors one, a changed one as a box. */
-export const STOP_STYLE: Readonly<Record<StopStatus | "outside", string>> = {
+export const STOP_STYLE: Readonly<Record<StopStatus, string>> = {
   new: "border-diff-add-fg bg-diff-add-bg text-diff-add-fg",
   changed: "border-risk-logic-solid bg-risk-logic-bg text-risk-logic",
-  outside: "border-dashed border-input bg-surface-subtle text-muted-foreground",
 };
 
 export interface FlowViewProps {
@@ -59,26 +59,43 @@ export const StatusGlyph = ({ status }: { readonly status: StopStatus }) =>
     <PencilIcon aria-hidden="true" className="size-3 shrink-0" />
   );
 
+const capitalized = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+
 const listed = (items: readonly string[]): string =>
   items.length <= 3
     ? items.join(", ")
     : `${items.slice(0, 3).join(", ")} and ${items.length - 3} more`;
 
-/** What a screen reader hears for a stop, and its tooltip. */
+/** What a screen reader hears for a stop. */
 export const stopName = (stop: Stop): string =>
   [
     stop.label,
     stop.status === "new" ? "new file" : "changed",
     stop.names.length > 0 ? listed(stop.names) : null,
+    stop.calledBy.length > 0 ? `called by ${listed(stop.calledBy)}` : null,
     stop.shared > 1 ? `on ${stop.shared} paths` : null,
+    stop.uses > 0 ? usedOutside(stop.uses) : null,
   ]
     .filter((part) => part !== null)
     .join(", ");
 
-/** A changed file on a path: its status as a glyph and a color, its name, and how many paths run it. */
+/** In how many places code outside the pull request uses a stop, as a glyph and a count. */
+export const OutsideUses = ({ uses }: { readonly uses: number }) =>
+  uses === 0 ? null : (
+    <span data-slot="flow-outside-uses" className="inline-flex shrink-0 items-center text-kbd">
+      <LogInIcon aria-hidden="true" className="size-3" />
+      <span className="pl-0.5">{uses}</span>
+    </span>
+  );
+
+/**
+ * A changed file on a path: its status as a glyph and a color, its name, how many paths run it, and
+ * in how many places code outside the pull request uses it.
+ */
 export const StopChip = ({
   stop,
   hot,
+  linked = false,
   onHot,
   onOpen,
   className,
@@ -86,6 +103,8 @@ export const StopChip = ({
   readonly stop: Stop;
   /** Another chip of the same file has the pointer or the focus. */
   readonly hot: boolean;
+  /** It calls the stop that has the pointer or the focus on its path, or is called by it. */
+  readonly linked?: boolean;
   readonly onHot: (path: string | null) => void;
   readonly onOpen: FlowViewProps["onOpenPart"];
   readonly className?: string;
@@ -98,14 +117,20 @@ export const StopChip = ({
       data-path={stop.path}
       data-status={stop.status}
       data-hot={hot || undefined}
+      data-linked={linked || undefined}
       className={cn(
         "inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md border px-1.5 font-mono text-code-compact",
         STOP_STYLE[stop.status],
+        linked && "border-primary border-dashed",
         hot && "shadow-[0_0_0_2px_var(--background),0_0_0_4px_var(--primary)]",
         className,
       )}
       aria-label={stopName(stop)}
-      title={`${stop.path}${stop.names.length > 0 ? `: ${stop.names.join(", ")}` : ""}`}
+      title={[
+        `${stop.path}${stop.names.length > 0 ? `: ${stop.names.join(", ")}` : ""}`,
+        ...(stop.calledBy.length > 0 ? [`Called by ${stop.calledBy.join(", ")}`] : []),
+        ...(stop.uses > 0 ? [capitalized(usedOutside(stop.uses))] : []),
+      ].join("\n")}
       onClick={() => first !== undefined && onOpen(first, stop.path)}
       onFocus={() => onHot(stop.path)}
       onBlur={() => onHot(null)}
@@ -115,6 +140,7 @@ export const StopChip = ({
       <StatusGlyph status={stop.status} />
       <span className="truncate">{stop.label}</span>
       {stop.shared > 1 && <span className="shrink-0 text-kbd">×{stop.shared}</span>}
+      <OutsideUses uses={stop.uses} />
     </button>
   );
 };
@@ -140,7 +166,7 @@ export const EndChip = ({
   </button>
 );
 
-/** Where a path is reached, each of its labels on a line, and whether that's in the pull request. */
+/** Where a path is reached, each of its labels on a line. */
 export const PathLabel = ({ path }: { readonly path: FlowPath }) => (
   <div data-slot="flow-path-label" className="flex min-w-0 flex-col gap-0.5">
     {path.labels.slice(0, 3).map((label, at) => (
@@ -148,7 +174,7 @@ export const PathLabel = ({ path }: { readonly path: FlowPath }) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: two flows can share a title, and the list never reorders.
         key={at}
         className="truncate font-mono text-code-compact font-semibold"
-        title={path.outside[at] ?? label}
+        title={label}
       >
         {label}
       </span>
@@ -158,9 +184,6 @@ export const PathLabel = ({ path }: { readonly path: FlowPath }) => (
         and {path.labels.length - 3} more
       </span>
     )}
-    <span className="text-caption text-muted-foreground">
-      {path.inPullRequest ? "In this PR" : "Not in this PR"}
-    </span>
   </div>
 );
 
@@ -186,6 +209,11 @@ export const FlowLegend = ({ children }: { readonly children: string }) => (
       new file
     </span>
     <span>×3: three ways run it.</span>
+    <span className="inline-flex items-center gap-1">
+      <OutsideUses uses={4} />
+      <span className="sr-only">: </span>
+      used in 4 places outside the PR.
+    </span>
   </p>
 );
 

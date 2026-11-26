@@ -92,7 +92,12 @@ const callersOf = (callers: UnchangedFile[], generated: ReadonlySet<string> = ne
 describe("changedDefinitions", () => {
   it("names a definition whose own lines the PR changes, with its part", () => {
     expect(changedDefinitions([sources], new Map([[sources.path, sourcesSpans]]))).toEqual([
-      { partId: credentialsHunk.id, path: "services/sources.py", name: "clone_credentials" },
+      {
+        partId: credentialsHunk.id,
+        path: "services/sources.py",
+        name: "clone_credentials",
+        owner: null,
+      },
     ]);
   });
 
@@ -121,6 +126,67 @@ describe("changedDefinitions", () => {
     ).toEqual([]);
   });
 
+  it("leaves out a class whose PR only adds a method with the comment above it", () => {
+    const added = hunk("CallTree.java", "@@ -20,2 +20,9 @@", [
+      "     }",
+      " ",
+      "+    /**",
+      "+     * The root's own cost.",
+      "+     */",
+      "+    public int rootCost() {",
+      "+        // Cheap.",
+      "+        return root.cost();",
+      "+    }",
+    ]);
+    const definitions = {
+      head: spans([
+        ["CallTree", 1, 40],
+        ["rootCost", 25, 28],
+      ]),
+      base: spans([["CallTree", 1, 33]]),
+      comments: { head: new Set([22, 23, 24, 26]), base: new Set<number>() },
+    };
+    expect(
+      changedDefinitions(
+        [file("CallTree.java", [added])],
+        new Map([["CallTree.java", definitions]]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("leaves out a definition whose PR only changes a comment, deleted lines by the base file", () => {
+    const changed = hunk("a.py", "@@ -2,5 +2,4 @@", [
+      "     start()",
+      "-    # Runs twice.",
+      "-    # Then stops.",
+      "+    # Runs once.",
+      "     stop()",
+      " ",
+    ]);
+    const definitions = {
+      head: spans([["run", 1, 4]]),
+      base: spans([["run", 1, 5]]),
+      comments: { head: new Set([3]), base: new Set([3, 4]) },
+    };
+    expect(changedDefinitions([file("a.py", [changed])], new Map([["a.py", definitions]]))).toEqual(
+      [],
+    );
+  });
+
+  it("names a definition whose code the PR comments out", () => {
+    const commented = hunk("a.py", "@@ -2,1 +2,1 @@", ["-    start()", "+    # start()"]);
+    const definitions = {
+      head: spans([["run", 1, 4]]),
+      base: spans([["run", 1, 4]]),
+      comments: { head: new Set([2]), base: new Set<number>() },
+    };
+    expect(
+      changedDefinitions([file("a.py", [commented])], new Map([["a.py", definitions]])).map(
+        (one) => one.name,
+      ),
+    ).toEqual(["run"]);
+  });
+
   it("names a definition the PR deletes lines of, by the base file", () => {
     const removed = hunk("app.py", "@@ -5,3 +5,1 @@", [
       " def create_app():",
@@ -133,7 +199,7 @@ describe("changedDefinitions", () => {
     };
     expect(
       changedDefinitions([file("app.py", [removed])], new Map([["app.py", definitions]])),
-    ).toEqual([{ partId: removed.id, path: "app.py", name: "create_app" }]);
+    ).toEqual([{ partId: removed.id, path: "app.py", name: "create_app", owner: null }]);
   });
 
   it("leaves out added files, and lines outside any definition", () => {
@@ -171,8 +237,8 @@ describe("changedDefinitions", () => {
     expect(
       changedDefinitions([file("a.py", [split])], new Map([["a.py", definitions]]), parts),
     ).toEqual([
-      { partId: partId(split.id, 1), path: "a.py", name: "first" },
-      { partId: partId(split.id, 2), path: "a.py", name: "second" },
+      { partId: partId(split.id, 1), path: "a.py", name: "first", owner: null },
+      { partId: partId(split.id, 2), path: "a.py", name: "second", owner: null },
     ]);
   });
 });
@@ -373,5 +439,45 @@ describe("mentionsAny", () => {
     expect(mentionsAny("app = create_app()", names)).toBe(true);
     expect(mentionsAny("restate(estates)", names)).toBe(false);
     expect(mentionsAny("", names)).toBe(false);
+  });
+
+  it("finds no use through a receiver that names another class", () => {
+    const store: FileChange = {
+      ...file("src/main/java/shop/Store.java", [
+        hunk("src/main/java/shop/Store.java", "@@ -2,1 +2,1 @@", [
+          "-  int create() { return 1; }",
+          "+  int create() { return 2; }",
+        ]),
+      ]),
+      language: "java",
+    };
+    const definitions = {
+      head: [
+        { name: "Store", kind: "class" as const, startLine: 1, endLine: 3 },
+        { name: "create", kind: "method" as const, startLine: 2, endLine: 2 },
+      ],
+      base: [
+        { name: "Store", kind: "class" as const, startLine: 1, endLine: 3 },
+        { name: "create", kind: "method" as const, startLine: 2, endLine: 2 },
+      ],
+    };
+    const changed = changedDefinitions([store], new Map([[store.path, definitions]]));
+    const caller: UnchangedFile = {
+      path: "src/main/java/shop/Node.java",
+      language: "java",
+      content: ["NodeClass.create(Node.class);", "Store.create();", "store.create();"].join("\n"),
+      symbols: {
+        definitions: [],
+        references: [
+          { name: "create", line: 1, kind: "member", receiver: "NodeClass" },
+          { name: "create", line: 2, kind: "member", receiver: "Store" },
+          { name: "create", line: 3, kind: "member", receiver: "store" },
+        ],
+        imports: [{ module: "jdk.graal.compiler.graph.NodeClass", names: null }],
+      },
+    };
+    expect(
+      findUnchangedCallers([store], changed, [caller], new Set())[0]?.uses.map((use) => use.line),
+    ).toEqual([2, 3]);
   });
 });

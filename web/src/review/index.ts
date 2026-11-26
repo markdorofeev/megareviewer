@@ -19,7 +19,6 @@ export {
   type HunkItem,
   type LineComment,
   type LinePlace,
-  LineRow,
   PINNED,
   type PointLine,
 } from "./diff/hunk-card.tsx";
@@ -37,6 +36,7 @@ export {
   MechanicalHunk,
 } from "./diff/mechanical-group.tsx";
 export type { ViewLine } from "./diff/rows.ts";
+export { SelectionComment } from "./diff/selection-comment.tsx";
 export {
   createShikiHighlighter,
   type Highlighter,

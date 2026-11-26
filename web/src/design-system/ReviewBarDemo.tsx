@@ -27,21 +27,22 @@ import { Button } from "../ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip.tsx";
 import { DESIGN_RUN, POINTS, PULL_REQUEST, THREADS, useDemoChoice } from "./fixtures.ts";
 
-/** The point card's points and a second finding, so a chip has more than one to walk. */
+/** The point card's points and a second finding, so the stepper has more than one to walk. */
 const MORE_POINTS: readonly Point[] = [
-  ...POINTS,
+  ...POINTS.slice(0, 1),
   {
     id: PointId.parse("f2"),
-    kind: "finding",
     title: "Gives up after the fifth attempt without saying why",
     explanation: "",
     path: "src/http/retry.ts",
     lines: null,
     hunkIds: [],
+    type: "contract",
     severity: "minor",
     suggestion: null,
     mismatch: null,
   },
+  ...POINTS.slice(1),
 ];
 
 /** The PR's threads in the page's order: two open, one resolved, across two files. */
@@ -160,9 +161,9 @@ const BarDemo = ({
               {!walkingThreads ? (
                 <PointStepper
                   points={points}
+                  type={narrowed}
                   current={current}
                   stateOf={stateOf}
-                  kind={narrowed}
                   onGo={setCurrent}
                   onOpenList={() => {}}
                 />
@@ -295,21 +296,21 @@ export const ReviewBarStates = (): ReactNode => (
       hairline="running"
     />
     <BarDemo label="Before the first step: the count" />
-    <BarDemo label="Mid-list" start={PointId.parse("r:h_0123456789abcdef")} />
+    <BarDemo label="Mid-list" start={PointId.parse("f2")} />
     <BarDemo
-      label="Narrowed to findings by their chip"
-      narrowedAt="finding"
+      label="A type's chip pressed, narrowing the stepper to it"
+      narrowedAt="contract"
       start={PointId.parse("f2")}
     />
-    <BarDemo label="On a dismissed point" start={PointId.parse("d1")} dismissed={["d1"]} />
+    <BarDemo label="On a dismissed point" start={PointId.parse("f2")} dismissed={["f2"]} />
     <BarDemo label="One point" points={POINTS.slice(0, 1)} start={PointId.parse("f1")} />
     <BarDemo
       label="What's missing, and why"
       run={{
         ...RAN,
-        stages: { ...RAN.stages, risk: "failed", decisions: "skipped" },
+        stages: { ...RAN.stages, findings: "failed" },
         modelError: {
-          stage: "risk",
+          stage: "findings",
           code: "model-error",
           message: "Your Claude plan's usage limit is reached. It resets at 18:00.",
         },

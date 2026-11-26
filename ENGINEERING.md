@@ -21,24 +21,25 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Term | Meaning |
 |---|---|
 | Pull request | A host-agnostic PR: title, description, branch, commits, diff, head SHA |
-| Hunk | One contiguous change, identified by a stable hunk ID. Risk, proofs and decisions are per hunk |
+| Hunk | One contiguous change, identified by a stable hunk ID. Risk classes and proofs are per hunk |
 | Part | The lines of a hunk that change one definition, identified by a part ID. A hunk that isn't split is one part. The flows and hints are per part |
-| Risk class | *mechanical*, *logic* or *contract*. Contract is internal: the page shows only the model's, as a risk |
+| Risk class | *mechanical*, *logic* or *contract*, from a mechanical proof or a path rule. Internal: it orders the flows and is never shown |
 | Mechanical proof | Deterministic evidence that a hunk is mechanical: generated, whitespace, rename, move or formatting |
 | Intent | Stated intent (description, tickets), inferred intent (code: what it does, its shape across the system, what to watch), and the mismatches between them |
-| Decision | A choice the code makes, resting on one or more hunks |
-| Finding | Something that looks wrong, on the lines of a hunk that show it |
-| Point | What the model asks the reviewer to look at: a finding, a risk it raised, or a decision, with the hunk and lines it rests on |
+| Finding | Something that looks wrong, on the lines of a hunk that show it, with a type and a severity |
+| Finding type | What a finding is about: *logic*, the code does the wrong thing; *contract*, the change breaks or exposes something outside the PR; *architecture*, it's built in the wrong place or way for the code the PR shows |
+| Point | What the model asks the reviewer to look at: a finding, or an intent mismatch no finding names, with the hunk and lines it rests on |
 | Point state | What the reviewer did with a point: *open* (nothing, which means fine), *raised* or *dismissed* |
-| Checking test | A test in the PR whose assertions check the very behavior a risk names, by its name, lines and what it asserts. The model names it, the server checks it, and it's a mark on the risk, never a reason to show it less |
 | Verdict | What the published review says: approve, request changes or comment. The reviewer picks it |
 | Flow | An entry point a user or caller reaches and the changed code it runs, callers first, found from the call graph by the code; or a supporting flow of changes no flow runs, by kind. The code's flows order and label the overview: its order, its entry points and the Through line |
-| Flow path | Where a change is reached and the changed files it runs from there, in call order: a flow's entry points, or a file outside the PR that uses a changed definition, with code several flows run on each. What the overview's preview forms draw |
-| Stop | A changed file on a flow path, *new* when the PR adds it and *changed* otherwise. Tests, docs, generated and mechanical files are never stops |
+| Definition call | A call from one changed definition into another, within a part too. What a flow path follows |
+| Flow path | Where a change is reached and the changed files it runs from there, in call order: a flow's entry points, or a file's definitions no changed code calls, with code several paths run on each. What the overview's preview forms draw |
+| Stop | A changed file on a flow path, under one that calls it there unless the path starts in it; *new* when the PR adds it and *changed* otherwise. Tests, docs, generated and mechanical files are never stops |
 | Tour | The page's tour of a PR: a few steps in call order, which the model writes and the Understand layout shows |
 | Step | A place on the page's tour: one sentence and the lines of one or two hunks that decide it, in call order. The model writes the steps and the server checks them |
 | Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed: the one megareviewer was pointed at, one it read before, or one found by searching the home folder |
 | Copy | megareviewer's own bare repository of a PR's repository, holding only the commits it downloaded. Read as a checkout |
+| Receiver | What a member is written after, `NodeClass` in `NodeClass.create()`: it decides which class's member a call can reach |
 | Unchanged caller | Code outside the PR that calls a definition the PR changes, or names it as a type. Read from a checkout |
 | Call site | A use, at a line and column of a part, of a definition the PR changes: where the page shows the code a call runs |
 | Model provider | What runs the model passes and decides who pays: Claude Code, the Anthropic API, Codex, opencode |
@@ -51,7 +52,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Reviewer | Someone asked to review a PR or who has, with the verdict of their latest review on the host, or none yet |
 | Review status | What a PR's reviews add up to on its host: *approved*, *changes requested*, or neither |
 | Check | One CI result on a commit: *passed*, *failed*, *running* or *skipped* |
-| Severity | How much Claude thinks a finding matters: *minor*, *major* or *blocking*. Comments carry none |
+| Severity | How much Claude thinks a finding matters: *minor*, *major* or *blocking*. It ranks the findings and colors their marks. Comments carry none |
 | Suggestion | The lines a comment proposes in place of the ones it's on |
 | Connection | A service megareviewer reads from, GitHub, Bitbucket, Claude or Jira, and whether it works |
 | Review activity | The reviews and comments the reviewer posted from megareviewer on this machine, by day |
@@ -64,14 +65,14 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Linked file | A harness file that a guideline file reaches, straight or through other files. On unless switched off, and used only when a root that's on reaches it through files that are |
 | Harness read | A file of the harness a pass opened or searched with its reader, or that a transport loaded by itself, with the lines it was given, or was refused. Kept on the pass's model call |
 | Guidance | What one model run was given beside the code: the enabled preferences and the guideline files, numbered, and kept on the analysis so a point can say which one shaped it, with the check configs and build files its guardrail call read |
-| Guardrail | A check that would catch a kind of problem before review, in any code: a named rule of a tool whose config megareviewer read, which the config doesn't turn on, or a kind of check and an engine the model suggests. A mark on a finding or a risk. megareviewer names it and never turns it on |
+| Guardrail | A check that would catch a kind of problem before review, in any code: a named rule of a tool whose config megareviewer read, which the config doesn't turn on, or a kind of check and an engine the model suggests. A mark on a finding. megareviewer names it and never turns it on |
 | Check config | A tool's configuration file at a repository's root, read at the PR's base commit to know which rules the repository has |
 
 ### Bounded contexts
 
 | Context | Kind | Contains |
 |---|---|---|
-| Review | Core | Analysis, hunks, risk, intent, decisions, tour, verdicts |
+| Review | Core | Analysis, hunks, risk classes, intent, findings, tour, verdicts |
 | Diff analysis | Supporting | Diff parsing, mechanical proofs, call-graph hints |
 | Integrations | Generic | Git hosts, Jira, Claude, storage |
 
@@ -130,10 +131,10 @@ Don't over-apply it. An interface exists only at an I/O boundary or when there's
 
 ### UI
 
-- **Tokens only.** Colors, type, radius, shadows and durations come from `web/src/styles/globals.css` through Tailwind's utilities (`bg-diff-add-bg`, `text-risk-contract`, `text-ui`). No hex, `rgb()`, palette colors such as `bg-zinc-100`, or inline colors. A color that isn't there is added to the tokens, with its pairs in `pnpm check:contrast`, not to a component.
+- **Tokens only.** Colors, type, radius, shadows and durations come from `web/src/styles/globals.css` through Tailwind's utilities (`bg-diff-add-bg`, `text-severity-major`, `text-ui`). No hex, `rgb()`, palette colors such as `bg-zinc-100`, or inline colors. A color that isn't there is added to the tokens, with its pairs in `pnpm check:contrast`, not to a component.
 - **Primitives from `web/src/ui`.** shadcn/ui on Base UI, owned here; a change from upstream is marked `// hunk:`. No other component library.
 - **Classes with `cn()`,** from `web/src/lib/utils.ts`, and `cva` for a component with more than two variants. Tailwind generates only the classes it finds whole, so a class chosen by a value is spelled out in a map.
-- **Never color alone.** A risk, verdict, status or changed line also has a glyph or a word.
+- **Never color alone.** A severity, verdict, status or changed line also has a glyph or a word.
 - **One keymap, and few keys.** Every shortcut is in `web/src/lib/keymap.ts`, and hints come from it through `KeyHint`. A new one is added only when a reviewer asks for it or the action is one they repeat on every PR; a button or a click is the way to do something, and a key per button is a list nobody learns.
 - **WCAG 2.2 AA** in light, dark and the color-blind diff: 4.5:1 text, 3:1 for what isn't text, a visible focus, 24 px targets.
 

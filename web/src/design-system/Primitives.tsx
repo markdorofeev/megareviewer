@@ -126,8 +126,8 @@ export const Primitives = () => (
           <TabsTrigger value="files">
             Files <TabsCount>21</TabsCount>
           </TabsTrigger>
-          <TabsTrigger value="decisions">
-            Decisions <TabsCount>7</TabsCount>
+          <TabsTrigger value="commits">
+            Commits <TabsCount>7</TabsCount>
           </TabsTrigger>
         </TabsList>
         <TabsContent value="files" className="pt-2 text-muted-foreground">
@@ -201,12 +201,11 @@ export const Primitives = () => (
         </Label>
       </RadioGroup>
       <Row label="select">
-        <Select defaultValue="contract" items={RISK_ITEMS}>
+        <Select defaultValue="logic" items={RISK_ITEMS}>
           <SelectTrigger className="w-40" aria-label="Risk">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="contract">Contract</SelectItem>
             <SelectItem value="logic">Logic</SelectItem>
             <SelectItem value="mechanical">Mechanical</SelectItem>
           </SelectContent>

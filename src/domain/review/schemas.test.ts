@@ -5,7 +5,6 @@ import {
   Analysis,
   AnalysisId,
   CommentKey,
-  DecisionId,
   GuidanceRef,
   HttpUrl,
   Intent,
@@ -29,10 +28,6 @@ describe("ID and primitive schemas", () => {
     [HunkId, "h_0123456789ABCDEF", false],
     [HunkId, "h_0123456789abcde", false],
     [HunkId, "d1", false],
-    [DecisionId, "d1", true],
-    [DecisionId, "d12", true],
-    [DecisionId, "d0", false],
-    [DecisionId, "s1", false],
     [AnalysisId, "a_0123456789abcdef", true],
     [AnalysisId, "a_0123", false],
     [CommentKey, "summary", true],
@@ -94,12 +89,11 @@ describe("Intent", () => {
 });
 
 describe("Analysis", () => {
-  it("reads one stored before guidance: none on the run, no mark on a finding or a risk", () => {
+  it("reads one stored before guidance: none on the run, no mark on a finding", () => {
     const { guidance: _, ...analysis } = smallFeatureAnalysis;
     const stored = {
       ...analysis,
       findings: analysis.findings.map(({ guidance: _, ...finding }) => finding),
-      risk: analysis.risk.map(({ guidance: _, ...risk }) => risk),
     };
 
     const parsed = Analysis.parse(JSON.parse(JSON.stringify(stored)));
@@ -107,6 +101,5 @@ describe("Analysis", () => {
     expect(parsed).toEqual(smallFeatureAnalysis);
     expect(parsed.guidance).toBeNull();
     expect(parsed.findings.map((finding) => finding.guidance)).toEqual([null]);
-    expect(parsed.risk.every((risk) => risk.guidance === null)).toBe(true);
   });
 });

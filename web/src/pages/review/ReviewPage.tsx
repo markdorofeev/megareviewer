@@ -33,6 +33,7 @@ import { navigate, reviewPath } from "../../app/router.ts";
 import { holdInView } from "../../lib/held-scroll.ts";
 import { type ShortcutHandlers, type ShortcutId, useShortcuts } from "../../lib/keymap.ts";
 import { usePageDisplay } from "../../lib/page-display.tsx";
+import { type PointTone, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import {
   CallPeek,
@@ -45,11 +46,11 @@ import {
   KeyHint,
   type LineComment,
   type LinePlace,
-  LineRow,
   languageOf,
   PINNED,
   type PointLine,
   ReviewThreadView,
+  SelectionComment,
   ShortcutsDialog,
   TreeSkeleton,
   threadPlace,
@@ -63,7 +64,7 @@ import { scopeOptions, scopePath } from "../preferences/rule.tsx";
 import { failureReason } from "../preferences/view.ts";
 import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
-import { callMarks, checkingTestPayload } from "./calls.tsx";
+import { callMarks } from "./calls.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { FlowBowTie } from "./FlowBowTie.tsx";
 import { FlowLanes } from "./FlowLanes.tsx";
@@ -84,6 +85,7 @@ import {
   mapFiles,
   mechanicalCount,
   OVERVIEW_FORMS,
+  openedOn,
   parseOverviewForm,
   partIndex,
   pointPlaces,
@@ -93,14 +95,11 @@ import { useModelChoice } from "./model-choice.ts";
 import { Overview } from "./Overview.tsx";
 import { fileOverview, type OverviewNode } from "./overview.ts";
 import {
-  DecisionChip,
-  DecisionNote,
   FindingCard,
   type PointActions,
   PointFold,
   PointMention,
   pointAnchor,
-  RiskNote,
 } from "./PointCard.tsx";
 import { PointList } from "./PointList.tsx";
 import { PointStepper } from "./PointStepper.tsx";
@@ -403,14 +402,9 @@ const Review = ({
   const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
   const mechanical = mechanicalCount(trailing);
-  // Decisions are behind a switch in the Display menu, off until the reviewer turns them on.
-  const [decisionsOn, setDecisionsOn] = useStoredState("decisions", false, parseBoolean);
   // On until the reviewer turns it off: off, a run asks for no tour and the layout is the overview.
   const [tourOn, setTourOn] = useStoredState("tour", true, parseBoolean);
-  const points = useMemo(
-    () => pointsOf(analysis).filter((point) => decisionsOn || point.kind !== "decision"),
-    [analysis, decisionsOn],
-  );
+  const points = useMemo(() => pointsOf(analysis), [analysis]);
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
   const pointStates = usePoints(analysisId, view.pointReviews);
   // A point a preference says not to flag is folded where its card would be until the reviewer
@@ -440,47 +434,27 @@ const Review = ({
   const family = modelFamily(live.modelOption ?? modelChoice.chosen);
   const landing = useLanding(modelRunning, pointIds, family);
   const places = useMemo(() => pointPlaces(points, order, index), [points, order, index]);
-  // Where each point goes on its part, by its kind: a finding's card and a risk's note under the
-  // last of its lines the part shows, findings first, and a decision's chip at the end of it. A
-  // point whose lines the part doesn't show goes under its header.
+  // Where each point goes on its part: under the last of its lines the part shows. A point whose
+  // lines the part doesn't show goes under its header.
   const cardPlaces = useMemo(() => {
     const underLine = new Map<PartId, Map<string, Point[]>>();
-    const atLineEnd = new Map<PartId, Map<string, Point[]>>();
     const underHeader = new Map<PartId, Point[]>();
     const rowsAbove = new Map<PointId, number>();
-    const add = (
-      map: Map<PartId, Map<string, Point[]>>,
-      partId: PartId,
-      key: string,
-      point: Point,
-    ) => {
-      const lines = map.get(partId) ?? new Map<string, Point[]>();
-      lines.set(key, [...(lines.get(key) ?? []), point]);
-      map.set(partId, lines);
-    };
     for (const [partId, placed] of places.cards) {
       const part = index.parts.get(partId);
       for (const point of placed) {
         const last = part === undefined ? null : lastLineShown(point, part.hunk);
         if (last === null) {
           underHeader.set(partId, [...(underHeader.get(partId) ?? []), point]);
-        } else if (point.kind === "decision") {
-          add(atLineEnd, partId, last.key, point);
         } else {
-          add(underLine, partId, last.key, point);
+          const lines = underLine.get(partId) ?? new Map<string, Point[]>();
+          lines.set(last.key, [...(lines.get(last.key) ?? []), point]);
+          underLine.set(partId, lines);
           rowsAbove.set(point.id, last.rows);
         }
       }
     }
-    for (const lines of underLine.values()) {
-      for (const [key, here] of lines) {
-        lines.set(key, [
-          ...here.filter((point) => point.kind === "finding"),
-          ...here.filter((point) => point.kind !== "finding"),
-        ]);
-      }
-    }
-    return { underLine, atLineEnd, underHeader, rowsAbove };
+    return { underLine, underHeader, rowsAbove };
   }, [places, index]);
   // Points that share a fold land with its first: the fold is what's measured and unfolds.
   const foldOf = useMemo(() => {
@@ -505,17 +479,14 @@ const Review = ({
     (id: PointId): number | undefined => inView.get(foldOf.get(id) ?? id),
     [inView, foldOf],
   );
-  // Each file's points by kind, for the tree's marks.
-  const pointsByFile = useMemo(() => {
-    const byPath = new Map<string, Partial<Record<Point["kind"], number>>>();
+  // Each file's findings, for the tree's marks.
+  const findingsByFile = useMemo(() => {
+    const byPath = new Map<string, number>();
     for (const [partId, placed] of places.cards) {
       const path = index.parts.get(partId)?.file.path;
       if (path === undefined) continue;
-      const counted = placed.filter((point) => !folded.has(point.id));
-      if (counted.length === 0) continue;
-      const counts = byPath.get(path) ?? {};
-      for (const point of counted) counts[point.kind] = (counts[point.kind] ?? 0) + 1;
-      byPath.set(path, counts);
+      const counted = placed.filter((point) => !folded.has(point.id)).length;
+      if (counted > 0) byPath.set(path, (byPath.get(path) ?? 0) + counted);
     }
     return byPath;
   }, [places, index, folded]);
@@ -527,9 +498,9 @@ const Review = ({
         oldPath: file.oldPath,
         additions: file.additions,
         deletions: file.deletions,
-        ...(pointsByFile.has(file.path) ? { points: pointsByFile.get(file.path) } : {}),
+        findings: findingsByFile.get(file.path) ?? 0,
       })),
-    [files, pointsByFile],
+    [files, findingsByFile],
   );
   // Directories the reviewer opened in the overview, to see their files.
   const [expandedGroups, setExpandedGroups] = useState<readonly string[]>([]);
@@ -541,12 +512,10 @@ const Review = ({
   // a line saying why there's none. The tour is drawn from the analysis shown; whether it's being
   // written, from the live one.
   const tourOverview = useMemo(() => fileOverview(analysis), [analysis]);
-  const everyPoint = useMemo(() => pointsOf(analysis), [analysis]);
   const noTour = tourOn ? noTourOf(live) : null;
   const tour = useMemo(
-    () =>
-      tourOn ? tourOf(analysis, tourOverview, everyPoint, (point) => stateOf(point.id)) : null,
-    [tourOn, analysis, tourOverview, everyPoint, stateOf],
+    () => (tourOn ? tourOf(analysis, tourOverview, points, (point) => stateOf(point.id)) : null),
+    [tourOn, analysis, tourOverview, points, stateOf],
   );
 
   // The brief's line of directories, from the overview with none opened.
@@ -594,17 +563,6 @@ const Review = ({
     [analysis.callSites, index, callPeek],
   );
   const marksOf = useCallback((id: PartId) => calls.get(id), [calls]);
-  // A checking test's name opens its code in the same card.
-  const testPeeks = useMemo(
-    () =>
-      new Map(
-        points.flatMap((point) => {
-          const payload = checkingTestPayload(point, index);
-          return payload === null ? [] : [[point.id, { handle: callPeek, payload }] as const];
-        }),
-      ),
-    [points, index, callPeek],
-  );
   const [focusedHunkId, setFocusedHunkId] = useState<PartId | null>(null);
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
@@ -613,7 +571,7 @@ const Review = ({
   // node to focus there, or the tour, on its step.
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
   const [currentPoint, setCurrentPoint] = useState<PointId | null>(null);
-  // The kind a chip narrowed the stepper to, or the threads.
+  // What a pressed chip has the stepper walk.
   const [narrowed, setNarrowed] = useState<Narrowing | null>(null);
   // The thread last gone to, and what the stepper goes round of them.
   const [currentThread, setCurrentThread] = useState<ThreadId | null>(null);
@@ -622,23 +580,15 @@ const Review = ({
   const [showThreads, setShowThreads] = useState(false);
   // The stepper walks the threads when their chip is pressed, or when Claude has no points.
   const walkingThreads = narrowed === "thread" || walked.length === 0;
+  // A run again may find none of the type a chip narrowed the stepper to.
+  const walkedType =
+    narrowed !== "thread" && walked.some((point) => point.type === narrowed) ? narrowed : null;
   // One thing on the page is the current one: the point or the thread the stepper is on.
   const activePoint = walkingThreads ? null : currentPoint;
   const [showPoints, setShowPoints] = useState(false);
-  // Decisions are footnotes, opened one at a time.
-  const [openDecisions, setOpenDecisions] = useState<ReadonlySet<PointId>>(new Set());
-  const toggleDecision = useCallback(
-    (id: PointId) =>
-      setOpenDecisions((previous) => {
-        const next = new Set(previous);
-        if (!next.delete(id)) next.add(id);
-        return next;
-      }),
-    [],
-  );
   // When this page saw Claude's run start, for the time since.
   const [rerunning, setRerunning] = useState(false);
-  // The hunks of a decision or mismatch the reviewer went to.
+  // The hunks of a point the reviewer went to.
   const [highlight, setHighlight] = useState<ReadonlySet<PartId>>(new Set());
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -685,23 +635,17 @@ const Review = ({
       }),
     [setHunkComments],
   );
+  const latestComments = useRef(hunkComments);
+  latestComments.current = hunkComments;
   const openCommentOn = useCallback(
     (partId: PartId, place: LinePlace | null) => {
       raised.current = null;
       setOpenComment((previous) => {
-        // Extending a comment into a range takes its draft along to the range's last line.
-        if (place?.startLine !== undefined && previous !== null && previous.partId === partId) {
-          const hunkId = hunkIdOf(partId);
-          const from = previous.place;
-          setHunkComments((comments) =>
-            comments.map((comment) =>
-              comment.hunkId === hunkId && comment.side === from.side && comment.line === from.line
-                ? { ...comment, line: place.line, startLine: place.startLine }
-                : comment,
-            ),
-          );
-        }
-        return place === null ? null : { partId, place };
+        if (place === null) return null;
+        const hunkId = hunkIdOf(partId);
+        const open = previous?.partId === partId ? previous.place : null;
+        setHunkComments((comments) => openedOn(comments, hunkId, place, open).comments);
+        return { partId, place: openedOn(latestComments.current, hunkId, place, open).place };
       });
     },
     [setHunkComments],
@@ -821,12 +765,10 @@ const Review = ({
   const goToPoint = (id: PointId) => {
     const point = points.find((one) => one.id === id);
     const cardPart = places.cardPart.get(id);
-    if (point?.kind === "decision") {
-      setOpenDecisions((previous) => new Set([...previous, id]));
-    }
     // Going to a point a preference left out shows it.
     if (folded.has(id)) showLeftOut(id);
-    if (narrowed === "thread") setNarrowed(null);
+    // The stepper stays on what was gone to.
+    setNarrowed((narrowing) => (narrowing === point?.type ? narrowing : null));
     setHighlight(new Set((point?.hunkIds ?? []).flatMap(index.partsOf)));
     if (layout === "overview" && !understand) {
       if (cardPart !== undefined) showHunk(cardPart);
@@ -913,19 +855,6 @@ const Review = ({
     scrollTo(TOUR_LANDING);
     setLandingHeld((previous) => previous + 1);
   };
-  /** Opens the map on a part, from the tour. */
-  const openPartFromTour = (id: PartId) => {
-    toCode();
-    setFocusedHunkId(id);
-    setHighlight(new Set([id]));
-    scrollTo(order.includes(id) ? hunkAnchor(id) : MECHANICAL_ANCHOR);
-  };
-  /** A chip's card in the map; a decision's lines while decisions are off, which have no card. */
-  const openTourPoint = (point: Point) => {
-    if (point.kind !== "decision" || decisionsOn) return goToPoint(point.id);
-    const part = places.cardPart.get(point.id) ?? point.hunkIds.flatMap(index.partsOf)[0];
-    if (part !== undefined) openPartFromTour(part);
-  };
   const openFileFromTour = (path: string) => {
     toCode(understand ? undefined : { kind: "overview", node: path });
     scrollTo(
@@ -943,10 +872,7 @@ const Review = ({
     toCode();
     scrollTo(threadAnchor(id));
   };
-  /**
-   * Narrows the stepper to a kind, or to the threads, going to the first of them unless the
-   * reviewer is on one.
-   */
+  /** Has the stepper walk a type's findings or the threads, going to the first unless on one. */
   const narrow = (kind: Narrowing | null) => {
     setNarrowed(kind);
     if (kind === "thread") {
@@ -984,18 +910,14 @@ const Review = ({
     setLayout("overview", { from: "code", at });
     if (path !== null) focusInOverview(path);
   };
-  /** Opens a directory's or a file's first file in the map; outside, the code the node uses. */
+  /** Opens a directory's or a file's first file in the map. */
   const openNode = (node: OverviewNode) => {
-    const [path] = node.kind === "outside" ? [] : node.paths;
-    const first =
-      path === undefined
-        ? node.partIds[0]
-        : files.find((group) => group.file.path === path)?.partIds[0];
-    if (first === undefined) return;
+    const [path] = node.paths;
+    const first = files.find((group) => group.file.path === path)?.partIds[0];
+    if (path === undefined || first === undefined) return;
     toCode({ kind: "overview", node: node.key });
     setFocusedHunkId(first);
-    if (path === undefined) showHunk(first, "map");
-    else scrollTo(fileAnchor(path));
+    scrollTo(fileAnchor(path));
   };
   /** Opens a part from a flow path in the map; Esc comes back to its file's stop. */
   const openFlowPart = (id: PartId, path: string | null) => {
@@ -1030,14 +952,11 @@ const Review = ({
     const node = [...overview.rows.flat(), ...overview.strip].find(
       (one) => one.key === overviewAt.current,
     );
-    if (node !== undefined && node.kind !== "outside") return openNode(node);
+    if (node !== undefined) return openNode(node);
     toCode();
   };
   usePageDisplay({
-    toggles: [
-      { label: "Decisions", checked: decisionsOn, onChange: (on) => setDecisionsOn(() => on) },
-      { label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) },
-    ],
+    toggles: [{ label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) }],
     more: {
       label: "Overview (preview)",
       options: OVERVIEW_FORMS,
@@ -1266,7 +1185,7 @@ const Review = ({
     ruleScopes,
     onRule: stable.saveRule,
   });
-  /** A finding's card, with the lines its suggestion replaces and whether its draft is written. */
+  /** A point's card, with the lines its suggestion replaces and whether its draft is written. */
   const findingCard = (point: Point, partId: PartId | null) => {
     const found = partId === null ? undefined : index.parts.get(partId);
     const lines = point.lines;
@@ -1293,50 +1212,22 @@ const Review = ({
       />
     );
   };
-  const riskNote = (point: Point) => (
-    <RiskNote
-      key={point.id}
-      point={point}
-      {...actionsOf(point)}
-      family={family}
-      linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
-      test={testPeeks.get(point.id) ?? null}
-    />
-  );
-  const decisionNote = (point: Point) => (
-    <DecisionNote key={point.id} point={point} {...actionsOf(point)} />
-  );
-  /** A point by its kind, where no line of its part holds it. */
-  const card = (point: Point, partId: PartId | null = null) =>
-    point.kind === "finding"
-      ? findingCard(point, partId)
-      : point.kind === "risk"
-        ? riskNote(point)
-        : decisionNote(point);
-  // The lines each part's points rest on, so they take the kind's mark. Where points overlap,
-  // the one that matters most wins: a finding's line reads as a finding. A point landing in view
-  // gives its lines their place in the timeline.
+  // The lines each part's points rest on, so they take the mark; where points overlap, the first's.
+  // A point landing in view gives its lines their place in the timeline.
   const pointLines = useMemo(() => {
-    const rank: Readonly<Record<PointLine["kind"], number>> = {
-      finding: 0,
-      risk: 1,
-      decision: 2,
-      step: 3,
-    };
     const byPart = new Map<PartId, Map<string, PointLine>>();
     for (const [partId, placed] of places.cards) {
       const lines = new Map<string, PointLine>();
       for (const point of placed) {
-        // A decision is a footnote, and marks no line; nor does a point folded as left out.
-        if (point.lines === null || point.kind === "decision" || folded.has(point.id)) continue;
+        // A point folded as left out marks no line.
+        if (point.lines === null || folded.has(point.id)) continue;
         const { side, startLine, line: last } = point.lines;
         const at = landingAt(point.id);
         for (let line = startLine; line <= last; line += 1) {
           const key = `${side}:${line}`;
-          const held = lines.get(key);
-          if (held !== undefined && rank[point.kind] >= rank[held.kind]) continue;
+          if (lines.has(key)) continue;
           lines.set(key, {
-            kind: point.kind,
+            kind: pointTone(point),
             ...(at === undefined
               ? {}
               : { landing: { at, line: line - startLine, lines: last - startLine + 1 } }),
@@ -1423,63 +1314,37 @@ const Review = ({
       [...cards, ...mentions],
       { bodyClassName: "flex flex-col gap-2 border-b bg-surface-subtle p-3" },
       <>
-        {cards.map((point) => card(point, id))}
+        {cards.map((point) => findingCard(point, id))}
         {mentions.map((point) => (
           <PointMention key={point.id} point={point} onGo={stable.goToPoint} />
         ))}
       </>,
     );
   };
-  // Findings and risks under the last of their lines, which they grow out from when they land, and the
-  // footnotes of the decisions at the end of the line, when opened.
+  // Points under the last of their lines, which they grow out from when they land.
   const pointsAt = (id: PartId, place: LinePlace): ReactNode => {
     const key = placeKey(place);
     const here = cardPlaces.underLine.get(id)?.get(key) ?? NO_POINTS;
-    const notes = (cardPlaces.atLineEnd.get(id)?.get(key) ?? NO_POINTS).filter((point) =>
-      openDecisions.has(point.id),
-    );
-    return (
-      <>
-        {fold(
-          here,
-          {
-            row: true,
-            className: PINNED,
-            bodyClassName: "flex max-w-3xl flex-col gap-2 py-2 pr-3 pl-29 font-sans",
-          },
-          here.map((point) => card(point, id)),
-        )}
-        {notes.length > 0 && (
-          <LineRow inset>
-            <div className="flex flex-col gap-1">{notes.map(decisionNote)}</div>
-          </LineRow>
-        )}
-      </>
+    return fold(
+      here,
+      {
+        row: true,
+        className: PINNED,
+        bodyClassName: "flex max-w-3xl flex-col gap-2 py-2 pr-3 pl-29 font-sans",
+      },
+      here.map((point) => findingCard(point, id)),
     );
   };
-  // A decision's chip at the end of its line.
-  const pointsAtEnd = (id: PartId, place: LinePlace): ReactNode => {
-    const here = cardPlaces.atLineEnd.get(id)?.get(placeKey(place));
-    if (here === undefined) return null;
-    return here.map((point) => (
-      <DecisionChip
-        key={point.id}
-        point={point}
-        state={pointStates.stateOf(point.id)}
-        open={openDecisions.has(point.id)}
-        current={activePoint === point.id}
-        onToggle={toggleDecision}
-      />
-    ));
-  };
-  const flaggedOf = useCallback(
-    (id: PartId): ReadonlySet<string> | undefined => {
+  const flagsOf = useCallback(
+    (id: PartId): ReadonlyMap<string, PointTone> | undefined => {
       const lines = cardPlaces.underLine.get(id);
       if (lines === undefined) return undefined;
-      const flagged = [...lines].filter(([, here]) =>
-        here.some((p) => p.kind === "finding" && !folded.has(p.id)),
+      return new Map(
+        [...lines].flatMap(([key, here]) => {
+          const first = here.find((point) => !folded.has(point.id));
+          return first === undefined ? [] : [[key, pointTone(first)] as const];
+        }),
       );
-      return new Set(flagged.map(([key]) => key));
     },
     [cardPlaces, folded],
   );
@@ -1519,7 +1384,7 @@ const Review = ({
       epochOf(analysis),
       readOnly,
       highlight.has(id),
-      openComment?.partId === id ? `${openComment.place.side}${openComment.place.line}` : "",
+      openComment?.partId === id ? JSON.stringify(openComment.place) : "",
       ...commentsOf(id).map((comment) => JSON.stringify(comment)),
     ];
     // A part with threads draws again when they change, or another becomes the current one.
@@ -1529,7 +1394,6 @@ const Review = ({
     for (const point of cards) {
       parts.push(point.id, pointStates.stateOf(point.id), pointStates.isSaving(point.id));
       parts.push(activePoint === point.id, folded.has(point.id));
-      if (point.kind === "decision") parts.push(openDecisions.has(point.id));
     }
     for (const point of mentions) parts.push(point.id);
     for (const point of [...cards, ...mentions]) {
@@ -1600,8 +1464,7 @@ const Review = ({
     marksOf,
     pointsOn,
     pointsAt,
-    pointsAtEnd,
-    flaggedOf,
+    flagsOf,
     pointLinesOf,
     threadsAt,
     earlierThreads,
@@ -1617,7 +1480,7 @@ const Review = ({
           {fold(
             places.unplaced,
             { bodyClassName: "flex flex-col gap-2" },
-            places.unplaced.map((point) => card(point)),
+            places.unplaced.map((point) => findingCard(point, null)),
           )}
         </section>
       )}
@@ -1700,7 +1563,7 @@ const Review = ({
             points={walked}
             leftOut={folded.size}
             threads={threadChip(orderedThreads, threadScope, resolvedHere)}
-            narrowed={narrowed}
+            narrowed={narrowed === "thread" ? narrowed : walkedType}
             onNarrow={narrow}
             onRun={async () => {
               const optionId = modelChoice.chosen?.id;
@@ -1715,9 +1578,9 @@ const Review = ({
             {!walkingThreads ? (
               <PointStepper
                 points={walked}
+                type={walkedType}
                 current={currentPoint}
                 stateOf={pointStates.stateOf}
-                kind={narrowed}
                 onGo={goToPoint}
                 onOpenList={() => setShowPoints(true)}
               />
@@ -1968,7 +1831,7 @@ const Review = ({
           tour={tour}
           stateOf={(point) => stateOf(point.id)}
           renderExcerpt={excerptCard}
-          onOpenPoint={openTourPoint}
+          onOpenPoint={(point) => goToPoint(point.id)}
           onOpenFile={openFileFromTour}
           onOpenInCode={openInCode}
           onCurrentStep={(step) => {
@@ -2024,6 +1887,8 @@ const Review = ({
           )}
         </div>
       )}
+
+      {complete && <SelectionComment onComment={openCommentOn} />}
 
       <footer className="flex items-center justify-end gap-3">
         <ModelCalls
@@ -2094,7 +1959,6 @@ const Review = ({
         <PointList
           points={walked}
           family={family}
-          kind={narrowed === "thread" ? null : narrowed}
           stateOf={pointStates.stateOf}
           onGo={(id) => {
             setShowPoints(false);

@@ -11,8 +11,6 @@ const STAGE_NAMES: Readonly<Record<StageName, string>> = {
   prep: "Prepare",
   intent: "Intent",
   findings: "Findings",
-  risk: "Risk",
-  decisions: "Decisions",
   steps: "Tour",
 };
 

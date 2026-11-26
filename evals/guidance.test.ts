@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTreeSitterCodeParser } from "../src/adapters/treesitter/index.ts";
-import type { CodeParser, FindingDraft, ModelRisk } from "../src/application/ports/index.ts";
+import type { CodeParser, FindingDraft } from "../src/application/ports/index.ts";
 import { FakeAnalysisModel } from "../src/application/testing/index.ts";
 import { HunkId } from "../src/domain/diff/index.ts";
 import { type Analysis, type GuidanceMark, HARNESS_ROOT } from "../src/domain/review/index.ts";
@@ -21,14 +21,14 @@ beforeAll(async () => {
 /** The mark the labels ask for on each labeled finding, by its index. */
 const askedMarks = ({ labels }: EvalCase): Map<number, GuidanceMark> =>
   new Map(
-    (labels.guidance ?? []).flatMap(({ ref, effect, findings = [] }) =>
+    (labels.guidance ?? []).flatMap(({ ref, effect, findings }) =>
       findings.map((index) => [index, { ref, effect }] as const),
     ),
   );
 
 /**
  * The case run through the pipeline with a model that answers what the labels expect: each labeled
- * finding on its first line, with the given marks, and a risk on each hunk labeled contract.
+ * finding on its first line, with the given marks.
  */
 const answered = async (
   evalCase: EvalCase,
@@ -44,6 +44,7 @@ const answered = async (
         title: finding.description.slice(0, 80),
         explanation: finding.description,
         lines: { hunkId: HunkId.parse(place.hunkId), side: place.side, startLine: line, line },
+        type: "logic",
         severity: "major",
         suggestion: null,
         mismatch: null,
@@ -51,16 +52,6 @@ const answered = async (
       },
     ];
   });
-  const risk = Object.entries(labels.risk).map(
-    ([hunkId, label]): ModelRisk => ({
-      hunkId: HunkId.parse(hunkId),
-      riskClass: label === "contract" ? "contract" : "logic",
-      reason: "As labeled",
-      lines: null,
-      checkedBy: null,
-      guidance: null,
-    }),
-  );
   const model = new FakeAnalysisModel({ readsHarness: true });
   // A mark on a file left to be read stands only on a read of it.
   const reads = (evalCase.guidance?.linked ?? []).map(({ path }) => ({
@@ -71,7 +62,6 @@ const answered = async (
   }));
   model.scriptReads("findings", reads);
   model.script("findings", ok(findings));
-  model.script("risk", ok(risk));
   const result = await analyzeCase(evalCase.fixture, {
     model,
     parser,
@@ -87,8 +77,6 @@ const answered = async (
 const verdictFor = ({ labels }: EvalCase, analysis: Analysis): JudgeVerdict => ({
   findings: labels.findings.map((_, expected) => ({ expected, produced: expected })),
   findingRatings: analysis.findings.map((_, produced) => ({ produced, rating: "valid" })),
-  decisions: labels.decisions.map((_, expected) => ({ expected, produced: null })),
-  ratings: analysis.decisions.map((_, produced) => ({ produced, rating: "meaningful" })),
   mismatches: [],
   injectionReported: false,
 });
@@ -111,7 +99,6 @@ describe.each(guided.map((evalCase) => [evalCase.name, evalCase] as const))(
       expect(score.guidanceWrong.hit).toBe(0);
       expect(score.guidanceWrong.total).toBeGreaterThan(0);
       expect(rate(score.findingRecall)).toBe(1);
-      expect(rate(score.contractRecall)).toBe(1);
     });
 
     it("misses them when the answer carries no mark", async () => {
@@ -131,7 +118,7 @@ it("fails preference-dont-flag when the Don't flag preference swallows the bug",
   const swallowed = new Map(askedMarks(evalCase)).set(0, { ref: "p2", effect: "left-out" });
   const analysis = await answered(evalCase, swallowed);
   const score = scoreCase(analysis, evalCase.labels, verdictFor(evalCase, analysis));
-  expect(score.leftOutRight).toEqual({ hit: 2, total: 3 });
+  expect(score.leftOutRight).toEqual({ hit: 1, total: 2 });
   expect(score.guidanceWrong).toEqual({ hit: 1, total: 2 });
   expect(score.findingRecall).toEqual({ hit: 0, total: 1 });
 });
@@ -142,21 +129,4 @@ it("counts a mark of the preference that matches nothing in preference-dont-flag
   const analysis = await answered(evalCase, stray);
   const score = scoreCase(analysis, evalCase.labels, verdictFor(evalCase, analysis));
   expect(score.guidanceWrong).toEqual({ hit: 1, total: 2 });
-});
-
-it("follows guideline-file's REVIEW.md from the migration's risk alone", async () => {
-  const evalCase = named("guideline-file");
-  const [label] = evalCase.labels.guidance ?? [];
-  const [migration] = label?.risks ?? [];
-  if (migration === undefined) throw new Error("guideline-file labels no risk for REVIEW.md");
-  const unmarked = await answered(evalCase, new Map());
-  const analysis: Analysis = {
-    ...unmarked,
-    risk: unmarked.risk.map((risk) =>
-      risk.hunkId === migration ? { ...risk, guidance: { ref: "g1", effect: "raised" } } : risk,
-    ),
-  };
-  const score = scoreCase(analysis, evalCase.labels, verdictFor(evalCase, analysis));
-  expect(score.guidanceFollowed).toEqual({ hit: 1, total: 1 });
-  expect(score.guidanceWrong).toEqual({ hit: 0, total: 1 });
 });

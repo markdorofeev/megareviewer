@@ -13,7 +13,7 @@ import {
   codexVersion,
 } from "./version.ts";
 
-/** The review's four passes, or with the tour every pass, the steps pass among them. */
+/** The review's two passes, or with the tour every pass, the steps pass among them. */
 const requests = (model = "gpt-6-luna", tour = false) =>
   (tour ? ModelPass.options : MODEL_STAGES).map((pass) =>
     codexRequest(
@@ -55,12 +55,10 @@ describe("codexRequest", () => {
     expect(efforts).toEqual([
       ["gpt-6-sol", "model_reasoning_effort=medium"],
       ["gpt-6-sol", "model_reasoning_effort=high"],
-      ["gpt-6-sol", "model_reasoning_effort=low"],
-      ["gpt-6-sol", "model_reasoning_effort=high"],
     ]);
   });
 
-  it("keeps the cached part byte-identical across the four passes of one input", () => {
+  it("keeps the cached part byte-identical across the passes of one input", () => {
     const all = requests();
     expect(new Set(all.map((request) => JSON.stringify(request.files))).size).toBe(1);
     expect(all[0]?.files[INSTRUCTIONS_FILE]).toContain("<pull_request_data>");
