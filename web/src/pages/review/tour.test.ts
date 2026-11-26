@@ -74,7 +74,6 @@ describe("tourOf", () => {
       ["src/routes/", [1]],
       ["src/services/", [2, 3, 4]],
     ]);
-    expect(tour.others.map((box) => box.label)).not.toContain("src/routes/");
     expect(tour.spans).toEqual([]);
   });
 
@@ -96,8 +95,6 @@ describe("tourOf", () => {
     ]);
     expect(new Set(tour.boxes.map((box) => box.key)).size).toBe(4);
     expect(tour.boxes.flatMap((box) => box.steps)).toEqual([1, 2, 3, 4, 5]);
-    // A directory on the tour twice is still on it once: never among the others.
-    expect(tour.others.map((box) => box.label)).not.toContain("src/services/");
   });
 
   it("groups the two boxes of a step that crosses into another process, apart from its neighbors", () => {

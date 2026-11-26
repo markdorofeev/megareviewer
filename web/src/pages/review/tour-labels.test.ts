@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxLabel, chipLabels, compactLabels } from "./tour-labels.ts";
+import { boxLabel, compactLabels } from "./tour-labels.ts";
 
 describe("boxLabel", () => {
   it("splits a directory into its parents and its own name", () => {
@@ -17,25 +17,6 @@ describe("boxLabel", () => {
       prefix: "compiler/src/…/phases/common/",
       name: "priorityinline",
     });
-  });
-});
-
-describe("chipLabels", () => {
-  it("keeps a path that fits, and cuts a longer one from its middle", () => {
-    expect(
-      chipLabels([
-        "substratevm/mx.substratevm/",
-        "substratevm/src/com.oracle.svm.hosted.test/src/com/oracle/svm/core/pgo/",
-      ]),
-    ).toEqual(["substratevm/mx.substratevm", "substratevm/src/…/svm/core/pgo"]);
-  });
-
-  it("keeps the whole of two paths the cut would make read alike", () => {
-    const alike = [
-      "substratevm/src/com.oracle.svm.hosted.test/src/com/oracle/svm/core/pgo/",
-      "substratevm/src/com.oracle.svm.test/src/com/oracle/svm/core/pgo/",
-    ];
-    expect(chipLabels(alike)).toEqual(alike.map((label) => label.slice(0, -1)));
   });
 });
 

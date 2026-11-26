@@ -82,8 +82,6 @@ export interface TourView {
   readonly boxes: readonly TourBox[];
   /** The two boxes of a step in two directories, by their keys. */
   readonly spans: readonly { readonly step: number; readonly keys: readonly [string, string] }[];
-  /** The other directories, each with the ledger group of its first file. */
-  readonly others: readonly (TourBox & { readonly group: LedgerGroupId | null })[];
   /** What the tour didn't show, a group each, empty ones left out. */
   readonly ledger: readonly LedgerGroup[];
   /** Claude's findings no step shows. */
@@ -227,7 +225,6 @@ export const tourOf = (
       boxes.push(boxOn(first, step.number));
     }
   }
-  const onTour = new Set(boxes.map((box) => box.directory));
 
   // The ledger: every changed line no step shows, by file, in groups.
   const stepFiles = new Set(steps.flatMap((step) => step.excerpts.map((excerpt) => excerpt.path)));
@@ -260,17 +257,6 @@ export const tourOf = (
     const files = ledgerFiles.filter((one) => one.group === id).map((one) => one.file);
     return files.length === 0 ? [] : [{ id, label: LEDGER_LABELS[id], files }];
   });
-  const groupOfPath = new Map(ledgerFiles.map((one) => [one.file.path, one.group]));
-
-  const others = [...overview.rows.flat(), ...overview.strip]
-    .filter((node) => node.kind === "group" && !onTour.has(node.key))
-    .map((node) => ({
-      key: node.key,
-      directory: node.key,
-      label: node.label,
-      steps: [],
-      group: node.paths.map((path) => groupOfPath.get(path)).find((id) => id !== undefined) ?? null,
-    }));
 
   const chipped = new Set(steps.flatMap((step) => step.points.map((point) => point.id)));
   const outside = points.filter(
@@ -286,7 +272,6 @@ export const tourOf = (
     steps,
     boxes,
     spans,
-    others,
     ledger,
     outside,
     depth: { read, findingsOutside: outside.filter(open).length },

@@ -6,8 +6,6 @@ import { shortenPath } from "../../review/tree/names.ts";
 
 /** What fits a box's line of parents, at the caption size in a box of the strip's widest. */
 const PARENT_CHARS = 30;
-/** What fits a chip of a directory off the tour. */
-const CHIP_CHARS = 36;
 /** What fits a box of the compact strip, beside its steps' numbers. */
 const COMPACT_CHARS = 28;
 
@@ -25,17 +23,6 @@ export const boxLabel = (label: string): { readonly prefix: string; readonly nam
   if (cut === -1) return { prefix: "", name: path || label };
   const parents = shortenPath(path.slice(0, cut), within(PARENT_CHARS - 1));
   return { prefix: `${parents}/`, name: path.slice(cut + 1) };
-};
-
-/**
- * The directories off the tour, each on one line. Two that the cut would make read alike keep
- * their whole paths: what differs between them is what was cut.
- */
-export const chipLabels = (labels: readonly string[]): string[] => {
-  const cut = labels.map((label) => shortenPath(bare(label), within(CHIP_CHARS)));
-  return cut.map((text, at) =>
-    cut.some((other, j) => j !== at && other === text) ? bare(labels[at] ?? text) : text,
-  );
 };
 
 /** `com.oracle.svm.hosted/pgo` without the dotted parts every such name on the strip starts with. */
