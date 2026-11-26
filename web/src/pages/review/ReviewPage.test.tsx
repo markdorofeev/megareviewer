@@ -903,7 +903,7 @@ describe("intent", () => {
       view: withIntent({
         stated: null,
         mismatches: [],
-        inferred: { summary: "Renames a variable.", shape: "", behaviorChanges: [], watch: [] },
+        inferred: { summary: "Renames a variable.", behaviorChanges: [] },
       }),
     });
     await loaded();

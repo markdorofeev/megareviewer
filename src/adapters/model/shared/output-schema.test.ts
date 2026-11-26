@@ -32,11 +32,11 @@ describe("the answer format", () => {
     expect(json).toContain('"enum":["unrequested","missing","contradicts"]');
   });
 
-  it("asks the intent for its whole brief: the summary, the shape and what to watch", () => {
+  it("asks the intent for its summary and behavior changes", () => {
     const [intent] = objects(schema).filter(
       (node) => isObject(node.properties) && "behaviorChanges" in node.properties,
     );
-    expect(intent?.required).toEqual(["summary", "shape", "behaviorChanges", "watch"]);
+    expect(intent?.required).toEqual(["summary", "behaviorChanges"]);
   });
 
   it("asks each finding for the guidance that shaped it, or null", () => {

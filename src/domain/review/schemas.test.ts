@@ -73,17 +73,20 @@ describe("PublicationReceipt", () => {
 });
 
 describe("Intent", () => {
-  it("reads an intent stored before the brief, with no shape and nothing to watch", () => {
+  it("reads an intent stored with a brief's shape and watch, without them", () => {
     const stored = {
       stated: null,
-      inferred: { summary: "Adds receipts.", behaviorChanges: ["GET /receipt"] },
+      inferred: {
+        summary: "Adds receipts.",
+        shape: "`GET /receipt` calls `render`.",
+        behaviorChanges: ["GET /receipt"],
+        watch: ["Receipts stay in memory"],
+      },
       mismatches: [],
     };
     expect(Intent.parse(stored).inferred).toEqual({
       summary: "Adds receipts.",
-      shape: "",
       behaviorChanges: ["GET /receipt"],
-      watch: [],
     });
   });
 });

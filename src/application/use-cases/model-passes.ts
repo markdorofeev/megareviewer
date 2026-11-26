@@ -228,9 +228,7 @@ const intentTexts: Rewrite<Intent> = ({ stated, inferred, mismatches }, text) =>
   stated: stated === null ? null : { ...stated, summary: text(stated.summary) },
   inferred: {
     summary: text(inferred.summary),
-    shape: text(inferred.shape),
     behaviorChanges: inferred.behaviorChanges.map(text),
-    watch: inferred.watch.map(text),
   },
   mismatches: mismatches.map((one) => ({ ...one, description: text(one.description) })),
 });

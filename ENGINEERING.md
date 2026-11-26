@@ -25,7 +25,7 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Part | The lines of a hunk that change one definition, identified by a part ID. A hunk that isn't split is one part. The flows and hints are per part |
 | Risk class | *mechanical*, *logic* or *contract*, from a mechanical proof or a path rule. Internal: it orders the flows and is never shown |
 | Mechanical proof | Deterministic evidence that a hunk is mechanical: generated, whitespace, rename, move or formatting |
-| Intent | Stated intent (description, tickets), inferred intent (code: what it does, its shape across the system, what to watch), and the mismatches between them |
+| Intent | Stated intent (description, tickets), inferred intent (code: what it does), and the mismatches between them |
 | Finding | Something that looks wrong, on the lines of a hunk that show it, with a type and a severity |
 | Finding type | What a finding is about: *logic*, the code does the wrong thing; *contract*, the change breaks or exposes something outside the PR; *architecture*, it's built in the wrong place or way for the code the PR shows |
 | Point | What the model asks the reviewer to look at: a finding, or an intent mismatch no finding names, with the hunk and lines it rests on |
