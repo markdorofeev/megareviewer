@@ -298,7 +298,8 @@ export const noDataFlowOf = (
   return hasModelRun(analysis) ? { kind: "not-asked" } : { kind: "no-review" };
 };
 
-export const noDataFlowText = (reason: NoDataFlow): string => {
+/** Why there's no flow, or null when nothing is worth saying: a review that found none. */
+export const noDataFlowText = (reason: NoDataFlow): string | null => {
   switch (reason.kind) {
     case "no-review":
       return "How data moves through this change is written by an AI review. Until one has run, this is the changed directories and the calls between them.";
@@ -307,7 +308,7 @@ export const noDataFlowText = (reason: NoDataFlow): string => {
     case "writing":
       return "How data moves through this change is being written.";
     case "none":
-      return "The AI review found no path that data moves along in this change, so this is its directories.";
+      return null;
     case "failed":
       return `The data flow couldn't be written: ${reason.message}`;
   }

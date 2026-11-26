@@ -235,8 +235,12 @@ describe("noDataFlowOf", () => {
     expect(noDataFlowText({ kind: "failed", message: "Overloaded" })).toBe(
       "The data flow couldn't be written: Overloaded",
     );
-    for (const kind of ["no-review", "not-asked", "writing", "none"] as const) {
-      expect(noDataFlowText({ kind })).not.toBe("");
+    for (const kind of ["no-review", "not-asked", "writing"] as const) {
+      expect(noDataFlowText({ kind })).toBeTruthy();
     }
+  });
+
+  it("says nothing when the review found no flow", () => {
+    expect(noDataFlowText({ kind: "none" })).toBeNull();
   });
 });

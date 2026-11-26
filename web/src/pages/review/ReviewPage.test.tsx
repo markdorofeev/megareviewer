@@ -1407,7 +1407,7 @@ const layoutIs = (layout: "map" | "overview" | "tour") =>
   document.querySelector("[data-slot=review-page]")?.getAttribute("data-layout") === layout;
 
 describe("overview", () => {
-  it("draws the changed directories from the entry down, with unlinked ones in the strip", async () => {
+  it("draws the changed directories from the entry down, and leaves out unlinked ones", async () => {
     renderReview();
     await loaded();
     await openOverview();
@@ -1415,8 +1415,7 @@ describe("overview", () => {
     expect(nodeOf("group:src/routes").getAttribute("aria-label")).toMatch(
       /^src\/routes\/, 1 file, /,
     );
-    const strip = within(overviewBox()).getByRole("region", { name: "Not linked" });
-    expect(within(strip).getByRole("button", { name: "./, 1 file, logic" })).toBeTruthy();
+    expect(overviewBox().querySelector('[data-key="group:"]')).toBeNull();
     // Proved-mechanical files aren't in it: the map lists them with their proofs.
     expect(overviewBox().querySelector('[data-key="pnpm-lock.yaml"]')).toBeNull();
   });
@@ -1441,15 +1440,9 @@ describe("overview", () => {
     await userEvent.keyboard("{ArrowDown}");
     expect(focusedKey()).toBe("group:src/services");
     await userEvent.keyboard("{ArrowDown}");
-    expect(focusedKey()).toBe("group:");
-    await userEvent.keyboard("{ArrowUp}{ArrowUp}");
+    expect(focusedKey()).toBe("group:src/services");
+    await userEvent.keyboard("{ArrowUp}");
     expect(focusedKey()).toBe("group:src/routes");
-    // A focused directory names its files, flows and what it reaches, for the keyboard.
-    expect(
-      screen.getByText(
-        "src/routes/: orders.ts · read in The receipt endpoint · reaches src/services/ (cachedReceipt).",
-      ),
-    ).toBeTruthy();
     await userEvent.keyboard("{Enter}");
     expect(layoutIs("map")).toBe(true);
     expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
@@ -1465,21 +1458,18 @@ describe("overview", () => {
       "src/routes/ imports, calls src/services/: cachedReceipt",
     );
   });
-  it("names what an edge carries on hover, and lights the hovered file's edges", async () => {
+  it("lights the hovered directory's edges, and says nothing under the diagram", async () => {
     renderReview();
     await loaded();
     await openOverview();
     const edge = overviewBox().querySelector("[data-slot=overview-edge]");
     if (edge === null) throw new Error("no edge");
-    await userEvent.hover(edge);
-    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toBe(
-      "src/routes/ imports, calls src/services/: cachedReceipt",
-    );
-    await userEvent.unhover(edge);
     await userEvent.hover(nodeOf("group:src/services"));
     expect(edge.hasAttribute("data-lit")).toBe(true);
     await userEvent.unhover(nodeOf("group:src/services"));
-    expect(screen.getByText(/^Hover or focus a directory/)).toBeTruthy();
+    expect(edge.hasAttribute("data-lit")).toBe(false);
+    expect(overviewBox().querySelector("[data-slot=overview-detail]")).toBeNull();
+    expect(overviewBox().querySelector("[data-slot=overview-legend]")).toBeNull();
   });
 
   // It renders the large fixture's map first, which takes about 9 s on CI's runners.
@@ -2655,10 +2645,6 @@ describe("outside the pull request", () => {
     expect(box.getAttribute("aria-label")).toContain("used in 1 place outside the PR");
     expect(box.textContent).toContain("used in 1 place outside the PR");
     expect(overviewBox().textContent).not.toContain("email-receipts");
-    act(() => box.focus());
-    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toContain(
-      "used in 1 place outside the PR.",
-    );
   });
 
   /** The page's status, with the folder searched for clones and the one copies are kept in. */

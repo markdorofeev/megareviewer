@@ -448,6 +448,7 @@ const Review = ({
     [overviewForm, analysis],
   );
   const noDataFlow = overviewForm === "data-flow" && dataFlow === null ? noDataFlowOf(live) : null;
+  const noDataFlowLine = noDataFlow === null ? null : noDataFlowText(noDataFlow);
   // The steps pass writes the tour and the data flow, so a run asks for it when either would show.
   const explained = tourOn || overviewForm === "data-flow";
   // The directories the bow tie shows as their files, and the cells the lanes show whole.
@@ -1759,9 +1760,9 @@ const Review = ({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {noDataFlow !== null && (
+          {noDataFlowLine !== null && (
             <p data-slot="no-data-flow" role="status" className="text-muted-foreground">
-              {noDataFlowText(noDataFlow)}
+              {noDataFlowLine}
             </p>
           )}
           {dataFlow !== null ? (
@@ -1785,7 +1786,6 @@ const Review = ({
               onFocusNode={(key) => {
                 overviewAt.current = key;
               }}
-              onOpenFile={openFileFromTour}
             />
           ) : overviewForm === "lanes" ? (
             <FlowLanes
