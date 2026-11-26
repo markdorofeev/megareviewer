@@ -21,7 +21,11 @@ const layout = (page: Page) => page.locator("[data-slot=review-page]");
 test("with the Tour switch off, a run asks for no tour and there's no Tour layout", async ({
   page,
 }) => {
-  await page.addInitScript(() => window.localStorage.setItem("megareviewer:tour", "false"));
+  await page.addInitScript(() => {
+    window.localStorage.setItem("megareviewer:tour", "false");
+    // The data-flow overview, the default, is written by the same pass, so a run would ask for it.
+    window.localStorage.setItem("megareviewer:overview-form", JSON.stringify("directories"));
+  });
   const run = page.waitForRequest((request) => /\/model$/.test(request.url()));
   await openReview(page, PR.receiptsTour, TITLE);
   expect((await run).postDataJSON()).not.toHaveProperty("tour");
