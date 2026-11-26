@@ -160,6 +160,9 @@ const reviewBar = () => {
   return bar;
 };
 const overviewBox = () => screen.getByRole("region", { name: "Overview of the changed files" });
+const dataFlowRegion = () =>
+  screen.getByRole("region", { name: "How data moves through this change" });
+const noDataFlow = () => document.querySelector('[data-slot="no-data-flow"]');
 const pointCard = (title: RegExp) => screen.getByRole("article", { name: title });
 const pointButton = (action: string, title: RegExp) =>
   screen.getByRole("button", { name: new RegExp(`^${action}: ${title.source}`) });
@@ -1405,7 +1408,7 @@ const layoutIs = (layout: "map" | "overview" | "tour") =>
   document.querySelector("[data-slot=review-page]")?.getAttribute("data-layout") === layout;
 
 describe("overview", () => {
-  it("draws the changed directories from the entry down, with unlinked ones in the strip", async () => {
+  it("draws the changed directories from the entry down, and leaves out unlinked ones", async () => {
     renderReview();
     await loaded();
     await openOverview();
@@ -1413,8 +1416,7 @@ describe("overview", () => {
     expect(nodeOf("group:src/routes").getAttribute("aria-label")).toMatch(
       /^src\/routes\/, 1 file, /,
     );
-    const strip = within(overviewBox()).getByRole("region", { name: "Not linked" });
-    expect(within(strip).getByRole("button", { name: "./, 1 file, logic" })).toBeTruthy();
+    expect(overviewBox().querySelector('[data-key="group:"]')).toBeNull();
     // Proved-mechanical files aren't in it: the map lists them with their proofs.
     expect(overviewBox().querySelector('[data-key="pnpm-lock.yaml"]')).toBeNull();
   });
@@ -1439,15 +1441,9 @@ describe("overview", () => {
     await userEvent.keyboard("{ArrowDown}");
     expect(focusedKey()).toBe("group:src/services");
     await userEvent.keyboard("{ArrowDown}");
-    expect(focusedKey()).toBe("group:");
-    await userEvent.keyboard("{ArrowUp}{ArrowUp}");
+    expect(focusedKey()).toBe("group:src/services");
+    await userEvent.keyboard("{ArrowUp}");
     expect(focusedKey()).toBe("group:src/routes");
-    // A focused directory names its files, flows and what it reaches, for the keyboard.
-    expect(
-      screen.getByText(
-        "src/routes/: orders.ts · read in The receipt endpoint · reaches src/services/ (cachedReceipt).",
-      ),
-    ).toBeTruthy();
     await userEvent.keyboard("{Enter}");
     expect(layoutIs("map")).toBe(true);
     expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
@@ -1463,21 +1459,18 @@ describe("overview", () => {
       "src/routes/ imports, calls src/services/: cachedReceipt",
     );
   });
-  it("names what an edge carries on hover, and lights the hovered file's edges", async () => {
+  it("lights the hovered directory's edges, and says nothing under the diagram", async () => {
     renderReview();
     await loaded();
     await openOverview();
     const edge = overviewBox().querySelector("[data-slot=overview-edge]");
     if (edge === null) throw new Error("no edge");
-    await userEvent.hover(edge);
-    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toBe(
-      "src/routes/ imports, calls src/services/: cachedReceipt",
-    );
-    await userEvent.unhover(edge);
     await userEvent.hover(nodeOf("group:src/services"));
     expect(edge.hasAttribute("data-lit")).toBe(true);
     await userEvent.unhover(nodeOf("group:src/services"));
-    expect(screen.getByText(/^Hover or focus a directory/)).toBeTruthy();
+    expect(edge.hasAttribute("data-lit")).toBe(false);
+    expect(overviewBox().querySelector("[data-slot=overview-detail]")).toBeNull();
+    expect(overviewBox().querySelector("[data-slot=overview-legend]")).toBeNull();
   });
 
   // It renders the large fixture's map first, which takes about 9 s on CI's runners.
@@ -1512,7 +1505,8 @@ describe("overview", () => {
     expect(
       forms.getAllByRole("menuitemradio").map((item) => [item.textContent, item.ariaChecked]),
     ).toEqual([
-      ["Directories", "true"],
+      ["Data flow", "true"],
+      ["Directories", "false"],
       ["Lanes", "false"],
       ["Bow tie", "false"],
       ["Flow rows", "false"],
@@ -1540,6 +1534,47 @@ describe("overview", () => {
     await userEvent.keyboard("{Escape}");
     expect(layoutIs("overview")).toBe(true);
     expect((document.activeElement as HTMLElement | null)?.dataset.path).toBe(path);
+  });
+
+  it("is the data flow once an AI review has written one, and says why it's the directories until then", async () => {
+    const first = renderReview();
+    await loaded();
+    const box = await openOverview();
+    expect(box).toBeTruthy();
+    expect(noDataFlow()?.textContent).toBe(
+      "This AI review didn't write a data flow. Re-run it to get one. Until then, this is the changed directories and the calls between them.",
+    );
+    first.unmount();
+
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
+    const flow = within(dataFlowRegion());
+    expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
+    expect(flow.getAllByRole("heading", { level: 3 }).map((one) => one.textContent)).toEqual([
+      "Find the order",
+      "Render the receipt, kept in memory",
+      "Not in the picture",
+    ]);
+    expect(flow.getByText("keeps data")).toBeTruthy();
+
+    const receipts = flow.getByRole("button", { name: /^receipts, existing file/ });
+    await userEvent.click(receipts);
+    expect(layoutIs("map")).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(layoutIs("overview")).toBe(true);
+    expect((document.activeElement as HTMLElement | null)?.dataset.path).toBe(
+      "src/services/receipts.ts",
+    );
+  });
+
+  it("is the directories when that form is chosen, whatever the review wrote", async () => {
+    window.localStorage.setItem("megareviewer:overview-form", '"directories"');
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    expect(await openOverview()).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "How data moves through this change" })).toBeNull();
+    expect(noDataFlow()).toBeNull();
   });
 
   it.each([
@@ -1570,7 +1605,7 @@ describe("the tour", () => {
     );
     expect(window.location.search).toBe("?view=tour");
     await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
-    expect(overviewBox()).toBeTruthy();
+    expect(dataFlowRegion()).toBeTruthy();
     expect(() => tourRegion()).toThrow();
     await userEvent.click(layoutSwitch().getByRole("button", { name: "Tour" }));
     expect(await screen.findByRole("region", { name: "Tour steps" })).toBeTruthy();
@@ -1579,7 +1614,7 @@ describe("the tour", () => {
     window.localStorage.setItem("megareviewer:tour", "false");
     renderReview({ view: tourAnalysisView });
     await loaded();
-    expect(overviewBox()).toBeTruthy();
+    expect(dataFlowRegion()).toBeTruthy();
     expect(() => tourRegion()).toThrow();
     expect(layoutSwitch().queryByRole("button", { name: "Tour" })).toBeNull();
   });
@@ -2521,7 +2556,11 @@ describe("the bar's verdicts", () => {
     ).toContain("bg-ai-soft");
   });
 
-  it("asks for no tour with a run once the Display menu's Tour switch is off", async () => {
+  it.each([
+    ["data-flow", { tour: true }],
+    ["directories", {}],
+  ])("with the Tour switch off and the overview as %s, asks a run for %o", async (form, asked) => {
+    window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
     const { requests } = renderReview({
       view: codeOnly,
       respond: (request) =>
@@ -2540,6 +2579,7 @@ describe("the bar's verdicts", () => {
     await userEvent.click(button);
     expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
       optionId: "claude-code/claude-sonnet-5-5",
+      ...asked,
     });
   });
 
@@ -2606,10 +2646,6 @@ describe("outside the pull request", () => {
     expect(box.getAttribute("aria-label")).toContain("used in 1 place outside the PR");
     expect(box.textContent).toContain("used in 1 place outside the PR");
     expect(overviewBox().textContent).not.toContain("email-receipts");
-    act(() => box.focus());
-    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toContain(
-      "used in 1 place outside the PR.",
-    );
   });
 
   /** The page's status, with the folder searched for clones and the one copies are kept in. */

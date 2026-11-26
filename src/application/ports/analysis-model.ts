@@ -9,6 +9,7 @@ import type {
 } from "../../domain/diff/index.ts";
 import {
   type Commit,
+  type DataFlow,
   Finding,
   type GuidanceRef,
   type HarnessHeading,
@@ -145,6 +146,12 @@ export interface PassOptions {
 export const FindingDraft = Finding.unwrap().omit({ id: true, guardrail: true }).readonly();
 export type FindingDraft = z.infer<typeof FindingDraft>;
 
+/** What the steps pass answers: the tour's steps, and the data flow or none. */
+export interface TourDraft {
+  readonly steps: StepDraft[];
+  readonly flow: DataFlow | null;
+}
+
 export interface AnalysisModel {
   /** Changes whenever prompts, schemas or the model change. Part of the cache key. */
   readonly version: string;
@@ -162,9 +169,12 @@ export interface AnalysisModel {
     intent: Intent | null,
     options?: PassOptions,
   ): Promise<Result<PassOutput<FindingDraft[]>, PassError>>;
-  /** The page's tour, what matters most first; only a run that asks for the tour calls it. */
+  /**
+   * The page's tour, what matters most first, and how data moves through the change; only a run
+   * that asks for the tour calls it.
+   */
   steps(
     input: AnalysisInput,
     options?: PassOptions,
-  ): Promise<Result<PassOutput<StepDraft[]>, PassError>>;
+  ): Promise<Result<PassOutput<TourDraft>, PassError>>;
 }

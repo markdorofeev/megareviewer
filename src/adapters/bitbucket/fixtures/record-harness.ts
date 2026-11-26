@@ -22,7 +22,8 @@ const KEPT_HEADERS = /^(x-ratelimit-.*|retry-after|content-type)$/;
 const prune = (url: string, { status, headers }: Response, text: string): unknown => {
   if (status >= 400) return text;
   if (!new URL(url).pathname.includes("/diffstat/")) {
-    // A directory's listing carries links and commits nothing here reads.
+    // A folder's listing asks only for what's read; a directory's carries links and commits too.
+    if (new URL(url).searchParams.has("max_depth")) return JSON.parse(text);
     return headers.get("content-type")?.startsWith("application/json") ? { values: [] } : text;
   }
   const { values, next } = BitbucketPage(BitbucketDiffstat).parse(JSON.parse(text));
@@ -68,6 +69,9 @@ const main = async (): Promise<void> => {
       "README.md",
       "pipe",
     ]),
+    await source.listFolder(REPO, SHA, ".changes"),
+    await source.listFolder(REPO, SHA, "README.md"),
+    await source.listFolder(REPO, SHA, "megareviewer-missing-file.txt"),
     await source.changedPaths(REPO, BASE_SHA, SHA),
     await source.changedPaths(LARGE, FROM_SHA, TO_SHA),
   ];

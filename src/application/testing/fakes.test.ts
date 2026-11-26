@@ -148,11 +148,13 @@ describe.each([
       source.setFiles(harnessRepo, sha, {
         ...Object.fromEntries(harnessFiles.map(({ path, content }) => [path, content])),
         "docs/logo.txt": { kind: "skipped", reason: "unreadable" },
+        "docs/rules/naming.md": "Names\n",
         "docs/old.md": "Moved\n",
       });
       source.setFiles(harnessRepo, toSha, {
         ...Object.fromEntries(harnessFiles.map(({ path, content }) => [path, content])),
         "docs/logo.txt": { kind: "skipped", reason: "unreadable" },
+        "docs/rules/naming.md": "Names\n",
         "docs/new.md": "Moved\n",
         "AGENTS.md": "# Added\n",
       });
@@ -165,6 +167,7 @@ describe.each([
     sha,
     files: harnessFiles,
     directory: "docs",
+    folder: { path: "docs", files: ["docs/house-rules.md", "docs/rules/naming.md"] },
     missingPath: "AGENTS.md",
     skipped: { path: "docs/logo.txt", reason: "unreadable" },
     change: diffs
@@ -194,9 +197,13 @@ describe("the fake harness source", () => {
     release();
     await reading;
 
+    source.failNext("listFolder", network);
+    expect(await source.listFolder(harnessRepo, "sha", "docs")).toEqual(err(network));
+
     expect(source.calls).toEqual({
       listFiles: ["sha", "sha"],
       readFiles: [["a.md"]],
+      listFolder: ["docs"],
       changedPaths: [],
     });
   });

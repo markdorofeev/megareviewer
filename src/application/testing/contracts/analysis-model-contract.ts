@@ -60,14 +60,19 @@ export const describeAnalysisModelContract = (
       const result = await model.steps(smallFeatureInput, { tour: true });
       if (!result.ok) throw new Error(`steps failed: ${result.error.message}`);
 
-      for (const item of result.value.value) expect(StepDraft.parse(item)).toEqual(item);
+      const { steps, flow } = result.value.value;
+      for (const item of steps) expect(StepDraft.parse(item)).toEqual(item);
+      const paths = new Set(smallFeatureInput.files.map((file) => file.path));
+      for (const station of flow?.stations ?? []) {
+        for (const path of [...station.files, ...station.shapes]) expect(paths).toContain(path);
+      }
       const hunks = new Map(
         smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
       );
       const mechanical = new Set(
         smallFeatureInput.files.flatMap((file) => file.mechanicalHunks.map((hunk) => hunk.hunkId)),
       );
-      expect(validateSteps(result.value.value, { hunks, mechanical })).toEqual([]);
+      expect(validateSteps(steps, { hunks, mechanical })).toEqual([]);
       expectUsage(result.value, "steps");
     });
   });

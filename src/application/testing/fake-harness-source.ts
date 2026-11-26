@@ -5,7 +5,7 @@ import {
   type RepoRef,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
-import type { HarnessSource, HarnessSourceFile } from "../ports/index.ts";
+import type { HarnessSource, HarnessSourceFile, HarnessSourceFolder } from "../ports/index.ts";
 
 /** Git's hash of a file holding `content`, as `git hash-object` prints it. */
 export const gitBlobHash = async (content: string): Promise<BlobHash> => {
@@ -16,7 +16,7 @@ export const gitBlobHash = async (content: string): Promise<BlobHash> => {
   return BlobHash.parse([...hash].map((byte) => byte.toString(16).padStart(2, "0")).join(""));
 };
 
-export type HarnessSourceMethod = "listFiles" | "readFiles" | "changedPaths";
+export type HarnessSourceMethod = "listFiles" | "readFiles" | "listFolder" | "changedPaths";
 
 const commitKey = (repo: RepoRef, sha: string): string =>
   `${repo.host}/${repo.owner}/${repo.repo}@${sha}`;
@@ -31,8 +31,9 @@ export class FakeHarnessSource implements HarnessSource {
   readonly calls: {
     readonly listFiles: string[];
     readonly readFiles: (readonly string[])[];
+    readonly listFolder: string[];
     readonly changedPaths: { readonly from: string; readonly to: string }[];
-  } = { listFiles: [], readFiles: [], changedPaths: [] };
+  } = { listFiles: [], readFiles: [], listFolder: [], changedPaths: [] };
   private readonly lists: boolean;
   private readonly diffs: boolean;
   private readonly commits = new Map<string, Map<string, string | HarnessSourceFile>>();
@@ -111,6 +112,18 @@ export class FakeHarnessSource implements HarnessSource {
         }),
       ),
     );
+  }
+
+  async listFolder(
+    repo: RepoRef,
+    sha: string,
+    path: string,
+  ): Promise<Result<HarnessSourceFolder | null, HostError>> {
+    this.calls.listFolder.push(path);
+    const failure = await this.failureOf("listFolder");
+    if (failure !== null) return err(failure);
+    const files = [...this.filesAt(repo, sha).keys()].filter((file) => file.startsWith(`${path}/`));
+    return ok(files.length === 0 ? null : { files, complete: true });
   }
 
   async changedPaths(

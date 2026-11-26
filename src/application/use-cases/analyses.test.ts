@@ -2194,14 +2194,81 @@ describe("a run with the tour", () => {
     expect(left.modelError).toBeNull();
   });
 
+  const station = (name: string, files: string[]) => ({
+    name,
+    when: null,
+    keeps: false,
+    files,
+    gives: null,
+    shapes: [],
+  });
+  const routeToReceipts = {
+    source: "a request",
+    stations: [
+      station("Find the order", ["src/routes/orders.ts"]),
+      station("Render the receipt", ["src/services/receipts.ts"]),
+    ],
+    end: "the response",
+  };
+
+  it("keeps the data flow the steps pass wrote, with or without a tour", async () => {
+    const model = new FakeAnalysisModel();
+    const { analysis, runModel } = await codeOnly(model);
+    model.script("steps", ok(tourOf(analysis).slice(0, 2)));
+    model.scriptFlow(routeToReceipts);
+    const after = await runModel(analysis.id, undefined, true);
+    expect(after.steps).toEqual([]);
+    expect(after.dataFlow).toEqual(routeToReceipts);
+    expect(model.callsTo("steps")).toHaveLength(1);
+  });
+
+  it("tells the model what's wrong with the flow once, then keeps what the checks pass", async () => {
+    const model = new FakeAnalysisModel();
+    const { analysis, runModel } = await codeOnly(model);
+    const wrong = {
+      ...routeToReceipts,
+      stations: [
+        ...routeToReceipts.stations,
+        station("Read the config", ["config/app.yaml", "src/made-up.ts"]),
+      ],
+    };
+    model.script("steps", ok(tourOf(analysis)), ok(tourOf(analysis)));
+    model.scriptFlow(wrong, wrong);
+    const after = await runModel(analysis.id, undefined, true);
+    expect(model.callsTo("steps")[1]?.options?.feedback).toEqual([
+      "Station 3 of the flow lists src/made-up.ts, which isn't a changed file of this pull request. Use paths as the data gives them.",
+      "Nothing in the code joins station 2 of the flow to station 3: none of their files calls, names or requests one of the other's. Order the stations as the data moves, or merge them.",
+    ]);
+    expect(after.steps).toHaveLength(3);
+    expect(after.dataFlow?.stations.map((one) => one.files)).toEqual([
+      ["src/routes/orders.ts"],
+      ["src/services/receipts.ts"],
+      ["config/app.yaml"],
+    ]);
+  });
+
+  it("has no flow when the checks leave fewer than two stations, and still has its tour", async () => {
+    const model = new FakeAnalysisModel();
+    const { analysis, runModel } = await codeOnly(model);
+    const made = { ...routeToReceipts, stations: [station("Made up", ["src/made-up.ts"])] };
+    model.script("steps", ok(tourOf(analysis)), ok(tourOf(analysis)));
+    model.scriptFlow(made, made);
+    const after = await runModel(analysis.id, undefined, true);
+    expect(after.dataFlow).toBeNull();
+    expect(after.steps).toHaveLength(3);
+    expect(after.stepsError).toBeNull();
+  });
+
   it("goes with the run when it's removed", async () => {
     const model = new FakeAnalysisModel();
     const { analysis, runModel, useCases } = await codeOnly(model);
     model.script("steps", ok(tourOf(analysis)));
+    model.scriptFlow(routeToReceipts);
     await runModel(analysis.id, undefined, true);
     const removed = await useCases.removeModelRun(analysis.id);
     if (!removed.ok) throw new Error(removed.error.message);
     expect(removed.value.analysis.steps).toBeNull();
+    expect(removed.value.analysis.dataFlow).toBeNull();
     expect(removed.value.analysis.stages.steps).toBe("skipped");
   });
 
@@ -2293,6 +2360,9 @@ describe("a model run's guidance", () => {
   it("gives the passes the enabled preferences for the repository and REVIEW.md at the base commit, and keeps what it gave", async () => {
     const { analyze, model, preferences, github } = setup({ fixtures: [guidelines] });
     for (const one of [naming, elsewhere, off, tenant]) await preferences.savePreference(one);
+    for (const path of ["AGENTS.md", "CLAUDE.md"]) {
+      await preferences.setGuidelineSwitch(repo, path, false);
+    }
 
     const analysis = await analyze();
 
@@ -2369,7 +2439,7 @@ describe("a model run's guidance", () => {
     const model = new FakeAnalysisModel();
     model.script("intent", err(modelError("overloaded")));
     const { analyze, runModel, preferences } = setup({ fixtures: [guidelines], model });
-    await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
+    await preferences.setGuidelineSwitch(repo, "AGENTS.md", false);
 
     const failed = await analyze();
     const analysis = await runModel(failed.id);
@@ -2469,12 +2539,22 @@ describe("a model run's guidance", () => {
       expect(github.getFilesCalls.flat().filter(({ path }) => path.endsWith(".md"))).toEqual([]);
     });
 
-    it("leaves out a root that's off with what it imports, and an import that's off alone", async () => {
+    it("gives CLAUDE.md unless it's off, leaving out what it imports with it, and an import that's off alone", async () => {
       const { analyze, preferences } = setup({ harnessSource: source(FILES) });
-      expect(given(await analyze())).toEqual([["g1", "REVIEW.md", null]]);
+      expect(given(await analyze())?.map(([, path]) => path)).toEqual([
+        "REVIEW.md",
+        "CLAUDE.md",
+        "docs/rules.md",
+        "docs/naming.md",
+        "docs/style.md",
+      ]);
+      expect(await preferences.getGuidelineSwitches(repo)).toEqual(new Map());
+
+      const off = setup({ harnessSource: source(FILES) });
+      await off.preferences.setGuidelineSwitch(repo, "CLAUDE.md", false);
+      expect(given(await off.analyze())).toEqual([["g1", "REVIEW.md", null]]);
 
       const other = setup({ harnessSource: source(FILES) });
-      await other.preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
       await other.preferences.setGuidelineSwitch(repo, "docs/naming.md", false);
       expect(given(await other.analyze())?.map(([, path]) => path)).toEqual([
         "REVIEW.md",
@@ -2482,7 +2562,6 @@ describe("a model run's guidance", () => {
         "docs/rules.md",
         "docs/style.md",
       ]);
-      expect(await preferences.getGuidelineSwitches(repo)).toEqual(new Map());
     });
 
     it("passes over an import that doesn't fit, takes a smaller one after it, and names what it left out", async () => {
@@ -2515,16 +2594,16 @@ describe("a model run's guidance", () => {
     it("gives a root that's on only because a root that's on imports it", async () => {
       const { analyze, preferences } = setup({
         harnessSource: source({
-          "CLAUDE.md": "@AGENTS.md\n",
-          "AGENTS.md": "Use pnpm.\n\n@docs/rules.md\n",
+          "CLAUDE.md": "@CONTRIBUTING.md\n",
+          "CONTRIBUTING.md": "Use pnpm.\n\n@docs/rules.md\n",
           "docs/rules.md": "# Rules\n",
         }),
       });
       await preferences.setGuidelineSwitch(repo, "CLAUDE.md", true);
       expect(given(await analyze())).toEqual([
         ["g1", "CLAUDE.md", null],
-        ["g2", "AGENTS.md", null],
-        ["g3", "docs/rules.md", "AGENTS.md"],
+        ["g2", "CONTRIBUTING.md", null],
+        ["g3", "docs/rules.md", "CONTRIBUTING.md"],
       ]);
     });
 
@@ -2671,7 +2750,9 @@ describe("a model run's guidance", () => {
         harnessSource,
         modelEnabled: false,
       });
-      await preferences.setGuidelineSwitch(repo, "REVIEW.md", false);
+      for (const path of ["REVIEW.md", "AGENTS.md", "CLAUDE.md"]) {
+        await preferences.setGuidelineSwitch(repo, path, false);
+      }
       const { id } = await analyze();
       await harnessStore.dropUnusedSince("2027-01-01T00:00:00Z");
       const ran = await runModel(id);

@@ -15,7 +15,6 @@ import {
   layout,
   metaText,
   NODE_HEIGHT,
-  nodeWidth,
   shownLabel,
 } from "./overview-layout.ts";
 
@@ -43,7 +42,7 @@ const NodeButton = ({
   onFocus,
 }: {
   readonly node: OverviewNode;
-  readonly box?: Box;
+  readonly box: Box;
   readonly active: boolean;
   /** It holds the file last in view in the code. */
   readonly current: boolean;
@@ -67,12 +66,8 @@ const NodeButton = ({
   return (
     <div
       data-slot="overview-node-box"
-      className={cn("grid", box === undefined ? "relative" : "absolute")}
-      style={
-        box === undefined
-          ? { width: nodeWidth(node) }
-          : { left: box.x, top: box.y, width: box.width, height: NODE_HEIGHT }
-      }
+      className="absolute grid"
+      style={{ left: box.x, top: box.y, width: box.width, height: NODE_HEIGHT }}
     >
       <button
         type="button"
@@ -160,7 +155,6 @@ export const Overview = ({
   onCollapse,
   expandedGroups,
   onFocusNode,
-  onOpenFile,
 }: {
   readonly overview: FileOverview;
   /** The file last in view in the code: its directory is outlined. */
@@ -172,8 +166,6 @@ export const Overview = ({
   readonly onCollapse: (groupKey: string) => void;
   readonly expandedGroups: readonly string[];
   readonly onFocusNode: (key: string) => void;
-  /** Opens a file in the map: a test that reaches no changed code. */
-  readonly onOpenFile: (path: string) => void;
 }) => {
   const id = useId();
   const box = useRef<HTMLDivElement>(null);
@@ -188,16 +180,11 @@ export const Overview = ({
   );
   const ends = useMemo(() => anchors(overview.edges, boxes), [overview.edges, boxes]);
   const labels = useMemo(
-    () =>
-      new Map([...overview.rows.flat(), ...overview.strip].map((node) => [node.key, node.label])),
+    () => new Map(overview.rows.flat().map((node) => [node.key, node.label])),
     [overview],
   );
   const labelOf = (key: string) => labels.get(key) ?? key;
-  // Rows, then the strip as one more row, for the arrows.
-  const grid = useMemo(
-    () => [...overview.rows, overview.strip].filter((row) => row.length > 0),
-    [overview],
-  );
+  const grid = overview.rows;
 
   // A node that a group opened or closed over is gone, so is what it said.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the diagram changes.
@@ -267,12 +254,6 @@ export const Overview = ({
       ref={box}
       onKeyDown={onKeyDown}
     >
-      <p data-slot="overview-legend" className="text-muted-foreground">
-        Each box is a directory. Directories that nothing in the pull request calls are on top; each
-        sits below its callers. Solid lines are calls, dash-dot ones HTTP requests to a route,
-        dashed ones imports, dotted ones types. Tests show on the directories they call, and the
-        others are listed under them. The outlined box holds the file last in view in the code.
-      </p>
       {expandedGroups.length > 0 && (
         <p className="flex flex-wrap gap-2">
           {expandedGroups.map((key) => (
@@ -348,75 +329,17 @@ export const Overview = ({
                 );
               })}
             </svg>
-            {overview.rows.flat().map((node) => (
-              <NodeButton key={node.key} box={boxes.get(node.key)} {...nodeProps(node)} />
-            ))}
+            {overview.rows.flat().map((node) => {
+              const at = boxes.get(node.key);
+              return at === undefined ? null : (
+                <NodeButton key={node.key} box={at} {...nodeProps(node)} />
+              );
+            })}
           </div>
         </div>
       ) : (
         <p className="text-muted-foreground">No changed file calls or imports another.</p>
       )}
-      {overview.strip.length > 0 && (
-        <section aria-label="Not linked" className="flex flex-col gap-2">
-          <h3 className="text-caption font-medium text-muted-foreground">Not linked</h3>
-          <div className="flex flex-wrap gap-2">
-            {overview.strip.map((node) => (
-              <NodeButton key={node.key} {...nodeProps(node)} />
-            ))}
-          </div>
-        </section>
-      )}
-      {overview.tests.length > 0 && (
-        <section aria-label="Tests that call no changed code" className="flex flex-col gap-2">
-          <h3 className="text-caption font-medium text-muted-foreground">
-            Tests that call no changed code · {overview.tests.length}
-          </h3>
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {overview.tests.map((path) => (
-              <button
-                key={path}
-                type="button"
-                data-slot="overview-test"
-                data-key={path}
-                className="min-h-6 text-left font-mono text-code-compact wrap-anywhere text-foreground underline decoration-input underline-offset-2 hover:decoration-foreground"
-                title={path}
-                onClick={() => onOpenFile(path)}
-              >
-                {basename(path)}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      <p data-slot="overview-detail" className="min-h-5 text-muted-foreground" aria-live="polite">
-        {hovered === null
-          ? "Hover or focus a directory to see its files, flows and tests."
-          : hovered.kind === "edge"
-            ? describeEdge(hovered.edge, labelOf)
-            : nodeDetail(hovered.node, overview.edges, labelOf)}
-      </p>
     </section>
   );
-};
-
-/** A file's path, flows, the files it reaches with what each edge carries, and its tests. */
-const nodeDetail = (
-  node: OverviewNode,
-  edges: readonly OverviewEdge[],
-  labelOf: (key: string) => string,
-): string => {
-  const out = edges
-    .filter((edge) => edge.from === node.key)
-    .map((edge) => {
-      const symbols = edge.symbols.length > 0 ? ` (${edge.symbols.join(", ")})` : "";
-      return `${labelOf(edge.to)}${symbols}`;
-    });
-  const parts = [
-    node.kind === "group" ? `${node.label}: ${node.paths.map(basename).join(", ")}` : node.paths[0],
-    node.flows.length > 0 ? `read in ${node.flows.join("; ")}` : "in no flow",
-    ...(out.length > 0 ? [`reaches ${out.join(", ")}`] : []),
-    ...(node.uses > 0 ? [usedOutside(node.uses)] : []),
-    ...(node.badges.length > 0 ? [`tested in ${node.badges.map(basename).join(", ")}`] : []),
-  ];
-  return `${parts.join(" · ")}.`;
 };

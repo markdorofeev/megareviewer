@@ -5,6 +5,7 @@ import {
   type BeforeModel,
   classifyByRules,
   codeFlows,
+  dataFlowContext,
   type FilesFetched,
   following,
   joinParts,
@@ -338,6 +339,7 @@ export const runModel = async (
       guardrails: null,
       steps: null,
       stepsError: null,
+      dataFlow: null,
       stages: {
         ...mapModelStages(current.stages, () => "pending"),
         steps: run.tour === true ? "pending" : "skipped",
@@ -488,6 +490,12 @@ const modelStages = async (
                 hunks,
                 mechanical: new Set(prepared.proofs.flatMap((proof) => proof.hunkId ?? [])),
               },
+              dataFlowContext({
+                files,
+                callGraph: prepared.callGraph,
+                definitionCalls: prepared.definitionCalls,
+                fileLinks: prepared.fileLinks,
+              }),
               deps,
               guidance,
             ),
@@ -498,6 +506,7 @@ const modelStages = async (
               result.outcome.ok ? "done" : "failed",
               (analysis) => ({
                 steps: result.outcome.ok ? result.outcome.value : [],
+                dataFlow: result.flow,
                 stepsError: result.outcome.ok
                   ? null
                   : {

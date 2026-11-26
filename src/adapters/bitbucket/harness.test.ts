@@ -9,7 +9,7 @@ import {
 import { loadHarness } from "../../application/use-cases/index.ts";
 import { MAX_HARNESS_FILE_BYTES, type RepoRef } from "../../domain/review/index.ts";
 import harnessExchanges from "./fixtures/harness.json" with { type: "json" };
-import { diffstatUrl } from "./harness.ts";
+import { diffstatUrl, folderUrl } from "./harness.ts";
 import { createBitbucketHarnessSource } from "./index.ts";
 
 const API = "https://api.bitbucket.org/2.0";
@@ -52,7 +52,11 @@ describeHarnessSourceContract("bitbucket", () => ({
     sourceWith(
       scenario === "normal"
         ? harnessExchanges
-        : [refusedAt(fileUrl("README.md")), refusedAt(diffstatUrl(repo, BASE_SHA, SHA))],
+        : [
+            refusedAt(fileUrl("README.md")),
+            refusedAt(folderUrl(repo, SHA, ".changes")),
+            refusedAt(diffstatUrl(repo, BASE_SHA, SHA)),
+          ],
     ),
   lists: false,
   diffs: true,
@@ -71,6 +75,7 @@ describeHarnessSourceContract("bitbucket", () => ({
     },
   ],
   directory: "pipe",
+  folder: { path: ".changes", files: [".changes/0.1.0.json", PATCH] },
   missingPath: "megareviewer-missing-file.txt",
   change: {
     fromSha: BASE_SHA,
@@ -99,6 +104,37 @@ const response = (
 });
 
 describe("createBitbucketHarnessSource", () => {
+  it("lists a folder's files over its pages, and says when it stopped before the last", async () => {
+    const first = folderUrl(repo, SHA, "docs");
+    const pageUrl = (page: number) => `${first}&page=${page}`;
+    const page = (page: number, next: boolean): RecordedExchange =>
+      response(
+        page === 1 ? first : pageUrl(page),
+        {
+          values: [
+            { path: `docs/${page}.md`, type: "commit_file" },
+            { path: `docs/${page}`, type: "commit_directory" },
+          ],
+          ...(next ? { next: pageUrl(page + 1) } : {}),
+        },
+        { headers: jsonHeaders },
+      );
+    const twoPages = await sourceWith([page(1, true), page(2, false)]).listFolder(
+      repo,
+      SHA,
+      "docs",
+    );
+    expect(twoPages).toEqual({
+      ok: true,
+      value: { files: ["docs/1.md", "docs/2.md"], complete: true },
+    });
+
+    const endless = Array.from({ length: 11 }, (_, index) => page(index + 1, true));
+    const cut = await sourceWith(endless).listFolder(repo, SHA, "docs");
+    expect(cut).toMatchObject({ ok: true, value: { complete: false } });
+    expect(cut.ok ? cut.value?.files : []).toHaveLength(10);
+  });
+
   it("hashes a file as git does", async () => {
     const read = async (content: string) => {
       const answer = await sourceWith([response(fileUrl("a.md"), content)]).readFiles(repo, SHA, [

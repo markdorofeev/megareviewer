@@ -14,8 +14,12 @@ describe("receipts-tour on the fake server", () => {
   it("writes three steps the server's checks pass", async () => {
     const answer = await model.steps(inputOf(receiptsTour.pullRequest.url));
     if (!answer.ok) throw new Error("the fake model answers");
-    const steps = answer.value.value;
+    const { steps, flow } = answer.value.value;
     expect(steps).toHaveLength(3);
+    expect(flow?.stations.map((station) => station.files)).toEqual([
+      ["src/routes/orders.ts"],
+      ["src/services/receipts.ts"],
+    ]);
     const hunks = new Map(
       smallFeatureInput.files.flatMap((file) => file.hunks.map((hunk) => [hunk.id, hunk])),
     );
@@ -27,6 +31,6 @@ describe("receipts-tour on the fake server", () => {
 
   it("writes none for any other pull request", async () => {
     const answer = await model.steps(inputOf(smallFeatureInput.pullRequest.url));
-    expect(answer.ok && answer.value.value).toEqual([]);
+    expect(answer.ok && answer.value.value).toEqual({ steps: [], flow: null });
   });
 });

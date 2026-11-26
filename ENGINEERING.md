@@ -37,6 +37,8 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Stop | A changed file on a flow path, under one that calls it there unless the path starts in it; *new* when the PR adds it and *changed* otherwise. Tests, docs, generated and mechanical files are never stops |
 | Tour | The page's tour of a PR: a few steps, what matters most first, which the model writes and the Tour layout shows |
 | Step | A place on the page's tour: one sentence of something the change makes true, and the lines that show it, in one place or two. The model writes the steps and the server checks them |
+| Data flow | How data moves through a change: where it comes in, the stations it passes through in the order it moves, and where it ends up. The model writes it with the steps and the server checks it. What the Overview draws |
+| Station | A place on the data flow: a role, the changed files that play it, when it runs, whether it keeps data for a later station, and what it hands the next one, with the changed files that only define what's handed on |
 | Checkout | A local git clone of the PR's repository, read at the PR's head commit and never changed: the one megareviewer was pointed at, one it read before, or one found by searching the home folder |
 | Copy | megareviewer's own bare repository of a PR's repository, holding only the commits it downloaded. Read as a checkout |
 | Receiver | What a member is written after, `NodeClass` in `NodeClass.create()`: it decides which class's member a call can reach |
@@ -59,9 +61,9 @@ Code, UI and docs use these names, and only these names, for these concepts. A n
 | Preference | A rule of the reviewer's for an AI review, one sentence: *look for* or *don't flag*, for every repository or for one, written, learned or imported, with a switch |
 | Preference proposal | A preference megareviewer proposes from review signals or past comments, with the evidence it rests on. Not used until the reviewer accepts it |
 | Review signal | Something the reviewer did that says what they value: a point dismissed or raised, or a line comment posted, with its text as it was |
-| Guideline file | A file at a repository's root that says how its code is written or reviewed, such as `REVIEW.md`: a root of the harness. A model run reads the ones the reviewer switched on, at the PR's base commit |
+| Guideline file | A file at a repository's root that says how its code is written or reviewed, such as `REVIEW.md`: a root of the harness. A model run reads the ones that are on, `REVIEW.md`, `AGENTS.md` and `CLAUDE.md` unless switched off, at the PR's base commit |
 | Harness | The guideline files at a repository's root and the files they link, at a PR's base commit |
-| Harness file | One of the harness's files, with how it was found: a root, or by an import, a link or a mention, and the file that names it |
+| Harness file | One of the harness's files, with how it was found: a root, or by an import, a link or a mention of it or of a folder it's in, and the file that names it |
 | Linked file | A harness file that a guideline file reaches, straight or through other files. On unless switched off, and used only when a root that's on reaches it through files that are |
 | Harness read | A file of the harness a pass opened or searched with its reader, or that a transport loaded by itself, with the lines it was given, or was refused. Kept on the pass's model call |
 | Guidance | What one model run was given beside the code: the enabled preferences and the guideline files, numbered, and kept on the analysis so a point can say which one shaped it, with the check configs and build files its guardrail call read |

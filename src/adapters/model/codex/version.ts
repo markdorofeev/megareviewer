@@ -7,7 +7,7 @@
 export const CODEX_PROMPT_VERSION = 15;
 export const CODEX_FINGERPRINT = "8a94bce9bb56dd45";
 /** The same, of a run that asks for the tour. */
-export const CODEX_TOUR_FINGERPRINT = "dc6baf11cdd43a57";
+export const CODEX_TOUR_FINGERPRINT = "94e046e8f223e3fc";
 
 /** An effort for every pass, in place of each pass's own, is named after the model. */
 export const codexVersion = (model: string, effort?: string): string =>

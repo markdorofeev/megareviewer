@@ -1,6 +1,7 @@
 export { activeReviewerActivity, newReviewerActivity } from "./activity.ts";
 export {
   fixtureAnalysisView,
+  fixtureDataFlow,
   fixtureHunks,
   fixtureParts,
   fixtureSteps,

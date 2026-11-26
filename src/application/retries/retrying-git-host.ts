@@ -116,6 +116,8 @@ export const retryingHarnessSource = (
     listFiles: (repo, sha) => retried("the files at a commit", () => source.listFiles(repo, sha)),
     readFiles: (repo, sha, paths) =>
       retried(`${paths.length} files`, () => source.readFiles(repo, sha, paths)),
+    listFolder: (repo, sha, path) =>
+      retried("the files in a folder", () => source.listFolder(repo, sha, path)),
     changedPaths: (repo, fromSha, toSha) =>
       retried("the changed files", () => source.changedPaths(repo, fromSha, toSha)),
   };

@@ -44,6 +44,17 @@ export {
 } from "./analysis.ts";
 export { attachmentHost } from "./attachments.ts";
 export { type CodeFlowsInput, codeFlows, looksGenerated } from "./code-flows.ts";
+export {
+  DataFlow,
+  type DataFlowContext,
+  type DataFlowProblem,
+  dataFlowContext,
+  keptDataFlow,
+  MAX_STATIONS,
+  MIN_STATIONS,
+  Station,
+  validateDataFlow,
+} from "./data-flow.ts";
 export { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 export {
   HostError,
@@ -97,6 +108,7 @@ export {
   harnessOutline,
   harnessPlan,
   harnessReach,
+  isHarnessFileInFolder,
   MAX_COPY_LINE,
   MAX_HARNESS_DEPTH,
   MAX_HARNESS_FILE_BYTES,
@@ -146,7 +158,7 @@ export { PointKind } from "./point-kind.ts";
 export {
   canEnable,
   checkGuidanceMark,
-  DEFAULT_GUIDELINE_PATH,
+  DEFAULT_GUIDELINE_PATHS,
   GUIDELINE_PATHS,
   Guidance,
   GuidanceEffect,

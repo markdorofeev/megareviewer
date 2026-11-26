@@ -67,19 +67,20 @@ describe("receipts-guided", () => {
       ["p1", "look-for", "Caches with nothing that invalidates them"],
       ["p2", "dont-flag", "Naming"],
     ]);
-    expect(analysis.guidance?.guidelines.map((file) => [file.ref, file.path])).toEqual([
-      ["g1", "REVIEW.md"],
+    expect(analysis.guidance?.guidelines.map((file) => [file.ref, file.path, file.given])).toEqual([
+      ["g1", "REVIEW.md", "prompt"],
+      ["g2", "CLAUDE.md", "on-request"],
     ]);
     expect(marks(analysis)).toEqual([
       ["raised", "Caches with nothing that invalidates them"],
       ["raised", "REVIEW.md"],
       ["left-out", "Naming"],
     ]);
-    // CLAUDE.md is over what a guideline file can be, which the preferences page says.
+    // CLAUDE.md is over what a prompt holds, so a pass reads it when it asks.
     const files = preferences.repositories.find((one) => one.repo.repo === repo.repo);
     expect(files?.guidelineFiles?.map((file) => [file.path, file.enabled, file.tooLarge])).toEqual([
       ["REVIEW.md", true, false],
-      ["CLAUDE.md", false, true],
+      ["CLAUDE.md", true, true],
       ["CONTRIBUTING.md", false, false],
     ]);
   });
@@ -105,7 +106,9 @@ describe("receipts-guided", () => {
 
   it("marks nothing by a preference the run wasn't given", async () => {
     const { analysis } = await reviewed(async (fake) => {
-      await fake.preferences.setGuidelineSwitch(repo, "REVIEW.md", false);
+      for (const path of ["REVIEW.md", "CLAUDE.md"]) {
+        await fake.preferences.setGuidelineSwitch(repo, path, false);
+      }
     });
     expect(analysis.guidance).toEqual({ preferences: [], guidelines: [], checks: [] });
     expect(marks(analysis)).toEqual([
