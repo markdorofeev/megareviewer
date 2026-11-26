@@ -44,6 +44,17 @@ export {
 } from "./analysis.ts";
 export { attachmentHost } from "./attachments.ts";
 export { type CodeFlowsInput, codeFlows, looksGenerated } from "./code-flows.ts";
+export {
+  DataFlow,
+  type DataFlowContext,
+  type DataFlowProblem,
+  dataFlowContext,
+  keptDataFlow,
+  MAX_STATIONS,
+  MIN_STATIONS,
+  Station,
+  validateDataFlow,
+} from "./data-flow.ts";
 export { type Entry, entryLabel, entryOf } from "./entry-points.ts";
 export {
   HostError,

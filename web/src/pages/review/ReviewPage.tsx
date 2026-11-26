@@ -64,7 +64,9 @@ import { scopeOptions, scopePath } from "../preferences/rule.tsx";
 import { failureReason } from "../preferences/view.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks } from "./calls.tsx";
+import { DataFlow } from "./DataFlow.tsx";
 import { Dialog } from "./Dialog.tsx";
+import { dataFlowOf, noDataFlowOf, noDataFlowText } from "./data-flow.ts";
 import { FlowBowTie } from "./FlowBowTie.tsx";
 import { FlowLanes } from "./FlowLanes.tsx";
 import { FlowRows } from "./FlowRows.tsx";
@@ -432,13 +434,22 @@ const Review = ({
   // The overview as its directories, or as one of the previews of the pull request's flow paths.
   const [overviewForm, setOverviewForm] = useStoredState(
     "overview-form",
-    "directories",
+    "data-flow",
     parseOverviewForm,
   );
   const flow = useMemo(
-    () => (overviewForm === "directories" ? null : flowPaths(analysis)),
+    () =>
+      overviewForm === "directories" || overviewForm === "data-flow" ? null : flowPaths(analysis),
     [overviewForm, analysis],
   );
+  // The data flow is drawn from the analysis shown; why there's none, from the live one.
+  const dataFlow = useMemo(
+    () => (overviewForm === "data-flow" ? dataFlowOf(analysis) : null),
+    [overviewForm, analysis],
+  );
+  const noDataFlow = overviewForm === "data-flow" && dataFlow === null ? noDataFlowOf(live) : null;
+  // The steps pass writes the tour and the data flow, so a run asks for it when either would show.
+  const explained = tourOn || overviewForm === "data-flow";
   // The directories the bow tie shows as their files, and the cells the lanes show whole.
   const [flowOpened, setFlowOpened] = useState<ReadonlySet<string>>(new Set());
   const toggleFlow = (key: string) =>
@@ -1487,7 +1498,7 @@ const Review = ({
               const optionId = modelChoice.chosen?.id;
               const result = await runModel.run(analysisId, {
                 ...(optionId === undefined ? {} : { optionId }),
-                ...(tourOn ? { tour: true } : {}),
+                ...(explained ? { tour: true } : {}),
               });
               if (!result.ok) return;
               follow();
@@ -1748,7 +1759,19 @@ const Review = ({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {flow === null ? (
+          {noDataFlow !== null && (
+            <p data-slot="no-data-flow" role="status" className="text-muted-foreground">
+              {noDataFlowText(noDataFlow)}
+            </p>
+          )}
+          {dataFlow !== null ? (
+            <DataFlow
+              view={dataFlow}
+              option={analysis.modelOption}
+              focusKey={overviewFocus}
+              onOpenFile={openFileFromTour}
+            />
+          ) : flow === null ? (
             <Overview
               overview={overview}
               focusKey={overviewFocus}
@@ -1825,7 +1848,7 @@ const Review = ({
           view={view}
           family={family}
           chosen={modelChoice.chosen}
-          tour={tourOn}
+          tour={explained}
           onClose={() => setRerunning(false)}
           onRestart={(seed) => restart(seed)}
         />

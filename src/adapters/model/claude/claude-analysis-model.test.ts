@@ -180,7 +180,7 @@ describe("ClaudeAnalysisModel", () => {
       await model.intent(smallFeatureInput);
       await model.intent(smallFeatureInput, { tour: true });
       const steps = await model.steps(smallFeatureInput, { tour: true });
-      expect(steps.ok && steps.value.value).toHaveLength(3);
+      expect(steps.ok && steps.value.value.steps).toHaveLength(3);
 
       expect(requests[1]?.body).toEqual(requests[0]?.body);
       const { messages, ...shared } = requests[2]?.body ?? { messages: [] };

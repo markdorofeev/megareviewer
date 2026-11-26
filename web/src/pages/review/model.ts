@@ -31,10 +31,14 @@ export const parseLayout = (stored: unknown): Layout | undefined =>
       ? "overview"
       : undefined;
 
-/** The form the overview takes: its directories, or one of the three previews of its flow paths. */
-export type OverviewForm = "directories" | "lanes" | "bow-tie" | "rows";
+/**
+ * The form the overview takes: the change's data flow, which is its directories until an AI review
+ * has written one; its directories; or one of the three previews of its flow paths.
+ */
+export type OverviewForm = "data-flow" | "directories" | "lanes" | "bow-tie" | "rows";
 
 export const OVERVIEW_FORMS: readonly { readonly value: OverviewForm; readonly label: string }[] = [
+  { value: "data-flow", label: "Data flow" },
   { value: "directories", label: "Directories" },
   { value: "lanes", label: "Lanes" },
   { value: "bow-tie", label: "Bow tie" },

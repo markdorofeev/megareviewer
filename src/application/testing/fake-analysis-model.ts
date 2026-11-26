@@ -1,4 +1,5 @@
 import type {
+  DataFlow,
   HarnessRead,
   Intent,
   ModelError,
@@ -14,6 +15,7 @@ import type {
   PassError,
   PassOptions,
   PassOutput,
+  TourDraft,
 } from "../ports/index.ts";
 
 export interface PassValues {
@@ -58,6 +60,8 @@ export class FakeAnalysisModel implements AnalysisModel {
     steps: [],
   };
 
+  private readonly scriptedFlows: (DataFlow | null)[] = [];
+
   constructor(options: { version?: string; maxInputTokens?: number; readsHarness?: boolean } = {}) {
     this.version = options.version ?? "fake-model/1";
     this.readsHarness = options.readsHarness ?? false;
@@ -66,6 +70,11 @@ export class FakeAnalysisModel implements AnalysisModel {
 
   script<P extends ModelPass>(pass: P, ...answers: ScriptedPass<P>[]): void {
     this.scripts[pass].push(...answers);
+  }
+
+  /** The data flow of the steps pass's next answers; without one, an answer has none. */
+  scriptFlow(...flows: (DataFlow | null)[]): void {
+    this.scriptedFlows.push(...flows);
   }
 
   /** What the pass's next answer says it read. Queued beside the scripted answers. */
@@ -137,12 +146,15 @@ export class FakeAnalysisModel implements AnalysisModel {
     );
   }
 
-  /** Derives no tour: a fake can't follow calls. Tests script the steps they need. */
+  /** Derives no tour and no flow: a fake can't follow calls. Tests script what they need. */
   async steps(
     input: AnalysisInput,
     options?: PassOptions,
-  ): Promise<Result<PassOutput<StepDraft[]>, PassError>> {
-    return this.answer("steps", input, options, () => []);
+  ): Promise<Result<PassOutput<TourDraft>, PassError>> {
+    const answered = await this.answer("steps", input, options, () => []);
+    if (!answered.ok) return answered;
+    const flow = this.scriptedFlows.shift() ?? null;
+    return ok({ ...answered.value, value: { steps: answered.value.value, flow } });
   }
 
   private async answer<P extends ModelPass>(

@@ -130,11 +130,41 @@ describe("a ref of the run's guidance in text the reviewer reads", () => {
       model,
       input,
       { hunks, mechanical: new Set(), parts: [], callGraph: [] },
+      { paths: new Set(), linked: () => false },
       deps(),
       guidance,
     );
     if (!steps.outcome.ok) throw new Error(steps.outcome.error.message);
     expect(steps.outcome.value[0]?.sentence).toBe(`${clean} 1`);
+  });
+
+  it("is replaced in the data flow's words", async () => {
+    const model = new FakeAnalysisModel();
+    const [first, second] = input.files.map((file) => file.path);
+    if (first === undefined || second === undefined) throw new Error("the input has two files");
+    const station = (path: string) => ({
+      name: said,
+      when: said,
+      keeps: false,
+      files: [path],
+      gives: said,
+      shapes: [],
+    });
+    model.scriptFlow({ source: said, stations: [station(first), station(second)], end: said });
+    const { flow, modelCalls } = await runSteps(
+      model,
+      input,
+      { hunks, mechanical: new Set(), parts: [], callGraph: [] },
+      { paths: new Set([first, second]), linked: () => true },
+      deps(),
+      guidance,
+    );
+    expect(flow).toMatchObject({
+      source: clean,
+      stations: [{ name: clean, when: clean, gives: clean }, { name: clean }],
+      end: clean,
+    });
+    expect(modelCalls).toHaveLength(1);
   });
 
   it("is left alone when it isn't the run's, or the pull request's own code has the word", async () => {

@@ -58,7 +58,21 @@ Follow the change the way a request or a user action runs through it, from where
 - sentence: what happens at this step, as behavior a caller notices, in present tense, in at most 20 words, with code names in backticks and no period at the end ("A token is verified against the host before it's saved").
 - excerpts: the lines that decide what the sentence says, 4 to 14 of them: hunkId, side ("new" for "+" and unchanged lines, "old" for "-" lines, so a removed check can be shown), and startLine to line. Use only line numbers the hunk shows, and only hunks sent in full. One excerpt per step; two only when the hop crosses into another process, such as a client's request and the route that serves it, each in its own file.
 - No step on a test, a generated file or docs.
-- Nothing that looks wrong: that's another task's. A step says what the code does.`,
+- Nothing that looks wrong: that's another task's. A step says what the code does.
+
+Then, in flow, say how data moves through the change, as you'd draw it on a whiteboard for the reviewer before they read any code: where the data comes in, the few stations it passes through, and where it ends up. One path, the main one, in the order the data moves. That isn't always call order: code that reads what other code wrote comes after it, even when the reader is the one that calls.
+
+- source: where the data comes into the change from outside it, in at most 8 words: a request, a command, an option, an event, a file ("\`POST /orders\` from the checkout page"). null when nothing comes in.
+- stations: 2 to 7. A station is a role on the path, not a file: files that do the same job at the same point are one station ("the four instrumentation phases").
+  - name: what happens to the data there, as a verb phrase of at most 6 words, without code names ("Count while the program runs", "Check the token with the host").
+  - when: when or where the station runs, in at most 3 words ("build time", "run time", "at exit", "in the browser", "on the server"), when the stations differ in it. null when they all run in one place and time.
+  - keeps: true when the station holds the data for a later station to read: a table, a cache, a queue, a file, memory that outlives the call. Otherwise false.
+  - files: the changed files that play this role, each by its path as the data gives it. A file goes in one place in the whole flow. Existing files the change edits to reach this station go here too. Leave out tests, docs, generated files and changed files off this path.
+  - gives: what the station hands the next one, as data and not as a call, in at most 12 words, code names in backticks ("a counter per branch, call and lock"). For the last station, what it leaves where the data ends up.
+  - shapes: the changed files that only define what's handed on, such as a key, a record or a format. Usually none.
+- end: where the data ends up outside the change, in at most 8 words ("an \`.iprof\` file", "the \`orders\` table", "the response"). null when it stays inside.
+
+Two neighboring stations are joined in the code: one calls the other, names it or sends it a request. When the change moves no data along a path of at least two stations, as a refactoring, a configuration change or a single function doesn't, answer flow with null.`,
 };
 
 const ids = (hunkIds: readonly string[]): string =>

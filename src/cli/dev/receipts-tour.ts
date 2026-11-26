@@ -1,6 +1,6 @@
 import type { AnalysisInput, AnalysisModel } from "../../application/ports/index.ts";
 import { type PullRequestFixture, smallFeature } from "../../application/testing/index.ts";
-import { pullRequestUrl, type StepDraft } from "../../domain/review/index.ts";
+import { type DataFlow, pullRequestUrl, type StepDraft } from "../../domain/review/index.ts";
 import { ok } from "../../domain/shared/index.ts";
 import { hunkWith, lineOf } from "./hunks.ts";
 
@@ -50,7 +50,34 @@ const stepsOf = (input: AnalysisInput): StepDraft[] => {
   ];
 };
 
-/** The model, but receipts-tour's steps pass answers with its tour, after the model's own time. */
+/** The data flow the fake model writes of it: the request, the route, the receipts kept an hour. */
+const FLOW: DataFlow = {
+  source: "`GET /orders/:id/receipt` from a signed-in user",
+  stations: [
+    {
+      name: "Find the user's own order",
+      when: null,
+      keeps: false,
+      files: ["src/routes/orders.ts"],
+      gives: "the order, once it's the user's",
+      shapes: [],
+    },
+    {
+      name: "Render the receipt, kept an hour",
+      when: null,
+      keeps: true,
+      files: ["src/services/receipts.ts"],
+      gives: "the receipt as plain text",
+      shapes: [],
+    },
+  ],
+  end: "the response",
+};
+
+/**
+ * The model, but receipts-tour's steps pass answers with its tour and its data flow, after the
+ * model's own time.
+ */
 export const withTour = (model: AnalysisModel, url: string): AnalysisModel => ({
   version: model.version,
   readsHarness: model.readsHarness,
@@ -60,6 +87,6 @@ export const withTour = (model: AnalysisModel, url: string): AnalysisModel => ({
   async steps(input, options) {
     const answer = await model.steps(input, options);
     if (!answer.ok || input.pullRequest.url !== url) return answer;
-    return ok({ ...answer.value, value: stepsOf(input) });
+    return ok({ ...answer.value, value: { steps: stepsOf(input), flow: FLOW } });
   },
 });

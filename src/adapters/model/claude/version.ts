@@ -10,7 +10,7 @@ export const PROMPT_FINGERPRINT = "bb38e2f84124162c";
 /** The same, of a run with something to read, which the others send nothing of. */
 export const READER_FINGERPRINT = "d926058e9e2b4a74";
 /** The same, of the steps pass, which only a run that asks for the tour sends. */
-export const TOUR_FINGERPRINT = "a7420f11b28c17c7";
+export const TOUR_FINGERPRINT = "fb2791ebf2575a4a";
 
 export const apiVersion = (model: string): string => `${model}/p${PROMPT_VERSION}`;
 
@@ -25,7 +25,7 @@ export const CLAUDE_CODE_PROMPT_VERSION = 19;
 export const CLAUDE_CODE_FINGERPRINT = "6a8aced374e41ab7";
 /** The same, of a run with something to read, which the others send nothing of. */
 export const CLAUDE_CODE_READER_FINGERPRINT = "725950ff8540728f";
-export const CLAUDE_CODE_TOUR_FINGERPRINT = "504708202c6b3466";
+export const CLAUDE_CODE_TOUR_FINGERPRINT = "8a92266418f99283";
 
 /** An effort for every pass, in place of each pass's own, is named after the model. */
 export const claudeCodeVersion = (model: string, effort?: string): string =>
