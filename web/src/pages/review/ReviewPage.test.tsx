@@ -1741,7 +1741,7 @@ describe("layouts", () => {
     expect(understand.getAttribute("aria-pressed")).toBe("true");
     expect(window.location.search).toBe("?view=overview");
     await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    await screen.findByRole("menuitemcheckbox", { name: "Decisions" });
+    await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
     expect(screen.queryByRole("menuitemradio", { name: "Understand" })).toBeNull();
   });
 
