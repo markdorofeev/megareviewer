@@ -837,7 +837,7 @@ test.describe("without the model", () => {
     // A click on the route's directory in the overview opens its first file in the map.
     await page
       .getByRole("group", { name: "Layout" })
-      .getByRole("button", { name: "Understand" })
+      .getByRole("button", { name: "Overview" })
       .click();
     const overview = page.getByRole("region", { name: "Overview of the changed files" });
     await overview.getByRole("button", { name: /^src\/routes\/, / }).click();
@@ -892,7 +892,7 @@ test("shows the overview in each preview form, whose stops open the map", async 
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
   await page
     .getByRole("group", { name: "Layout" })
-    .getByRole("button", { name: "Understand" })
+    .getByRole("button", { name: "Overview" })
     .click();
   for (const form of FLOW_FORMS) {
     const view = await showForm(page, form);
@@ -936,7 +936,7 @@ for (const width of [720, 1024, 1440]) {
     await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeInViewport();
     await page
       .getByRole("group", { name: "Layout" })
-      .getByRole("button", { name: "Understand" })
+      .getByRole("button", { name: "Overview" })
       .click();
     await expect(page.locator("[data-slot=overview-scroll]")).toBeVisible();
     expect(await overflows()).toBe(false);

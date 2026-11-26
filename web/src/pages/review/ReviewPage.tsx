@@ -117,7 +117,7 @@ import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
 import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
 import { type NoTour, noTourOf, type TourExcerpt, type TourStep, tourOf } from "./tour.ts";
-import { BackRow, NoTourLine, TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
+import { NoTourLine, TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
 import { UsageFooter } from "./UsageFooter.tsx";
 import { useFileInView } from "./useFileInView.ts";
 import { useHarness } from "./useHarness.ts";
@@ -567,8 +567,8 @@ const Review = ({
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
   const overviewAt = useRef<string | null>(null);
-  // What the code was opened from, for the bar's second row to go back to: the overview, on the
-  // node to focus there, or the tour, on its step.
+  // What the code was opened from, for Back to come back to: the overview, on the node to focus
+  // there, or the tour, on its step.
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
   const [currentPoint, setCurrentPoint] = useState<PointId | null>(null);
   // What a pressed chip has the stepper walk.
@@ -780,7 +780,7 @@ const Review = ({
     setCurrentPoint(id);
   };
   // The tour's place across the layouts: the step the map was opened from, which the map marks and
-  // the bar's second row goes back to, and the step last current, kept per analysis in the tab.
+  // Back goes back to, and the step last current, kept per analysis in the tab.
   const [fromStep, setFromStep] = useState<{
     readonly step: TourStep;
     readonly excerpt: TourExcerpt;
@@ -804,7 +804,7 @@ const Review = ({
   const tourReady = tourOn && noTour === null && tour !== null;
   /**
    * To the code from the overview or the tour, on a history entry of its own that Back, Esc and
-   * the bar's second row go back from; nothing while the code is shown.
+   * the switch go back from; nothing while the code is shown.
    */
   const toCode = (
     from: ReturnTo = understand
@@ -1691,17 +1691,6 @@ const Review = ({
         verdict={verdictLabel(yourVerdict, verdictKnown, publication)}
         hairline={landing.running ? "running" : landing.phase === "landing" ? "finishing" : null}
       />
-      {layout === "map" && returnTo !== null && (
-        <BackRow
-          name={returnTo.kind === "tour" ? "Back to tour" : "Back to overview"}
-          detail={returnTo.kind === "tour" ? `Step ${returnTo.step}` : null}
-          onBack={backFromCode}
-          onDismiss={() => {
-            setReturnTo(null);
-            setFromStep(null);
-          }}
-        />
-      )}
 
       {!complete && (
         <ProgressStrip stages={live.stages} shown={CODE_STAGES} filesFetched={live.filesFetched} />

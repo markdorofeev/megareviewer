@@ -1393,7 +1393,7 @@ describe("points", () => {
 /** The bar's switch between the code and the overview. */
 const layoutSwitch = () => within(screen.getByRole("group", { name: "Layout" }));
 const openOverview = async () => {
-  await userEvent.click(layoutSwitch().getByRole("button", { name: "Understand" }));
+  await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
   return overviewBox();
 };
 /** The diagram's file nodes by row, as their labels. */
@@ -1561,7 +1561,7 @@ describe("overview", () => {
     window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
     renderReview();
     await loaded();
-    await userEvent.click(layoutSwitch().getByRole("button", { name: "Understand" }));
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
     expect(screen.getByRole("region", { name })).toBeTruthy();
   });
 });
@@ -1572,18 +1572,19 @@ describe("the tour", () => {
   };
   const tourRegion = () => screen.getByRole("region", { name: "Tour steps" });
 
-  it("is the Understand layout unless the Tour switch is off", async () => {
-    const first = renderReview();
+  it("is what the overview shows unless the Tour switch is off", async () => {
+    withTour();
+    const first = renderReview({ view: tourAnalysisView });
     await loaded();
-    expect(layoutSwitch().getByRole("button", { name: "Understand" })).toBeTruthy();
-    expect(layoutSwitch().queryByRole("button", { name: "Overview" })).toBeNull();
+    expect(await screen.findByRole("region", { name: "Tour steps" })).toBeTruthy();
+    expect(layoutSwitch().getByRole("button", { name: "Overview" })).toBeTruthy();
     first.unmount();
 
     window.localStorage.setItem("megareviewer:tour", "false");
-    renderReview();
+    renderReview({ view: tourAnalysisView });
     await loaded();
-    expect(layoutSwitch().getByRole("button", { name: "Overview" })).toBeTruthy();
-    expect(layoutSwitch().queryByRole("button", { name: "Understand" })).toBeNull();
+    expect(overviewBox()).toBeTruthy();
+    expect(() => tourRegion()).toThrow();
   });
 
   it("shows the steps in order, their points, and what the tour didn't show", async () => {
@@ -1658,7 +1659,8 @@ describe("the tour", () => {
       }),
     );
     await waitFor(() => expect(layoutIs("map")).toBe(true));
-    expect(screen.getByRole("button", { name: "Back to tour · Step 2" })).toBeTruthy();
+    // The bar's switch goes back; there's no row of its own for it.
+    expect(screen.queryByRole("button", { name: /^Back to/ })).toBeNull();
     const label = document.querySelector("[data-slot=tour-landing]");
     expect(label?.textContent).toContain("Tour step 2");
     // The label is what the map scrolls to, not the top of the part it's in.
@@ -1668,7 +1670,6 @@ describe("the tour", () => {
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(layoutIs("overview")).toBe(true));
     expect(document.activeElement?.textContent).toContain("Step 2:");
-    expect(screen.queryByRole("button", { name: "Back to tour · Step 2" })).toBeNull();
     // The step it came back to is the current one.
     const current = document.querySelector("[data-slot=tour-step][aria-current=step]");
     expect(current?.textContent).toContain("cachedReceipt keeps each order's receipt");
@@ -1686,7 +1687,9 @@ describe("the tour", () => {
     window.sessionStorage.setItem(`megareviewer:tour-step:${id}`, "3");
     await userEvent.keyboard("v");
     await waitFor(() => expect(layoutIs("map")).toBe(true));
-    expect(screen.getByRole("button", { name: "Back to tour · Step 3" })).toBeTruthy();
+    expect(document.querySelector("[data-slot=tour-landing]")?.textContent).toContain(
+      "Tour step 3",
+    );
     await userEvent.keyboard("v");
     await waitFor(() => expect(layoutIs("overview")).toBe(true));
     expect(document.activeElement?.textContent).toContain("Step 3:");
@@ -1734,15 +1737,15 @@ describe("layouts", () => {
     renderReview();
     await loaded();
     const code = layoutSwitch().getByRole("button", { name: "Code" });
-    const understand = layoutSwitch().getByRole("button", { name: "Understand" });
+    const overview = layoutSwitch().getByRole("button", { name: "Overview" });
     expect(code.getAttribute("aria-pressed")).toBe("true");
-    await userEvent.click(understand);
+    await userEvent.click(overview);
     expect(overviewBox()).toBeTruthy();
-    expect(understand.getAttribute("aria-pressed")).toBe("true");
+    expect(overview.getAttribute("aria-pressed")).toBe("true");
     expect(window.location.search).toBe("?view=overview");
     await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    await screen.findByRole("menuitemcheckbox", { name: "Decisions" });
-    expect(screen.queryByRole("menuitemradio", { name: "Understand" })).toBeNull();
+    await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
+    expect(screen.queryByRole("menuitemradio", { name: "Overview" })).toBeNull();
   });
 
   it("are entries of the browser's history, so Back goes from the code to the overview", async () => {

@@ -287,7 +287,12 @@ describe("a point a preference left out", () => {
       <FindingCard
         point={{
           ...finding,
-          guidance: { effect: "left-out", label: "REVIEW.md", preferenceId: null, everywhere: false },
+          guidance: {
+            effect: "left-out",
+            label: "REVIEW.md",
+            preferenceId: null,
+            everywhere: false,
+          },
         }}
         {...actions}
         {...findingProps}
