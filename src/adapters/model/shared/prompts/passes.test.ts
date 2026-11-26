@@ -132,7 +132,7 @@ describe("what guidance adds to a task", () => {
     expect(
       fnv1a64(JSON.stringify(messages)),
       "A run with guidance sends something else. Bump every transport's prompt version.",
-    ).toBe("c7ba749c42f3b851");
+    ).toBe("a7afbc01574360d5");
   });
 
   it("comes before the problems with an earlier answer", () => {

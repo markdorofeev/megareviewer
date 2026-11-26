@@ -5,10 +5,10 @@ import { MODEL } from "./request.ts";
  * change, and set PROMPT_FINGERPRINT to the value the version test prints. The version is part
  * of the analysis cache key, so a stale one would serve analyses made with the old prompts.
  */
-export const PROMPT_VERSION = 21;
-export const PROMPT_FINGERPRINT = "7d0cf0b3f39ca36b";
+export const PROMPT_VERSION = 22;
+export const PROMPT_FINGERPRINT = "bb38e2f84124162c";
 /** The same, of a run with something to read, which the others send nothing of. */
-export const READER_FINGERPRINT = "ecb2402ae3a53e45";
+export const READER_FINGERPRINT = "d926058e9e2b4a74";
 /** The same, of the steps pass, which only a run that asks for the tour sends. */
 export const TOUR_FINGERPRINT = "a7420f11b28c17c7";
 
@@ -21,11 +21,11 @@ export const VERSION = apiVersion(MODEL);
  * the API's, so an analysis made on one transport isn't served for the other. Bump it as above,
  * with CLAUDE_CODE_FINGERPRINT.
  */
-export const CLAUDE_CODE_PROMPT_VERSION = 18;
-export const CLAUDE_CODE_FINGERPRINT = "5b777973de8cb4d0";
+export const CLAUDE_CODE_PROMPT_VERSION = 19;
+export const CLAUDE_CODE_FINGERPRINT = "6a8aced374e41ab7";
 /** The same, of a run with something to read, which the others send nothing of. */
-export const CLAUDE_CODE_READER_FINGERPRINT = "51fd0e9849c24c14";
-export const CLAUDE_CODE_TOUR_FINGERPRINT = "1c8e2fe52bfda209";
+export const CLAUDE_CODE_READER_FINGERPRINT = "725950ff8540728f";
+export const CLAUDE_CODE_TOUR_FINGERPRINT = "504708202c6b3466";
 
 /** An effort for every pass, in place of each pass's own, is named after the model. */
 export const claudeCodeVersion = (model: string, effort?: string): string =>
