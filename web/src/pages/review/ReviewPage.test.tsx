@@ -873,29 +873,23 @@ describe("intent", () => {
   };
   const lines = () => [...brief().querySelectorAll("p")].map((line) => line.textContent);
 
-  it("reads in three lines: what the change does, how it runs through the system, what to watch", async () => {
-    renderReview();
+  it("is one line of what the change does, with Claude's code names set as code", async () => {
+    if (analysis.intent === null) throw new Error("the fixture has no intent");
+    renderReview({
+      view: withIntent({
+        inferred: {
+          ...analysis.intent.inferred,
+          summary: "`GET /orders/:id/receipt` calls `renderReceipt`.",
+        },
+      }),
+    });
     await loaded();
-    const { inferred } = analysis.intent ?? {};
-    expect(lines()).toEqual([
-      `From the code: ${inferred?.summary}`,
-      "Through: GET /orders/:id/receipt calls renderReceipt, which fetches tax lines from the tax service and keeps the result in an in-memory cache.",
-      "Watch: Any signed-in user can download any order's receipt · Rendered receipts stay in memory for the life of the process",
-    ]);
-    // Code names are set as code, from the model's backticks, never as HTML.
+    expect(lines()).toEqual(["From the code: GET /orders/:id/receipt calls renderReceipt."]);
+    // From the model's backticks, never as HTML.
     expect([...brief().querySelectorAll("code")].map((code) => code.textContent)).toEqual([
       "GET /orders/:id/receipt",
       "renderReceipt",
     ]);
-  });
-
-  it("leaves out a line Claude left empty", async () => {
-    if (analysis.intent === null) throw new Error("the fixture has no intent");
-    renderReview({
-      view: withIntent({ inferred: { ...analysis.intent.inferred, shape: "", watch: [] } }),
-    });
-    await loaded();
-    expect(lines()).toHaveLength(1);
   });
 
   it("before Claude, is the description's first sentence alone", async () => {
@@ -909,7 +903,7 @@ describe("intent", () => {
       view: withIntent({
         stated: null,
         mismatches: [],
-        inferred: { summary: "Renames a variable.", shape: "", behaviorChanges: [], watch: [] },
+        inferred: { summary: "Renames a variable.", behaviorChanges: [] },
       }),
     });
     await loaded();

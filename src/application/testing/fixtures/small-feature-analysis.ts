@@ -164,7 +164,7 @@ export const smallFeatureInput: AnalysisInput = {
 const key: AnalysisKey = {
   ref: pullRequest.ref,
   headSha: pullRequest.headSha,
-  pipelineVersion: "23",
+  pipelineVersion: "24",
 };
 
 export const smallFeatureIntent: Intent = {
@@ -179,14 +179,11 @@ export const smallFeatureIntent: Intent = {
   inferred: {
     summary:
       "Adds GET /orders/:id/receipt, which renders a receipt and caches it in memory for a hard-coded hour. Also raises the rate limit tenfold.",
-    shape:
-      "`GET /orders/:id/receipt` in `ordersRouter` calls `findOrder`, then `renderReceipt`, which reads or fills an in-process `Map` cache.",
     behaviorChanges: [
       "New endpoint GET /orders/:id/receipt returns a plain-text receipt for the user's own order, or 404.",
       "Receipts are cached in process memory for one hour, with no eviction.",
       "The rate limit goes from 60 to 600 requests per minute.",
     ],
-    watch: ["Rate limit raised tenfold, which nobody asked for"],
   },
   mismatches: [
     {

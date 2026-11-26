@@ -278,7 +278,7 @@ describe("the analysis pipeline", () => {
     expect(analysis.status).toBe("complete");
     expect(analysis.error).toBeNull();
     expect(Object.values(analysis.stages)).toEqual([...Array(4).fill("done"), "skipped"]);
-    expect(analysis.key.pipelineVersion).toBe("23");
+    expect(analysis.key.pipelineVersion).toBe("24");
     expect(analysis.modelError).toBeNull();
     expect(analysis.files.map((file) => ({ ...file, language: null }))).toEqual(
       smallFeatureFiles.map((file) => ({ ...file, language: null })),
@@ -724,7 +724,7 @@ describe("the analysis pipeline", () => {
     it("drops unknown hunks from mismatches after a retry", async () => {
       const intent = {
         stated: null,
-        inferred: { summary: "Adds receipts.", shape: "", behaviorChanges: [], watch: [] },
+        inferred: { summary: "Adds receipts.", behaviorChanges: [] },
         mismatches: [
           { kind: "unrequested" as const, description: "Rate limit", hunkIds: [h1, unknownHunk] },
         ],
@@ -769,7 +769,7 @@ describe("the analysis pipeline", () => {
         "intent",
         ok({
           stated: null,
-          inferred: { summary: "Adds receipts.", shape: "", behaviorChanges: [], watch: [] },
+          inferred: { summary: "Adds receipts.", behaviorChanges: [] },
           mismatches: [
             { kind: "unrequested", description: "Caches receipts.", hunkIds: [hunk.id] },
           ],
@@ -1177,7 +1177,7 @@ describe("without the model", () => {
       findings: "skipped",
       steps: "skipped",
     });
-    expect(analysis.key.pipelineVersion).toBe("23");
+    expect(analysis.key.pipelineVersion).toBe("24");
     expect(analysis.intent).toBeNull();
     expect(analysis.usage).toEqual([]);
     expect(analysis.risk.map((risk) => [risk.hunkId, risk.source])).toEqual(
@@ -1269,7 +1269,7 @@ describe("with a local checkout", () => {
       expect(analysis.status).toBe("complete");
       expect(analysis.checkout).toBe("read");
       expect(analysis.checkoutDir).toBe("/src/shop");
-      expect(analysis.key.pipelineVersion).toBe("23");
+      expect(analysis.key.pipelineVersion).toBe("24");
       expect(analysis.unchangedCallers).toEqual([
         {
           partId: ordersHunk,
@@ -1408,7 +1408,7 @@ describe("with a local checkout", () => {
       const analysis = await analyze();
       expect(analysis.checkout).toBe(status);
       expect(analysis.checkoutDir).toBe(namesRepo ? "/src/shop" : null);
-      expect(analysis.key.pipelineVersion).toBe("23");
+      expect(analysis.key.pipelineVersion).toBe("24");
       expect(analysis.unchangedCallers).toEqual([]);
       expect(reader.reads).toEqual([]);
     },

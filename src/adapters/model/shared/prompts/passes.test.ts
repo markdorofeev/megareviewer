@@ -13,12 +13,12 @@ describe("the intent task", () => {
     }
   });
 
-  it("keeps the brief short: words per line and lines to watch", () => {
+  it("keeps the summary to one short sentence", () => {
     expect(PASS_INSTRUCTIONS.intent).toContain("one sentence of at most 20 words");
-    expect(PASS_INSTRUCTIONS.intent).toContain(
-      "one sentence of at most 25 words: where it's reached",
-    );
-    expect(PASS_INSTRUCTIONS.intent).toContain("at most 2 things");
+  });
+
+  it("takes what nobody asked for as a mismatch, even when the summary leaves it out", () => {
+    expect(PASS_INSTRUCTIONS.intent).toContain("is a mismatch even when the summary leaves it out");
   });
 });
 
@@ -74,8 +74,7 @@ describe("the reviewer's guidance", () => {
     );
   });
 
-  it("orders the brief's watch by it, without a mark", () => {
-    expect(PASS_INSTRUCTIONS.intent).toContain("within the same 2 things and 12 words");
+  it("puts no mark on the intent", () => {
     expect(PASS_INSTRUCTIONS.intent).not.toMatch(/"raised"|"left-out"/);
   });
 });
@@ -133,7 +132,7 @@ describe("what guidance adds to a task", () => {
     expect(
       fnv1a64(JSON.stringify(messages)),
       "A run with guidance sends something else. Bump every transport's prompt version.",
-    ).toBe("b9100f1f5f4a0091");
+    ).toBe("c7ba749c42f3b851");
   });
 
   it("comes before the problems with an earlier answer", () => {
@@ -144,12 +143,10 @@ describe("what guidance adds to a task", () => {
 });
 
 describe("passMessage", () => {
-  it("gives findings the intent's summary and mismatches by ID, not its brief", () => {
+  it("gives findings the intent's summary and mismatches by ID", () => {
     const message = passMessage("findings", smallFeatureIntent, undefined);
     expect(message).toContain(`Inferred: ${smallFeatureIntent.inferred.summary}`);
     expect(message).toMatch(/^- m1 unrequested: /m);
-    expect(message).not.toContain(smallFeatureIntent.inferred.shape);
-    expect(message).not.toContain(smallFeatureIntent.inferred.watch[0]);
   });
 
   it("gives the intent task nothing earlier, and the previous attempt's problems last", () => {

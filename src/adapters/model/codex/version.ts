@@ -4,10 +4,10 @@
  * output schema or the arguments change, and set CODEX_FINGERPRINT to the value the version test
  * prints. The version is part of the analysis cache key.
  */
-export const CODEX_PROMPT_VERSION = 13;
-export const CODEX_FINGERPRINT = "7bfe66e7c5e9bd15";
+export const CODEX_PROMPT_VERSION = 14;
+export const CODEX_FINGERPRINT = "637713b626ba3436";
 /** The same, of a run that asks for the tour. */
-export const CODEX_TOUR_FINGERPRINT = "df2cdca1a32bf2bb";
+export const CODEX_TOUR_FINGERPRINT = "d74125d36739eded";
 
 /** An effort for every pass, in place of each pass's own, is named after the model. */
 export const codexVersion = (model: string, effort?: string): string =>

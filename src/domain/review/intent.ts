@@ -38,12 +38,7 @@ export type StatedIntent = z.infer<typeof StatedIntent>;
 export const InferredIntent = z
   .object({
     summary: z.string(),
-    // Analyses stored before the brief had only the summary and the behavior changes.
-    /** How the change runs through the system, from where it's reached to what it ends in. */
-    shape: z.string().default(""),
     behaviorChanges: z.array(z.string()).readonly(),
-    /** What the reviewer should keep in mind while reading: consequences past the summary. */
-    watch: z.array(z.string()).readonly().default([]),
   })
   .readonly();
 export type InferredIntent = z.infer<typeof InferredIntent>;

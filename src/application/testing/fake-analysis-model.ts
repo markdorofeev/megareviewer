@@ -103,9 +103,7 @@ export class FakeAnalysisModel implements AnalysisModel {
         stated: sources.length === 0 ? null : { summary: input.pullRequest.title, sources },
         inferred: {
           summary: `Changes ${files.length} file(s).`,
-          shape: "",
           behaviorChanges: files.map((file) => `Changes ${file.path}`),
-          watch: [],
         },
         mismatches: [],
       };

@@ -602,17 +602,11 @@ const analysis: Analysis = {
     inferred: {
       summary:
         "Adds a receipt download endpoint, retries the tax service, caches rendered receipts in memory and changes the date format on receipts.",
-      shape:
-        "`GET /orders/:id/receipt` calls `renderReceipt`, which fetches tax lines from the tax service and keeps the result in an in-memory cache.",
       behaviorChanges: [
         "GET /orders/:id/receipt returns a plain-text receipt for any order ID to any signed-in user.",
         "Tax lines are fetched up to 3 times, back to back, before the receipt fails.",
         "Each rendered receipt stays in memory for the life of the process.",
         'Receipts show dates as "21 October 2026" instead of "2026-10-21", and prices as money.',
-      ],
-      watch: [
-        "Any signed-in user can download any order's receipt",
-        "Rendered receipts stay in memory for the life of the process",
       ],
     },
     mismatches: [

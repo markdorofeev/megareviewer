@@ -82,7 +82,7 @@ describe("a ref of the run's guidance in text the reviewer reads", () => {
       "intent",
       ok({
         stated: { summary: said, sources: [] },
-        inferred: { summary: said, shape: said, behaviorChanges: [said], watch: [said] },
+        inferred: { summary: said, behaviorChanges: [said] },
         mismatches: [{ kind: "unrequested", description: said, hunkIds: [] }],
       }),
     );
@@ -90,7 +90,7 @@ describe("a ref of the run's guidance in text the reviewer reads", () => {
     expect(result.outcome).toEqual(
       ok({
         stated: { summary: clean, sources: [] },
-        inferred: { summary: clean, shape: clean, behaviorChanges: [clean], watch: [clean] },
+        inferred: { summary: clean, behaviorChanges: [clean] },
         mismatches: [{ kind: "unrequested", description: clean, hunkIds: [] }],
       }),
     );
