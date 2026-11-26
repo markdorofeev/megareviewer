@@ -71,6 +71,8 @@ export interface FileOverview {
   readonly edges: readonly OverviewEdge[];
   /** Nodes no edge touches. */
   readonly strip: readonly OverviewNode[];
+  /** Tests and test helpers that reach no changed code, in path order: listed, never a box. */
+  readonly tests: readonly string[];
   /** Each file's place: its node, its group, its strip item, or the first node it's a badge on. */
   readonly placeOf: ReadonlyMap<string, string>;
 }
@@ -266,8 +268,9 @@ export type OverviewInput = Pick<
 /**
  * The changed files by directory, as layered nodes: each one row below its lowest caller, cycles
  * broken toward reading order. Edges merge imports, calls, type uses and requests per pair. Tests are
- * badges, unlinked nodes go to the strip, and code outside the PR that uses what a node's files
- * change is a count on it. ARCHITECTURE.md's Overview has the rest.
+ * badges on the code they reach, or listed when they reach none, unlinked nodes go to the strip,
+ * and code outside the PR that uses what a node's files change is a count on it. ARCHITECTURE.md's
+ * Overview has the rest.
  */
 export const fileOverview = (
   analysis: OverviewInput,
@@ -358,11 +361,14 @@ export const fileOverview = (
     for (const path of reached) testsOn.set(path, [...(testsOn.get(path) ?? []), test]);
   }
 
-  // Nodes: directories, each holding its code, docs and tests that reach no code, or a file of a
-  // directory opened in place.
-  const unlinkedTests = [...testLike].filter((test) => (badgesOf.get(test) ?? []).length === 0);
+  // Nodes: directories, each holding its code and docs, or a file of a directory opened in place.
+  // A test that reaches no code would make a box of a test directory, most of them in Java, where
+  // tests are in another source root.
+  const unlinkedTests = [...testLike]
+    .filter((test) => (badgesOf.get(test) ?? []).length === 0)
+    .sort(byTreePath);
   const members = new Map<string, string[]>();
-  for (const path of [...code, ...docs, ...unlinkedTests].sort(byTreePath)) {
+  for (const path of [...code, ...docs].sort(byTreePath)) {
     const box = groupKey(directoryOf(path));
     const key = expanded.has(box) ? path : box;
     members.set(key, [...(members.get(key) ?? []), path]);
@@ -522,17 +528,19 @@ export const fileOverview = (
       }),
     ),
   );
-  return { rows, edges, strip, placeOf };
+  return { rows, edges, strip, tests: unlinkedTests, placeOf };
 };
 
 /**
  * The changed files in the overview's order: row by row from the files nothing calls, each
- * followed by the tests that reach it, then the strip. The map reads the files in this order.
+ * followed by the tests that reach it, then the strip, then the tests that reach nothing. The map
+ * reads the files in this order.
  */
 export const filesInCallOrder = (overview: FileOverview): string[] => {
   const order = new Set<string>();
   for (const node of [...overview.rows.flat(), ...overview.strip]) {
     for (const path of [...node.paths, ...node.badges]) order.add(path);
   }
+  for (const path of overview.tests) order.add(path);
   return [...order];
 };

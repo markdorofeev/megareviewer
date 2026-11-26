@@ -224,9 +224,12 @@ describe("fileOverview with every directory opened", () => {
     const badges = (key: string) => overview.rows.flat().find((node) => node.key === key)?.badges;
     expect(badges("app/service.py")).toEqual(["tests/test_service.py"]);
     expect(badges("app/store.py")).toEqual(["tests/test_service.py", "tests/fakes.py"]);
-    // A helper only tests use that reaches no code, and a test that links to nothing, are listed.
-    expect(overview.strip.map((node) => node.label)).toEqual(["fake_clock.py", "test_lonely.py"]);
+    // A helper only tests use that reaches no code, and a test that links to nothing, are listed,
+    // never a box.
+    expect(overview.strip).toEqual([]);
+    expect(overview.tests).toEqual(["src/testing/fake_clock.py", "tests/test_lonely.py"]);
     expect(overview.placeOf.get("tests/fakes.py")).toBe("app/store.py");
+    expect(overview.placeOf.has("tests/test_lonely.py")).toBe(false);
   });
 
   it("keeps code only tests call as a node, unless its name says it's a helper", () => {
@@ -252,7 +255,7 @@ describe("fileOverview with every directory opened", () => {
     ]);
   });
 
-  it("lists unlinked files, docs and unlinked tests in the strip", () => {
+  it("lists unlinked files and docs in the strip, and unlinked tests apart", () => {
     const files = [
       file("a.py", [1]),
       file("b.py", [2]),
@@ -264,7 +267,26 @@ describe("fileOverview with every directory opened", () => {
     expect(overview.strip.map((node) => [node.key, node.row])).toEqual([
       ["CONTRIBUTING.md", -1],
       ["web/Guide.tsx", -1],
-      ["web/Guide.test.tsx", -1],
+    ]);
+    expect(overview.tests).toEqual(["web/Guide.test.tsx"]);
+  });
+
+  it("makes no box of a test directory whose tests reach no code", () => {
+    const files = [
+      file("svm/src/core/pgo/Recorder.java", [1]),
+      file("svm/src/core/pgo/Dumper.java", [2]),
+      file("svm/src/core.test/src/core/pgo/RecorderTest.java", [3]),
+      file("svm/src/core.test/src/core/pgo/DumperTest.java", [4]),
+    ];
+    const overview = opened(input(files, { callGraph: [call(1, 2), call(3, 4)] }), flowOf(files));
+    const boxed = [...overview.rows.flat(), ...overview.strip].flatMap((node) => node.paths);
+    expect(boxed).toEqual(["svm/src/core/pgo/Recorder.java", "svm/src/core/pgo/Dumper.java"]);
+    expect(overview.edges.map((edge) => [edge.from, edge.to])).toEqual([
+      ["svm/src/core/pgo/Recorder.java", "svm/src/core/pgo/Dumper.java"],
+    ]);
+    expect(overview.tests).toEqual([
+      "svm/src/core.test/src/core/pgo/DumperTest.java",
+      "svm/src/core.test/src/core/pgo/RecorderTest.java",
     ]);
   });
 
@@ -421,9 +443,9 @@ describe("fileOverview with every directory opened", () => {
           .flatMap((node) => node.badges)
           .filter((path) => !asNode.includes(path)),
       );
-      expect([...asNode, ...asBadge].sort()).toEqual(toReview);
+      expect([...asNode, ...asBadge, ...overview.tests].sort()).toEqual(toReview);
       expect(new Set(asNode).size).toBe(asNode.length);
-      expect([...overview.placeOf.keys()].sort()).toEqual(toReview);
+      expect([...overview.placeOf.keys(), ...overview.tests].sort()).toEqual(toReview);
     }
   });
 });
@@ -477,7 +499,6 @@ describe("fileOverview outside the pull request", () => {
     expect(usesOf(callers)).toEqual([
       ["group:app", 3],
       ["group:lib", 0],
-      ["group:tests", 1],
     ]);
     expect(usesOf(callers, ["group:app"])).toContainEqual(["app/store.py", 2]);
   });

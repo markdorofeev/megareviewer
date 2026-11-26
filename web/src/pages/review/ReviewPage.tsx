@@ -1762,6 +1762,7 @@ const Review = ({
               onFocusNode={(key) => {
                 overviewAt.current = key;
               }}
+              onOpenFile={openFileFromTour}
             />
           ) : overviewForm === "lanes" ? (
             <FlowLanes
