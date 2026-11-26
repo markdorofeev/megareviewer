@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { smallFeatureAnalysis } from "../../application/testing/fixtures/small-feature-analysis.ts";
+import { smallFeatureAnalysis } from "../../application/testing/index.ts";
 import {
   type DataFlow,
   type DataFlowContext,
