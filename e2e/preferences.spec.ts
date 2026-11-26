@@ -36,7 +36,7 @@ const openReview = async (page: Page, url: string, title: string, claude = true)
   await page.goto(`/?token=${TOKEN}`);
   await page.getByRole("textbox", { name: "Pull request link" }).fill(url);
   await page.getByRole("button", { name: "Review", exact: true }).click();
-  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+$/);
+  await expect(page).toHaveURL(/\/review\/a_[0-9a-f]+(\?view=\w+)?$/);
   await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
   await expect(page.getByRole("list", { name: "Analysis progress" })).toBeHidden();
   if (!claude) return;

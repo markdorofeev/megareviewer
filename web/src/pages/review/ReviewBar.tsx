@@ -30,12 +30,13 @@ const useStuck = () => {
 };
 
 /**
- * The row under the header that stays at the top of the window while the code scrolls: Claude's
- * run and the stepper through its points, Show files at 1024px or less, the reviewer's verdict on
+ * The row under the header that stays at the top of the window while the code scrolls: the
+ * switch between the code and the overview, Claude's run and the stepper through its points, Show files at 1024px or less, the reviewer's verdict on
  * the host, and Approve and Publish. Its height is `--review-bar-h`, which what sticks or scrolls under it
  * reads. Stuck, it names the PR first.
  */
 export const ReviewBar = ({
+  layout = null,
   title,
   claude,
   tools,
@@ -44,6 +45,8 @@ export const ReviewBar = ({
   hairline,
   stuck: stuckAs,
 }: {
+  /** The switch between the code and the overview. */
+  readonly layout?: ReactNode;
   /** The PR's title, shown once the header has scrolled away. */
   readonly title: string | null;
   /** Claude's run, its chips and the stepper. */
@@ -75,6 +78,12 @@ export const ReviewBar = ({
         // Drawn by globals.css: a still, full-width bar under reduced motion.
         <span data-slot="model-hairline" data-state={hairline} aria-hidden="true">
           <span />
+        </span>
+      )}
+      {layout !== null && (
+        <span className="flex shrink-0 items-center gap-3">
+          {layout}
+          <span aria-hidden="true" className="h-4.5 w-px shrink-0 bg-border" />
         </span>
       )}
       {stuck && title !== null && (
