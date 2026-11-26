@@ -1596,7 +1596,7 @@ describe("the tour", () => {
       "Step 4: Receipt lines show prices through formatMoney and dates through dayjs",
       "Not in the tour · 7 files",
     ]);
-    expect(steps.getByText("lines 14–21 · 8 of 18 changed lines")).toBeTruthy();
+    expect(steps.getByText("lines 14–21")).toBeTruthy();
     const [firstChip] = steps.getAllByRole("button", { name: /^Finding/ });
     expect(firstChip?.textContent).toContain(
       "Any signed-in user can read every customer's receipt",

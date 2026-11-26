@@ -309,10 +309,7 @@ const StepSection = ({
                   <span className="text-muted-foreground">{excerpt.path.slice(0, cut)}</span>
                   <span className="font-medium">{excerpt.path.slice(cut)}</span>
                 </span>
-                <span className="text-caption text-muted-foreground">
-                  {linesLabel(excerpt)} · {excerpt.shown} of{" "}
-                  {count(excerpt.fileChanged, "changed line")}
-                </span>
+                <span className="text-caption text-muted-foreground">{linesLabel(excerpt)}</span>
                 <Button
                   variant="ghost"
                   size="sm"

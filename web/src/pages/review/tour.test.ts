@@ -46,17 +46,8 @@ describe("tourOf", () => {
         step(3, { hunkId: fixtureHunks.formatMoneyRemoved, side: "old", startLine: 21, line: 24 }),
       ],
     });
-    expect(tour.steps[2]?.excerpts[0]?.shown).toBe(4);
+    expect(tour.steps[2]?.excerpts).toHaveLength(1);
     expect(tour.shown + ledgerLines(tour)).toBe(prLines);
-  });
-
-  it("says how many of a file's changed lines an excerpt shows", () => {
-    const [route] = view().steps;
-    expect(route?.excerpts[0]).toMatchObject({
-      path: "src/routes/orders.ts",
-      shown: 8,
-      fileChanged: 18,
-    });
   });
 
   it("groups what the steps didn't show: their files' rest, tests, generated, other", () => {

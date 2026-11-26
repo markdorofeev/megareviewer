@@ -86,27 +86,6 @@ for (const theme of ["light", "dark"] as const) {
       steps.getByRole("region", { name: "After the tour" }).getByRole("heading", { level: 2 }),
     ).toHaveText([/^Not in the tour/, "Findings outside the steps"]);
 
-    // The changed lines the steps show and the ledger's add up to the pull request's.
-    const shown = await steps
-      .locator("[data-slot=tour-card]")
-      .evaluateAll((cards) =>
-        cards.reduce(
-          (sum, card) => sum + Number(/· (\d+) of/.exec(card.textContent ?? "")?.[1] ?? 0),
-          0,
-        ),
-      );
-    const ledger = await steps.locator("[data-slot=tour-end] details li").evaluateAll((rows) =>
-      rows.reduce((sum, row) => {
-        const added = /\+(\d+)/.exec(row.textContent ?? "")?.[1] ?? "0";
-        const removed = /−(\d+)/.exec(row.textContent ?? "")?.[1] ?? "0";
-        return sum + Number(added) + Number(removed);
-      }, 0),
-    );
-    const counted = await page.getByText(/^\d+ lines added, \d+ removed$/).textContent();
-    const [added = NaN, removed = NaN] = (counted ?? "").match(/\d+/g)?.map(Number) ?? [];
-    const total = added + removed;
-    expect(shown + ledger).toBe(total);
-
     // A box goes to its step.
     await page.getByRole("button", { name: /^config\/, step 3/ }).click();
     await expect(page.locator(":focus")).toContainText("Step 3:");

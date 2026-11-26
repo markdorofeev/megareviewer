@@ -31,9 +31,6 @@ export interface TourExcerpt {
   /** Its rows in the hunk, `end` past the last. */
   readonly start: number;
   readonly end: number;
-  /** The added and removed lines it shows, and the file's. */
-  readonly shown: number;
-  readonly fileChanged: number;
 }
 
 export interface TourStep {
@@ -93,8 +90,7 @@ const LEDGER_LABELS: Readonly<Record<LedgerGroupId, string>> = {
   other: "Other files",
 };
 
-const changed = (hunk: Hunk, start = 0, end = hunk.lines.length): number =>
-  hunk.lines.slice(start, end).filter((line) => line.kind !== "context").length;
+const changed = (hunk: Hunk): number => hunk.lines.filter((line) => line.kind !== "context").length;
 
 /** The rows of `hunk` from `lines`' first to its last, on its side; null when it shows neither. */
 export const rowsOf = (
@@ -159,8 +155,6 @@ export const tourOf = (
           partId: part,
           lines,
           ...rows,
-          shown: changed(hunk, rows.start, rows.end),
-          fileChanged: file.hunks.reduce((sum, one) => sum + changed(one), 0),
         },
       ];
     });
