@@ -30,6 +30,7 @@ import {
 import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from "../../api/index.ts";
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
+import { holdInView } from "../../lib/held-scroll.ts";
 import { type ShortcutHandlers, type ShortcutId, useShortcuts } from "../../lib/keymap.ts";
 import { usePageDisplay } from "../../lib/page-display.tsx";
 import { cn } from "../../lib/utils.ts";
@@ -58,7 +59,7 @@ import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import type { RuleFields } from "../preferences/PreferenceForm.tsx";
-import { scopeOptions } from "../preferences/rule.tsx";
+import { scopeOptions, scopePath } from "../preferences/rule.tsx";
 import { failureReason } from "../preferences/view.ts";
 import { throughOf } from "./brief.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
@@ -71,7 +72,6 @@ import { flowPaths } from "./flow-paths.ts";
 import { DraftGuardrail } from "./Guardrail.tsx";
 import { type HunkDeps, hunkAnchor } from "./HunkView.tsx";
 import { barButtons, verdictAfter, verdictLabel } from "./header-buttons.ts";
-import { holdInView } from "./heldScroll.ts";
 import { IntentLine } from "./IntentLine.tsx";
 import { IntentPanel } from "./IntentPanel.tsx";
 import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./MapLayout.tsx";
@@ -1987,6 +1987,7 @@ const Review = ({
           option={live.modelOption}
           guidance={live.guidance}
           leftOut={points.filter((point) => point.guidance?.effect === "left-out").length}
+          preferences={scopePath({ kind: "repo", repo: analysis.key.ref.repo })}
         />
         {complete && !modelRunning && hasModelRun(live) && (
           // A new run of the code's stages under the same ID: the page starts afresh to follow it.

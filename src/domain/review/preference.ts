@@ -280,6 +280,8 @@ export interface PointGuidance {
   readonly label: string;
   /** Null for a guideline file. */
   readonly preferenceId: PreferenceId | null;
+  /** A preference for every repository; a guideline file and any other are the PR's repository's. */
+  readonly everywhere: boolean;
 }
 
 /**
@@ -293,12 +295,19 @@ export const resolveGuidanceMark = (
 ): PointGuidance | null => {
   if (mark === null || guidance === null) return null;
   const file = guidance.guidelines.find((guideline) => guideline.ref === mark.ref);
-  if (file !== undefined) return { effect: mark.effect, label: file.path, preferenceId: null };
+  if (file !== undefined) {
+    return { effect: mark.effect, label: file.path, preferenceId: null, everywhere: false };
+  }
   const preference = guidance.preferences.find((candidate) => candidate.ref === mark.ref);
   if (preference === undefined) return null;
   const effect: GuidanceEffect = preference.kind === "look-for" ? "raised" : "left-out";
   return mark.effect === effect
-    ? { effect, label: preference.text, preferenceId: preference.id }
+    ? {
+        effect,
+        label: preference.text,
+        preferenceId: preference.id,
+        everywhere: preference.scope.kind === "global",
+      }
     : null;
 };
 

@@ -595,6 +595,7 @@ const PointStates = () => {
             effect: "raised",
             label: "Waits a caller can't see or cancel",
             preferenceId: PreferenceId.parse("pref_00000000000000d1"),
+            everywhere: true,
           },
         }}
         {...actions}
@@ -614,6 +615,7 @@ const PointStates = () => {
             effect: "left-out",
             label: "Naming",
             preferenceId: PreferenceId.parse("pref_00000000000000d2"),
+            everywhere: true,
           },
         }}
         {...actions}
@@ -628,7 +630,7 @@ const PointStates = () => {
           ...risk,
           id: PointId.parse("r:h_00000000000000fd"),
           title: "Retries a request that isn't idempotent, so a payment could be taken twice.",
-          guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null },
+          guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null, everywhere: false },
         }}
         {...actions}
       />

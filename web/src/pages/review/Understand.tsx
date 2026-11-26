@@ -8,10 +8,10 @@ import {
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Point, PointState } from "../../../../src/domain/review/index.ts";
+import { holdInPlace } from "../../lib/held-scroll.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
-import { holdInPlace } from "./heldScroll.ts";
 import { ModelText } from "./IntentLine.tsx";
 import {
   depthText,

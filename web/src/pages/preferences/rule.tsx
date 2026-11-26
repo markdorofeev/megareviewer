@@ -4,6 +4,7 @@ import type {
   PreferenceScope,
   RepoRef,
 } from "../../../../src/domain/review/index.ts";
+import { preferencesPath } from "../../app/router.ts";
 import { cn } from "../../lib/utils.ts";
 import { HOST_NAMES } from "../picker/PullRequestList.tsx";
 import { HostIcon } from "./HostIcon.tsx";
@@ -47,6 +48,14 @@ export const repoKey = ({ host, owner, repo }: RepoRef): string => `${host}/${ow
 
 export const scopeKey = (scope: PreferenceScope): string =>
   scope.kind === "global" ? "global" : repoKey(scope.repo);
+
+/** The preferences page on a scope's panel. */
+export const scopePath = (scope: PreferenceScope): string =>
+  preferencesPath(scope.kind === "global" ? null : repoKey(scope.repo));
+
+/** The repository among the scopes a rule can be saved to, else everywhere. */
+export const repoScopeOf = (scopes: readonly ScopeOption[]): PreferenceScope =>
+  scopes.find((option) => option.scope.kind !== "global")?.scope ?? GLOBAL;
 
 /** A scope the form offers, by the name the reviewer reads. */
 export interface ScopeOption {

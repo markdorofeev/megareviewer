@@ -6,6 +6,7 @@ import {
   parsePullRequestUrl,
   pullRequestUrl,
 } from "../../../src/domain/review/index.ts";
+import { saveScroll } from "./scroll-memory.ts";
 
 export type Route =
   | { readonly page: "picker" }
@@ -86,7 +87,9 @@ export const usePathname = (): string =>
 export const useSearch = (): string =>
   useSyncExternalStore(subscribe, () => window.location.search);
 
+/** Goes to `path` on a new history entry, at the top, keeping this page's place for Back. */
 export const navigate = (path: string): void => {
+  saveScroll();
   window.history.pushState(null, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
 };

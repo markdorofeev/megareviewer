@@ -42,6 +42,7 @@ const checked: Point = {
 };
 
 const repo = analysis.key.ref.repo;
+const REPO_PREFERENCES = `/preferences?scope=${repo.host}/${repo.owner}/${repo.repo}`;
 const actions = {
   state: "open" as const,
   saving: false,
@@ -68,18 +69,20 @@ const fromPreference = {
   effect: "raised" as const,
   label: "Lookups that aren't scoped to the signed-in user",
   preferenceId: PreferenceId.parse("pref_00000000000000a1"),
+  everywhere: true,
 };
 const leftOutByPreference = {
   effect: "left-out" as const,
   label: "Naming",
   preferenceId: PreferenceId.parse("pref_00000000000000a2"),
+  everywhere: true,
 };
 
 const guidanceLine = (container: HTMLElement) =>
   container.querySelector<HTMLElement>("[data-slot=point-guidance]");
 
 describe("a point's guidance", () => {
-  it("says which preference raised it, as a link to the preferences", () => {
+  it("says which preference raised it, as a link to its scope's preferences", () => {
     const { container } = render(
       <FindingCard
         point={{ ...finding, guidance: fromPreference }}
@@ -97,16 +100,32 @@ describe("a point's guidance", () => {
     expect(link.getAttribute("href")).toBe("/preferences");
   });
 
+  it("links a preference for this repository to the repository's preferences", () => {
+    render(
+      <FindingCard
+        point={{ ...finding, guidance: { ...fromPreference, everywhere: false } }}
+        {...actions}
+        {...findingProps}
+      />,
+    );
+    expect(screen.getByRole("link", { name: fromPreference.label }).getAttribute("href")).toBe(
+      REPO_PREFERENCES,
+    );
+  });
+
   it("names the guideline file a risk comes from", () => {
     const { container } = render(
       <RiskNote
-        point={{ ...risk, guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null } }}
+        point={{
+          ...risk,
+          guidance: { effect: "raised", label: "REVIEW.md", preferenceId: null, everywhere: false },
+        }}
         {...actions}
       />,
     );
     expect(guidanceLine(container)?.textContent).toBe("From REVIEW.md");
     expect(screen.getByRole("link", { name: "REVIEW.md" }).getAttribute("href")).toBe(
-      "/preferences",
+      REPO_PREFERENCES,
     );
   });
 
@@ -249,7 +268,12 @@ describe("a point a preference left out", () => {
       <RiskNote
         point={{
           ...risk,
-          guidance: { effect: "left-out", label: "REVIEW.md", preferenceId: null },
+          guidance: {
+            effect: "left-out",
+            label: "REVIEW.md",
+            preferenceId: null,
+            everywhere: false,
+          },
         }}
         {...actions}
         leftOut
@@ -354,7 +378,7 @@ describe("Don't flag things like this", () => {
     expect(screen.getByRole("form")).toBeTruthy();
   });
 
-  it("says on the dismissed line that the rule was saved, with a link to it", async () => {
+  it("says on the dismissed line that the rule was saved, with a link to its scope", async () => {
     const Saved = () => {
       const [state, setState] = useState<"open" | "dismissed">("open");
       return (
@@ -375,7 +399,7 @@ describe("Don't flag things like this", () => {
     await userEvent.click(within(form).getByRole("button", { name: "Save and dismiss" }));
     const line = await screen.findByText(/Dismissed, and saved to your/);
     expect(within(line).getByRole("link", { name: "preferences" }).getAttribute("href")).toBe(
-      "/preferences",
+      REPO_PREFERENCES,
     );
   });
 

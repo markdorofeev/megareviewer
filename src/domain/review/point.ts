@@ -97,7 +97,12 @@ export const Point = z
      * left-out is one the reviewer asked not to be flagged, which the page folds.
      */
     guidance: z
-      .object({ effect: GuidanceEffect, label: z.string(), preferenceId: PreferenceId.nullable() })
+      .object({
+        effect: GuidanceEffect,
+        label: z.string(),
+        preferenceId: PreferenceId.nullable(),
+        everywhere: z.boolean(),
+      })
       .readonly()
       .optional(),
     /** On a finding or a risk: a check that could catch its kind. */

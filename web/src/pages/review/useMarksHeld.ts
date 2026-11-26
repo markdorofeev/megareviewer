@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { type Analysis, MODEL_STAGES, STEPS_STAGE } from "../../../../src/domain/review/index.ts";
-import { holdTopLine } from "./heldScroll.ts";
+import { holdTopLine } from "../../lib/held-scroll.ts";
 
 const CODE = "[aria-label=Changes]";
 

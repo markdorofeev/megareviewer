@@ -53,7 +53,7 @@ const MOVES = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
  * it take their real size after the scroll, until the reader moves or a moment passes. Returns
  * what lets go sooner.
  */
-export const holdInPlace = (area: string, put: () => void): (() => void) => {
+export const holdInPlace = (area: string, put: () => void, ms = HOLD_MS): (() => void) => {
   const observed = document.querySelector(area);
   if (observed === null || typeof ResizeObserver !== "function") return nothing;
   const observer = new ResizeObserver(put);
@@ -62,7 +62,7 @@ export const holdInPlace = (area: string, put: () => void): (() => void) => {
     window.clearTimeout(timer);
     for (const move of MOVES) window.removeEventListener(move, release);
   };
-  const timer = window.setTimeout(release, HOLD_MS);
+  const timer = window.setTimeout(release, ms);
   for (const move of MOVES) window.addEventListener(move, release, { passive: true });
   observer.observe(observed);
   return release;

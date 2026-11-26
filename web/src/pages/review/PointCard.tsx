@@ -14,11 +14,11 @@ import {
   type Point,
   type PointId,
   type PointState,
+  type PreferenceScope,
   parseBody,
   type Severity,
 } from "../../../../src/domain/review/index.ts";
 import { Link } from "../../app/Link.tsx";
-import { PREFERENCES_PATH } from "../../app/router.ts";
 import { POINT_ICON, POINT_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { type CallPayload, type CallPeekHandle, CallTrigger } from "../../review/index.ts";
@@ -31,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu.tsx";
 import { PreferenceForm, type RuleFields } from "../preferences/PreferenceForm.tsx";
-import type { ScopeOption } from "../preferences/rule.tsx";
+import { GLOBAL, repoScopeOf, type ScopeOption, scopePath } from "../preferences/rule.tsx";
 import { GuardrailLine } from "./Guardrail.tsx";
 
 export const pointAnchor = (id: PointId): string => `point-${id}`;
@@ -150,9 +150,12 @@ const guidanceWords = ({ effect, preferenceId }: NonNullable<Point["guidance"]>)
  */
 const GuidanceLine = ({
   guidance,
+  scopes,
   className,
 }: {
   readonly guidance: NonNullable<Point["guidance"]>;
+  /** The scopes a rule can be saved to, which name the PR's repository. */
+  readonly scopes: readonly ScopeOption[];
   readonly className?: string;
 }) => {
   const Icon = guidance.preferenceId === null ? FileTextIcon : SlidersHorizontalIcon;
@@ -166,7 +169,7 @@ const GuidanceLine = ({
       <span className="min-w-0">
         {guidanceWords(guidance)}{" "}
         <Link
-          to={PREFERENCES_PATH}
+          to={scopePath(guidance.everywhere ? GLOBAL : repoScopeOf(scopes))}
           className={cn(
             "underline",
             guidance.preferenceId === null && "font-mono text-code-compact",
@@ -322,11 +325,11 @@ const RuleForm = ({
 /** The rule's form on a card: whether it's open, and whether a rule was saved from the point. */
 const useRule = (point: Point, onRule: PointActions["onRule"]) => {
   const [writing, setWriting] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<PreferenceScope | null>(null);
   const save = async (fields: RuleFields): Promise<string | null> => {
     const failed = await onRule(point, fields);
     if (failed === null) {
-      setSaved(true);
+      setSaved(fields.scope);
       setWriting(false);
     }
     return failed;
@@ -334,12 +337,12 @@ const useRule = (point: Point, onRule: PointActions["onRule"]) => {
   return { writing, setWriting, saved, save };
 };
 
-/** What a dismissed point's line says, with the rule when one was saved from it. */
-const dismissedNote = (ruleSaved: boolean): ReactNode =>
-  ruleSaved ? (
+/** What a dismissed point's line says, with where its rule is when one was saved from it. */
+const dismissedNote = (savedTo: PreferenceScope | null): ReactNode =>
+  savedTo !== null ? (
     <>
       Dismissed, and saved to your{" "}
-      <Link to={PREFERENCES_PATH} className="underline">
+      <Link to={scopePath(savedTo)} className="underline">
         preferences
       </Link>
     </>
@@ -530,7 +533,9 @@ export const FindingCard = memo(function FindingCard({
           {point.mismatch.description}
         </p>
       )}
-      {point.guidance !== undefined && <GuidanceLine guidance={point.guidance} />}
+      {point.guidance !== undefined && (
+        <GuidanceLine guidance={point.guidance} scopes={ruleScopes} />
+      )}
       {point.guardrail !== undefined && (
         <GuardrailLine guardrail={point.guardrail} family={family} />
       )}
@@ -756,7 +761,7 @@ export const RiskNote = memo(function RiskNote({
         <CheckedBy checkedBy={point.checkedBy} peek={test} id={`${pointAnchor(point.id)}-test`} />
       )}
       {point.guidance !== undefined && (
-        <GuidanceLine guidance={point.guidance} className="pb-0.5" />
+        <GuidanceLine guidance={point.guidance} scopes={ruleScopes} className="pb-0.5" />
       )}
       {point.guardrail !== undefined && (
         <GuardrailLine guardrail={point.guardrail} family={family} className="pb-0.5" />
