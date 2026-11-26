@@ -26,7 +26,7 @@ const endLine = (node: Node): number => {
  * member or type), and `@import.module` with optional `@import.name`s. On overlap the first pattern
  * wins; captures starting with `_` are for predicates only.
  */
-export const findSymbols = (tree: Tree, query: Query): CodeSymbols => {
+export const findSymbols = (tree: Tree, query: Query): Omit<CodeSymbols, "commentLines"> => {
   const definitions = new Map<number, { patternIndex: number; definition: SymbolDefinition }>();
   const references = new Map<number, { patternIndex: number; reference: SymbolReference }>();
   const imports = new Map<number, { module: string; names: string[] | null }>();

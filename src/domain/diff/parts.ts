@@ -20,6 +20,11 @@ export interface DefinitionSpan {
 export interface FileDefinitions {
   readonly head: readonly DefinitionSpan[];
   readonly base: readonly DefinitionSpan[];
+  /** The lines of each that hold a comment and nothing else; none known without it. */
+  readonly comments?: {
+    readonly head: ReadonlySet<number>;
+    readonly base: ReadonlySet<number>;
+  };
 }
 
 /** The hunk a part is of: the part ID without its ".n". */

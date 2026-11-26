@@ -32,6 +32,8 @@ export interface CodeSymbols {
   readonly references: SymbolReference[];
   /** Empty for languages whose imports aren't read. */
   readonly imports: SymbolImport[];
+  /** The lines that hold a comment and nothing else. */
+  readonly commentLines: number[];
 }
 
 export interface CodeParserError {

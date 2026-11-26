@@ -39,7 +39,8 @@ const KINDS: Readonly<Record<string, SymbolDefinition["kind"]>> = {
  * source's tokens, so reformatting keeps them equal and any other change doesn't. A definition
  * starts at an unindented `function`, `class`, `const`… line and runs until the next one;
  * every other identifier is a reference by name. `import { a } from "m"`, `import a from "m"`
- * and `from m import a` lines are imports, and their identifiers aren't references.
+ * and `from m import a` lines are imports, and their identifiers aren't references. A line that
+ * starts with `//` or `#` is a comment.
  */
 export class FakeCodeParser implements CodeParser {
   /** Sources passed to each method, in call order. */
@@ -105,7 +106,10 @@ export class FakeCodeParser implements CodeParser {
               columns: [column],
             })),
     );
-    return ok({ definitions, references, imports });
+    const commentLines = lines.flatMap((text, index) =>
+      /^\s*(\/\/|#)/.test(text) ? [index + 1] : [],
+    );
+    return ok({ definitions, references, imports, commentLines });
   }
 
   private fail(

@@ -53,12 +53,11 @@ describe("throughOf", () => {
     });
   });
 
-  it("leaves out what isn't code to read: generated, mechanical and outside the pull request", () => {
+  it("leaves out what isn't code to read: generated and mechanical", () => {
     const through = throughOf(
       overview([
         [group("web/src/api", { generated: true }), group("src/routes")],
         [group("src/moved", { risk: "mechanical" })],
-        [group("lib", { kind: "outside", key: "outside:lib/" })],
       ]),
     );
     expect(through?.rows).toEqual([[{ label: "routes", entries: [] }]]);

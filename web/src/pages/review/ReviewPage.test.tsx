@@ -1488,11 +1488,7 @@ describe("overview", () => {
     renderReview();
     await loaded();
     await openOverview();
-    expect(overviewRows()).toEqual([
-      ["src/routes/"],
-      ["src/services/"],
-      ["email-receipts.ts", "email-receipts.test.ts"],
-    ]);
+    expect(overviewRows()).toEqual([["src/routes/"], ["src/services/"]]);
     expect(nodeOf("group:src/routes").getAttribute("aria-label")).toMatch(
       /^src\/routes\/, 1 file, /,
     );
@@ -1522,10 +1518,8 @@ describe("overview", () => {
     await userEvent.keyboard("{ArrowDown}");
     expect(focusedKey()).toBe("group:src/services");
     await userEvent.keyboard("{ArrowDown}");
-    expect(focusedKey()).toBe("outside:src/jobs/email-receipts.ts");
-    await userEvent.keyboard("{ArrowDown}");
     expect(focusedKey()).toBe("group:");
-    await userEvent.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}");
+    await userEvent.keyboard("{ArrowUp}{ArrowUp}");
     expect(focusedKey()).toBe("group:src/routes");
     // A focused directory names its files, flows and what it reaches, for the keyboard.
     expect(
@@ -1607,12 +1601,11 @@ describe("overview", () => {
     expect(window.localStorage.getItem("megareviewer:overview-form")).toBe('"rows"');
     expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
     const rows = within(screen.getByRole("region", { name: "Flow paths of the pull request" }));
-    // A file outside the pull request that uses its code starts a path; a test outside doesn't.
-    const labels = [...document.querySelectorAll("[data-slot=flow-path-label]")].map(
-      (label) => label.textContent,
-    );
-    expect(labels.some((label) => label?.startsWith("email-receipts.ts"))).toBe(true);
-    expect(labels.some((label) => label?.includes("email-receipts.test.ts"))).toBe(false);
+    // A file outside the pull request starts no path: the file it uses says so.
+    expect(rows.queryByText(/email-receipts/)).toBeNull();
+    expect(
+      rows.getAllByRole("button", { name: /^receipts, .*used in 1 place outside the PR$/ }).length,
+    ).toBeGreaterThan(0);
     // Proved-mechanical files are listed apart, never a stop on a path.
     const also = within(rows.getByRole("region", { name: "Also changed" }));
     expect(also.getByRole("button", { name: "pnpm-lock.yaml" })).toBeTruthy();
@@ -2637,23 +2630,18 @@ describe("outside the pull request", () => {
     expect(within(cardOf(h.receiptRoute)).queryByText(/Used unchanged/)).toBeNull();
   });
 
-  it("shows a faded node per caller file in the overview, opening the code it uses", async () => {
+  it("counts them on the directory they use in the overview, and draws no box for them", async () => {
     renderReview();
     await loaded();
     await openOverview();
-    const outside = nodeOf("outside:src/jobs/email-receipts.ts");
-    expect(outside.getAttribute("data-risk") === "outside").toBe(true);
-    expect(outside.getAttribute("aria-label")).toBe("email-receipts.ts, outside the PR · 1 use");
-    act(() => outside.focus());
-    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toBe(
-      "src/jobs/email-receipts.ts · outside the pull request · uses src/services/ (renderReceipt).",
+    const box = nodeOf("group:src/services");
+    expect(box.getAttribute("aria-label")).toContain("used in 1 place outside the PR");
+    expect(box.textContent).toContain("used in 1 place outside the PR");
+    expect(overviewBox().textContent).not.toContain("email-receipts");
+    act(() => box.focus());
+    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toContain(
+      "used in 1 place outside the PR.",
     );
-    expect(overviewBox().querySelector("[data-slot=overview-legend]")?.textContent).toContain(
-      "Faded files are outside the pull request, under the code whose changes they use.",
-    );
-    await userEvent.click(outside);
-    expect(layoutIs("map")).toBe(true);
-    expect(scrolledTo().at(-1)).toBe(`hunk-${h.receiptFormatting}`);
   });
 
   /** The page's status, with the folder searched for clones. */

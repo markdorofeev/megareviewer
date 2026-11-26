@@ -1,6 +1,6 @@
 import type { FileSymbols } from "./call-graph.ts";
 import { importReach, languageFamily, resolvesImports, sharesPackage } from "./imports.ts";
-import { type DefinitionSpan, partsByHunk, piecesOf } from "./parts.ts";
+import { type DefinitionSpan, type FileDefinitions, partsByHunk, piecesOf } from "./parts.ts";
 import { isTestFile } from "./test-files.ts";
 import type { FileChange, HunkPart, PartId, UnchangedCallers, UnchangedUse } from "./types.ts";
 
@@ -36,14 +36,12 @@ const innermost = (
 
 /**
  * Definitions in the base file whose own lines the PR adds or deletes: a class that only gains
- * methods isn't one. Blank lines don't count. One per file and name.
+ * methods isn't one. Blank lines and comments don't count: a comment above a method is inside its
+ * class, not the method. One per file and name.
  */
 export const changedDefinitions = (
   files: readonly FileChange[],
-  definitions: ReadonlyMap<
-    string,
-    { readonly head: readonly DefinitionSpan[]; readonly base: readonly DefinitionSpan[] }
-  >,
+  definitions: ReadonlyMap<string, FileDefinitions>,
   parts: readonly HunkPart[] = [],
 ): ChangedDefinition[] => {
   const byHunk = partsByHunk(parts);
@@ -55,14 +53,10 @@ export const changedDefinitions = (
     for (const piece of piecesOf(file, byHunk)) {
       for (const line of piece.hunk.lines) {
         if (line.kind === "context" || line.text.trim() === "") continue;
-        const definition =
-          line.kind === "add"
-            ? line.newLine === null
-              ? undefined
-              : innermost(spans.head, line.newLine)
-            : line.oldLine === null
-              ? undefined
-              : innermost(spans.base, line.oldLine);
+        const side = line.kind === "add" ? "head" : "base";
+        const at = line.kind === "add" ? line.newLine : line.oldLine;
+        if (at === null || spans.comments?.[side].has(at)) continue;
+        const definition = innermost(spans[side], at);
         if (
           definition !== undefined &&
           before.has(definition.name) &&

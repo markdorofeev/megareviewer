@@ -372,6 +372,11 @@ describe("FakeCodeParser", () => {
     expect(await nodes("const a = { b: 1, c: 'x  y' };")).not.toEqual(original);
   });
 
+  it("takes a line that starts as a comment for one", async () => {
+    const result = await parser.symbols("// a\nconst b = 1; // c\n# d\n", "typescript");
+    expect(result.ok && result.value.commentLines).toEqual([1, 3]);
+  });
+
   it("finds top-level definitions and references", async () => {
     const result = await parser.symbols(
       "import { b } from './b';\n\nexport function a() {\n  return b();\n}\nconst c = a;\n",

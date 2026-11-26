@@ -168,7 +168,6 @@ describe("fileOverview with every directory opened", () => {
         uses: ["import", "call", "type"],
         symbols: ["Thing", "run"],
         back: false,
-        outside: false,
       },
     ]);
   });
@@ -202,7 +201,6 @@ describe("fileOverview with every directory opened", () => {
       uses: ["request"],
       symbols: ["GET /api/items", "PUT /api/items/{id}"],
       back: false,
-      outside: false,
     });
     expect(overview.rows[2]?.[0]?.badges).toEqual(["tests/test_api.py"]);
   });
@@ -433,7 +431,12 @@ describe("fileOverview with every directory opened", () => {
 });
 
 /** Uses of what hunk `n` changes, one per path, outside the pull request. */
-const usedBy = (n: number, symbol: string, paths: readonly string[]): UnchangedCallers => ({
+const usedBy = (
+  n: number,
+  symbol: string,
+  paths: readonly string[],
+  more = 0,
+): UnchangedCallers => ({
   partId: h(n),
   symbol,
   uses: paths.map((path) => ({
@@ -442,80 +445,63 @@ const usedBy = (n: number, symbol: string, paths: readonly string[]): UnchangedC
     use: "call" as const,
     excerpt: { start: 1, lines: ["a", "b", symbol] },
   })),
-  more: 0,
+  more,
 });
 
 describe("fileOverview outside the pull request", () => {
-  it("puts each caller file one row below the file it uses, with an outside edge", () => {
-    const files = [file("app/main.py", [1]), file("app/store.py", [2])];
-    const overview = opened(
-      input(files, {
-        callGraph: [call(1, 2)],
-        unchangedCallers: [
-          usedBy(2, "save", ["jobs/sync.py", "tests/test_sync.py"]),
-          usedBy(1, "main", ["jobs/sync.py"]),
-        ],
-      }),
-      flowOf(files),
+  const files = [
+    file("app/main.py", [1]),
+    file("app/store.py", [2]),
+    file("lib/text.py", [3]),
+    file("tests/test_store.py", [4]),
+  ];
+  const linked = {
+    callGraph: [call(1, 2)],
+    fileLinks: [{ from: "app/main.py", to: "lib/text.py" }],
+  };
+  const usesOf = (
+    unchangedCallers: readonly UnchangedCallers[],
+    expanded: readonly string[] = [],
+  ) => {
+    const overview = fileOverview(
+      { ...input(files, { ...linked, unchangedCallers }), flows: flowOf(files) },
+      new Set(expanded),
     );
-    expect(rowsOf(overview)).toEqual([["main.py"], ["store.py"], ["sync.py", "test_sync.py"]]);
-    const sync = overview.rows[2]?.[0];
-    expect(sync).toMatchObject({
-      key: "outside:jobs/sync.py",
-      kind: "outside",
-      paths: ["jobs/sync.py"],
-      partIds: [h(2), h(1)],
-      uses: 2,
-    });
-    expect(
-      overview.edges
-        .filter((edge) => edge.outside)
-        .map((edge) => [edge.from, edge.to, edge.symbols]),
-    ).toEqual([
-      ["outside:jobs/sync.py", "app/store.py", ["save"]],
-      ["outside:jobs/sync.py", "app/main.py", ["main"]],
-      ["outside:tests/test_sync.py", "app/store.py", ["save"]],
-    ]);
-    expect(overview.placeOf.has("jobs/sync.py")).toBe(false);
-  });
+    return [...overview.rows.flat(), ...overview.strip].map((node) => [node.key, node.uses]);
+  };
 
-  it("brings a file nothing in the pull request links into the diagram", () => {
-    const files = [file("app/store.py", [1])];
-    const overview = opened(
-      input(files, { unchangedCallers: [usedBy(1, "save", ["jobs/sync.py"])] }),
-      flowOf(files),
-    );
-    expect(rowsOf(overview)).toEqual([["store.py"], ["sync.py"]]);
-    expect(overview.strip).toEqual([]);
-  });
-
-  it("groups more than ten caller files by directory", () => {
-    const files = [file("app/store.py", [1])];
-    const paths = [
-      ...Array.from({ length: 10 }, (_, at) => `jobs/nightly/job${at}.py`),
-      "scripts/one.py",
+  it("counts on a directory the places that use what its files change, tests aside", () => {
+    const callers = [
+      usedBy(1, "main", ["jobs/sync.py"]),
+      usedBy(2, "save", ["jobs/sync.py", "jobs/nightly.py", "tests/test_sync.py"], 4),
+      usedBy(4, "make_store", ["jobs/fixtures.py"]),
     ];
-    const overview = opened(
-      input(files, { unchangedCallers: [usedBy(1, "save", paths)] }),
-      flowOf(files),
-    );
-    const outside = overview.rows[1] ?? [];
-    expect(outside.map((node) => [node.key, node.label, node.paths.length, node.uses])).toEqual([
-      ["outside:jobs/nightly/", "jobs/nightly/", 10, 10],
-      ["outside:scripts/one.py", "one.py", 1, 1],
+    expect(usesOf(callers)).toEqual([
+      ["group:app", 3],
+      ["group:lib", 0],
+      ["group:tests", 1],
+    ]);
+    expect(usesOf(callers, ["group:app"])).toContainEqual(["app/store.py", 2]);
+  });
+
+  it("counts the uses past the limit when they can be code", () => {
+    expect(usesOf([usedBy(3, "slug", ["jobs/a.py", "jobs/b.py"], 7)])).toContainEqual([
+      "group:lib",
+      9,
     ]);
   });
 
-  it("leaves out callers of tests and helpers, which have no node", () => {
-    const files = [file("app/store.py", [1]), file("tests/test_store.py", [2])];
-    const overview = opened(
-      input(files, {
-        callGraph: [call(2, 1)],
-        unchangedCallers: [usedBy(2, "make_store", ["tests/test_other.py"])],
-      }),
-      flowOf(files),
+  it("draws the same diagram with them or without: no node, no edge, no row", () => {
+    const keys = (unchangedCallers: readonly UnchangedCallers[]) => {
+      const { rows, edges, strip } = fileOverview({
+        ...input(files, { ...linked, unchangedCallers }),
+        flows: flowOf(files),
+      });
+      return [rows.map((row) => row.map((node) => node.key)), edges, strip.map((node) => node.key)];
+    };
+    expect(keys([usedBy(2, "save", ["jobs/sync.py"]), usedBy(4, "make", ["jobs/a.py"])])).toEqual(
+      keys([]),
     );
-    expect(overview.edges.some((edge) => edge.outside)).toBe(false);
   });
 });
 
@@ -594,7 +580,6 @@ describe("fileOverview by directory", () => {
         uses: ["type", "request"],
         symbols: ["GET /items", "Item"],
         back: false,
-        outside: false,
       },
     ]);
   });

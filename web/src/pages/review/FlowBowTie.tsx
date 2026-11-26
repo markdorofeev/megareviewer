@@ -9,10 +9,12 @@ import {
   type FlowViewProps,
   NoPaths,
   OffThePaths,
+  OutsideUses,
   STOP_STYLE,
   StatusGlyph,
   useFocusedStop,
 } from "./flow-parts.tsx";
+import { usedOutside } from "./outside-uses.ts";
 
 // Sizes in pixels. Nodes are HTML buttons and the edges an inline SVG behind them, drawn from the
 // same numbers, as in the overview.
@@ -28,12 +30,15 @@ const COLUMNS = ["Reached from", "Runs through", "Ends in"] as const;
 
 const columnX = (column: number): number => PAD + column * (NODE_WIDTH + COLUMN_GAP);
 
+const usesOf = (node: BowTieNode): number => node.stops.reduce((sum, stop) => sum + stop.uses, 0);
+
 const nodeName = (node: BowTieNode): string =>
   [
     node.label,
     node.note,
     node.kind === "files" ? (node.status === "new" ? "new" : "changed") : null,
     node.stops.length > 1 ? node.stops.map((stop) => stop.label).join(", ") : null,
+    usesOf(node) > 0 ? usedOutside(usesOf(node)) : null,
   ]
     .filter((part) => part !== null)
     .join(", ");
@@ -197,8 +202,7 @@ export const FlowBowTie = ({
                     data-slot="flow-bow-tie-node"
                     data-kind={node.kind}
                     data-group={group ?? undefined}
-                    // A path from outside isn't the file it uses, which has a box of its own.
-                    data-path={node.status === "outside" ? undefined : first?.path}
+                    data-path={first?.path}
                     data-holds={
                       several ? node.stops.map((stop) => stop.path).join("\n") : undefined
                     }
@@ -223,11 +227,12 @@ export const FlowBowTie = ({
                       {node.kind === "request" ? (
                         <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
                       ) : (
-                        node.status !== "outside" && <StatusGlyph status={node.status} />
+                        <StatusGlyph status={node.status} />
                       )}
                       <span className="truncate font-mono text-code-compact font-semibold">
                         {node.label}
                       </span>
+                      <OutsideUses uses={usesOf(node)} />
                     </span>
                     <span className="truncate">{node.note}</span>
                   </button>

@@ -3,6 +3,7 @@ import {
   type PartId,
   type UnchangedCallers,
 } from "../../../../src/domain/diff/index.ts";
+import { codeUses } from "./outside-uses.ts";
 import { type FileOverview, type OverviewNode, uniqueLabels } from "./overview.ts";
 
 // The intent's brief before the model has run: what the code alone says about the shape of the
@@ -27,8 +28,7 @@ export interface Through {
 export const MAX_STOPS = 8;
 
 /** What the brief names: changed code to read, not tests, generated or mechanical files. */
-const named = (node: OverviewNode): boolean =>
-  node.kind !== "outside" && !node.generated && node.risk !== "mechanical";
+const named = (node: OverviewNode): boolean => !node.generated && node.risk !== "mechanical";
 
 const pathOf = (node: OverviewNode): string =>
   node.kind === "group" ? node.key.slice("group:".length) || "." : node.key;
@@ -80,10 +80,8 @@ export const reachOf = (
   const used = callers.flatMap((one) => {
     const path = pathOfPart(one.partId);
     if (path === undefined || isTestFile(path)) return [];
-    const uses = one.uses.filter((use) => !isTestFile(use.path)).length;
-    // Uses past the limit are counted, not listed; code is kept first, so they're tests when any is.
-    const more = one.uses.length > uses ? 0 : one.more;
-    return uses + more === 0 ? [] : [{ symbol: one.symbol, uses: uses + more }];
+    const uses = codeUses(one);
+    return uses === 0 ? [] : [{ symbol: one.symbol, uses }];
   });
   if (used.length === 0) return null;
   return {

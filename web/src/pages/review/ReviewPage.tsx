@@ -950,19 +950,15 @@ const Review = ({
     setOpenedFrom(null);
     if (path !== null) focusInOverview(path);
   };
-  /** Opens a directory's or a file's first file in the map; outside, the code the node uses. */
+  /** Opens a directory's or a file's first file in the map. */
   const openNode = (node: OverviewNode) => {
-    const [path] = node.kind === "outside" ? [] : node.paths;
-    const first =
-      path === undefined
-        ? node.partIds[0]
-        : files.find((group) => group.file.path === path)?.partIds[0];
-    if (first === undefined) return;
+    const [path] = node.paths;
+    const first = files.find((group) => group.file.path === path)?.partIds[0];
+    if (path === undefined || first === undefined) return;
     setLayout(() => "map");
     setOpenedFrom(node.key);
     setFocusedHunkId(first);
-    if (path === undefined) showHunk(first, "map");
-    else scrollTo(fileAnchor(path));
+    scrollTo(fileAnchor(path));
   };
   /** Opens a part from a flow path in the map; Esc comes back to its file's stop. */
   const openFlowPart = (id: PartId, path: string | null) => {
@@ -987,7 +983,7 @@ const Review = ({
     const node = [...overview.rows.flat(), ...overview.strip].find(
       (one) => one.key === overviewAt.current,
     );
-    if (node !== undefined && node.kind !== "outside") return openNode(node);
+    if (node !== undefined) return openNode(node);
     setLayout(() => "map");
   };
   usePageDisplay({

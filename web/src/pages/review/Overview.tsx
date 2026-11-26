@@ -2,7 +2,8 @@ import { LayoutGridIcon } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
-import { EDGE_LINE, NODE_OUTSIDE, NODE_RISK } from "./diagram-styles.ts";
+import { EDGE_LINE, NODE_RISK } from "./diagram-styles.ts";
+import { usedOutside } from "./outside-uses.ts";
 import type { FileOverview, OverviewEdge, OverviewNode } from "./overview.ts";
 import {
   anchors,
@@ -52,19 +53,15 @@ const NodeButton = ({
 }) => {
   const group = node.kind === "group";
   const expandable = group && node.paths.length > 1;
-  const outside = node.kind === "outside";
-  const name = (
-    outside
-      ? [node.label, metaText(node)]
-      : [
-          node.label,
-          group ? files(node.paths.length) : null,
-          ...node.entries,
-          node.risk,
-          node.generated ? "generated" : null,
-          current ? "in view in the code" : null,
-        ]
-  )
+  const name = [
+    node.label,
+    group ? files(node.paths.length) : null,
+    ...node.entries,
+    node.uses > 0 ? usedOutside(node.uses) : null,
+    node.risk,
+    node.generated ? "generated" : null,
+    current ? "in view in the code" : null,
+  ]
     .filter((part) => part !== null)
     .join(", ");
   return (
@@ -80,13 +77,13 @@ const NodeButton = ({
       <button
         type="button"
         data-slot="overview-node"
-        data-risk={outside ? "outside" : node.risk}
+        data-risk={node.risk}
         data-generated={node.generated || undefined}
         data-active={active || undefined}
         data-current={current || undefined}
         className={cn(
           "grid h-full w-full content-start gap-0.5 overflow-hidden rounded-md border px-2 py-1 text-left text-caption",
-          outside ? NODE_OUTSIDE : NODE_RISK[node.risk],
+          NODE_RISK[node.risk],
           // Generated files are dashed, and say so in their name; the text keeps its contrast.
           node.generated && "border-dashed",
           active && "border-primary",
@@ -271,8 +268,6 @@ export const Overview = ({
         sits below its callers. Solid lines are calls, dash-dot ones HTTP requests to a route,
         dashed ones imports, dotted ones types. Tests show on the directories they call. The
         outlined box holds the file last in view in the code.
-        {overview.edges.some((edge) => edge.outside) &&
-          " Faded files are outside the pull request, under the code whose changes they use."}
       </p>
       {expandedGroups.length > 0 && (
         <p className="flex flex-wrap gap-2">
@@ -390,15 +385,11 @@ const nodeDetail = (
       const symbols = edge.symbols.length > 0 ? ` (${edge.symbols.join(", ")})` : "";
       return `${labelOf(edge.to)}${symbols}`;
     });
-  if (node.kind === "outside") {
-    const where =
-      node.paths.length > 1 ? `${node.label}: ${node.paths.length} files` : node.paths[0];
-    return `${where} · outside the pull request · uses ${out.join(", ")}.`;
-  }
   const parts = [
     node.kind === "group" ? `${node.label}: ${node.paths.map(basename).join(", ")}` : node.paths[0],
     node.flows.length > 0 ? `read in ${node.flows.join("; ")}` : "in no flow",
     ...(out.length > 0 ? [`reaches ${out.join(", ")}`] : []),
+    ...(node.uses > 0 ? [usedOutside(node.uses)] : []),
     ...(node.badges.length > 0 ? [`tested in ${node.badges.map(basename).join(", ")}`] : []),
   ];
   return `${parts.join(" · ")}.`;

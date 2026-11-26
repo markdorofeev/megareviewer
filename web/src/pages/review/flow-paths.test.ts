@@ -311,35 +311,33 @@ describe("flowPaths", () => {
     ]);
   });
 
-  it("starts a path at a file outside the pull request that uses a changed definition", () => {
+  it("says in how many places code outside uses a stop, and starts no path there", () => {
+    const at = (path: string) => ({
+      path,
+      line: 12,
+      use: "call" as const,
+      excerpt: { start: 12, lines: ["place()"] },
+    });
     const callers: UnchangedCallers[] = [
       {
         partId: h(3),
         symbol: "place",
         uses: [
-          {
-            path: "src/main/java/shop/jobs/RefundJob.java",
-            line: 12,
-            use: "call",
-            excerpt: { start: 12, lines: ["place()"] },
-          },
-          {
-            path: "src/test/java/shop/jobs/RefundJobTest.java",
-            line: 9,
-            use: "call",
-            excerpt: { start: 9, lines: ["place()"] },
-          },
+          at("src/main/java/shop/jobs/RefundJob.java"),
+          at("src/main/java/shop/jobs/RetryJob.java"),
+          at("src/test/java/shop/jobs/RefundJobTest.java"),
         ],
         more: 0,
       },
     ];
-    const paths = flowPaths(
-      input(shop, { callGraph: calls, flows: [], unchangedCallers: callers }),
-    );
-    expect(paths.paths.filter((path) => !path.inPullRequest)).toMatchObject([
-      { labels: ["RefundJob.java"], outside: ["src/main/java/shop/jobs/RefundJob.java"] },
+    const flows = [flow("POST /orders", [1], [1])];
+    const paths = flowPaths(input(shop, { callGraph: calls, flows, unchangedCallers: callers }));
+    expect(shape(paths)).toEqual(shape(flowPaths(input(shop, { callGraph: calls, flows }))));
+    expect(paths.paths[0]?.stops.map((one) => [one.label, one.uses])).toEqual([
+      ["OrderController", 0],
+      ["OrderService", 2],
+      ["OrderRepository", 0],
     ]);
-    expect(shape(paths)).toContainEqual(["RefundJob.java", "OrderService", "OrderRepository"]);
   });
 
   it("ends a path in the requests it sends, without following them", () => {

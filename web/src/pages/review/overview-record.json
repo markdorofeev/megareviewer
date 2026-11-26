@@ -24,24 +24,6 @@
           "partIds": ["h_b72d144cfd1ff546.2", "h_b72d144cfd1ff546.1", "h_99d04498495c7faa"],
           "row": 1
         }
-      ],
-      [
-        {
-          "key": "outside:src/jobs/email-receipts.ts",
-          "label": "email-receipts.ts",
-          "entries": [],
-          "flows": [],
-          "partIds": ["h_99d04498495c7faa"],
-          "row": 2
-        },
-        {
-          "key": "outside:test/jobs/email-receipts.test.ts",
-          "label": "email-receipts.test.ts",
-          "entries": [],
-          "flows": [],
-          "partIds": ["h_99d04498495c7faa"],
-          "row": 2
-        }
       ]
     ],
     "strip": [

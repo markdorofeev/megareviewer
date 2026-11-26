@@ -121,6 +121,67 @@ describe("changedDefinitions", () => {
     ).toEqual([]);
   });
 
+  it("leaves out a class whose PR only adds a method with the comment above it", () => {
+    const added = hunk("CallTree.java", "@@ -20,2 +20,9 @@", [
+      "     }",
+      " ",
+      "+    /**",
+      "+     * The root's own cost.",
+      "+     */",
+      "+    public int rootCost() {",
+      "+        // Cheap.",
+      "+        return root.cost();",
+      "+    }",
+    ]);
+    const definitions = {
+      head: spans([
+        ["CallTree", 1, 40],
+        ["rootCost", 25, 28],
+      ]),
+      base: spans([["CallTree", 1, 33]]),
+      comments: { head: new Set([22, 23, 24, 26]), base: new Set<number>() },
+    };
+    expect(
+      changedDefinitions(
+        [file("CallTree.java", [added])],
+        new Map([["CallTree.java", definitions]]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("leaves out a definition whose PR only changes a comment, deleted lines by the base file", () => {
+    const changed = hunk("a.py", "@@ -2,5 +2,4 @@", [
+      "     start()",
+      "-    # Runs twice.",
+      "-    # Then stops.",
+      "+    # Runs once.",
+      "     stop()",
+      " ",
+    ]);
+    const definitions = {
+      head: spans([["run", 1, 4]]),
+      base: spans([["run", 1, 5]]),
+      comments: { head: new Set([3]), base: new Set([3, 4]) },
+    };
+    expect(changedDefinitions([file("a.py", [changed])], new Map([["a.py", definitions]]))).toEqual(
+      [],
+    );
+  });
+
+  it("names a definition whose code the PR comments out", () => {
+    const commented = hunk("a.py", "@@ -2,1 +2,1 @@", ["-    start()", "+    # start()"]);
+    const definitions = {
+      head: spans([["run", 1, 4]]),
+      base: spans([["run", 1, 4]]),
+      comments: { head: new Set([2]), base: new Set<number>() },
+    };
+    expect(
+      changedDefinitions([file("a.py", [commented])], new Map([["a.py", definitions]])).map(
+        (one) => one.name,
+      ),
+    ).toEqual(["run"]);
+  });
+
   it("names a definition the PR deletes lines of, by the base file", () => {
     const removed = hunk("app.py", "@@ -5,3 +5,1 @@", [
       " def create_app():",

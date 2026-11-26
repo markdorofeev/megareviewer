@@ -25,6 +25,7 @@ import {
   PullRequest,
   type RiskAssessment,
 } from "../src/domain/review/index.ts";
+import { usedOutside } from "../web/src/pages/review/outside-uses.ts";
 import { type FileOverview, fileOverview } from "../web/src/pages/review/overview.ts";
 
 // Every stage of the flows slice measures itself on one real PR. This runs today's prep, rule
@@ -187,8 +188,8 @@ export const overviewOf = (measured: Measured): FileOverview => fileOverview(mea
 export const overviewLines = ({ rows, strip }: FileOverview): string[] => {
   const name = (node: FileOverview["rows"][number][number]) => {
     const notes = [
-      ...(node.kind === "outside" ? ["outside"] : []),
       ...node.entries,
+      ...(node.uses > 0 ? [usedOutside(node.uses)] : []),
       ...(node.generated ? ["generated"] : []),
     ];
     const badges = node.badges.length > 0 ? ` [${node.badges.map(basename).join(", ")}]` : "";

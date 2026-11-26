@@ -111,6 +111,10 @@ export const prep = async (
     definitionsByPath.set(file.path, {
       head: headSymbols?.ok ? headSymbols.value.definitions : [],
       base: baseSymbols?.ok ? baseSymbols.value.definitions : [],
+      comments: {
+        head: new Set(headSymbols?.ok ? headSymbols.value.commentLines : []),
+        base: new Set(baseSymbols?.ok ? baseSymbols.value.commentLines : []),
+      },
     });
   }
 

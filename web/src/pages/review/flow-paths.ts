@@ -9,6 +9,7 @@ import {
 } from "../../../../src/domain/diff/index.ts";
 import type { Analysis, Flow } from "../../../../src/domain/review/index.ts";
 import { byTreePath, directoryOf, treePath } from "../../review/tree/paths.ts";
+import { usesByFile } from "./outside-uses.ts";
 import { uniqueLabels } from "./overview.ts";
 
 // The overview's preview layouts: the pull request as flow paths, each from where the change is
@@ -31,6 +32,8 @@ export interface Stop {
   readonly partIds: readonly PartId[];
   /** How many flow paths run it. */
   readonly shared: number;
+  /** In how many places code outside the pull request uses what it changes. */
+  readonly uses: number;
   /**
    * The path of the stop it's drawn under: of those that call it, the one fewest calls from where
    * the path starts. Null where it starts.
@@ -58,14 +61,10 @@ export interface PathEnd {
 export interface FlowPath {
   readonly key: string;
   /**
-   * Where it's reached: a route, a page, a command, the definition nothing calls, or a file
-   * outside. Several when they run the same changed files.
+   * Where it's reached: a route, a page, a command, or definitions nothing in the pull request
+   * calls. Several when they run the same changed files.
    */
   readonly labels: readonly string[];
-  /** False for files the pull request doesn't change that use what it changes. */
-  readonly inPullRequest: boolean;
-  /** Outside the pull request, the files' paths. */
-  readonly outside: readonly string[];
   /** The changed files it runs: where it starts, then what those call, and so on. */
   readonly stops: readonly Stop[];
   /** The calls it makes between them: no form links two stops without one. */
@@ -225,8 +224,6 @@ const calledFrom = (
 interface Walk {
   readonly key: string;
   readonly label: string;
-  /** Outside the pull request, the file it starts in. */
-  readonly from: string | null;
   readonly starts: readonly number[];
   readonly runs: readonly number[];
 }
@@ -251,7 +248,7 @@ const walksOf = (
     );
     if (starts.length === 0) continue;
     for (const start of starts) entered.add(start);
-    walks.push({ key: `flow:${at}`, label: flow.title, from: null, starts, runs: reach(starts) });
+    walks.push({ key: `flow:${at}`, label: flow.title, starts, runs: reach(starts) });
   }
 
   const called = new Set(all.flatMap(calleesOf));
@@ -263,7 +260,7 @@ const walksOf = (
     const names = unique(starts.flatMap((at) => definitions[at]?.name || []));
     const label =
       names.length === 0 ? (labels.get(path) ?? path) : `${listed(names)} in ${basename(path)}`;
-    return [{ key: `file:${path}`, label, from: null, starts, runs: reach(starts) }];
+    return [{ key: `file:${path}`, label, starts, runs: reach(starts) }];
   };
   const candidates = files
     .flatMap((path) => walkFrom(path, (at) => !called.has(at) && !entered.has(at)))
@@ -285,8 +282,7 @@ const walksOf = (
  * command, or else at the definitions of a file that nothing in the pull request calls, and runs
  * the definitions their calls reach: a file is a stop only where one of those is in it, so code
  * several paths run is a stop on each. One that starts at no entry isn't drawn when another path
- * runs every file on it. A file outside the pull request that uses a changed definition starts a
- * path of its own. Paths that start in the same files, run the same ones and send the same requests
+ * runs every file on it. Paths that start in the same files, run the same ones and send the same requests
  * are one path with each one's label. Tests, docs, generated and mechanical files are listed apart, and code no path runs
  * is `unreached`: every changed file is in exactly one of them or on a path.
  */
@@ -327,35 +323,15 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
   const labels = uniqueLabels(code.map((file) => file.path));
 
   const graph = codeGraph(analysis, fileOf);
-  const { definitions, all, pathAt, calleesOf, reach, pathsOf } = graph;
+  const { definitions, all, pathAt, pathsOf } = graph;
   const inTreeOrder = code.map((file) => file.path).sort(byTreePath);
   const walked = walksOf(analysis.flows ?? [], graph, inTreeOrder);
-  const outside = new Map<string, number[]>();
-  for (const { partId, symbol, uses } of analysis.unchangedCallers ?? []) {
-    const changing = all.filter((at) => definitions[at]?.partIds.includes(partId));
-    const named = changing.filter((at) => definitions[at]?.name === symbol);
-    const used = named.length > 0 ? named : changing;
-    for (const use of uses) {
-      if (isTestFile(use.path) || used.length === 0) continue;
-      outside.set(use.path, unique([...(outside.get(use.path) ?? []), ...used]));
-    }
-  }
-  const outsideLabels = uniqueLabels([...outside.keys()]);
-  for (const [path, starts] of [...outside].sort(([a], [b]) => byTreePath(a, b))) {
-    walked.push({
-      key: `outside:${path}`,
-      label: outsideLabels.get(path) ?? path,
-      from: path,
-      starts,
-      runs: reach(starts),
-    });
-  }
-
-  // How many flows and outside files run each file, before the ones alike become one path.
+  // How many run each file, before the ones alike become one path.
   const shared = new Map<string, number>();
   for (const one of walked) {
     for (const path of pathsOf(one.runs)) shared.set(path, (shared.get(path) ?? 0) + 1);
   }
+  const outsideUses = usesByFile(analysis);
   const labelOf = (path: string) => withoutExtension(labels.get(path) ?? path);
   const stop = (
     path: string,
@@ -369,6 +345,7 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
     names: unique(ats.flatMap((at) => definitions[at]?.name || [])),
     partIds: unique(ats.flatMap((at) => definitions[at]?.partIds ?? [])),
     shared: shared.get(path) ?? 0,
+    uses: outsideUses.get(path) ?? 0,
     from,
     calledBy,
   });
@@ -390,8 +367,6 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
       {
         key: first.key,
         labels: alike.map((one) => one.label),
-        inPullRequest: first.from === null,
-        outside: alike.flatMap((one) => one.from ?? []),
         stops: [...from].map(([path, caller]) =>
           stop(
             path,
@@ -411,7 +386,6 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
   for (const one of walked) {
     const sent = one.runs.flatMap((at) => definitions[at]?.requests.map((end) => end.symbol) ?? []);
     const key = [
-      one.from === null,
       ...pathsOf(one.starts).sort(),
       "",
       ...pathsOf(one.runs).sort(),

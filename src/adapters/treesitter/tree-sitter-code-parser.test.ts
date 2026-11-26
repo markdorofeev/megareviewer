@@ -282,6 +282,31 @@ describe("createTreeSitterCodeParser", () => {
     expect(save?.columns).toEqual([source.indexOf("save"), source.lastIndexOf("save")]);
   });
 
+  it.each([
+    [
+      "java",
+      "/**\n * Counts.\n *\n */\nclass A {\n  int a; // one\n  /* b */ // c\n  /* d */ int d;\n}\n",
+      [1, 2, 3, 4, 7],
+    ],
+    [
+      "python",
+      '# one\nx = 1  # two\n"""not a comment"""\ndef f():\n    # three\n    pass\n',
+      [1, 5],
+    ],
+    ["typescript", "// one\nconst a = `// not one`; // two\n/*\n\n  three */\n", [1, 3, 5]],
+    [
+      "tsx",
+      "const a = (\n  <p>\n    {/* one */}\n    {b /* two */}\n  </p>\n);\n// three\n",
+      [3, 7],
+    ],
+    ["javascript", "// one\nconst a = 1;\n", [1]],
+    ["go", "package p\n\n// one\nvar a = 1 // two\n/* three */\n", [3, 5]],
+    ["rust", "/// one\nfn f() {\n    // two\n}\n/* three */\n", [1, 3, 5]],
+    ["c_sharp", "/// one\nclass A {\n  // two\n  int a; /* three */\n}\n", [1, 3]],
+  ])("lists the lines of %s that hold only comments", async (language, source, lines) => {
+    expect((await symbolsOf(source, language)).commentLines).toEqual(lines);
+  });
+
   it("covers every language", () => {
     expect(cases.map(([language]) => language)).toEqual(LANGUAGES.map((spec) => spec.name));
   });

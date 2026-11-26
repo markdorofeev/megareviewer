@@ -9,17 +9,13 @@ export const NODE_RISK: Readonly<Record<NodeRisk, string>> = {
   mechanical: "border-risk-mechanical-solid bg-risk-mechanical-bg text-risk-mechanical",
 };
 
-/** Files outside the pull request: dashed, on the page's subtle surface, muted text. */
-export const NODE_OUTSIDE = "border-dashed border-input bg-surface-subtle text-muted-foreground";
-
 /**
  * An edge by what it carries. Calls are solid, imports dashed, types dotted; a request crosses into
- * another process, so it's heavier and broken unlike any call; an edge from outside the PR fades.
+ * another process, so it's heavier and broken unlike any call.
  */
 export const EDGE_LINE: Readonly<Record<string, string>> = {
   call: "",
   import: "[stroke-dasharray:6_4]",
   request: "stroke-muted-foreground [stroke-dasharray:12_4_3_4] [stroke-width:2.5]",
   type: "[stroke-dasharray:1.5_3] [stroke-linecap:round]",
-  outside: "[stroke-dasharray:4_4] opacity-60",
 };

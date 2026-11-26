@@ -19,6 +19,7 @@ const stop = (layer: string, label: string, n: number, more: Partial<Stop> = {})
   names: [],
   partIds: [h(n)],
   shared: 1,
+  uses: 0,
   from: null,
   calledBy: [],
   ...more,
@@ -33,7 +34,7 @@ const under = (one: Stop, caller: Stop): Stop => ({
 const call = (from: Stop, to: Stop) => ({ from: from.path, to: to.path });
 
 const controller = stop("controllers", "OrderController", 1);
-const service = stop("services", "OrderService", 2, { shared: 2, names: ["place"] });
+const service = stop("services", "OrderService", 2, { shared: 2, uses: 4, names: ["place"] });
 const repository = stop("repositories", "OrderRepository", 3, { status: "new" });
 
 const flow: FlowPaths = {
@@ -41,17 +42,13 @@ const flow: FlowPaths = {
     {
       key: "flow:0",
       labels: ["POST /orders"],
-      inPullRequest: true,
-      outside: [],
       stops: [controller, under(service, controller), under(repository, service)],
       calls: [call(controller, service), call(service, repository)],
       ends: [],
     },
     {
-      key: "outside:src/jobs/RefundJob.java",
-      labels: ["RefundJob.java"],
-      inPullRequest: false,
-      outside: ["src/jobs/RefundJob.java"],
+      key: "file:src/services/OrderService.java",
+      labels: ["refund in OrderService.java"],
       stops: [service, under(repository, service)],
       calls: [call(service, repository)],
       ends: [{ label: "POST /refunds", partId: h(9), from: service.path }],
@@ -123,8 +120,6 @@ const wide: FlowPaths = {
     {
       key: "flow:0",
       labels: ["POST /orders"],
-      inPullRequest: true,
-      outside: [],
       stops: wideStops,
       calls: wideCalls,
       ends: [],
@@ -143,11 +138,24 @@ describe.each(VIEWS)("the overview as %s", (_name, View) => {
     return { onOpenPart, onOpenFile };
   };
 
-  it("names where the change is reached, in the pull request and outside it", () => {
+  it("names where the change is reached", () => {
     show();
     expect(screen.getAllByText("POST /orders").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("RefundJob.java").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Not in this PR/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("refund in OrderService.java").length).toBeGreaterThan(0);
+  });
+
+  it("says on a stop in how many places code outside the pull request uses it", () => {
+    const { container } = render(
+      <View flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />,
+    );
+    const used = [...container.querySelectorAll("button")].filter(
+      (button) => button.querySelector("[data-slot=flow-outside-uses]") !== null,
+    );
+    expect(used.length).toBeGreaterThan(0);
+    for (const button of used) {
+      expect(button.getAttribute("aria-label")).toContain("used in 4 places outside the PR");
+      expect(button.querySelector("[data-slot=flow-outside-uses]")?.textContent).toBe("4");
+    }
   });
 
   it("opens a changed file's first part, and says which file to come back to", async () => {
@@ -198,8 +206,8 @@ describe("the overview as rows and lanes", () => {
         .getAllByRole("button", { name: /^OrderService, / })
         .map((button) => button.getAttribute("aria-label")),
     ).toEqual([
-      "OrderService, changed, place, called by OrderController, on 2 paths",
-      "OrderService, changed, place, on 2 paths",
+      "OrderService, changed, place, called by OrderController, on 2 paths, used in 4 places outside the PR",
+      "OrderService, changed, place, on 2 paths, used in 4 places outside the PR",
     ]);
     expect(
       screen.getAllByRole("button", { name: "OrderRepository, new file, called by OrderService" }),
@@ -248,8 +256,8 @@ describe("the overview as rows", () => {
 
   it("puts a request under the file that sends it", () => {
     const { container } = show(flow);
-    const [, outside] = container.querySelectorAll("[data-slot=flow-row]");
-    const [list] = outside?.querySelectorAll("[data-slot=flow-calls]") ?? [];
+    const [, second] = container.querySelectorAll("[data-slot=flow-row]");
+    const [list] = second?.querySelectorAll("[data-slot=flow-calls]") ?? [];
     expect([...(list?.children ?? [])].map((item) => item.textContent)).toEqual([
       "OrderRepository",
       "POST /refunds",
@@ -284,10 +292,10 @@ describe("the overview as lanes", () => {
       "repositories/",
       "Sends",
     ]);
-    const [, outside] = screen.getAllByRole("row").slice(1);
-    if (outside === undefined) throw new Error("the outside path is a row");
-    // The path from outside the pull request runs nothing in the controllers.
-    const [controllers, services] = within(outside).getAllByRole("cell");
+    const [, second] = screen.getAllByRole("row").slice(1);
+    if (second === undefined) throw new Error("the second path is a row");
+    // The second path runs nothing in the controllers.
+    const [controllers, services] = within(second).getAllByRole("cell");
     if (controllers === undefined || services === undefined) throw new Error("it has cells");
     expect(within(controllers).queryByRole("button")).toBeNull();
     expect(within(services).getByRole("button").getAttribute("aria-label")).toMatch(
@@ -372,17 +380,5 @@ describe("a box of the bow tie with several files", () => {
   it("has nothing to open when it holds one file", () => {
     render(<BowTie flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />);
     expect(screen.queryByRole("button", { name: /^Show the files/ })).toBeNull();
-  });
-
-  it("takes a file outside the pull request's box for its own, not for the code it uses", () => {
-    render(
-      <BowTie
-        flow={flow}
-        onOpenPart={vi.fn()}
-        onOpenFile={vi.fn()}
-        focusKey={{ key: service.path, n: 1 }}
-      />,
-    );
-    expect(document.activeElement?.getAttribute("aria-label")).toMatch(/^OrderService, /);
   });
 });

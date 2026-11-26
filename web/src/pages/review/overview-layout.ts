@@ -1,4 +1,5 @@
 import { shortenName, shortenPath, splitName } from "../../review/tree/names.ts";
+import { usedOutside } from "./outside-uses.ts";
 import type { FileOverview, OverviewEdge, OverviewNode } from "./overview.ts";
 
 // The overview's layout.
@@ -27,19 +28,16 @@ const MAX_FIT = 380;
 
 export const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 
-const uses = (count: number): string => (count === 1 ? "1 use" : `${count} uses`);
-
 export const files = (count: number): string => (count === 1 ? "1 file" : `${count} files`);
 
 export const metaText = (
   node: Pick<OverviewNode, "kind" | "paths" | "added" | "deleted" | "entries" | "uses">,
 ) =>
-  node.kind === "outside"
-    ? `${node.paths.length > 1 ? `${files(node.paths.length)} · ` : ""}outside the PR · ${uses(node.uses)}`
-    : [
-        node.kind === "group" ? files(node.paths.length) : `+${node.added} −${node.deleted}`,
-        ...node.entries,
-      ].join(" · ");
+  [
+    node.kind === "group" ? files(node.paths.length) : `+${node.added} −${node.deleted}`,
+    ...node.entries,
+    ...(node.uses > 0 ? [usedOutside(node.uses)] : []),
+  ].join(" · ");
 
 const labelRoom = (node: OverviewNode): number =>
   LABEL_ROOM + (node.kind === "group" && node.paths.length > 1 ? EXPAND_ROOM : 0);
@@ -114,18 +112,16 @@ export const layout = (rows: FileOverview["rows"], backEdges: boolean) => {
 
 /**
  * Dash-dot for a request, which crosses into another process, even merged with calls; else solid
- * for a call, dashed for an import only, dotted for a type. From outside the pull request, faded.
+ * for a call, dashed for an import only, dotted for a type.
  */
 export const edgeStyle = (edge: OverviewEdge): string =>
-  edge.outside
-    ? "outside"
-    : edge.uses.includes("request")
-      ? "request"
-      : edge.uses.includes("call")
-        ? "call"
-        : edge.uses.every((use) => use === "import")
-          ? "import"
-          : "type";
+  edge.uses.includes("request")
+    ? "request"
+    : edge.uses.includes("call")
+      ? "call"
+      : edge.uses.every((use) => use === "import")
+        ? "import"
+        : "type";
 
 /**
  * Where each edge leaves its caller and enters its callee, spread across the middle of the node in
@@ -153,7 +149,7 @@ export const anchors = (edges: readonly OverviewEdge[], boxes: ReadonlyMap<strin
       ]),
     );
   };
-  const forward = edges.filter((edge) => !edge.back && !edge.outside);
+  const forward = edges.filter((edge) => !edge.back);
   const out = new Map<OverviewEdge, number>();
   const into = new Map<OverviewEdge, number>();
   for (const key of boxes.keys()) {
@@ -189,13 +185,6 @@ export const edgePath = (
     const y2 = to.y + NODE_HEIGHT / 2;
     const side = width - BACK_ROOM / 2;
     return `M ${x1} ${y1} C ${side} ${y1} ${side} ${y2} ${x2} ${y2}`;
-  }
-  if (from.y > to.y) {
-    // From a file outside the pull request, up into the bottom of the file it uses.
-    const y1 = from.y;
-    const y2 = to.y + NODE_HEIGHT;
-    const bend = Math.max(ROW_GAP / 2, (y1 - y2) / 2);
-    return `M ${x1} ${y1} C ${x1} ${y1 - bend} ${x2} ${y2 + bend} ${x2} ${y2}`;
   }
   const y1 = from.y + NODE_HEIGHT;
   const y2 = to.y;

@@ -10,9 +10,9 @@ export interface BowTieNode {
   readonly column: 0 | 1 | 2;
   readonly kind: "path" | "files" | "request";
   readonly label: string;
-  /** Under the label: the other labels of a path, or how many files a directory holds. */
+  /** Under the label: a path's file and its other labels, or how many files a directory holds. */
   readonly note: string;
-  readonly status: StopStatus | "outside";
+  readonly status: StopStatus;
   /** A directory's files, or a path's first. */
   readonly stops: readonly Stop[];
   /** The directory's box it is, or was before that was opened to its files. */
@@ -35,11 +35,11 @@ export interface BowTie {
 const statusOf = (stops: readonly Stop[]): StopStatus =>
   stops.every((stop) => stop.status === "new") ? "new" : "changed";
 
-const pathNote = (path: FlowPath): string => {
-  const more = path.labels.length - 1;
-  const others = more === 0 ? "" : ` · and ${more} more`;
-  return `${path.inPullRequest ? "In this PR" : "Not in this PR"}${others}`;
-};
+const pathNote = (path: FlowPath): string =>
+  [
+    ...(path.stops[0] === undefined ? [] : [path.stops[0].label]),
+    ...(path.labels.length > 1 ? [`and ${path.labels.length - 1} more`] : []),
+  ].join(" · ");
 
 /**
  * A path is a node on the left, standing for the files it starts in. Every other file a path runs is
@@ -57,10 +57,8 @@ export const bowTie = (flow: FlowPaths, opened: ReadonlySet<string> = new Set())
   const layerLabel = new Map(flow.layers.map((layer) => [layer.key, layer.label]));
   const layerAt = new Map(flow.layers.map((layer, at) => [layer.key, at]));
 
-  // The path's node stands for the files it starts in; outside the pull request, for none of them.
-  const standsFor = (path: FlowPath, stop: Stop | undefined) =>
-    path.inPullRequest && stop?.from === null;
-  const runs = (path: FlowPath) => path.stops.filter((stop) => !standsFor(path, stop));
+  // The path's node stands for the files it starts in.
+  const runs = (path: FlowPath) => path.stops.filter((stop) => stop.from !== null);
   const groups = new Map<
     string,
     { readonly layer: string; readonly column: 1 | 2; readonly stops: Map<string, Stop> }
@@ -93,7 +91,7 @@ export const bowTie = (flow: FlowPaths, opened: ReadonlySet<string> = new Set())
       kind: "path",
       label: path.labels[0] ?? "",
       note: pathNote(path),
-      status: path.inPullRequest ? (first?.status ?? "changed") : "outside",
+      status: first?.status ?? "changed",
       stops: first === undefined ? [] : [first],
       group: null,
       partId: first?.partIds[0] ?? null,
@@ -144,11 +142,8 @@ export const bowTie = (flow: FlowPaths, opened: ReadonlySet<string> = new Set())
     const stopAt = new Map(path.stops.map((stop) => [stop.path, stop]));
     const nodeOf = (file: string): string => {
       const stop = stopAt.get(file);
-      return stop === undefined || standsFor(path, stop) ? path.key : boxOf(stop);
+      return stop === undefined || stop.from === null ? path.key : boxOf(stop);
     };
-    if (!path.inPullRequest) {
-      for (const stop of path.stops) if (stop.from === null) link(path.key, boxOf(stop));
-    }
     for (const { from, to } of path.calls) {
       // A call back into where the path starts isn't drawn: nothing points left.
       if (nodeOf(to) !== path.key && nodeOf(from) !== nodeOf(to)) link(nodeOf(from), nodeOf(to));
