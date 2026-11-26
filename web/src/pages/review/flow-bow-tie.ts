@@ -42,23 +42,25 @@ const pathNote = (path: FlowPath): string => {
 };
 
 /**
- * A path is a node on the left, standing for the file it starts in. Every other file a path runs
- * is in the middle, by directory, when it calls another changed file, and on the right when it
- * calls none. A path links to each directory it runs through, and to an end only when nothing it
- * runs through calls that end; a directory links to the ends its files call. Requests to the pull
- * request's routes are ends too. A directory named in `opened` by its box's key is a box per file,
- * each with its own links.
+ * A path is a node on the left, standing for the files it starts in. Every other file a path runs is
+ * in the middle, by directory, when it calls another changed file or sends a request, and on the
+ * right when it does neither. Every link is a call the path makes: from a file to one it calls, the
+ * files that starts are in drawn from the path's node. Requests to the pull request's routes are on
+ * the right too, from the files that send them. A directory named in `opened` by its box's key is a
+ * box per file, each with its own links.
  */
 export const bowTie = (flow: FlowPaths, opened: ReadonlySet<string> = new Set()): BowTie => {
-  const calling = new Set(flow.calls.map((call) => call.from));
-  const callsTo = new Map<string, Set<string>>();
-  for (const { from, to } of flow.calls)
-    callsTo.set(from, (callsTo.get(from) ?? new Set()).add(to));
+  const calling = new Set([
+    ...flow.calls.map((call) => call.from),
+    ...flow.paths.flatMap((path) => path.ends.map((end) => end.from)),
+  ]);
   const layerLabel = new Map(flow.layers.map((layer) => [layer.key, layer.label]));
   const layerAt = new Map(flow.layers.map((layer, at) => [layer.key, at]));
 
-  // The stops a path runs after the file it starts in; outside the pull request, all of them.
-  const runs = (path: FlowPath) => (path.inPullRequest ? path.stops.slice(1) : path.stops);
+  // The path's node stands for the files it starts in; outside the pull request, for none of them.
+  const standsFor = (path: FlowPath, stop: Stop | undefined) =>
+    path.inPullRequest && stop?.from === null;
+  const runs = (path: FlowPath) => path.stops.filter((stop) => !standsFor(path, stop));
   const groups = new Map<
     string,
     { readonly layer: string; readonly column: 1 | 2; readonly stops: Map<string, Stop> }
@@ -139,19 +141,19 @@ export const bowTie = (flow: FlowPaths, opened: ReadonlySet<string> = new Set())
   const edges = new Map<string, { from: string; to: string }>();
   const link = (from: string, to: string) => edges.set(`${from}\u0000${to}`, { from, to });
   for (const path of flow.paths) {
-    const through = runs(path).filter((stop) => calling.has(stop.path));
-    for (const stop of runs(path)) {
-      const reachedThrough = through.some((other) => callsTo.get(other.path)?.has(stop.path));
-      if (calling.has(stop.path) || !reachedThrough) link(path.key, boxOf(stop));
+    const stopAt = new Map(path.stops.map((stop) => [stop.path, stop]));
+    const nodeOf = (file: string): string => {
+      const stop = stopAt.get(file);
+      return stop === undefined || standsFor(path, stop) ? path.key : boxOf(stop);
+    };
+    if (!path.inPullRequest) {
+      for (const stop of path.stops) if (stop.from === null) link(path.key, boxOf(stop));
     }
-    for (const stop of through) {
-      for (const to of runs(path)) {
-        if (!calling.has(to.path) && callsTo.get(stop.path)?.has(to.path)) {
-          link(boxOf(stop), boxOf(to));
-        }
-      }
+    for (const { from, to } of path.calls) {
+      // A call back into where the path starts isn't drawn: nothing points left.
+      if (nodeOf(to) !== path.key && nodeOf(from) !== nodeOf(to)) link(nodeOf(from), nodeOf(to));
     }
-    for (const end of path.ends) link(path.key, `request:${end.label}`);
+    for (const end of path.ends) link(nodeOf(end.from), `request:${end.label}`);
   }
   return {
     nodes: [...left, ...files, ...ends],

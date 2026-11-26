@@ -19,8 +19,18 @@ const stop = (layer: string, label: string, n: number, more: Partial<Stop> = {})
   names: [],
   partIds: [h(n)],
   shared: 1,
+  from: null,
+  calledBy: [],
   ...more,
 });
+
+/** A stop on a path that reaches it from another. */
+const under = (one: Stop, caller: Stop): Stop => ({
+  ...one,
+  from: caller.path,
+  calledBy: [caller.label],
+});
+const call = (from: Stop, to: Stop) => ({ from: from.path, to: to.path });
 
 const controller = stop("controllers", "OrderController", 1);
 const service = stop("services", "OrderService", 2, { shared: 2, names: ["place"] });
@@ -33,7 +43,8 @@ const flow: FlowPaths = {
       labels: ["POST /orders"],
       inPullRequest: true,
       outside: [],
-      stops: [controller, service, repository],
+      stops: [controller, under(service, controller), under(repository, service)],
+      calls: [call(controller, service), call(service, repository)],
       ends: [],
     },
     {
@@ -41,8 +52,9 @@ const flow: FlowPaths = {
       labels: ["RefundJob.java"],
       inPullRequest: false,
       outside: ["src/jobs/RefundJob.java"],
-      stops: [service, repository],
-      ends: [{ label: "POST /refunds", partId: h(9) }],
+      stops: [service, under(repository, service)],
+      calls: [call(service, repository)],
+      ends: [{ label: "POST /refunds", partId: h(9), from: service.path }],
     },
   ],
   layers: [
@@ -50,10 +62,7 @@ const flow: FlowPaths = {
     { key: "src/services", label: "services" },
     { key: "src/repositories", label: "repositories" },
   ],
-  calls: [
-    { from: controller.path, to: service.path },
-    { from: service.path, to: repository.path },
-  ],
+  calls: [call(controller, service), call(service, repository)],
   unreached: [stop("config", "WebConfig", 4, { shared: 0 })],
   also: {
     tests: ["src/test/OrderServiceTest.java"],
@@ -100,8 +109,14 @@ const services = ["Order", "Refund", "Stock", "Tax"].map((name, at) =>
 const repositories = ["Order", "Refund"].map((name, at) =>
   stop("repositories", `${name}Repository`, 20 + at, { status: "new" }),
 );
-const call = (from: Stop | undefined, to: Stop | undefined) =>
-  from === undefined || to === undefined ? [] : [{ from: from.path, to: to.path }];
+const wideStops = [
+  controller,
+  ...services.map((service) => under(service, controller)),
+  ...repositories.flatMap((repository, at) => under(repository, services[at] ?? controller)),
+];
+const wideCalls = wideStops.flatMap(({ from, path }) =>
+  from === null ? [] : [{ from, to: path }],
+);
 const wide: FlowPaths = {
   ...flow,
   paths: [
@@ -110,15 +125,12 @@ const wide: FlowPaths = {
       labels: ["POST /orders"],
       inPullRequest: true,
       outside: [],
-      stops: [controller, ...services, ...repositories],
+      stops: wideStops,
+      calls: wideCalls,
       ends: [],
     },
   ],
-  calls: [
-    ...services.flatMap((service) => call(controller, service)),
-    ...call(services[0], repositories[0]),
-    ...call(services[1], repositories[1]),
-  ],
+  calls: wideCalls,
 };
 
 describe.each(VIEWS)("the overview as %s", (_name, View) => {
@@ -182,9 +194,16 @@ describe("the overview as rows and lanes", () => {
   ] as const)("says a stop's status and how many ways run it, as %s", (_name, View) => {
     render(<View flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />);
     expect(
-      screen.getAllByRole("button", { name: "OrderService, changed, place, on 2 paths" }),
+      screen
+        .getAllByRole("button", { name: /^OrderService, / })
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      "OrderService, changed, place, called by OrderController, on 2 paths",
+      "OrderService, changed, place, on 2 paths",
+    ]);
+    expect(
+      screen.getAllByRole("button", { name: "OrderRepository, new file, called by OrderService" }),
     ).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "OrderRepository, new file" })).toHaveLength(2);
   });
 
   it("opens the route a path sends a request to", async () => {
@@ -197,7 +216,65 @@ describe("the overview as rows and lanes", () => {
   });
 });
 
+describe("the overview as rows", () => {
+  const show = (shown: FlowPaths) =>
+    render(<FlowRows flow={shown} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />);
+  const nameOf = (chip: Element | null | undefined) =>
+    chip?.getAttribute("aria-label")?.split(",")[0];
+
+  it("draws a chevron only for a call along the line, and puts several called files under one", () => {
+    const { container } = show(wide);
+    const row = container.querySelector("[data-slot=flow-row]");
+    // Each of the two services that call a repository goes on to it along its line.
+    expect(
+      [...(row?.querySelectorAll("[data-slot=flow-call]") ?? [])].map((chevron) => [
+        nameOf(
+          chevron.parentElement?.previousElementSibling?.querySelector("[data-slot=flow-stop]"),
+        ),
+        nameOf(chevron.parentElement?.querySelector("[data-slot=flow-stop]")),
+      ]),
+    ).toEqual([
+      ["OrderService", "OrderRepository"],
+      ["RefundService", "RefundRepository"],
+    ]);
+    // The four services are under the controller, the ones that call nothing first.
+    const [list] = row?.querySelectorAll("[data-slot=flow-calls]") ?? [];
+    expect(
+      [...(list?.children ?? [])].map((item) =>
+        nameOf(item.querySelector("[data-slot=flow-stop]")),
+      ),
+    ).toEqual(["StockService", "TaxService", "OrderService", "RefundService"]);
+  });
+
+  it("puts a request under the file that sends it", () => {
+    const { container } = show(flow);
+    const [, outside] = container.querySelectorAll("[data-slot=flow-row]");
+    const [list] = outside?.querySelectorAll("[data-slot=flow-calls]") ?? [];
+    expect([...(list?.children ?? [])].map((item) => item.textContent)).toEqual([
+      "OrderRepository",
+      "POST /refunds",
+    ]);
+  });
+});
+
 describe("the overview as lanes", () => {
+  it("marks what a stop calls and what calls it on its path, and no other", async () => {
+    const { container } = render(
+      <Lanes flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />,
+    );
+    const linked = () =>
+      [...container.querySelectorAll("tr")].map((row) =>
+        [...row.querySelectorAll<HTMLElement>("[data-linked]")].map((one) => one.dataset.path),
+      );
+    expect(linked()).toEqual([[], [], []]);
+    const [first] = screen.getAllByRole("button", { name: /^OrderService, / });
+    if (first === undefined) throw new Error("the service is a stop");
+    await userEvent.hover(first);
+    expect(linked()).toEqual([[], [controller.path, repository.path], []]);
+    await userEvent.unhover(first);
+    expect(linked()).toEqual([[], [], []]);
+  });
+
   it("is a table of the paths by directory", () => {
     render(<Lanes flow={flow} onOpenPart={vi.fn()} onOpenFile={vi.fn()} focusKey={null} />);
     expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([

@@ -64,12 +64,13 @@ const listed = (items: readonly string[]): string =>
     ? items.join(", ")
     : `${items.slice(0, 3).join(", ")} and ${items.length - 3} more`;
 
-/** What a screen reader hears for a stop, and its tooltip. */
+/** What a screen reader hears for a stop. */
 export const stopName = (stop: Stop): string =>
   [
     stop.label,
     stop.status === "new" ? "new file" : "changed",
     stop.names.length > 0 ? listed(stop.names) : null,
+    stop.calledBy.length > 0 ? `called by ${listed(stop.calledBy)}` : null,
     stop.shared > 1 ? `on ${stop.shared} paths` : null,
   ]
     .filter((part) => part !== null)
@@ -79,6 +80,7 @@ export const stopName = (stop: Stop): string =>
 export const StopChip = ({
   stop,
   hot,
+  linked = false,
   onHot,
   onOpen,
   className,
@@ -86,6 +88,8 @@ export const StopChip = ({
   readonly stop: Stop;
   /** Another chip of the same file has the pointer or the focus. */
   readonly hot: boolean;
+  /** It calls the stop that has the pointer or the focus on its path, or is called by it. */
+  readonly linked?: boolean;
   readonly onHot: (path: string | null) => void;
   readonly onOpen: FlowViewProps["onOpenPart"];
   readonly className?: string;
@@ -98,14 +102,19 @@ export const StopChip = ({
       data-path={stop.path}
       data-status={stop.status}
       data-hot={hot || undefined}
+      data-linked={linked || undefined}
       className={cn(
         "inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md border px-1.5 font-mono text-code-compact",
         STOP_STYLE[stop.status],
+        linked && "border-primary border-dashed",
         hot && "shadow-[0_0_0_2px_var(--background),0_0_0_4px_var(--primary)]",
         className,
       )}
       aria-label={stopName(stop)}
-      title={`${stop.path}${stop.names.length > 0 ? `: ${stop.names.join(", ")}` : ""}`}
+      title={[
+        `${stop.path}${stop.names.length > 0 ? `: ${stop.names.join(", ")}` : ""}`,
+        ...(stop.calledBy.length > 0 ? [`Called by ${stop.calledBy.join(", ")}`] : []),
+      ].join("\n")}
       onClick={() => first !== undefined && onOpen(first, stop.path)}
       onFocus={() => onHot(stop.path)}
       onBlur={() => onHot(null)}

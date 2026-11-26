@@ -238,6 +238,67 @@ describe("flowPaths", () => {
     ]);
   });
 
+  it("draws every link a path has from a call, and no other", () => {
+    const ledger = file("src/pgo/Ledger.java", [5]);
+    const helper = file("src/pgo/Helper.java", [6]);
+    const orphan = file("src/pgo/Orphan.java", [7]);
+    const files = [encoder, recorder, writer, feature, ledger, helper, orphan];
+    const definitionCalls = [
+      defines("enable", 4, [1, 3, 4]),
+      defines("record", 2, [2, 3]),
+      defines("write", 3, [4, 1]),
+      defines("post", 5),
+      defines("help", 6, [0]),
+      defines("encode", 1, [1]),
+      defines("orphan", 7),
+    ];
+    const found = flowPaths(
+      input(files, {
+        definitionCalls,
+        flows: [flow("POST /orders", [4, 7], [4]), flow("GET /orders", [1, 7], [1])],
+      }),
+    );
+    const pathOfPart = new Map<string, string>(
+      files.flatMap((one) => one.hunks.map((each) => [each.id, one.path])),
+    );
+    const pathOf = (one: DefinitionCalls | undefined) => pathOfPart.get(one?.partIds[0] ?? h(0));
+    const made = new Set(
+      definitionCalls.flatMap((one) =>
+        one.calls.map((to) => `${pathOf(one)}>${pathOf(definitionCalls[to])}`),
+      ),
+    );
+    const key = ({ from, to }: { from: string | null; to: string }) => `${from}>${to}`;
+    expect(found.paths.map((path) => path.labels)).toEqual([["POST /orders"], ["GET /orders"]]);
+    for (const path of found.paths) {
+      expect(path.calls.map(key).filter((call) => !made.has(call))).toEqual([]);
+      const called = path.stops.filter((one) => one.from !== null);
+      const drawn = new Set(path.calls.map(key));
+      expect(called.filter((one) => !drawn.has(key({ from: one.from, to: one.path })))).toEqual([]);
+      // Where it starts is the one stop nothing on it leads to.
+      expect(path.stops.length - called.length).toBe(1);
+    }
+    expect(found.calls.map(key).filter((call) => !made.has(call))).toEqual([]);
+    // A file a flow only lists is no stop.
+    expect(found.unreached.map((one) => one.path)).toEqual([orphan.path]);
+  });
+
+  it("draws a stop under the caller nearest the start, and says every caller", () => {
+    const [path] = flowPaths(
+      input([encoder, recorder, writer], {
+        definitionCalls: [
+          defines("encode", 1, [1, 2]),
+          defines("record", 2, [2]),
+          defines("write", 3),
+        ],
+      }),
+    ).paths;
+    expect(path?.stops.map((one) => [one.label, one.from, one.calledBy])).toEqual([
+      ["Encoder", null, []],
+      ["Recorder", encoder.path, ["Encoder"]],
+      ["Writer", encoder.path, ["Encoder", "Recorder"]],
+    ]);
+  });
+
   it("joins the paths that run the same files into one, with each label", () => {
     const paths = flowPaths(
       input([controller, service], {
@@ -290,7 +351,9 @@ describe("flowPaths", () => {
       }),
     );
     expect(shape(paths)[0]).toEqual(["Page: Orders", "Orders"]);
-    expect(paths.paths[0]?.ends).toEqual([{ label: "POST /orders", partId: h(1) }]);
+    expect(paths.paths[0]?.ends).toEqual([
+      { label: "POST /orders", partId: h(1), from: page.path },
+    ]);
   });
 
   it("lists a file proved mechanical in every hunk apart, and never as a stop", () => {
@@ -335,7 +398,49 @@ describe("bowTie", () => {
     ]);
   });
 
-  it("links a path straight to an end nothing in between calls", () => {
+  it("links two files of the middle, the one that calls to the one it calls", () => {
+    const refunds = file("src/main/java/shop/refunds/RefundService.java", [9]);
+    const chain = bowTie(
+      flowPaths(
+        input([controller, service, refunds, repository], {
+          callGraph: [hint(1, 3), hint(3, 9), hint(9, 5)],
+          flows: [flow("POST /orders", [1], [1])],
+        }),
+      ),
+    );
+    const name = (key: string) => chain.nodes.find((node) => node.key === key)?.label;
+    expect(chain.nodes.map((node) => [node.column, node.label])).toEqual([
+      [0, "POST /orders"],
+      [1, "OrderService"],
+      [1, "RefundService"],
+      [2, "OrderRepository"],
+    ]);
+    expect(chain.edges.map((edge) => [name(edge.from), name(edge.to)])).toEqual([
+      ["POST /orders", "OrderService"],
+      ["OrderService", "RefundService"],
+      ["RefundService", "OrderRepository"],
+    ]);
+  });
+
+  it("links a request to the file that sends it, which is in the middle", () => {
+    const page = file("web/src/pages/Orders.tsx", [9], { language: "tsx" });
+    const client = file("web/src/api/orders.ts", [10], { language: "typescript" });
+    const sent = bowTie(
+      flowPaths(
+        input([page, client, controller], {
+          callGraph: [hint(9, 10), hint(10, 1, "request")],
+          flows: [flow("Page: Orders", [9], [9])],
+        }),
+      ),
+    );
+    const name = (key: string) => sent.nodes.find((node) => node.key === key)?.label;
+    expect(sent.edges.map((edge) => [name(edge.from), name(edge.to)])).toEqual([
+      ["Page: Orders", "orders"],
+      ["orders", "POST /orders"],
+    ]);
+  });
+
+  it("links a path straight to an end it calls itself", () => {
     const direct = bowTie(
       flowPaths(
         input([controller, repository], {

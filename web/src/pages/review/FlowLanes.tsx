@@ -16,28 +16,12 @@ import type { FlowPath, Stop } from "./flow-paths.ts";
 /** A cell shows this many stops before folding the rest behind a button. */
 const SHOWN = 3;
 
-/** The line of a path through a cell: from its first directory to its last, or to its requests. */
-const Line = ({
-  path,
-  from,
-  to,
-}: {
-  readonly path: FlowPath;
-  readonly from: "edge" | "middle";
-  readonly to: "edge" | "middle";
-}) => (
-  <span
-    aria-hidden="true"
-    data-slot="flow-lane-line"
-    className={cn("absolute top-1/2 border-t border-input", !path.inPullRequest && "border-dashed")}
-    style={{ left: from === "edge" ? 0 : "50%", right: to === "edge" ? 0 : "50%" }}
-  />
-);
-
 /**
  * The pull request as lanes: a column per directory, callers before callees, and a row per flow
  * path, with a mark in each directory where the path runs changed files. The directories are the
- * headings, so the architecture is read once and the rows say what's particular to this change.
+ * headings, so the architecture is read once and the rows say what's particular to this change. No
+ * line joins the cells, since it would join every file in one to every file in the next: the stop
+ * with the pointer or the focus marks the ones on its path that call it or that it calls.
  */
 export const FlowLanes = ({
   flow,
@@ -49,14 +33,25 @@ export const FlowLanes = ({
 }: FlowViewProps & FlowFolds) => {
   const box = useRef<HTMLElement>(null);
   const [hot, setHot] = useState<string | null>(null);
+  const [hotPath, setHotPath] = useState<string | null>(null);
   useFocusedStop(box, focusKey);
   const sends = flow.paths.some((path) => path.ends.length > 0);
-  const chip = (stop: Stop) => (
+  const chip = (path: FlowPath, stop: Stop) => (
     <StopChip
       key={stop.path}
       stop={stop}
       hot={hot === stop.path}
-      onHot={setHot}
+      linked={
+        hotPath === path.key &&
+        path.calls.some(
+          ({ from, to }) =>
+            (from === hot && to === stop.path) || (to === hot && from === stop.path),
+        )
+      }
+      onHot={(one) => {
+        setHot(one);
+        setHotPath(one === null ? null : path.key);
+      }}
       onOpen={onOpenPart}
     />
   );
@@ -68,8 +63,8 @@ export const FlowLanes = ({
       className="flex min-w-0 flex-col gap-3"
     >
       <FlowLegend>
-        Each column is a directory, callers first. Each row is a way the change is reached, with a
-        mark where it runs changed files; a dashed row starts outside the pull request.
+        Each column is a directory, callers first. Each row is a way the change is reached, with the
+        changed files it runs. Hover or focus a file to mark what calls it and what it calls.
       </FlowLegend>
       {flow.paths.length === 0 ? (
         <NoPaths />
@@ -113,9 +108,6 @@ export const FlowLanes = ({
                 const cells = flow.layers.map((layer) =>
                   path.stops.filter((stop) => stop.layer === layer.key),
                 );
-                const marked = cells.flatMap((stops, at) => (stops.length > 0 ? [at] : []));
-                const first = marked[0] ?? -1;
-                const last = marked[marked.length - 1] ?? -1;
                 const border = row > 0 && "border-t";
                 return (
                   <tr key={path.key} data-slot="flow-lane">
@@ -134,20 +126,12 @@ export const FlowLanes = ({
                       const open = opened.has(key) || stops.length <= SHOWN;
                       const folded = open ? [] : stops.slice(SHOWN - 1);
                       const more = open ? "Show fewer" : `and ${folded.length} more`;
-                      const onLine = at >= first && at <= last && first !== -1;
-                      const ends = path.ends.length > 0;
                       return (
-                        <td key={layer} className={cn("relative px-2 py-2.5 align-middle", border)}>
-                          {onLine && (first !== last || ends) && (
-                            <Line
-                              path={path}
-                              from={at === first ? "middle" : "edge"}
-                              to={at === last && !ends ? "middle" : "edge"}
-                            />
-                          )}
-                          {at > last && ends && <Line path={path} from="edge" to="edge" />}
-                          <div className="relative flex flex-col items-center gap-1">
-                            {(open ? stops : stops.slice(0, SHOWN - 1)).map(chip)}
+                        <td key={layer} className={cn("px-2 py-2.5 align-middle", border)}>
+                          <div className="flex flex-col items-center gap-1">
+                            {(open ? stops : stops.slice(0, SHOWN - 1)).map((stop) =>
+                              chip(path, stop),
+                            )}
                             {stops.length > SHOWN && (
                               <button
                                 type="button"
@@ -165,11 +149,14 @@ export const FlowLanes = ({
                       );
                     })}
                     {sends && (
-                      <td className={cn("relative px-2 py-2.5 align-middle", border)}>
-                        {path.ends.length > 0 && <Line path={path} from="edge" to="middle" />}
-                        <div className="relative flex flex-col items-center gap-1">
+                      <td className={cn("px-2 py-2.5 align-middle", border)}>
+                        <div className="flex flex-col items-center gap-1">
                           {path.ends.map((end) => (
-                            <EndChip key={end.label} end={end} onOpen={onOpenPart} />
+                            <EndChip
+                              key={`${end.from} ${end.label}`}
+                              end={end}
+                              onOpen={onOpenPart}
+                            />
                           ))}
                         </div>
                       </td>

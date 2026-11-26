@@ -20,6 +20,7 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 48;
 const NODE_GAP = 12;
 const COLUMN_GAP = 96;
+const LOOP = 48;
 const PAD = 16;
 const HEADING = 28;
 
@@ -159,12 +160,17 @@ export const FlowBowTie = ({
                 const [x1, y1] = [from.x + NODE_WIDTH, from.y + NODE_HEIGHT / 2];
                 const [x2, y2] = [to.x, to.y + NODE_HEIGHT / 2];
                 const bend = (x2 - x1) / 2;
+                // Between two boxes of one column, round their right side.
+                const d =
+                  from.x === to.x
+                    ? `M ${x1} ${y1} C ${x1 + LOOP} ${y1} ${x1 + LOOP} ${y2} ${x1} ${y2}`
+                    : `M ${x1} ${y1} C ${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`;
                 const lit = hovered === edge.from || hovered === edge.to;
                 return (
                   <path
                     key={`${edge.from}>${edge.to}`}
                     data-slot="flow-bow-tie-edge"
-                    d={`M ${x1} ${y1} C ${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`}
+                    d={d}
                     className={cn(
                       "fill-none stroke-input [stroke-width:1.5]",
                       lit && "stroke-primary [stroke-width:2]",

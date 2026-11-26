@@ -31,6 +31,19 @@ export interface Stop {
   readonly partIds: readonly PartId[];
   /** How many flow paths run it. */
   readonly shared: number;
+  /**
+   * The path of the stop it's drawn under: of those that call it, the one fewest calls from where
+   * the path starts. Null where it starts.
+   */
+  readonly from: string | null;
+  /** The labels of every stop on the path that calls it. */
+  readonly calledBy: readonly string[];
+}
+
+/** A call from one changed file into another. */
+export interface FileCall {
+  readonly from: string;
+  readonly to: string;
 }
 
 /** A request a path sends to a route the pull request adds: where the path leaves its process. */
@@ -38,6 +51,8 @@ export interface PathEnd {
   /** The route's method and path. */
   readonly label: string;
   readonly partId: PartId;
+  /** The path of the stop that sends it. */
+  readonly from: string;
 }
 
 export interface FlowPath {
@@ -51,8 +66,10 @@ export interface FlowPath {
   readonly inPullRequest: boolean;
   /** Outside the pull request, the files' paths. */
   readonly outside: readonly string[];
-  /** The changed files it runs, in the order it reaches them. */
+  /** The changed files it runs: where it starts, then what those call, and so on. */
   readonly stops: readonly Stop[];
+  /** The calls it makes between them: no form links two stops without one. */
+  readonly calls: readonly FileCall[];
   readonly ends: readonly PathEnd[];
 }
 
@@ -77,8 +94,8 @@ export interface FlowPaths {
   readonly paths: readonly FlowPath[];
   /** The stops' directories, callers before callees. */
   readonly layers: readonly Layer[];
-  /** A call from one changed file into another, on some path. */
-  readonly calls: readonly { readonly from: string; readonly to: string }[];
+  /** The calls of every path. */
+  readonly calls: readonly FileCall[];
   /** Changed code no path runs. */
   readonly unreached: readonly Stop[];
   readonly also: AlsoChanged;
@@ -173,12 +190,44 @@ const codeGraph = (analysis: FlowPathsInput, fileOf: ReadonlyMap<PartId, FileCha
   return { definitions, all, pathAt, calleesOf, reach, pathsOf };
 };
 
+/** The calls between files the definitions make. */
+const fileCallsOf = (
+  runs: readonly number[],
+  { pathAt, calleesOf }: ReturnType<typeof codeGraph>,
+): FileCall[] => {
+  const calls = new Map<string, FileCall>();
+  for (const at of runs) {
+    for (const callee of calleesOf(at)) {
+      const [from, to] = [pathAt(at), pathAt(callee)];
+      if (from !== undefined && to !== undefined && from !== to)
+        calls.set(`${from}\u0000${to}`, { from, to });
+    }
+  }
+  return [...calls.values()];
+};
+
+/** Each file with the one that calls it nearest the starts, in the order calls reach them. */
+const calledFrom = (
+  starts: readonly string[],
+  calls: readonly FileCall[],
+): ReadonlyMap<string, string | null> => {
+  const from = new Map<string, string | null>(starts.map((path) => [path, null]));
+  // A map's iteration takes in what's added to it as it goes: breadth first.
+  for (const path of from.keys()) {
+    for (const call of calls) {
+      if (call.from === path && !from.has(call.to)) from.set(call.to, path);
+    }
+  }
+  return from;
+};
+
 /** A path before it's drawn: where it starts and the definitions it runs. */
 interface Walk {
   readonly key: string;
   readonly label: string;
   /** Outside the pull request, the file it starts in. */
   readonly from: string | null;
+  readonly starts: readonly number[];
   readonly runs: readonly number[];
 }
 
@@ -202,7 +251,7 @@ const walksOf = (
     );
     if (starts.length === 0) continue;
     for (const start of starts) entered.add(start);
-    walks.push({ key: `flow:${at}`, label: flow.title, from: null, runs: reach(starts) });
+    walks.push({ key: `flow:${at}`, label: flow.title, from: null, starts, runs: reach(starts) });
   }
 
   const called = new Set(all.flatMap(calleesOf));
@@ -214,7 +263,7 @@ const walksOf = (
     const names = unique(starts.flatMap((at) => definitions[at]?.name || []));
     const label =
       names.length === 0 ? (labels.get(path) ?? path) : `${listed(names)} in ${basename(path)}`;
-    return [{ key: `file:${path}`, label, from: null, runs: reach(starts) }];
+    return [{ key: `file:${path}`, label, from: null, starts, runs: reach(starts) }];
   };
   const candidates = files
     .flatMap((path) => walkFrom(path, (at) => !called.has(at) && !entered.has(at)))
@@ -237,8 +286,8 @@ const walksOf = (
  * the definitions their calls reach: a file is a stop only where one of those is in it, so code
  * several paths run is a stop on each. One that starts at no entry isn't drawn when another path
  * runs every file on it. A file outside the pull request that uses a changed definition starts a
- * path of its own. Paths that run the same files and send the same requests are one path with each
- * one's label. Tests, docs, generated and mechanical files are listed apart, and code no path runs
+ * path of its own. Paths that start in the same files, run the same ones and send the same requests
+ * are one path with each one's label. Tests, docs, generated and mechanical files are listed apart, and code no path runs
  * is `unreached`: every changed file is in exactly one of them or on a path.
  */
 export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
@@ -297,6 +346,7 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
       key: `outside:${path}`,
       label: outsideLabels.get(path) ?? path,
       from: path,
+      starts,
       runs: reach(starts),
     });
   }
@@ -306,66 +356,83 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
   for (const one of walked) {
     for (const path of pathsOf(one.runs)) shared.set(path, (shared.get(path) ?? 0) + 1);
   }
-  const stop = (path: string, ats: readonly number[]): Stop => ({
+  const labelOf = (path: string) => withoutExtension(labels.get(path) ?? path);
+  const stop = (
+    path: string,
+    ats: readonly number[],
+    { from, calledBy }: Pick<Stop, "from" | "calledBy">,
+  ): Stop => ({
     path,
-    label: withoutExtension(labels.get(path) ?? path),
+    label: labelOf(path),
     layer: directoryOf(path),
     status: code.find((file) => file.path === path)?.status === "added" ? "new" : "changed",
     names: unique(ats.flatMap((at) => definitions[at]?.name || [])),
     partIds: unique(ats.flatMap((at) => definitions[at]?.partIds ?? [])),
     shared: shared.get(path) ?? 0,
+    from,
+    calledBy,
   });
-  const merged = new Map<string, FlowPath>();
-  for (const one of walked) {
-    const stops = pathsOf(one.runs).map((path) =>
-      stop(
-        path,
-        one.runs.filter((at) => pathAt(at) === path),
-      ),
+  /** A path of the walks that start in the same files, run the same ones and send the same. */
+  const drawn = (alike: readonly Walk[]): FlowPath[] => {
+    const [first] = alike;
+    if (first === undefined) return [];
+    const runs = unique(alike.flatMap((one) => one.runs));
+    const calls = fileCallsOf(runs, graph);
+    const from = calledFrom(pathsOf(first.starts), calls);
+    const ends = runs.flatMap((at) =>
+      (definitions[at]?.requests ?? []).map(({ symbol, toPartId }) => ({
+        label: symbol,
+        partId: toPartId,
+        from: pathAt(at) ?? "",
+      })),
     );
-    const ends = [
-      ...new Map(
-        one.runs
-          .flatMap((at) => definitions[at]?.requests ?? [])
-          .map(({ symbol, toPartId }) => [symbol, { label: symbol, partId: toPartId }]),
-      ).values(),
+    return [
+      {
+        key: first.key,
+        labels: alike.map((one) => one.label),
+        inPullRequest: first.from === null,
+        outside: alike.flatMap((one) => one.from ?? []),
+        stops: [...from].map(([path, caller]) =>
+          stop(
+            path,
+            runs.filter((at) => pathAt(at) === path),
+            {
+              from: caller,
+              calledBy: calls.filter((call) => call.to === path).map((call) => labelOf(call.from)),
+            },
+          ),
+        ),
+        calls,
+        ends: [...new Map(ends.map((end) => [`${end.from}\u0000${end.label}`, end])).values()],
+      },
     ];
-    const same = [
+  };
+  const alike = new Map<string, Walk[]>();
+  for (const one of walked) {
+    const sent = one.runs.flatMap((at) => definitions[at]?.requests.map((end) => end.symbol) ?? []);
+    const key = [
       one.from === null,
-      ...stops.map((each) => each.path).sort(),
+      ...pathsOf(one.starts).sort(),
       "",
-      ...ends.map((end) => end.label).sort(),
+      ...pathsOf(one.runs).sort(),
+      "",
+      ...unique(sent).sort(),
     ].join("\u0000");
-    const known = merged.get(same);
-    merged.set(same, {
-      key: known?.key ?? one.key,
-      labels: [...(known?.labels ?? []), one.label],
-      inPullRequest: one.from === null,
-      outside: [...(known?.outside ?? []), ...(one.from === null ? [] : [one.from])],
-      stops: known?.stops ?? stops,
-      ends: known?.ends ?? ends,
-    });
+    alike.set(key, [...(alike.get(key) ?? []), one]);
   }
-  const paths = [...merged.values()];
+  const paths = [...alike.values()].flatMap(drawn);
 
-  const calls = new Map<string, { from: string; to: string }>();
-  for (const from of new Set(walked.flatMap((one) => one.runs))) {
-    for (const to of calleesOf(from)) {
-      const [a, b] = [pathAt(from), pathAt(to)];
-      if (a !== undefined && b !== undefined && a !== b)
-        calls.set(`${a}\u0000${b}`, { from: a, to: b });
-    }
-  }
   const unreached = inTreeOrder
     .filter((path) => !shared.has(path))
     .map((path) =>
       stop(
         path,
         all.filter((at) => pathAt(at) === path),
+        { from: null, calledBy: [] },
       ),
     );
 
-  const fileCalls = [...calls.values()];
+  const fileCalls = fileCallsOf(unique(walked.flatMap((one) => one.runs)), graph);
   return { paths, layers: layersOf(paths, fileCalls), calls: fileCalls, unreached, also };
 };
 
@@ -374,10 +441,7 @@ export const flowPaths = (analysis: FlowPathsInput): FlowPaths => {
  * chain of calls that reaches it. A call that closes a cycle doesn't count, and directories at the
  * same place keep the order the paths first reach them in.
  */
-const layersOf = (
-  paths: readonly FlowPath[],
-  calls: readonly { readonly from: string; readonly to: string }[],
-): Layer[] => {
+const layersOf = (paths: readonly FlowPath[], calls: readonly FileCall[]): Layer[] => {
   const keys = unique(paths.flatMap((path) => path.stops.map((one) => one.layer)));
   const out = new Map<string, string[]>(keys.map((key) => [key, []]));
   for (const { from, to } of calls) {
