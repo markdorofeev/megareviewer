@@ -61,6 +61,8 @@ export const StatusResponse = z
     model: ModelOptions,
     /** The folder searched for clones of a PR's repository, in full; null when the search is off. */
     cloneSearchFolder: z.string().nullable(),
+    /** The folder megareviewer downloads its own copies of repositories to; null when that's off. */
+    downloadFolder: z.string().nullable(),
   })
   .readonly();
 export type StatusResponse = z.infer<typeof StatusResponse>;

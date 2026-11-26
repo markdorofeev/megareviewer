@@ -106,6 +106,7 @@ const STATUS: StatusResponse = {
   jira: { configured: true },
   model: MODEL,
   cloneSearchFolder: "/home/mina",
+  downloadFolder: "/home/mina/.megareviewer/repos",
 };
 const withHosts = (
   hosts: Partial<StatusResponse["hosts"]>,

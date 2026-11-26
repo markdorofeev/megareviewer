@@ -61,6 +61,7 @@ const setup = (
     noHosts?: boolean;
     analysis?: Analysis;
     preferences?: InMemoryPreferenceStore;
+    copies?: FakeRepositoryCopies;
   } = {},
 ) => {
   const clock = new FixedClock("2026-10-21T10:00:00Z");
@@ -88,7 +89,7 @@ const setup = (
       harnessSource: () => null,
       harnessStore: new InMemoryHarnessStore(),
       knownCheckouts: new InMemoryKnownCheckouts(),
-      copies: new FakeRepositoryCopies(),
+      copies: options.copies ?? new FakeRepositoryCopies(),
       threads: {},
       statuses: {},
       parser: new FakeCodeParser(),
@@ -766,7 +767,13 @@ describe("getStatus", () => {
       jira: { configured: true },
       model: { options: [fakeModelOption()], defaultId: fakeModelOption().id },
       cloneSearchFolder: "/home/lee",
+      downloadFolder: null,
     });
+  });
+
+  it("reports where repositories are downloaded to, while they are", async () => {
+    const { useCases } = setup({ copies: new FakeRepositoryCopies({ downloadFolder: "/copies" }) });
+    expect((await useCases.getStatus()).downloadFolder).toBe("/copies");
   });
 
   it("reports unconfigured hosts", async () => {
