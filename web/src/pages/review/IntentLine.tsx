@@ -1,5 +1,5 @@
 import { CheckIcon, InfoIcon, Loader2Icon, RouteIcon, SparklesIcon } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { type Analysis, hasModelRun, runStages } from "../../../../src/domain/review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { codeSpans } from "./brief.ts";
@@ -58,12 +58,6 @@ export const ModelText = ({ text }: { readonly text: string }) => (
       ),
     )}
   </span>
-);
-
-const Line = ({ lead, children }: { readonly lead: string; readonly children: ReactNode }) => (
-  <p className="min-w-0">
-    <span className={LEAD}>{lead}</span> {children}
-  </p>
 );
 
 /** "Sonnet 5.5 through Claude Code", when the run recorded its option. */
@@ -161,13 +155,11 @@ export interface TourLink {
 }
 
 /**
- * The intent's brief under the title, what to know before reading the code. Claude's once it has
- * run, in up to three lines: what the change does, how it runs through the system, and what to
- * keep in mind. Before, the description's first sentence. While Claude runs the description stays;
- * when the intent arrives it fades out and Claude's brief fades in where it was, the room kept
- * until the run ends so the header doesn't change height. The Details button ends the first line,
- * so it reads as more of it. A mismatch between what was asked and what the code does is one of
- * Claude's points, on the code it rests on.
+ * The intent's brief under the title, one line of what to know before reading the code: what the
+ * change does, Claude's once it has run, and before, the description's first sentence. While Claude
+ * runs the description stays; when the intent arrives it fades out and Claude's line fades in where
+ * it was. The Details button ends the line, so it reads as more of it. A mismatch between what was
+ * asked and what the code does is one of Claude's points, on the code it rests on.
  */
 export const IntentLine = ({
   analysis,
@@ -219,41 +211,23 @@ export const IntentLine = ({
     </p>
   );
   const inferred = intent !== null && (
-    <div data-arriving={swapping || undefined} className="flex min-w-0 flex-col gap-0.5">
-      <p className="min-w-0">
-        <span className={LEAD}>
-          {mismatches.length > 0 || intent.stated === null ? (
-            "From the code:"
-          ) : (
-            <>
-              <CheckIcon
-                aria-hidden="true"
-                className="mr-1 inline size-3.5 align-[-0.125em] text-review-approved"
-              />
-              Does what was asked:
-            </>
-          )}
-        </span>{" "}
-        <ModelText text={intent.inferred.summary} />
-        {details}
-      </p>
-      {intent.inferred.shape !== "" && (
-        <Line lead="Through:">
-          <ModelText text={intent.inferred.shape} />
-        </Line>
-      )}
-      {intent.inferred.watch.length > 0 && (
-        <Line lead="Watch:">
-          {intent.inferred.watch.map((item, at) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: the list never reorders.
-            <span key={at}>
-              {at > 0 && " · "}
-              <ModelText text={item} />
-            </span>
-          ))}
-        </Line>
-      )}
-    </div>
+    <p data-arriving={swapping || undefined} className="min-w-0">
+      <span className={LEAD}>
+        {mismatches.length > 0 || intent.stated === null ? (
+          "From the code:"
+        ) : (
+          <>
+            <CheckIcon
+              aria-hidden="true"
+              className="mr-1 inline size-3.5 align-[-0.125em] text-review-approved"
+            />
+            Does what was asked:
+          </>
+        )}
+      </span>{" "}
+      <ModelText text={intent.inferred.summary} />
+      {details}
+    </p>
   );
 
   return (
