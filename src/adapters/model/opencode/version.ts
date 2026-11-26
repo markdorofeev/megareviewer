@@ -8,7 +8,7 @@
 export const OPENCODE_PROMPT_VERSION = 16;
 export const OPENCODE_FINGERPRINT = "0115ba60437e4572";
 /** The same, of the steps pass, which only a run that asks for the tour sends. */
-export const OPENCODE_TOUR_FINGERPRINT = "98c10186f31c5681";
+export const OPENCODE_TOUR_FINGERPRINT = "379a067d6e641de4";
 
 /** The same, of a run with something to read, which the others send nothing of. */
 export const OPENCODE_READER_FINGERPRINT = "bb5e40798124aa61";
