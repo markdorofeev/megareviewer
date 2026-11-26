@@ -194,7 +194,7 @@ test("a call's card keeps its header in view when its code scrolls sideways", as
   expect(room).toBeGreaterThanOrEqual(10);
 });
 
-test("the line under the mouse shows a plus on its number, an unchanged fold's doesn't", async ({
+test("the line under the mouse shows a quiet plus on its number, which fills under it, an unchanged fold's doesn't", async ({
   page,
 }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
@@ -211,6 +211,7 @@ test("the line under the mouse shows a plus on its number, an unchanged fold's d
       plus: getComputedStyle(element, "::before").content,
       fill: getComputedStyle(element).backgroundColor,
     }));
+  const clear = "rgba(0, 0, 0, 0)";
   const tint = (row: Locator) =>
     row.evaluate((element) => getComputedStyle(element, "::before").backgroundColor);
 
@@ -224,8 +225,11 @@ test("the line under the mouse shows a plus on its number, an unchanged fold's d
     .first();
   const number = commentable.getByRole("button", { name: /^Comment on/ });
   await commentable.locator("[role=cell]").last().hover();
+  expect(await look(number)).toEqual({ plus: '"+"', fill: clear });
+  expect(await tint(commentable)).toBe(clear);
+  await number.hover();
   expect(await look(number)).toEqual({ plus: '"+"', fill: primary });
-  expect(await tint(commentable)).not.toBe("rgba(0, 0, 0, 0)");
+  expect(await tint(commentable)).toBe(clear);
 
   await card.locator("[data-slot=file-gap]").getByRole("button").first().click();
   const unchanged = card
@@ -234,7 +238,7 @@ test("the line under the mouse shows a plus on its number, an unchanged fold's d
     .first();
   await unchanged.hover();
   await expect(unchanged.getByRole("button")).toHaveCount(0);
-  expect(await tint(unchanged)).toBe("rgba(0, 0, 0, 0)");
+  expect(await tint(unchanged)).toBe(clear);
   expect((await look(number)).plus).toBe("none");
 });
 
@@ -594,6 +598,146 @@ test("walks the threads from the bar, before Claude runs and beside its points",
   await bar.getByRole("button", { name: "Next thread" }).click();
   await expect(position).toHaveAccessibleName("Thread 2 of 5, show all");
   await expect(page.locator("[data-slot=review-thread]:focus")).toBeInViewport();
+});
+
+/** The middle of a stretch of a line's text, on the screen. */
+const textAt = (row: Locator, text: string, edge: "start" | "end") =>
+  row.locator("[data-slot=line-code]").evaluate(
+    (cell, [wanted, side]) => {
+      const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        const at = node.textContent?.indexOf(wanted) ?? -1;
+        if (at < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, at);
+        range.setEnd(node, at + wanted.length);
+        const box = range.getBoundingClientRect();
+        return {
+          x: side === "start" ? box.left + 1 : box.right - 1,
+          y: (box.top + box.bottom) / 2,
+        };
+      }
+      throw new Error(`no text ${wanted}`);
+    },
+    [text, edge] as const,
+  );
+
+/** Drags from one point to another, in steps, as a hand does. */
+const drag = async (
+  page: Page,
+  from: { readonly x: number; readonly y: number },
+  to: { readonly x: number; readonly y: number },
+  release = true,
+) => {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  if (release) await page.mouse.up();
+};
+
+const middle = async (locator: Locator) => {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error("not on the screen");
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+};
+
+test("opens the comment box from a line's number or a drag down the numbers, and not from the code", async ({
+  page,
+}) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+  const changes = page.getByRole("region", { name: "Changes" });
+  const field = changes.getByRole("textbox", { name: /^Comment on/ });
+  const receipts = changes.locator('[data-slot=file-card][data-path="src/services/receipts.ts"]');
+  const line = (number: number) => receipts.locator(`[data-place="new:${number}"]`);
+  const number = (of: number) =>
+    receipts.getByRole("button", { name: `Comment on line ${of}`, exact: true });
+  await line(9).scrollIntoViewIfNeeded();
+
+  // The code is text: a click on it opens nothing, and the row under the mouse keeps its colors.
+  await line(9).locator("[data-slot=line-code]").click();
+  await expect(field).toHaveCount(0);
+  const cell = () => number(9).evaluate((one) => getComputedStyle(one).backgroundColor);
+  await expect(line(9)).toHaveCSS("cursor", "auto");
+  expect(await cell()).toBe("rgba(0, 0, 0, 0)");
+  expect(await number(9).evaluate((one) => getComputedStyle(one, "::before").content)).toBe('"+"');
+  await number(9).hover();
+  expect(await cell()).not.toBe("rgba(0, 0, 0, 0)");
+
+  await number(9).click();
+  await expect(changes.getByRole("textbox", { name: "Comment on line 9" })).toBeFocused();
+  // A click on the line of an open box leaves it open; on its number, closes it.
+  await line(9).locator("[data-slot=line-code]").click();
+  await expect(field).toHaveCount(1);
+  await number(9).click();
+  await expect(field).toHaveCount(0);
+
+  await drag(page, await middle(number(9)), await middle(number(11)), false);
+  await expect(receipts.locator("[data-marked]")).toHaveCount(3);
+  expect(await page.evaluate(() => window.getSelection()?.isCollapsed)).toBe(true);
+  await page.mouse.up();
+  await expect(changes.getByRole("textbox", { name: "Comment on lines 9–11" })).toBeFocused();
+  await expect(receipts.locator("[data-marked]")).toHaveCount(3);
+});
+
+test("offers to comment on a selection of code, at its end", async ({ page }) => {
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
+  const changes = page.getByRole("region", { name: "Changes" });
+  const config = changes.locator('[data-slot=file-card][data-path="config/app.yaml"]');
+  const line = (place: string) => config.locator(`[data-place="${place}"]`);
+  const button = page.locator("[data-slot=selection-comment]");
+  await line("new:14").scrollIntoViewIfNeeded();
+
+  // From an unchanged line over a deleted and an added one: the added line's side.
+  await drag(
+    page,
+    await textAt(line("new:12"), "enabled", "start"),
+    await textAt(line("new:13"), "perMinute", "end"),
+    false,
+  );
+  await expect(button).toHaveCount(0);
+  await page.mouse.up();
+  await expect(button).toBeVisible();
+  const [end, box] = [await line("new:13").boundingBox(), await button.boundingBox()];
+  if (end === null || box === null) throw new Error("not on the screen");
+  expect(box.y).toBeGreaterThan(end.y);
+  expect(box.y - (end.y + end.height)).toBeLessThan(8);
+
+  // Esc puts it away and leaves the selection; a click in the code clears both.
+  await page.keyboard.press("Escape");
+  await expect(button).toHaveCount(0);
+  await line("new:16").locator("[data-slot=line-code]").click();
+  await expect(changes.getByRole("textbox", { name: /^Comment on/ })).toHaveCount(0);
+
+  // Upwards, ending on the deleted line: its side, with the button above it.
+  await drag(
+    page,
+    await textAt(line("new:13"), "perMinute", "end"),
+    await textAt(line("old:13"), "perMinute", "start"),
+  );
+  await expect(button).toBeVisible();
+  const deleted = await line("old:13").boundingBox();
+  const above = await button.boundingBox();
+  if (deleted === null || above === null) throw new Error("not on the screen");
+  expect(above.y + above.height).toBeLessThanOrEqual(deleted.y + 4);
+
+  // Out of sight under the bar it's away, and back with the line.
+  await page.evaluate(() => window.scrollBy({ top: 400, behavior: "instant" }));
+  await expect(button).toBeHidden();
+  await page.evaluate(() => window.scrollBy({ top: -400, behavior: "instant" }));
+  await expect(button).toBeVisible();
+
+  await button.click();
+  await expect(changes.getByRole("textbox", { name: "Comment on old line 13" })).toBeFocused();
+  await expect(button).toHaveCount(0);
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("");
+  await page.keyboard.press("Escape");
+
+  // A triple click selects the line, and only it.
+  const at = await textAt(line("new:14"), "burst", "start");
+  await page.mouse.click(at.x, at.y, { clickCount: 3 });
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect(changes.getByRole("textbox", { name: "Comment on line 14" })).toBeFocused();
 });
 
 test("posts a comment now, and it comes back as a thread", async ({ page }) => {

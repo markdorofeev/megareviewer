@@ -1,5 +1,5 @@
 import { BugIcon } from "lucide-react";
-import { Fragment, type MouseEvent, memo, type ReactNode } from "react";
+import { Fragment, type MouseEvent, memo, type PointerEvent, type ReactNode } from "react";
 import { POINT_TONE, type PointTone } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import type { CharRange } from "./intra-line.ts";
@@ -181,9 +181,11 @@ export interface DiffLineProps {
     readonly side: "old" | "new";
     readonly label: string;
     readonly onClick: (event: MouseEvent<HTMLButtonElement>) => void;
+    /** The press a drag down the numbers begins with. */
+    readonly onPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void;
   };
-  /** A click anywhere on the row, e.g. to comment on it. */
-  readonly onRowClick?: (event: MouseEvent<HTMLDivElement>) => void;
+  /** Where a comment on the line goes, as "side:line": a selection of its code finds it by this. */
+  readonly place?: string;
   /** Ranges of the code to wrap, e.g. calls; a new array each render re-renders the row. */
   readonly marks?: readonly LineMark[];
   /** A point's card is under this line: a bug in the new number's cell, in its color. */
@@ -211,7 +213,7 @@ export const DiffLine = memo(function DiffLine({
   onComment,
   onGutterClick,
   numberButton,
-  onRowClick,
+  place,
   cellRole = "gridcell",
   marks = NO_MARKS,
   flag = null,
@@ -219,6 +221,8 @@ export const DiffLine = memo(function DiffLine({
   const kind = KIND[line.kind];
   const number = line.newNo ?? line.oldNo;
   const markSide = layout === "split-old" ? "old" : "new";
+  const showsFlag = (value: number, side: "old" | "new") =>
+    side === "new" && flag !== null && value < 1000;
   const gutter = (value: number | null, side: "old" | "new") => (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the grid's ↑ and ↓, with shift, do the same.
     // biome-ignore lint/a11y/noStaticElementInteractions: a cell of the grid; only the grid clicks it.
@@ -241,19 +245,17 @@ export const DiffLine = memo(function DiffLine({
           type="button"
           aria-label={numberButton.label}
           onClick={numberButton.onClick}
+          onPointerDown={numberButton.onPointerDown}
           // As tall as a line of code: WCAG 2.5.8's inline exception, as for a link in a sentence.
           data-inline-target
           className={cn(
-            "h-full w-full pr-2 text-right hover:bg-primary hover:text-primary-foreground focus-visible:-outline-offset-2",
-            // Under the mouse the whole cell fills, square and full height, so it and the row's
-            // tint read as one band; a chip inside the gutter read as apart from the line.
-            onRowClick !== undefined &&
-              "group-hover/line:bg-primary group-hover/line:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground",
+            "peer/number h-full w-full cursor-pointer pr-2 text-right hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground focus-visible:-outline-offset-2",
             // A plus beside the number says a click comments; the cell fits it only up to four
             // digits, so from 10,000 the fill alone says it.
-            onRowClick !== undefined &&
-              value < 10_000 &&
-              "before:mr-1 before:content-none group-hover/line:before:content-['+'] focus-visible:before:content-['+']",
+            value < 10_000 &&
+              "before:mr-1 before:content-none before:text-muted-foreground hover:before:text-primary-foreground hover:before:content-['+'] focus-visible:before:text-primary-foreground focus-visible:before:content-['+']",
+            // With the pointer elsewhere on the row, only the plus; a finding's bug has its place.
+            value < 10_000 && !showsFlag(value, side) && "group-hover/line:before:content-['+']",
           )}
         >
           {value}
@@ -261,13 +263,13 @@ export const DiffLine = memo(function DiffLine({
       ) : (
         (value ?? "")
       )}
-      {side === "new" && flag !== null && value !== null && value < 1000 && (
-        // Gives way to the plus the row shows under the mouse.
+      {flag !== null && value !== null && showsFlag(value, side) && (
+        // Gives way to the plus and the fill of the number under the mouse, where its color is lost.
         <BugIcon
           aria-hidden="true"
           data-slot="finding-flag"
           className={cn(
-            "pointer-events-none absolute top-1/2 left-1 size-3 -translate-y-1/2 group-hover/line:hidden",
+            "pointer-events-none absolute top-1/2 left-1 size-3 -translate-y-1/2 peer-hover/number:hidden peer-focus-visible/number:hidden",
             POINT_TONE[flag].text,
           )}
         />
@@ -290,13 +292,12 @@ export const DiffLine = memo(function DiffLine({
   );
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the line number is the keyboard's way to the same action.
     <div
       role="row"
       id={id}
-      onClick={onRowClick}
       aria-selected={selected || undefined}
       data-line={line.key}
+      data-place={place}
       data-kind={line.kind}
       data-focused={focused || undefined}
       data-marked={marked || undefined}
@@ -313,17 +314,12 @@ export const DiffLine = memo(function DiffLine({
       }
       className={cn(
         "group/line relative flex min-w-full font-code",
-        onRowClick !== undefined && "cursor-pointer",
         DENSITY[density],
         kind.row,
         // A tint over the row's own, so a selected added line still reads as added.
         // Above the gutters, which are positioned and would paint over them otherwise.
         selected &&
           "before:pointer-events-none before:absolute before:inset-0 before:z-[1] before:bg-primary/15",
-        // The same tint, fainter, says the row under the mouse can be commented on.
-        !selected &&
-          onRowClick !== undefined &&
-          "hover:before:pointer-events-none hover:before:absolute hover:before:inset-0 hover:before:z-[1] hover:before:bg-primary/8",
         (focused || marked) &&
           "after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:z-[1] after:w-[3px] after:bg-ring",
       )}
@@ -342,6 +338,7 @@ export const DiffLine = memo(function DiffLine({
       </span>
       <span
         role={cellRole}
+        data-slot="line-code"
         className={cn(
           "pr-4",
           wrap ? "min-w-0 flex-1 whitespace-pre-wrap break-all" : "whitespace-pre",

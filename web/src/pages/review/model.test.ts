@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { type Analysis, type Point, PointId } from "../../../../src/domain/review/index.ts";
+import {
+  type Analysis,
+  type HunkComment,
+  type Point,
+  PointId,
+} from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
+import type { LinePlace } from "../../review/index.ts";
 import {
   byTreePath,
   changeTotals,
   gapBetween,
   mapFiles,
   mechanicalCount,
+  openedOn,
   parseLayout,
   partIndex,
   pointPlaces,
@@ -216,5 +223,47 @@ describe("totals", () => {
     const totals = changeTotals(analysis.files);
     expect(totals).toEqual({ files: 7, additions: 58, deletions: 13 });
     expect(changeTotals([])).toEqual({ files: 0, additions: 0, deletions: 0 });
+  });
+});
+
+describe("openedOn", () => {
+  const hunkId = h.routeImports;
+  const range = { side: "new" as const, startLine: 10, line: 12 };
+  const draft = { hunkId, side: "new" as const, line: 11, body: "Why?" };
+
+  it("takes the open box's draft along to the range's last line, when the range covers it", () => {
+    expect(openedOn([draft], hunkId, range, { side: "new", line: 11 })).toEqual({
+      place: range,
+      comments: [{ ...draft, line: 12, startLine: 10 }],
+    });
+    const last = { ...draft, line: 12 };
+    expect(openedOn([last], hunkId, range, { side: "new", line: 12 }).comments).toEqual([
+      { ...last, startLine: 10 },
+    ]);
+  });
+
+  it("leaves a draft the range doesn't cover, or on the other side or hunk, where it is", () => {
+    const stays = (drafts: readonly HunkComment[], open: LinePlace | null) =>
+      expect(openedOn(drafts, hunkId, range, open)).toEqual({ place: range, comments: drafts });
+    stays([{ ...draft, line: 14 }], { side: "new", line: 14 });
+    stays([{ ...draft, startLine: 8 }], { side: "new", startLine: 8, line: 11 });
+    stays([{ ...draft, side: "old" }], { side: "old", line: 11 });
+    stays([{ ...draft, hunkId: h.dependency }], { side: "new", line: 11 });
+    stays([draft], null);
+  });
+
+  it("opens the draft a line already has, on its own lines, and puts no second one on it", () => {
+    const last = { ...draft, startLine: 8, line: 12, body: "And this?" };
+    const own = { side: "new", line: 12, startLine: 8 };
+    for (const open of [null, { side: "new" as const, line: 11 }]) {
+      expect(openedOn([draft, last], hunkId, range, open)).toEqual({
+        place: own,
+        comments: [draft, last],
+      });
+    }
+    // From the line's number, and from a selection within the open box's own last line.
+    const line = { side: "new" as const, line: 12 };
+    expect(openedOn([last], hunkId, line, null).place).toEqual(own);
+    expect(openedOn([last], hunkId, line, { ...line, startLine: 8 }).place).toEqual(own);
   });
 });

@@ -1,7 +1,7 @@
 import {
   Fragment,
-  type MouseEvent,
   memo,
+  type PointerEvent,
   type ReactNode,
   useEffect,
   useMemo,
@@ -36,7 +36,7 @@ import { DiffLine, type LineMark, type LineMarkKind, type PointLanding } from ".
 import { FilePath, FileStatusChip, UnchangedUses } from "./file-path.tsx";
 import { languageOf } from "./languages.ts";
 import { hunkLocation, lineCounts } from "./lines.ts";
-import { viewLines } from "./rows.ts";
+import { type ViewLine, viewLines } from "./rows.ts";
 import { useHunkTokens, useNearViewport } from "./syntax.ts";
 
 /**
@@ -68,6 +68,9 @@ export const commentPlace = (
       ? null
       : { side: "new", line: line.newLine };
 
+const placeOf = (line: ViewLine): LinePlace | null =>
+  commentPlace({ kind: line.kind, oldLine: line.oldNo, newLine: line.newNo });
+
 /**
  * Keeps a row that isn't a line, such as a divider or a button, at the visible width of a file
  * card's lines, which scroll sideways together inside an `@container`.
@@ -84,6 +87,9 @@ export interface HunkItem {
   readonly risk: RiskAssessment;
   readonly proofs?: readonly MechanicalProof[];
 }
+
+/** A line's place as its row and its points name it: "side:line". */
+const placeKey = (place: LinePlace) => `${place.side}:${place.line}`;
 
 const samePlace = (a: LinePlace, b: LinePlace) => a.side === b.side && a.line === b.line;
 
@@ -238,10 +244,50 @@ export const HunkCard = memo(function HunkCard({
     }
     onOpenComment?.(id, place);
   };
+  /** A drag down the numbers: the line it began on and the one it's at, on one side. */
+  const [drag, setDrag] = useState<{ readonly from: LinePlace; readonly to: number } | null>(null);
+  const dragged: LinePlace | null =
+    drag === null || drag.to === drag.from.line
+      ? null
+      : {
+          side: drag.from.side,
+          startLine: Math.min(drag.from.line, drag.to),
+          line: Math.max(drag.from.line, drag.to),
+        };
+  const startDrag = (place: LinePlace, event: PointerEvent) => {
+    // A finger's drag scrolls.
+    if (event.button !== 0 || event.shiftKey || event.pointerType === "touch") return;
+    setDrag({ from: place, to: place.line });
+  };
+  const dragOver = (event: PointerEvent) => {
+    if (drag === null || !(event.target instanceof Element)) return;
+    const key = event.target.closest<HTMLElement>("[data-place]")?.dataset.place;
+    const over = lines.map(placeOf).find((one) => one !== null && placeKey(one) === key);
+    if (over?.side === drag.from.side) setDrag({ ...drag, to: over.line });
+  };
+  const endDrag = useRef(() => {});
+  endDrag.current = () => {
+    setDrag(null);
+    if (dragged !== null) onOpenComment?.(id, dragged);
+  };
+  const dragging = drag !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const end = () => endDrag.current();
+    const cancel = () => setDrag(null);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", cancel);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", cancel);
+    };
+  }, [dragging]);
+  const markedPlace = dragged ?? (onComment === undefined ? null : openComment);
   return (
     <section
       ref={ref}
       data-slot="hunk-card"
+      data-part={id}
       data-risk={risk?.riskClass}
       data-highlighted={highlighted || undefined}
       className={cn(
@@ -307,21 +353,18 @@ export const HunkCard = memo(function HunkCard({
         className={cn("[content-visibility:auto]", !inFile && "overflow-x-auto")}
         // Off screen, the lines are as tall as they will be, so the scrollbar doesn't jump.
         style={{ containIntrinsicSize: `auto ${shown.length * 20}px` }}
+        onPointerOver={dragging ? dragOver : undefined}
       >
         <div className="w-max min-w-full">
           {shown.map((line) => {
-            const place = commentPlace({
-              kind: line.kind,
-              oldLine: line.oldNo,
-              newLine: line.newNo,
-            });
+            const place = placeOf(line);
             const comment =
               place === null ? undefined : comments.find((one) => samePlace(one, place));
             const open = place !== null && openComment !== null && samePlace(openComment, place);
             const commentAt = open ? openComment : comment;
             const threads = place === null ? null : (threadsAt?.(place) ?? null);
             const points = place === null ? null : (pointsAt?.(place) ?? null);
-            const key = place === null ? null : `${place.side}:${place.line}`;
+            const key = place === null ? null : placeKey(place);
             const point = key === null ? undefined : pointLines?.get(key);
             return (
               <Fragment key={line.key}>
@@ -338,31 +381,20 @@ export const HunkCard = memo(function HunkCard({
                   }
                   marked={
                     place !== null &&
-                    onComment !== undefined &&
-                    openComment !== null &&
-                    openComment.side === place.side &&
-                    place.line >= (openComment.startLine ?? openComment.line) &&
-                    place.line <= openComment.line
+                    markedPlace !== null &&
+                    markedPlace.side === place.side &&
+                    place.line >= (markedPlace.startLine ?? markedPlace.line) &&
+                    place.line <= markedPlace.line
                   }
-                  numberButton={
-                    place === null || !commentable
-                      ? undefined
-                      : {
+                  {...(place === null || key === null || !commentable
+                    ? {}
+                    : {
+                        place: key,
+                        numberButton: {
                           side: place.side,
                           label: placeLabel(place),
                           onClick: (event) => toggleComment(place, event.shiftKey),
-                        }
-                  }
-                  {...(place === null || !commentable
-                    ? {}
-                    : {
-                        onRowClick: (event: MouseEvent<HTMLDivElement>) => {
-                          // Selecting code isn't asking to comment.
-                          if (window.getSelection()?.isCollapsed === false) return;
-                          // The line number's own click already handled it.
-                          if (event.target instanceof Element && event.target.closest("button"))
-                            return;
-                          toggleComment(place, event.shiftKey);
+                          onPointerDown: (event) => startDrag(place, event),
                         },
                       })}
                 />

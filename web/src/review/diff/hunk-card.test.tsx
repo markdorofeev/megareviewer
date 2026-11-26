@@ -155,24 +155,165 @@ describe("HunkCard", () => {
     expect(screen.getByRole("button", { name: "Comment on line 14" })).toBeTruthy();
   });
 
-  it("opens a comment with a click anywhere on a line, but not when selecting code", async () => {
+  it("opens nothing with a click on the code, and closes no box on it", async () => {
     const user = userEvent.setup();
     const onOpenComment = vi.fn();
-    renderWith(<Cards cards={[second]} onOpenComment={onOpenComment} onComment={vi.fn()} />);
-    const row = screen.getAllByRole("row").find((one) => one.dataset.kind === "add");
-    if (row === undefined) throw new Error("no added line");
-    await user.click(row);
-    expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, { side: "new", line: 41 });
-    onOpenComment.mockClear();
-    const selection = window.getSelection();
-    selection?.selectAllChildren(row);
-    // A click that ends a drag over the code: the selection is still there.
-    fireEvent.click(row);
+    const props = { cards: [second], onOpenComment, onComment: vi.fn() };
+    const { rerender } = renderWith(<Cards {...props} />);
+    const line = () => {
+      const row = screen.getAllByRole("row").find((one) => one.dataset.kind === "add");
+      if (row === undefined) throw new Error("no added line");
+      return row;
+    };
+    await user.click(line());
+    await user.click(screen.getByText("b"));
+    expect(line().className).not.toMatch(/cursor-pointer|hover:before/);
+    rerender(
+      <HighlighterContext.Provider value={pendingHighlighter()}>
+        <Cards {...props} openComment={{ side: "new", line: 41 }} />
+      </HighlighterContext.Provider>,
+    );
+    await user.click(line());
     expect(onOpenComment).not.toHaveBeenCalled();
-    selection?.removeAllRanges();
   });
 
-  it("closes the open comment box with a click on its own line, Cancel or Esc", async () => {
+  it("names its part and the lines a comment can go on, for a selection of code", () => {
+    const { container } = renderWith(
+      <Cards cards={[first]} onOpenComment={vi.fn()} onComment={vi.fn()} />,
+    );
+    const places = () =>
+      [...container.querySelectorAll<HTMLElement>("[data-line]")].map((row) => row.dataset.place);
+    expect(container.querySelector<HTMLElement>("[data-slot=hunk-card]")?.dataset.part).toBe(
+      first.hunk.id,
+    );
+    expect(places()).toEqual(["new:12", "old:13", "new:13", "new:14"]);
+  });
+
+  it("names no line when comments are read-only", () => {
+    const { container } = renderWith(<Cards cards={[first]} />);
+    expect(container.querySelector("[data-place]")).toBeNull();
+  });
+
+  describe("a drag down the line numbers", () => {
+    const number = (name: string) => screen.getByRole("button", { name: `Comment on ${name}` });
+    const marked = () =>
+      [...document.querySelectorAll<HTMLElement>("[data-marked]")].map((row) => row.dataset.place);
+
+    it("marks the lines it covers and opens the box on them when it ends", async () => {
+      const user = userEvent.setup();
+      const onOpenComment = vi.fn();
+      renderWith(<Cards cards={[second]} onOpenComment={onOpenComment} onComment={vi.fn()} />);
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: number("line 40") },
+        { target: number("line 41") },
+        { target: number("line 42") },
+      ]);
+      expect(marked()).toEqual(["new:40", "new:41", "new:42"]);
+      expect(onOpenComment).not.toHaveBeenCalled();
+      await user.pointer({ keys: "[/MouseLeft]" });
+      expect(onOpenComment).toHaveBeenCalledTimes(1);
+      expect(onOpenComment).toHaveBeenCalledWith(second.hunk.id, {
+        side: "new",
+        line: 42,
+        startLine: 40,
+      });
+      expect(marked()).toEqual([]);
+    });
+
+    it("goes up as well as down", async () => {
+      const user = userEvent.setup();
+      const onOpenComment = vi.fn();
+      renderWith(<Cards cards={[second]} onOpenComment={onOpenComment} onComment={vi.fn()} />);
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: number("line 42") },
+        { target: number("line 41") },
+        { keys: "[/MouseLeft]" },
+      ]);
+      expect(onOpenComment).toHaveBeenCalledWith(second.hunk.id, {
+        side: "new",
+        line: 42,
+        startLine: 41,
+      });
+    });
+
+    it("stays on its side, and follows the pointer along the rows", async () => {
+      const user = userEvent.setup();
+      const onOpenComment = vi.fn();
+      renderWith(<Cards cards={[first]} onOpenComment={onOpenComment} onComment={vi.fn()} />);
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: number("line 12") },
+        { target: number("old line 13") },
+      ]);
+      expect(marked()).toEqual([]);
+      // Over the code rather than the number: the row is what counts.
+      const code = document.querySelector("[data-place='new:13'] [role=cell]:last-child");
+      if (code === null) throw new Error("no code");
+      await user.pointer([{ target: code }, { keys: "[/MouseLeft]" }]);
+      expect(onOpenComment).toHaveBeenCalledWith(first.hunk.id, {
+        side: "new",
+        line: 13,
+        startLine: 12,
+      });
+    });
+
+    it("is a plain click when it ends on the number it began on", async () => {
+      const user = userEvent.setup();
+      const onOpenComment = vi.fn();
+      renderWith(<Cards cards={[second]} onOpenComment={onOpenComment} onComment={vi.fn()} />);
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: number("line 41") },
+        { target: number("line 42") },
+        { target: number("line 41") },
+        { keys: "[/MouseLeft]" },
+      ]);
+      expect(onOpenComment).toHaveBeenCalledTimes(1);
+      expect(onOpenComment).toHaveBeenCalledWith(second.hunk.id, { side: "new", line: 41 });
+    });
+
+    it("leaves the other mouse buttons and ⇧-click alone", async () => {
+      const user = userEvent.setup();
+      const onOpenComment = vi.fn();
+      renderWith(
+        <Cards
+          cards={[second]}
+          openComment={{ side: "new", line: 40 }}
+          onOpenComment={onOpenComment}
+          onComment={vi.fn()}
+        />,
+      );
+      await user.pointer([
+        { keys: "[MouseRight>]", target: number("line 41") },
+        { target: number("line 42") },
+        { keys: "[/MouseRight]" },
+      ]);
+      expect(onOpenComment).not.toHaveBeenCalled();
+      await user.keyboard("{Shift>}");
+      await user.click(number("line 42"));
+      await user.keyboard("{/Shift}");
+      expect(onOpenComment).toHaveBeenCalledTimes(1);
+      expect(onOpenComment).toHaveBeenLastCalledWith(second.hunk.id, {
+        side: "new",
+        line: 42,
+        startLine: 40,
+      });
+    });
+
+    it("is dropped when the pointer is cancelled", async () => {
+      const user = userEvent.setup();
+      const onOpenComment = vi.fn();
+      renderWith(<Cards cards={[second]} onOpenComment={onOpenComment} onComment={vi.fn()} />);
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: number("line 41") },
+        { target: number("line 42") },
+      ]);
+      fireEvent.pointerCancel(window);
+      expect(marked()).toEqual([]);
+      await user.pointer({ keys: "[/MouseLeft]" });
+      expect(onOpenComment).not.toHaveBeenCalled();
+    });
+  });
+
+  it("closes the open comment box with a click on its line number, Cancel or Esc", async () => {
     const user = userEvent.setup();
     const onOpenComment = vi.fn();
     renderWith(

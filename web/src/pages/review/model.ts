@@ -15,7 +15,7 @@ import type {
   PointId,
   RiskAssessment,
 } from "../../../../src/domain/review/index.ts";
-import { commentPlace, type HunkItem } from "../../review/index.ts";
+import { commentPlace, type HunkItem, type LinePlace } from "../../review/index.ts";
 import { byTreePath } from "../../review/tree/paths.ts";
 
 export { byTreePath };
@@ -281,6 +281,37 @@ export const commentsInParts = (
     if (id !== undefined) byPart.set(id, [...(byPart.get(id) ?? []), comment]);
   }
   return byPart;
+};
+
+/**
+ * Where the comment box opens, and the drafts as it does. A line with a draft opens that draft, on
+ * its own lines. The draft of the box already open goes along when the new lines cover its own.
+ */
+export const openedOn = (
+  comments: readonly HunkComment[],
+  hunkId: HunkId,
+  place: LinePlace,
+  open: LinePlace | null,
+): { readonly place: LinePlace; readonly comments: readonly HunkComment[] } => {
+  const { side, line, startLine } = place;
+  const isOn = (comment: HunkComment, other: LinePlace) =>
+    comment.hunkId === hunkId && comment.side === other.side && comment.line === other.line;
+  const covered =
+    open?.side === side &&
+    (open.startLine ?? open.line) >= (startLine ?? line) &&
+    open.line <= line;
+  const draft = comments.find((comment) => isOn(comment, place));
+  if (draft !== undefined && !(covered && open.line === line)) {
+    const own = draft.startLine === undefined ? {} : { startLine: draft.startLine };
+    return { place: { side, line, ...own }, comments };
+  }
+  if (!covered || startLine === undefined) return { place, comments };
+  return {
+    place,
+    comments: comments.map((comment) =>
+      isOn(comment, open) ? { ...comment, line, startLine } : comment,
+    ),
+  };
 };
 
 /** What the pull request changes, counted over every file in it, mechanical ones too. */

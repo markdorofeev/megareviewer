@@ -196,6 +196,17 @@ const PAIRS = [
   ["Focused line bar on diff-gutter-bg (non-text)", "ring", "diff-gutter-bg", 3],
   ["Focused line bar on diff-add-gutter (non-text)", "ring", "diff-add-gutter", 3],
   ["Focused line bar on diff-del-gutter (non-text)", "ring", "diff-del-gutter", 3],
+  // hunk: the plus a line's number shows while the pointer is on its row.
+  ...[
+    "diff-gutter-bg",
+    "diff-add-gutter",
+    "diff-del-gutter",
+    "review-changes-bg",
+    "severity-major-bg",
+    "review-pending-bg",
+    "muted",
+    "ai-soft-bg",
+  ].map((cell) => [`Comment plus on ${cell} (non-text)`, "muted-foreground", cell, 3]),
   // hunk: a file's status chip: new, deleted or renamed, on its own tint.
   ["New file chip", "diff-add-fg", "diff-add-bg", 4.5],
   ["Deleted file chip", "diff-del-fg", "diff-del-bg", 4.5],

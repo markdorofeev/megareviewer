@@ -36,6 +36,7 @@ export {
   MechanicalHunk,
 } from "./diff/mechanical-group.tsx";
 export type { ViewLine } from "./diff/rows.ts";
+export { SelectionComment } from "./diff/selection-comment.tsx";
 export {
   createShikiHighlighter,
   type Highlighter,
