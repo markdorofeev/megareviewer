@@ -1,14 +1,21 @@
 import { createHash } from "node:crypto";
-import type { HarnessSource, HarnessSourceFile, Logger } from "../../application/ports/index.ts";
+import { z } from "zod";
+import type {
+  HarnessSource,
+  HarnessSourceFile,
+  HarnessSourceFolder,
+  Logger,
+} from "../../application/ports/index.ts";
 import {
   BlobHash,
   type HostError,
   MAX_HARNESS_FILE_BYTES,
   type RepoRef,
 } from "../../domain/review/index.ts";
-import { ok, type Result } from "../../domain/shared/index.ts";
+import { err, ok, type Result } from "../../domain/shared/index.ts";
 import { fileUrl, mapLimit, repoUrl, withQuery } from "./bitbucket-host.ts";
 import { createBitbucketClient, MAX_PAGES } from "./client.ts";
+import { invalidResponse } from "./errors.ts";
 import { BitbucketDiffstat, BitbucketPage } from "./schemas.ts";
 
 export interface BitbucketHarnessOptions {
@@ -23,6 +30,21 @@ export interface BitbucketHarnessOptions {
 const FILES_AT_ONCE = 18;
 const DIFFSTAT_FIELDS = "next,values.old.path,values.new.path";
 const DIFFSTAT_PAGE_SIZE = 500;
+const FOLDER_FIELDS = "next,values.path,values.type";
+const FOLDER_PAGE_SIZE = 100;
+/** How deep in a folder its listing goes; a harness is never that deep. */
+const FOLDER_DEPTH = 20;
+
+const FolderPage = BitbucketPage(z.object({ path: z.string().min(1), type: z.string() }));
+type FolderPage = z.infer<typeof FolderPage>;
+
+/** Everything under a folder, at any depth: a directory's listing goes one level without it. */
+export const folderUrl = (repo: RepoRef, sha: string, path: string): string =>
+  withQuery(`${fileUrl(repo, sha, path)}/`, {
+    max_depth: String(FOLDER_DEPTH),
+    pagelen: String(FOLDER_PAGE_SIZE),
+    fields: FOLDER_FIELDS,
+  });
 
 /** Git's hash of a file, which Bitbucket's API gives nowhere. */
 const gitBlobHash = (bytes: Uint8Array): BlobHash =>
@@ -89,6 +111,39 @@ export const createBitbucketHarnessSource = (options: BitbucketHarnessOptions): 
         files.push(file.value);
       }
       return ok(files);
+    },
+
+    async listFolder(repo, sha, path): Promise<Result<HarnessSourceFolder | null, HostError>> {
+      const what = `the files in ${path}`;
+      // A file answers as a file does, so the first page is read as it came.
+      const first = await client.raw(
+        folderUrl(repo, sha, path),
+        "application/json",
+        MAX_HARNESS_FILE_BYTES,
+      );
+      if (!first.ok) return first.error.kind === "not-found" ? ok(null) : first;
+      const { contentType, bytes } = first.value;
+      if (!contentType.startsWith("application/json") || bytes === null) return ok(null);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(new TextDecoder().decode(bytes));
+      } catch {
+        return err(invalidResponse(what, "the body isn't JSON"));
+      }
+      const page = FolderPage.safeParse(parsed);
+      if (!page.success) return err(invalidResponse(what, page.error));
+      const files: string[] = [];
+      let next: FolderPage | undefined = page.data;
+      for (let count = 1; next !== undefined; count += 1) {
+        for (const entry of next.values) if (entry.type === "commit_file") files.push(entry.path);
+        if (next.next === undefined)
+          return ok(files.length === 0 ? null : { files, complete: true });
+        if (count === MAX_PAGES) break;
+        const read: Result<FolderPage, HostError> = await client.json(what, FolderPage, next.next);
+        if (!read.ok) return read;
+        next = read.value;
+      }
+      return ok({ files, complete: false });
     },
 
     async changedPaths(repo, fromSha, toSha) {

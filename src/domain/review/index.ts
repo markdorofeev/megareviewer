@@ -108,6 +108,7 @@ export {
   harnessOutline,
   harnessPlan,
   harnessReach,
+  isHarnessFileInFolder,
   MAX_COPY_LINE,
   MAX_HARNESS_DEPTH,
   MAX_HARNESS_FILE_BYTES,
@@ -157,7 +158,7 @@ export { PointKind } from "./point-kind.ts";
 export {
   canEnable,
   checkGuidanceMark,
-  DEFAULT_GUIDELINE_PATH,
+  DEFAULT_GUIDELINE_PATHS,
   GUIDELINE_PATHS,
   Guidance,
   GuidanceEffect,

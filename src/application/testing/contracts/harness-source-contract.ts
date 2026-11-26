@@ -20,6 +20,8 @@ export interface HarnessSourceContractSetup {
   /** Two or more text files at `sha`, one in a directory and one with non-ASCII text. */
   readonly files: readonly HarnessSourceContractFile[];
   readonly directory: string;
+  /** A folder at `sha`, with some of the files under it, one in a folder of its own. */
+  readonly folder: { readonly path: string; readonly files: readonly string[] };
   /** A path that isn't at `sha`. */
   readonly missingPath: string;
   /** A file at `sha` the source won't give as text, when its host can tell one from a missing path. */
@@ -72,6 +74,18 @@ export const describeHarnessSourceContract = (
       });
     });
 
+    it("lists the files under a folder at any depth, and nothing for a file or a missing path", async () => {
+      const listed = await source.listFolder(s.repo, s.sha, s.folder.path);
+      if (!listed.ok) throw new Error(`listFolder failed: ${listed.error.message}`);
+      expect(listed.value?.complete).toBe(true);
+      const files = listed.value?.files ?? [];
+      expect(files).toEqual(expect.arrayContaining([...s.folder.files]));
+      for (const path of files) expect(path.startsWith(`${s.folder.path}/`)).toBe(true);
+      for (const path of [s.files[0]?.path ?? "", s.missingPath]) {
+        expect(await source.listFolder(s.repo, s.sha, path)).toEqual({ ok: true, value: null });
+      }
+    });
+
     it("says why it won't give a file's text", async () => {
       if (s.skipped === undefined) return;
       const { path, reason } = s.skipped;
@@ -100,6 +114,8 @@ export const describeHarnessSourceContract = (
       const path = s.files[0]?.path ?? "";
       const read = await refused.readFiles(s.repo, s.sha, [path]);
       expect(read).toMatchObject({ ok: false, error: { kind: "unauthorized" } });
+      const folder = await refused.listFolder(s.repo, s.sha, s.folder.path);
+      expect(folder).toMatchObject({ ok: false, error: { kind: "unauthorized" } });
       if (s.lists) {
         const listed = await refused.listFiles(s.repo, s.sha);
         expect(listed).toMatchObject({ ok: false, error: { kind: "unauthorized" } });

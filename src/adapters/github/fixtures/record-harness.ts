@@ -71,6 +71,9 @@ const main = async (): Promise<void> => {
       "source",
     ]),
     await source.readFiles(REPO, SHA, ["header.gif"]),
+    await source.listFolder(REPO, SHA, ".github"),
+    await source.listFolder(REPO, SHA, ".github/security.md"),
+    await source.listFolder(REPO, SHA, "megareviewer-missing-file.txt"),
   ];
   for (const result of recorded) if (!result.ok) throw new Error(result.error.message);
   const out = new URL("harness.json", import.meta.url);

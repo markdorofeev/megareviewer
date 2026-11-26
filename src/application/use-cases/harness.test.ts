@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  GUIDELINE_PATHS,
   Harness,
   type HostError,
   MAX_HARNESS_DEPTH,
@@ -191,6 +192,25 @@ describe.each(KINDS)("a harness from a source that $name", (kind) => {
     expect(harness.files.at(-1)?.links).toEqual([{ path: "1.md", kind: "import" }]);
   });
 
+  it("connects a folder past the last hop to the files it has, and is cut by one it doesn't", async () => {
+    const chain = {
+      "CLAUDE.md": "@1.md and docs/",
+      "1.md": "@2.md",
+      "2.md": "@3.md",
+      "3.md": "@4.md",
+      "4.md": "@5.md",
+      "docs/a.md": "",
+    };
+    const has = await setup({ ...chain, "5.md": "docs/" }, kind).load();
+    expect(has.harness.cut).toBeNull();
+    expect(has.harness.files.find(({ path }) => path === "5.md")?.links).toEqual([
+      { path: "docs/a.md", kind: "mention" },
+    ]);
+    const lacks = await setup({ ...chain, "5.md": "notes/", "notes/b.md": "" }, kind).load();
+    expect(lacks.harness.cut).toBe("depth");
+    expect(paths(lacks.harness)).not.toContain("notes/b.md");
+  });
+
   it("stops at 200 files, and says so, with the links among the ones it has", async () => {
     const many = Array.from({ length: MAX_HARNESS_FILES + 20 }, (_, index) => `${index}.md`);
     const { load } = setup(
@@ -227,7 +247,51 @@ describe.each(KINDS)("a harness from a source that $name", (kind) => {
     expect([...contents.keys()]).toEqual(paths(harness));
   });
 
-  it("has nothing for a link to a directory or to a file that isn't there", async () => {
+  it("takes a folder for the Markdown under it, at any depth, as the file naming it links them", async () => {
+    const { load } = setup(
+      {
+        "CLAUDE.md":
+          "Rules are in docs/rules/.\n\n[Cursor's](.cursor/rules) and @docs/rules/naming.md\n",
+        "docs/rules/naming.md": "Names.\n",
+        "docs/rules/api/errors.md": "Errors.\n",
+        "docs/rules/logo.png": "",
+        "docs/rules/NOTICE.txt": "",
+        ".cursor/rules/style.mdc": "Style.\n",
+        "docs/other.md": "",
+      },
+      kind,
+    );
+    const { harness } = await load();
+    expect(harness.files.map(({ path, via, linkedFrom }) => [path, via, linkedFrom])).toEqual([
+      ["CLAUDE.md", "root", null],
+      ["docs/rules/naming.md", "import", "CLAUDE.md"],
+      ["docs/rules/api/errors.md", "mention", "CLAUDE.md"],
+      [".cursor/rules/style.mdc", "link", "CLAUDE.md"],
+    ]);
+    expect(harness.files[0]?.links).toEqual([
+      { path: "docs/rules/naming.md", kind: "import" },
+      { path: "docs/rules/api/errors.md", kind: "mention" },
+      { path: ".cursor/rules/style.mdc", kind: "link" },
+    ]);
+    expect(harness.cut).toBeNull();
+  });
+
+  it("takes a folder in prose against its file before the root, and never a file for itself", async () => {
+    const { load } = setup(
+      {
+        "CLAUDE.md": "@docs/notes.md",
+        "docs/notes.md": "See plan/ and the rest of docs/.",
+        "docs/plan/a.md": "",
+        "plan/b.md": "",
+      },
+      kind,
+    );
+    const { harness } = await load();
+    expect(paths(harness)).toEqual(["CLAUDE.md", "docs/notes.md", "docs/plan/a.md"]);
+    expect(harness.files[1]?.links).toEqual([{ path: "docs/plan/a.md", kind: "mention" }]);
+  });
+
+  it("has nothing for a folder or a file that isn't there, or a folder named as a file", async () => {
     const { load } = setup(
       { "CLAUDE.md": "[docs](docs) @docs.md/ @rules.md @none.md", "rules.md/a.ts": "" },
       kind,
@@ -448,6 +512,62 @@ describe("what loading a harness asks a source for", () => {
     expect(paths((await load(NEWER)).harness)).toHaveLength(4);
   });
 
+  it("lists a folder from the listing, and from a source that can't list once a folder", async () => {
+    const files: Files = { "CLAUDE.md": "docs/ and none/", "docs/a.md": "", "docs/b/c.md": "" };
+    const listed = setup(files, { diffs: false });
+    await listed.load();
+    expect(listed.source.calls.listFolder).toEqual([]);
+
+    const walked = setup(files, { lists: false, diffs: false });
+    expect(paths((await walked.load()).harness)).toEqual(["CLAUDE.md", "docs/a.md", "docs/b/c.md"]);
+    expect(walked.source.calls.listFolder).toEqual(["docs", "none"]);
+    expect(requests(walked.source).reads.slice(1)).toEqual([["docs/a.md", "docs/b/c.md"]]);
+  });
+
+  it("lists a folder again after a change, but not one that wasn't there and still isn't", async () => {
+    const files: Files = { "CLAUDE.md": "docs/ and none/", "docs/a.md": "" };
+    const { load, source } = setup(files, { lists: false });
+    source.setFiles(repo, NEWER, { ...files, "src/app.ts": "changed" });
+    await load();
+    await load(NEWER);
+    expect(source.calls.listFolder).toEqual(["docs", "none", "docs"]);
+
+    const newest = "c".repeat(40);
+    source.setFiles(repo, newest, { ...files, "none/d.md": "" });
+    expect(paths((await load(newest)).harness)).toEqual(["CLAUDE.md", "docs/a.md", "none/d.md"]);
+    expect(source.calls.listFolder.slice(3)).toEqual(["docs", "none"]);
+  });
+
+  it("reads folders' files after every file named, however deep, so a large one crowds out none", async () => {
+    const many = Object.fromEntries(
+      Array.from({ length: MAX_HARNESS_FILES + 50 }, (_, index) => [`docs/${index}.md`, ""]),
+    );
+    const { load } = setup({
+      "CLAUDE.md": "docs/ and @a.md",
+      "a.md": "[b](b.md) and notes/",
+      "b.md": "",
+      "notes/c.md": "",
+      ...many,
+    });
+    const { harness } = await load();
+    expect(paths(harness).slice(0, 4)).toEqual(["CLAUDE.md", "a.md", "b.md", "docs/0.md"]);
+    // Folders take what's left nearest a root first, as files do.
+    expect(paths(harness)).not.toContain("notes/c.md");
+    expect(harness.files).toHaveLength(MAX_HARNESS_FILES);
+    expect(harness.cut).toBe("files");
+  });
+
+  it("says the harness was cut when a folder's listing is only part of it", async () => {
+    const { load, source } = setup({ "CLAUDE.md": "docs/", "docs/a.md": "" }, { lists: false });
+    source.listFolder = async () => ({
+      ok: true,
+      value: { files: ["docs/a.md"], complete: false },
+    });
+    const { harness } = await load();
+    expect(paths(harness)).toEqual(["CLAUDE.md", "docs/a.md"]);
+    expect(harness.cut).toBe("files");
+  });
+
   it("asks for at most 400 paths it doesn't know are there, and says the harness was cut", async () => {
     const none = Array.from({ length: MAX_HARNESS_LOOKUPS + 50 }, (_, index) => `none-${index}.md`);
     const files = {
@@ -462,6 +582,19 @@ describe("what loading a harness asks a source for", () => {
     const { harness } = await listed.load();
     expect(harness.cut).toBeNull();
     expect(paths(harness)).toEqual(["CLAUDE.md", "a.md"]);
+  });
+
+  it("counts a folder it lists against the 400, and lists none past them", async () => {
+    // The roots are asked for first.
+    const left = MAX_HARNESS_LOOKUPS - GUIDELINE_PATHS.length;
+    const none = Array.from({ length: left }, (_, index) => `@none-${index}.md`);
+    const { load, source } = setup(
+      { "CLAUDE.md": `${none.join("\n")}\ndocs/`, "docs/a.md": "" },
+      { lists: false, diffs: false },
+    );
+    const { harness } = await load();
+    expect(harness.cut).toBe("files");
+    expect(source.calls.listFolder).toEqual([]);
   });
 });
 

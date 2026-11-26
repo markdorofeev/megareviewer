@@ -42,6 +42,10 @@ const unauthorizedExchanges: RecordedExchange[] = [
     response: { status: 401, headers: jsonHeaders, body: refused },
   },
   {
+    request: { method: "GET", url: treeUrl(repo, `${SHA}%3A.github`) },
+    response: { status: 401, headers: jsonHeaders, body: refused },
+  },
+  {
     request: { method: "POST", url: `${API}/graphql` },
     response: { status: 401, headers: jsonHeaders, body: refused },
   },
@@ -91,6 +95,7 @@ describeHarnessSourceContract("github", () => ({
     },
   ],
   directory: "source",
+  folder: { path: ".github", files: [".github/security.md", ".github/workflows/main.yml"] },
   missingPath: "megareviewer-missing-file.txt",
   skipped: { path: "header.gif", reason: "unreadable" },
   change: null,
@@ -158,6 +163,34 @@ const fakeGitHub = async (commits: Readonly<Record<string, Readonly<Record<strin
 };
 
 describe("createGitHubHarnessSource", () => {
+  it("lists a folder's files without its symlinks, and says when GitHub cut its tree short", async () => {
+    const folder = (truncated: boolean): RecordedExchange => ({
+      request: { method: "GET", url: treeUrl(repo, `${SHA}%3Adocs/a%20b`) },
+      response: {
+        status: 200,
+        headers: jsonHeaders,
+        body: {
+          truncated,
+          tree: [
+            { path: "rules.md", mode: "100644", type: "blob", sha: "a".repeat(40) },
+            { path: "api", mode: "040000", type: "tree", sha: "b".repeat(40) },
+            { path: "api/errors.md", mode: "100644", type: "blob", sha: "c".repeat(40) },
+            { path: "link.md", mode: "120000", type: "blob", sha: "d".repeat(40) },
+          ],
+        },
+      },
+    });
+    const files = ["docs/a b/rules.md", "docs/a b/api/errors.md"];
+    expect(await sourceWith([folder(false)]).listFolder(repo, SHA, "docs/a b")).toEqual({
+      ok: true,
+      value: { files, complete: true },
+    });
+    expect(await sourceWith([folder(true)]).listFolder(repo, SHA, "docs/a b")).toEqual({
+      ok: true,
+      value: { files, complete: false },
+    });
+  });
+
   it("leaves a symlink out of the list, whose blob holds a path and no rules", async () => {
     const listed = await sourceWith(harnessExchanges).listFiles(repo, SHA);
     const paths = listed.ok && listed.value !== null ? [...listed.value.keys()] : [];

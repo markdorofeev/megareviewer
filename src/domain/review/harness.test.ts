@@ -16,9 +16,15 @@ import {
   strongerLink,
 } from "./index.ts";
 
-/** Each link as "kind path", or "kind path | path" when its path in prose can mean two files. */
+/**
+ * Each link as "kind path", or "kind path | path" when its path in prose can mean two files, a
+ * folder's paths ending in a slash.
+ */
 const links = (path: string, content: string): string[] =>
-  harnessLinks(path, content).map(({ kind, paths }) => `${kind} ${paths.join(" | ")}`);
+  harnessLinks(path, content).map(
+    ({ kind, paths, folder }) =>
+      `${kind} ${paths.map((one) => (folder ? `${one}/` : one)).join(" | ")}`,
+  );
 
 describe("harnessLinks", () => {
   it.each([
@@ -99,7 +105,7 @@ describe("harnessLinks", () => {
   });
 
   it.each([
-    ["a code span", "Run `docs/a.md` and `@b.md`, or ``c.md ` d.md``."],
+    ["a code span with more than a path", "Run `pnpm a.md`, `docs/a.md:12` or ``c.md ` d.md``."],
     ["a code span over two lines", "`docs/a.md\n@b.md`"],
     ["a backtick fence", "```md\n@a.md\n[b](b.md) c.md\n```"],
     ["a tilde fence", "~~~\n@a.md\n~~~"],
@@ -118,6 +124,58 @@ describe("harnessLinks", () => {
     ["a path with a control character", "[a](a%00b.md) [b](a%0Ab.md)"],
     ["a path of more than 500 characters", `${"a/".repeat(260)}b.md`],
   ])("reads no link in %s", (_name, content) => {
+    expect(links("CLAUDE.md", content)).toEqual([]);
+  });
+
+  it("reads a code span that holds a path and nothing else as a path in prose", () => {
+    expect(links("docs/notes.md", "Follow `rules.md`, `@style.md.` and `plan/`.")).toEqual([
+      "mention docs/rules.md | rules.md",
+      "mention docs/style.md | style.md",
+      "mention docs/plan/ | plan/",
+    ]);
+  });
+
+  it.each([
+    [
+      "a Markdown link, with a slash or none",
+      "[Plan](docs/plan) [Rules](/docs/rules/)",
+      ["link docs/plan/", "link docs/rules/"],
+    ],
+    [
+      "an import ending in a slash",
+      "@docs/rules/ @.cursor/rules/",
+      ["import docs/rules/", "import .cursor/rules/"],
+    ],
+    [
+      "a path in prose ending in a slash",
+      "Rules are in docs/rules/, modules in com.oracle.svm.core/.",
+      ["mention docs/rules/", "mention com.oracle.svm.core/"],
+    ],
+    [
+      "a code span ending in a slash",
+      "Documentation lives under `docs/`, beside `compiler/` and `.ci/docker/`.",
+      ["mention docs/", "mention compiler/", "mention .ci/docker/"],
+    ],
+  ])("reads a folder named in %s", (_name, content, expected) => {
+    expect(links("CLAUDE.md", content)).toEqual(expected);
+  });
+
+  it("resolves a folder as a file: a link against its file, a path in prose then against the root", () => {
+    expect(links("docs/notes.md", "[here](./) [plan](plan) and plan/ [up](../)")).toEqual([
+      "link docs/",
+      "link docs/plan/",
+      "mention docs/plan/ | plan/",
+    ]);
+  });
+
+  it.each([
+    ["an import without a slash at its end", "Ask @someone, or install @anthropic-ai/sdk."],
+    ["a path in prose without one", "The plan is in docs/plan, before/after and I/O."],
+    ["a code span without one", "Run `docs/plan` or `claude/stage-51`."],
+    ["a pattern", "docs/*.md and src/**/*.ts"],
+    ["the repository's root", "[home](/) [here](./) [up](docs/..) `./`"],
+    ["a file of another kind", "src/index.ts and [b](b.png)"],
+  ])("reads no folder in %s", (_name, content) => {
     expect(links("CLAUDE.md", content)).toEqual([]);
   });
 
@@ -293,7 +351,7 @@ const paths = (files: readonly HarnessFile[]) => files.map(({ path }) => path);
 describe("harnessEnabled", () => {
   const linked = harness(
     file("REVIEW.md", [["docs/rules.md", "link"]]),
-    file("CLAUDE.md", [
+    file("CONTRIBUTING.md", [
       ["docs/a.md", "import"],
       ["docs/rules.md", "mention"],
     ]),
@@ -305,25 +363,31 @@ describe("harnessEnabled", () => {
   const enabled = (switches: ReadonlyMap<string, boolean>) =>
     paths(linked.files).filter((path) => harnessEnabled(path, linked, switches));
 
-  it("switches a root by its own switch, REVIEW.md on unless off and the others off unless on", () => {
+  it("switches a root by its own switch, the review's and the agents' on unless off", () => {
     expect(enabled(new Map())).toEqual(["REVIEW.md", "docs/rules.md", "docs/deep.md"]);
     expect(enabled(off("REVIEW.md"))).toEqual([]);
+    const agents = harness(file("AGENTS.md"), file("CLAUDE.md"));
+    expect(paths(agents.files).filter((path) => harnessEnabled(path, agents, new Map()))).toEqual([
+      "AGENTS.md",
+      "CLAUDE.md",
+    ]);
+    expect(harnessEnabled("CLAUDE.md", agents, off("CLAUDE.md"))).toBe(false);
   });
 
   it("has every file an enabled root reaches, round a cycle too", () => {
-    expect(enabled(on("CLAUDE.md"))).toEqual(paths(linked.files));
+    expect(enabled(on("CONTRIBUTING.md"))).toEqual(paths(linked.files));
   });
 
   it("reaches a file through whichever root is on", () => {
-    expect(enabled(new Map([...on("CLAUDE.md"), ...off("REVIEW.md")]))).toEqual(
+    expect(enabled(new Map([...on("CONTRIBUTING.md"), ...off("REVIEW.md")]))).toEqual(
       paths(linked.files).filter((path) => path !== "REVIEW.md"),
     );
   });
 
   it("leaves out a file switched off, and what only it reaches", () => {
-    expect(enabled(new Map([...on("CLAUDE.md"), ...off("docs/a.md")]))).toEqual([
+    expect(enabled(new Map([...on("CONTRIBUTING.md"), ...off("docs/a.md")]))).toEqual([
       "REVIEW.md",
-      "CLAUDE.md",
+      "CONTRIBUTING.md",
       "docs/rules.md",
       "docs/deep.md",
     ]);
@@ -335,49 +399,51 @@ describe("harnessEnabled", () => {
   });
 
   describe("a root another root names", () => {
+    // Both off unless switched on.
+    const COPILOT = ".github/copilot-instructions.md";
     const naming = (kind: HarnessLinkKind) =>
       harness(
-        file("AGENTS.md", [["docs/a.md", "import"]]),
-        file("CLAUDE.md", [["AGENTS.md", kind]]),
+        file("CONTRIBUTING.md", [["docs/a.md", "import"]]),
+        file(COPILOT, [["CONTRIBUTING.md", kind]]),
         file("docs/a.md"),
       );
     const used = (files: Harness, switches: ReadonlyMap<string, boolean>) =>
       paths(files.files).filter((path) => harnessEnabled(path, files, switches));
 
     it("is on with a root that's on and imports it, and so is what it imports", () => {
-      expect(used(naming("import"), on("CLAUDE.md"))).toEqual([
-        "AGENTS.md",
-        "CLAUDE.md",
+      expect(used(naming("import"), on(COPILOT))).toEqual([
+        "CONTRIBUTING.md",
+        COPILOT,
         "docs/a.md",
       ]);
       expect(used(naming("import"), new Map())).toEqual([]);
     });
 
     it("is off when it's switched off, and nothing is reached through it", () => {
-      const switches = new Map([...on("CLAUDE.md"), ...off("AGENTS.md")]);
-      expect(used(naming("import"), switches)).toEqual(["CLAUDE.md"]);
+      const switches = new Map([...on(COPILOT), ...off("CONTRIBUTING.md")]);
+      expect(used(naming("import"), switches)).toEqual([COPILOT]);
     });
 
     it.each(["link", "mention"] as const)("keeps its own default when it's only a %s", (kind) => {
-      expect(used(naming(kind), on("CLAUDE.md"))).toEqual(["CLAUDE.md"]);
-      expect(used(naming(kind), on("CLAUDE.md", "AGENTS.md"))).toEqual([
-        "AGENTS.md",
-        "CLAUDE.md",
+      expect(used(naming(kind), on(COPILOT))).toEqual([COPILOT]);
+      expect(used(naming(kind), on(COPILOT, "CONTRIBUTING.md"))).toEqual([
+        "CONTRIBUTING.md",
+        COPILOT,
         "docs/a.md",
       ]);
     });
 
     const through = (first: HarnessLinkKind, second: HarnessLinkKind) =>
       harness(
-        file("AGENTS.md", [["docs/a.md", "link"]]),
-        file("CLAUDE.md", [["docs/all.md", first]]),
-        file("docs/all.md", [["AGENTS.md", second]]),
+        file("CONTRIBUTING.md", [["docs/a.md", "link"]]),
+        file(COPILOT, [["docs/all.md", first]]),
+        file("docs/all.md", [["CONTRIBUTING.md", second]]),
         file("docs/a.md"),
       );
 
     it("is on through a chain of imports, whatever files are in it", () => {
-      const all = ["AGENTS.md", "CLAUDE.md", "docs/all.md", "docs/a.md"];
-      expect(used(through("import", "import"), on("CLAUDE.md"))).toEqual(all);
+      const all = ["CONTRIBUTING.md", COPILOT, "docs/all.md", "docs/a.md"];
+      expect(used(through("import", "import"), on(COPILOT))).toEqual(all);
       expect(used(through("import", "import"), new Map())).toEqual([]);
     });
 
@@ -387,16 +453,14 @@ describe("harnessEnabled", () => {
       ["import", "link"],
       ["import", "mention"],
     ] as const)("keeps its own default through a chain of a %s and a %s", (first, second) => {
-      expect(used(through(first, second), on("CLAUDE.md"))).toEqual(["CLAUDE.md", "docs/all.md"]);
+      expect(used(through(first, second), on(COPILOT))).toEqual([COPILOT, "docs/all.md"]);
     });
 
     it("is off through a chain with a file that's off, and when it's off itself", () => {
       const chain = through("import", "import");
-      expect(used(chain, new Map([...on("CLAUDE.md"), ...off("docs/all.md")]))).toEqual([
-        "CLAUDE.md",
-      ]);
-      expect(used(chain, new Map([...on("CLAUDE.md"), ...off("AGENTS.md")]))).toEqual([
-        "CLAUDE.md",
+      expect(used(chain, new Map([...on(COPILOT), ...off("docs/all.md")]))).toEqual([COPILOT]);
+      expect(used(chain, new Map([...on(COPILOT), ...off("CONTRIBUTING.md")]))).toEqual([
+        COPILOT,
         "docs/all.md",
       ]);
     });
@@ -445,7 +509,7 @@ describe("harnessPlan", () => {
   it("puts the enabled roots and then their imports in the prompt, breadth-first as written", () => {
     const imports = harness(
       file("REVIEW.md", [["r.md", "import"]]),
-      file("CLAUDE.md", [
+      file("CONTRIBUTING.md", [
         ["see-also.md", "link"],
         ["a.md", "import"],
         ["b.md", "import"],
@@ -458,8 +522,8 @@ describe("harnessPlan", () => {
       file("deep.md"),
       file("mentioned.md"),
     );
-    expect(plan(imports, on("CLAUDE.md"))).toEqual({
-      inPrompt: ["REVIEW.md", "CLAUDE.md", "r.md", "a.md", "b.md", "deep.md"],
+    expect(plan(imports, on("CONTRIBUTING.md"))).toEqual({
+      inPrompt: ["REVIEW.md", "CONTRIBUTING.md", "r.md", "a.md", "b.md", "deep.md"],
       onRequest: ["see-also.md", "from-link.md", "mentioned.md"],
       passedOver: [],
     });
@@ -505,17 +569,17 @@ describe("harnessPlan", () => {
 
   it("puts a root that's on by its importer in the prompt, after the roots that are on", () => {
     const only = harness(
-      file("REVIEW.md", [["AGENTS.md", "link"]]),
-      file("AGENTS.md", [["docs/a.md", "import"]]),
-      file("CLAUDE.md", [["AGENTS.md", "import"]]),
+      file("REVIEW.md", [["CONTRIBUTING.md", "link"]]),
+      file("CONTRIBUTING.md", [["docs/a.md", "import"]]),
+      file("CLAUDE.md", [["CONTRIBUTING.md", "import"]]),
       file("docs/a.md"),
     );
     expect(plan(only, on("CLAUDE.md"))).toEqual({
-      inPrompt: ["REVIEW.md", "CLAUDE.md", "AGENTS.md", "docs/a.md"],
+      inPrompt: ["REVIEW.md", "CLAUDE.md", "CONTRIBUTING.md", "docs/a.md"],
       onRequest: [],
       passedOver: [],
     });
-    expect(plan(only, new Map([...on("CLAUDE.md"), ...off("AGENTS.md")]))).toEqual({
+    expect(plan(only, new Map([...on("CLAUDE.md"), ...off("CONTRIBUTING.md")]))).toEqual({
       inPrompt: ["REVIEW.md", "CLAUDE.md"],
       onRequest: [],
       passedOver: [],
