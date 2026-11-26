@@ -104,4 +104,5 @@ export const fixtureStatus: StatusResponse = {
   jira: { configured: true },
   model: fixtureModelOptions,
   cloneSearchFolder: "/home/lee",
+  downloadFolder: "/home/lee/.megareviewer/repos",
 };

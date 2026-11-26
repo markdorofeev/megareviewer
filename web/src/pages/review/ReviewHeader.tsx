@@ -60,12 +60,14 @@ const Branch = ({ name }: { readonly name: string }) => (
 
 /**
  * The PR, named once: its title with its number, a link to it on the host, its state and review
- * status, then its CI and reviewers at the row's other end; one line of where it is, who wants to
- * merge what, when it was updated and how much it changes; and its intent as a brief. It scrolls
- * away; the bar under it stays. The threads are counted in the bar, and the files in the tree.
+ * status, then its CI and reviewers at the row's other end; one line of where it is, how much of
+ * its repository was read, who wants to merge what, when it was updated and how much it changes;
+ * and its intent as a brief. It scrolls away; the bar under it stays. The threads are counted in
+ * the bar, and the files in the tree.
  */
 export const ReviewHeader = ({
   view,
+  repository,
   intent,
   totals,
   status,
@@ -74,6 +76,8 @@ export const ReviewHeader = ({
   now,
 }: {
   readonly view: AnalysisView;
+  /** Whether the repository was read, after its name, with the dot before it. */
+  readonly repository: ReactNode;
   /** The intent's brief, under the byline. */
   readonly intent: ReactNode;
   /** What every file of the PR changes. */
@@ -147,6 +151,7 @@ export const ReviewHeader = ({
         className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted-foreground"
       >
         <span>{ref.repo.repo}</span>
+        {repository}
         {pullRequest !== null && (
           <>
             {" "}

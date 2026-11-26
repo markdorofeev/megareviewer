@@ -115,6 +115,7 @@ const responses: Record<RouteName, unknown> = {
       defaultId: "claude-code/claude-sonnet-5-5",
     },
     cloneSearchFolder: "/home/lee",
+    downloadFolder: "/home/lee/.megareviewer/repos",
   },
   getReviewActivity: {
     reviews: [
