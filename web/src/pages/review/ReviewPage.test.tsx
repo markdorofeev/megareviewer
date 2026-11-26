@@ -2756,10 +2756,9 @@ describe("outside the pull request", () => {
     const note = await openRepository();
     expect(screen.getByText("The whole repository was read")).not.toBeNull();
     await waitFor(() =>
-      expect(note()).toBe(
-        "megareviewer read acme/shop at 9e8d7c6, from your clone in ~/code/shop. It found 2 uses of what the pull request changes in code outside it, shown on the changes.",
-      ),
+      expect(note()).toBe("2 uses outside the PR. Read at 9e8d7c6 from your clone."),
     );
+    expect(screen.getByText("your clone").getAttribute("title")).toBe("~/code/shop");
   });
 
   it("says the repository was read from megareviewer's own copy, and that nothing uses the change", async () => {
@@ -2772,9 +2771,10 @@ describe("outside the pull request", () => {
     await loaded();
     const note = await openRepository();
     await waitFor(() =>
-      expect(note()).toBe(
-        "megareviewer read acme/shop at 9e8d7c6, from its own copy in ~/.megareviewer/repos/github/acme/shop.git. No code outside the pull request uses what it changes.",
-      ),
+      expect(note()).toBe("No uses outside the PR. Read at 9e8d7c6 from megareviewer's copy."),
+    );
+    expect(screen.getByText("megareviewer's copy").getAttribute("title")).toBe(
+      "~/.megareviewer/repos/github/acme/shop.git",
     );
   });
 

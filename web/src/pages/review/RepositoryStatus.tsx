@@ -42,7 +42,7 @@ const shortFolder = (dir: string, home: string | null): string =>
 const usesOf = (callers: Analysis["unchangedCallers"]): number =>
   callers.reduce((sum, { uses, more }) => sum + uses.length + more, 0);
 
-/** Where the repository was read from, and what was found in it. */
+/** What was found in the repository, and where it was read from: the folder in a tooltip. */
 const ReadNote = ({
   analysis,
   home,
@@ -53,22 +53,21 @@ const ReadNote = ({
   readonly copies: string | null;
 }) => {
   const { checkoutDir, key, unchangedCallers } = analysis;
-  const { repo } = key.ref;
   const uses = usesOf(unchangedCallers);
   const own = checkoutDir !== null && copies !== null && checkoutDir.startsWith(`${copies}/`);
   return (
     <p data-slot="checkout-note" className="text-muted-foreground">
-      megareviewer read {repo.owner}/{repo.repo} at <NoteCode>{key.headSha.slice(0, 7)}</NoteCode>
+      {uses === 0 ? "No uses" : uses === 1 ? "1 use" : `${uses} uses`} outside the PR. Read at{" "}
+      <NoteCode>{key.headSha.slice(0, 7)}</NoteCode>
       {checkoutDir !== null && (
         <>
-          {own ? ", from its own copy in " : ", from your clone in "}
-          <NoteCode>{shortFolder(checkoutDir, home)}</NoteCode>
+          {" from "}
+          <span title={shortFolder(checkoutDir, home)}>
+            {own ? "megareviewer's copy" : "your clone"}
+          </span>
         </>
       )}
-      .{" "}
-      {uses === 0
-        ? "No code outside the pull request uses what it changes."
-        : `It found ${uses === 1 ? "1 use" : `${uses} uses`} of what the pull request changes in code outside it, shown on the changes.`}
+      .
     </p>
   );
 };
