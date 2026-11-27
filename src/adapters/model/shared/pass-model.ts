@@ -88,7 +88,7 @@ export const createPassModel = (transport: {
 
     steps: (input, options) =>
       run("steps", input, null, options, (answer) =>
-        answer.pass === "steps" ? answer.steps : null,
+        answer.pass === "steps" ? { steps: answer.steps, flow: answer.flow } : null,
       ),
   };
 };

@@ -85,14 +85,28 @@ export const HarnessRead = z
   .readonly();
 export type HarnessRead = z.infer<typeof HarnessRead>;
 
-/** A path in prose can mean two files: the first of `paths` that's one is the one it links. */
+/**
+ * A path in prose can mean two files: the first of `paths` that's one is the one it links. A
+ * folder's link stands for the harness files under it.
+ */
 export interface HarnessLink {
   readonly kind: HarnessLinkKind;
   readonly paths: readonly string[];
+  readonly folder?: true;
 }
 
 const LINKABLE = /[^/]\.(?:md|mdc|markdown|txt)$/i;
 const MAX_PATH_LENGTH = 500;
+
+const isPath = (path: string): boolean =>
+  path !== "" && path.length <= MAX_PATH_LENGTH && !/\p{Cc}/u.test(path);
+
+/**
+ * Whether a file a folder holds is one of the harness's, by its path: Markdown, since a folder's
+ * `.txt` files are licenses and notices more often than rules. One that's named is linked.
+ */
+export const isHarnessFileInFolder = (path: string): boolean =>
+  LINKABLE.test(path) && !/\.txt$/i.test(path) && isPath(path);
 
 /** Stands for text no link is read from. A private-use character, so it's no path's or space. */
 const MASK = "";
@@ -129,9 +143,14 @@ const maskFences = (content: string): string => {
   return lines.map((line, index) => (fenced[index] ? masked(line) : line)).join("\n");
 };
 
+interface Span {
+  readonly start: number;
+  readonly end: number;
+}
+
 /** A span's backticks are closed by as many, in the same paragraph. */
-const maskSpans = (text: string): string => {
-  const spans: { start: number; end: number }[] = [];
+const maskSpans = (text: string): { readonly text: string; readonly spans: readonly Span[] } => {
+  const spans: Span[] = [];
   let runs: { start: number; length: number }[] = [];
   const closeParagraph = () => {
     for (let at = 0; at < runs.length; at += 1) {
@@ -156,11 +175,19 @@ const maskSpans = (text: string): string => {
     out += text.slice(from, start) + masked(text.slice(start, end));
     from = end;
   }
-  return out + text.slice(from);
+  return { text: out + text.slice(from), spans };
 };
 
-/** `target` from `folder`, or null when it leaves the repository or isn't a file to link. */
-const resolved = (folder: readonly string[], target: string): string | null => {
+interface Target {
+  readonly path: string;
+  readonly folder: boolean;
+}
+
+/**
+ * `target` from `folder`: a file to link, or a folder, which ends in a slash or has no extension.
+ * Null when it leaves the repository, is its root, or is neither.
+ */
+const resolved = (folder: readonly string[], target: string): Target | null => {
   const segments = [...folder];
   for (const segment of target.split("/")) {
     if (segment === "" || segment === ".") continue;
@@ -168,10 +195,16 @@ const resolved = (folder: readonly string[], target: string): string | null => {
     else if (segments.pop() === undefined) return null;
   }
   const path = segments.join("/");
-  return LINKABLE.test(path) && path.length <= MAX_PATH_LENGTH && !/\p{Cc}/u.test(path)
-    ? path
+  if (!isPath(path)) return null;
+  if (LINKABLE.test(path)) return { path, folder: false };
+  return target.endsWith("/") || /^\.?[^.]+$/.test(segments.at(-1) ?? "")
+    ? { path, folder: true }
     : null;
 };
+
+/** Outside a Markdown link a folder ends in a slash, so `@scope/name` and `I/O` aren't one. */
+const withSlash = (target: string, found: Target | null): Target | null =>
+  found?.folder === true && !target.endsWith("/") ? null : found;
 
 const decoded = (target: string): string => {
   try {
@@ -183,23 +216,31 @@ const decoded = (target: string): string => {
 
 const withoutAnchor = (target: string): string => target.replace(/#.*$/s, "");
 
+/** A path in prose: what's around one in a sentence or a table ends it, and so does a mask. */
+const PROSE_PATH = /[^\s`"'()*<>[\]{}|,;!?:=“”‘’—–]+/g;
+
 /**
- * The files `content`, the file at `path`, links, each once, where it's first linked by its
- * strongest kind. Nothing in a code span or a fence is a link, and neither is a URL, a path under
- * `~` or one that leaves the repository.
+ * The files and folders `content`, the file at `path`, links, each once, where it's first linked by
+ * its strongest kind. Nothing in a code span or a fence is a link, and neither is a URL, a path
+ * under `~`, the repository's root or one that leaves the repository.
  */
 export const harnessLinks = (path: string, content: string): HarnessLink[] => {
   const folder = path.split("/").slice(0, -1);
   const found: (HarnessLink & { readonly at: number })[] = [];
-  const add = (at: number, kind: HarnessLinkKind, candidates: readonly (string | null)[]) => {
-    const paths = [...new Set(candidates.filter((candidate) => candidate !== null))];
+  const add = (at: number, kind: HarnessLinkKind, candidates: readonly (Target | null)[]) => {
+    const targets = candidates.filter((candidate) => candidate !== null);
+    const paths = [...new Set(targets.map((target) => target.path))];
     // The file itself is there, so nothing after it is what's meant.
     const self = paths.indexOf(path);
     const others = self === -1 ? paths : paths.slice(0, self);
-    if (others.length > 0) found.push({ at, kind, paths: others });
+    if (others.length === 0) return;
+    // Both of a path in prose's meanings are a file, or both a folder.
+    found.push({ at, kind, paths: others, ...(targets[0]?.folder ? { folder: true } : {}) });
   };
 
-  let text = maskSpans(maskFences(content));
+  const unfenced = maskFences(content);
+  const unspanned = maskSpans(unfenced);
+  let text = unspanned.text;
 
   const addLink = (at: number, target: string) => {
     if (/^[a-z][a-z0-9+.-]*:|^\/\/|^~/i.test(target)) return;
@@ -231,16 +272,42 @@ export const harnessLinks = (path: string, content: string): HarnessLink[] => {
     /(^|\s)@((?:\\ |[^\s])+)/g,
     (match, before: string, token: string, at: number) => {
       const target = inProse(token).replaceAll("\\ ", " ");
-      if (isRelative(target)) add(at + before.length, "import", [resolved(folder, target)]);
+      if (isRelative(target)) {
+        add(at + before.length, "import", [withSlash(target, resolved(folder, target))]);
+      }
       return before + masked(match.slice(before.length));
     },
   );
 
-  for (const match of text.matchAll(/[^\s`"'()*<>[\]{}|,;!?:=“”‘’—–]+/g)) {
+  for (const match of text.matchAll(PROSE_PATH)) {
     const target = inProse(match[0]).replace(/\\(?=[_.-])/g, "");
+    // `docs/*.md` is a pattern, and names no folder.
+    const glob = text.charAt(match.index + match[0].length) === "*";
     if (isRelative(target)) {
-      add(match.index, "mention", [resolved(folder, target), resolved([], target)]);
+      add(
+        match.index,
+        "mention",
+        [resolved(folder, target), resolved([], target)].map((found) =>
+          glob && found?.folder ? null : withSlash(target, found),
+        ),
+      );
     }
+  }
+
+  // A span that holds a path and nothing else names it: `docs/` and `docs/rules.md` aren't examples.
+  for (const { start, end } of unspanned.spans) {
+    const target = inProse(
+      unfenced
+        .slice(start, end)
+        .replace(/^`+|`+$/g, "")
+        .trim(),
+    );
+    const whole = [...target.matchAll(PROSE_PATH)];
+    if (!isRelative(target) || whole.length !== 1 || whole[0]?.[0] !== target) continue;
+    add(start, "mention", [
+      withSlash(target, resolved(folder, target)),
+      withSlash(target, resolved([], target)),
+    ]);
   }
 
   const strength = ({ kind }: HarnessLink) => HarnessLinkKind.options.indexOf(kind);
@@ -249,7 +316,7 @@ export const harnessLinks = (path: string, content: string): HarnessLink[] => {
     const key = link.paths.join("\n");
     if (!once.has(key)) once.set(key, link);
   }
-  return [...once.values()].sort((a, b) => a.at - b.at).map(({ kind, paths }) => ({ kind, paths }));
+  return [...once.values()].sort((a, b) => a.at - b.at).map(({ at: _, ...link }) => link);
 };
 
 export const strongerLink = (a: HarnessLinkKind, b: HarnessLinkKind): HarnessLinkKind => {

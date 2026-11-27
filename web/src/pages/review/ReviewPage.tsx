@@ -64,7 +64,9 @@ import { scopeOptions, scopePath } from "../preferences/rule.tsx";
 import { failureReason } from "../preferences/view.ts";
 import { ClaudeElement, type Narrowing } from "./ClaudeElement.tsx";
 import { callMarks } from "./calls.tsx";
+import { DataFlow } from "./DataFlow.tsx";
 import { Dialog } from "./Dialog.tsx";
+import { dataFlowOf, noDataFlowOf, noDataFlowText } from "./data-flow.ts";
 import { FlowBowTie } from "./FlowBowTie.tsx";
 import { FlowLanes } from "./FlowLanes.tsx";
 import { FlowRows } from "./FlowRows.tsx";
@@ -112,7 +114,7 @@ import { ReviewHeader } from "./ReviewHeader.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
 import { parseBoolean, readSession, useStoredState, writeSession } from "./storage.ts";
 import { ThreadStepper, threadChip } from "./ThreadStepper.tsx";
-import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
+import { threadOrder, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
 import { noTourOf, type TourExcerpt, type TourStep, tourOf } from "./tour.ts";
 import { TOUR_LANDING, TourLanding, Understand } from "./Understand.tsx";
@@ -421,8 +423,8 @@ const Review = ({
   const tourOverview = useMemo(() => fileOverview(analysis), [analysis]);
   const noTour = tourOn ? noTourOf(live) : null;
   const tour = useMemo(
-    () => (tourOn ? tourOf(analysis, tourOverview, points, (point) => stateOf(point.id)) : null),
-    [tourOn, analysis, tourOverview, points, stateOf],
+    () => (tourOn ? tourOf(analysis, tourOverview, points) : null),
+    [tourOn, analysis, tourOverview, points],
   );
 
   const tourReady = tourOn && noTour === null && tour !== null;
@@ -430,13 +432,23 @@ const Review = ({
   // The overview as its directories, or as one of the previews of the pull request's flow paths.
   const [overviewForm, setOverviewForm] = useStoredState(
     "overview-form",
-    "directories",
+    "data-flow",
     parseOverviewForm,
   );
   const flow = useMemo(
-    () => (overviewForm === "directories" ? null : flowPaths(analysis)),
+    () =>
+      overviewForm === "directories" || overviewForm === "data-flow" ? null : flowPaths(analysis),
     [overviewForm, analysis],
   );
+  // The data flow is drawn from the analysis shown; why there's none, from the live one.
+  const dataFlow = useMemo(
+    () => (overviewForm === "data-flow" ? dataFlowOf(analysis) : null),
+    [overviewForm, analysis],
+  );
+  const noDataFlow = overviewForm === "data-flow" && dataFlow === null ? noDataFlowOf(live) : null;
+  const noDataFlowLine = noDataFlow === null ? null : noDataFlowText(noDataFlow);
+  // The steps pass writes the tour and the data flow, so a run asks for it when either would show.
+  const explained = tourOn || overviewForm === "data-flow";
   // The directories the bow tie shows as their files, and the cells the lanes show whole.
   const [flowOpened, setFlowOpened] = useState<ReadonlySet<string>>(new Set());
   const toggleFlow = (key: string) =>
@@ -475,17 +487,11 @@ const Review = ({
   const [currentPoint, setCurrentPoint] = useState<PointId | null>(null);
   // What the pager walks, when not every finding: a type picked in its list, or the threads.
   const [narrowed, setNarrowed] = useState<Narrowing | null>(null);
-  // The thread last gone to, and what the stepper goes round of them.
+  // The thread last gone to.
   const [currentThread, setCurrentThread] = useState<ThreadId | null>(null);
-  const [threadScopeChosen, setThreadScope] = useState<ThreadScope | null>(null);
-  const [resolvedHere, setResolvedHere] = useState<ReadonlySet<ThreadId>>(new Set());
-  // The stepper walks the threads when their chip is pressed, or when Claude has no points.
-  const walkingThreads = narrowed === "thread" || walked.length === 0;
   // A run again may find none of the type the list narrowed the pager to.
   const walkedType =
     narrowed !== "thread" && walked.some((point) => point.type === narrowed) ? narrowed : null;
-  // One thing on the page is the current one: the point or the thread the stepper is on.
-  const activePoint = walkingThreads ? null : currentPoint;
   // When this page saw Claude's run start, for the time since.
   const [rerunning, setRerunning] = useState(false);
   // The hunks of a point the reviewer went to.
@@ -581,18 +587,14 @@ const Review = ({
     () => threadOrder(placement, files, index),
     [placement, files, index],
   );
-  const threadScope = threadScopeOf(threadScopeChosen, orderedThreads, resolvedHere);
+  const threadStepCount = threadSteps(orderedThreads).length;
+  // The stepper walks the unresolved threads when their chip is pressed, or when Claude has no
+  // points; once the last is resolved, the chip goes and the stepper is back on the points.
+  const walkingThreads = (narrowed === "thread" && threadStepCount > 0) || walked.length === 0;
+  // One thing on the page is the current one: the point or the thread the stepper is on.
+  const activePoint = walkingThreads ? null : currentPoint;
   const activeThread = walkingThreads ? currentThread : null;
   const { resolve } = threads;
-  const resolveThread = useCallback(
-    async (id: ThreadId, resolved: boolean) => {
-      const error = await resolve(id, resolved);
-      // A thread resolved here stays a step, so the stepper's position doesn't jump.
-      if (error === null && resolved) setResolvedHere((previous) => new Set(previous).add(id));
-      return error;
-    },
-    [resolve],
-  );
   const authorId = analysis.pullRequest?.author.id ?? null;
   const threadView = (thread: ReviewThread, covered: readonly string[] | null) => (
     <ReviewThreadView
@@ -604,7 +606,7 @@ const Review = ({
       covered={covered}
       mediaUrl={(url) => client.attachmentUrl(analysisId, url)}
       onReply={(body) => threads.reply(thread.id, body)}
-      onResolve={(resolved) => resolveThread(thread.id, resolved)}
+      onResolve={(resolved) => resolve(thread.id, resolved)}
       current={activeThread === thread.id}
       anchorId={threadAnchor(thread.id)}
       linesAbove={covered?.length ?? 0}
@@ -783,7 +785,7 @@ const Review = ({
   const narrow = (kind: Narrowing | null) => {
     setNarrowed(kind);
     if (kind !== "thread") return;
-    const steps = threadSteps(orderedThreads, threadScope, resolvedHere);
+    const steps = threadSteps(orderedThreads);
     const [first] = steps;
     if (first !== undefined && !steps.some((thread) => thread.id === currentThread)) {
       goToThread(first.id);
@@ -1475,14 +1477,14 @@ const Review = ({
             onRerun={() => setRerunning(true)}
             points={walked}
             leftOut={folded.size}
-            threads={threadChip(orderedThreads, threadScope, resolvedHere)}
-            narrowed={narrowed === "thread" ? narrowed : walkedType}
+            threads={threadChip(orderedThreads)}
+            narrowed={narrowed === "thread" && threadStepCount > 0 ? narrowed : walkedType}
             onNarrow={narrow}
             onRun={async () => {
               const optionId = modelChoice.chosen?.id;
               const result = await runModel.run(analysisId, {
                 ...(optionId === undefined ? {} : { optionId }),
-                ...(tourOn ? { tour: true } : {}),
+                ...(explained ? { tour: true } : {}),
               });
               if (!result.ok) return;
               follow();
@@ -1499,15 +1501,8 @@ const Review = ({
                 family={family}
               />
             ) : (
-              orderedThreads.length > 0 && (
-                <ThreadStepper
-                  ordered={orderedThreads}
-                  scope={threadScope}
-                  onScope={setThreadScope}
-                  resolvedHere={resolvedHere}
-                  current={currentThread}
-                  onGo={goToThread}
-                />
+              threadStepCount > 0 && (
+                <ThreadStepper ordered={orderedThreads} current={currentThread} onGo={goToThread} />
               )
             )}
           </ClaudeElement>
@@ -1745,7 +1740,19 @@ const Review = ({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {flow === null ? (
+          {noDataFlowLine !== null && (
+            <p data-slot="no-data-flow" role="status" className="text-muted-foreground">
+              {noDataFlowLine}
+            </p>
+          )}
+          {dataFlow !== null ? (
+            <DataFlow
+              view={dataFlow}
+              option={analysis.modelOption}
+              focusKey={overviewFocus}
+              onOpenFile={openFileFromTour}
+            />
+          ) : flow === null ? (
             <Overview
               overview={overview}
               focusKey={overviewFocus}
@@ -1759,7 +1766,6 @@ const Review = ({
               onFocusNode={(key) => {
                 overviewAt.current = key;
               }}
-              onOpenFile={openFileFromTour}
             />
           ) : overviewForm === "lanes" ? (
             <FlowLanes
@@ -1823,7 +1829,7 @@ const Review = ({
           view={view}
           family={family}
           chosen={modelChoice.chosen}
-          tour={tourOn}
+          tour={explained}
           onClose={() => setRerunning(false)}
           onRestart={(seed) => restart(seed)}
         />

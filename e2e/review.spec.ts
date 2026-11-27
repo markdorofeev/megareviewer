@@ -576,14 +576,12 @@ test("walks the threads from the bar, before Claude runs and beside its findings
   await expect(position).toHaveText("1 of 5");
   expect(tops.slice(0, 4)).toEqual([...tops.slice(0, 4)].sort((a, b) => a - b));
 
-  // A resolved thread is folded; going to it from the list opens it.
+  // The list has the unresolved threads only.
   await position.click();
-  const list = page.getByRole("dialog", { name: "6 threads, 5 unresolved" });
-  await list.getByRole("button", { name: /Why ten times the rate limit\?/ }).click();
-  const resolved = page.locator("[data-slot=review-thread]:focus");
-  await expect(resolved).toHaveAttribute("aria-label", /, resolved$/);
-  await expect(resolved.getByRole("button", { name: "Hide" })).toBeVisible();
-  await expect(resolved).toBeInViewport();
+  const list = page.getByRole("dialog", { name: "5 unresolved threads" });
+  await expect(list.getByRole("button", { name: /Why ten times the rate limit\?/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(list).toBeHidden();
 
   // With Claude's findings, the threads are a chip after the pager. The pager stays on the
   // threads the reviewer was going round; the chip takes it to the findings and back.
@@ -593,7 +591,7 @@ test("walks the threads from the bar, before Claude runs and beside its findings
   await chip.click();
   await expect(bar.getByRole("button", { name: /^\d+ findings?, show all$/ })).toBeVisible();
   await chip.click();
-  // Narrowing from a thread outside the steps goes to the first step.
+  // Back on the threads, the stepper is where it was.
   await expect(position).toHaveAccessibleName("Thread 1 of 5, show all");
   await bar.getByRole("button", { name: "Next thread" }).click();
   await expect(position).toHaveAccessibleName("Thread 2 of 5, show all");

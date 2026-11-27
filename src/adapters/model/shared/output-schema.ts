@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { FindingDraft } from "../../../application/ports/index.ts";
-import { Intent, StepDraft } from "../../../domain/review/index.ts";
+import { DataFlow, Intent, StepDraft } from "../../../domain/review/index.ts";
 
 const REVIEW_VARIANTS = [
   z.object({ pass: z.literal("intent"), intent: Intent }),
@@ -20,7 +20,12 @@ export const ReviewPassAnswer = z.object({ answer: z.discriminatedUnion("pass", 
 export const PassAnswer = z.object({
   answer: z.discriminatedUnion("pass", [
     ...REVIEW_VARIANTS,
-    z.object({ pass: z.literal("steps"), steps: z.array(StepDraft) }),
+    z.object({
+      pass: z.literal("steps"),
+      steps: z.array(StepDraft),
+      // An answer recorded before the flow has none.
+      flow: DataFlow.nullable().default(null),
+    }),
   ]),
 });
 export type PassAnswer = z.infer<typeof PassAnswer>;

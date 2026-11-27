@@ -9,10 +9,10 @@
       "headers": {
         "content-type": "application/json; charset=utf-8",
         "x-ratelimit-limit": "5000",
-        "x-ratelimit-remaining": "4979",
-        "x-ratelimit-reset": "1795609742",
+        "x-ratelimit-remaining": "4939",
+        "x-ratelimit-reset": "1795709677",
         "x-ratelimit-resource": "core",
-        "x-ratelimit-used": "21"
+        "x-ratelimit-used": "61"
       },
       "body": {
         "truncated": false,
@@ -169,10 +169,10 @@
       "headers": {
         "content-type": "application/json; charset=utf-8",
         "x-ratelimit-limit": "5000",
-        "x-ratelimit-remaining": "4978",
-        "x-ratelimit-reset": "1795609742",
+        "x-ratelimit-remaining": "4938",
+        "x-ratelimit-reset": "1795709677",
         "x-ratelimit-resource": "core",
-        "x-ratelimit-used": "22"
+        "x-ratelimit-used": "62"
       },
       "body": {
         "truncated": true,
@@ -204,6 +204,49 @@
       "method": "POST",
       "url": "https://api.github.com/graphql",
       "body": {
+        "query": "query ($owner: String!, $repo: String!, $e0: String!, $e1: String!) {\n  repository(owner: $owner, name: $repo) {\n    f0: object(expression: $e0) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n    f1: object(expression: $e1) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n  }\n}",
+        "variables": {
+          "owner": "sindresorhus",
+          "repo": "is",
+          "e0": "e9c026c611c1160eaad50da00be4e676b626018f:.github/security.md",
+          "e1": "e9c026c611c1160eaad50da00be4e676b626018f:source"
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": "4982",
+        "x-ratelimit-reset": "1795710096",
+        "x-ratelimit-resource": "graphql",
+        "x-ratelimit-used": "18"
+      },
+      "body": {
+        "data": {
+          "repository": {
+            "f0": {
+              "__typename": "Blob",
+              "text": "# Security Policy\n\nTo report a security vulnerability, please submit it [here](https://github.com/sindresorhus/is/security/advisories/new).\n\nNo AI slop will be accepted.\n",
+              "isBinary": false,
+              "isTruncated": false,
+              "oid": "34a527ba6b8ef13393330073af5ec736b2e7393a",
+              "byteSize": 170
+            },
+            "f1": {
+              "__typename": "Tree"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://api.github.com/graphql",
+      "body": {
         "query": "query ($owner: String!, $repo: String!, $e0: String!, $e1: String!, $e2: String!) {\n  repository(owner: $owner, name: $repo) {\n    f0: object(expression: $e0) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n    f1: object(expression: $e1) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n    f2: object(expression: $e2) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n  }\n}",
         "variables": {
           "owner": "sindresorhus",
@@ -219,10 +262,10 @@
       "headers": {
         "content-type": "application/json; charset=utf-8",
         "x-ratelimit-limit": "5000",
-        "x-ratelimit-remaining": "4980",
-        "x-ratelimit-reset": "1795609183",
+        "x-ratelimit-remaining": "4983",
+        "x-ratelimit-reset": "1795710096",
         "x-ratelimit-resource": "graphql",
-        "x-ratelimit-used": "20"
+        "x-ratelimit-used": "17"
       },
       "body": {
         "data": {
@@ -254,49 +297,6 @@
       "method": "POST",
       "url": "https://api.github.com/graphql",
       "body": {
-        "query": "query ($owner: String!, $repo: String!, $e0: String!, $e1: String!) {\n  repository(owner: $owner, name: $repo) {\n    f0: object(expression: $e0) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n    f1: object(expression: $e1) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n  }\n}",
-        "variables": {
-          "owner": "sindresorhus",
-          "repo": "is",
-          "e0": "e9c026c611c1160eaad50da00be4e676b626018f:.github/security.md",
-          "e1": "e9c026c611c1160eaad50da00be4e676b626018f:source"
-        }
-      }
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "x-ratelimit-limit": "5000",
-        "x-ratelimit-remaining": "4979",
-        "x-ratelimit-reset": "1795609183",
-        "x-ratelimit-resource": "graphql",
-        "x-ratelimit-used": "21"
-      },
-      "body": {
-        "data": {
-          "repository": {
-            "f0": {
-              "__typename": "Blob",
-              "text": "# Security Policy\n\nTo report a security vulnerability, please submit it [here](https://github.com/sindresorhus/is/security/advisories/new).\n\nNo AI slop will be accepted.\n",
-              "isBinary": false,
-              "isTruncated": false,
-              "oid": "34a527ba6b8ef13393330073af5ec736b2e7393a",
-              "byteSize": 170
-            },
-            "f1": {
-              "__typename": "Tree"
-            }
-          }
-        }
-      }
-    }
-  },
-  {
-    "request": {
-      "method": "POST",
-      "url": "https://api.github.com/graphql",
-      "body": {
         "query": "query ($owner: String!, $repo: String!, $e0: String!) {\n  repository(owner: $owner, name: $repo) {\n    f0: object(expression: $e0) { __typename ... on Blob { oid byteSize text isBinary isTruncated } }\n  }\n}",
         "variables": {
           "owner": "sindresorhus",
@@ -310,10 +310,10 @@
       "headers": {
         "content-type": "application/json; charset=utf-8",
         "x-ratelimit-limit": "5000",
-        "x-ratelimit-remaining": "4978",
-        "x-ratelimit-reset": "1795609183",
+        "x-ratelimit-remaining": "4981",
+        "x-ratelimit-reset": "1795710096",
         "x-ratelimit-resource": "graphql",
-        "x-ratelimit-used": "22"
+        "x-ratelimit-used": "19"
       },
       "body": {
         "data": {
@@ -328,6 +328,86 @@
             }
           }
         }
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.github.com/repos/sindresorhus/is/git/trees/e9c026c611c1160eaad50da00be4e676b626018f%3A.github?recursive=1"
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": "4937",
+        "x-ratelimit-reset": "1795709677",
+        "x-ratelimit-resource": "core",
+        "x-ratelimit-used": "63"
+      },
+      "body": {
+        "truncated": false,
+        "tree": [
+          {
+            "path": "security.md",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "34a527ba6b8ef13393330073af5ec736b2e7393a"
+          },
+          {
+            "path": "workflows",
+            "mode": "040000",
+            "type": "tree",
+            "sha": "f615a2fca053051f1c0a82fdef0d21cd67ea8b5b"
+          },
+          {
+            "path": "workflows/main.yml",
+            "mode": "100644",
+            "type": "blob",
+            "sha": "33db2341787feaf16ef04754065fd6d5a928c87d"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.github.com/repos/sindresorhus/is/git/trees/e9c026c611c1160eaad50da00be4e676b626018f%3A.github/security.md?recursive=1"
+    },
+    "response": {
+      "status": 422,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": "4936",
+        "x-ratelimit-reset": "1795709677",
+        "x-ratelimit-resource": "core",
+        "x-ratelimit-used": "64"
+      },
+      "body": {
+        "message": "Invalid object requested. SHA must identify a commit or a tree."
+      }
+    }
+  },
+  {
+    "request": {
+      "method": "GET",
+      "url": "https://api.github.com/repos/sindresorhus/is/git/trees/e9c026c611c1160eaad50da00be4e676b626018f%3Amegareviewer-missing-file.txt?recursive=1"
+    },
+    "response": {
+      "status": 404,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "5000",
+        "x-ratelimit-remaining": "4935",
+        "x-ratelimit-reset": "1795709677",
+        "x-ratelimit-resource": "core",
+        "x-ratelimit-used": "65"
+      },
+      "body": {
+        "message": "Not Found"
       }
     }
   }

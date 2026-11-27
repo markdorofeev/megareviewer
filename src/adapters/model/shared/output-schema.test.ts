@@ -176,10 +176,28 @@ describe("the answer format of a run with the tour", () => {
     expect(PassAnswer.parse({ answer: { pass: "steps", steps: [step] } }).answer).toEqual({
       pass: "steps",
       steps: [step],
+      flow: null,
     });
     expect(
       PassAnswer.safeParse({ answer: { pass: "steps", steps: [{ ...step, excerpts: [] }] } })
         .success,
     ).toBe(false);
+  });
+
+  it("parses the data flow a steps answer has, and asks for it in the schema", () => {
+    const flow = {
+      source: "a request",
+      stations: [
+        { name: "Take", when: null, keeps: false, files: ["a.ts"], gives: "an order", shapes: [] },
+        { name: "Keep", when: null, keeps: true, files: ["b.ts"], gives: null, shapes: [] },
+      ],
+      end: "the `orders` table",
+    };
+    const answer = PassAnswer.parse({ answer: { pass: "steps", steps: [], flow } }).answer;
+    expect(answer).toEqual({ pass: "steps", steps: [], flow });
+    expect(JSON.stringify(TOUR_PASS_ANSWER_FORMAT.schema)).toContain(
+      '"required":["pass","steps","flow"]',
+    );
+    expect(JSON.stringify(PASS_ANSWER_FORMAT.schema)).not.toContain("stations");
   });
 });

@@ -27,7 +27,7 @@ export const RerunModel = ({
   readonly family: string;
   /** The model the new run uses. */
   readonly chosen: ModelOption;
-  /** The Tour switch is on: the new run writes the tour too. */
+  /** The new run writes the tour and the data flow too: one of them would show. */
   readonly tour: boolean;
   readonly onClose: () => void;
   /** The page starts afresh from this view. */

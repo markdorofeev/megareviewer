@@ -308,6 +308,7 @@ export const smallFeatureAnalysis: Analysis = {
   ],
   steps: null,
   stepsError: null,
+  dataFlow: null,
   warnings: [],
   usage: [
     {

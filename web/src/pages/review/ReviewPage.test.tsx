@@ -18,6 +18,7 @@ import {
   fixtureParts,
   fixturePullRequestStatus,
   fixtureStatus,
+  fixtureThreads,
   largeAnalysisView,
   lockedModelOptions,
   NO_API_CREDENTIALS,
@@ -159,6 +160,9 @@ const reviewBar = () => {
   return bar;
 };
 const overviewBox = () => screen.getByRole("region", { name: "Overview of the changed files" });
+const dataFlowRegion = () =>
+  screen.getByRole("region", { name: "How data moves through this change" });
+const noDataFlow = () => document.querySelector('[data-slot="no-data-flow"]');
 const pointCard = (title: RegExp) => screen.getByRole("article", { name: title });
 const pointButton = (action: string, title: RegExp) =>
   screen.getByRole("button", { name: new RegExp(`^${action}: ${title.source}`) });
@@ -1418,7 +1422,7 @@ const layoutIs = (layout: "map" | "overview" | "tour") =>
   document.querySelector("[data-slot=review-page]")?.getAttribute("data-layout") === layout;
 
 describe("overview", () => {
-  it("draws the changed directories from the entry down, with unlinked ones in the strip", async () => {
+  it("draws the changed directories from the entry down, and leaves out unlinked ones", async () => {
     renderReview();
     await loaded();
     await openOverview();
@@ -1426,8 +1430,7 @@ describe("overview", () => {
     expect(nodeOf("group:src/routes").getAttribute("aria-label")).toMatch(
       /^src\/routes\/, 1 file, /,
     );
-    const strip = within(overviewBox()).getByRole("region", { name: "Not linked" });
-    expect(within(strip).getByRole("button", { name: "./, 1 file, logic" })).toBeTruthy();
+    expect(overviewBox().querySelector('[data-key="group:"]')).toBeNull();
     // Proved-mechanical files aren't in it: the map lists them with their proofs.
     expect(overviewBox().querySelector('[data-key="pnpm-lock.yaml"]')).toBeNull();
   });
@@ -1452,15 +1455,9 @@ describe("overview", () => {
     await userEvent.keyboard("{ArrowDown}");
     expect(focusedKey()).toBe("group:src/services");
     await userEvent.keyboard("{ArrowDown}");
-    expect(focusedKey()).toBe("group:");
-    await userEvent.keyboard("{ArrowUp}{ArrowUp}");
+    expect(focusedKey()).toBe("group:src/services");
+    await userEvent.keyboard("{ArrowUp}");
     expect(focusedKey()).toBe("group:src/routes");
-    // A focused directory names its files, flows and what it reaches, for the keyboard.
-    expect(
-      screen.getByText(
-        "src/routes/: orders.ts · read in The receipt endpoint · reaches src/services/ (cachedReceipt).",
-      ),
-    ).toBeTruthy();
     await userEvent.keyboard("{Enter}");
     expect(layoutIs("map")).toBe(true);
     expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
@@ -1476,21 +1473,18 @@ describe("overview", () => {
       "src/routes/ imports, calls src/services/: cachedReceipt",
     );
   });
-  it("names what an edge carries on hover, and lights the hovered file's edges", async () => {
+  it("lights the hovered directory's edges, and says nothing under the diagram", async () => {
     renderReview();
     await loaded();
     await openOverview();
     const edge = overviewBox().querySelector("[data-slot=overview-edge]");
     if (edge === null) throw new Error("no edge");
-    await userEvent.hover(edge);
-    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toBe(
-      "src/routes/ imports, calls src/services/: cachedReceipt",
-    );
-    await userEvent.unhover(edge);
     await userEvent.hover(nodeOf("group:src/services"));
     expect(edge.hasAttribute("data-lit")).toBe(true);
     await userEvent.unhover(nodeOf("group:src/services"));
-    expect(screen.getByText(/^Hover or focus a directory/)).toBeTruthy();
+    expect(edge.hasAttribute("data-lit")).toBe(false);
+    expect(overviewBox().querySelector("[data-slot=overview-detail]")).toBeNull();
+    expect(overviewBox().querySelector("[data-slot=overview-legend]")).toBeNull();
   });
 
   // It renders the large fixture's map first, which takes about 9 s on CI's runners.
@@ -1525,7 +1519,8 @@ describe("overview", () => {
     expect(
       forms.getAllByRole("menuitemradio").map((item) => [item.textContent, item.ariaChecked]),
     ).toEqual([
-      ["Directories", "true"],
+      ["Data flow", "true"],
+      ["Directories", "false"],
       ["Lanes", "false"],
       ["Bow tie", "false"],
       ["Flow rows", "false"],
@@ -1553,6 +1548,47 @@ describe("overview", () => {
     await userEvent.keyboard("{Escape}");
     expect(layoutIs("overview")).toBe(true);
     expect((document.activeElement as HTMLElement | null)?.dataset.path).toBe(path);
+  });
+
+  it("is the data flow once an AI review has written one, and says why it's the directories until then", async () => {
+    const first = renderReview();
+    await loaded();
+    const box = await openOverview();
+    expect(box).toBeTruthy();
+    expect(noDataFlow()?.textContent).toBe(
+      "This AI review didn't write a data flow. Re-run it to get one. Until then, this is the changed directories and the calls between them.",
+    );
+    first.unmount();
+
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
+    const flow = within(dataFlowRegion());
+    expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
+    expect(flow.getAllByRole("heading", { level: 3 }).map((one) => one.textContent)).toEqual([
+      "Find the order",
+      "Render the receipt, kept in memory",
+      "Not in the picture",
+    ]);
+    expect(flow.getByText("keeps data")).toBeTruthy();
+
+    const receipts = flow.getByRole("button", { name: /^receipts, existing file/ });
+    await userEvent.click(receipts);
+    expect(layoutIs("map")).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(layoutIs("overview")).toBe(true);
+    expect((document.activeElement as HTMLElement | null)?.dataset.path).toBe(
+      "src/services/receipts.ts",
+    );
+  });
+
+  it("is the directories when that form is chosen, whatever the review wrote", async () => {
+    window.localStorage.setItem("megareviewer:overview-form", '"directories"');
+    renderReview({ view: tourAnalysisView });
+    await loaded();
+    expect(await openOverview()).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "How data moves through this change" })).toBeNull();
+    expect(noDataFlow()).toBeNull();
   });
 
   it.each([
@@ -1583,7 +1619,7 @@ describe("the tour", () => {
     );
     expect(window.location.search).toBe("?view=tour");
     await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
-    expect(overviewBox()).toBeTruthy();
+    expect(dataFlowRegion()).toBeTruthy();
     expect(() => tourRegion()).toThrow();
     await userEvent.click(layoutSwitch().getByRole("button", { name: "Tour" }));
     expect(await screen.findByRole("region", { name: "Tour steps" })).toBeTruthy();
@@ -1592,7 +1628,7 @@ describe("the tour", () => {
     window.localStorage.setItem("megareviewer:tour", "false");
     renderReview({ view: tourAnalysisView });
     await loaded();
-    expect(overviewBox()).toBeTruthy();
+    expect(dataFlowRegion()).toBeTruthy();
     expect(() => tourRegion()).toThrow();
     expect(layoutSwitch().queryByRole("button", { name: "Tour" })).toBeNull();
   });
@@ -1607,15 +1643,15 @@ describe("the tour", () => {
       "Step 2: cachedReceipt keeps each order's receipt in memory once it's rendered",
       "Step 3: Tax lines are fetched up to 3 times before the receipt fails",
       "Step 4: Receipt lines show prices through formatMoney and dates through dayjs",
-      "After the tour",
+      "Not in the tour · 7 files",
     ]);
-    expect(steps.getByText("lines 14–21 · 8 of 18 changed lines")).toBeTruthy();
+    expect(steps.getByText("lines 14–21")).toBeTruthy();
     const [firstChip] = steps.getAllByRole("button", { name: /^Finding/ });
     expect(firstChip?.textContent).toContain(
       "Any signed-in user can read every customer's receipt",
     );
-    expect(steps.getByText("Not in the tour")).toBeTruthy();
-    expect(steps.getByText("Suggested depth")).toBeTruthy();
+    expect(steps.getByRole("region", { name: "After the tour" })).toBeTruthy();
+    expect(steps.queryByText("Suggested depth")).toBeNull();
     const strip = screen.getByRole("group", { name: "Directories on the tour" });
     expect(within(strip).getByRole("button", { name: /^src\/routes\/, step 1/ })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
@@ -2534,7 +2570,11 @@ describe("the bar's verdicts", () => {
     ).toContain("bg-ai-soft");
   });
 
-  it("asks for no tour with a run once the Display menu's Tour switch is off", async () => {
+  it.each([
+    ["data-flow", { tour: true }],
+    ["directories", {}],
+  ])("with the Tour switch off and the overview as %s, asks a run for %o", async (form, asked) => {
+    window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
     const { requests } = renderReview({
       view: codeOnly,
       respond: (request) =>
@@ -2553,6 +2593,7 @@ describe("the bar's verdicts", () => {
     await userEvent.click(button);
     expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
       optionId: "claude-code/claude-sonnet-5-5",
+      ...asked,
     });
   });
 
@@ -2619,10 +2660,6 @@ describe("outside the pull request", () => {
     expect(box.getAttribute("aria-label")).toContain("used in 1 place outside the PR");
     expect(box.textContent).toContain("used in 1 place outside the PR");
     expect(overviewBox().textContent).not.toContain("email-receipts");
-    act(() => box.focus());
-    expect(overviewBox().querySelector("[data-slot=overview-detail]")?.textContent).toContain(
-      "used in 1 place outside the PR.",
-    );
   });
 
   /** The page's status, with the folder searched for clones and the one copies are kept in. */
@@ -2769,10 +2806,9 @@ describe("outside the pull request", () => {
     const note = await openRepository();
     expect(screen.getByText("The whole repository was read")).not.toBeNull();
     await waitFor(() =>
-      expect(note()).toBe(
-        "megareviewer read acme/shop at 9e8d7c6, from your clone in ~/code/shop. It found 2 uses of what the pull request changes in code outside it, shown on the changes.",
-      ),
+      expect(note()).toBe("2 uses outside the PR. Read at 9e8d7c6 from your clone."),
     );
+    expect(screen.getByText("your clone").getAttribute("title")).toBe("~/code/shop");
   });
 
   it("says the repository was read from megareviewer's own copy, and that nothing uses the change", async () => {
@@ -2785,9 +2821,10 @@ describe("outside the pull request", () => {
     await loaded();
     const note = await openRepository();
     await waitFor(() =>
-      expect(note()).toBe(
-        "megareviewer read acme/shop at 9e8d7c6, from its own copy in ~/.megareviewer/repos/github/acme/shop.git. No code outside the pull request uses what it changes.",
-      ),
+      expect(note()).toBe("No uses outside the PR. Read at 9e8d7c6 from megareviewer's copy."),
+    );
+    expect(screen.getByText("megareviewer's copy").getAttribute("title")).toBe(
+      "~/.megareviewer/repos/github/acme/shop.git",
     );
   });
 
@@ -2884,38 +2921,20 @@ describe("review threads", () => {
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_tax");
     });
 
-    it("opens a folded resolved thread gone to from the list, and steps on from it", async () => {
+    it("lists only the unresolved threads, and goes to one", async () => {
       renderReview({ view: codeOnly });
       await loaded();
       await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
-      const money = document.getElementById("thread-PRRT_money");
-      expect(
-        within(money as HTMLElement).getByRole("button", { name: "Show 1 comment" }),
-      ).toBeTruthy();
-
       await userEvent.click(position());
-      const list = await screen.findByRole("dialog", { name: "4 threads, 3 unresolved" });
-      await userEvent.click(within(list).getByRole("button", { name: /Rounds half-cents up\?/ }));
+      const list = await screen.findByRole("dialog", { name: "3 unresolved threads" });
+      expect(within(list).queryByRole("button", { name: /Rounds half-cents up\?/ })).toBeNull();
+      await userEvent.click(within(list).getByRole("button", { name: /Name says what it counts/ }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(scrolledTo().at(-1)).toBe("thread-PRRT_money");
-      await waitFor(() => expect(document.activeElement?.id).toBe("thread-PRRT_money"));
-      const opened = document.getElementById("thread-PRRT_money") as HTMLElement;
-      expect(within(opened).queryByRole("button", { name: "Show 1 comment" })).toBeNull();
-      expect(within(opened).getByRole("button", { name: "Hide" })).toBeTruthy();
-      // It isn't one of the steps, so the position is the count, and Next goes on down the page,
-      // round to the first.
-      expect(position().textContent).toBe("3 unresolved");
-      await step("Next thread");
-      expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier");
-
-      // Every thread is a step once the list says so.
-      await userEvent.click(position());
-      await userEvent.click(await screen.findByRole("button", { name: "All (4)" }));
-      await userEvent.keyboard("{Escape}");
-      expect(position().getAttribute("aria-label")).toBe("Thread 1 of 4, show all");
+      expect(scrolledTo().at(-1)).toBe("thread-PRRT_attempts");
+      expect(position().textContent).toBe("2 of 3");
     });
 
-    it("keeps a thread resolved here as a step, so the position doesn't jump", async () => {
+    it("takes a thread resolved here out of the steps, and steps on from it", async () => {
       renderReview({ view: codeOnly });
       await loaded();
       await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
@@ -2924,11 +2943,29 @@ describe("review threads", () => {
       expect(position().textContent).toBe("2 of 3");
       const attempts = document.getElementById("thread-PRRT_attempts") as HTMLElement;
       await userEvent.click(within(attempts).getByRole("button", { name: "Resolve" }));
-      // Read again after the write: resolved now, still the second of three.
-      await waitFor(() => expect(barStatus()).toMatch(/^Thread 2 of 3, .*line 29, resolved: /));
-      expect(position().textContent).toBe("2 of 3");
+      // Read again after the write: no longer a step, so the position is the count.
+      await waitFor(() => expect(position().textContent).toBe("2 unresolved"));
       await step("Next thread");
-      expect(position().textContent).toBe("3 of 3");
+      expect(scrolledTo().at(-1)).toBe("thread-PRRT_tax");
+      expect(position().textContent).toBe("2 of 2");
+    });
+
+    it("shows no stepper when every thread is resolved", async () => {
+      const { requests } = renderReview({
+        view: codeOnly,
+        respond: (request) =>
+          request.url.endsWith("/threads")
+            ? jsonResponse(200, {
+                threads: fixtureThreads.threads.map((one) => ({ ...one, resolved: true })),
+              })
+            : undefined,
+      });
+      await loaded();
+      await waitFor(() =>
+        expect(requests.some((request) => request.url.endsWith("/threads"))).toBe(true),
+      );
+      await waitFor(() => expect(document.getElementById("thread-PRRT_tax")).not.toBeNull());
+      expect(reviewBar().querySelector("[data-slot=thread-stepper]")).toBeNull();
     });
 
     it("after Claude's findings, has the pager walk the threads with their chip", async () => {

@@ -14,6 +14,7 @@ import {
   type Analysis,
   type AnalysisKey,
   analysisId,
+  type DataFlow,
   FindingId,
   MismatchId,
   type ModelCall,
@@ -697,6 +698,7 @@ const analysis: Analysis = {
   ],
   steps: null,
   stepsError: null,
+  dataFlow: null,
   warnings: [
     "Full file contents omitted for 1 file to fit the model's limit",
     "Couldn't fetch Jira tickets: Jira answered 503",
@@ -753,6 +755,30 @@ export const fixtureSteps: readonly Step[] = [
   },
 ];
 
+/** Claude's data flow of the fixture PR: the request, the route, the receipts kept in memory. */
+export const fixtureDataFlow: DataFlow = {
+  source: "`GET /orders/:id/receipt` from the orders page",
+  stations: [
+    {
+      name: "Find the order",
+      when: null,
+      keeps: false,
+      files: ["src/routes/orders.ts"],
+      gives: "the order, or a 404",
+      shapes: [],
+    },
+    {
+      name: "Render the receipt, kept in memory",
+      when: null,
+      keeps: true,
+      files: ["src/services/receipts.ts", "src/lib/money.ts"],
+      gives: "the receipt as plain text",
+      shapes: [],
+    },
+  ],
+  end: "the response",
+};
+
 /** The fixture analysis after a run that asked for the tour. */
 export const tourAnalysisView: AnalysisView = {
   ...fixtureAnalysisView,
@@ -760,5 +786,6 @@ export const tourAnalysisView: AnalysisView = {
     ...analysis,
     stages: { ...analysis.stages, steps: "done" },
     steps: fixtureSteps,
+    dataFlow: fixtureDataFlow,
   },
 };

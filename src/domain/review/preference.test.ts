@@ -151,11 +151,15 @@ describe("canEnable", () => {
 });
 
 describe("guideline files", () => {
-  it("reads REVIEW.md unless it's switched off, and the others only when switched on", () => {
-    expect(guidelineEnabled("REVIEW.md", new Map())).toBe(true);
-    expect(guidelineEnabled("REVIEW.md", new Map([["REVIEW.md", false]]))).toBe(false);
-    expect(guidelineEnabled("CLAUDE.md", new Map())).toBe(false);
-    expect(guidelineEnabled("CLAUDE.md", new Map([["CLAUDE.md", true]]))).toBe(true);
+  it("reads REVIEW.md, AGENTS.md and CLAUDE.md unless switched off, and the others when on", () => {
+    for (const path of ["REVIEW.md", "AGENTS.md", "CLAUDE.md"]) {
+      expect(guidelineEnabled(path, new Map())).toBe(true);
+      expect(guidelineEnabled(path, new Map([[path, false]]))).toBe(false);
+    }
+    for (const path of ["CONTRIBUTING.md", ".github/copilot-instructions.md"]) {
+      expect(guidelineEnabled(path, new Map())).toBe(false);
+      expect(guidelineEnabled(path, new Map([[path, true]]))).toBe(true);
+    }
   });
 
   it("measures a file in bytes, and marks one over 64 KB too large", () => {
@@ -165,7 +169,7 @@ describe("guideline files", () => {
       enabled: true,
       tooLarge: false,
     });
-    const atLimit = guidelineFile("AGENTS.md", "x".repeat(MAX_INLINE_BYTES), new Map());
+    const atLimit = guidelineFile("CONTRIBUTING.md", "x".repeat(MAX_INLINE_BYTES), new Map());
     expect(atLimit).toMatchObject({ bytes: 65_536, enabled: false, tooLarge: false });
     const over = guidelineFile(
       "CLAUDE.md",

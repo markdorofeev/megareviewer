@@ -7,6 +7,7 @@ import {
   type PassOutput,
 } from "../../application/ports/index.ts";
 import {
+  DataFlow,
   Intent,
   MODEL_STAGES,
   type ModelError,
@@ -16,6 +17,12 @@ import {
   StepDraft,
 } from "../../domain/review/index.ts";
 import { err, ok, type Result } from "../../domain/shared/index.ts";
+
+/** The steps pass's answer; a recording made before the data flow holds the steps alone. */
+const RecordedTour = z.union([
+  z.array(StepDraft).transform((steps) => ({ steps, flow: null })),
+  z.object({ steps: z.array(StepDraft), flow: DataFlow.nullable() }),
+]);
 
 /** One pass as it ran: what it answered, how long it took, and what it used. */
 const RecordedPass = z
@@ -182,7 +189,7 @@ export const createReplayAnalysisModel = (
     steps: async (_input, passOptions) =>
       recording.passes.steps === undefined
         ? ok({
-            value: [],
+            value: { steps: [], flow: null },
             usage: {
               pass: "steps",
               inputTokens: 0,
@@ -196,8 +203,8 @@ export const createReplayAnalysisModel = (
         : play(
             "steps",
             passOptions,
-            (answer) => parsed(z.array(StepDraft), answer, "steps"),
-            () => [],
+            (answer) => parsed(RecordedTour, answer, "steps"),
+            () => ({ steps: [], flow: null }),
           ),
   };
 };

@@ -64,8 +64,8 @@ test("callers arrive after the review opened, on the same review, without moving
   await money.getByRole("button", { name: "Used unchanged in 1 place" }).click();
   await expect(money).toContainText("src/invoice.ts");
   await expect(repository(page)).toHaveText("Whole repository");
-  await expect(await note(page)).toContainText(
-    "from its own copy in ~/.megareviewer/repos/github/acme/shop.git. It found 1 use",
+  await expect(await note(page)).toHaveText(
+    /^1 use outside the PR\. Read at \w{7} from megareviewer's copy\.$/,
   );
   await page.keyboard.press("Escape");
 

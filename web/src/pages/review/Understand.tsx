@@ -1,4 +1,4 @@
-import { ChevronRightIcon, CodeIcon, RouteIcon, SparklesIcon } from "lucide-react";
+import { ChevronRightIcon, CodeIcon, RouteIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Point, PointState } from "../../../../src/domain/review/index.ts";
 import { holdInPlace } from "../../lib/held-scroll.ts";
@@ -7,7 +7,6 @@ import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { ModelText } from "./IntentLine.tsx";
 import {
-  depthText,
   type LedgerGroupId,
   listOf,
   type TourBox,
@@ -17,13 +16,12 @@ import {
 } from "./tour.ts";
 import { boxLabel, compactLabels } from "./tour-labels.ts";
 
-// The Understand layout with a tour: a strip of the directories the steps reach, the steps, then
-// what the tour didn't show. The window scrolls. The strip scrolls away with it, and a compact one
+// The Understand layout with a tour: a strip of the directories the steps' lines are in, the steps,
+// then what the tour didn't show. The window scrolls. The strip scrolls away with it, and a compact one
 // takes its place under the bar: one strip that shrank when it stuck moved the steps under the
 // reader by the difference, 780 px on graal #15134.
 
 export const stepAnchor = (number: number): string => `tour-step-${number}`;
-const END_TITLE = "tour-end-title";
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -50,7 +48,7 @@ const StepNumber = ({
   </span>
 );
 
-/** A directory on the tour's path, with its steps' numbers; one line of it on the compact strip. */
+/** A directory the tour has steps in, with their numbers; one line of it on the compact strip. */
 const PathBox = ({
   box,
   current,
@@ -112,7 +110,7 @@ const PathBox = ({
   );
 };
 
-/** The directories the steps reach, in the order they first reach them, with arrows between. */
+/** The directories the steps' lines are in, each once, in the order the steps first reach them. */
 const PathBoxes = ({
   tour,
   current,
@@ -127,9 +125,7 @@ const PathBoxes = ({
   readonly onGoToStep: (number: number) => void;
 }) => {
   const names = compact ? compactLabels(tour.boxes.map((box) => box.label)) : null;
-  const boxAt = (at: number) => {
-    const box = tour.boxes[at];
-    if (box === undefined) return null;
+  return tour.boxes.map((box, at) => {
     const compactName = names?.[at];
     return (
       <PathBox
@@ -141,52 +137,10 @@ const PathBoxes = ({
         onGo={() => onGoToStep(Math.min(...box.steps))}
       />
     );
-  };
-  const items: ReactNode[] = [];
-  for (let at = 0; at < tour.boxes.length; at += 1) {
-    const box = tour.boxes[at];
-    if (box === undefined) continue;
-    const span = tour.spans.find((one) => one.keys[0] === box.key);
-    if (at > 0) {
-      items.push(
-        <ChevronRightIcon
-          key={`arrow-${box.key}`}
-          aria-hidden="true"
-          className="size-4 shrink-0 text-primary"
-        />,
-      );
-    }
-    if (span !== undefined && tour.boxes[at + 1] !== undefined) {
-      items.push(
-        // biome-ignore lint/a11y/useSemanticElements: a group of two boxes, not of form controls.
-        <div
-          key={`span-${box.key}`}
-          role="group"
-          aria-label={`Step ${span.step} spans both`}
-          className={cn(
-            "flex min-w-0 items-center gap-1 rounded-xl border-[1.5px] border-dashed border-primary",
-            compact ? "px-1.5 py-1" : "flex-col items-start px-1.5 pt-1 pb-1.5",
-          )}
-        >
-          <span className="text-caption font-medium text-primary">Step {span.step} spans both</span>
-          <div className="flex min-w-0 items-center gap-1">
-            {boxAt(at)}
-            <span aria-hidden="true" className="text-primary">
-              +
-            </span>
-            {boxAt(at + 1)}
-          </div>
-        </div>,
-      );
-      at += 1;
-    } else {
-      items.push(boxAt(at));
-    }
-  }
-  return items;
+  });
 };
 
-/** The tour's path. Part of the page: it scrolls away, so its height costs the steps nothing. */
+/** Where the tour's steps are. Part of the page: it scrolls away, so its height costs the steps nothing. */
 const TourStrip = ({
   tour,
   current,
@@ -204,14 +158,14 @@ const TourStrip = ({
     className="border-b pt-3 pb-4"
   >
     {/* A row apart from the next by more than the "Current step" label hangs under its box. */}
-    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-4">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-4">
       <PathBoxes tour={tour} current={current} compact={false} focusable onGoToStep={onGoToStep} />
     </div>
   </div>
 );
 
 /**
- * The path on one line, under the bar. Beside the full strip it's drawn over the page once that
+ * The strip on one line, under the bar. Beside the full strip it's drawn over the page once that
  * one has scrolled away, taking no room, and only for the pointer: the full strip is the one a
  * keyboard and a screen reader find. Below 1180 px it's the only strip, and part of the page.
  */
@@ -355,10 +309,7 @@ const StepSection = ({
                   <span className="text-muted-foreground">{excerpt.path.slice(0, cut)}</span>
                   <span className="font-medium">{excerpt.path.slice(cut)}</span>
                 </span>
-                <span className="text-caption text-muted-foreground">
-                  {linesLabel(excerpt)} · {excerpt.shown} of{" "}
-                  {count(excerpt.fileChanged, "changed line")}
-                </span>
+                <span className="text-caption text-muted-foreground">{linesLabel(excerpt)}</span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -387,7 +338,7 @@ const LineCounts = ({ added, deleted }: { readonly added: number; readonly delet
   </span>
 );
 
-/** What the tour didn't show, Claude's points outside it, and where to read in the code. */
+/** What the tour didn't show, and Claude's points outside it; null when there's neither. */
 const TourEnd = ({
   tour,
   stateOf,
@@ -403,22 +354,20 @@ const TourEnd = ({
   readonly onOpenFile: (path: string) => void;
   readonly onOpenPoint: (point: Point) => void;
 }) => {
+  if (tour.ledger.length === 0 && tour.outside.length === 0) return null;
   const files = tour.ledger.reduce((sum, group) => sum + group.files.length, 0);
   return (
     <section
-      aria-labelledby={END_TITLE}
+      aria-label="After the tour"
       data-slot="tour-end"
       className="flex flex-col gap-5 py-6 lg:pl-10"
     >
-      <h2 id={END_TITLE} className="font-semibold text-heading">
-        After the tour
-      </h2>
       {tour.ledger.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <h3 className="font-semibold text-body">
+          <h2 className="font-semibold text-body">
             Not in the tour{" "}
             <span className="font-normal text-muted-foreground">· {count(files, "file")}</span>
-          </h3>
+          </h2>
           {tour.ledger.map((group) => {
             const added = group.files.reduce((sum, file) => sum + file.added, 0);
             const deleted = group.files.reduce((sum, file) => sum + file.deleted, 0);
@@ -463,7 +412,7 @@ const TourEnd = ({
       )}
       {tour.outside.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <h3 className="font-semibold text-body">Findings outside the steps</h3>
+          <h2 className="font-semibold text-body">Findings outside the steps</h2>
           {tour.outside.map((point) => (
             <PointChip
               key={point.id}
@@ -483,16 +432,6 @@ const TourEnd = ({
           ))}
         </div>
       )}
-      <div
-        data-slot="tour-depth"
-        className="flex max-w-4xl items-start gap-2 rounded-lg border border-ai-soft-bd bg-ai-soft px-4 py-3 text-body"
-      >
-        <SparklesIcon aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary" />
-        <div>
-          <h3 className="font-semibold">Suggested depth</h3>
-          <p>{depthText(tour.depth)}</p>
-        </div>
-      </div>
     </section>
   );
 };

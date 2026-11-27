@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ReviewThread } from "../../../../src/domain/review/index.ts";
 import { fixtureAnalysisView, fixtureThreads } from "../../../dev/fixtures/index.ts";
 import { mapFiles, partIndex } from "./model.ts";
-import { stepThreads, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
+import { stepThreads, threadOrder, threadSteps } from "./thread-steps.ts";
 import { placeThreads } from "./threads.ts";
 
 const { analysis } = fixtureAnalysisView;
@@ -14,7 +14,6 @@ const thread = (id: string, resolved = false): ReviewThread => ({
   id,
   resolved,
 });
-const NONE: ReadonlySet<string> = new Set();
 
 describe("threadOrder", () => {
   it("lists the threads top to bottom: by line in each card, its earlier comments, then the rest", () => {
@@ -36,37 +35,16 @@ describe("threadOrder", () => {
 });
 
 describe("threadSteps", () => {
-  const ordered = [thread("a"), thread("b", true), thread("c")];
-
-  it("walks the unresolved threads, or every one", () => {
-    expect(ids(threadSteps(ordered, "unresolved", NONE))).toEqual(["a", "c"]);
-    expect(ids(threadSteps(ordered, "all", NONE))).toEqual(["a", "b", "c"]);
-  });
-
-  it("keeps a thread resolved on this page as a step", () => {
-    const resolvedHere = new Set(["c"]);
-    const now = [thread("a"), thread("b", true), thread("c", true)];
-    expect(ids(threadSteps(now, "unresolved", resolvedHere))).toEqual(["a", "c"]);
-  });
-});
-
-describe("threadScopeOf", () => {
-  it("is the reviewer's choice when they made one", () => {
-    expect(threadScopeOf("all", [thread("a")], NONE)).toBe("all");
-    expect(threadScopeOf("unresolved", [thread("a", true)], NONE)).toBe("unresolved");
-  });
-
-  it("is the unresolved threads, or every one when all are resolved", () => {
-    expect(threadScopeOf(null, [thread("a"), thread("b", true)], NONE)).toBe("unresolved");
-    expect(threadScopeOf(null, [thread("a", true)], NONE)).toBe("all");
-    // The last one resolved here doesn't widen the steps under the reviewer.
-    expect(threadScopeOf(null, [thread("a", true)], new Set(["a"]))).toBe("unresolved");
+  it("walks the unresolved threads only", () => {
+    const ordered = [thread("a"), thread("b", true), thread("c")];
+    expect(ids(threadSteps(ordered))).toEqual(["a", "c"]);
+    expect(threadSteps([thread("a", true)])).toEqual([]);
   });
 });
 
 describe("stepThreads", () => {
   const ordered = [thread("a"), thread("b", true), thread("c"), thread("d", true)];
-  const steps = threadSteps(ordered, "unresolved", NONE);
+  const steps = threadSteps(ordered);
 
   it("goes round the steps, both ways", () => {
     expect(stepThreads(ordered, steps, "a", 1)).toBe("c");

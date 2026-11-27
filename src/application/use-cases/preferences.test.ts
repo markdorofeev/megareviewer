@@ -210,7 +210,7 @@ describe("getPreferences", () => {
           {
             path: "CLAUDE.md",
             bytes: 70_000,
-            enabled: false,
+            enabled: true,
             tooLarge: true,
             use: null,
             linked: [],
@@ -883,12 +883,15 @@ describe("a repository's harness", () => {
   };
 
   it("is shown without asking the host for the guideline files", async () => {
-    const made = await analyzed({ "AGENTS.md": "[Style](docs/style.md)\n", "docs/style.md": "x" });
+    const made = await analyzed({
+      "CONTRIBUTING.md": "[Style](docs/style.md)\n",
+      "docs/style.md": "x",
+    });
     await made.load(baseSha);
 
     expect((await section(made)).guidelineFiles).toEqual([
       {
-        path: "AGENTS.md",
+        path: "CONTRIBUTING.md",
         bytes: 23,
         enabled: false,
         tooLarge: false,
@@ -897,7 +900,7 @@ describe("a repository's harness", () => {
           {
             path: "docs/style.md",
             bytes: 1,
-            linkedFrom: "AGENTS.md",
+            linkedFrom: "CONTRIBUTING.md",
             via: "link",
             enabled: true,
             use: "on-request",
@@ -909,12 +912,15 @@ describe("a repository's harness", () => {
   });
 
   it("shows a root an enabled one imports as on, and what each would bring while it's off", async () => {
+    const COPILOT = ".github/copilot-instructions.md";
     const made = await analyzed({
-      "CLAUDE.md": "@AGENTS.md\n",
-      "AGENTS.md": "@style.md\nSee CONTRIBUTING.md.\n",
-      "CONTRIBUTING.md": "Write tests.\n",
+      // Imports are against their file.
+      [COPILOT]: "@../CONTRIBUTING.md\n",
+      "CONTRIBUTING.md": "@style.md\nSee AGENTS.md.\n",
+      "AGENTS.md": "Write tests.\n",
       "style.md": "x",
     });
+    await made.useCases.setGuidelineSwitch(shop, "AGENTS.md", false);
     await made.load(baseSha);
     const shown = async () =>
       ((await section(made)).guidelineFiles ?? []).map(({ path, enabled, use, linked }) => [
@@ -925,41 +931,41 @@ describe("a repository's harness", () => {
       ]);
 
     expect(await shown()).toEqual([
+      ["AGENTS.md", false, null, []],
       [
-        "AGENTS.md",
+        "CONTRIBUTING.md",
         false,
         null,
         [
           ["style.md", true, "prompt"],
           // A guideline file that's only mentioned keeps its own switch.
-          ["CONTRIBUTING.md", false, null],
+          ["AGENTS.md", false, null],
         ],
       ],
       [
-        "CLAUDE.md",
+        COPILOT,
         false,
         null,
         [
-          ["AGENTS.md", false, "prompt"],
+          ["CONTRIBUTING.md", false, "prompt"],
           ["style.md", true, "prompt"],
-          ["CONTRIBUTING.md", false, null],
+          ["AGENTS.md", false, null],
         ],
       ],
-      ["CONTRIBUTING.md", false, null, []],
     ]);
 
-    await made.useCases.setGuidelineSwitch(shop, "CLAUDE.md", true);
-    expect((await shown()).map((file) => file.slice(0, 3))).toEqual([
-      ["AGENTS.md", true, "prompt"],
-      ["CLAUDE.md", true, "prompt"],
-      ["CONTRIBUTING.md", false, null],
-    ]);
-
-    await made.useCases.setGuidelineSwitch(shop, "AGENTS.md", false);
+    await made.useCases.setGuidelineSwitch(shop, COPILOT, true);
     expect((await shown()).map((file) => file.slice(0, 3))).toEqual([
       ["AGENTS.md", false, null],
-      ["CLAUDE.md", true, "prompt"],
+      ["CONTRIBUTING.md", true, "prompt"],
+      [COPILOT, true, "prompt"],
+    ]);
+
+    await made.useCases.setGuidelineSwitch(shop, "CONTRIBUTING.md", false);
+    expect((await shown()).map((file) => file.slice(0, 3))).toEqual([
+      ["AGENTS.md", false, null],
       ["CONTRIBUTING.md", false, null],
+      [COPILOT, true, "prompt"],
     ]);
   });
 

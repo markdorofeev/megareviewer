@@ -129,12 +129,42 @@ describe("a ref of the run's guidance in text the reviewer reads", () => {
     const steps = await runSteps(
       model,
       input,
-      { hunks, mechanical: new Set(), parts: [], callGraph: [] },
+      { hunks, mechanical: new Set() },
+      { paths: new Set<string>(), linked: () => false },
       deps(),
       guidance,
     );
     if (!steps.outcome.ok) throw new Error(steps.outcome.error.message);
     expect(steps.outcome.value[0]?.sentence).toBe(`${clean} 1`);
+  });
+
+  it("is replaced in the data flow's words", async () => {
+    const model = new FakeAnalysisModel();
+    const [first, second] = input.files.map((file) => file.path);
+    if (first === undefined || second === undefined) throw new Error("the input has two files");
+    const station = (path: string) => ({
+      name: said,
+      when: said,
+      keeps: false,
+      files: [path],
+      gives: said,
+      shapes: [],
+    });
+    model.scriptFlow({ source: said, stations: [station(first), station(second)], end: said });
+    const { flow, modelCalls } = await runSteps(
+      model,
+      input,
+      { hunks, mechanical: new Set() },
+      { paths: new Set([first, second]), linked: () => true },
+      deps(),
+      guidance,
+    );
+    expect(flow).toMatchObject({
+      source: clean,
+      stations: [{ name: clean, when: clean, gives: clean }, { name: clean }],
+      end: clean,
+    });
+    expect(modelCalls).toHaveLength(1);
   });
 
   it("is left alone when it isn't the run's, or the pull request's own code has the word", async () => {
@@ -178,6 +208,7 @@ const read = (path: string, outcome: HarnessRead["outcome"] = "read"): HarnessRe
   toLine: null,
   outcome,
 });
+const NO_FLOW = { paths: new Set<string>(), linked: () => false };
 const passDeps = () => ({
   logger: new RecordingLogger(),
   clock: new FixedClock("2026-11-25T10:00:00Z"),
@@ -322,5 +353,59 @@ describe("a guidance mark on a file left for a pass to read", () => {
       read("harness"),
     ]);
     expect(refs).toEqual(["g1", null, null]);
+  });
+});
+
+describe("a step whose two excerpts show the same lines", () => {
+  const on = (one: Hunk, startLine: number, line: number) => ({
+    hunkId: one.id,
+    side: "new" as const,
+    startLine,
+    line,
+  });
+  const step = (...excerpts: ReturnType<typeof on>[]) => ({ sentence: "A receipt", excerpts });
+  const overlapping = [
+    step(on(route, 1, 2), on(route, 2, 3)),
+    step(on(tests, 1, 4)),
+    step(on(tests, 6, 10)),
+  ];
+
+  it("is what the retry is told, and keeps its first excerpt when the retry says it again", async () => {
+    const model = new FakeAnalysisModel();
+    model.script("steps", ok(overlapping));
+    model.script("steps", ok(overlapping));
+    const { outcome } = await runSteps(
+      model,
+      input,
+      { hunks, mechanical: new Set() },
+      NO_FLOW,
+      passDeps(),
+    );
+    expect(model.callsTo("steps")[1]?.options?.feedback).toEqual([
+      "Step 1's two excerpts show some of the same lines. Give one excerpt, or two that share no line.",
+    ]);
+    if (!outcome.ok) throw new Error(outcome.error.message);
+    expect(outcome.value.map((kept) => kept.excerpts)).toEqual([
+      [on(route, 1, 2)],
+      [on(tests, 1, 4)],
+      [on(tests, 6, 10)],
+    ]);
+  });
+
+  it("takes steps in any order, and two places of one file", async () => {
+    const model = new FakeAnalysisModel();
+    model.script(
+      "steps",
+      ok([step(on(tests, 6, 10)), step(on(route, 1, 1), on(route, 3, 3)), step(on(tests, 1, 4))]),
+    );
+    const { outcome, modelCalls } = await runSteps(
+      model,
+      input,
+      { hunks, mechanical: new Set() },
+      NO_FLOW,
+      passDeps(),
+    );
+    expect(modelCalls).toHaveLength(1);
+    expect(outcome.ok && outcome.value.map((kept) => kept.id)).toEqual(["t1", "t2", "t3"]);
   });
 });
