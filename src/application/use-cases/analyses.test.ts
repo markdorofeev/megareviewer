@@ -1363,23 +1363,18 @@ describe("with a local checkout", () => {
     expect(parsed).not.toContain("ordersRouters");
   });
 
-  it("warns about files too large to read, and about a checkout it can't read", async () => {
+  it("skips files too large to read without a warning, and warns about a checkout it can't read", async () => {
     const big = `ordersRouter ${"x".repeat(1024 * 1024)}`;
     const { analyze } = setup({
       modelEnabled: false,
       checkouts: new FakeLocalCheckouts({
-        checkout: checkout({
-          "src/big.ts": big,
-          "src/huge.ts": big,
-          // Names nothing the PR changes, so no caller in it could be missing.
-          "src/other.ts": "x".repeat(1024 * 1024 + 1),
-        }),
+        checkout: checkout({ "src/big.ts": big }),
         dir: "/src/shop",
         namesRepo: true,
       }),
     });
-    expect((await analyze()).warnings).toContain(
-      "2 files in the local checkout are over 1 MB, so callers in them aren't shown.",
+    expect((await analyze()).warnings.filter((warning) => warning.includes("checkout"))).toEqual(
+      [],
     );
 
     const failing = checkout();
@@ -1457,7 +1452,6 @@ describe("with a local checkout", () => {
 
 describe("callers brought to a complete analysis", () => {
   const { headSha, ref, url } = smallFeature.pullRequest;
-  const big = `ordersRouter ${"x".repeat(1024 * 1024)}`;
   const repositoryFiles = {
     ...smallFeature.headFiles,
     "src/app.ts": [
@@ -1530,12 +1524,21 @@ describe("callers brought to a complete analysis", () => {
   });
 
   it("changes nothing but the callers, the checkout and its warnings", async () => {
-    const copies = downloads({ ...repositoryFiles, "src/big.ts": big });
+    const copies = downloads();
+    const download = copies.download.bind(copies);
+    copies.download = async (...args) => {
+      const copy = await download(...args);
+      if (copy.ok) {
+        copy.value.checkout.filesMentioning = async () =>
+          err({ kind: "failed", message: "git grep failed: boom" });
+      }
+      return copy;
+    };
     const { id, before, release, stored, done } = await opened({ copies });
     release();
     await done(id);
     const after = await stored(id);
-    const WARNING = "1 file in the local checkout is over 1 MB, so callers in it aren't shown.";
+    const WARNING = "Couldn't read the local checkout: git grep failed: boom";
     expect(after).toEqual({
       ...before,
       checkout: "read",
@@ -1658,7 +1661,7 @@ describe("callers brought to a complete analysis", () => {
   describe("with a model run", () => {
     it("waits for the run in flight, and reads the PR without them", async () => {
       const model = new HeldModel();
-      const copies = downloads({ ...repositoryFiles, "src/big.ts": big });
+      const copies = downloads();
       const { useCases, id, release, stored, done, doneCount } = await opened({ copies, model });
       await useCases.runModel(id);
       release();
@@ -1677,11 +1680,8 @@ describe("callers brought to a complete analysis", () => {
       const inputs = model.callsTo("intent").map(({ input }) => JSON.stringify(input));
       expect(inputs.some((input) => input.includes("src/app.ts"))).toBe(false);
 
-      // Remove AI review keeps the callers and what couldn't be read of them.
-      const WARNING = "1 file in the local checkout is over 1 MB, so callers in it aren't shown.";
-      expect(after.warnings).toContain(WARNING);
+      // Remove AI review keeps the callers.
       const removed = await useCases.removeModelRun(id);
-      expect(removed.ok && removed.value.analysis.warnings).toContain(WARNING);
       expect(removed.ok && usesOf(removed.value.analysis)).toEqual(USES);
       expect(removed.ok && removed.value.analysis.checkout).toBe("read");
     });
