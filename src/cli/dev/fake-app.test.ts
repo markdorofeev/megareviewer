@@ -178,7 +178,7 @@ describe("createFakeApp", () => {
       "link docs/runbooks/refunds.md",
       "link docs/runbooks/stock.md",
     ]);
-    expect(harness.skipped).toEqual([{ path: "docs/changelog.md", reason: "too-large" }]);
+    expect(harness.skipped).toEqual([{ path: "docs/decision-log.md", reason: "too-large" }]);
     const plan = harnessPlan(harness, new Map([["CLAUDE.md", true]]));
     expect(plan.inPrompt.map(({ path }) => path)).toEqual([
       "REVIEW.md",

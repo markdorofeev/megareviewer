@@ -116,6 +116,7 @@ export const isHarnessFileInFolder = (path: string): boolean =>
 const NOT_RULES_DIRECTORIES = new Set([
   "__fixtures__",
   "__snapshots__",
+  "_vendor",
   "fixtures",
   "licenses",
   "node_modules",
@@ -125,13 +126,15 @@ const NOT_RULES_DIRECTORIES = new Set([
   "third-party",
   "third_party",
   "vendor",
+  "vendored",
 ]);
 
-const NOT_RULES_NAME = /^(?:licen[cs]e|notice|copying|provenance|changelog)(?:[._-]|$)/i;
+const NOT_RULES_NAME =
+  /^(?:licen[cs]e|notice|copying|provenance|changelog|code[_-]of[_-]conduct)(?:[._-]|$)/i;
 
 /**
  * Whether a path is never a repository's own rules, whoever names it: test data, another
- * project's files, a license, a notice or a changelog, or what `.gitattributes` at the base
+ * project's files, a license, a notice, a code of conduct or a changelog, or what `.gitattributes` at the base
  * commit marks generated or vendored.
  */
 export const isNeverRules = (path: string, attributeFor: AttributeFor): boolean => {

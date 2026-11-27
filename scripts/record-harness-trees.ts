@@ -89,15 +89,22 @@ const sourceOf = (tree: Tree, read: Map<string, string>): HarnessSource => ({
   changedPaths: async () => ok(null),
 });
 
-/** Only the lines that hold links, when they alone link the same files, else the whole file. */
+/** A line that opens or closes a fence, kept so the lines between stay in it. */
+const FENCE = /^[\s>]*(?:(?:[-*+]|\d{1,9}[.)])\s+)?(?:`{3,}|~{3,})/;
+
+/**
+ * The lines that hold links and the fences around them, the others blank, when they link the same
+ * files as the whole file does, else the whole file.
+ */
 const reduced = (path: string, content: string): string => {
   if (path === ".gitattributes") return content;
   const links = harnessLinks(path, content);
   if (links.length === 0) return "";
   const kept = content
     .split("\n")
-    .filter((line) => harnessLinks(path, line).length > 0)
-    .join("\n");
+    .map((line) => (FENCE.test(line) || harnessLinks(path, line).length > 0 ? line : ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
   return isDeepStrictEqual(harnessLinks(path, kept), links) ? kept : content;
 };
 
