@@ -202,6 +202,18 @@ describe("migrate", () => {
     expect(db.prepare("SELECT blob FROM harness_blobs").all()).toEqual([{ blob: "blob" }]);
   });
 
+  it("marks the harnesses stored before their rules were kept as walked by none", () => {
+    const db = databaseAt(12);
+    db.exec(`INSERT INTO harnesses VALUES
+      ('github', 'acme', 'shop', 'sha', 't', NULL, '[]', '[]')`);
+
+    expect(migrate(db, MIGRATIONS.slice(0, 13))).toEqual([13]);
+
+    expect(db.prepare("SELECT sha, rules FROM harnesses").all()).toEqual([
+      { sha: "sha", rules: 0 },
+    ]);
+  });
+
   it("rolls back a failed migration and stays at the last good version", () => {
     const db = databaseAt(MIGRATIONS.length);
     const broken = [

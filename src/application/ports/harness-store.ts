@@ -7,7 +7,8 @@ export interface HarnessBlob {
 
 /**
  * Repositories' harnesses, by commit, and their files' contents, each once by its blob hash. The
- * store stamps when a harness was put and when a blob was last put or read.
+ * store stamps when a harness was put and when a blob was last put or read. A harness is put under
+ * HARNESS_RULES, and one put under other rules is never answered.
  */
 export interface HarnessStore {
   getHarness(repo: RepoRef, sha: string): Promise<Harness | null>;

@@ -26,7 +26,6 @@ export const fakeModelOption = (overrides: Partial<ModelOption> = {}): ModelOpti
     modelName: "Sonnet 5.5",
     family: "Claude",
     via: "Claude Code, on your Pro plan",
-    measured: true,
     available: true,
     reason: null,
     ...overrides,

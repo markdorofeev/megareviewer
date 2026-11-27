@@ -4,12 +4,20 @@ import {
   type HunkComment,
   type Point,
   PointId,
+  type PointState,
+  type ReviewThread,
 } from "../../../../src/domain/review/index.ts";
-import { fixtureAnalysisView, fixtureHunks, fixtureParts } from "../../../dev/fixtures/index.ts";
+import {
+  fixtureAnalysisView,
+  fixtureHunks,
+  fixtureParts,
+  fixtureThreads,
+} from "../../../dev/fixtures/index.ts";
 import type { LinePlace } from "../../review/index.ts";
 import {
   byTreePath,
   changeTotals,
+  commentedPoints,
   gapBetween,
   mapFiles,
   openedOn,
@@ -111,6 +119,70 @@ describe("a split part's risk", () => {
       riskClass: "contract",
       reason: "Whole hunk.",
     });
+  });
+});
+
+describe("commentedPoints", () => {
+  const f1: Point = {
+    id: PointId.parse("f1"),
+    title: "Any signed-in user can read every customer's receipt",
+    explanation: "",
+    path: "src/routes/orders.ts",
+    lines: { hunkId: h.receiptRoute, side: "new", startLine: 15, line: 15 },
+    hunkIds: [h.receiptRoute],
+    type: "logic",
+    severity: "blocking",
+    suggestion: null,
+    mismatch: null,
+  };
+  const [first] = fixtureThreads.threads;
+  if (first === undefined) throw new Error("no fixture thread");
+  const thread = (changes: Partial<ReviewThread> = {}, authorId = "lee-park"): ReviewThread => ({
+    ...first,
+    path: "src/routes/orders.ts",
+    line: 15,
+    comments: [
+      {
+        ...first.comments[0],
+        id: "c1",
+        author: { id: authorId, name: "Lee" },
+        body: "x",
+        createdAt: "2026-10-22T10:00:00Z",
+        originalCommit: null,
+      },
+    ],
+    ...changes,
+  });
+  const raised = (): PointState => "raised";
+  const commented = (
+    threads: readonly ReviewThread[],
+    {
+      state = raised,
+      drafts = [] as readonly HunkComment[],
+      reviewer = "lee-park" as string | null,
+    } = {},
+  ) => [...commentedPoints([f1], state, drafts, threads, reviewer)];
+
+  it("holds a raised point whose line has the reviewer's thread and no draft", () => {
+    expect(commented([thread()])).toEqual([f1.id]);
+  });
+
+  it("leaves a point the reviewer didn't raise, or whose draft is still waiting", () => {
+    expect(commented([thread()], { state: () => "open" })).toEqual([]);
+    const draft: HunkComment = { hunkId: h.receiptRoute, side: "new", line: 15, body: "x" };
+    expect(commented([thread()], { drafts: [draft] })).toEqual([]);
+  });
+
+  it("leaves it for a thread on another line, side or file, an outdated one or someone else's", () => {
+    expect(commented([thread({ line: 14 })])).toEqual([]);
+    expect(commented([thread({ side: "old" })])).toEqual([]);
+    expect(commented([thread({ path: "src/app.ts" })])).toEqual([]);
+    expect(commented([thread({ outdated: true })])).toEqual([]);
+    expect(commented([thread({}, "sam-rivera")])).toEqual([]);
+  });
+
+  it("takes anyone's thread when the reviewer is unknown", () => {
+    expect(commented([thread({}, "sam-rivera")], { reviewer: null })).toEqual([f1.id]);
   });
 });
 

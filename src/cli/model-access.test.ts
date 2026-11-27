@@ -42,7 +42,7 @@ const codexSignedIn: CodexStatus = {
   models: [
     { slug: "gpt-6-sol", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
     { slug: "gpt-6-luna", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
-    { slug: "gpt-6-astra", contextWindow: 272_000, efforts: ["low", "medium", "high"] },
+    { slug: "gpt-6.1-terra", contextWindow: 500_000, efforts: ["low", "medium", "high"] },
   ],
 };
 const CODEX_MISSING = "Codex isn't installed: install the Codex CLI, then run `codex login`";
@@ -204,6 +204,8 @@ describe("createModelCatalog", () => {
         ...listed("anthropic-api", expected.apiSuffix),
         `codex/gpt-6-luna: ${CODEX_MISSING}`,
         `codex/gpt-6-sol: ${CODEX_MISSING}`,
+        `codex/gpt-6.1-sol: ${CODEX_MISSING}`,
+        `codex/gpt-6-astra: ${CODEX_MISSING}`,
         OPENCODE_MISSING,
       ],
     });
@@ -220,7 +222,6 @@ describe("createModelCatalog", () => {
       modelName: "Sonnet 5.5",
       family: "Claude",
       via: "Claude Code, on your Pro plan",
-      measured: true,
       available: true,
       reason: null,
     });
@@ -428,15 +429,19 @@ describe("Codex's options", () => {
     expect(options.find((option) => option.id === "codex/gpt-6-sol")).toMatchObject({
       family: "GPT",
       modelName: "GPT-6 Sol",
-      measured: true,
     });
   });
 
-  it("leaves out a measured model the account's catalog doesn't have", () => {
+  it("leaves out a model the account's catalog doesn't have", () => {
     expect(codexModels([{ slug: "gpt-6-sol", contextWindow: null, efforts: [] }])).toEqual([
       { id: "gpt-6-sol", name: "GPT-6 Sol", family: "GPT" },
     ]);
-    expect(codexModels(null).map((model) => model.id)).toEqual(["gpt-6-luna", "gpt-6-sol"]);
+    expect(codexModels(null).map((model) => model.id)).toEqual([
+      "gpt-6-luna",
+      "gpt-6-sol",
+      "gpt-6.1-sol",
+      "gpt-6-astra",
+    ]);
   });
 
   it.each<[CodexStatus, string]>([
@@ -452,10 +457,9 @@ describe("Codex's options", () => {
   ])("disables its options with the fix", async (status, reason) => {
     const { catalog } = catalogWith([signedIn], [false], undefined, status);
     const { options, defaultId } = await catalog.options();
-    expect(options.filter((option) => option.provider === "codex")).toEqual([
-      expect.objectContaining({ available: false, reason }),
-      expect.objectContaining({ available: false, reason }),
-    ]);
+    expect(options.filter((option) => option.provider === "codex")).toEqual(
+      Array(4).fill(expect.objectContaining({ available: false, reason })),
+    );
     expect(defaultId).toBe("claude-code/claude-sonnet-5-5");
   });
 
@@ -464,7 +468,7 @@ describe("Codex's options", () => {
     expect(catalog.model("codex/gpt-6-luna")).toBeNull();
     await catalog.options();
     expect(catalog.model("codex/gpt-6-luna")?.version).toMatch(/^codex\/gpt-6-luna\/p\d+$/);
-    expect(catalog.model("codex/gpt-6-astra")).toBeNull();
+    expect(catalog.model("codex/gpt-6.1-terra")).toBeNull();
   });
 
   it("says who pays", () => {
@@ -477,7 +481,7 @@ describe("opencode's options", () => {
   const withOpencode = (status: OpencodeStatus) =>
     catalogWith([signedOut], [false], undefined, { state: "not-installed" }, status);
 
-  it("lists every model it offers, unmeasured, each through its own provider", async () => {
+  it("lists every model it offers, each through its own provider", async () => {
     const { catalog } = withOpencode(opencodeRunning);
     const { options, defaultId } = await catalog.options();
     expect(options.filter((option) => option.provider === "opencode")).toEqual([
@@ -488,7 +492,6 @@ describe("opencode's options", () => {
         via: "opencode, on Anthropic",
         // A run says which provider behind opencode it ran on.
         providerName: "opencode on Anthropic",
-        measured: false,
         available: true,
       }),
       expect.objectContaining({

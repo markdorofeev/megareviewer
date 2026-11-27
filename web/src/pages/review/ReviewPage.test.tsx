@@ -1105,6 +1105,62 @@ describe("points", () => {
     expect(addToReview(FINDING)).toBeTruthy();
   });
 
+  describe("once the comment made from them is on the host", () => {
+    /** The reviewer's thread on the finding's line, as the host has it after posting. */
+    const posted = (authorId: string) => ({
+      threads: [
+        ...fixtureThreads.threads,
+        {
+          ...fixtureThreads.threads[1],
+          id: "PRRT_receipt",
+          path: "src/routes/orders.ts",
+          line: 15,
+          originalLine: 15,
+          comments: [
+            {
+              id: "PRRC_receipt1",
+              author: { id: authorId, name: "Someone" },
+              body: "Any signed-in user can read every customer's receipt.",
+              createdAt: "2026-10-22T10:00:00Z",
+              originalCommit: null,
+            },
+          ],
+        },
+      ],
+    });
+    const raisedView: AnalysisView = {
+      ...fixture,
+      pointReviews: [
+        { pointId: PointId.parse("f1"), state: "raised", updatedAt: "2026-10-22T09:59:00Z" },
+      ],
+    };
+
+    it("fold to a line above the thread on their line", async () => {
+      renderReview({
+        view: raisedView,
+        respond: (request) =>
+          request.url.endsWith("/threads") ? jsonResponse(200, posted("lee-park")) : undefined,
+      });
+      await loaded();
+      await waitFor(() => expect(pointCard(FINDING).textContent).toContain("Commented, below"));
+      const thread = document.getElementById("thread-PRRT_receipt");
+      if (thread === null) throw new Error("no thread");
+      expect(comesBefore(pointCard(FINDING), thread)).toBe(true);
+      expect(screen.queryByRole("button", { name: /^Add to review: Any signed-in/ })).toBeNull();
+    });
+
+    it("stay when the thread on their line is someone else's", async () => {
+      renderReview({
+        view: raisedView,
+        respond: (request) =>
+          request.url.endsWith("/threads") ? jsonResponse(200, posted("sam-rivera")) : undefined,
+      });
+      await loaded();
+      await waitFor(() => expect(document.getElementById("thread-PRRT_receipt")).not.toBeNull());
+      expect(addToReview(FINDING)).toBeTruthy();
+    });
+  });
+
   it("edit in the comment box first, after what the reviewer already wrote there", async () => {
     window.localStorage.setItem(
       `megareviewer:hunk-comments:${id}`,
