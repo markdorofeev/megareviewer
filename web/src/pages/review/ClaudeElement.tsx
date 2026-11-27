@@ -39,8 +39,8 @@ export type Narrowing = FindingType | "thread";
 /**
  * The threads' chip, a toggle for whether the pager walks them. Landing, it rises in after the
  * pager, its count rolling up from zero (globals.css); the number is in the text for screen
- * readers, and drawn for the eye. Below 1280px the word gives way to the glyph and count, leaving
- * the pager room for its title.
+ * readers, and drawn for the eye. Below 1536px the word gives way to the glyph and count, leaving
+ * the pager and the stuck bar's title their room.
  */
 const ThreadChip = ({
   count,
@@ -82,7 +82,7 @@ const ThreadChip = ({
           style={cssVars({ "--count": count })}
         />
         <span className="sr-only">{count}</span>{" "}
-        <span className="max-xl:sr-only">{count === 1 ? one : many}</span>
+        <span className="max-2xl:sr-only">{count === 1 ? one : many}</span>
       </span>
     </button>
   );
@@ -338,8 +338,8 @@ export const ClaudeElement = ({
         variant="ai-quiet"
         compact
         icon={RefreshCwIcon}
-        // Below 640px its icon is enough for the pager beside it; a screen reader hears the word.
-        label={<span className="max-sm:sr-only">{starting ? "Starting…" : "Re-run"}</span>}
+        // Below 1024px its icon is enough for the pager beside it; a screen reader hears the word.
+        label={<span className="max-lg:sr-only">{starting ? "Starting…" : "Re-run"}</span>}
         note={
           locked ??
           (chosen === null ? null : `Runs ${chosen.modelName} through ${chosen.via} again`)
@@ -432,12 +432,13 @@ export const ClaudeElement = ({
         {split}
       </span>
       {reason !== null && (
-        // The bar is one row: a long reason is cut there, and whole on hover and when read out.
+        // The bar is one row: a long reason is cut there, down to 128px before the pager gives any
+        // room, and whole on hover and when read out.
         <span
           {...after(2)}
           role="alert"
           title={reason}
-          className="min-w-0 truncate text-caption text-destructive"
+          className="min-w-32 shrink-[999] truncate text-caption text-destructive max-md:max-w-60"
         >
           {reason}
         </span>

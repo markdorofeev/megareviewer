@@ -241,6 +241,9 @@ const PAIRS = [
     [`${name} point's label on its card`, color, "thread-bg", 4.5],
     [`${name} point's bar on its card (non-text)`, color, "thread-bg", 3],
     [`${name} point's glyph in the review bar (non-text)`, color, "background", 3],
+    // Before the pager's first step: how many findings are of the severity, and Start on its tint.
+    [`${name} count in the review bar`, color, "background", 4.5],
+    [`${name} Start in the review bar`, name === "Mismatch" ? "foreground" : color, tint, 4.5],
     [`${name} point's glyph in the list (non-text)`, color, "popover", 3],
     // A marked line's number on its tint, and its rail on the tint and on the row beside it.
     [`${name} mark's number`, name === "Mismatch" ? "foreground" : color, tint, 4.5],

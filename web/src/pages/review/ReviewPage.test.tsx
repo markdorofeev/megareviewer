@@ -1190,10 +1190,16 @@ describe("points", () => {
   it("are counted in the pager, started, and stepped through both ways, round", async () => {
     renderReview();
     await loaded();
-    // Before the first step, the count and Start, which goes to the first.
-    await waitFor(() => expect(position().textContent).toBe("3 findings"));
+    // Before the first step, the count, how many of each severity, and Start, which goes to the
+    // first.
+    await waitFor(() =>
+      expect(position().textContent).toBe("3 findings■1 blocking▲1 major●1 minor"),
+    );
     expect(within(reviewBar()).getByRole("group", { name: "Findings" })).toBeTruthy();
     expect(position().getAttribute("aria-label")).toBe("3 findings, show all");
+    // The severities are drawn for the eye, and a screen reader hears them as the description.
+    const described = position().getAttribute("aria-describedby") ?? "";
+    expect(document.getElementById(described)?.textContent).toBe("1 blocking, 1 major, 1 minor");
     expect(within(reviewBar()).queryByRole("button", { name: "Previous finding" })).toBeNull();
     // A type is no chip on the bar: it's picked in the list.
     expect(within(reviewBar()).queryByRole("button", { name: /logic finding/ })).toBeNull();
@@ -1268,7 +1274,7 @@ describe("points", () => {
     await loaded();
     const list = await openList();
     await userEvent.click(within(list).getByRole("button", { name: "ƒ logic 2" }));
-    expect(position().textContent).toBe("2 logic findings");
+    expect(position().textContent).toBe("2 logic findings▲1 major●1 minor");
     await userEvent.keyboard("{Escape}");
     // The SHOP-142 mismatch, from the details, goes to the contract finding that shows it.
     const intent = await openDetails();
@@ -2894,7 +2900,7 @@ describe("review threads", () => {
       renderReview({ view: codeOnly });
       await loaded();
       // Before the first step, the count: three of the four are unresolved.
-      await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
+      await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await step("Start");
       // orders.ts comes before receipts.ts, so its earlier comment is first.
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier");
@@ -2924,7 +2930,7 @@ describe("review threads", () => {
     it("lists only the unresolved threads, and goes to one", async () => {
       renderReview({ view: codeOnly });
       await loaded();
-      await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
+      await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await userEvent.click(position());
       const list = await screen.findByRole("dialog", { name: "3 unresolved threads" });
       expect(within(list).queryByRole("button", { name: /Rounds half-cents up\?/ })).toBeNull();
@@ -2937,7 +2943,7 @@ describe("review threads", () => {
     it("takes a thread resolved here out of the steps, and steps on from it", async () => {
       renderReview({ view: codeOnly });
       await loaded();
-      await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
+      await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await step("Start");
       await step("Next thread");
       expect(position().textContent).toBe("2 of 3");
@@ -2972,7 +2978,7 @@ describe("review threads", () => {
       renderReview();
       await loaded();
       const chip = await within(reviewBar()).findByRole("button", { name: "3 unresolved threads" });
-      expect(position().textContent).toBe("3 findings");
+      expect(position().textContent).toContain("3 findings");
       await userEvent.click(chip);
       expect(chip.getAttribute("aria-pressed")).toBe("true");
       // Pressing it goes to the first thread.
@@ -2983,7 +2989,7 @@ describe("review threads", () => {
 
       // Letting go takes the pager back to the findings; the thread's place is kept.
       await userEvent.click(chip);
-      expect(position().textContent).toBe("3 findings");
+      expect(position().textContent).toContain("3 findings");
       expect(document.getElementById("thread-PRRT_attempts")?.dataset.current).toBeUndefined();
       await userEvent.click(chip);
       expect(position().textContent).toBe("2 of 3");
@@ -2992,7 +2998,7 @@ describe("review threads", () => {
     it("goes to the map from the overview, which doesn't show threads", async () => {
       renderReview({ view: codeOnly });
       await loaded();
-      await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
+      await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await userEvent.keyboard("v");
       expect(overviewBox()).toBeTruthy();
       await step("Start");

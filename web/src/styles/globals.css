@@ -639,6 +639,12 @@
   overflow: hidden;
   background: color-mix(in oklab, var(--primary) 18%, transparent);
 }
+/* Below 768px the bar scrolls sideways, which clips at its border: on the border, the hairline would start a vertical scroll. */
+@media (width < 48rem) {
+  [data-slot="model-hairline"] {
+    bottom: 0;
+  }
+}
 [data-slot="model-hairline"] > span {
   position: absolute;
   inset-block: 0;

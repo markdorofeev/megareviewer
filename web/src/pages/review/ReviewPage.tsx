@@ -1518,7 +1518,7 @@ const Review = ({
               onClick={() => setRailOpen(!railOpen)}
             >
               <FolderTreeIcon aria-hidden="true" />
-              <span className="max-sm:sr-only">{railOpen ? "Hide files" : "Show files"}</span>
+              <span className="sr-only">{railOpen ? "Hide files" : "Show files"}</span>
             </Button>
           )
         }
@@ -1535,7 +1535,7 @@ const Review = ({
                     onClick={() => void revokeNow()}
                   >
                     <Undo2Icon aria-hidden="true" />
-                    <span className="max-sm:sr-only">
+                    <span className="max-md:sr-only">
                       {revoke.pending ? "Revoking…" : "Revoke approval"}
                     </span>
                   </Button>
@@ -1559,8 +1559,8 @@ const Review = ({
                         aria-hidden="true"
                         className={cn(!bar.approve.filled && "text-review-approved")}
                       />
-                      {/* Below 640px the icon alone; a screen reader still hears the word. */}
-                      <span className="max-sm:sr-only">
+                      {/* Below 768px the icon alone; a screen reader still hears the word. */}
+                      <span className="max-md:sr-only">
                         {approve.pending ? "Approving…" : "Approve"}
                       </span>
                     </TooltipTrigger>
@@ -1576,9 +1576,9 @@ const Review = ({
                     aria-haspopup="dialog"
                     onClick={() => void openPublish()}
                   >
-                    {/* Below 640px "Publish…"; a screen reader hears it all. */}
-                    <span className="max-sm:sr-only">Publish review…</span>
-                    <span aria-hidden="true" className="sm:hidden">
+                    {/* Below 1024px "Publish…"; a screen reader hears it all. */}
+                    <span className="max-lg:sr-only">Publish review…</span>
+                    <span aria-hidden="true" className="lg:hidden">
                       Publish…
                     </span>
                     {bar.publish.count > 0 && (

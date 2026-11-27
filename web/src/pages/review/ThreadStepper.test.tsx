@@ -39,7 +39,7 @@ describe("ThreadStepper", () => {
     const onGo = vi.fn();
     stepper({ onGo });
     expect(screen.getByRole("group", { name: "Threads" })).toBeTruthy();
-    expect(position().textContent).toBe("3 unresolved");
+    expect(position().textContent).toBe("3 unresolvedin 2 files");
     expect(position().getAttribute("aria-label")).toBe("3 unresolved, show all");
     expect(screen.queryByRole("button", { name: /^Go to thread/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Previous thread" })).toBeNull();

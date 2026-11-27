@@ -48,9 +48,9 @@ const ThreadIcon = () => (
 );
 
 /**
-/**
- * The pager through the PR's unresolved threads in the page's order: the current thread's opening
- * words, which go back to it, and the position, which opens the list.
+ * The pager through the PR's unresolved threads in the page's order: before the first step, their
+ * count and how many files they're in; on one, its opening words, which go back to it, and the
+ * position, which opens the list.
  */
 export const ThreadStepper = ({
   ordered,
@@ -68,6 +68,8 @@ export const ThreadStepper = ({
   const at = found === -1 ? null : found;
   const thread = at === null ? undefined : steps[at];
   const title = thread === undefined ? "" : threadTitle(thread);
+  const files = new Set(steps.map((step) => step.path)).size;
+  const inFiles = `in ${plural(files, "file", "files")}`;
   return (
     <Stepper
       slot="thread-stepper"
@@ -78,6 +80,17 @@ export const ThreadStepper = ({
       icon={<ThreadIcon />}
       count={steps.length}
       countWords="unresolved"
+      summary={
+        files === 0 ? null : (
+          <span
+            aria-hidden="true"
+            className="w-0 flex-1 truncate text-left font-normal text-muted-foreground max-md:hidden"
+          >
+            {inFiles}
+          </span>
+        )
+      }
+      summaryWords={files > 0 ? inFiles : null}
       onStep={(direction) => {
         const to = stepThreads(ordered, steps, current, direction);
         if (to !== null) onGo(to);

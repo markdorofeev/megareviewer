@@ -6,7 +6,7 @@ import type { Layout } from "./model.ts";
 
 /**
  * The code, the overview, or the tour once there's one, at the start of the bar so it's in reach
- * wherever the reader is. Its words go below 1280px, where the bar needs the room, and stay its
+ * wherever the reader is. Its words go below 1536px, where the bar needs the room, and stay its
  * accessible names.
  */
 export const LayoutSwitch = ({
@@ -42,7 +42,7 @@ export const LayoutSwitch = ({
             }
           >
             <Icon aria-hidden="true" />
-            <span className="max-xl:sr-only">{label}</span>
+            <span className="max-2xl:sr-only">{label}</span>
           </TooltipTrigger>
           <TooltipContent side="bottom" align="start">
             {label}
