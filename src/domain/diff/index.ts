@@ -7,6 +7,7 @@ export {
 export { buildDefinitionCalls } from "./definition-calls.ts";
 export { FileLink, fileLinks } from "./file-links.ts";
 export { findFormattingProofs } from "./formatting.ts";
+export { type GeneratedAttribute, parseGitattributes } from "./gitattributes.ts";
 export { hunkHasLine, hunkId } from "./hunk-id.ts";
 export { languageFamily, resolvesImports, type SymbolImport } from "./imports.ts";
 export { type DiffParseError, parseUnifiedDiff } from "./parse-diff.ts";

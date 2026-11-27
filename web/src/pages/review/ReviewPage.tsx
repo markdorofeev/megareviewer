@@ -314,6 +314,8 @@ const Review = ({
   const mechanical = mechanicalCount(trailing);
   // On until the reviewer turns it off: off, a run asks for no tour and there's no Tour layout.
   const [tourOn, setTourOn] = useStoredState("tour", true, parseBoolean);
+  // Off until the reviewer turns it on: off, there's no Overview layout and its form isn't asked for.
+  const [overviewOn, setOverviewOn] = useStoredState("overview", false, parseBoolean);
   const points = useMemo(() => pointsOf(analysis), [analysis]);
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
   const pointStates = usePoints(analysisId, view.pointReviews);
@@ -428,7 +430,7 @@ const Review = ({
   );
 
   const tourReady = tourOn && noTour === null && tour !== null;
-  const [layout, setLayout] = useLayout(tourReady);
+  const [layout, setLayout] = useLayout(tourReady, overviewOn);
   // The overview as its directories, or as one of the previews of the pull request's flow paths.
   const [overviewForm, setOverviewForm] = useStoredState(
     "overview-form",
@@ -448,7 +450,7 @@ const Review = ({
   const noDataFlow = overviewForm === "data-flow" && dataFlow === null ? noDataFlowOf(live) : null;
   const noDataFlowLine = noDataFlow === null ? null : noDataFlowText(noDataFlow);
   // The steps pass writes the tour and the data flow, so a run asks for it when either would show.
-  const explained = tourOn || overviewForm === "data-flow";
+  const explained = tourOn || (overviewOn && overviewForm === "data-flow");
   // The directories the bow tie shows as their files, and the cells the lanes show whole.
   const [flowOpened, setFlowOpened] = useState<ReadonlySet<string>>(new Set());
   const toggleFlow = (key: string) =>
@@ -836,7 +838,8 @@ const Review = ({
       if (openedFrom() !== null) return window.history.back();
       // With a tour, to the step last current; else the overview, on the file in view.
       if (tourReady) return enterTour(readStoredStep());
-      return openOverview();
+      if (overviewOn) openOverview();
+      return;
     }
     // Opened from the code and not moved since: back to the very line the reader left.
     const came = cameFrom();
@@ -871,13 +874,21 @@ const Review = ({
     setLayout("overview");
   };
   usePageDisplay({
-    toggles: [{ label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) }],
-    more: {
-      label: "Overview (preview)",
-      options: OVERVIEW_FORMS,
-      value: overviewForm,
-      onChange: (next) => setOverviewForm((previous) => parseOverviewForm(next) ?? previous),
-    },
+    toggles: [
+      { label: "Overview", checked: overviewOn, onChange: (on) => setOverviewOn(() => on) },
+      { label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) },
+    ],
+    ...(overviewOn
+      ? {
+          more: {
+            label: "Overview (preview)",
+            options: OVERVIEW_FORMS,
+            value: overviewForm,
+            onChange: (next: string) =>
+              setOverviewForm((previous) => parseOverviewForm(next) ?? previous),
+          },
+        }
+      : {}),
   });
 
   /**
@@ -1443,8 +1454,13 @@ const Review = ({
       />
       <ReviewBar
         layout={
-          analysis.stages.prep === "done" ? (
-            <LayoutSwitch layout={layout} tour={tourReady} onChange={chooseLayout} />
+          analysis.stages.prep === "done" && (overviewOn || tourReady) ? (
+            <LayoutSwitch
+              layout={layout}
+              overview={overviewOn}
+              tour={tourReady}
+              onChange={chooseLayout}
+            />
           ) : null
         }
         title={live.pullRequest?.title ?? null}

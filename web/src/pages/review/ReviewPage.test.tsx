@@ -191,6 +191,8 @@ const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   window.localStorage.clear();
+  // Off by default, which the layouts' own tests cover; the rest are written with it on.
+  window.localStorage.setItem("megareviewer:overview", "true");
 });
 
 afterEach(() => {
@@ -995,6 +997,9 @@ describe("map", () => {
     });
     renderReview();
     await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Overview" }));
+    await userEvent.keyboard("{Escape}");
     await userEvent.keyboard("v");
     expect(layoutIs("overview")).toBe(true);
     await userEvent.keyboard("v");
@@ -1769,6 +1774,29 @@ describe("the tour", () => {
 });
 
 describe("layouts", () => {
+  it("have no overview until the Display menu's Overview switch turns it on", async () => {
+    window.localStorage.removeItem("megareviewer:overview");
+    window.history.replaceState(null, "", "/?view=overview");
+    renderReview();
+    await loaded();
+    expect(screen.queryByRole("group", { name: "Layout" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
+    expect(window.location.search).toBe("?view=code");
+    await userEvent.keyboard("v");
+    expect(layoutIs("map")).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    const overview = await screen.findByRole("menuitemcheckbox", { name: "Overview" });
+    expect(overview.getAttribute("aria-checked")).toBe("false");
+    expect(screen.queryByRole("group", { name: "Overview (preview)" })).toBeNull();
+    await userEvent.click(overview);
+    expect(window.localStorage.getItem("megareviewer:overview")).toBe("true");
+    expect(await screen.findByRole("group", { name: "Overview (preview)" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    await openOverview();
+    expect(window.location.search).toBe("?view=overview");
+  });
+
   it("are switched in the bar, which shows the one in use, and not in the Display menu", async () => {
     renderReview();
     await loaded();
@@ -2577,31 +2605,36 @@ describe("the bar's verdicts", () => {
   });
 
   it.each([
-    ["data-flow", { tour: true }],
-    ["directories", {}],
-  ])("with the Tour switch off and the overview as %s, asks a run for %o", async (form, asked) => {
-    window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
-    const { requests } = renderReview({
-      view: codeOnly,
-      respond: (request) =>
-        request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
-    });
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    const tour = await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
-    expect(tour.getAttribute("aria-checked")).toBe("true");
-    await userEvent.click(tour);
-    expect(window.localStorage.getItem("megareviewer:tour")).toBe("false");
-    await userEvent.keyboard("{Escape}");
+    ["data-flow", true, { tour: true }],
+    ["data-flow", false, {}],
+    ["directories", true, {}],
+  ])(
+    "with the Tour switch off and the overview as %s, shown %s, asks a run for %o",
+    async (form, shown, asked) => {
+      window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
+      window.localStorage.setItem("megareviewer:overview", JSON.stringify(shown));
+      const { requests } = renderReview({
+        view: codeOnly,
+        respond: (request) =>
+          request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
+      });
+      await loaded();
+      await userEvent.click(screen.getByRole("button", { name: "Display" }));
+      const tour = await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
+      expect(tour.getAttribute("aria-checked")).toBe("true");
+      await userEvent.click(tour);
+      expect(window.localStorage.getItem("megareviewer:tour")).toBe("false");
+      await userEvent.keyboard("{Escape}");
 
-    const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
-    await waitFor(() => expect(description(button)).toContain("Sonnet 5.5"));
-    await userEvent.click(button);
-    expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
-      optionId: "claude-code/claude-sonnet-5-5",
-      ...asked,
-    });
-  });
+      const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
+      await waitFor(() => expect(description(button)).toContain("Sonnet 5.5"));
+      await userEvent.click(button);
+      expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
+        optionId: "claude-code/claude-sonnet-5-5",
+        ...asked,
+      });
+    },
+  );
 
   it("re-runs Claude after asking: takes the run off and runs the chosen model again", async () => {
     let running = false;

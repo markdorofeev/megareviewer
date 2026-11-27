@@ -23,6 +23,7 @@ test("with the Tour switch off, a run asks for no tour and there's no Tour layou
 }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("megareviewer:tour", "false");
+    window.localStorage.setItem("megareviewer:overview", "true");
     // The data-flow overview, the default, is written by the same pass, so a run would ask for it.
     window.localStorage.setItem("megareviewer:overview-form", JSON.stringify("directories"));
   });

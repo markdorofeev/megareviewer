@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GeneratedAttribute } from "../diff/index.ts";
 import { GUIDELINE_PATHS, guidelineEnabled, MAX_INLINE_BYTES } from "./preference.ts";
 import { Sha } from "./primitives.ts";
 
@@ -95,6 +96,9 @@ export interface HarnessLink {
   readonly folder?: true;
 }
 
+/** What `.gitattributes` at the base commit marks a path, as `parseGitattributes` reads it. */
+export type AttributeFor = (path: string) => GeneratedAttribute | null;
+
 const LINKABLE = /[^/]\.(?:md|mdc|markdown|txt)$/i;
 const MAX_PATH_LENGTH = 500;
 
@@ -107,6 +111,51 @@ const isPath = (path: string): boolean =>
  */
 export const isHarnessFileInFolder = (path: string): boolean =>
   LINKABLE.test(path) && !/\.txt$/i.test(path) && isPath(path);
+
+/** Where a repository keeps test data or other projects' files, never its own rules. */
+const NOT_RULES_DIRECTORIES = new Set([
+  "__fixtures__",
+  "__snapshots__",
+  "_vendor",
+  "fixtures",
+  "licenses",
+  "node_modules",
+  "test-data",
+  "test_data",
+  "testdata",
+  "third-party",
+  "third_party",
+  "vendor",
+  "vendored",
+]);
+
+const NOT_RULES_NAME =
+  /^(?:licen[cs]e|notice|copying|provenance|changelog|code[_-]of[_-]conduct)(?:[._-]|$)/i;
+
+/**
+ * Whether a path is never a repository's own rules, whoever names it: test data, another
+ * project's files, a license, a notice, a code of conduct or a changelog, or what `.gitattributes` at the base
+ * commit marks generated or vendored.
+ */
+export const isNeverRules = (path: string, attributeFor: AttributeFor): boolean => {
+  const segments = path.split("/");
+  const name = segments.at(-1) ?? "";
+  return (
+    segments.slice(0, -1).some((segment) => NOT_RULES_DIRECTORIES.has(segment.toLowerCase())) ||
+    NOT_RULES_NAME.test(name) ||
+    attributeFor(path) !== null
+  );
+};
+
+/**
+ * Whether the walk follows a link of `kind` to `path`. An import is the author saying "load this",
+ * so it's always followed; any other link isn't to a `.txt` file or what's never rules.
+ */
+export const followsLink = (
+  path: string,
+  kind: HarnessLinkKind,
+  attributeFor: AttributeFor,
+): boolean => kind === "import" || (!/\.txt$/i.test(path) && !isNeverRules(path, attributeFor));
 
 /** Stands for text no link is read from. A private-use character, so it's no path's or space. */
 const MASK = "";

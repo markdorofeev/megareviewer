@@ -222,6 +222,12 @@ export const MIGRATIONS: readonly string[] = [
   DELETE FROM harness_files;
   DELETE FROM harnesses;
   `,
+  // Harnesses walked before test data, licenses and folders named outside a root were left out
+  // hold those files.
+  `
+  DELETE FROM harness_files;
+  DELETE FROM harnesses;
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });

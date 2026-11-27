@@ -95,7 +95,7 @@ describe("receipts-harness over HTTP", () => {
     expect(listed).toMatchObject({
       guidelineNote: null,
       harnessCut: null,
-      harnessSkipped: [{ path: "docs/changelog.md", reason: "too-large" }],
+      harnessSkipped: [{ path: "docs/decision-log.md", reason: "too-large" }],
       harnessNote: null,
     });
   });
@@ -145,7 +145,7 @@ describe("receipts-harness over HTTP", () => {
     await loaded();
     await switchFile("docs/naming.md", false);
 
-    for (const path of ["docs/STYLE.md", "docs/changelog.md"]) {
+    for (const path of ["docs/STYLE.md", "docs/decision-log.md"]) {
       expect(ErrorResponse.parse(await put(path, true)).error).toEqual({
         code: "bad-request",
         message: `${path} isn't a guideline file megareviewer reads: REVIEW.md, AGENTS.md, CLAUDE.md, CONTRIBUTING.md, .github/copilot-instructions.md`,

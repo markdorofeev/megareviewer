@@ -1,5 +1,8 @@
+import { parseGitattributes } from "../../domain/diff/index.ts";
 import {
+  type AttributeFor,
   type BlobHash,
+  followsLink,
   GUIDELINE_PATHS,
   type Harness,
   type HarnessFile,
@@ -9,6 +12,7 @@ import {
   harnessLinks,
   harnessOutline,
   isHarnessFileInFolder,
+  isNeverRules,
   MAX_HARNESS_DEPTH,
   MAX_HARNESS_FILE_BYTES,
   MAX_HARNESS_FILES,
@@ -230,6 +234,27 @@ interface WalkedFile extends Omit<HarnessFile, "via" | "linkedFrom" | "links"> {
 
 const utf8 = new TextEncoder();
 
+/** Read with the roots, at the base commit as they are, so a PR can't change what's left out. */
+const GITATTRIBUTES = ".gitattributes";
+
+const isRoot = (path: string): boolean => GUIDELINE_PATHS.some((root) => root === path);
+
+/**
+ * The link a file's walk follows, or null. Only a root names a folder: a folder another file names
+ * is usually where code lives, not where rules are. A path in prose is tried up to the first of
+ * its meanings that's never rules, since that one may be what it means.
+ */
+const followed = (
+  from: string,
+  link: HarnessLink,
+  attributeFor: AttributeFor,
+): FoundLink | null => {
+  if (link.folder === true && !isRoot(from)) return null;
+  const stop = link.paths.findIndex((path) => !followsLink(path, link.kind, attributeFor));
+  const paths = stop === -1 ? link.paths : link.paths.slice(0, stop);
+  return paths.length === 0 ? null : { ...link, paths, from };
+};
+
 interface Walked extends LoadedHarness {
   /** What the source gave, to store. */
   readonly fetched: readonly HarnessBlob[];
@@ -249,6 +274,8 @@ const walk = async (baseSha: string, reader: Reader): Promise<Result<Walked, Hos
   let partial = false;
   let lookups = MAX_HARNESS_LOOKUPS;
   let cut: Harness["cut"] = null;
+  let attributeFor: AttributeFor = () => null;
+  let attributesMissing = false;
   const roots: FoundLink[] = GUIDELINE_PATHS.map((path) => ({
     kind: "root",
     paths: [path],
@@ -308,8 +335,33 @@ const walk = async (baseSha: string, reader: Reader): Promise<Result<Walked, Hos
   /** A folder's harness files, nearest it first, never the file that names it. */
   const filesIn = (folder: HarnessSourceFolder, from: string | null): string[] =>
     folder.files
-      .filter((path) => isHarnessFileInFolder(path) && path !== from)
+      .filter(
+        (path) => isHarnessFileInFolder(path) && path !== from && !isNeverRules(path, attributeFor),
+      )
       .sort((a, b) => a.split("/").length - b.split("/").length || (a < b ? -1 : a > b ? 1 : 0));
+
+  /** `.gitattributes`, unless it's known not to be there or nothing is left to look it up with. */
+  const attributesWanted = (): string[] => {
+    const known = reader.knows(GITATTRIBUTES);
+    if (known === "absent") {
+      attributesMissing = true;
+      return [];
+    }
+    if (known === "unknown") {
+      if (lookups === 0) return [];
+      lookups -= 1;
+    }
+    return [GITATTRIBUTES];
+  };
+
+  /** One that can't be read marks nothing, so only the path rules leave files out. */
+  const attributesRead = (found: Found): void => {
+    attributesMissing = found === null;
+    if (found?.kind !== "text" || utf8.encode(found.content).byteLength > MAX_HARNESS_FILE_BYTES)
+      return;
+    attributeFor = parseGitattributes(found.content);
+    if (!found.stored) fetched.push({ blob: found.blob, content: found.content });
+  };
 
   /** A hop's links with each folder's in place of the harness files under it, listed as needed. */
   const withFolders = async (
@@ -387,8 +439,10 @@ const walk = async (baseSha: string, reader: Reader): Promise<Result<Walked, Hos
         hop = expanded.value;
       }
       const wanted = wantedOf(hop);
-      const read = await reader.read([...wanted]);
+      const attributes = depth === 0 ? attributesWanted() : [];
+      const read = await reader.read([...wanted, ...attributes]);
       if (!read.ok) return read;
+      for (const path of attributes) attributesRead(read.value.get(path) ?? null);
       for (const path of wanted) {
         const found = read.value.get(path) ?? null;
         const large =
@@ -423,7 +477,10 @@ const walk = async (baseSha: string, reader: Reader): Promise<Result<Walked, Hos
           files.set(path, file);
           contents.set(path, content);
           if (!outcome.stored) fetched.push({ blob, content });
-          next.push(...harnessLinks(path, content).map((found) => ({ ...found, from: path })));
+          for (const found of harnessLinks(path, content)) {
+            const link = followed(path, found, attributeFor);
+            if (link !== null) next.push(link);
+          }
         }
         connect(link, file);
       }
@@ -448,20 +505,8 @@ const walk = async (baseSha: string, reader: Reader): Promise<Result<Walked, Hos
 
   // Links past a limit still connect files the harness has.
   for (const link of [...named.value, ...fromFolders.value]) {
-    if (link.folder === true) {
-      const folder = meantFolder(link);
-      if (folder === undefined) {
-        if (link.paths.some((path) => !folders.has(path) && reader.knowsFolder(path) !== "absent"))
-          cut ??= "depth";
-        continue;
-      }
-      for (const path of folder === null ? [] : filesIn(folder, link.from)) {
-        const file = files.get(path);
-        if (file !== undefined) connect(link, file);
-        else if (outcomes.get(path) === undefined) cut ??= "depth";
-      }
-      continue;
-    }
+    // Only a root names a folder, and every folder a root names has been walked.
+    if (link.folder === true) continue;
     const path = link.paths.find((candidate) => files.has(candidate));
     const file = path === undefined ? undefined : files.get(path);
     if (file !== undefined) connect(link, file);
@@ -486,9 +531,10 @@ const walk = async (baseSha: string, reader: Reader): Promise<Result<Walked, Hos
       })),
       cut,
       skipped: [...skipped.values()],
-      missing: [...outcomes, ...folders].flatMap(([path, outcome]) =>
-        outcome === null ? [path] : [],
-      ),
+      missing: [
+        ...[...outcomes, ...folders].flatMap(([path, outcome]) => (outcome === null ? [path] : [])),
+        ...(attributesMissing ? [GITATTRIBUTES] : []),
+      ],
     },
     contents,
     fetched,

@@ -121,7 +121,6 @@ export const readUnchangedCallers = async (
   });
 
   const unchanged: UnchangedFile[] = [];
-  let tooLarge = 0;
   for (let start = 0; start < candidates.length; start += FILES_PER_READ) {
     const batch = candidates.slice(start, start + FILES_PER_READ);
     const read = await at.checkout.readFiles(
@@ -137,7 +136,6 @@ export const readUnchangedCallers = async (
     for (const [index, file] of read.value.entries()) {
       const candidate = batch[index];
       if (candidate === undefined) continue;
-      if (file.kind === "too-large") tooLarge += 1;
       // The checkout may answer a file that holds a name only within a longer one.
       if (file.kind !== "text" || !mentionsAny(file.content, names)) continue;
       const symbols = await parser.symbols(file.content, candidate.language);
@@ -147,11 +145,6 @@ export const readUnchangedCallers = async (
   }
   return {
     unchangedCallers: findUnchangedCallers(files, changed, unchanged, generated),
-    warnings:
-      tooLarge === 0
-        ? []
-        : [
-            `${tooLarge === 1 ? "1 file" : `${tooLarge} files`} in the local checkout ${tooLarge === 1 ? "is" : "are"} over 1 MB, so callers in ${tooLarge === 1 ? "it" : "them"} aren't shown.`,
-          ],
+    warnings: [],
   };
 };

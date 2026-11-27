@@ -192,23 +192,22 @@ describe.each(KINDS)("a harness from a source that $name", (kind) => {
     expect(harness.files.at(-1)?.links).toEqual([{ path: "1.md", kind: "import" }]);
   });
 
-  it("connects a folder past the last hop to the files it has, and is cut by one it doesn't", async () => {
-    const chain = {
-      "CLAUDE.md": "@1.md and docs/",
-      "1.md": "@2.md",
-      "2.md": "@3.md",
-      "3.md": "@4.md",
-      "4.md": "@5.md",
-      "docs/a.md": "",
-    };
-    const has = await setup({ ...chain, "5.md": "docs/" }, kind).load();
-    expect(has.harness.cut).toBeNull();
-    expect(has.harness.files.find(({ path }) => path === "5.md")?.links).toEqual([
-      { path: "docs/a.md", kind: "mention" },
-    ]);
-    const lacks = await setup({ ...chain, "5.md": "notes/", "notes/b.md": "" }, kind).load();
-    expect(lacks.harness.cut).toBe("depth");
-    expect(paths(lacks.harness)).not.toContain("notes/b.md");
+  it("takes a folder only from a root, since another file names one for where code lives", async () => {
+    const { load } = setup(
+      {
+        "CLAUDE.md": "@docs/notes.md and docs/rules/",
+        "docs/notes.md": "The adapters are in src/ and the cases in [evals](../evals). @plan/",
+        "docs/rules/a.md": "",
+        "src/README.md": "",
+        "evals/case.md": "",
+        "docs/plan/b.md": "",
+      },
+      kind,
+    );
+    const { harness } = await load();
+    expect(paths(harness)).toEqual(["CLAUDE.md", "docs/notes.md", "docs/rules/a.md"]);
+    expect(harness.files[1]?.links).toEqual([]);
+    expect(harness.cut).toBeNull();
   });
 
   it("stops at 200 files, and says so, with the links among the ones it has", async () => {
@@ -279,16 +278,89 @@ describe.each(KINDS)("a harness from a source that $name", (kind) => {
   it("takes a folder in prose against its file before the root, and never a file for itself", async () => {
     const { load } = setup(
       {
-        "CLAUDE.md": "@docs/notes.md",
-        "docs/notes.md": "See plan/ and the rest of docs/.",
-        "docs/plan/a.md": "",
+        ".github/copilot-instructions.md": "See plan/ and the rest of .github/.",
+        ".github/plan/a.md": "",
         "plan/b.md": "",
       },
       kind,
     );
     const { harness } = await load();
-    expect(paths(harness)).toEqual(["CLAUDE.md", "docs/notes.md", "docs/plan/a.md"]);
-    expect(harness.files[1]?.links).toEqual([{ path: "docs/plan/a.md", kind: "mention" }]);
+    expect(paths(harness)).toEqual([".github/copilot-instructions.md", ".github/plan/a.md"]);
+    expect(harness.files[0]?.links).toEqual([{ path: ".github/plan/a.md", kind: "mention" }]);
+  });
+
+  it("follows no link but an import to test data, another project's files, a license or a .txt", async () => {
+    const { load } = setup(
+      {
+        "CLAUDE.md": [
+          "See src/api/fixtures/rules.md, vendor/lib/STYLE.md, third_party/x/AGENTS.md,",
+          "[licenses](licenses/MIT.md), [notes](NOTES.txt), CHANGELOG.md, NOTICE.md and",
+          "LICENSE-MIT.md, and [the rules](docs/rules.md).",
+          "",
+          "@test/fixtures/imported.md @notes.txt",
+          "",
+          "Everything under docs/.",
+        ].join("\n"),
+        "src/api/fixtures/rules.md": "",
+        "vendor/lib/STYLE.md": "",
+        "third_party/x/AGENTS.md": "",
+        "licenses/MIT.md": "",
+        "NOTES.txt": "",
+        "CHANGELOG.md": "",
+        "NOTICE.md": "",
+        "LICENSE-MIT.md": "",
+        "docs/rules.md": "",
+        "docs/__snapshots__/page.md": "",
+        "docs/testdata/case.md": "",
+        "docs/guide.md": "",
+        "test/fixtures/imported.md": "",
+        "notes.txt": "",
+      },
+      kind,
+    );
+    const { harness } = await load();
+    expect(paths(harness)).toEqual([
+      "CLAUDE.md",
+      "docs/rules.md",
+      "test/fixtures/imported.md",
+      "notes.txt",
+      "docs/guide.md",
+    ]);
+  });
+
+  it("leaves out what .gitattributes at the base commit marks generated or vendored", async () => {
+    const { load } = setup(
+      {
+        ".gitattributes":
+          "evals/cases/*/files/** linguist-vendored\ndocs/api/*.md linguist-generated\n",
+        "CLAUDE.md": "See docs/, evals/cases/a/files/CONTRIBUTING.md and evals/cases/a/labels.md.",
+        "evals/cases/a/files/CONTRIBUTING.md": "",
+        "evals/cases/a/labels.md": "",
+        "docs/api/routes.md": "",
+        "docs/rules.md": "",
+      },
+      kind,
+    );
+    const { harness } = await load();
+    expect(paths(harness)).toEqual(["CLAUDE.md", "evals/cases/a/labels.md", "docs/rules.md"]);
+    expect(harness.missing).not.toContain(".gitattributes");
+  });
+
+  it("stops a path in prose at its first meaning that's never rules, since it may be the one", async () => {
+    const { load } = setup(
+      {
+        ".gitattributes": "docs/a.md linguist-generated\n",
+        "CLAUDE.md": "@docs/notes.md",
+        "docs/notes.md": "See a.md and rules/b.md.",
+        "docs/a.md": "",
+        "a.md": "",
+        "docs/rules/b.md": "",
+        "rules/b.md": "",
+      },
+      kind,
+    );
+    const { harness } = await load();
+    expect(paths(harness)).toEqual(["CLAUDE.md", "docs/notes.md", "docs/rules/b.md"]);
   });
 
   it("has nothing for a folder or a file that isn't there, or a folder named as a file", async () => {
@@ -461,7 +533,7 @@ describe("what loading a harness asks a source for", () => {
   it("makes one diff and no read when nothing of the harness changed, missing and skipped paths too", async () => {
     const files: Files = {
       ...FILES,
-      "REVIEW.md": "[none](none.md) and [image](image.txt)",
+      "REVIEW.md": "[none](none.md) and @image.txt",
       "image.txt": { kind: "skipped", reason: "unreadable" },
     };
     const { load, source } = setup(files, { lists: false });
@@ -494,7 +566,10 @@ describe("what loading a harness asks a source for", () => {
       "CONTRIBUTING.md",
       ".github/copilot-instructions.md",
     ];
-    const walk = [roots, ["docs/rules.md", "docs/plan.md", "docs/how.md"]];
+    const walk = [
+      [...roots, ".gitattributes"],
+      ["docs/rules.md", "docs/plan.md", "docs/how.md"],
+    ];
     await load();
     expect(requests(source)).toEqual({ lists: 0, diffs: 0, reads: walk });
     await load(NEWER);

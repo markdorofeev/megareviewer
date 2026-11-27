@@ -20,7 +20,7 @@ const HARNESS_FILES = {
 @docs/architecture.md
 
 How tests are written is in docs/testing.md. When something breaks in production, start at the
-[runbooks](docs/runbooks/README.md). What changed and when is in the [changelog](docs/changelog.md).
+[runbooks](docs/runbooks/README.md). Why the code is as it is is in the [decision log](docs/decision-log.md).
 `,
   "docs/house-rules.md": `# House rules
 
@@ -76,7 +76,7 @@ export const fakeHarnessSources = (
     sources[of.host].setFiles(of, pullRequest.baseSha, baseFiles);
   }
   sources.github.setFiles(repo, receiptsHarness.pullRequest.baseSha, {
-    "docs/changelog.md": { kind: "skipped", reason: "too-large" },
+    "docs/decision-log.md": { kind: "skipped", reason: "too-large" },
   });
   return sources;
 };

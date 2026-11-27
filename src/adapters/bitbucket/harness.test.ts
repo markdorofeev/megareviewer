@@ -252,8 +252,8 @@ describe("loading a harness from Bitbucket", () => {
       logger: new RecordingLogger(),
     };
     expect((await loadHarness(deps, repo, BASE_SHA)).ok).toBe(true);
-    // The five roots, then what CLAUDE.md links.
-    expect(requests).toHaveLength(7);
+    // The five roots and .gitattributes, then what CLAUDE.md links.
+    expect(requests).toHaveLength(8);
     requests.length = 0;
 
     const loaded = await loadHarness(deps, repo, SHA);

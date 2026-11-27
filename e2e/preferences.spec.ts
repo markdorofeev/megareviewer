@@ -226,7 +226,7 @@ test("unfolds what a guideline file links, and switches a linked file off", asyn
   await expect(fold).toHaveAttribute("aria-expanded", "false");
   await expect(uses).toHaveText("2 in every review, 5 on request");
   await expect(section.locator("[data-slot=harness-notes]")).toHaveText(
-    "docs/changelog.md is over 1 MB, so AI reviews don't use it.",
+    "docs/decision-log.md is over 1 MB, so AI reviews don't use it.",
   );
 
   await fold.focus();

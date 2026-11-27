@@ -173,13 +173,11 @@ describe("readUnchangedCallers", () => {
     expect(checkout.reads).toEqual([]);
   });
 
-  it("counts one file too large to read", async () => {
+  it("skips a file too large to read, without a warning", async () => {
     const checkout = new FakeLocalCheckout({
       [SHA]: { "src/b.ts": `save ${"x".repeat(1024 * 1024)}` },
     });
-    expect((await read(checkout)).warnings).toEqual([
-      "1 file in the local checkout is over 1 MB, so callers in it aren't shown.",
-    ]);
+    expect(await read(checkout)).toEqual({ unchangedCallers: [], warnings: [] });
   });
 
   it("warns when the files can't be read", async () => {
