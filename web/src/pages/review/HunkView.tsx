@@ -31,7 +31,6 @@ export interface HunkDeps {
     comment: LineComment,
     edit: (body: string) => void,
   ) => ReactNode;
-  readonly onFocusHunk: (id: PartId) => void;
   /** Claude's point cards and links that go under a part's header. */
   readonly pointsOn: (id: PartId) => ReactNode;
   /** Claude's findings under the last of their lines. */
@@ -64,13 +63,7 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
   if (proofs.length > 0) {
     return (
       <div className={PINNED}>
-        <MechanicalHunk
-          hunk={hunk}
-          file={file}
-          risk={risk}
-          proofs={proofs}
-          onFocus={deps.onFocusHunk}
-        />
+        <MechanicalHunk hunk={hunk} file={file} risk={risk} proofs={proofs} />
       </div>
     );
   }
@@ -81,7 +74,6 @@ export const HunkView = ({ id, deps }: { readonly id: PartId; readonly deps: Hun
       file={file}
       risk={risk}
       highlighted={deps.highlighted.has(id)}
-      onFocus={deps.onFocusHunk}
       unchanged={deps.unchangedOf(id)}
       inFile
       comments={deps.commentsOf(id)}

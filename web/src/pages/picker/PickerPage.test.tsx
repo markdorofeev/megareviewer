@@ -333,18 +333,6 @@ describe("PickerPage's field", () => {
     await userEvent.type(field(), "8");
     expect(screen.queryByText(/^Couldn't open/)).toBeNull();
   });
-
-  it("focuses and selects the field on /, but not while typing elsewhere", async () => {
-    renderPicker();
-    await userEvent.type(field(), "abc");
-    field().blur();
-    await userEvent.keyboard("/");
-    expect(document.activeElement).toBe(field());
-    expect(field().selectionStart).toBe(0);
-    expect(field().selectionEnd).toBe(3);
-    await userEvent.keyboard("/");
-    expect(field().value).toBe("/");
-  });
 });
 
 describe("PickerPage's rows", () => {

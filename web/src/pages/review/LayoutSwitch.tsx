@@ -1,5 +1,4 @@
 import { CodeXmlIcon, type LucideIcon, NetworkIcon, RouteIcon } from "lucide-react";
-import { KeyHint } from "../../review/index.ts";
 import { Toggle } from "../../ui/toggle.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import type { Layout } from "./model.ts";
@@ -49,7 +48,6 @@ export const LayoutSwitch = ({
           </TooltipTrigger>
           <TooltipContent side="bottom" align="start">
             {label}
-            <KeyHint id="toggleLayout" />
           </TooltipContent>
         </Tooltip>
       ))}

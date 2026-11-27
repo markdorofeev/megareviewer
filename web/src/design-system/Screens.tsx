@@ -5,7 +5,6 @@ import {
   CommentComposer,
   DiffViewer,
   FileTree,
-  KeyHint,
   PrHeader,
   ReviewSubmitForm,
   useSyntax,
@@ -58,18 +57,13 @@ const OverviewScreen = () => {
         }
         tabs={TABS}
         activeTab="files"
-        actions={
-          <Button>
-            Publish <KeyHint id="openReview" />
-          </Button>
-        }
+        actions={<Button>Publish</Button>}
       />
       <div className="grid gap-4 p-4 lg:grid-cols-[16rem_1fr]">
         <FileTree
           files={TREE_FILES}
           activePath={active}
           onSelect={setActive}
-          navigate
           className="hidden h-[28rem] lg:flex"
         />
         <div className="flex min-w-0 flex-col gap-4">

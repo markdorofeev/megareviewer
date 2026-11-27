@@ -1,14 +1,10 @@
-import type { ShortcutId } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
-import { KeyHint } from "./key-hint.tsx";
 
 export interface EmptyStateAction {
   readonly label: string;
   readonly onClick: () => void;
-  /** The shortcut that does the same, shown beside the label. */
-  readonly shortcut?: ShortcutId;
 }
 
 const TONES = {
@@ -66,7 +62,6 @@ export const EmptyState = ({
             onClick={action.onClick}
           >
             {action.label}
-            {action.shortcut !== undefined && <KeyHint id={action.shortcut} />}
           </Button>
         ))}
       </div>

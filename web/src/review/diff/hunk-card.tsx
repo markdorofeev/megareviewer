@@ -126,7 +126,6 @@ export interface HunkCardProps {
   readonly highlighted?: boolean;
   /** Scrolls the card into view and focuses it. */
   readonly focused?: boolean;
-  readonly onFocus?: (id: PartId) => void;
   /** Shows this many lines at first, with a button for the rest. */
   readonly lineLimit?: number;
   /** Uses outside the pull request of the definitions this part changes. */
@@ -185,7 +184,6 @@ export const HunkCard = memo(function HunkCard({
   proofs = [],
   highlighted = false,
   focused = false,
-  onFocus,
   lineLimit,
   unchanged = [],
   comments = [],
@@ -299,7 +297,6 @@ export const HunkCard = memo(function HunkCard({
       aria-label={`${file.path}, ${hunkLocation(hunk)}`}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a card is focused to select its hunk.
       tabIndex={0}
-      onFocus={() => onFocus?.(id)}
     >
       {header && (
         <header

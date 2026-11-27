@@ -1,10 +1,5 @@
 import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
-import type {
-  FileChange,
-  Hunk,
-  HunkId,
-  MechanicalProof,
-} from "../../../../src/domain/diff/index.ts";
+import type { FileChange, Hunk, MechanicalProof } from "../../../../src/domain/diff/index.ts";
 import type { RiskAssessment } from "../../../../src/domain/review/index.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
@@ -58,14 +53,12 @@ export const MechanicalHunk = memo(function MechanicalHunk({
   risk,
   proofs,
   focused = false,
-  onFocus,
 }: {
   readonly hunk: Hunk;
   readonly file: FileChange;
   readonly risk: RiskAssessment | null;
   readonly proofs: readonly MechanicalProof[];
   readonly focused?: boolean;
-  readonly onFocus?: (id: HunkId) => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -80,12 +73,7 @@ export const MechanicalHunk = memo(function MechanicalHunk({
 
   return (
     <div data-slot="mechanical-hunk" className="bg-surface-subtle">
-      <Toggle
-        ref={ref}
-        open={open}
-        onClick={() => setOpen((value) => !value)}
-        onFocus={() => onFocus?.(hunk.id)}
-      >
+      <Toggle ref={ref} open={open} onClick={() => setOpen((value) => !value)}>
         {file.path}, {hunkLocation(hunk)} — {proofs.map((proof) => proof.detail).join("; ")} (+
         {added} −{deleted})
       </Toggle>

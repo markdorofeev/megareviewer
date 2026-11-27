@@ -15,20 +15,18 @@ const press = (
 });
 
 const ALL = KEYMAP.map((entry) => entry.id);
-const ON = { mac: true, singleKeys: true };
+const ON = { mac: true };
 
 describe("shortcutFor", () => {
   it("finds the shortcut a key runs", () => {
-    expect(shortcutFor(press("n"), ALL, ON)).toBe("nextFile");
     expect(shortcutFor(press("ArrowDown"), ALL, ON)).toBe("lineDown");
     expect(shortcutFor(press("ArrowDown", { shift: true }), ALL, ON)).toBe("extendDown");
-    expect(shortcutFor(press("R", { shift: true }), ALL, ON)).toBe("openReview");
-    expect(shortcutFor(press("?", { shift: true }), ALL, ON)).toBe("help");
+    expect(shortcutFor(press("Escape"), ALL, ON)).toBe("close");
   });
 
   it("keeps a modifier's key for the browser", () => {
-    expect(shortcutFor(press("n", { meta: true }), ALL, ON)).toBeNull();
-    expect(shortcutFor(press("n", { alt: true }), ALL, ON)).toBeNull();
+    expect(shortcutFor(press("ArrowDown", { meta: true }), ALL, ON)).toBeNull();
+    expect(shortcutFor(press("ArrowDown", { alt: true }), ALL, ON)).toBeNull();
   });
 
   it("uses ⌘ on macOS and Ctrl elsewhere", () => {
@@ -39,24 +37,13 @@ describe("shortcutFor", () => {
 
   it("lets keys type into fields, but not ⌘↵ or Esc", () => {
     const field = document.createElement("textarea");
-    expect(shortcutFor(press("n", {}, field), ALL, ON)).toBeNull();
     expect(shortcutFor(press("ArrowDown", {}, field), ALL, ON)).toBeNull();
     expect(shortcutFor(press("Enter", { meta: true }, field), ALL, ON)).toBe("submit");
     expect(shortcutFor(press("Escape", {}, field), ALL, ON)).toBe("close");
   });
 
-  it("turns single keys off and leaves the others on", () => {
-    const off = { mac: true, singleKeys: false };
-    expect(shortcutFor(press("n"), ALL, off)).toBeNull();
-    expect(shortcutFor(press("R", { shift: true }), ALL, off)).toBeNull();
-    // Arrow keys aren't characters, so they stay on.
-    expect(shortcutFor(press("ArrowDown"), ALL, off)).toBe("lineDown");
-    expect(shortcutFor(press("Enter", { meta: true }), ALL, off)).toBe("submit");
-    expect(shortcutFor(press("Escape"), ALL, off)).toBe("close");
-  });
-
   it("only runs the shortcuts asked for", () => {
-    expect(shortcutFor(press("n"), ["help"], ON)).toBeNull();
+    expect(shortcutFor(press("Escape"), ["lineDown"], ON)).toBeNull();
   });
 });
 
@@ -78,17 +65,7 @@ describe("chordKeys", () => {
   it("shows each key of a chord", () => {
     expect(chordKeys(shortcut("submit").chords[0] ?? { key: "" }, true)).toEqual(["⌘", "↵"]);
     expect(chordKeys(shortcut("submit").chords[0] ?? { key: "" }, false)).toEqual(["Ctrl", "↵"]);
-    expect(chordKeys(shortcut("openReview").chords[0] ?? { key: "" }, true)).toEqual(["⇧", "R"]);
-    expect(chordKeys(shortcut("help").chords[0] ?? { key: "" }, true)).toEqual(["?"]);
+    expect(chordKeys(shortcut("close").chords[0] ?? { key: "" }, true)).toEqual(["Esc"]);
     expect(chordKeys(shortcut("extendUp").chords[0] ?? { key: "" }, true)).toEqual(["⇧", "↑"]);
-  });
-
-  it("gives every shortcut a distinct chord within where it works", () => {
-    const seen = KEYMAP.flatMap((entry) =>
-      entry.chords.map(
-        (chord) => `${entry.scope} ${chord.mod ?? false} ${chord.shift ?? false} ${chord.key}`,
-      ),
-    );
-    expect(new Set(seen).size).toBe(seen.length);
   });
 });

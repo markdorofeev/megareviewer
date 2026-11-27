@@ -1,7 +1,6 @@
 import { type ReactNode, useId, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { PublicationVerdict } from "../../../../src/domain/review/index.ts";
-import { useShortcuts } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Label } from "../../ui/label.tsx";
@@ -9,7 +8,6 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../../ui/
 import { RadioGroup, RadioGroupItem } from "../../ui/radio-group.tsx";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "../../ui/sheet.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
-import { KeyHint } from "../shell/key-hint.tsx";
 
 /** A comment written on lines, waiting to be published with the review. */
 export interface PendingComment {
@@ -67,8 +65,6 @@ export interface ReviewSubmitPanelProps {
   readonly canApprove: boolean;
   readonly onSubmit: (verdict: PublicationVerdict, body: string) => Promise<void> | void;
   readonly defaultVerdict?: PublicationVerdict;
-  /** ⇧R opens this panel; off when another panel on the page has it. */
-  readonly shortcut?: boolean;
 }
 
 /** Publishing the review: what will be posted, a summary, a verdict, then ⌘↵. */
@@ -77,18 +73,11 @@ export const ReviewSubmitPanel = ({
   canApprove,
   onSubmit,
   defaultVerdict = "comment",
-  shortcut = true,
 }: ReviewSubmitPanelProps) => {
   const [open, setOpen] = useState(false);
   const narrow = useSyncExternalStore(subscribeNarrow, isNarrow);
-  useShortcuts({ openReview: () => setOpen(true) }, shortcut);
 
-  const trigger = (
-    <Button>
-      Publish
-      {shortcut && <KeyHint id="openReview" />}
-    </Button>
-  );
+  const trigger = <Button>Publish</Button>;
   const body = (
     <ReviewSubmitForm
       // The title names the dialog, so it's the Sheet's or the Popover's own.
@@ -240,7 +229,6 @@ export const ReviewSubmitForm = ({
         </Button>
         <Button onClick={() => void submit()} disabled={state === "submitting"}>
           {state === "submitting" ? "Publishing…" : "Publish"}
-          <KeyHint id="submit" />
         </Button>
       </div>
     </div>

@@ -186,8 +186,6 @@ const scrolledTo = () =>
     .mocked(Element.prototype.scrollIntoView)
     .mock.contexts.map((element) => (element as Element).id);
 
-const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
-
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   window.localStorage.clear();
@@ -975,19 +973,6 @@ describe("map", () => {
     expect(calls(h.receiptFormatting)).toEqual(["formatMoney"]);
   });
 
-  it("opens the code of the call on the focused line with o", async () => {
-    renderReview();
-    await loaded();
-    const call = placeOf(h.receiptRoute).querySelector("[data-slot=call]");
-    const number = call?.closest("[role=row]")?.querySelector("button");
-    if (!(number instanceof HTMLElement)) throw new Error("no line number beside the call");
-    number.focus();
-    await userEvent.keyboard("o");
-    const peek = await screen.findByLabelText("Code cachedReceipt runs");
-    expect(within(peek).getByRole("table", { name: "Lines of cachedReceipt" })).toBeTruthy();
-    expect(document.activeElement).toBe(number);
-  });
-
   it("still works when storage throws", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
@@ -1000,9 +985,9 @@ describe("map", () => {
     await userEvent.click(screen.getByRole("button", { name: "Display" }));
     await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Overview" }));
     await userEvent.keyboard("{Escape}");
-    await userEvent.keyboard("v");
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
     expect(layoutIs("overview")).toBe(true);
-    await userEvent.keyboard("v");
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Code" }));
     expect(fileCards()).toHaveLength(3);
   });
 });
@@ -1700,7 +1685,7 @@ describe("the tour", () => {
       .parse(JSON.parse(window.localStorage.getItem(`megareviewer:hunk-comments:${id}`) ?? "[]"));
     expect(stored).toMatchObject([{ line, body: "Why here?" }]);
 
-    await userEvent.keyboard("v");
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Code" }));
     await waitFor(() => expect(layoutIs("map")).toBe(true));
     expect(within(mainArea()).getByText("Why here?")).toBeTruthy();
   });
@@ -1735,19 +1720,19 @@ describe("the tour", () => {
     ).toBeTruthy();
   });
 
-  it("switches with v between the tour's current step and its lines in the map", async () => {
+  it("switches with the bar between the tour's current step and its lines in the map", async () => {
     withTour();
     window.sessionStorage.clear();
     renderReview({ view: tourAnalysisView });
     await loaded();
     await screen.findByRole("region", { name: "Tour steps" });
     window.sessionStorage.setItem(`megareviewer:tour-step:${id}`, "3");
-    await userEvent.keyboard("v");
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Code" }));
     await waitFor(() => expect(layoutIs("map")).toBe(true));
     expect(document.querySelector("[data-slot=tour-landing]")?.textContent).toContain(
       "Tour step 3",
     );
-    await userEvent.keyboard("v");
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Tour" }));
     await waitFor(() => expect(layoutIs("tour")).toBe(true));
     expect(document.activeElement?.textContent).toContain("Step 3:");
   });
@@ -1830,28 +1815,12 @@ describe("layouts", () => {
     renderReview();
     await loaded();
     await userEvent.click(cardOf(h.routeImports));
-    await userEvent.keyboard("v");
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
     expect(layoutIs("overview")).toBe(true);
     const back = vi.spyOn(window.history, "back");
-    await userEvent.keyboard("v");
+    await userEvent.click(layoutSwitch().getByRole("button", { name: "Code" }));
     expect(back).toHaveBeenCalledOnce();
     await waitFor(() => expect(layoutIs("map")).toBe(true));
-  });
-
-  it("switch with v, keeping the file the reviewer is on", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.click(cardOf(h.routeImports));
-    expect(focusedLabel()).toMatch(IMPORTS);
-    await userEvent.keyboard("v");
-    expect(layoutIs("overview")).toBe(true);
-    expect(focusedKey()).toBe("group:src/routes");
-
-    await userEvent.keyboard("{ArrowDown}");
-    await userEvent.keyboard("v");
-    expect(layoutIs("map")).toBe(true);
-    expect(scrolledTo().at(-1)).toBe("file-src/services/receipts.ts");
-    expect(focusedLabel()).toBe("src/services/receipts.ts");
   });
 
   it("remember the choice for every PR, and read a stored call tree as the overview", async () => {
@@ -1867,51 +1836,6 @@ describe("layouts", () => {
     await loaded();
     expect(overviewBox()).toBeTruthy();
     expect(layoutIs("overview")).toBe(true);
-  });
-});
-
-describe("keyboard shortcuts", () => {
-  it("move between files with n and p, from the focused one", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.click(cardOf(h.routeImports));
-    await userEvent.keyboard("n");
-    expect(scrolledTo().at(-1)).toBe("file-src/services/receipts.ts");
-    expect(focusedLabel()).toBe("src/services/receipts.ts");
-    await userEvent.keyboard("n");
-    expect(scrolledTo().at(-1)).toBe("file-package.json");
-    // There's no file after the last.
-    await userEvent.keyboard("n");
-    expect(scrolledTo().at(-1)).toBe("file-package.json");
-    await userEvent.keyboard("pp");
-    expect(scrolledTo().at(-1)).toBe("file-src/routes/orders.ts");
-  });
-
-  it("open a comment on the focused hunk's first changed line with c", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.click(cardOf(h.receiptRoute));
-    await userEvent.keyboard("c");
-    const field = within(mainArea()).getByRole("textbox", { name: /^Comment on line / });
-    expect(document.activeElement).toBe(field);
-  });
-
-  it("are listed for each layout, and none fire while the list is open", async () => {
-    renderReview();
-    await loaded();
-    await userEvent.keyboard("?");
-    const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
-    const keysOf = (name: string) =>
-      within(within(dialog).getByRole("region", { name }))
-        .getAllByRole("definition")
-        .map((keys) => keys.textContent);
-    expect(keysOf("In the code")).toEqual(["n", "p", "c", "o"]);
-    expect(keysOf("In the overview")).toEqual(["←→↑↓", "↵"]);
-    expect(keysOf("Anywhere")).toEqual(["v", "⇧R", "Esc", "?"]);
-    await userEvent.keyboard("v");
-    expect(layoutIs("map")).toBe(true);
-    await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
 
@@ -2213,11 +2137,14 @@ describe("comments on hunks", () => {
     Reflect.deleteProperty(document, "elementFromPoint");
   });
 
-  it("removes a comment that's emptied, and c opens one on the focused hunk", async () => {
+  it("removes a comment that's emptied", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(cardOf(h.routeImports));
-    await userEvent.keyboard("c");
+    const [number] = within(cardOf(h.routeImports)).getAllByRole("button", {
+      name: /^Comment on (old )?line \d+$/,
+    });
+    if (number === undefined) throw new Error("no commentable line");
+    await userEvent.click(number);
     const field = within(mainArea()).getByRole("textbox", { name: /^Comment on (old )?line \d+$/ });
     expect(document.activeElement).toBe(field);
     await userEvent.type(field, "x");
@@ -3032,7 +2959,7 @@ describe("review threads", () => {
       renderReview({ view: codeOnly });
       await loaded();
       await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
-      await userEvent.keyboard("v");
+      await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
       expect(overviewBox()).toBeTruthy();
       await step("Start");
       await waitFor(() => expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier"));

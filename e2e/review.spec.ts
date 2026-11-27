@@ -119,21 +119,13 @@ test("analyzes a PR picked from the list", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Publish review…/ })).toBeEnabled();
 });
 
-test("the map moves between the files with the keyboard", async ({ page }) => {
+test("the map shows the files in path order", async ({ page }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
   const files = await page
     .locator("[aria-label=Changes] [data-slot=file-card]")
     .evaluateAll((cards) => cards.map((card) => card.getAttribute("aria-label") ?? ""));
   // In path order, as a directory tree lists them.
   expect(files).toEqual(["config/app.yaml", "src/routes/orders.ts", "src/services/receipts.ts"]);
-  const [first, second] = files;
-  if (first === undefined || second === undefined) throw new Error("expected two files");
-  await page.locator("[aria-label=Changes] [data-slot=file-card-header]").first().click();
-  const focused = page.locator("[aria-label=Changes] [data-slot=file-card]:focus");
-  await page.keyboard.press("n");
-  await expect(focused).toHaveAttribute("aria-label", second);
-  await page.keyboard.press("p");
-  await expect(focused).toHaveAttribute("aria-label", first);
 });
 
 test("a call shows the code it runs while the pointer is on it or on its card", async ({

@@ -2,7 +2,6 @@ import { useId, useState } from "react";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
-import { KeyHint } from "../shell/key-hint.tsx";
 
 export interface CommentComposerProps {
   /** What the comment is on, e.g. "src/retry.ts:41–43". */
@@ -84,7 +83,6 @@ export const CommentComposer = ({
         )}
         <Button type="submit" size="sm" disabled={empty || state === "submitting"}>
           {state === "submitting" ? "Saving…" : "Comment"}
-          <KeyHint id="submit" />
         </Button>
       </div>
     </form>

@@ -135,17 +135,6 @@ describe("HunkCard", () => {
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it("reports a hunk focused by clicking or tabbing to its card", async () => {
-    const user = userEvent.setup();
-    const onFocus = vi.fn();
-    renderWith(<Cards onFocus={onFocus} />);
-    await user.click(within(screen.getByRole("region", { name: secondName })).getByText("b"));
-    expect(onFocus).toHaveBeenLastCalledWith(second.hunk.id);
-    await user.tab({ shift: true });
-    expect(document.activeElement).toBe(screen.getByRole("region", { name: firstName }));
-    expect(onFocus).toHaveBeenLastCalledWith(first.hunk.id);
-  });
-
   it("puts a comment button on each line number when comments can be written", async () => {
     const user = userEvent.setup();
     const onOpenComment = vi.fn();

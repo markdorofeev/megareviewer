@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useShortcuts } from "../../lib/keymap.ts";
 import { observeWidth, widthOf } from "../../lib/measure.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Input } from "../../ui/input.tsx";
@@ -23,8 +22,6 @@ export interface FileTreeProps {
   readonly files: readonly FileEntry[];
   readonly activePath: string | null;
   readonly onSelect: (path: string) => void;
-  /** n and p select the next and previous file, in the order shown. One tree per page has it. */
-  readonly navigate?: boolean;
   readonly className?: string;
 }
 
@@ -88,13 +85,7 @@ const tooltip = (file: FileEntry): string => {
 };
 
 /** The changed files: filtered with `/` or by Claude's findings, each with its status and counts. */
-export const FileTree = ({
-  files,
-  activePath,
-  onSelect,
-  navigate = false,
-  className,
-}: FileTreeProps) => {
+export const FileTree = ({ files, activePath, onSelect, className }: FileTreeProps) => {
   const nav = useRef<HTMLElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const filter = useRef<HTMLInputElement>(null);
@@ -113,7 +104,6 @@ export const FileTree = ({
     const shut = [...closed].filter((dir) => at?.startsWith(`${dir}/`));
     if (shut.length > 0) setClosed(new Set([...closed].filter((dir) => !shut.includes(dir))));
   }
-  useShortcuts({ filterTree: () => filter.current?.focus() });
 
   const byPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
   const tree = useMemo(() => fileTree(files.map((file) => file.path)), [files]);
@@ -185,12 +175,6 @@ export const FileTree = ({
     const paths = order.filter((path) => (byPath.get(path)?.findings ?? 0) > 0);
     return new Map(paths.map((path, at) => [path, at]));
   }, [order, byPath]);
-  const step = (by: 1 | -1) => {
-    const at = activePath === null ? -1 : order.indexOf(activePath);
-    const next = order[Math.min(order.length - 1, Math.max(0, at + by))];
-    if (next !== undefined) onSelect(next);
-  };
-  useShortcuts({ nextFile: () => step(1), previousFile: () => step(-1) }, navigate);
 
   // Keep the active file in sight when the list is longer than its box.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the active file changes.

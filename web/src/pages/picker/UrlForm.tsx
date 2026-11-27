@@ -10,7 +10,6 @@ import {
 import { type PullRequestRef, parsePullRequestUrl } from "../../../../src/domain/review/index.ts";
 import { isMac, matchesChord, shortcut } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
-import { KeyHint } from "../../review/index.ts";
 import { Button } from "../../ui/button.tsx";
 import { SPIN } from "./PullRequestList.tsx";
 
@@ -95,7 +94,7 @@ export const UrlForm = ({
               id={`${id}-url`}
               aria-label="Pull request link"
               className={cn(
-                "h-9 w-full min-w-0 rounded-md border border-input bg-card pr-10 pl-8 placeholder:text-muted-foreground",
+                "h-9 w-full min-w-0 rounded-md border border-input bg-card pr-3 pl-8 placeholder:text-muted-foreground",
                 invalid !== null && "border-destructive",
               )}
               type="url"
@@ -115,10 +114,6 @@ export const UrlForm = ({
               }}
               aria-invalid={invalid !== null}
               aria-describedby={`${id}-message`}
-            />
-            <KeyHint
-              id="focusLink"
-              className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2"
             />
           </div>
           <Button

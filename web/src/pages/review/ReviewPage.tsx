@@ -31,7 +31,7 @@ import { errorMessage, useAnalysisView, useApi, useMutation, useStatus } from ".
 import { Link } from "../../app/Link.tsx";
 import { navigate, reviewPath } from "../../app/router.ts";
 import { holdInView } from "../../lib/held-scroll.ts";
-import { type ShortcutHandlers, type ShortcutId, useShortcuts } from "../../lib/keymap.ts";
+import { useShortcuts } from "../../lib/keymap.ts";
 import { usePageDisplay } from "../../lib/page-display.tsx";
 import { type PointTone, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
@@ -43,7 +43,6 @@ import {
   DiffSkeleton,
   FileTree,
   HunkCard,
-  KeyHint,
   type LineComment,
   type LinePlace,
   languageOf,
@@ -51,7 +50,6 @@ import {
   type PointLine,
   ReviewThreadView,
   SelectionComment,
-  ShortcutsDialog,
   TreeSkeleton,
   threadPlace,
   WARNING,
@@ -217,19 +215,6 @@ type ReturnTo =
   | { readonly kind: "overview"; readonly node: string | null }
   | { readonly kind: "tour"; readonly step: number };
 
-/** The shortcuts the review page has, for its `?` dialog. */
-const PAGE_SHORTCUTS: readonly ShortcutId[] = [
-  "nextFile",
-  "previousFile",
-  "comment",
-  "openCall",
-  "moveFile",
-  "openFile",
-  "toggleLayout",
-  "openReview",
-  "close",
-  "help",
-];
 const NO_UNCHANGED: readonly UnchangedCallers[] = [];
 
 /**
@@ -477,7 +462,6 @@ const Review = ({
     [analysis.callSites, index, callPeek],
   );
   const marksOf = useCallback((id: PartId) => calls.get(id), [calls]);
-  const [focusedHunkId, setFocusedHunkId] = useState<PartId | null>(null);
   // The file the overview asks to focus, and the node last focused there.
   const [overviewFocus, setOverviewFocus] = useState<{ key: string; n: number } | null>(null);
   const overviewAt = useRef<string | null>(null);
@@ -498,7 +482,6 @@ const Review = ({
   const [highlight, setHighlight] = useState<ReadonlySet<PartId>>(new Set());
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest | null>(null);
   const [publishing, setPublishing] = useState(false);
-  const [showShortcuts, setShowShortcuts] = useState(false);
   const detailsReturnFocus = useRef(true);
   const [showDetails, setShowDetails] = useState(false);
   // Comments on hunk lines are drafts in this browser until they're published with the review.
@@ -646,10 +629,6 @@ const Review = ({
 
   const scrollTo = (id: string) =>
     setScrollRequest((previous) => ({ id, n: (previous?.n ?? 0) + 1 }));
-  /** The part the reviewer is on: the one last focused in the map. */
-  const currentHunk = (): PartId | null => (layout === "map" ? focusedHunkId : null);
-
-  const focusHunk = useCallback((id: PartId) => setFocusedHunkId(id), []);
   /** Focuses a file's place in the overview: its directory, its node, or a node it's a badge on. */
   const focusInOverview = (path: string) => {
     if (!overview.placeOf.has(path)) return;
@@ -755,7 +734,6 @@ const Review = ({
   const openInCode = (step: TourStep, excerpt: TourExcerpt) => {
     toCode({ kind: "tour", step: step.number });
     setFromStep({ step, excerpt });
-    setFocusedHunkId(excerpt.partId);
     writeSession(storedStepKey, step.number);
     // The label over the excerpt, which can start well below its part's top.
     scrollTo(TOUR_LANDING);
@@ -802,12 +780,9 @@ const Review = ({
       points.some((point) => point.id === id) || shows === undefined ? id : PointId.parse(shows.id),
     );
   };
-  /** The overview opens on the file the reviewer is on: the card holding the focus, else in view. */
+  /** The overview opens on the file in view. */
   const openOverview = () => {
-    const focused = document.activeElement?.closest<HTMLElement>(
-      "[aria-label=Changes] [data-slot=file-card]",
-    );
-    const path = focused?.dataset.path ?? fileInView;
+    const path = fileInView;
     const at = path === null ? null : (overview.placeOf.get(path) ?? path);
     // Where it opens, whether or not the focus gets there: a hidden tab reports no focus.
     overviewAt.current = at;
@@ -821,13 +796,11 @@ const Review = ({
     const first = files.find((group) => group.file.path === path)?.partIds[0];
     if (path === undefined || first === undefined) return;
     toCode({ kind: "overview", node: node.key });
-    setFocusedHunkId(first);
     scrollTo(fileAnchor(path));
   };
   /** Opens a part from a flow path in the map; Esc comes back to its file's stop. */
   const openFlowPart = (id: PartId, path: string | null) => {
     toCode({ kind: "overview", node: path ?? index.parts.get(id)?.file.path ?? null });
-    setFocusedHunkId(id);
     showHunk(id, "map");
   };
   const switchLayout = () => {
@@ -890,24 +863,6 @@ const Review = ({
   });
 
   /**
-   * Goes to the next or previous file's card: from the card holding the focus, or else from where
-   * the window is scrolled to.
-   */
-  const moveFile = (direction: 1 | -1) => {
-    const cards = [
-      ...document.querySelectorAll<HTMLElement>("[aria-label=Changes] [data-slot=file-card]"),
-    ];
-    const focused = cards.findIndex((card) => card.contains(document.activeElement));
-    const target =
-      focused !== -1
-        ? cards[focused + direction]
-        : direction === 1
-          ? cards.find((card) => card.getBoundingClientRect().top > 1)
-          : cards.findLast((card) => card.getBoundingClientRect().top < -1);
-    if (target !== undefined) scrollTo(target.id);
-  };
-
-  /**
    * Raises a point: a comment on its lines with its text and its suggestion, which
    * posts with the review under their name. With `add` it's saved as it is; otherwise the comment
    * box opens on it for the reviewer to edit. A draft already on those lines keeps what's in it:
@@ -962,58 +917,13 @@ const Review = ({
     raised.current = { partId, place: opened, before: draft, pointId: point.id, state };
     scrollTo(hunkAnchor(partId));
   };
-  const commentOnFocused = () => {
-    // Comment on the focused hunk's first changed line.
-    const current = currentHunk();
-    const found = current === null ? undefined : index.parts.get(current);
-    const line = found?.hunk.lines.find((one) => one.kind !== "context");
-    if (!complete || found === undefined || line === undefined) return;
-    const place = commentPlace(line);
-    if (place === null || current === null) return;
-    raised.current = null;
-    setOpenComment({ partId: current, place });
-  };
-  /**
-   * Opens the code a call runs: the call after the open one on the focused line, or the first,
-   * or else on the focused part or file.
-   */
-  const openCallOnFocused = () => {
-    const focused = document.activeElement;
-    if (!(focused instanceof HTMLElement)) return;
-    const scope =
-      focused.closest("[role=row]") ??
-      focused.closest("[data-slot=hunk-card]") ??
-      focused.closest("[data-slot=file-card]");
-    const found = [...(scope?.querySelectorAll<HTMLElement>("[data-slot=call]") ?? [])];
-    const open = found.findIndex((call) => call.hasAttribute("data-popup-open"));
-    const next = found[(open + 1) % found.length];
-    if (next !== undefined) callPeek.open(next.id);
-  };
   const onEscape = () => {
     if (highlight.size > 0) return setHighlight(new Set());
     if (layout === "map") backFromCode();
   };
   // The verdict is the reviewer's own, so a complete analysis can always be published.
   const canPublish = complete;
-  // The overview handles its own arrows and Enter, on the file that has the focus.
-  const mapOnly: ShortcutHandlers = {
-    nextFile: () => moveFile(1),
-    previousFile: () => moveFile(-1),
-    comment: commentOnFocused,
-    openCall: openCallOnFocused,
-    close: onEscape,
-  };
-  useShortcuts(
-    {
-      ...(layout === "map" ? mapOnly : {}),
-      toggleLayout: () => switchLayout(),
-      openReview: () => {
-        if (canPublish) void openPublish();
-      },
-      help: () => setShowShortcuts(true),
-    },
-    !publishing && !showShortcuts && !showDetails,
-  );
+  useShortcuts({ close: onEscape }, layout === "map" && !publishing && !showDetails);
 
   const prUrl = analysis.pullRequest?.url ?? pullRequestUrl(analysis.key.ref);
   const reanalyze = useMutation(client.startAnalysis);
@@ -1384,7 +1294,6 @@ const Review = ({
         />
       );
     },
-    onFocusHunk: focusHunk,
     marksOf,
     pointsOn,
     pointsAt,
@@ -1864,7 +1773,6 @@ const Review = ({
           }}
         />
       )}
-      <ShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} ids={PAGE_SHORTCUTS} />
       <CallPeek handle={callPeek} onGoTo={(id) => scrollTo(hunkAnchor(id))} />
       {showDetails && (
         <Dialog
@@ -1896,9 +1804,6 @@ const Review = ({
           )}
         </Dialog>
       )}
-      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
-        Press <KeyHint id="help" /> for keyboard shortcuts.
-      </p>
     </div>
   );
 };

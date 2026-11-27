@@ -1,14 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { modifiedFile } from "./diff/testing.ts";
-import {
-  DiffViewer,
-  FilePath,
-  FileTree,
-  KeyHint,
-  ReviewSubmitPanel,
-  type ViewLine,
-} from "./index.ts";
+import { DiffViewer, FilePath, FileTree, ReviewSubmitPanel } from "./index.ts";
 
 const FILE = modifiedFile("src/retry.ts", [
   "@@ -10,4 +10,4 @@ export function retry",
@@ -41,11 +34,8 @@ describe("DiffViewer", () => {
     expect(within(grid).getByText(/Hunk 1 of 1, lines 10 to 13/)).toBeTruthy();
   });
 
-  it("moves the line focus with the arrows and comments on the selection with c", () => {
-    const comments: (readonly ViewLine[])[] = [];
-    render(
-      <DiffViewer file={FILE} virtualize={false} onComment={(lines) => comments.push(lines)} />,
-    );
+  it("moves the line focus with the arrows and extends the selection with ⇧", () => {
+    render(<DiffViewer file={FILE} virtualize={false} onComment={() => undefined} />);
     const grid = screen.getByRole("grid");
     act(() => grid.focus());
     const active = () => document.getElementById(grid.getAttribute("aria-activedescendant") ?? "");
@@ -54,8 +44,6 @@ describe("DiffViewer", () => {
     expect(active()?.textContent).toContain("removed line 11");
     fireEvent.keyDown(grid, { key: "ArrowDown", shiftKey: true });
     expect(grid.querySelectorAll("[aria-selected=true]")).toHaveLength(2);
-    fireEvent.keyDown(grid, { key: "c" });
-    expect(comments[0]?.map((line) => line.text)).toEqual(["b", "B"]);
   });
 
   it("shows split halves side by side", () => {
@@ -99,11 +87,9 @@ describe("FileTree", () => {
     return one;
   };
 
-  it("filters with / and clears with Esc", () => {
+  it("filters and clears with Esc", () => {
     render(<FileTree files={files} activePath={null} onSelect={() => undefined} />);
-    fireEvent.keyDown(window, { key: "/" });
     const filter = screen.getByRole("textbox", { name: "Filter files by name or path" });
-    expect(document.activeElement).toBe(filter);
     fireEvent.change(filter, { target: { value: "auth" } });
     expect(screen.getByText("1 of 4 files")).toBeTruthy();
     expect(
@@ -211,19 +197,6 @@ describe("FilePath", () => {
     expect(
       [...container.querySelectorAll("[data-icon]")].map((icon) => icon.getAttribute("data-icon")),
     ).toEqual(["typeScript", "class"]);
-  });
-});
-
-describe("KeyHint", () => {
-  it("hides a letter key's hint when single-key shortcuts are off, not ⌘↵'s", () => {
-    window.localStorage.setItem("megareviewer:singleKeyShortcuts", "false");
-    const { container } = render(
-      <>
-        <KeyHint id="nextFile" />
-        <KeyHint id="submit" />
-      </>,
-    );
-    expect(container.querySelectorAll("[data-slot=kbd-group]")).toHaveLength(1);
   });
 });
 

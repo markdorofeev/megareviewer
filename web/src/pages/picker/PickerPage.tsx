@@ -8,7 +8,6 @@ import {
 import { type ApiError, useApi, usePullRequests, useReviewActivity } from "../../api/index.ts";
 import { useConnections } from "../../app/connections-context.tsx";
 import { navigate, pullRequestPath, reviewPath } from "../../app/router.ts";
-import { isTextEntry } from "../../lib/keymap.ts";
 import { HOST_NAMES, prLabel } from "./PullRequestList.tsx";
 import { PullRequestLists, type RowFailure } from "./PullRequestLists.tsx";
 import { ReviewActivityCard } from "./ReviewActivity.tsx";
@@ -80,18 +79,6 @@ export const PickerPage = ({ now = Date.now }: { readonly now?: () => number }) 
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [now, readAgain]);
-
-  useEffect(() => {
-    const focusField = (event: KeyboardEvent) => {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (isTextEntry(event.target)) return;
-      event.preventDefault();
-      urlField.current?.focus();
-      urlField.current?.select();
-    };
-    document.addEventListener("keydown", focusField);
-    return () => document.removeEventListener("keydown", focusField);
-  }, []);
 
   const open = async (
     url: string,

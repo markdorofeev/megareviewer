@@ -115,65 +115,6 @@ test("works from the keyboard", async ({ page }) => {
   await expect(selected).toHaveCount(0);
   await page.keyboard.press("Shift+ArrowUp");
   await expect(selected).toHaveCount(2);
-
-  // c comments on the selection; ⌘↵ sends it.
-  await page.keyboard.press("c");
-  const composer = screens.getByRole("textbox", { name: "Comment on src/http/retry.ts:15–16" });
-  await expect(composer).toBeFocused();
-  await page.keyboard.type("Typed from the keyboard.");
-  await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(screens.getByText("Typed from the keyboard.")).toBeVisible();
-  await expect(composer).toHaveCount(0);
-
-  // u switches the diff between unified and split.
-  await grid.focus();
-  await page.keyboard.press("u");
-  await expect(screens.getByRole("button", { name: "Split" }).nth(1)).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await page.keyboard.press("u");
-  await expect(screens.getByRole("button", { name: "Unified" }).nth(1)).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-
-  // n and p move through the overview's files.
-  await page.evaluate(() => {
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-  });
-  const active = screens.locator("nav [aria-selected=true]");
-  await expect(active).toHaveAttribute("data-key", "src/http/retry.ts");
-  await page.keyboard.press("n");
-  await expect(active).toHaveAttribute("data-key", "src/util/sleep.ts");
-  await page.keyboard.press("p");
-  await expect(active).toHaveAttribute("data-key", "src/http/retry.ts");
-
-  // / filters the files; Esc clears the filter.
-  await page.keyboard.press("/");
-  const filter = page.getByRole("textbox", { name: "Filter files by name or path" }).first();
-  await expect(filter).toBeFocused();
-  await page.keyboard.type("sleep");
-  await page.keyboard.press("Escape");
-  await expect(filter).toHaveValue("");
-
-  // ⇧R opens the review to publish; Esc closes it.
-  await filter.blur();
-  await page.keyboard.press("Shift+R");
-  const publish = page.getByRole("dialog", { name: "Publish review" });
-  await expect(publish).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(publish).toHaveCount(0);
-
-  // ? lists the shortcuts, and turns the letter keys off.
-  await page.keyboard.press("?");
-  const shortcuts = page.getByRole("dialog", { name: "Keyboard shortcuts" });
-  await expect(shortcuts).toBeVisible();
-  await shortcuts.getByRole("switch", { name: /Single-key shortcuts/ }).click();
-  await page.keyboard.press("Escape");
-  await expect(shortcuts).toHaveCount(0);
-  await page.keyboard.press("n");
-  await expect(active).toHaveAttribute("data-key", "src/http/retry.ts");
 });
 
 // The rail is 17rem beside the code above 1024px; under that the tree takes the page's width. A

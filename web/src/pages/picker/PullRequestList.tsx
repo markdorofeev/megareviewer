@@ -4,7 +4,7 @@ import type { HostKind, PullRequestSummary } from "../../../../src/domain/review
 import { isPlainClick } from "../../app/Link.tsx";
 import { pullRequestPath } from "../../app/router.ts";
 import { cn } from "../../lib/utils.ts";
-import { avatarColors, initialsOf, KeyHint } from "../../review/index.ts";
+import { avatarColors, initialsOf } from "../../review/index.ts";
 import { Badge } from "../../ui/badge.tsx";
 import { Skeleton } from "../../ui/skeleton.tsx";
 import { fullDate, relativeTime } from "./relative-time.ts";
@@ -106,7 +106,6 @@ const Row = ({
             <Badge variant="outline" className="text-muted-foreground @max-[479px]:hidden">
               {host}
             </Badge>
-            <KeyHint id="openRow" className="hidden group-focus-visible:inline-flex" />
             <ChevronRightIcon
               aria-hidden="true"
               className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 max-sm:hidden"

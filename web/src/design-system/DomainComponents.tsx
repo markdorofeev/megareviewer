@@ -8,7 +8,6 @@ import {
   type Reviewer,
 } from "../../../src/domain/review/index.ts";
 import { DEEP_APP_PATHS, JAVA_SERVICE_PATHS, MONOREPO_PATHS } from "../../dev/fixtures/index.ts";
-import { useShortcuts } from "../lib/keymap.ts";
 import { type PointTone, VERDICT_STATUS } from "../lib/status.ts";
 import { FindingCard } from "../pages/review/PointCard.tsx";
 import {
@@ -24,7 +23,6 @@ import {
   type FileEntry,
   FileTree,
   HunkCard,
-  KeyHint,
   type LineComment,
   type LinePlace,
   type PointLine,
@@ -36,7 +34,6 @@ import {
   type ReviewThreadProps,
   ReviewThreadView,
   SelectionComment,
-  ShortcutsDialog,
   TreeSkeleton,
   useSyntax,
   type ViewLine,
@@ -73,8 +70,6 @@ const CARD_STATES: readonly (readonly [CommentState, string])[] = [
 
 /** The review page's components on made-up data, in each of their states. */
 export const DomainComponents = () => {
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  useShortcuts({ help: () => setShortcutsOpen(true) });
   return (
     <div className="flex flex-col gap-10">
       <Group title="PR header">
@@ -250,24 +245,6 @@ export const DomainComponents = () => {
         </div>
       </Group>
 
-      <Group title="Key hints and shortcuts">
-        <div className="flex flex-wrap items-center gap-4">
-          <span className="flex items-center gap-2">
-            Next file <KeyHint id="nextFile" />
-          </span>
-          <span className="flex items-center gap-2">
-            Publish <KeyHint id="openReview" />
-          </span>
-          <span className="flex items-center gap-2">
-            Send <KeyHint id="submit" />
-          </span>
-          <Button variant="outline" onClick={() => setShortcutsOpen(true)}>
-            All shortcuts <KeyHint id="help" />
-          </Button>
-        </div>
-        <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-      </Group>
-
       <Group title="Empty states">
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
@@ -276,7 +253,7 @@ export const DomainComponents = () => {
               glyph="✓"
               title="Every finding is in your review"
               body="Publish the review to post it on the pull request."
-              actions={[{ label: "Publish", onClick: () => undefined, shortcut: "openReview" }]}
+              actions={[{ label: "Publish", onClick: () => undefined }]}
             />
           </Card>
           <Card>
@@ -421,7 +398,7 @@ const ManyFoldersDemo = ({
 };
 
 const AuthorPanel = () => (
-  <ReviewSubmitPanel pending={[]} canApprove={false} shortcut={false} onSubmit={() => undefined} />
+  <ReviewSubmitPanel pending={[]} canApprove={false} onSubmit={() => undefined} />
 );
 
 /** Drafts on a hunk's lines, kept in memory, as the review page keeps them in local storage. */

@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import type { FileChange, Hunk } from "../../../../src/domain/diff/index.ts";
-import { isMac, type ShortcutId, shortcutFor, useSingleKeyShortcuts } from "../../lib/keymap.ts";
+import { isMac, type ShortcutId, shortcutFor } from "../../lib/keymap.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { ToggleGroup, ToggleGroupItem } from "../../ui/toggle-group.tsx";
@@ -34,14 +34,7 @@ export type DiffView = "unified" | "split";
 /** Rows past this make the viewer draw only what's in view. */
 export const VIRTUALIZE_ABOVE = 300;
 
-const GRID_KEYS: readonly ShortcutId[] = [
-  "lineDown",
-  "lineUp",
-  "extendDown",
-  "extendUp",
-  "comment",
-  "toggleSplit",
-];
+const GRID_KEYS: readonly ShortcutId[] = ["lineDown", "lineUp", "extendDown", "extendUp"];
 
 export interface DiffViewerProps {
   readonly file: FileChange;
@@ -106,7 +99,6 @@ export const DiffViewer = ({
   const wrap = wrapProp ?? view === "split";
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [loaded, setLoaded] = useState(deferred === undefined);
-  const [singleKeys] = useSingleKeyShortcuts();
 
   const rows: readonly Row[] = useMemo(
     () => (view === "split" ? splitRows(file, tokens) : unifiedRows(file, tokens)),
@@ -169,25 +161,14 @@ export const DiffViewer = ({
     [focus, anchor, lines, rowOfLine, virtual, virtualizer, lineId],
   );
 
-  const comment = useCallback(() => {
-    if (onComment === undefined || focus === null) return;
-    const chosen =
-      selected.size > 0
-        ? lines.filter((line) => selected.has(line.key))
-        : lines.filter((line) => line.key === focus);
-    onComment(chosen);
-  }, [onComment, focus, selected, lines]);
-
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const id = shortcutFor(event, GRID_KEYS, { mac: isMac(), singleKeys });
+    const id = shortcutFor(event, GRID_KEYS, { mac: isMac() });
     if (id === null) return;
     event.preventDefault();
     if (id === "lineDown") moveFocus(1, false);
     if (id === "lineUp") moveFocus(-1, false);
     if (id === "extendDown") moveFocus(1, true);
     if (id === "extendUp") moveFocus(-1, true);
-    if (id === "comment") comment();
-    if (id === "toggleSplit") setView(view === "split" ? "unified" : "split");
   };
 
   const onGutterClick = useCallback(
