@@ -84,7 +84,6 @@ import {
   commentsInParts,
   type Layout,
   mapFiles,
-  mechanicalCount,
   OVERVIEW_FORMS,
   openedOn,
   parseOverviewForm,
@@ -311,7 +310,6 @@ const Review = ({
   const files = useMemo(() => mapFiles(analysis, index), [analysis, index]);
   const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
-  const mechanical = mechanicalCount(trailing);
   // On until the reviewer turns it off: off, a run asks for no tour and there's no Tour layout.
   const [tourOn, setTourOn] = useStoredState("tour", true, parseBoolean);
   // Off until the reviewer turns it on: off, there's no Overview layout and its form isn't asked for.
@@ -1736,7 +1734,6 @@ const Review = ({
               )
             }
             trailingProofs={trailing}
-            mechanicalCount={mechanical}
             scrollRequest={scrollRequest}
             signatureOf={signatureOf}
           />

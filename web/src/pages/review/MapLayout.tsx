@@ -203,7 +203,6 @@ export const MapLayout = ({
   before,
   after,
   trailingProofs,
-  mechanicalCount,
   scrollRequest,
   signatureOf,
 }: {
@@ -215,7 +214,6 @@ export const MapLayout = ({
   /** Shown after the last file, e.g. threads on files without a card. */
   readonly after?: ReactNode;
   readonly trailingProofs: readonly MechanicalProof[];
-  readonly mechanicalCount: number;
   readonly scrollRequest: ScrollRequest | null;
   /** What a part's place shows, as a string that changes whenever that does. */
   readonly signatureOf: (id: PartId) => string;
@@ -254,9 +252,6 @@ export const MapLayout = ({
         className="flex scroll-mt-2 flex-col gap-4 -outline-offset-2"
         tabIndex={-1}
       >
-        {mechanicalCount === 0 && analysis.stages.prep === "done" && (
-          <p className="text-muted-foreground">No mechanical changes in this pull request.</p>
-        )}
         <MechanicalGroup files={analysis.files} proofs={trailingProofs} risk={analysis.risk} />
         <FileNotices files={analysis.files} />
       </div>
