@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { parseGitattributes } from "../diff/index.ts";
 import {
   BlobHash,
+  followsLink,
   GUIDELINE_PATHS,
   Harness,
   type HarnessFile,
@@ -11,6 +13,7 @@ import {
   harnessOutline,
   harnessPlan,
   harnessReach,
+  isNeverRules,
   MAX_COPY_LINE,
   MAX_INLINE_BYTES,
   strongerLink,
@@ -212,6 +215,73 @@ describe("harnessLinks", () => {
       harnessOutline(content);
     }
   }, 20_000);
+});
+
+describe("isNeverRules", () => {
+  const none = () => null;
+
+  it.each([
+    "src/adapters/github/fixtures/PROVENANCE.md",
+    "test/__fixtures__/rules.md",
+    "web/__snapshots__/page.md",
+    "pkg/testdata/AGENTS.md",
+    "go/test-data/a.md",
+    "py/test_data/a.md",
+    "vendor/lib/README.md",
+    "third_party/x/CONTRIBUTING.md",
+    "Third-Party/x/a.md",
+    "node_modules/pkg/README.md",
+    "LICENSES/MIT.md",
+    "LICENSE.md",
+    "licence.md",
+    "LICENSE-APACHE.md",
+    "NOTICE.md",
+    "COPYING.md",
+    "docs/PROVENANCE.md",
+    "CHANGELOG.md",
+    "changelog-2026.md",
+  ])("is %s", (path) => {
+    expect(isNeverRules(path, none)).toBe(true);
+  });
+
+  it.each([
+    "docs/rules.md",
+    "test/README.md",
+    "spec/review.md",
+    "docs/licensing.md",
+    "docs/notices-for-reviewers.md",
+    "docs/vendoring.md",
+    "fixtures.md",
+    "docs/changelog-policy/rules.md",
+  ])("isn't %s", (path) => {
+    expect(isNeverRules(path, none)).toBe(false);
+  });
+
+  it("is what .gitattributes marks generated or vendored, and nothing it unsets", () => {
+    const attributeFor = parseGitattributes(
+      "evals/cases/*/files/** linguist-vendored\ndocs/api/*.md linguist-generated\ndocs/api/keep.md -linguist-generated\n",
+    );
+    expect(isNeverRules("evals/cases/a/files/CONTRIBUTING.md", attributeFor)).toBe(true);
+    expect(isNeverRules("docs/api/routes.md", attributeFor)).toBe(true);
+    expect(isNeverRules("docs/api/keep.md", attributeFor)).toBe(false);
+    expect(isNeverRules("evals/cases/a/labels.md", attributeFor)).toBe(false);
+  });
+});
+
+describe("followsLink", () => {
+  const none = () => null;
+
+  it("follows an import anywhere, a .txt and a fixture too", () => {
+    expect(followsLink("notes.txt", "import", none)).toBe(true);
+    expect(followsLink("test/fixtures/rules.md", "import", none)).toBe(true);
+  });
+
+  it.each(["link", "mention"] as const)("follows a %s to rules only, never to a .txt", (kind) => {
+    expect(followsLink("docs/rules.md", kind, none)).toBe(true);
+    expect(followsLink("docs/RULES.TXT", kind, none)).toBe(false);
+    expect(followsLink("licenses/tree-sitter-go.txt", kind, none)).toBe(false);
+    expect(followsLink("src/fixtures/PROVENANCE.md", kind, none)).toBe(false);
+  });
 });
 
 describe("strongerLink", () => {

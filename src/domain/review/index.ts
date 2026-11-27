@@ -91,8 +91,10 @@ export {
 } from "./guardrail.ts";
 export { type RefNames, refNames, withoutRefs } from "./guidance-refs.ts";
 export {
+  type AttributeFor,
   BlobHash,
   fitInPrompt,
+  followsLink,
   HARNESS_ROOT,
   Harness,
   HarnessFile,
@@ -109,6 +111,7 @@ export {
   harnessPlan,
   harnessReach,
   isHarnessFileInFolder,
+  isNeverRules,
   MAX_COPY_LINE,
   MAX_HARNESS_DEPTH,
   MAX_HARNESS_FILE_BYTES,
