@@ -61,6 +61,12 @@ export const Harness = z
   .readonly();
 export type Harness = z.infer<typeof Harness>;
 
+/**
+ * The rules a harness is walked by: what a file links and what the walk follows. A harness stored
+ * under other rules is walked again, so a change to them goes up with it.
+ */
+export const HARNESS_RULES = 1;
+
 /** How many links a file can be from a root. */
 export const MAX_HARNESS_DEPTH = 5;
 export const MAX_HARNESS_FILES = 200;
@@ -251,9 +257,14 @@ const resolved = (folder: readonly string[], target: string): Target | null => {
     : null;
 };
 
-/** Outside a Markdown link a folder ends in a slash, so `@scope/name` and `I/O` aren't one. */
-const withSlash = (target: string, found: Target | null): Target | null =>
-  found?.folder === true && !target.endsWith("/") ? null : found;
+/**
+ * Outside a Markdown link a folder is only what says it's a path: one ending in a slash or
+ * starting with `./`, or a code span's, so `I/O` in prose isn't one.
+ */
+const asFolder = (target: string, inSpan: boolean, found: Target | null): Target | null =>
+  found?.folder === true && !inSpan && !target.endsWith("/") && !/^\.\.?\//.test(target)
+    ? null
+    : found;
 
 const decoded = (target: string): string => {
   try {
@@ -339,7 +350,7 @@ export const harnessLinks = (path: string, content: string): HarnessLink[] => {
     (match, before: string, token: string, at: number) => {
       const target = inProse(token).replaceAll("\\ ", " ");
       if (isRelative(target)) {
-        add(at + before.length, "import", [withSlash(target, resolved(folder, target))]);
+        add(at + before.length, "import", [asFolder(target, false, resolved(folder, target))]);
       }
       return before + masked(match.slice(before.length));
     },
@@ -348,10 +359,12 @@ export const harnessLinks = (path: string, content: string): HarnessLink[] => {
   // A leading slash in a guideline file means the repository's root, as it does in a link.
   const inRepository = (target: string): boolean => /^(?:[^~/$\\]|\/(?!\/))/.test(target);
   // A leading slash says it's a path, so `/docs/rules` is a folder as `docs/rules/` is, and `I/O` isn't.
-  const meanings = (target: string): (Target | null)[] =>
+  const meanings = (target: string, inSpan = false): (Target | null)[] =>
     target.startsWith("/")
       ? [resolved([], target)]
-      : [resolved(folder, target), resolved([], target)].map((found) => withSlash(target, found));
+      : [resolved(folder, target), resolved([], target)].map((found) =>
+          asFolder(target, inSpan, found),
+        );
   /** What a path in prose names: a pattern for a folder's Markdown names the folder. */
   const unpatterned = (target: string): string | null =>
     target.includes("*") ? patternFolder(target) : target;
@@ -370,18 +383,16 @@ export const harnessLinks = (path: string, content: string): HarnessLink[] => {
 
   // A span that holds a path and nothing else names it: `docs/` and `docs/rules.md` aren't examples.
   for (const { start, end } of unspanned.spans) {
-    const target = unpatterned(
-      inProse(
-        unfenced
-          .slice(start, end)
-          .replace(/^`+|`+$/g, "")
-          .trim(),
-      ),
-    );
+    const span = unfenced
+      .slice(start, end)
+      .replace(/^`+|`+$/g, "")
+      .trim();
+    const target = unpatterned(inProse(span));
     if (target === null || !inRepository(target)) continue;
     const whole = [...target.matchAll(PROSE_PATH)];
     if (whole.length !== 1 || whole[0]?.[0] !== target) continue;
-    add(start, "mention", meanings(target));
+    // `framework-docs/modules/ROOT` is a folder; `mx` and `@types/node` aren't.
+    add(start, "mention", meanings(target, !span.startsWith("@") && target.includes("/")));
   }
 
   const strength = ({ kind }: HarnessLink) => HarnessLinkKind.options.indexOf(kind);

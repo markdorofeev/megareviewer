@@ -9,7 +9,7 @@ import {
   FixedClock,
   RecordingLogger,
 } from "../../application/testing/index.ts";
-import { BlobHash, type Harness, type RepoRef } from "../../domain/review/index.ts";
+import { BlobHash, HARNESS_RULES, type Harness, type RepoRef } from "../../domain/review/index.ts";
 import { openSqliteAnalysisStore, type SqliteAnalysisStore } from "./index.ts";
 import { FILE_CACHE_DAYS } from "./sqlite-analysis-store.ts";
 
@@ -103,6 +103,25 @@ describe("the SQLite harness store", () => {
     expect(logger.entries.find((entry) => entry.level === "warn")?.message).toBe(
       "Ignoring a stored harness that no longer parses",
     );
+  });
+
+  it("answers no harness walked by other rules, and drops older rules' at a restart", async () => {
+    const path = tempPath();
+    const store = openStore(path);
+    await store.putHarness(repo, harness);
+    const db = new DatabaseSync(path);
+    db.exec(`UPDATE harnesses SET rules = ${HARNESS_RULES + 1}`);
+
+    expect(await store.getHarness(repo, harness.baseSha)).toBeNull();
+    expect(await store.latestHarness(repo)).toBeNull();
+    store.close();
+    openStore(path).close();
+    expect(db.prepare("SELECT rules FROM harnesses").all()).toEqual([{ rules: HARNESS_RULES + 1 }]);
+
+    db.exec(`UPDATE harnesses SET rules = ${HARNESS_RULES - 1}`);
+    openStore(path).close();
+    expect(db.prepare("SELECT rules FROM harnesses").all()).toEqual([]);
+    db.close();
   });
 
   it("leaves a harness as it was when the one replacing it can't be written", async () => {
