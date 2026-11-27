@@ -191,6 +191,8 @@ const IMPORTS = /^src\/routes\/orders\.ts, lines 1–8$/;
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   window.localStorage.clear();
+  // Off by default, which the layouts' own tests cover; the rest are written with it on.
+  window.localStorage.setItem("megareviewer:overview", "true");
 });
 
 afterEach(() => {
@@ -995,6 +997,9 @@ describe("map", () => {
     });
     renderReview();
     await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Overview" }));
+    await userEvent.keyboard("{Escape}");
     await userEvent.keyboard("v");
     expect(layoutIs("overview")).toBe(true);
     await userEvent.keyboard("v");
@@ -1190,10 +1195,16 @@ describe("points", () => {
   it("are counted in the pager, started, and stepped through both ways, round", async () => {
     renderReview();
     await loaded();
-    // Before the first step, the count and Start, which goes to the first.
-    await waitFor(() => expect(position().textContent).toBe("3 findings"));
+    // Before the first step, the count, how many of each severity, and Start, which goes to the
+    // first.
+    await waitFor(() =>
+      expect(position().textContent).toBe("3 findings■1 blocking▲1 major●1 minor"),
+    );
     expect(within(reviewBar()).getByRole("group", { name: "Findings" })).toBeTruthy();
     expect(position().getAttribute("aria-label")).toBe("3 findings, show all");
+    // The severities are drawn for the eye, and a screen reader hears them as the description.
+    const described = position().getAttribute("aria-describedby") ?? "";
+    expect(document.getElementById(described)?.textContent).toBe("1 blocking, 1 major, 1 minor");
     expect(within(reviewBar()).queryByRole("button", { name: "Previous finding" })).toBeNull();
     // A type is no chip on the bar: it's picked in the list.
     expect(within(reviewBar()).queryByRole("button", { name: /logic finding/ })).toBeNull();
@@ -1268,7 +1279,7 @@ describe("points", () => {
     await loaded();
     const list = await openList();
     await userEvent.click(within(list).getByRole("button", { name: "ƒ logic 2" }));
-    expect(position().textContent).toBe("2 logic findings");
+    expect(position().textContent).toBe("2 logic findings▲1 major●1 minor");
     await userEvent.keyboard("{Escape}");
     // The SHOP-142 mismatch, from the details, goes to the contract finding that shows it.
     const intent = await openDetails();
@@ -1763,6 +1774,29 @@ describe("the tour", () => {
 });
 
 describe("layouts", () => {
+  it("have no overview until the Display menu's Overview switch turns it on", async () => {
+    window.localStorage.removeItem("megareviewer:overview");
+    window.history.replaceState(null, "", "/?view=overview");
+    renderReview();
+    await loaded();
+    expect(screen.queryByRole("group", { name: "Layout" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
+    expect(window.location.search).toBe("?view=code");
+    await userEvent.keyboard("v");
+    expect(layoutIs("map")).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Display" }));
+    const overview = await screen.findByRole("menuitemcheckbox", { name: "Overview" });
+    expect(overview.getAttribute("aria-checked")).toBe("false");
+    expect(screen.queryByRole("group", { name: "Overview (preview)" })).toBeNull();
+    await userEvent.click(overview);
+    expect(window.localStorage.getItem("megareviewer:overview")).toBe("true");
+    expect(await screen.findByRole("group", { name: "Overview (preview)" })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    await openOverview();
+    expect(window.location.search).toBe("?view=overview");
+  });
+
   it("are switched in the bar, which shows the one in use, and not in the Display menu", async () => {
     renderReview();
     await loaded();
@@ -2571,31 +2605,36 @@ describe("the bar's verdicts", () => {
   });
 
   it.each([
-    ["data-flow", { tour: true }],
-    ["directories", {}],
-  ])("with the Tour switch off and the overview as %s, asks a run for %o", async (form, asked) => {
-    window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
-    const { requests } = renderReview({
-      view: codeOnly,
-      respond: (request) =>
-        request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
-    });
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "Display" }));
-    const tour = await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
-    expect(tour.getAttribute("aria-checked")).toBe("true");
-    await userEvent.click(tour);
-    expect(window.localStorage.getItem("megareviewer:tour")).toBe("false");
-    await userEvent.keyboard("{Escape}");
+    ["data-flow", true, { tour: true }],
+    ["data-flow", false, {}],
+    ["directories", true, {}],
+  ])(
+    "with the Tour switch off and the overview as %s, shown %s, asks a run for %o",
+    async (form, shown, asked) => {
+      window.localStorage.setItem("megareviewer:overview-form", JSON.stringify(form));
+      window.localStorage.setItem("megareviewer:overview", JSON.stringify(shown));
+      const { requests } = renderReview({
+        view: codeOnly,
+        respond: (request) =>
+          request.url === `${viewPath}/model` ? jsonResponse(200, { analysisId: id }) : undefined,
+      });
+      await loaded();
+      await userEvent.click(screen.getByRole("button", { name: "Display" }));
+      const tour = await screen.findByRole("menuitemcheckbox", { name: "Tour (preview)" });
+      expect(tour.getAttribute("aria-checked")).toBe("true");
+      await userEvent.click(tour);
+      expect(window.localStorage.getItem("megareviewer:tour")).toBe("false");
+      await userEvent.keyboard("{Escape}");
 
-    const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
-    await waitFor(() => expect(description(button)).toContain("Sonnet 5.5"));
-    await userEvent.click(button);
-    expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
-      optionId: "claude-code/claude-sonnet-5-5",
-      ...asked,
-    });
-  });
+      const button = within(reviewBar()).getByRole("button", { name: "Request AI review" });
+      await waitFor(() => expect(description(button)).toContain("Sonnet 5.5"));
+      await userEvent.click(button);
+      expect(requests.find((request) => request.url === `${viewPath}/model`)?.body).toEqual({
+        optionId: "claude-code/claude-sonnet-5-5",
+        ...asked,
+      });
+    },
+  );
 
   it("re-runs Claude after asking: takes the run off and runs the chosen model again", async () => {
     let running = false;
@@ -2894,7 +2933,7 @@ describe("review threads", () => {
       renderReview({ view: codeOnly });
       await loaded();
       // Before the first step, the count: three of the four are unresolved.
-      await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
+      await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await step("Start");
       // orders.ts comes before receipts.ts, so its earlier comment is first.
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier");
@@ -2924,7 +2963,7 @@ describe("review threads", () => {
     it("lists only the unresolved threads, and goes to one", async () => {
       renderReview({ view: codeOnly });
       await loaded();
-      await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
+      await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await userEvent.click(position());
       const list = await screen.findByRole("dialog", { name: "3 unresolved threads" });
       expect(within(list).queryByRole("button", { name: /Rounds half-cents up\?/ })).toBeNull();
@@ -2937,7 +2976,7 @@ describe("review threads", () => {
     it("takes a thread resolved here out of the steps, and steps on from it", async () => {
       renderReview({ view: codeOnly });
       await loaded();
-      await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
+      await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await step("Start");
       await step("Next thread");
       expect(position().textContent).toBe("2 of 3");
@@ -2972,7 +3011,7 @@ describe("review threads", () => {
       renderReview();
       await loaded();
       const chip = await within(reviewBar()).findByRole("button", { name: "3 unresolved threads" });
-      expect(position().textContent).toBe("3 findings");
+      expect(position().textContent).toContain("3 findings");
       await userEvent.click(chip);
       expect(chip.getAttribute("aria-pressed")).toBe("true");
       // Pressing it goes to the first thread.
@@ -2983,7 +3022,7 @@ describe("review threads", () => {
 
       // Letting go takes the pager back to the findings; the thread's place is kept.
       await userEvent.click(chip);
-      expect(position().textContent).toBe("3 findings");
+      expect(position().textContent).toContain("3 findings");
       expect(document.getElementById("thread-PRRT_attempts")?.dataset.current).toBeUndefined();
       await userEvent.click(chip);
       expect(position().textContent).toBe("2 of 3");
@@ -2992,7 +3031,7 @@ describe("review threads", () => {
     it("goes to the map from the overview, which doesn't show threads", async () => {
       renderReview({ view: codeOnly });
       await loaded();
-      await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
+      await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await userEvent.keyboard("v");
       expect(overviewBox()).toBeTruthy();
       await step("Start");

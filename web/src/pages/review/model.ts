@@ -251,17 +251,6 @@ const partShowing = (
     }),
   );
 
-/** One row per mechanical hunk, plus one per file-level proof, as the mechanical group shows. */
-export const mechanicalCount = (proofs: readonly MechanicalProof[]): number => {
-  const hunks = new Set<PartId>();
-  let fileLevel = 0;
-  for (const proof of proofs) {
-    if (proof.hunkId === null) fileLevel += 1;
-    else hunks.add(proof.hunkId);
-  }
-  return hunks.size + fileLevel;
-};
-
 /**
  * Proofs the mechanical group at the end shows: file-level ones, and those in files with nothing
  * else to review. A mechanical hunk in a file with other changes shows in place on that file's card.

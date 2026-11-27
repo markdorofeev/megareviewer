@@ -122,7 +122,7 @@ describe("a review whose run read guidance", () => {
     const folded = pointCard(RETRIES);
     expect(folded.dataset.leftOut).toBe("true");
     expect(folded.textContent).toContain("Left out by your preference: Retries without backoff");
-    await waitFor(() => expect(position().textContent).toBe("2 findings"));
+    await waitFor(() => expect(position().textContent).toContain("2 findings"));
     expect(await types()).toEqual(["All 2", "ƒ logic 1", "◆ contract 1"]);
     // Only the stale receipt's two lines are marked; the retry's six aren't.
     expect(retryMarks()).toHaveLength(2);
@@ -153,7 +153,7 @@ describe("a review whose run read guidance", () => {
     expect(card.dataset.leftOut).toBeUndefined();
     expect(document.activeElement).toBe(card);
     expect(guidanceOf(RETRIES)).toBe("Left out by your preference: Retries without backoff");
-    await waitFor(() => expect(position().textContent).toBe("3 findings"));
+    await waitFor(() => expect(position().textContent).toContain("3 findings"));
     expect(await types()).toEqual(["All 3", "ƒ logic 2", "◆ contract 1"]);
     expect(retryMarks()).toHaveLength(8);
 
@@ -174,7 +174,7 @@ describe("a review whose run read guidance", () => {
     });
     await loaded();
     expect(pointCard(RETRIES).dataset.leftOut).toBeUndefined();
-    await waitFor(() => expect(position().textContent).toBe("3 findings"));
+    await waitFor(() => expect(position().textContent).toContain("3 findings"));
   });
 
   it("says when everything Claude found was left out", async () => {

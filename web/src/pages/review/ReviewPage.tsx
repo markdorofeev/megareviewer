@@ -84,7 +84,6 @@ import {
   commentsInParts,
   type Layout,
   mapFiles,
-  mechanicalCount,
   OVERVIEW_FORMS,
   openedOn,
   parseOverviewForm,
@@ -311,9 +310,10 @@ const Review = ({
   const files = useMemo(() => mapFiles(analysis, index), [analysis, index]);
   const order = useMemo(() => files.flatMap((group) => group.partIds), [files]);
   const trailing = useMemo(() => trailingProofs(analysis, index), [analysis, index]);
-  const mechanical = mechanicalCount(trailing);
   // On until the reviewer turns it off: off, a run asks for no tour and there's no Tour layout.
   const [tourOn, setTourOn] = useStoredState("tour", true, parseBoolean);
+  // Off until the reviewer turns it on: off, there's no Overview layout and its form isn't asked for.
+  const [overviewOn, setOverviewOn] = useStoredState("overview", false, parseBoolean);
   const points = useMemo(() => pointsOf(analysis), [analysis]);
   const pointIds = useMemo(() => points.map((point) => point.id), [points]);
   const pointStates = usePoints(analysisId, view.pointReviews);
@@ -428,7 +428,7 @@ const Review = ({
   );
 
   const tourReady = tourOn && noTour === null && tour !== null;
-  const [layout, setLayout] = useLayout(tourReady);
+  const [layout, setLayout] = useLayout(tourReady, overviewOn);
   // The overview as its directories, or as one of the previews of the pull request's flow paths.
   const [overviewForm, setOverviewForm] = useStoredState(
     "overview-form",
@@ -448,7 +448,7 @@ const Review = ({
   const noDataFlow = overviewForm === "data-flow" && dataFlow === null ? noDataFlowOf(live) : null;
   const noDataFlowLine = noDataFlow === null ? null : noDataFlowText(noDataFlow);
   // The steps pass writes the tour and the data flow, so a run asks for it when either would show.
-  const explained = tourOn || overviewForm === "data-flow";
+  const explained = tourOn || (overviewOn && overviewForm === "data-flow");
   // The directories the bow tie shows as their files, and the cells the lanes show whole.
   const [flowOpened, setFlowOpened] = useState<ReadonlySet<string>>(new Set());
   const toggleFlow = (key: string) =>
@@ -836,7 +836,8 @@ const Review = ({
       if (openedFrom() !== null) return window.history.back();
       // With a tour, to the step last current; else the overview, on the file in view.
       if (tourReady) return enterTour(readStoredStep());
-      return openOverview();
+      if (overviewOn) openOverview();
+      return;
     }
     // Opened from the code and not moved since: back to the very line the reader left.
     const came = cameFrom();
@@ -871,13 +872,21 @@ const Review = ({
     setLayout("overview");
   };
   usePageDisplay({
-    toggles: [{ label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) }],
-    more: {
-      label: "Overview (preview)",
-      options: OVERVIEW_FORMS,
-      value: overviewForm,
-      onChange: (next) => setOverviewForm((previous) => parseOverviewForm(next) ?? previous),
-    },
+    toggles: [
+      { label: "Overview", checked: overviewOn, onChange: (on) => setOverviewOn(() => on) },
+      { label: "Tour (preview)", checked: tourOn, onChange: (on) => setTourOn(() => on) },
+    ],
+    ...(overviewOn
+      ? {
+          more: {
+            label: "Overview (preview)",
+            options: OVERVIEW_FORMS,
+            value: overviewForm,
+            onChange: (next: string) =>
+              setOverviewForm((previous) => parseOverviewForm(next) ?? previous),
+          },
+        }
+      : {}),
   });
 
   /**
@@ -1443,8 +1452,13 @@ const Review = ({
       />
       <ReviewBar
         layout={
-          analysis.stages.prep === "done" ? (
-            <LayoutSwitch layout={layout} tour={tourReady} onChange={chooseLayout} />
+          analysis.stages.prep === "done" && (overviewOn || tourReady) ? (
+            <LayoutSwitch
+              layout={layout}
+              overview={overviewOn}
+              tour={tourReady}
+              onChange={chooseLayout}
+            />
           ) : null
         }
         title={live.pullRequest?.title ?? null}
@@ -1518,7 +1532,7 @@ const Review = ({
               onClick={() => setRailOpen(!railOpen)}
             >
               <FolderTreeIcon aria-hidden="true" />
-              <span className="max-sm:sr-only">{railOpen ? "Hide files" : "Show files"}</span>
+              <span className="sr-only">{railOpen ? "Hide files" : "Show files"}</span>
             </Button>
           )
         }
@@ -1535,7 +1549,7 @@ const Review = ({
                     onClick={() => void revokeNow()}
                   >
                     <Undo2Icon aria-hidden="true" />
-                    <span className="max-sm:sr-only">
+                    <span className="max-md:sr-only">
                       {revoke.pending ? "Revoking…" : "Revoke approval"}
                     </span>
                   </Button>
@@ -1559,8 +1573,8 @@ const Review = ({
                         aria-hidden="true"
                         className={cn(!bar.approve.filled && "text-review-approved")}
                       />
-                      {/* Below 640px the icon alone; a screen reader still hears the word. */}
-                      <span className="max-sm:sr-only">
+                      {/* Below 768px the icon alone; a screen reader still hears the word. */}
+                      <span className="max-md:sr-only">
                         {approve.pending ? "Approving…" : "Approve"}
                       </span>
                     </TooltipTrigger>
@@ -1576,9 +1590,9 @@ const Review = ({
                     aria-haspopup="dialog"
                     onClick={() => void openPublish()}
                   >
-                    {/* Below 640px "Publish…"; a screen reader hears it all. */}
-                    <span className="max-sm:sr-only">Publish review…</span>
-                    <span aria-hidden="true" className="sm:hidden">
+                    {/* Below 1024px "Publish…"; a screen reader hears it all. */}
+                    <span className="max-lg:sr-only">Publish review…</span>
+                    <span aria-hidden="true" className="lg:hidden">
                       Publish…
                     </span>
                     {bar.publish.count > 0 && (
@@ -1720,7 +1734,6 @@ const Review = ({
               )
             }
             trailingProofs={trailing}
-            mechanicalCount={mechanical}
             scrollRequest={scrollRequest}
             signatureOf={signatureOf}
           />

@@ -42,14 +42,17 @@ export const cameFrom = (state: unknown = window.history.state): CameFrom | null
 
 /**
  * The review's layout, in its address so Back and Forward go between the layouts. The last one
- * chosen is kept per browser, for a review opened without one. The tour is a layout only while
- * there's one (`tour`); without, it's the overview.
+ * chosen is kept per browser, for a review opened without one. The overview is a layout only while
+ * the Display menu's switch has it (`overview`), and the tour only while there's one (`tour`);
+ * without them, it's the overview or the code.
  */
-export const useLayout = (tour: boolean) => {
+export const useLayout = (tour: boolean, overview: boolean) => {
   const search = useSearch();
   const [stored, store] = useStoredState("review-layout", "map", parseLayout);
   const named = layoutOfSearch(search) ?? stored;
-  const layout = named === "tour" && !tour ? "overview" : named;
+  const fallback = overview ? "overview" : "map";
+  const layout =
+    (named === "tour" && !tour) || (named === "overview" && !overview) ? fallback : named;
   // The entry the page is on names the layout it shows, so Back to it shows that one.
   useEffect(() => {
     if (layoutOfSearch(search) === layout) return;

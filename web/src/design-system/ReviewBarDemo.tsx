@@ -275,7 +275,7 @@ export const ReviewBarStates = (): ReactNode => (
       running
       hairline="running"
     />
-    <BarDemo label="Before the first step: the count, and Start" />
+    <BarDemo label="Before the first step: the count, how many of each severity, and Start, in the worst one's color" />
     <BarDemo label="Mid-list" start={PointId.parse("f2")} />
     <BarDemo
       label="A type picked in the list, narrowing the pager to it"
@@ -341,7 +341,11 @@ export const ReviewBarStates = (): ReactNode => (
       start={PointId.parse("f1")}
       isAuthor
     />
-    <BarDemo label="Stuck to the top: the title first" stuck start={PointId.parse("f1")} />
+    <BarDemo
+      label="Stuck to the top: the PR's title after the AI review's button, with room kept for it from 1280px"
+      stuck
+      start={PointId.parse("f1")}
+    />
     <BarDemo label="Published" published start={PointId.parse("f1")} />
   </div>
 );

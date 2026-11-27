@@ -312,14 +312,22 @@ test.describe("the bar, with many of Claude's points", () => {
     );
 
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    await expect(bar).toBeInViewport();
-    expect((await bar.boundingBox())?.y).toBe(0);
-    // Stuck, it names the PR.
-    await expect(bar.getByText(SMALL_FEATURE_TITLE)).toBeVisible();
-
+    // Start is where Next will be, and neither arrow moves from one step to the next: not when
+    // the bar sticks as the first step scrolls the page, and not with the titles' lengths.
+    const edges = (name: string) =>
+      bar.getByRole("button", { name }).evaluate((one) => {
+        const box = one.getBoundingClientRect();
+        return [box.left, box.right];
+      });
+    const [, startRight] = await edges("Start");
     await bar.getByRole("button", { name: "Start" }).click();
     await expect(bar.getByRole("button", { name: /^Finding 1 of \d+, show all$/ })).toBeVisible();
+    await expect(bar).toHaveAttribute("data-stuck", "true");
+    expect((await bar.boundingBox())?.y).toBe(0);
+    const previous = await edges("Previous finding");
+    const next = await edges("Next finding");
+    expect(next[1]).toBe(startRight);
+
     const card = page.locator("[data-slot=point]:focus");
     await expect(card).toBeInViewport();
     const barBottom = await bar.evaluate((one) => one.getBoundingClientRect().bottom);
@@ -334,6 +342,24 @@ test.describe("the bar, with many of Claude's points", () => {
           ?.getBoundingClientRect().bottom ?? Number.NaN,
     );
     expect(header).toBeLessThanOrEqual(cardTop);
+
+    for (const step of [2, 3, 4]) {
+      await bar.getByRole("button", { name: "Next finding" }).click();
+      await expect(
+        bar.getByRole("button", { name: new RegExp(`^Finding ${step} of \\d+, show all$`) }),
+      ).toBeVisible();
+      expect(await edges("Previous finding")).toEqual(previous);
+      expect(await edges("Next finding")).toEqual(next);
+    }
+
+    // Stuck, it names the PR after the pager: from 1280px the bar keeps it 128px at least.
+    await expect(bar).toHaveAttribute("data-stuck", "true");
+    const title = bar.locator("[data-slot=bar-title]");
+    await expect(title).toBeVisible();
+    expect((await title.boundingBox())?.width).toBeGreaterThanOrEqual(128);
+    await page.setViewportSize({ width: 1024, height: 720 });
+    await expect(title).toBeHidden();
+    await page.setViewportSize({ width: 1280, height: 720 });
 
     await bar.getByRole("button", { name: /^Publish review…/ }).click();
     await expect(page.getByRole("dialog", { name: "Publish review" })).toBeVisible();
@@ -535,13 +561,85 @@ test("replies to a thread and resolves it", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("nothing in the bar overlaps, from a phone to 1280px, and it scrolls sideways only below 768px", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
+  const bar = page.locator("[data-slot=review-bar]");
+  const chip = bar.locator("[data-slot=thread-chip]");
+
+  /** The bar's visible controls by their left edge, outermost only, and its widths. */
+  const measure = () =>
+    bar.evaluate((one) => {
+      const all = [
+        ...one.querySelectorAll<HTMLElement>("button, a, [data-slot=your-verdict]"),
+      ].filter((control) => {
+        const box = control.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && getComputedStyle(control).visibility !== "hidden";
+      });
+      const outer = all.filter(
+        (control) => !all.some((other) => other !== control && other.contains(control)),
+      );
+      const controls = outer
+        .map((control) => {
+          const box = control.getBoundingClientRect();
+          const name = control.getAttribute("aria-label") ?? control.textContent ?? "";
+          return { name: name.trim().slice(0, 40), left: box.left, right: box.right };
+        })
+        .sort((a, b) => a.left - b.left);
+      return { controls, scrollWidth: one.scrollWidth, clientWidth: one.clientWidth };
+    });
+
+  const check = async (state: string) => {
+    for (const width of [375, 480, 640, 720, 768, 900, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      // Two frames, so the layout has followed the resize.
+      await page.evaluate(
+        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+      );
+      const { controls, scrollWidth, clientWidth } = await measure();
+      for (const [n, control] of controls.entries()) {
+        const before = controls[n - 1];
+        if (before === undefined) continue;
+        expect(
+          control.left,
+          `${state} at ${width}px: "${control.name}" starts under "${before.name}"`,
+        ).toBeGreaterThanOrEqual(before.right - 1);
+      }
+      if (width >= 640) {
+        expect(scrollWidth, `${state} at ${width}px: the bar scrolls`).toBeLessThanOrEqual(
+          clientWidth,
+        );
+      }
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        `${state} at ${width}px: the page scrolls sideways`,
+      ).toBe(true);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+  };
+
+  await expect(bar.locator("[data-slot=point-stepper]")).toBeVisible();
+  await check("findings, before the first step");
+  // The chip has the pager walk the threads, from the first.
+  await chip.click();
+  await expect(bar.getByRole("button", { name: /^Thread 1 of \d+, show all$/ })).toBeVisible();
+  await check("threads, on a step");
+  await chip.click();
+  await bar.getByRole("button", { name: "Start" }).click();
+  await expect(bar.getByRole("button", { name: /^Finding 1 of \d+, show all$/ })).toBeVisible();
+  await check("findings, on a step");
+});
+
 test("walks the threads from the bar, before Claude runs and beside its findings", async ({
   page,
 }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
   const bar = page.locator("[data-slot=review-bar]");
   const position = bar.getByRole("button", { name: /, show all$/ });
-  await expect(position).toHaveText("5 unresolved");
+  await expect(position).toContainText("5 unresolved");
 
   // The keyboard steps as the mouse does.
   await bar.getByRole("button", { name: "Start" }).focus();
@@ -847,10 +945,15 @@ test("ranks findings by severity, says each one's type and narrows the pager to 
   await expect(position).toHaveAccessibleName("Finding 2 of 3, show all");
 });
 
+/** Turns on the Display menu's Overview switch, off by default, before the page loads. */
+const withOverview = (page: Page) =>
+  page.addInitScript(() => window.localStorage.setItem("megareviewer:overview", "true"));
+
 test.describe("without the model", () => {
   test.use({ ai: false });
 
   test("opens a file from the overview and publishes", async ({ page, server }) => {
+    await withOverview(page);
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
     await expect(page.getByRole("button", { name: "Details", exact: true })).toBeVisible();
     // No points without the model; the host's threads are still there.
@@ -912,6 +1015,7 @@ const showForm = async (page: Page, form: (typeof FLOW_FORMS)[number]) => {
 };
 
 test("shows the overview in each preview form, whose stops open the map", async ({ page }) => {
+  await withOverview(page);
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
   await page
     .getByRole("group", { name: "Layout" })
@@ -934,6 +1038,7 @@ test("shows the overview in each preview form, whose stops open the map", async 
 for (const width of [375, 768, 1024]) {
   test(`the overview's preview forms stay within the viewport at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
+    await withOverview(page);
     await page.addInitScript(() =>
       window.localStorage.setItem("megareviewer:review-layout", '"overview"'),
     );
@@ -952,6 +1057,7 @@ for (const width of [375, 768, 1024]) {
 for (const width of [720, 1024, 1440]) {
   test(`review stays within the viewport at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
+    await withOverview(page);
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
     const overflows = () =>
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");

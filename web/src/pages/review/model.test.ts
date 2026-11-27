@@ -12,7 +12,6 @@ import {
   changeTotals,
   gapBetween,
   mapFiles,
-  mechanicalCount,
   openedOn,
   parseLayout,
   partIndex,
@@ -173,13 +172,6 @@ describe("parseLayout", () => {
     expect(parseLayout("map")).toBe("map");
     expect(parseLayout("tour")).toBe("tour");
     expect(parseLayout("graph")).toBeUndefined();
-  });
-});
-
-describe("mechanicalCount", () => {
-  it("counts mechanical hunks and file-level proofs, as the mechanical group lists them", () => {
-    expect(mechanicalCount(analysis.proofs)).toBe(6);
-    expect(mechanicalCount([])).toBe(0);
   });
 });
 

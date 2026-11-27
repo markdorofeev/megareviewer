@@ -1,15 +1,17 @@
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import type {
   FindingType,
   Point,
   PointId,
   PointState,
+  Severity,
 } from "../../../../src/domain/review/index.ts";
 import {
   FINDING_STATUS,
   FINDING_TYPE_STATUS,
   POINT_TONE,
+  type PointTone,
   pointTone,
   SEVERITY_STATUS,
 } from "../../lib/status.ts";
@@ -26,8 +28,21 @@ const SEGMENT =
 /** The current step's title, the pager's middle segment; it gives way first as the bar narrows. */
 export const STEPPER_TITLE = cn(
   SEGMENT,
-  "min-w-0 shrink justify-start gap-1.5 px-2 text-left font-normal max-sm:hidden",
+  "min-w-0 flex-1 justify-start gap-1.5 px-2 text-left font-normal max-md:hidden",
 );
+
+/**
+ * From 768px the pager is one width whatever it says, less where the bar has no room for it, so
+ * Previous and Next stay under the pointer from one step to the next. Below, the title is gone
+ * and the pager is as wide as its position.
+ */
+const FIXED = "md:w-xl";
+
+/** What the pager takes of a color before the first step: its border, and Start's tint. */
+export interface StepperTone {
+  readonly border: string;
+  readonly start: string;
+}
 
 /** A count that rolls up from zero while the run lands; the number is for screen readers. */
 const CountUp = ({ count }: { readonly count: number }) => (
@@ -59,6 +74,9 @@ export const Stepper = ({
   count,
   countWords,
   qualifier = null,
+  summary = null,
+  summaryWords = null,
+  tone = null,
   title,
   status,
   onStep,
@@ -80,6 +98,15 @@ export const Stepper = ({
   readonly count: number;
   /** The words after the count: "findings", "logic findings", "unresolved". */
   readonly countWords: string;
+  /**
+   * Before the first step, what the steps add up to, after their count. With one the pager has its
+   * full width from the start, so Next is where Start was.
+   */
+  readonly summary?: ReactNode;
+  /** The summary in words, for a screen reader: "1 blocking, 2 minor". */
+  readonly summaryWords?: string | null;
+  /** Before the first step, the color that says how much the steps matter. */
+  readonly tone?: StepperTone | null;
   /** After the position, what the steps were narrowed to: "logic". */
   readonly qualifier?: string | null;
   /** The current step's title, a segment that goes back to it. */
@@ -91,6 +118,7 @@ export const Stepper = ({
   readonly list: (close: () => void) => ReactNode;
 }) => {
   const [open, setOpen] = useState(false);
+  const summaryId = useId();
   // A row moves the focus to what it goes to; closing mustn't take it back to the position.
   const went = useRef(false);
   const close = () => {
@@ -99,18 +127,27 @@ export const Stepper = ({
   };
   const Kind = `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
   const before = at === null && !started;
+  const wide = !before || summary !== null;
   const position =
     at === null ? (
       <>
         {icon}
-        {/* Below 640px the icon and count leave Start its room. */}
-        <span>
-          <CountUp count={count} /> <span className="max-sm:hidden">{countWords}</span>
+        {/* Below 768px the icon and count leave Start its room. */}
+        <span className={cn(before && "font-semibold")}>
+          <CountUp count={count} /> <span className="max-md:hidden">{countWords}</span>
         </span>
+        {before && summary}
       </>
     ) : (
       <span>
-        {at + 1} of {total}
+        {/* As wide as the last step's number, so the position is one width on every step. */}
+        <span
+          className="inline-block min-w-[calc(var(--digits)*1ch)] text-right"
+          style={cssVars({ "--digits": String(total).length })}
+        >
+          {at + 1}
+        </span>{" "}
+        of {total}
         {qualifier !== null && ` ${qualifier}`}
       </span>
     );
@@ -130,7 +167,10 @@ export const Stepper = ({
     <Button
       variant="ghost"
       size="xs"
-      className={cn(SEGMENT, before ? "gap-0.5 pr-1.5 pl-2 text-ui" : "w-6 px-0")}
+      className={cn(
+        SEGMENT,
+        before ? cn("gap-0.5 pr-1.5 pl-2.5 text-ui", tone?.start) : "w-6 px-0",
+      )}
       aria-label={before ? undefined : `Next ${noun}`}
       disabled={total === 0}
       onClick={() => onStep(1)}
@@ -145,7 +185,11 @@ export const Stepper = ({
       role="group"
       aria-label={`${noun.charAt(0).toUpperCase()}${noun.slice(1)}s`}
       data-slot={slot}
-      className="flex h-7 min-w-0 max-w-xl items-stretch rounded-md border border-border bg-background"
+      className={cn(
+        "flex h-7 min-w-0 max-w-xl items-stretch rounded-md border bg-background",
+        wide && FIXED,
+        (before && tone?.border) || "border-border",
+      )}
     >
       {!before && previous}
       {at !== null && title}
@@ -161,17 +205,26 @@ export const Stepper = ({
             <Button
               variant="ghost"
               size="xs"
-              className={cn(SEGMENT, "tabular gap-1.5 pr-1.5 text-ui")}
+              className={cn(
+                SEGMENT,
+                "tabular gap-1.5 pr-1.5 text-ui",
+                // Without a title the count has its room, and the arrow stays at the segment's end.
+                at === null && wide && "md:flex-1 md:justify-start",
+              )}
               aria-label={
                 at === null
                   ? `${count} ${countWords}, show all`
                   : `${Kind} ${at + 1} of ${total}, show all`
               }
+              aria-describedby={before && summaryWords !== null ? summaryId : undefined}
             />
           }
         >
           {position}
-          <ChevronDownIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+          <ChevronDownIcon
+            aria-hidden="true"
+            className={cn("size-3.5 text-muted-foreground", at === null && wide && "md:ml-auto")}
+          />
         </PopoverTrigger>
         <PopoverContent
           align="start"
@@ -182,6 +235,11 @@ export const Stepper = ({
         </PopoverContent>
       </Popover>
       {next}
+      {before && summaryWords !== null && (
+        <span id={summaryId} hidden>
+          {summaryWords}
+        </span>
+      )}
       <span role="status" className="sr-only">
         {status}
       </span>
@@ -189,10 +247,33 @@ export const Stepper = ({
   );
 };
 
+const SEVERITIES: readonly Severity[] = ["blocking", "major", "minor"];
+
+/** The pager before the first step, in its worst finding's color; grey when no step has one. */
+const TONE: Readonly<Record<PointTone, StepperTone>> = {
+  blocking: {
+    border: "border-severity-blocker/50",
+    start:
+      "bg-review-changes-bg text-severity-blocker hover:bg-review-changes-bg hover:text-severity-blocker",
+  },
+  major: {
+    border: "border-severity-major/50",
+    start:
+      "bg-severity-major-bg text-severity-major hover:bg-severity-major-bg hover:text-severity-major",
+  },
+  minor: {
+    border: "border-severity-minor/50",
+    start:
+      "bg-review-pending-bg text-severity-minor hover:bg-review-pending-bg hover:text-severity-minor",
+  },
+  mismatch: { border: "border-border", start: "bg-muted" },
+};
+
 /**
  * One pager through Claude's findings, round from the last to the first: before the first step,
- * their count and Start; on one, its severity and title, which go back to its card, and its
- * position, which opens the list. A type picked in the list narrows the steps to that type.
+ * their count, how many are of each severity and Start, in the worst one's color; on one, its
+ * severity and title, which go back to its card, and its position, which opens the list. A type
+ * picked in the list narrows the steps to that type.
  */
 export const PointStepper = ({
   points,
@@ -221,6 +302,11 @@ export const PointStepper = ({
   const typeLabel = type === null ? null : FINDING_TYPE_STATUS[type].label;
   const many = steps.length === 1 ? "finding" : "findings";
   const dismissed = point !== undefined && stateOf(point.id) === "dismissed";
+  const severities = SEVERITIES.flatMap((severity) => {
+    const count = steps.filter((step) => step.severity === severity).length;
+    return count === 0 ? [] : [{ severity, count }];
+  });
+  const worst: PointTone = severities[0]?.severity ?? "mismatch";
 
   return (
     <Stepper
@@ -230,9 +316,45 @@ export const PointStepper = ({
       total={steps.length}
       at={at}
       started={current !== null}
-      icon={<Icon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />}
+      icon={
+        <Icon
+          aria-hidden="true"
+          className={cn(
+            "size-3.5 shrink-0",
+            current === null ? POINT_TONE[worst].text : "text-muted-foreground",
+          )}
+        />
+      }
       count={steps.length}
       countWords={typeLabel === null ? many : `${typeLabel} ${many}`}
+      summary={
+        // One row high and wrapping: a severity the bar has no room for is on a row out of sight.
+        <span
+          data-slot="stepper-summary"
+          aria-hidden="true"
+          className="ml-1.5 flex h-6.5 w-0 flex-1 flex-wrap content-start gap-x-3 overflow-hidden max-md:hidden"
+        >
+          {severities.map(({ severity, count }) => (
+            <span
+              key={severity}
+              className={cn("flex h-6.5 shrink-0 items-center gap-1", POINT_TONE[severity].text)}
+            >
+              {SEVERITY_STATUS[severity].glyph}
+              <span>
+                {count} <span className="max-xl:hidden">{SEVERITY_STATUS[severity].label}</span>
+              </span>
+            </span>
+          ))}
+        </span>
+      }
+      summaryWords={
+        severities.length === 0
+          ? null
+          : severities
+              .map(({ severity, count }) => `${count} ${SEVERITY_STATUS[severity].label}`)
+              .join(", ")
+      }
+      tone={TONE[worst]}
       qualifier={typeLabel}
       onStep={(direction) => {
         const to = stepFrom(place, direction);

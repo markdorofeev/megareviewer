@@ -33,7 +33,8 @@ const useStuck = () => {
  * The row under the header that stays at the top of the window while the code scrolls: the
  * switch between the code and the overview, Claude's run and the pager through its findings, Show
  * files at 1024px or less, the reviewer's verdict on the host, and Approve and Publish. Its height
- * is `--review-bar-h`, which what sticks or scrolls under it reads. Stuck, it names the PR first.
+ * is `--review-bar-h`, which what sticks or scrolls under it reads. Stuck, it names the PR in the
+ * room left before the verdict.
  */
 export const ReviewBar = ({
   layout = null,
@@ -72,7 +73,12 @@ export const ReviewBar = ({
       ref={observed.bar}
       data-slot="review-bar"
       data-stuck={stuck || undefined}
-      className="sticky top-0 z-20 flex h-(--review-bar-row,var(--review-bar-h)) min-w-0 items-center gap-3 border-y bg-background"
+      className={cn(
+        "sticky top-0 z-20 flex h-(--review-bar-row,var(--review-bar-h)) min-w-0 items-center gap-3 border-y bg-background",
+        // Below 768px a state too wide for the row scrolls rather than overlapping; the padding
+        // keeps the end controls' focus outline in the scrolled box.
+        "max-md:overflow-x-auto max-md:px-1 max-md:[scrollbar-width:none]",
+      )}
     >
       {hairline !== null && (
         // Drawn by globals.css: a still, full-width bar under reduced motion.
@@ -86,38 +92,50 @@ export const ReviewBar = ({
           <span aria-hidden="true" className="h-4.5 w-px shrink-0 bg-border" />
         </span>
       )}
-      {stuck && title !== null && (
-        // The h1 above still names the page.
-        <span aria-hidden="true" className="flex max-w-96 shrink items-center gap-3 max-xl:hidden">
+      <div data-slot="claude-slot" className="flex min-w-0 items-center max-md:shrink-0">
+        {claude}
+      </div>
+      {/* Stuck, the PR's title is in it: before the pager, which was the version before, it came in
+          as the first step scrolled the page and moved the arrows from under the pointer. From
+          1280px its room is kept stuck or not, so the pager is one width either way. The h1 above
+          still names the page. */}
+      <span aria-hidden="true" className="@container flex min-w-0 flex-1 justify-end xl:min-w-40">
+        {stuck && title !== null && (
           <span
-            className="truncate font-semibold motion-safe:animate-in motion-safe:fade-in"
+            data-slot="bar-title"
+            className="hidden truncate font-semibold motion-safe:animate-in motion-safe:fade-in @min-[8rem]:block"
             title={title}
           >
             {title}
           </span>
-          <span className="h-4.5 w-px shrink-0 bg-border" />
-        </span>
-      )}
-      <div data-slot="claude-slot" className="flex min-w-0 flex-1 items-center">
-        {claude}
-      </div>
+        )}
+      </span>
       <div className="flex shrink-0 items-center gap-2">{tools}</div>
       {verdict !== null && (
         // Publish beside it sends another review: approving after a comment, say.
         <p
           role="status"
           data-slot="your-verdict"
+          title={VERDICT_STYLES[verdict.kind].label}
           className={cn(
             "flex shrink-0 items-center gap-1 font-medium",
             VERDICT_STYLES[verdict.kind].className,
           )}
         >
-          <VerdictIcon kind={verdict.kind} />
           {verdict.url === null ? (
-            VERDICT_STYLES[verdict.kind].label
+            <>
+              <VerdictIcon kind={verdict.kind} />
+              <VerdictWord kind={verdict.kind} />
+            </>
           ) : (
-            <a href={verdict.url} target="_blank" rel="noreferrer" className="text-inherit">
-              {VERDICT_STYLES[verdict.kind].label}
+            <a
+              href={verdict.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-inherit"
+            >
+              <VerdictIcon kind={verdict.kind} />
+              <VerdictWord kind={verdict.kind} />
             </a>
           )}
         </p>
@@ -135,6 +153,11 @@ const VERDICT_STYLES: Readonly<
   commented: { label: "Commented", className: "text-muted-foreground" },
   published: { label: "Published", className: "text-review-approved" },
 };
+
+/** Below 768px the icon alone, the word in its tooltip and for screen readers. */
+const VerdictWord = ({ kind }: { readonly kind: VerdictLabel["kind"] }) => (
+  <span className="max-md:sr-only">{VERDICT_STYLES[kind].label}</span>
+);
 
 const VerdictIcon = ({ kind }: { readonly kind: VerdictLabel["kind"] }) => {
   const Icon =
