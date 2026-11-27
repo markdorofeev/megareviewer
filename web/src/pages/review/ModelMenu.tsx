@@ -29,11 +29,6 @@ const ModelItem = ({
     aria-describedby={option.available ? undefined : noteId}
   >
     {option.modelName}
-    {!option.measured && (
-      <span className="rounded-full border px-1.5 text-caption text-muted-foreground">
-        unmeasured
-      </span>
-    )}
   </DropdownMenuRadioItem>
 );
 

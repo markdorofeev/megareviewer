@@ -24,7 +24,6 @@ const options = (
     modelName,
     family: "Claude",
     via: "via" in can ? can.via : providerName,
-    measured: true,
     available: "via" in can,
     reason: "reason" in can ? can.reason : null,
   }));
@@ -71,7 +70,6 @@ const opencodeOptions = (
     modelName,
     family: modelName.split(" ")[0] ?? modelName,
     via: `opencode, on ${providerName}`,
-    measured: false,
     available: true,
     reason: null,
   }));

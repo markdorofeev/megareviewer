@@ -61,7 +61,6 @@ const modelOption = (
   modelName,
   family: modelName.split(/[\s-]/)[0] ?? modelName,
   via,
-  measured: provider !== "opencode",
   available: true,
   reason: null,
 });

@@ -1,12 +1,20 @@
 import { EFFORTS, type Effort } from "../shared/effort.ts";
 
-/** US dollars per million tokens, at the API's standard tier up to 272K input tokens. */
-export interface OpenAiPrice {
+/** US dollars per million tokens, at the API's standard tier. */
+export interface OpenAiRates {
   readonly input: number;
   readonly cachedInput: number;
   /** A write with the default 30-minute lifetime. */
   readonly cacheWrite: number;
   readonly output: number;
+}
+
+/** OpenAI bills a request whose prompt is over 272K tokens at higher rates. */
+const LONG_PROMPT_TOKENS = 272_000;
+
+export interface OpenAiPrice extends OpenAiRates {
+  /** Absent for a model whose context window is no larger than 272K tokens. */
+  readonly longPrompt?: OpenAiRates;
 }
 
 /** An OpenAI model the passes can run on through Codex. */
@@ -20,9 +28,8 @@ export interface CodexModel {
 }
 
 /**
- * The models megareviewer lists through Codex, cheapest first, each measured by the evals
- * (evals/reports/). An option is one of these that the reviewer's `codex debug models` lists.
- * Prices from https://developers.openai.com/api/docs/pricing on 2026-11-14: check them whenever a
+ * The models megareviewer lists through Codex, cheapest first. An option is one of these that the reviewer's `codex debug models` lists.
+ * Prices from https://developers.openai.com/api/docs/pricing on 2026-11-27: check them whenever a
  * model is added.
  */
 export const CODEX_MODELS: readonly CodexModel[] = [
@@ -35,6 +42,22 @@ export const CODEX_MODELS: readonly CodexModel[] = [
     id: "gpt-6-sol",
     name: "GPT-6 Sol",
     price: { input: 2, cachedInput: 0.2, cacheWrite: 2.5, output: 10 },
+  },
+  {
+    id: "gpt-6.1-sol",
+    name: "GPT-6.1 Sol",
+    price: {
+      input: 2,
+      cachedInput: 0.1,
+      cacheWrite: 2.5,
+      output: 10,
+      longPrompt: { input: 4, cachedInput: 0.2, cacheWrite: 5, output: 15 },
+    },
+  },
+  {
+    id: "gpt-6-astra",
+    name: "GPT-6 Astra",
+    price: { input: 10, cachedInput: 1, cacheWrite: 12.5, output: 50 },
   },
 ];
 
@@ -65,14 +88,19 @@ export interface CodexTokens {
 }
 
 /** One call's cost at API prices, or null without a known price. */
-export const codexCostUsd = (price: OpenAiPrice | null, tokens: CodexTokens): number | null =>
-  price === null
-    ? null
-    : (tokens.inputTokens * price.input +
-        tokens.cacheReadTokens * price.cachedInput +
-        tokens.cacheWriteTokens * price.cacheWrite +
-        tokens.outputTokens * price.output) /
-      1_000_000;
+export const codexCostUsd = (price: OpenAiPrice | null, tokens: CodexTokens): number | null => {
+  if (price === null) return null;
+  const prompt = tokens.inputTokens + tokens.cacheReadTokens + tokens.cacheWriteTokens;
+  const rates =
+    price.longPrompt !== undefined && prompt > LONG_PROMPT_TOKENS ? price.longPrompt : price;
+  return (
+    (tokens.inputTokens * rates.input +
+      tokens.cacheReadTokens * rates.cachedInput +
+      tokens.cacheWriteTokens * rates.cacheWrite +
+      tokens.outputTokens * rates.output) /
+    1_000_000
+  );
+};
 
 /** When Codex is the first provider that can run. */
 export const DEFAULT_CODEX_MODEL = "gpt-6-sol";

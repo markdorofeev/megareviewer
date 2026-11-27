@@ -154,8 +154,6 @@ export interface ProviderModel {
   readonly via?: string;
   /** The name a run is recorded under, when the provider runs it through another. */
   readonly providerName?: string;
-  /** False for a model the evals haven't run on. Default: true. */
-  readonly measured?: boolean;
 }
 
 export interface CatalogProvider {
@@ -219,7 +217,6 @@ export const catalogOptions = (
       modelName: model.name,
       family: model.family,
       via: status.available ? (model.via ?? status.via) : provider.name,
-      measured: model.measured ?? true,
       available: status.available,
       reason: status.available ? null : status.reason,
     }));
@@ -244,10 +241,7 @@ const CLAUDE: readonly ProviderModel[] = CLAUDE_MODELS.map(({ id, name }) => ({
   family: "Claude",
 }));
 
-/**
- * Codex's listed models: the ones megareviewer measured that the reviewer's account offers, or
- * all of them while Codex can't say.
- */
+/** Codex's listed models: the ones the reviewer's account offers, or all of them while Codex can't say. */
 export const codexModels = (
   catalog: readonly CodexCatalogModel[] | null,
 ): readonly ProviderModel[] =>
@@ -260,7 +254,6 @@ export const OPENCODE_PLACEHOLDER: ProviderModel = {
   id: "models",
   name: "Your opencode models",
   family: "opencode",
-  measured: false,
 };
 
 /** "Claude Haiku 5.5" is a Claude, "GPT-6 Luna" a GPT: the first word of the name. */
@@ -268,7 +261,7 @@ const familyOf = (name: string): string => name.split(/[\s-]/)[0] || name;
 
 /**
  * The models the reviewer's opencode offers, as "provider/model", each run through the provider
- * it's on. None is measured: they're whatever the reviewer connected.
+ * it's on.
  */
 export const opencodeModels = (models: readonly OpencodeModel[]): readonly ProviderModel[] =>
   models.flatMap((model) => {
@@ -282,7 +275,6 @@ export const opencodeModels = (models: readonly OpencodeModel[]): readonly Provi
         family: familyOf(model.name),
         via: describeOpencode(model.providerName),
         providerName: `opencode on ${model.providerName}`,
-        measured: false,
       },
     ];
   });
