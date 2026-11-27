@@ -1815,7 +1815,7 @@ describe("layouts", () => {
   it("are entries of the browser's history, so Back goes from the code to the overview", async () => {
     renderReview();
     await loaded();
-    expect(window.location.search).toBe("?view=code");
+    await waitFor(() => expect(window.location.search).toBe("?view=code"));
     await openOverview();
     await userEvent.click(nodeOf("group:src/routes"));
     expect(layoutIs("map")).toBe(true);
