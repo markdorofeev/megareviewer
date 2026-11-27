@@ -5,23 +5,26 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
 import type { Layout } from "./model.ts";
 
 /**
- * The code, the overview, or the tour once there's one, at the start of the bar so it's in reach
+ * The code, the overview while it's on, or the tour once there's one, at the start of the bar so it's in reach
  * wherever the reader is. Its words go below 1280px, where the bar needs the room, and stay its
  * accessible names.
  */
 export const LayoutSwitch = ({
   layout,
+  overview,
   tour,
   onChange,
 }: {
   readonly layout: Layout;
+  /** The Display menu's Overview switch is on. */
+  readonly overview: boolean;
   /** There's a tour to switch to. */
   readonly tour: boolean;
   readonly onChange: (layout: Layout) => void;
 }) => {
   const options: readonly { value: Layout; label: string; Icon: LucideIcon }[] = [
     { value: "map", label: "Code", Icon: CodeXmlIcon },
-    { value: "overview", label: "Overview", Icon: NetworkIcon },
+    ...(overview ? [{ value: "overview" as const, label: "Overview", Icon: NetworkIcon }] : []),
     ...(tour ? [{ value: "tour" as const, label: "Tour", Icon: RouteIcon }] : []),
   ];
   return (

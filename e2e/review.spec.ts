@@ -847,10 +847,15 @@ test("ranks findings by severity, says each one's type and narrows the pager to 
   await expect(position).toHaveAccessibleName("Finding 2 of 3, show all");
 });
 
+/** Turns on the Display menu's Overview switch, off by default, before the page loads. */
+const withOverview = (page: Page) =>
+  page.addInitScript(() => window.localStorage.setItem("megareviewer:overview", "true"));
+
 test.describe("without the model", () => {
   test.use({ ai: false });
 
   test("opens a file from the overview and publishes", async ({ page, server }) => {
+    await withOverview(page);
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
     await expect(page.getByRole("button", { name: "Details", exact: true })).toBeVisible();
     // No points without the model; the host's threads are still there.
@@ -912,6 +917,7 @@ const showForm = async (page: Page, form: (typeof FLOW_FORMS)[number]) => {
 };
 
 test("shows the overview in each preview form, whose stops open the map", async ({ page }) => {
+  await withOverview(page);
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
   await page
     .getByRole("group", { name: "Layout" })
@@ -934,6 +940,7 @@ test("shows the overview in each preview form, whose stops open the map", async 
 for (const width of [375, 768, 1024]) {
   test(`the overview's preview forms stay within the viewport at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
+    await withOverview(page);
     await page.addInitScript(() =>
       window.localStorage.setItem("megareviewer:review-layout", '"overview"'),
     );
@@ -952,6 +959,7 @@ for (const width of [375, 768, 1024]) {
 for (const width of [720, 1024, 1440]) {
   test(`review stays within the viewport at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
+    await withOverview(page);
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE);
     const overflows = () =>
       page.evaluate("document.documentElement.scrollWidth > window.innerWidth");
