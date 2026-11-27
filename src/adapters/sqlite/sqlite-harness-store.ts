@@ -1,7 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { Clock, HarnessBlob, HarnessStore, Logger } from "../../application/ports/index.ts";
-import { type BlobHash, Harness, type RepoRef, type Timestamp } from "../../domain/review/index.ts";
+import {
+  type BlobHash,
+  HARNESS_RULES,
+  Harness,
+  type RepoRef,
+  type Timestamp,
+} from "../../domain/review/index.ts";
 
 const HarnessRow = z.object({
   sha: z.string(),
@@ -43,11 +49,11 @@ export const createSqliteHarnessStore = (
   const { clock, logger } = options;
   const selectHarness = db.prepare(
     `SELECT sha, cut, skipped, missing FROM harnesses
-     WHERE host = ? AND owner = ? AND repo = ? AND sha = ?`,
+     WHERE host = ? AND owner = ? AND repo = ? AND sha = ? AND rules = ?`,
   );
   const selectLatest = db.prepare(
     `SELECT sha, cut, skipped, missing FROM harnesses
-     WHERE host = ? AND owner = ? AND repo = ?
+     WHERE host = ? AND owner = ? AND repo = ? AND rules = ?
      ORDER BY julianday(loaded_at) DESC, rowid DESC LIMIT 1`,
   );
   const selectFiles = db.prepare(
@@ -59,8 +65,8 @@ export const createSqliteHarnessStore = (
     "DELETE FROM harnesses WHERE host = ? AND owner = ? AND repo = ? AND sha = ?",
   );
   const insertHarness = db.prepare(
-    `INSERT INTO harnesses (host, owner, repo, sha, loaded_at, cut, skipped, missing)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO harnesses (host, owner, repo, sha, loaded_at, cut, skipped, missing, rules)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertFile = db.prepare(
     `INSERT INTO harness_files
@@ -77,8 +83,9 @@ export const createSqliteHarnessStore = (
        content = excluded.content, used_at = excluded.used_at`,
   );
   const dropBlobs = db.prepare("DELETE FROM harness_blobs WHERE julianday(used_at) < julianday(?)");
+  // Older rules only: a megareviewer of newer ones can share the database.
   const dropHarnesses = db.prepare(
-    "DELETE FROM harnesses WHERE julianday(loaded_at) < julianday(?)",
+    "DELETE FROM harnesses WHERE julianday(loaded_at) < julianday(?) OR rules < ?",
   );
 
   const atomically = (work: () => void): void => {
@@ -116,14 +123,14 @@ export const createSqliteHarnessStore = (
 
   const drop = (time: Timestamp): void => {
     const blobs = Number(dropBlobs.run(time).changes);
-    const harnesses = Number(dropHarnesses.run(time).changes);
+    const harnesses = Number(dropHarnesses.run(time, HARNESS_RULES).changes);
     if (blobs + harnesses > 0) logger.debug("Dropped old harnesses", { blobs, harnesses });
   };
   drop(options.keptSince);
 
   return {
     async getHarness(repo: RepoRef, sha: string) {
-      return toHarness(repo, selectHarness.get(...columns(repo), sha));
+      return toHarness(repo, selectHarness.get(...columns(repo), sha, HARNESS_RULES));
     },
 
     async putHarness(repo: RepoRef, harness: Harness) {
@@ -136,6 +143,7 @@ export const createSqliteHarnessStore = (
           harness.cut,
           JSON.stringify(harness.skipped),
           JSON.stringify(harness.missing),
+          HARNESS_RULES,
         );
         for (const [position, file] of harness.files.entries()) {
           insertFile.run(
@@ -155,7 +163,7 @@ export const createSqliteHarnessStore = (
     },
 
     async latestHarness(repo: RepoRef) {
-      return toHarness(repo, selectLatest.get(...columns(repo)));
+      return toHarness(repo, selectLatest.get(...columns(repo), HARNESS_RULES));
     },
 
     async getBlobs(repo: RepoRef, blobs: readonly BlobHash[]) {

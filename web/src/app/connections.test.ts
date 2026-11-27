@@ -25,7 +25,6 @@ const codex = (available: boolean): StatusResponse["model"]["options"] =>
     modelName,
     family: "GPT",
     via: available ? "Codex, on your ChatGPT plan" : "Codex",
-    measured: true,
     available,
     reason: available ? null : CODEX_MISSING,
   }));

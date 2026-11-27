@@ -112,7 +112,7 @@ describe("a long group", () => {
     ]);
   });
 
-  it("opens with the field, and the models typed for under it, marked unmeasured", async () => {
+  it("opens with the field, and the models typed for under it", async () => {
     const withOpencode: ModelChoice = {
       ...choice,
       options: opencodeModelOptions.options,
@@ -150,7 +150,6 @@ describe("a long group", () => {
     await userEvent.type(field, "opus fast");
     expect(field).toMatchObject({ value: "opus fast" });
     const fast = within(menu).getByRole("menuitemradio", { name: /Opus 5\.5 Fast/ });
-    expect(fast.textContent).toMatch(/unmeasured$/);
     // From the field, an arrow goes to the option beside it, not the menu's first.
     await userEvent.keyboard("{ArrowDown}");
     expect(document.activeElement).toBe(fast);

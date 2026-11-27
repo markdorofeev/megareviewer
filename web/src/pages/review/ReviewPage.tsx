@@ -79,6 +79,7 @@ import { fileAnchor, MapLayout, MECHANICAL_ANCHOR, type ScrollRequest } from "./
 import { ModelCalls } from "./ModelCalls.tsx";
 import {
   changeTotals,
+  commentedPoints,
   commentsInParts,
   type Layout,
   mapFiles,
@@ -566,6 +567,18 @@ const Review = ({
     () => placeThreads(threads.list?.threads ?? null, files, index),
     [threads.list, files, index],
   );
+  // A point the reviewer made a comment of folds above it once the comment is on the host.
+  const commented = useMemo(
+    () =>
+      commentedPoints(
+        points,
+        pointStates.stateOf,
+        hunkComments,
+        threads.list?.threads ?? null,
+        view.currentUserId,
+      ),
+    [points, pointStates.stateOf, hunkComments, threads.list, view.currentUserId],
+  );
   const orderedThreads = useMemo(
     () => threadOrder(placement, files, index),
     [placement, files, index],
@@ -1037,6 +1050,7 @@ const Review = ({
         family={family}
         linesAbove={cardPlaces.rowsAbove.get(point.id) ?? 0}
         inReview={inReview}
+        commented={commented.has(point.id)}
         removed={
           found === undefined || lines === null || lines.side === "old"
             ? null
@@ -1227,7 +1241,7 @@ const Review = ({
     const mentions = places.mentions.get(id) ?? NO_POINTS;
     for (const point of cards) {
       parts.push(point.id, pointStates.stateOf(point.id), pointStates.isSaving(point.id));
-      parts.push(activePoint === point.id, folded.has(point.id));
+      parts.push(activePoint === point.id, folded.has(point.id), commented.has(point.id));
     }
     for (const point of mentions) parts.push(point.id);
     for (const point of [...cards, ...mentions]) {

@@ -13,6 +13,8 @@ import type {
   HunkComment,
   Point,
   PointId,
+  PointState,
+  ReviewThread,
   RiskAssessment,
 } from "../../../../src/domain/review/index.ts";
 import { commentPlace, type HunkItem, type LinePlace } from "../../review/index.ts";
@@ -278,6 +280,40 @@ export const commentsInParts = (
     if (id !== undefined) byPart.set(id, [...(byPart.get(id) ?? []), comment]);
   }
   return byPart;
+};
+
+/**
+ * The raised points a comment on the host now holds, which fold above it: no draft is on their
+ * last line, and a thread the reviewer started is, which is where Add to review and Comment now
+ * post it. With the reviewer unknown, any thread there counts.
+ */
+export const commentedPoints = (
+  points: readonly Point[],
+  stateOf: (id: PointId) => PointState,
+  drafts: readonly HunkComment[],
+  threads: readonly ReviewThread[] | null,
+  reviewerId: string | null,
+): ReadonlySet<PointId> => {
+  if (threads === null || threads.length === 0) return new Set();
+  return new Set(
+    points.flatMap(({ id, path, lines, hunkIds }) => {
+      if (lines === null || path === null || stateOf(id) !== "raised") return [];
+      const drafted = drafts.some(
+        (draft) =>
+          hunkIds.includes(draft.hunkId) && draft.side === lines.side && draft.line === lines.line,
+      );
+      if (drafted) return [];
+      const posted = threads.some(
+        (thread) =>
+          !thread.outdated &&
+          thread.path === path &&
+          thread.side === lines.side &&
+          thread.line === lines.line &&
+          (reviewerId === null || thread.comments[0]?.author.id === reviewerId),
+      );
+      return posted ? [id] : [];
+    }),
+  );
 };
 
 /**

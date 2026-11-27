@@ -45,8 +45,6 @@ export const ModelOption = ModelRunOption.unwrap()
     id: ModelOptionId,
     /** What runs it and who pays: "Claude Code, on your Pro plan". */
     via: z.string().min(1),
-    /** The evals have run on it, with a report under evals/reports/. */
-    measured: z.boolean(),
     available: z.boolean(),
     /** Why it can't run, and the fix; null when it can. */
     reason: z.string().nullable(),

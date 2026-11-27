@@ -160,6 +160,16 @@ describe("harnessLinks", () => {
       ["mention docs/", "mention compiler/", "mention .ci/docker/"],
     ],
     [
+      "a code span with a slash in it",
+      "Reference docs are in `framework-docs/modules/ROOT`, rules in `.cursor/rules`.",
+      ["mention framework-docs/modules/ROOT/", "mention .cursor/rules/"],
+    ],
+    [
+      "a path in prose starting with ./",
+      "Rules are in ./docs/rules and ./.claude/agents.",
+      ["mention docs/rules/", "mention .claude/agents/"],
+    ],
+    [
       "a pattern for its Markdown, in a table",
       "| a | docs/a/* |\n| b | `docs/b/**` |\n| c | docs/c/**/*.md |\n| d | **docs/d/** |",
       ["mention docs/a/", "mention docs/b/", "mention docs/c/", "mention docs/d/"],
@@ -194,7 +204,10 @@ describe("harnessLinks", () => {
   it.each([
     ["an import without a slash at its end", "Ask @someone, or install @anthropic-ai/sdk."],
     ["a path in prose without one", "The plan is in docs/plan, before/after and I/O."],
-    ["a code span without one", "Run `docs/plan` or `claude/stage-51`."],
+    [
+      "a code span without a slash in it, or a package's",
+      "Run `mx` or `vm`, or add `@types/node`.",
+    ],
     ["a pattern for anything but a folder's Markdown", "docs/*-guide.md, src/**/*.ts and *.md"],
     ["a pattern's later folders", "docs/**/rules/*-guide.md"],
     ["the repository's root", "[home](/) [here](./) [up](docs/..) `./`"],
