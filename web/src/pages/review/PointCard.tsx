@@ -121,8 +121,8 @@ const Meta = ({ point, underLines }: { readonly point: Point; readonly underLine
 };
 
 /**
- * A point folded to one line with a way back: dismissed, already in the review, or left out by a
- * preference.
+ * A point folded to one line with a way back: dismissed, already in the review or commented, or
+ * left out by a preference.
  */
 const Folded = ({
   point,
@@ -419,6 +419,7 @@ export const FindingCard = memo(function FindingCard({
   ruleScopes,
   onRule,
   inReview,
+  commented = false,
   removed,
   language,
   linesAbove = 0,
@@ -431,6 +432,8 @@ export const FindingCard = memo(function FindingCard({
   readonly linesAbove?: number;
   /** A draft on its lines holds it now, so it folds to a line above the draft. */
   readonly inReview: boolean;
+  /** The reviewer's thread on its lines holds it now, so it folds to a line above the thread. */
+  readonly commented?: boolean;
   /** The lines its suggestion replaces, as the diff shows them. */
   readonly removed: readonly string[] | null;
   readonly language: string | null;
@@ -459,13 +462,13 @@ export const FindingCard = memo(function FindingCard({
       />
     );
   }
-  if (state === "raised" && inReview) {
+  if (state === "raised" && (inReview || commented)) {
     return (
       <Folded
         point={point}
         state={state}
         current={current}
-        note="In your review, below"
+        note={inReview ? "In your review, below" : "Commented, below"}
         className="max-w-3xl px-1"
         action={<span aria-hidden="true">✓</span>}
       />
