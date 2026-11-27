@@ -18,7 +18,6 @@ import {
 } from "../ports/index.ts";
 import { appError, type UseCaseError } from "./errors.ts";
 import type { Prepared } from "./prep.ts";
-import { count } from "./text.ts";
 
 /**
  * What the model passes see: hunks without a proof in full, proved hunks as stats, and the head
@@ -155,8 +154,5 @@ export const fitToModel = async (
     else if (result.error.kind === "too-large") tooLarge = middle;
     else return err(failure(result.error));
   }
-  return ok({
-    input: without(fits),
-    warnings: [`Full file contents omitted for ${count(fits, "file")} to fit the model's limit`],
-  });
+  return ok({ input: without(fits), warnings: [] });
 };

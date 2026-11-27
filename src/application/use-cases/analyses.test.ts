@@ -597,9 +597,7 @@ describe("the analysis pipeline", () => {
       const analysis = await analyze();
 
       expect(analysis.status).toBe("complete");
-      expect(analysis.warnings).toEqual([
-        "Full file contents omitted for 1 file to fit the model's limit",
-      ]);
+      expect(analysis.warnings).toEqual([]);
       const sent = firstInput(model, "intent");
       expect(sent).toEqual(withoutLargest);
       expect(sent.files.flatMap((file) => file.hunks)).toHaveLength(6);
@@ -1336,7 +1334,6 @@ describe("with a local checkout", () => {
     const analysis = await tooSmall.analyze();
     expect(analysis.warnings).toEqual([
       "The code outside the pull request that uses what it changes was left out to fit the model's limit",
-      "Full file contents omitted for 3 files to fit the model's limit",
     ]);
     expect(tooSmall.model.callsTo("intent")[0]?.input).toEqual(bare);
   });
@@ -2875,7 +2872,7 @@ describe("removeModelRun", () => {
     }
   }
 
-  const withModelRun = async (model?: FakeAnalysisModel) => {
+  const withModelRun = async (model?: FakeAnalysisModel, fixture?: PullRequestFixture) => {
     const fileCache = new ForgettingFileCache();
     const parser = new BreakingParser();
     const ready = setup({
@@ -2883,6 +2880,7 @@ describe("removeModelRun", () => {
       fileCache,
       parser,
       ...(model === undefined ? {} : { model }),
+      ...(fixture === undefined ? {} : { fixtures: [fixture] }),
     });
     const codeOnly = await ready.analyze();
     const ran = await ready.runModel(codeOnly.id);
@@ -2916,16 +2914,11 @@ describe("removeModelRun", () => {
   });
 
   it("puts back the code's warnings without the model's", async () => {
-    const full = await (async () => {
-      const { analyze, model } = setup();
-      await analyze();
-      return firstInput(model, "checkSize");
-    })();
-    // Just too large, so the run drops a file's contents and says so.
-    const model = new FakeAnalysisModel({
-      maxInputTokens: Math.ceil(JSON.stringify(full).length / 4) - 1,
+    // A REVIEW.md too large for the prompt, which the run says it went without.
+    const { codeOnly, ran, remove } = await withModelRun(undefined, {
+      ...smallFeature,
+      baseFiles: { ...smallFeature.baseFiles, "REVIEW.md": "x".repeat(70_000) },
     });
-    const { codeOnly, ran, remove } = await withModelRun(model);
     expect(ran.warnings.length).toBeGreaterThan(codeOnly.warnings.length);
 
     const removed = await remove();

@@ -700,7 +700,7 @@ const analysis: Analysis = {
   stepsError: null,
   dataFlow: null,
   warnings: [
-    "Full file contents omitted for 1 file to fit the model's limit",
+    "The code outside the pull request that uses what it changes was left out to fit the model's limit",
     "Couldn't fetch Jira tickets: Jira answered 503",
   ],
   usage,
