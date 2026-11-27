@@ -96,6 +96,7 @@ export {
   fitInPrompt,
   followsLink,
   HARNESS_ROOT,
+  HARNESS_RULES,
   Harness,
   HarnessFile,
   HarnessHeading,

@@ -228,6 +228,11 @@ export const MIGRATIONS: readonly string[] = [
   DELETE FROM harness_files;
   DELETE FROM harnesses;
   `,
+  // The rules a harness was walked by, so a change to them needs no migration. Those stored before
+  // are 0, and walked again.
+  `
+  ALTER TABLE harnesses ADD COLUMN rules INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 const UserVersion = z.object({ user_version: z.number().int().nonnegative() });
