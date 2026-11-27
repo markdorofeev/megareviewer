@@ -307,11 +307,11 @@ describe("runDoctor", () => {
   it.each<[DoctorDeps["codex"], string]>([
     [
       { state: "not-installed" },
-      "– Codex: not installed: GPT-6 Luna and GPT-6 Sol on it are listed, disabled, in Request AI review's menu\n    Install the Codex CLI and run `codex login` to analyze on your ChatGPT plan.",
+      "– Codex: not installed: GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol and GPT-6 Astra on it are listed, disabled, in Request AI review's menu\n    Install the Codex CLI and run `codex login` to analyze on your ChatGPT plan.",
     ],
     [
       { state: "signed-out", version: "0.162.0" },
-      "– Codex: 0.162.0, not signed in: GPT-6 Luna and GPT-6 Sol on it are listed, disabled, in Request AI review's menu\n    Run `codex login` to analyze on your ChatGPT plan.",
+      "– Codex: 0.162.0, not signed in: GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol and GPT-6 Astra on it are listed, disabled, in Request AI review's menu\n    Run `codex login` to analyze on your ChatGPT plan.",
     ],
     [
       { state: "signed-in", version: "0.150.0", billing: "plan", models: [] },
@@ -328,7 +328,7 @@ describe("runDoctor", () => {
     ],
     [
       { state: "signed-in", version: "0.162.0", billing: "plan", models: [] },
-      "✗ Codex: 0.162.0, signed in, on your ChatGPT plan, but its catalog has none of GPT-6 Luna and GPT-6 Sol\n    Run `codex debug models` to see the models your account has.",
+      "✗ Codex: 0.162.0, signed in, on your ChatGPT plan, but its catalog has none of GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol and GPT-6 Astra\n    Run `codex debug models` to see the models your account has.",
     ],
   ])("says what Codex can do: %j", async (codex, line) => {
     expect((await lines({ codex }))[6]).toBe(line);
