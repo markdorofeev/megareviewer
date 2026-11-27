@@ -1,4 +1,4 @@
-import { CircleCheckIcon, Undo2Icon } from "lucide-react";
+import { CircleCheckIcon, FolderTreeIcon, Undo2Icon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnalysisView } from "../../../../contracts/index.ts";
 import {
@@ -100,7 +100,6 @@ import {
   PointMention,
   pointAnchor,
 } from "./PointCard.tsx";
-import { PointList } from "./PointList.tsx";
 import { PointStepper } from "./PointStepper.tsx";
 import { CODE_STAGES, ProgressStrip, stageName } from "./ProgressStrip.tsx";
 import { PublishDialog } from "./PublishDialog.tsx";
@@ -111,9 +110,8 @@ import { RerunModel } from "./RerunModel.tsx";
 import { ReviewBar } from "./ReviewBar.tsx";
 import { ReviewHeader } from "./ReviewHeader.tsx";
 import { StatedIntent } from "./StatedIntent.tsx";
-import { narrowTo } from "./stepper.ts";
 import { parseBoolean, readSession, useStoredState, writeSession } from "./storage.ts";
-import { ThreadList, ThreadStepper, threadChip } from "./ThreadStepper.tsx";
+import { ThreadStepper, threadChip } from "./ThreadStepper.tsx";
 import { type ThreadScope, threadOrder, threadScopeOf, threadSteps } from "./thread-steps.ts";
 import { coveredLines, placeKey, placeThreads, threadAnchor } from "./threads.ts";
 import { noTourOf, type TourExcerpt, type TourStep, tourOf } from "./tour.ts";
@@ -475,21 +473,19 @@ const Review = ({
   // there, or the tour, on its step.
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
   const [currentPoint, setCurrentPoint] = useState<PointId | null>(null);
-  // What a pressed chip has the stepper walk.
+  // What the pager walks, when not every finding: a type picked in its list, or the threads.
   const [narrowed, setNarrowed] = useState<Narrowing | null>(null);
   // The thread last gone to, and what the stepper goes round of them.
   const [currentThread, setCurrentThread] = useState<ThreadId | null>(null);
   const [threadScopeChosen, setThreadScope] = useState<ThreadScope | null>(null);
   const [resolvedHere, setResolvedHere] = useState<ReadonlySet<ThreadId>>(new Set());
-  const [showThreads, setShowThreads] = useState(false);
   // The stepper walks the threads when their chip is pressed, or when Claude has no points.
   const walkingThreads = narrowed === "thread" || walked.length === 0;
-  // A run again may find none of the type a chip narrowed the stepper to.
+  // A run again may find none of the type the list narrowed the pager to.
   const walkedType =
     narrowed !== "thread" && walked.some((point) => point.type === narrowed) ? narrowed : null;
   // One thing on the page is the current one: the point or the thread the stepper is on.
   const activePoint = walkingThreads ? null : currentPoint;
-  const [showPoints, setShowPoints] = useState(false);
   // When this page saw Claude's run start, for the time since.
   const [rerunning, setRerunning] = useState(false);
   // The hunks of a point the reviewer went to.
@@ -780,19 +776,18 @@ const Review = ({
     toCode();
     scrollTo(threadAnchor(id));
   };
-  /** Has the stepper walk a type's findings or the threads, going to the first unless on one. */
+  /**
+   * Has the pager walk a type's findings, which goes nowhere, or the threads, going to the first
+   * unless on one.
+   */
   const narrow = (kind: Narrowing | null) => {
     setNarrowed(kind);
-    if (kind === "thread") {
-      const steps = threadSteps(orderedThreads, threadScope, resolvedHere);
-      const [first] = steps;
-      if (first !== undefined && !steps.some((thread) => thread.id === currentThread)) {
-        goToThread(first.id);
-      }
-      return;
+    if (kind !== "thread") return;
+    const steps = threadSteps(orderedThreads, threadScope, resolvedHere);
+    const [first] = steps;
+    if (first !== undefined && !steps.some((thread) => thread.id === currentThread)) {
+      goToThread(first.id);
     }
-    const to = narrowTo(walked, kind, currentPoint);
-    if (to !== null) goToPoint(to);
   };
   /**
    * A mismatch is one of Claude's points, the nth of the intent's, so Details goes to its card:
@@ -1497,20 +1492,21 @@ const Review = ({
               <PointStepper
                 points={walked}
                 type={walkedType}
+                onType={narrow}
                 current={currentPoint}
                 stateOf={pointStates.stateOf}
                 onGo={goToPoint}
-                onOpenList={() => setShowPoints(true)}
+                family={family}
               />
             ) : (
               orderedThreads.length > 0 && (
                 <ThreadStepper
                   ordered={orderedThreads}
                   scope={threadScope}
+                  onScope={setThreadScope}
                   resolvedHere={resolvedHere}
                   current={currentThread}
                   onGo={goToThread}
-                  onOpenList={() => setShowThreads(true)}
                 />
               )
             )}
@@ -1526,7 +1522,8 @@ const Review = ({
               aria-controls="review-tree-rail"
               onClick={() => setRailOpen(!railOpen)}
             >
-              {railOpen ? "Hide files" : "Show files"}
+              <FolderTreeIcon aria-hidden="true" />
+              <span className="max-sm:sr-only">{railOpen ? "Hide files" : "Show files"}</span>
             </Button>
           )
         }
@@ -1846,30 +1843,6 @@ const Review = ({
             did(verdictAfter(verdict, yourVerdict));
             void refetch();
           }}
-        />
-      )}
-      {showThreads && (
-        <ThreadList
-          ordered={orderedThreads}
-          scope={threadScope}
-          onScope={setThreadScope}
-          onGo={(id) => {
-            setShowThreads(false);
-            goToThread(id);
-          }}
-          onClose={() => setShowThreads(false)}
-        />
-      )}
-      {showPoints && (
-        <PointList
-          points={walked}
-          family={family}
-          stateOf={pointStates.stateOf}
-          onGo={(id) => {
-            setShowPoints(false);
-            goToPoint(id);
-          }}
-          onClose={() => setShowPoints(false)}
         />
       )}
       <ShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} ids={PAGE_SHORTCUTS} />

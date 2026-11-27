@@ -20,7 +20,6 @@ import { ClaudeElement, type ClaudeRun, type Narrowing } from "../pages/review/C
 import { barButtons } from "../pages/review/header-buttons.ts";
 import { PointStepper } from "../pages/review/PointStepper.tsx";
 import { type HairlineState, ReviewBar } from "../pages/review/ReviewBar.tsx";
-import { narrowTo } from "../pages/review/stepper.ts";
 import { ThreadStepper, threadChip } from "../pages/review/ThreadStepper.tsx";
 import { type ThreadScope, threadScopeOf, threadSteps } from "../pages/review/thread-steps.ts";
 import { Button } from "../ui/button.tsx";
@@ -66,8 +65,8 @@ const RAN: ClaudeRun = {
 };
 
 /**
- * The review bar on made-up data, with a stepper that steps: Previous, Next and the chips work,
- * and the position and title follow.
+ * The review bar on made-up data, with a pager that steps: Previous, Next, the list and the
+ * threads' chip work, and the position and title follow.
  */
 const BarDemo = ({
   label,
@@ -145,13 +144,10 @@ const BarDemo = ({
               narrowed={narrowed}
               onNarrow={(kind) => {
                 setNarrowed(kind);
-                if (kind === "thread") {
-                  const [first] = threadSteps(threads, threadScope, here);
-                  if (thread === null && first !== undefined) setThread(first.id);
-                  return;
+                const [first] = threadSteps(threads, threadScope, here);
+                if (kind === "thread" && thread === null && first !== undefined) {
+                  setThread(first.id);
                 }
-                const to = narrowTo(points, kind, current);
-                if (to !== null) setCurrent(to);
               }}
               onRun={() => {}}
               onRerun={() => {}}
@@ -162,20 +158,25 @@ const BarDemo = ({
                 <PointStepper
                   points={points}
                   type={narrowed}
+                  onType={setNarrowed}
                   current={current}
                   stateOf={stateOf}
-                  onGo={setCurrent}
-                  onOpenList={() => {}}
+                  onGo={(id) => {
+                    const point = points.find((one) => one.id === id);
+                    // Going to a finding of another type lets go of the filter.
+                    setNarrowed((type) => (type === point?.type ? type : null));
+                    setCurrent(id);
+                  }}
                 />
               ) : (
                 threads.length > 0 && (
                   <ThreadStepper
                     ordered={threads}
                     scope={threadScope}
+                    onScope={() => {}}
                     resolvedHere={here}
                     current={thread}
                     onGo={setThread}
-                    onOpenList={() => {}}
                   />
                 )
               )}
@@ -295,15 +296,15 @@ export const ReviewBarStates = (): ReactNode => (
       running
       hairline="running"
     />
-    <BarDemo label="Before the first step: the count" />
+    <BarDemo label="Before the first step: the count, and Start" />
     <BarDemo label="Mid-list" start={PointId.parse("f2")} />
     <BarDemo
-      label="A type's chip pressed, narrowing the stepper to it"
+      label="A type picked in the list, narrowing the pager to it"
       narrowedAt="contract"
       start={PointId.parse("f2")}
     />
-    <BarDemo label="On a dismissed point" start={PointId.parse("f2")} dismissed={["f2"]} />
-    <BarDemo label="One point" points={POINTS.slice(0, 1)} start={PointId.parse("f1")} />
+    <BarDemo label="On a dismissed finding" start={PointId.parse("f2")} dismissed={["f2"]} />
+    <BarDemo label="One finding" points={POINTS.slice(0, 1)} start={PointId.parse("f1")} />
     <BarDemo
       label="What's missing, and why"
       run={{
@@ -319,7 +320,7 @@ export const ReviewBarStates = (): ReactNode => (
     />
     <BarDemo label="Nothing to raise" points={[]} />
     <BarDemo
-      label="Threads before Claude runs: the stepper goes round the unresolved ones, in the page's order"
+      label="Threads before Claude runs: the pager goes round the unresolved ones, in the page's order"
       run={DESIGN_RUN}
       points={[]}
       threads={PR_THREADS}
@@ -341,7 +342,7 @@ export const ReviewBarStates = (): ReactNode => (
       startThread="PRRT_open"
     />
     <BarDemo
-      label="Beside Claude's points: the threads' chip narrows the stepper to them"
+      label="After Claude's findings: the threads' chip has the pager walk them"
       threads={PR_THREADS}
       narrowedAt="thread"
       startThread="PRRT_open"
@@ -355,7 +356,7 @@ export const ReviewBarStates = (): ReactNode => (
       startThread="PRRT_grouped"
     />
     <BarDemo
-      label="Every thread resolved: the stepper goes round all of them"
+      label="Every thread resolved: the pager goes round all of them"
       run={DESIGN_RUN}
       points={[]}
       threads={ALL_RESOLVED}

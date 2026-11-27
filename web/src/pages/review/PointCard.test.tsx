@@ -64,11 +64,11 @@ describe("a finding's card", () => {
       (chip) => chip.textContent,
     );
 
-  it("says its type in a word, before its severity", () => {
+  it("says its severity, then its type in a word", () => {
     const { container, rerender } = render(
       <FindingCard point={finding} {...actions} {...findingProps} />,
     );
-    expect(chips(container)).toEqual(["ƒlogic", "●minor"]);
+    expect(chips(container)).toEqual(["●minor", "ƒlogic"]);
     rerender(
       <FindingCard
         point={{ ...finding, type: "architecture", severity: "blocking" }}
@@ -76,7 +76,7 @@ describe("a finding's card", () => {
         {...findingProps}
       />,
     );
-    expect(chips(container)).toEqual(["≡architecture", "■blocking"]);
+    expect(chips(container)).toEqual(["■blocking", "≡architecture"]);
     for (const glyph of container.querySelectorAll("[data-slot=finding-type] > span")) {
       expect(glyph.getAttribute("aria-hidden")).toBe("true");
     }

@@ -31,9 +31,9 @@ const useStuck = () => {
 
 /**
  * The row under the header that stays at the top of the window while the code scrolls: the
- * switch between the code and the overview, Claude's run and the stepper through its points, Show files at 1024px or less, the reviewer's verdict on
- * the host, and Approve and Publish. Its height is `--review-bar-h`, which what sticks or scrolls under it
- * reads. Stuck, it names the PR first.
+ * switch between the code and the overview, Claude's run and the pager through its findings, Show
+ * files at 1024px or less, the reviewer's verdict on the host, and Approve and Publish. Its height
+ * is `--review-bar-h`, which what sticks or scrolls under it reads. Stuck, it names the PR first.
  */
 export const ReviewBar = ({
   layout = null,

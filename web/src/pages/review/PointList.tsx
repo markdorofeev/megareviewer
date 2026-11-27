@@ -1,52 +1,83 @@
-import { useRef } from "react";
-import type { Point, PointId, PointState } from "../../../../src/domain/review/index.ts";
-import { FINDING_STATUS, POINT_TONE, pointTone } from "../../lib/status.ts";
+import {
+  FindingType,
+  type Point,
+  type PointId,
+  type PointState,
+} from "../../../../src/domain/review/index.ts";
+import { FINDING_STATUS, FINDING_TYPE_STATUS, POINT_TONE, pointTone } from "../../lib/status.ts";
 import { cn } from "../../lib/utils.ts";
-import { Dialog } from "./Dialog.tsx";
+import { PopoverHeader, PopoverTitle } from "../../ui/popover.tsx";
 import { SeverityChip, TypeChip } from "./PointCard.tsx";
+import { Segmented } from "./Segmented.tsx";
+
+const ALL = "all";
 
 /**
- * The points Claude raised, findings by severity first, each with its type and severity. A row per
- * point goes to its card.
+ * Claude's findings, by severity first, each with its type and severity, in the popover the
+ * pager's position opens. A row per finding goes to its card. When more than one type has
+ * findings, a filter narrows the rows and what the pager walks to one type.
  */
 export const PointList = ({
   points,
+  type,
+  onType,
+  current,
   stateOf,
   onGo,
-  onClose,
   family = "Claude",
 }: {
   readonly points: readonly Point[];
+  readonly type: FindingType | null;
+  readonly onType: (type: FindingType | null) => void;
+  /** The finding the pager is on. */
+  readonly current: PointId | null;
   readonly stateOf: (id: PointId) => PointState;
   readonly onGo: (id: PointId) => void;
-  readonly onClose: () => void;
-  /** Who made the points: "Claude". */
+  /** Who made the findings: "Claude". */
   readonly family?: string;
 }) => {
-  const went = useRef(false);
+  const types = FindingType.options.flatMap((one) => {
+    const count = points.filter((point) => point.type === one).length;
+    return count === 0 ? [] : [{ type: one, count }];
+  });
+  const rows = type === null ? points : points.filter((point) => point.type === type);
   return (
-    <Dialog
-      title={`${points.length} ${points.length === 1 ? "point" : "points"} from ${family}`}
-      onClose={onClose}
-      // A row moves the focus to what it goes to; closing mustn't take it back to the stepper.
-      returnFocus={() => !went.current}
-      className="sm:max-w-2xl"
-    >
-      {/* The dialog is a grid: without min-w-0 the list grows to its longest title. */}
-      <ul className="flex min-w-0 flex-col gap-1" aria-label="Points">
-        {points.map((point) => {
+    <>
+      <PopoverHeader>
+        <PopoverTitle>
+          {points.length} {points.length === 1 ? "finding" : "findings"} from {family}
+        </PopoverTitle>
+      </PopoverHeader>
+      {types.length > 1 && (
+        <Segmented
+          legend="Show and step through"
+          options={[
+            { value: ALL, label: `All ${points.length}` },
+            ...types.map(({ type: one, count }) => ({
+              value: one,
+              label: `${FINDING_TYPE_STATUS[one].glyph} ${FINDING_TYPE_STATUS[one].label} ${count}`,
+            })),
+          ]}
+          value={type ?? ALL}
+          onChange={(value) => onType(value === ALL ? null : value)}
+        />
+      )}
+      <ul className="flex min-w-0 flex-col gap-1" aria-label="Findings">
+        {rows.map((point) => {
           const { label, icon: Icon } = FINDING_STATUS;
           const state = stateOf(point.id);
+          const here = point.id === current;
           return (
             <li key={point.id}>
               <button
                 type="button"
                 data-slot="point-row"
-                className="flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-accent"
-                onClick={() => {
-                  went.current = true;
-                  onGo(point.id);
-                }}
+                aria-current={here ? "true" : undefined}
+                className={cn(
+                  "flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-accent",
+                  here && "bg-muted font-medium",
+                )}
+                onClick={() => onGo(point.id)}
               >
                 <Icon
                   aria-hidden="true"
@@ -66,7 +97,7 @@ export const PointList = ({
                   </span>
                 )}
                 {point.path !== null && (
-                  <span className="truncate font-mono text-code-compact text-muted-foreground">
+                  <span className="max-w-40 truncate font-mono text-code-compact text-muted-foreground">
                     {point.path}
                   </span>
                 )}
@@ -75,6 +106,6 @@ export const PointList = ({
           );
         })}
       </ul>
-    </Dialog>
+    </>
   );
 };

@@ -146,10 +146,10 @@ export const LandingDemo = () => {
         >
           <PointStepper
             points={points}
+            onType={() => {}}
             current={null}
             stateOf={() => "open"}
             onGo={() => {}}
-            onOpenList={() => {}}
           />
         </ClaudeElement>
       </header>

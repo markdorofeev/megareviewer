@@ -72,16 +72,17 @@ const reviewBar = () => {
   if (bar === null) throw new Error("no review bar");
   return bar;
 };
-const chips = () =>
-  [...reviewBar().querySelectorAll("[data-slot=point-chip]:not([data-kind=thread])")].map((chip) =>
-    chip.textContent?.replace(/\s+/g, " ").trim(),
-  );
-const position = () => {
-  const button = reviewBar().querySelector<HTMLElement>(
-    "[data-slot=point-stepper] button + button",
-  );
-  if (button === null) throw new Error("no stepper position");
-  return button;
+const position = () => within(reviewBar()).getByRole("button", { name: /, show all$/ });
+/** The types the list under the pager offers to narrow it to, read with the list open. */
+const types = async () => {
+  await userEvent.click(position());
+  const dialog = await screen.findByRole("dialog");
+  const offered = within(within(dialog).getByRole("group", { name: "Show and step through" }))
+    .getAllByRole("button")
+    .map((one) => one.textContent);
+  await userEvent.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  return offered;
 };
 const pointCard = (title: RegExp) => screen.getByRole("article", { name: title });
 const guidanceOf = (title: RegExp) =>
@@ -121,24 +122,25 @@ describe("a review whose run read guidance", () => {
     const folded = pointCard(RETRIES);
     expect(folded.dataset.leftOut).toBe("true");
     expect(folded.textContent).toContain("Left out by your preference: Retries without backoff");
-    await waitFor(() => expect(chips()).toEqual(["ƒ1 logic", "◆1 contract"]));
-    expect(position().textContent).toBe("2 points");
+    await waitFor(() => expect(position().textContent).toBe("2 findings"));
+    expect(await types()).toEqual(["All 2", "ƒ logic 1", "◆ contract 1"]);
     // Only the stale receipt's two lines are marked; the retry's six aren't.
     expect(retryMarks()).toHaveLength(2);
     // Round the steps, twice over: the folded point is never one of them.
     const titles = new Set<string | null>();
     for (let step = 0; step < 4; step += 1) {
-      await userEvent.click(within(reviewBar()).getByRole("button", { name: "Next point" }));
+      const name = step === 0 ? "Start" : "Next finding";
+      await userEvent.click(within(reviewBar()).getByRole("button", { name }));
       titles.add(stepTitle());
     }
     expect(titles.size).toBe(2);
     expect([...titles].some((title) => RETRIES.test(title ?? ""))).toBe(false);
-    // The files beside the code count what the chips count.
+    // The files beside the code count what the pager counts.
     const counted = [...document.querySelectorAll("[role=treeitem][aria-label*='1 finding']")];
     expect(counted).toHaveLength(2);
 
     await userEvent.click(position());
-    const list = within(await screen.findByRole("dialog")).getByRole("list", { name: "Points" });
+    const list = within(await screen.findByRole("dialog")).getByRole("list", { name: "Findings" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(list.textContent).not.toMatch(RETRIES);
   });
@@ -151,8 +153,8 @@ describe("a review whose run read guidance", () => {
     expect(card.dataset.leftOut).toBeUndefined();
     expect(document.activeElement).toBe(card);
     expect(guidanceOf(RETRIES)).toBe("Left out by your preference: Retries without backoff");
-    await waitFor(() => expect(chips()).toEqual(["ƒ2 logic", "◆1 contract"]));
-    expect(position().textContent).toBe("3 points");
+    await waitFor(() => expect(position().textContent).toBe("3 findings"));
+    expect(await types()).toEqual(["All 3", "ƒ logic 2", "◆ contract 1"]);
     expect(retryMarks()).toHaveLength(8);
 
     // Dismissed and undone, it stays shown: the reviewer has seen it.
@@ -172,7 +174,7 @@ describe("a review whose run read guidance", () => {
     });
     await loaded();
     expect(pointCard(RETRIES).dataset.leftOut).toBeUndefined();
-    await waitFor(() => expect(chips()).toEqual(["ƒ2 logic", "◆1 contract"]));
+    await waitFor(() => expect(position().textContent).toBe("3 findings"));
   });
 
   it("says when everything Claude found was left out", async () => {
@@ -190,7 +192,7 @@ describe("a review whose run read guidance", () => {
         /Claude found nothing to raise, and left out 1 by your preferences/,
       ),
     ).toBeTruthy();
-    expect(chips()).toEqual([]);
+    expect(reviewBar().querySelector("[data-slot=point-stepper]")).toBeNull();
     expect(pointCard(RETRIES).dataset.leftOut).toBe("true");
   });
 });

@@ -300,7 +300,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     });
     await demo.getByRole("button", { name: "Play" }).click();
     await expect(demo.getByRole("button", { name: /^Reviewing · / })).toBeVisible();
-    await expect(demo.locator("[data-slot=point-chip]").first()).toBeVisible();
+    await expect(demo.locator("[data-slot=point-stepper]")).toBeVisible();
     await expect(demo).toHaveAttribute("data-landing", "done");
     await expect(demo.locator("[data-slot=model-hairline]")).toHaveCount(0);
     const phases: unknown = await page.evaluate(() => Reflect.get(window, "landingPhases"));

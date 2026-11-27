@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type FindingType, type Point, PointId } from "../../../../src/domain/review/index.ts";
-import { narrowTo, stepFrom, stepperPlace } from "./stepper.ts";
+import { stepFrom, stepperPlace } from "./stepper.ts";
 
 const point = (id: string, type: FindingType | null): Point => ({
   id: PointId.parse(id),
@@ -29,7 +29,7 @@ describe("stepperPlace", () => {
     expect(stepperPlace(POINTS, null, id("f9")).at).toBeNull();
   });
 
-  it("walks only the type a chip narrowed it to, never a mismatch", () => {
+  it("walks only the type the list narrowed it to, never a mismatch", () => {
     const place = stepperPlace(POINTS, "contract", id("f3"));
     expect(place.steps.map((one) => one.id)).toEqual(["f1", "f3"]);
     expect(place.at).toBe(1);
@@ -57,15 +57,5 @@ describe("stepFrom", () => {
     expect(stepFrom(stepperPlace(one, null, id("f9")), -1)).toBe("f9");
     expect(stepFrom(stepperPlace([], null, null), 1)).toBeNull();
     expect(stepFrom(stepperPlace(POINTS, "architecture", null), 1)).toBeNull();
-  });
-});
-
-describe("narrowTo", () => {
-  it("goes to the type's first only when the current point isn't of it", () => {
-    expect(narrowTo(POINTS, "contract", id("f2"))).toBe("f1");
-    expect(narrowTo(POINTS, "contract", null)).toBe("f1");
-    expect(narrowTo(POINTS, "contract", id("f3"))).toBeNull();
-    expect(narrowTo(POINTS, null, id("f2"))).toBeNull();
-    expect(narrowTo(POINTS, "architecture", null)).toBeNull();
   });
 });

@@ -258,7 +258,7 @@ describe("ReviewPage states", () => {
     expect(swap?.querySelector("[data-leaving]")?.getAttribute("aria-hidden")).toBe("true");
     // The code doesn't change until everything has arrived.
     expect(document.querySelector("[data-slot=point]")).toBeNull();
-    expect(document.querySelector("[data-slot=point-chip]")).toBeNull();
+    expect(document.querySelector("[data-slot=point-stepper]")).toBeNull();
 
     setView(fixture);
     await waitFor(() => expect(addToReview(FINDING).hasAttribute("disabled")).toBe(false));
@@ -1000,8 +1000,15 @@ describe("map", () => {
 
 describe("points", () => {
   const position = () => within(reviewBar()).getByRole("button", { name: /, show all$/ });
-  const step = (name: "Next point" | "Previous point") =>
+  const step = (name: "Start" | "Next finding" | "Previous finding") =>
     userEvent.click(within(reviewBar()).getByRole("button", { name }));
+  /** Opens the list under the pager's position. */
+  const openList = async () => {
+    await userEvent.click(position());
+    return screen.findByRole("dialog", { name: "3 findings from Claude" });
+  };
+  const rows = (list: HTMLElement) =>
+    within(within(list).getByRole("list", { name: "Findings" })).getAllByRole("button");
 
   it("sit under the last of their lines, with a bug on it and the mismatch they show", async () => {
     renderReview();
@@ -1176,97 +1183,105 @@ describe("points", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("are counted in the bar, and stepped through both ways, round", async () => {
+  it("are counted in the pager, started, and stepped through both ways, round", async () => {
     renderReview();
     await loaded();
-    await waitFor(() =>
-      expect(
-        [...reviewBar().querySelectorAll("[data-slot=point-chip]")].map((chip) =>
-          chip.textContent?.replace(/\s+/g, " ").trim(),
-        ),
-      ).toEqual(["ƒ2 logic", "◆1 contract"]),
-    );
-    // Before the first step, the count; Next goes to the first.
-    expect(position().textContent).toBe("3 points");
-    expect(position().getAttribute("aria-label")).toBe("3 points, show all");
-    await step("Next point");
+    // Before the first step, the count and Start, which goes to the first.
+    await waitFor(() => expect(position().textContent).toBe("3 findings"));
+    expect(within(reviewBar()).getByRole("group", { name: "Findings" })).toBeTruthy();
+    expect(position().getAttribute("aria-label")).toBe("3 findings, show all");
+    expect(within(reviewBar()).queryByRole("button", { name: "Previous finding" })).toBeNull();
+    // A type is no chip on the bar: it's picked in the list.
+    expect(within(reviewBar()).queryByRole("button", { name: /logic finding/ })).toBeNull();
+    await step("Start");
     expect(scrolledTo().at(-1)).toBe("point-f1");
-    expect(position().getAttribute("aria-label")).toBe("Point 1 of 3, show all");
+    expect(position().textContent).toBe("1 of 3");
+    expect(position().getAttribute("aria-label")).toBe("Finding 1 of 3, show all");
+    expect(within(reviewBar()).queryByRole("button", { name: "Start" })).toBeNull();
     expect(within(reviewBar()).getByRole("status").textContent).toMatch(
       /^Finding 1 of 3: Any signed-in user can read/,
     );
-    expect(
-      within(reviewBar()).getByRole("button", { name: /^Go to finding: Any signed-in user/ }),
-    ).toBeTruthy();
+    const title = within(reviewBar()).getByRole("button", {
+      name: /^Go to finding: Any signed-in user/,
+    });
+    // The severity's glyph before the title, in its color.
+    expect(title.textContent).toMatch(/^■Any signed-in user/);
 
-    await step("Previous point");
+    await step("Previous finding");
     expect(position().textContent).toBe("3 of 3");
     expect(scrolledTo().at(-1)).toBe("point-f3");
-    await step("Next point");
+    await step("Next finding");
     expect(position().textContent).toBe("1 of 3");
-    await step("Next point");
+    await step("Next finding");
     expect(scrolledTo().at(-1)).toBe("point-f2");
 
-    // The title goes back to the point's card.
+    // The title goes back to the finding's card.
     await userEvent.click(within(reviewBar()).getByRole("button", { name: /^Go to finding/ }));
     expect(scrolledTo().slice(-2)).toEqual(["point-f2", "point-f2"]);
   });
 
-  it("are narrowed to a type by its chip, which goes to its first unless the stepper is on one", async () => {
+  it("are narrowed to a type in the list, which narrows the arrows and goes nowhere", async () => {
     renderReview();
     await loaded();
-    const chip = await within(reviewBar()).findByRole("button", { name: "2 logic findings" });
-    expect(chip.getAttribute("aria-pressed")).toBe("false");
-    await userEvent.click(chip);
-    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    await step("Start");
+    await step("Next finding");
     expect(scrolledTo().at(-1)).toBe("point-f2");
-    expect(position().textContent).toBe("1 of 2");
-    await step("Next point");
+    const scrolls = scrolledTo().length;
+    let list = await openList();
+    expect(
+      within(within(list).getByRole("group", { name: "Show and step through" }))
+        .getAllByRole("button")
+        .map((one) => [one.textContent, one.getAttribute("aria-pressed")]),
+    ).toEqual([
+      ["All 3", "true"],
+      ["ƒ logic 2", "false"],
+      ["◆ contract 1", "false"],
+    ]);
+    await userEvent.click(within(list).getByRole("button", { name: "ƒ logic 2" }));
+    expect(rows(list).map((row) => row.getAttribute("aria-current"))).toEqual(["true", null]);
+    // Picking a type doesn't move the page.
+    expect(scrolledTo()).toHaveLength(scrolls);
+    expect(position().textContent).toBe("1 of 2 logic");
+    expect(position().getAttribute("aria-label")).toBe("Logic finding 1 of 2, show all");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await step("Next finding");
     expect(scrolledTo().at(-1)).toBe("point-f3");
-    expect(position().textContent).toBe("2 of 2");
+    expect(position().textContent).toBe("2 of 2 logic");
     // Round the two of them, never the contract finding.
-    await step("Next point");
-    expect(scrolledTo().at(-1)).toBe("point-f2");
-    // No chip pressed is all of them, from where the stepper is.
-    await userEvent.click(chip);
-    expect(position().textContent).toBe("2 of 3");
-    await userEvent.click(chip);
-    expect(position().textContent).toBe("1 of 2");
+    await step("Next finding");
     expect(scrolledTo().at(-1)).toBe("point-f2");
 
-    // Another type's chip takes its place.
-    const contract = within(reviewBar()).getByRole("button", { name: "1 contract finding" });
-    await userEvent.click(contract);
-    expect(chip.getAttribute("aria-pressed")).toBe("false");
-    expect(position().textContent).toBe("1 of 1");
-    expect(scrolledTo().at(-1)).toBe("point-f1");
+    // All of them again, from where the pager is.
+    list = await openList();
+    await userEvent.click(within(list).getByRole("button", { name: "All 3" }));
+    expect(rows(list)).toHaveLength(3);
+    expect(position().textContent).toBe("2 of 3");
   });
 
   it("stop being narrowed when the reviewer goes to one of another type", async () => {
     renderReview();
     await loaded();
-    const chip = await within(reviewBar()).findByRole("button", { name: "2 logic findings" });
-    await userEvent.click(chip);
-    await userEvent.click(position());
-    const list = screen.getByRole("list", { name: "Points" });
-    await userEvent.click(within(list).getAllByRole("button")[0] as HTMLElement);
+    const list = await openList();
+    await userEvent.click(within(list).getByRole("button", { name: "ƒ logic 2" }));
+    expect(position().textContent).toBe("2 logic findings");
+    await userEvent.keyboard("{Escape}");
+    // The SHOP-142 mismatch, from the details, goes to the contract finding that shows it.
+    const intent = await openDetails();
+    await userEvent.click(within(intent).getByRole("button", { name: /Contradicts/ }));
     expect(scrolledTo().at(-1)).toBe("point-f1");
-    expect(chip.getAttribute("aria-pressed")).toBe("false");
     expect(position().textContent).toBe("1 of 3");
   });
 
   it("are listed by severity, each with its type and its severity in words", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(position());
-    const list = screen.getByRole("list", { name: "Points" });
+    const list = await openList();
     expect(
-      within(list)
-        .getAllByRole("button")
-        .map((row) => [
-          row.querySelector("[data-slot=finding-type]")?.textContent,
-          row.querySelector("[data-slot=severity]")?.textContent,
-        ]),
+      rows(list).map((row) => [
+        row.querySelector("[data-slot=finding-type]")?.textContent,
+        row.querySelector("[data-slot=severity]")?.textContent,
+      ]),
     ).toEqual([
       ["◆contract", "■blocking"],
       ["ƒlogic", "▲major"],
@@ -1274,19 +1289,19 @@ describe("points", () => {
     ]);
   });
 
-  it("are listed in full from the position, and a row there is where the stepper goes on", async () => {
+  it("are listed in full from the position, and a row there is where the pager goes on", async () => {
     renderReview();
     await loaded();
-    await userEvent.click(position());
-    const list = screen.getByRole("list", { name: "Points" });
-    expect(within(list).getAllByRole("button")).toHaveLength(3);
-    await userEvent.click(within(list).getAllByRole("button")[1] as HTMLElement);
+    const list = await openList();
+    expect(rows(list)).toHaveLength(3);
+    await userEvent.click(rows(list)[1] as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(scrolledTo().at(-1)).toBe("point-f2");
     expect(position().textContent).toBe("2 of 3");
-    // The card has the focus; closing the list doesn't take it back to the stepper.
+    // The card has the focus; closing the list doesn't take it back to the pager.
     await waitFor(() => expect(document.activeElement?.id).toBe("point-f2"));
 
-    await step("Next point");
+    await step("Next finding");
     expect(scrolledTo().at(-1)).toBe("point-f3");
   });
 
@@ -1294,14 +1309,13 @@ describe("points", () => {
     renderReview();
     await loaded();
     await userEvent.click(pointButton("Dismiss", RETRIES));
-    await userEvent.click(position());
-    const list = screen.getByRole("list", { name: "Points" });
+    const list = await openList();
     await userEvent.click(within(list).getByRole("button", { name: RETRIES }));
     const title = within(reviewBar()).getByRole("button", { name: /^Go to finding:/ });
     expect(title.querySelector(".line-through")?.textContent).toMatch(RETRIES);
     expect(within(reviewBar()).getByRole("status").textContent).toMatch(/\(dismissed\)$/);
-    await step("Next point");
-    await step("Previous point");
+    await step("Next finding");
+    await step("Previous finding");
     expect(scrolledTo().at(-1)).toBe("point-f3");
   });
 
@@ -1984,7 +1998,7 @@ describe("without the model", () => {
     // Markup is text, and doesn't start a sentence.
     expect(screen.getByText("Adds receipts. <b>Not bold</b>")).toBeTruthy();
     expect(screen.queryByText(/Moves formatMoney too/)).toBeNull();
-    expect(document.querySelector("[data-slot=point-chip]")).toBeNull();
+    expect(document.querySelector("[data-slot=point-stepper]")).toBeNull();
     expect(screen.queryByRole("article")).toBeNull();
   });
 
@@ -2835,7 +2849,7 @@ describe("review threads", () => {
 
   describe("stepping through them from the bar", () => {
     const position = () => within(reviewBar()).getByRole("button", { name: /, show all$/ });
-    const step = (name: "Next thread" | "Previous thread") =>
+    const step = (name: "Start" | "Next thread" | "Previous thread") =>
       userEvent.click(within(reviewBar()).getByRole("button", { name }));
     const barStatus = () => within(reviewBar()).getByRole("status").textContent;
 
@@ -2844,7 +2858,7 @@ describe("review threads", () => {
       await loaded();
       // Before the first step, the count: three of the four are unresolved.
       await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
-      await step("Next thread");
+      await step("Start");
       // orders.ts comes before receipts.ts, so its earlier comment is first.
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier");
       expect(focusedLabel()).toBe("Thread on line 60");
@@ -2880,9 +2894,9 @@ describe("review threads", () => {
       ).toBeTruthy();
 
       await userEvent.click(position());
-      const list = screen.getByRole("dialog", { name: "4 threads, 3 unresolved" });
+      const list = await screen.findByRole("dialog", { name: "4 threads, 3 unresolved" });
       await userEvent.click(within(list).getByRole("button", { name: /Rounds half-cents up\?/ }));
-      expect(screen.queryByRole("dialog")).toBeNull();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_money");
       await waitFor(() => expect(document.activeElement?.id).toBe("thread-PRRT_money"));
       const opened = document.getElementById("thread-PRRT_money") as HTMLElement;
@@ -2896,8 +2910,8 @@ describe("review threads", () => {
 
       // Every thread is a step once the list says so.
       await userEvent.click(position());
-      await userEvent.click(screen.getByRole("button", { name: "All (4)" }));
-      await userEvent.click(screen.getByRole("button", { name: "Close" }));
+      await userEvent.click(await screen.findByRole("button", { name: "All (4)" }));
+      await userEvent.keyboard("{Escape}");
       expect(position().getAttribute("aria-label")).toBe("Thread 1 of 4, show all");
     });
 
@@ -2905,7 +2919,7 @@ describe("review threads", () => {
       renderReview({ view: codeOnly });
       await loaded();
       await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
-      await step("Next thread");
+      await step("Start");
       await step("Next thread");
       expect(position().textContent).toBe("2 of 3");
       const attempts = document.getElementById("thread-PRRT_attempts") as HTMLElement;
@@ -2917,22 +2931,22 @@ describe("review threads", () => {
       expect(position().textContent).toBe("3 of 3");
     });
 
-    it("beside Claude's points, narrows the stepper to the threads with their chip", async () => {
+    it("after Claude's findings, has the pager walk the threads with their chip", async () => {
       renderReview();
       await loaded();
       const chip = await within(reviewBar()).findByRole("button", { name: "3 unresolved threads" });
-      expect(position().textContent).toBe("3 points");
+      expect(position().textContent).toBe("3 findings");
       await userEvent.click(chip);
       expect(chip.getAttribute("aria-pressed")).toBe("true");
-      // Narrowing goes to the first thread, as the findings' chip goes to the first of them.
+      // Pressing it goes to the first thread.
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier");
       expect(position().getAttribute("aria-label")).toBe("Thread 1 of 3, show all");
       await step("Next thread");
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_attempts");
 
-      // Going to a point takes the stepper back to the points; the thread's place is kept.
+      // Letting go takes the pager back to the findings; the thread's place is kept.
       await userEvent.click(chip);
-      expect(position().textContent).toBe("3 points");
+      expect(position().textContent).toBe("3 findings");
       expect(document.getElementById("thread-PRRT_attempts")?.dataset.current).toBeUndefined();
       await userEvent.click(chip);
       expect(position().textContent).toBe("2 of 3");
@@ -2944,7 +2958,7 @@ describe("review threads", () => {
       await waitFor(() => expect(position().textContent).toBe("3 unresolved"));
       await userEvent.keyboard("v");
       expect(overviewBox()).toBeTruthy();
-      await step("Next thread");
+      await step("Start");
       await waitFor(() => expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier"));
       expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
     });

@@ -294,7 +294,7 @@ test.describe("the bar, with many of Claude's points", () => {
     await page.setViewportSize({ width: 1024, height: 720 });
     await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
     await page.getByRole("button", { name: "Request AI review" }).click();
-    await expect(page.locator("[data-slot=point-chip]").first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator("[data-slot=point-stepper]")).toBeVisible({ timeout: 60_000 });
     await landed(page);
     const bar = page.locator("[data-slot=review-bar]");
 
@@ -318,8 +318,8 @@ test.describe("the bar, with many of Claude's points", () => {
     // Stuck, it names the PR.
     await expect(bar.getByText(SMALL_FEATURE_TITLE)).toBeVisible();
 
-    await bar.getByRole("button", { name: "Next point" }).click();
-    await expect(bar.getByRole("button", { name: /^Point 1 of \d+, show all$/ })).toBeVisible();
+    await bar.getByRole("button", { name: "Start" }).click();
+    await expect(bar.getByRole("button", { name: /^Finding 1 of \d+, show all$/ })).toBeVisible();
     const card = page.locator("[data-slot=point]:focus");
     await expect(card).toBeInViewport();
     const barBottom = await bar.evaluate((one) => one.getBoundingClientRect().bottom);
@@ -535,7 +535,7 @@ test("replies to a thread and resolves it", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("walks the threads from the bar, before Claude runs and beside its points", async ({
+test("walks the threads from the bar, before Claude runs and beside its findings", async ({
   page,
 }) => {
   await openReview(page, PR.smallFeature, SMALL_FEATURE_TITLE, false);
@@ -544,7 +544,7 @@ test("walks the threads from the bar, before Claude runs and beside its points",
   await expect(position).toHaveText("5 unresolved");
 
   // The keyboard steps as the mouse does.
-  await bar.getByRole("button", { name: "Next thread" }).focus();
+  await bar.getByRole("button", { name: "Start" }).focus();
   await page.keyboard.press("Enter");
   await expect(position).toHaveAccessibleName("Thread 1 of 5, show all");
   await expect(bar.getByRole("status")).toHaveText(
@@ -585,13 +585,13 @@ test("walks the threads from the bar, before Claude runs and beside its points",
   await expect(resolved.getByRole("button", { name: "Hide" })).toBeVisible();
   await expect(resolved).toBeInViewport();
 
-  // With Claude's points, the threads are a chip beside theirs. The stepper stays on the threads
-  // the reviewer was going round; the chip takes it to the points and back.
+  // With Claude's findings, the threads are a chip after the pager. The pager stays on the
+  // threads the reviewer was going round; the chip takes it to the findings and back.
   await analyzeWithClaude(page);
   const chip = bar.getByRole("button", { name: "5 unresolved threads" });
   await expect(chip).toHaveAttribute("aria-pressed", "true");
   await chip.click();
-  await expect(bar.getByRole("button", { name: /^\d+ points?, show all$/ })).toBeVisible();
+  await expect(bar.getByRole("button", { name: /^\d+ findings?, show all$/ })).toBeVisible();
   await chip.click();
   // Narrowing from a thread outside the steps goes to the first step.
   await expect(position).toHaveAccessibleName("Thread 1 of 5, show all");
@@ -797,31 +797,56 @@ test("says on a finding which check could catch it, and adds it to the comment m
   );
 });
 
-test("ranks findings by severity, says each one's type and narrows the stepper to one", async ({
+test("ranks findings by severity, says each one's type and narrows the pager to one", async ({
   page,
 }) => {
   await openReview(page, PR.receiptsTyped, `${SMALL_FEATURE_TITLE}, with a finding of each type`);
   const bar = page.locator("[data-slot=review-bar]");
   const title = bar.locator("[data-slot=stepper-title]");
-  const next = bar.getByRole("button", { name: "Next point" });
-  await next.click();
-  await expect(title).toHaveText("Any client can send ten times the requests");
+  const position = bar.getByRole("button", { name: /, show all$/ });
+  const next = bar.getByRole("button", { name: "Next finding" });
+  await expect(position).toHaveAccessibleName("3 findings, show all");
+  await bar.getByRole("button", { name: "Start" }).click();
+  await expect(title).toHaveText("■Any client can send ten times the requests");
   const card = page.getByRole("article", { name: "Any client can send ten times the requests" });
   await expect(card.locator("[data-slot=finding-type]")).toHaveText(/contract/);
   await expect(card.locator("[data-slot=severity]")).toHaveText(/blocking/);
   await expect(page.locator("[data-point-mark=blocking]")).toHaveCount(1);
   await next.click();
-  await expect(title).toHaveText("Formats prices beside the code that already does");
+  await expect(title).toHaveText(/Formats prices beside the code that already does$/);
   await next.click();
-  await expect(title).toHaveText("Receipts are never removed from memory");
+  await expect(title).toHaveText(/Receipts are never removed from memory$/);
 
-  const architecture = bar.getByRole("button", { name: "1 architecture finding" });
-  await architecture.click();
-  await expect(architecture).toHaveAttribute("aria-pressed", "true");
-  await expect(title).toHaveText("Formats prices beside the code that already does");
-  await expect(bar.getByRole("button", { name: "Point 1 of 1, show all" })).toBeVisible();
-  await architecture.click();
-  await expect(bar.getByRole("button", { name: "Point 2 of 3, show all" })).toBeVisible();
+  // A type is picked in the list, which narrows what the arrows walk without moving the page.
+  const settled = async () => {
+    let last = Number.NaN;
+    await expect
+      .poll(async () => {
+        const now = await page.evaluate(() => window.scrollY);
+        const still = now === last;
+        last = now;
+        return still;
+      })
+      .toBe(true);
+    return last;
+  };
+  await settled();
+  await position.click();
+  const list = page.getByRole("dialog", { name: "3 findings from Claude" });
+  const scrolled = await settled();
+  await list.getByRole("button", { name: "≡ architecture 1" }).click();
+  await expect(list.getByRole("list", { name: "Findings" }).getByRole("listitem")).toHaveCount(1);
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrolled);
+  await page.keyboard.press("Escape");
+  await expect(list).toBeHidden();
+  await expect(position).toBeFocused();
+  await next.click();
+  await expect(title).toHaveText(/Formats prices beside the code that already does$/);
+  await expect(position).toHaveAccessibleName("Architecture finding 1 of 1, show all");
+  await expect(position).toHaveText("1 of 1 architecture");
+  await position.click();
+  await list.getByRole("button", { name: "All 3" }).click();
+  await expect(position).toHaveAccessibleName("Finding 2 of 3, show all");
 });
 
 test.describe("without the model", () => {

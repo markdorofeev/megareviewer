@@ -24,8 +24,9 @@ const proposals = (section: ReturnType<typeof everywhere>) =>
 const openScope = (page: Page, name: RegExp) =>
   page.getByRole("navigation", { name: "Scopes" }).getByRole("button", { name }).click();
 const pointCard = (page: Page, title: string) => page.getByRole("article", { name: title });
-const chips = (page: Page) =>
-  page.locator("[data-slot=review-bar] [data-slot=point-chip]:not([data-kind=thread])");
+/** The pager's position, which counts the findings before the first step. */
+const position = (page: Page) =>
+  page.locator("[data-slot=review-bar]").getByRole("button", { name: /, show all$/ });
 
 const openPreferences = async (page: Page) => {
   await page.goto(`/preferences?token=${TOKEN}`);
@@ -273,7 +274,7 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   const leftOut = pointCard(page, NAMING);
   await expect(leftOut).toHaveAttribute("data-left-out", "true");
   await expect(leftOut).toContainText("Left out by your preference: Naming");
-  await expect(chips(page)).toHaveText([/^ƒ\s*1\s*logic$/, /^◆\s*1\s*contract$/]);
+  await expect(position(page)).toHaveAccessibleName("2 findings, show all");
   const marks = page.locator("[data-point-mark]");
   const marked = await marks.count();
 
@@ -293,7 +294,7 @@ test("a point says what it's from, a left-out one is shown, and a rule is saved 
   await expect(leftOut.locator("[data-slot=point-guidance]")).toHaveText(
     "Left out by your preference: Naming",
   );
-  await expect(chips(page)).toHaveText([/^ƒ\s*2\s*logic$/, /^◆\s*1\s*contract$/]);
+  await expect(position(page)).toHaveAccessibleName("3 findings, show all");
   await expect(marks).toHaveCount(marked + 1);
 
   // "Don't flag things like this" on the other finding: a rule for this repository, then dismissed.

@@ -1,13 +1,12 @@
 import {
   ChevronDownIcon,
-  EyeOffIcon,
   FileTextIcon,
   FlagOffIcon,
   PencilIcon,
   SlidersHorizontalIcon,
   XIcon,
 } from "lucide-react";
-import { memo, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Fragment, memo, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import {
   type FindingType,
   type IntentMismatchKind,
@@ -23,7 +22,6 @@ import {
   FINDING_STATUS,
   FINDING_TYPE_STATUS,
   POINT_TONE,
-  type PointTone,
   pointTone,
   SEVERITY_STATUS,
 } from "../../lib/status.ts";
@@ -79,12 +77,48 @@ export interface PointActions {
 
 const FindingIcon = FINDING_STATUS.icon;
 
-const FindingLabel = ({ tone }: { readonly tone: PointTone }) => (
-  <span className={cn("inline-flex items-center gap-1 font-medium", POINT_TONE[tone].text)}>
-    <FindingIcon aria-hidden="true" className="size-3.5" />
-    {FINDING_STATUS.label}
-  </span>
-);
+/**
+ * Under a finding's title, one quiet line: its severity in its color, its type and, when the card
+ * isn't under its lines, where they are.
+ */
+const Meta = ({ point, underLines }: { readonly point: Point; readonly underLines: boolean }) => {
+  const { severity, type, lines } = point;
+  const items = [
+    severity !== null && (
+      <span
+        key="severity"
+        data-slot="severity"
+        className={cn("inline-flex items-center gap-1 font-medium", POINT_TONE[severity].text)}
+      >
+        <span aria-hidden="true">{SEVERITY_STATUS[severity].glyph}</span>
+        <span className="capitalize">{SEVERITY_STATUS[severity].label}</span>
+      </span>
+    ),
+    type !== null && (
+      <span key="type" data-slot="finding-type" className="inline-flex items-center gap-1">
+        <span aria-hidden="true">{FINDING_TYPE_STATUS[type].glyph}</span>
+        {FINDING_TYPE_STATUS[type].label}
+      </span>
+    ),
+    lines !== null && !underLines && (
+      <RefChip key="lines">{lineRef(lines.side, lines.startLine, lines.line)}</RefChip>
+    ),
+  ].filter((item) => item !== false);
+  if (items.length === 0) return null;
+  return (
+    <p
+      data-slot="point-meta"
+      className="flex flex-wrap items-center gap-x-1.5 text-caption text-muted-foreground"
+    >
+      {items.map((item, at) => (
+        <Fragment key={item.key}>
+          {at > 0 && <span aria-hidden="true">·</span>}
+          {item}
+        </Fragment>
+      ))}
+    </p>
+  );
+};
 
 /**
  * A point folded to one line with a way back: dismissed, already in the review, or left out by a
@@ -474,29 +508,13 @@ export const FindingCard = memo(function FindingCard({
           POINT_TONE[pointTone(point)].bar,
         )}
       />
-      <header className="flex flex-wrap items-center gap-2">
-        <FindingLabel tone={pointTone(point)} />
-        {point.type !== null && <TypeChip type={point.type} />}
-        {point.severity !== null && <SeverityChip severity={point.severity} />}
-        <span
-          className={cn(CHIP, "border-review-pending/25 bg-review-pending-bg text-review-pending")}
-        >
-          Draft
-        </span>
-        {point.lines !== null && (
-          <span className="flex items-center gap-1 text-caption text-muted-foreground">
-            on{" "}
-            <RefChip>{lineRef(point.lines.side, point.lines.startLine, point.lines.line)}</RefChip>
-          </span>
-        )}
-        <span className="ml-auto flex items-center gap-1 text-caption text-muted-foreground">
-          <EyeOffIcon aria-hidden="true" className="size-3.5" />
-          Only you see this
-        </span>
+      <header className="flex flex-col gap-0.5">
+        <span className="sr-only">{FINDING_STATUS.label}</span>
+        <h3 id={`${id}-title`} className="text-body font-semibold">
+          {point.title}
+        </h3>
+        <Meta point={point} underLines={linesAbove > 0} />
       </header>
-      <h3 id={`${id}-title`} className="font-semibold">
-        {point.title}
-      </h3>
       {point.explanation !== "" && (
         <ThreadBody blocks={parseBody(point.explanation).blocks} suggestion={() => null} />
       )}

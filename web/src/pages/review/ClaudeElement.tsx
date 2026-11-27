@@ -11,7 +11,7 @@ import { type ReactNode, useId } from "react";
 import type { HarnessUse } from "../../../../contracts/index.ts";
 import {
   type Analysis,
-  FindingType,
+  type FindingType,
   hasModelRun,
   MODEL_STAGES,
   modelFamily,
@@ -26,7 +26,6 @@ export type ClaudeRun = Pick<
   "status" | "stages" | "modelError" | "modelOption" | "usage"
 >;
 
-import { FINDING_TYPE_STATUS } from "../../lib/status.ts";
 import { cn, cssVars } from "../../lib/utils.ts";
 import { Button } from "../../ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip.tsx";
@@ -34,17 +33,16 @@ import { ModelMenu } from "./ModelMenu.tsx";
 import type { ModelChoice } from "./model-choice.ts";
 import { harnessLine } from "./useHarness.ts";
 
-/** What a chip has the stepper walk: the findings of a type, or the PR's threads. */
+/** What the pager walks, when not every finding: the findings of a type, or the PR's threads. */
 export type Narrowing = FindingType | "thread";
 
 /**
- * A count, a toggle for what the stepper walks: a type's findings, or the threads. Landing, it
- * rises in at its place among the chips, its count rolling up from zero (globals.css); the number
- * is in the text for screen readers, and drawn for the eye. Below 1280px the word gives way to the
- * glyph and count, leaving the stepper room for its title.
+ * The threads' chip, a toggle for whether the pager walks them. Landing, it rises in after the
+ * pager, its count rolling up from zero (globals.css); the number is in the text for screen
+ * readers, and drawn for the eye. Below 1280px the word gives way to the glyph and count, leaving
+ * the pager room for its title.
  */
-const Chip = ({
-  kind,
+const ThreadChip = ({
   count,
   words,
   at,
@@ -52,22 +50,19 @@ const Chip = ({
   onPressed,
   label,
 }: {
-  readonly kind: Narrowing;
   readonly count: number;
-  /** The word after the count, one and many: "logic" for both, or "thread" and "threads". */
+  /** The word after the count, one and many: "thread" and "threads", or "unresolved" for both. */
   readonly words: readonly [string, string];
   readonly at: number;
   readonly pressed: boolean;
   readonly onPressed: (pressed: boolean) => void;
-  /** Its name, when the count and word don't say what it counts. */
-  readonly label?: string;
+  readonly label: string;
 }) => {
   const [one, many] = words;
   return (
     <button
       type="button"
-      data-slot="point-chip"
-      data-kind={kind}
+      data-slot="thread-chip"
       data-land="rise"
       aria-pressed={pressed}
       aria-label={label}
@@ -78,11 +73,7 @@ const Chip = ({
         "flex min-h-6 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-2 text-caption font-medium text-foreground aria-pressed:border-current aria-pressed:ring-1 aria-pressed:ring-current",
       )}
     >
-      {kind === "thread" ? (
-        <MessageSquareIcon aria-hidden="true" className="size-3.5" />
-      ) : (
-        <span aria-hidden="true">{FINDING_TYPE_STATUS[kind].glyph}</span>
-      )}
+      <MessageSquareIcon aria-hidden="true" className="size-3.5" />
       <span>
         <span
           data-slot="count-up"
@@ -212,9 +203,9 @@ export interface Reanalyze {
 }
 
 /**
- * The AI review in the bar. First what it found, a chip per type that has findings, and one for
- * the PR's threads, each a toggle for what the stepper that follows walks; then the stepper,
- * through the points or the threads; then, after a divider, the AI review's split button: Request
+ * The AI review in the bar. First the pager, through Claude's findings or the PR's threads, and
+ * the threads' chip, a toggle for which it walks; then, after a divider, the AI review's split
+ * button: Request
  * AI review before a run, with a line of what it would do; Reviewing while it runs; Re-run after
  * it; Try again after a run that didn't finish; Re-analyze when the PR has new commits.
  */
@@ -247,15 +238,15 @@ export const ClaudeElement = ({
   readonly points: readonly Point[];
   /** How many points are folded as left out, said when there's nothing else to say. */
   readonly leftOut?: number;
-  /** The threads the stepper can walk, for their chip beside the points'; null without any. */
+  /** The threads the pager can walk, for their chip after it; null without any. */
   readonly threads?: {
     readonly count: number;
     readonly words: readonly [string, string];
     readonly label: string;
   } | null;
-  /** The chip that's pressed, or null. */
+  /** Whether the threads' chip is pressed. */
   readonly narrowed: Narrowing | null;
-  readonly onNarrow: (kind: Narrowing | null) => void;
+  readonly onNarrow: (kind: "thread" | null) => void;
   readonly onRun: () => void;
   /** Re-run after a finished run: asks, then takes the run off and runs again. */
   readonly onRerun?: () => void;
@@ -265,7 +256,7 @@ export const ClaudeElement = ({
   readonly filesChanged?: number | null;
   /** What a run would read of the repository's harness. */
   readonly harness?: HarnessUse | null;
-  /** After the chips: the stepper through the points or the threads. */
+  /** The pager through the findings or the threads. */
   readonly children?: ReactNode;
 }) => {
   // The run's model once it has one; before, the one the reviewer would run.
@@ -281,12 +272,8 @@ export const ClaudeElement = ({
   const failed = analysis.modelError;
 
   const receipt = !running && points.length > 0;
-  // What follows the chips lands after the last of them.
-  const types = FindingType.options.flatMap((type) => {
-    const count = points.filter((point) => point.type === type).length;
-    return count === 0 ? [] : [{ type, count }];
-  });
-  const chips = receipt ? types.length + (threads === null ? 0 : 1) : 0;
+  // The pager lands first, then the threads' chip, then what follows them.
+  const chips = receipt ? (hasStepper ? 1 : 0) + (threads === null ? 0 : 1) : 0;
   const after = (at: number) =>
     receipt ? { "data-land": "rise", style: cssVars({ "--landing-i": chips + at }) } : {};
 
@@ -351,7 +338,8 @@ export const ClaudeElement = ({
         variant="ai-quiet"
         compact
         icon={RefreshCwIcon}
-        label={starting ? "Starting…" : "Re-run"}
+        // Below 640px its icon is enough for the pager beside it; a screen reader hears the word.
+        label={<span className="max-sm:sr-only">{starting ? "Starting…" : "Re-run"}</span>}
         note={
           locked ??
           (chosen === null ? null : `Runs ${chosen.modelName} through ${chosen.via} again`)
@@ -401,36 +389,24 @@ export const ClaudeElement = ({
 
   const left = receipt ? (
     <span data-slot="claude-receipt" className="flex min-w-0 items-center gap-1.5">
-      {types.map(({ type, count }, at) => {
-        const { label } = FINDING_TYPE_STATUS[type];
-        return (
-          <Chip
-            key={type}
-            kind={type}
-            count={count}
-            words={[label, label]}
-            label={`${count} ${label} ${count === 1 ? "finding" : "findings"}`}
-            at={at}
-            pressed={narrowed === type}
-            onPressed={(pressed) => onNarrow(pressed ? type : null)}
-          />
-        );
-      })}
+      {hasStepper && (
+        <span
+          data-land="rise"
+          style={cssVars({ "--landing-i": 0 })}
+          className="flex min-w-0 items-center"
+        >
+          {children}
+        </span>
+      )}
       {threads !== null && (
-        <Chip
-          kind="thread"
+        <ThreadChip
           count={threads.count}
           words={threads.words}
           label={threads.label}
-          at={types.length}
+          at={hasStepper ? 1 : 0}
           pressed={narrowed === "thread"}
           onPressed={(pressed) => onNarrow(pressed ? "thread" : null)}
         />
-      )}
-      {hasStepper && (
-        <span {...after(0)} className="ml-1 flex min-w-0 items-center">
-          {children}
-        </span>
       )}
     </span>
   ) : (
