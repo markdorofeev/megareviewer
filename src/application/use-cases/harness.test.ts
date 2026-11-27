@@ -210,6 +210,25 @@ describe.each(KINDS)("a harness from a source that $name", (kind) => {
     expect(harness.cut).toBeNull();
   });
 
+  it("takes the folder a root's table names by a pattern from the root", async () => {
+    const { load } = setup(
+      {
+        "AGENTS.md": "| Topic | Where |\n|---|---|\n| Conventions | /docs/conventions/* |",
+        "docs/conventions/naming.md": "",
+        "docs/conventions/errors/http.md": "",
+        "docs/conventions/LICENSE.md": "",
+        "docs/other.md": "",
+      },
+      kind,
+    );
+    const { harness } = await load();
+    expect(paths(harness)).toEqual([
+      "AGENTS.md",
+      "docs/conventions/naming.md",
+      "docs/conventions/errors/http.md",
+    ]);
+  });
+
   it("stops at 200 files, and says so, with the links among the ones it has", async () => {
     const many = Array.from({ length: MAX_HARNESS_FILES + 20 }, (_, index) => `${index}.md`);
     const { load } = setup(

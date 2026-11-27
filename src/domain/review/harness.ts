@@ -267,11 +267,28 @@ const withoutAnchor = (target: string): string => target.replace(/#.*$/s, "");
 
 /** A path in prose: what's around one in a sentence or a table ends it, and so does a mask. */
 const PROSE_PATH = /[^\s`"'()*<>[\]{}|,;!?:=“”‘’—–]+/g;
+/** A path in prose with the stars of a pattern in it, read from where PROSE_PATH starts one. */
+const PATTERN = new RegExp(PROSE_PATH.source.replace("*", ""), "y");
+/** Whether a character can be in a path. */
+const PATH_CHAR = new RegExp(`^${PROSE_PATH.source.slice(0, -1)}$`);
+
+/**
+ * The folder a pattern for its Markdown names, `docs/` for `docs/*`, `docs/**` or `docs/**\/*.md`,
+ * and null for any other pattern, such as `docs/*-guide.md` or `src/**\/*.ts`.
+ */
+const patternFolder = (pattern: string): string | null => {
+  const star = pattern.indexOf("*");
+  if (star <= 0 || pattern.charAt(star - 1) !== "/") return null;
+  return /^\*\*?(?:\/\*\*?)*(?:\.(?:md|mdc|markdown))?$/i.test(pattern.slice(star))
+    ? pattern.slice(0, star)
+    : null;
+};
 
 /**
  * The files and folders `content`, the file at `path`, links, each once, where it's first linked by
  * its strongest kind. Nothing in a code span or a fence is a link, and neither is a URL, a path
- * under `~`, the repository's root or one that leaves the repository.
+ * under `~`, the repository's root or one that leaves the repository. A path with a leading slash
+ * is from the root, as in a link; only an import's is absolute.
  */
 export const harnessLinks = (path: string, content: string): HarnessLink[] => {
   const folder = path.split("/").slice(0, -1);
@@ -328,35 +345,43 @@ export const harnessLinks = (path: string, content: string): HarnessLink[] => {
     },
   );
 
+  // A leading slash in a guideline file means the repository's root, as it does in a link.
+  const inRepository = (target: string): boolean => /^(?:[^~/$\\]|\/(?!\/))/.test(target);
+  // A leading slash says it's a path, so `/docs/rules` is a folder as `docs/rules/` is, and `I/O` isn't.
+  const meanings = (target: string): (Target | null)[] =>
+    target.startsWith("/")
+      ? [resolved([], target)]
+      : [resolved(folder, target), resolved([], target)].map((found) => withSlash(target, found));
+  /** What a path in prose names: a pattern for a folder's Markdown names the folder. */
+  const unpatterned = (target: string): string | null =>
+    target.includes("*") ? patternFolder(target) : target;
+
   for (const match of text.matchAll(PROSE_PATH)) {
-    const target = inProse(match[0]).replace(/\\(?=[_.-])/g, "");
-    // `docs/*.md` is a pattern, and names no folder.
-    const glob = text.charAt(match.index + match[0].length) === "*";
-    if (isRelative(target)) {
-      add(
-        match.index,
-        "mention",
-        [resolved(folder, target), resolved([], target)].map((found) =>
-          glob && found?.folder ? null : withSlash(target, found),
-        ),
-      );
-    }
+    // What follows a pattern's stars is the pattern's, `x/` in `docs/**\/x/*.md`.
+    let star = match.index;
+    while (text.charAt(star - 1) === "*") star -= 1;
+    if (star < match.index && PATH_CHAR.test(text.charAt(star - 1))) continue;
+    PATTERN.lastIndex = match.index;
+    const target = unpatterned(
+      inProse(PATTERN.exec(text)?.[0] ?? match[0]).replace(/\\(?=[_.-])/g, ""),
+    );
+    if (target !== null && inRepository(target)) add(match.index, "mention", meanings(target));
   }
 
   // A span that holds a path and nothing else names it: `docs/` and `docs/rules.md` aren't examples.
   for (const { start, end } of unspanned.spans) {
-    const target = inProse(
-      unfenced
-        .slice(start, end)
-        .replace(/^`+|`+$/g, "")
-        .trim(),
+    const target = unpatterned(
+      inProse(
+        unfenced
+          .slice(start, end)
+          .replace(/^`+|`+$/g, "")
+          .trim(),
+      ),
     );
+    if (target === null || !inRepository(target)) continue;
     const whole = [...target.matchAll(PROSE_PATH)];
-    if (!isRelative(target) || whole.length !== 1 || whole[0]?.[0] !== target) continue;
-    add(start, "mention", [
-      withSlash(target, resolved(folder, target)),
-      withSlash(target, resolved([], target)),
-    ]);
+    if (whole.length !== 1 || whole[0]?.[0] !== target) continue;
+    add(start, "mention", meanings(target));
   }
 
   const strength = ({ kind }: HarnessLink) => HarnessLinkKind.options.indexOf(kind);

@@ -119,10 +119,10 @@ describe("harnessLinks", () => {
     ["a URL", "https://example.com/docs/a.md and <http://example.com/b.md> www.example.com/c.md"],
     ["a link to a URL", "[a](https://example.com/a.md) [b](//example.com/b.md) [c](mailto:c.md)"],
     ["a path under ~", "@~/.claude/a.md [b](~/b.md) ~/c.md"],
-    ["an absolute path", "@/etc/a.md /etc/b.md $HOME/c.md"],
+    ["an absolute import or a variable", "@/etc/a.md $HOME/c.md [b](//b.md) //c.md"],
     ["a path out of the repository", "@../a.md [b](../../b.md) ../c.md docs/../../d.md"],
     ["another kind of file", "@src/a.ts [b](b.png) package.json"],
-    ["a file with only an extension", "docs/*.md and .md"],
+    ["a file with only an extension", "docs/*-guide.md and .md"],
     ["an anchor of its own", "[a](#naming)"],
     ["a path with a control character", "[a](a%00b.md) [b](a%0Ab.md)"],
     ["a path of more than 500 characters", `${"a/".repeat(260)}b.md`],
@@ -159,8 +159,28 @@ describe("harnessLinks", () => {
       "Documentation lives under `docs/`, beside `compiler/` and `.ci/docker/`.",
       ["mention docs/", "mention compiler/", "mention .ci/docker/"],
     ],
+    [
+      "a pattern for its Markdown, in a table",
+      "| a | docs/a/* |\n| b | `docs/b/**` |\n| c | docs/c/**/*.md |\n| d | **docs/d/** |",
+      ["mention docs/a/", "mention docs/b/", "mention docs/c/", "mention docs/d/"],
+    ],
   ])("reads a folder named in %s", (_name, content, expected) => {
     expect(links("CLAUDE.md", content)).toEqual(expected);
+  });
+
+  it("reads a folder with a leading slash without one at its end, and one without either as nothing", () => {
+    expect(
+      links("CLAUDE.md", "| a | /docs/a |\n| b | `/docs/b` |\n| c | docs/c |\nSee /docs/d."),
+    ).toEqual(["mention docs/a/", "mention docs/b/", "mention docs/d/"]);
+  });
+
+  it("reads a path in prose with a leading slash from the root, as a link", () => {
+    expect(
+      links(
+        "docs/notes.md",
+        "| Conventions | /docs/conventions/* |\nSee `/docs/naming.md` and /TEAM.md.",
+      ),
+    ).toEqual(["mention docs/conventions/", "mention docs/naming.md", "mention TEAM.md"]);
   });
 
   it("resolves a folder as a file: a link against its file, a path in prose then against the root", () => {
@@ -175,7 +195,8 @@ describe("harnessLinks", () => {
     ["an import without a slash at its end", "Ask @someone, or install @anthropic-ai/sdk."],
     ["a path in prose without one", "The plan is in docs/plan, before/after and I/O."],
     ["a code span without one", "Run `docs/plan` or `claude/stage-51`."],
-    ["a pattern", "docs/*.md and src/**/*.ts"],
+    ["a pattern for anything but a folder's Markdown", "docs/*-guide.md, src/**/*.ts and *.md"],
+    ["a pattern's later folders", "docs/**/rules/*-guide.md"],
     ["the repository's root", "[home](/) [here](./) [up](docs/..) `./`"],
     ["a file of another kind", "src/index.ts and [b](b.png)"],
   ])("reads no folder in %s", (_name, content) => {
