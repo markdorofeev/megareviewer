@@ -166,4 +166,4 @@ No telemetry unless the user opts in. "Your code never leaves your machine" has 
 
 ## 10. Write decisions down
 
-A significant decision goes into DESIGN.md, or into ARCHITECTURE.md or the file under `docs/architecture/` for the part it changes, with the reason and the alternatives rejected, in the same PR as the change it drives.
+A significant decision goes into DESIGN.md or ARCHITECTURE.md, or the file under `docs/design/` or `docs/architecture/` for the part it changes, with the reason and the alternatives rejected, in the same PR as the change it drives.

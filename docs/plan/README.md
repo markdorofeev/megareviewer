@@ -340,7 +340,7 @@ One after the other, for one agent. Stage 67 only removes, and leaves the findin
 - `pnpm check` passes locally and in CI: typecheck, lint and format, dependency rules, tests, coverage thresholds.
 - Every item in the stage's **Definition of done** is checked.
 - The stage changed only paths it owns, plus contract PRs made as described above.
-- New decisions that change DESIGN.md, ARCHITECTURE.md or a file under `docs/architecture/` are written there in the same PR (ENGINEERING.md §10).
+- New decisions that change DESIGN.md, ARCHITECTURE.md or a file under `docs/design/` or `docs/architecture/` are written there in the same PR (ENGINEERING.md §10).
 - The PR description states the intent, links the stage doc, and lists decisions made along the way.
 
 ## Credentials agents may not have
