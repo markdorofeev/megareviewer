@@ -43,42 +43,67 @@ export interface ServedUse {
   readonly read: HarnessRead | null;
 }
 
-const refused = (use: ToolUse, path: string | null, problem: string): ServedUse => ({
+const refused = (use: ToolUse, path: string | null, problem: string, round: number): ServedUse => ({
   result: { type: "tool_result", tool_use_id: use.id, is_error: true, content: problem },
-  read: path === null ? null : { path, fromLine: null, toLine: null, outcome: "refused" },
+  read:
+    path === null
+      ? null
+      : {
+          path,
+          fromLine: null,
+          toLine: null,
+          outcome: "refused",
+          round,
+          tool: "read",
+          reason: problem,
+        },
 });
 
-/** One use of the tool, answered from the run's files: what it asked for, or why it can't have it. */
-export const serveRead = (use: ToolUse, files: ReadonlyMap<string, string>): ServedUse => {
+/**
+ * One use of the tool in the call's `round`th round of reading, answered from the run's files:
+ * what it asked for, or why it can't have it.
+ */
+export const serveRead = (
+  use: ToolUse,
+  files: ReadonlyMap<string, string>,
+  round: number,
+): ServedUse => {
   const asked = PathInput.safeParse(use.input);
   if (use.name !== READ_FILE.name || !asked.success) {
-    return refused(use, null, `Use ${READ_FILE.name} with the path of a file to read.`);
+    return refused(use, null, `Use ${READ_FILE.name} with the path of a file to read.`, round);
   }
   const { path } = asked.data;
   const content = files.get(path);
-  if (content === undefined) return refused(use, path, `${path} isn't one of the files to read.`);
+  if (content === undefined) {
+    return refused(use, path, `${path} isn't one of the files to read.`, round);
+  }
 
   const lines = content.replace(/\n$/, "").split("\n");
   const range = LinesInput.safeParse(use.input);
   const first = range.data?.first_line ?? 1;
   const last = Math.min(range.data?.last_line ?? lines.length, lines.length);
   if (!range.success || first > last) {
-    return refused(use, path, `${path} has no such lines: its lines are 1 to ${lines.length}.`);
+    return refused(
+      use,
+      path,
+      `${path} has no such lines: its lines are 1 to ${lines.length}.`,
+      round,
+    );
   }
   const text = lines.slice(first - 1, last).join("\n");
   const whole = first === 1 && last === lines.length;
+  // The API refuses a text that's only whitespace.
+  const given = text.trim() === "" ? "(blank)" : text;
   return {
-    result: {
-      type: "tool_result",
-      tool_use_id: use.id,
-      // The API refuses a text that's only whitespace.
-      content: text.trim() === "" ? "(blank)" : text,
-    },
+    result: { type: "tool_result", tool_use_id: use.id, content: given },
     read: {
       path,
       fromLine: whole ? null : first,
       toLine: whole ? null : last,
       outcome: "read",
+      round,
+      tool: "read",
+      chars: given.length,
     },
   };
 };

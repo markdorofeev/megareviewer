@@ -88,6 +88,17 @@ export const HarnessRead = z
     fromLine: z.number().int().positive().nullable(),
     toLine: z.number().int().positive().nullable(),
     outcome: z.enum(["read", "refused"]),
+    // The rest is the call's log of its reader, for Run details; absent on analyses stored before.
+    /** Which of the call's rounds of reading asked for it, from 1. */
+    round: z.number().int().positive().optional(),
+    /** How: opened, searched, or loaded by the transport itself beside a file it opened. */
+    tool: z.enum(["read", "search", "loaded"]).optional(),
+    /** For a search, what it looked for and where; `path` is then a file it showed lines of. */
+    search: z.object({ pattern: z.string(), path: z.string() }).readonly().optional(),
+    /** How many characters the tool gave the model; for a search, its whole answer. */
+    chars: z.number().int().nonnegative().optional(),
+    /** For a refusal, what the tool told the model, or why there was no answer. */
+    reason: z.string().optional(),
   })
   .readonly();
 export type HarnessRead = z.infer<typeof HarnessRead>;

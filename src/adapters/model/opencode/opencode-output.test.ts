@@ -8,11 +8,29 @@ const harness: PassHarness = {
   files: new Set(["ARCHITECTURE.md", "CLAUDE.md", "AGENTS.md", "docs/notes.md"]),
 };
 
+/** A turn with its reads cut to what they are, leaving the log out. */
 const turnOf = (json: unknown, given: PassHarness | null = harness) => {
   const turn = readTurn(json, given);
   if (turn === null) throw new Error("the messages didn't parse");
-  return turn;
+  return {
+    ...turn,
+    reads: turn.reads.map(({ path, fromLine, toLine, outcome }) => ({
+      path,
+      fromLine,
+      toLine,
+      outcome,
+    })),
+  };
 };
+
+const logOf = (json: unknown, given: PassHarness = harness) =>
+  (readTurn(json, given)?.reads ?? []).map(({ path, round, tool, chars, reason }) => ({
+    path,
+    round,
+    tool,
+    chars,
+    reason,
+  }));
 
 const read = (path: string, lines: readonly [number, number] | null = null) => ({
   path,
@@ -69,6 +87,31 @@ describe("readTurn with a harness", () => {
       read("CLAUDE.md"),
     ]);
     expect(turn.tools).toEqual(["read of /tmp/outside/canary.md", "read of /outside/canary.md"]);
+  });
+
+  it("logs each read's round, what it gave, and why one was refused", () => {
+    expect(logOf(recordedReads("reads-answer"))).toEqual([
+      { path: "docs/notes.md", round: 1, tool: "read", chars: 88, reason: undefined },
+      { path: "CLAUDE.md", round: 2, tool: "read", chars: 136, reason: undefined },
+    ]);
+    expect(logOf(recordedReads("reads-refused")).slice(0, 2)).toEqual([
+      { path: "docs/notes.md", round: 1, tool: "read", chars: 88, reason: undefined },
+      {
+        path: "/tmp/outside/canary.md",
+        round: 1,
+        tool: "read",
+        chars: undefined,
+        reason: "Permission denied: external_directory",
+      },
+    ]);
+    const inside = { ...harness, files: new Set([...harness.files, "docs/AGENTS.md"]) };
+    expect(logOf(recordedReads("reads-nested"), inside)[1]).toEqual({
+      path: "docs/AGENTS.md",
+      round: 1,
+      tool: "loaded",
+      chars: undefined,
+      reason: undefined,
+    });
   });
 
   it("fails on another tool", () => {

@@ -108,6 +108,12 @@ export const ModelCall = z
     error: ModelError.nullable(),
     /** What it read of the harness, in order. Empty for a call without the read tool. */
     reads: z.array(HarnessRead).readonly().default([]),
+    /**
+     * Whether it had the read tool: "on" with `readable` files to open, "off" when it ran again
+     * without it. Absent for a call with nothing to read, and on calls stored before.
+     */
+    reader: z.enum(["on", "off"]).optional(),
+    readable: z.number().int().nonnegative().optional(),
   })
   .readonly();
 export type ModelCall = z.infer<typeof ModelCall>;

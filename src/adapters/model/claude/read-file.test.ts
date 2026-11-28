@@ -8,13 +8,21 @@ const files = new Map([
 ]);
 
 const use = (input: unknown, name = READ_FILE.name) =>
-  serveRead({ id: "toolu_1", name, input }, files);
+  serveRead({ id: "toolu_1", name, input }, files, 2);
 
 describe("serveRead", () => {
-  it("gives a file whole, and records it without lines", () => {
+  it("gives a file whole, and records it without lines, with its round and what it gave", () => {
     expect(use({ path: RULES })).toEqual({
       result: { type: "tool_result", tool_use_id: "toolu_1", content: "# Rules\n\nOne.\nTwo." },
-      read: { path: RULES, fromLine: null, toLine: null, outcome: "read" },
+      read: {
+        path: RULES,
+        fromLine: null,
+        toLine: null,
+        outcome: "read",
+        round: 2,
+        tool: "read",
+        chars: 18,
+      },
     });
   });
 
@@ -28,7 +36,15 @@ describe("serveRead", () => {
   ])("gives the lines %j", (lines, content, fromLine, toLine) => {
     const { result, read } = use({ path: RULES, ...lines });
     expect(result.content).toBe(content);
-    expect(read).toEqual({ path: RULES, fromLine, toLine, outcome: "read" });
+    expect(read).toEqual({
+      path: RULES,
+      fromLine,
+      toLine,
+      outcome: "read",
+      round: 2,
+      tool: "read",
+      chars: content.length,
+    });
   });
 
   it.each([
@@ -44,7 +60,15 @@ describe("serveRead", () => {
       is_error: true,
       content: `${RULES} has no such lines: its lines are 1 to 4.`,
     });
-    expect(read).toEqual({ path: RULES, fromLine: null, toLine: null, outcome: "refused" });
+    expect(read).toEqual({
+      path: RULES,
+      fromLine: null,
+      toLine: null,
+      outcome: "refused",
+      round: 2,
+      tool: "read",
+      reason: `${RULES} has no such lines: its lines are 1 to 4.`,
+    });
   });
 
   it.each([
@@ -64,7 +88,15 @@ describe("serveRead", () => {
         is_error: true,
         content: `${path} isn't one of the files to read.`,
       },
-      read: { path, fromLine: null, toLine: null, outcome: "refused" },
+      read: {
+        path,
+        fromLine: null,
+        toLine: null,
+        outcome: "refused",
+        round: 2,
+        tool: "read",
+        reason: `${path} isn't one of the files to read.`,
+      },
     });
   });
 

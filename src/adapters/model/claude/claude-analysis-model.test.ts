@@ -430,7 +430,15 @@ describe("ClaudeAnalysisModel", () => {
       if (!result.ok) throw new Error(result.error.message);
       expect(result.value.value).toHaveLength(2);
       expect(result.value.reads).toEqual([
-        { path: RULES, fromLine: null, toLine: null, outcome: "read" },
+        {
+          path: RULES,
+          fromLine: null,
+          toLine: null,
+          outcome: "read",
+          round: 1,
+          tool: "read",
+          chars: 20,
+        },
       ]);
 
       const [first, second] = requests.map(({ body }) => body);
@@ -466,10 +474,18 @@ describe("ClaudeAnalysisModel", () => {
         smallFeature.passes.findings,
       ]);
       if (!result.ok) throw new Error(result.error.message);
+      const log = { round: 1, tool: "read" };
       expect(result.value.reads).toEqual([
-        { path: RULES, fromLine: null, toLine: null, outcome: "read" },
-        { path: PLAN, fromLine: 3, toLine: 3, outcome: "read" },
-        { path: "/etc/hosts", fromLine: null, toLine: null, outcome: "refused" },
+        { path: RULES, fromLine: null, toLine: null, outcome: "read", ...log, chars: 20 },
+        { path: PLAN, fromLine: 3, toLine: 3, outcome: "read", ...log, chars: 8 },
+        {
+          path: "/etc/hosts",
+          fromLine: null,
+          toLine: null,
+          outcome: "refused",
+          ...log,
+          reason: "/etc/hosts isn't one of the files to read.",
+        },
       ]);
       const results = resultsIn(requests[1]);
       expect(results.map((block) => [block.tool_use_id, block.content, block.is_error])).toEqual([
@@ -486,7 +502,15 @@ describe("ClaudeAnalysisModel", () => {
         smallFeature.passes.findings,
       ]);
       expect(result.ok && result.value.reads).toEqual([
-        { path: "../../.ssh/id_rsa", fromLine: null, toLine: null, outcome: "refused" },
+        {
+          path: "../../.ssh/id_rsa",
+          fromLine: null,
+          toLine: null,
+          outcome: "refused",
+          round: 1,
+          tool: "read",
+          reason: "../../.ssh/id_rsa isn't one of the files to read.",
+        },
       ]);
       expect(resultsIn(requests[1])[0]).toMatchObject({ is_error: true });
     });
@@ -496,6 +520,9 @@ describe("ClaudeAnalysisModel", () => {
     it("reads for eight rounds and answers on the next", async () => {
       const { result, requests } = await findingsWith([...reads(8), smallFeature.passes.findings]);
       expect(result.ok && result.value.reads).toHaveLength(8);
+      expect(result.ok && result.value.reads?.map(({ round }) => round)).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8,
+      ]);
       expect(requests).toHaveLength(9);
     });
 

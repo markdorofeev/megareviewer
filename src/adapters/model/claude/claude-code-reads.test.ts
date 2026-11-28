@@ -17,24 +17,60 @@ const whole = { fromLine: null, toLine: null, outcome: "read" };
 
 describe("parseReads", () => {
   it("reads a recorded call: whole files, lines, searches that show lines, and what failed", () => {
+    const cents = (round: number, chars: number) => ({
+      round,
+      tool: "search",
+      search: { pattern: "cents", path: "harness" },
+      chars,
+    });
     expect(parseReads(recordedLines("reads"), "/work", READABLE)).toEqual([
-      { path: "harness/CLAUDE.md", ...whole },
-      { path: "harness/docs/rules.md", fromLine: 3, toLine: 5, outcome: "read" },
+      { path: "harness/CLAUDE.md", ...whole, round: 1, tool: "read", chars: 31 },
+      {
+        path: "harness/docs/rules.md",
+        fromLine: 3,
+        toLine: 5,
+        outcome: "read",
+        round: 2,
+        tool: "read",
+        chars: 38,
+      },
       // The directory's search showed a line of each of these.
-      { path: "harness/docs/rules.md", ...whole },
-      { path: "harness/docs/plan.md", ...whole },
-      { path: "harness/docs/plan.md", ...whole },
+      { path: "harness/docs/rules.md", ...whole, ...cents(3, 80) },
+      { path: "harness/docs/plan.md", ...whole, ...cents(3, 80) },
+      {
+        path: "harness/docs/plan.md",
+        ...whole,
+        round: 4,
+        tool: "search",
+        search: { pattern: "Money", path: "harness/docs/plan.md" },
+        chars: 23,
+      },
       // A search that only names files is of the directory.
-      { path: "harness", ...whole },
-      { path: "harness/none.md", ...whole, outcome: "refused" },
+      { path: "harness", ...whole, ...cents(5, 56) },
+      {
+        path: "harness/none.md",
+        ...whole,
+        outcome: "refused",
+        round: 6,
+        tool: "read",
+        reason: "File does not exist. Note: your current working directory is /work.",
+      },
     ]);
   });
 
-  it("reads what a recorded call was refused", () => {
+  it("reads what a recorded call was refused, and what Claude Code told it", () => {
+    const outside = (path: string, round: number) => ({
+      path,
+      ...whole,
+      outcome: "refused",
+      round,
+      tool: "read",
+      reason: `${path} is outside /work; --restricted confines the file tools to the working directory.`,
+    });
     expect(parseReads(recordedLines("read-outside"), "/work", READABLE)).toEqual([
-      { path: "harness/docs/plan.md", ...whole },
-      { path: "/outside/canary.md", ...whole, outcome: "refused" },
-      { path: "/parent/system.txt", ...whole, outcome: "refused" },
+      { path: "harness/docs/plan.md", ...whole, round: 1, tool: "read", chars: 38 },
+      outside("/outside/canary.md", 2),
+      outside("/parent/system.txt", 3),
     ]);
   });
 
@@ -45,7 +81,42 @@ describe("parseReads", () => {
         "/work",
         READABLE,
       ),
-    ).toEqual([{ path: "harness/CLAUDE.md", ...whole, outcome: "refused" }]);
+    ).toEqual([
+      {
+        path: "harness/CLAUDE.md",
+        ...whole,
+        outcome: "refused",
+        round: 1,
+        tool: "read",
+        reason: "It had no answer: the pass was stopped.",
+      },
+    ]);
+  });
+
+  it("counts uses sent together, before their answers, as one round", () => {
+    const answer = (...ids: string[]) =>
+      JSON.stringify({
+        type: "user",
+        message: {
+          content: ids.map((id) => ({ type: "tool_result", tool_use_id: id, content: "x" })),
+        },
+      });
+    const rounds = parseReads(
+      [
+        using("Read", { file_path: "harness/CLAUDE.md" }, "a"),
+        using("Read", { file_path: "harness/docs/rules.md" }, "b"),
+        answer("a", "b"),
+        using("Read", { file_path: "harness/docs/plan.md" }, "c"),
+        answer("c"),
+      ],
+      "/work",
+      READABLE,
+    ).map((read) => [read.path, read.round]);
+    expect(rounds).toEqual([
+      ["harness/CLAUDE.md", 1],
+      ["harness/docs/rules.md", 1],
+      ["harness/docs/plan.md", 2],
+    ]);
   });
 
   it("says nothing of a search for names in one file, which shows none of it", () => {

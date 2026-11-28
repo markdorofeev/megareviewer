@@ -287,6 +287,26 @@ describe("a pass with the read tool", () => {
     expect(without?.options).toEqual({ ...retry?.options, withoutReader: true });
   });
 
+  it("says on each call whether it had the tool, and how many files it could open", async () => {
+    const readable = { ref: "g1", path: "harness/docs/rules.md", bytes: 9, lines: 1 };
+    const withHarness: AnalysisInput = {
+      ...input,
+      harness: {
+        files: [{ ...readable, linkedFrom: "CLAUDE.md", headings: [] }],
+        contents: new Map([[readable.path, "# Rules\n"]]),
+      },
+    };
+    const model = new FakeAnalysisModel({ readsHarness: true });
+    model.script("findings", err(readerFailed));
+    const { modelCalls } = await runFindings(model, withHarness, null, hunks, passDeps());
+    expect(modelCalls.map(({ reader, readable }) => [reader, readable])).toEqual([
+      ["on", 1],
+      ["off", undefined],
+    ]);
+    const without = await findingsOf(new FakeAnalysisModel({ readsHarness: true }));
+    expect(without.modelCalls[0]).not.toHaveProperty("reader");
+  });
+
   it("fails with the second run's error, and isn't run a third time", async () => {
     const model = new FakeAnalysisModel({ readsHarness: true });
     model.script("findings", err(readerFailed), err({ kind: "overloaded", message: "Overloaded" }));

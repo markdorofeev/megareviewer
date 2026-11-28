@@ -38,6 +38,8 @@ const ReadTool = z.object({
       input: z.object({ path: z.string() }).loose(),
       content: z.array(z.object({ text: z.string().optional() }).loose()).optional(),
       metadata: z.object({ truncated: z.boolean().optional() }).loose().optional(),
+      /** Why it failed, when it did; read loosely, since it's only shown. */
+      error: z.unknown().optional(),
     }),
   ]),
 });
@@ -152,10 +154,20 @@ const linesOf = (text: string, truncated: boolean): Pick<HarnessRead, "fromLine"
   return { fromLine, toLine };
 };
 
+const Reason = z.union([z.string(), z.object({ message: z.string() }).loose()]);
+
+/** What opencode said of a read that failed: "Permission denied: read". */
+const reasonOf = (error: unknown): string | null => {
+  const reason = Reason.safeParse(error);
+  if (!reason.success) return null;
+  return typeof reason.data === "string" ? reason.data : reason.data.message;
+};
+
 /** What a tool item read of the harness, and what it did that it must not have, or null for none. */
 const readOf = (
   item: unknown,
   harness: PassHarness,
+  round: number,
 ): { readonly read: HarnessRead | null; readonly outside: string | null } => {
   const tool = ReadTool.safeParse(item);
   if (!tool.success) {
@@ -165,27 +177,29 @@ const readOf = (
   const { state } = tool.data;
   if (state.status === "streaming") return { read: null, outside: null };
   const { inside, path } = place(harness.directory, state.input.path);
+  const log = { round, tool: "read" } as const;
   if (state.status !== "completed") {
+    const reason = reasonOf(state.error) ?? "It had no answer: the pass was stopped.";
     return {
-      read: { path, ...WHOLE, outcome: "refused" },
+      read: { path, ...WHOLE, outcome: "refused", ...log, reason },
       outside: inside ? null : `read of ${path}`,
     };
   }
   if (!inside || !harness.files.has(path)) return { read: null, outside: `read of ${path}` };
   const text = state.content?.find((part) => part.text !== undefined)?.text ?? "";
   const lines = linesOf(text, state.metadata?.truncated === true);
-  return { read: { path, ...lines, outcome: "read" }, outside: null };
+  return { read: { path, ...lines, outcome: "read", ...log, chars: text.length }, outside: null };
 };
 
 /** The harness's files a message of opencode's own loaded, or null for any other message. */
-const loadedBy = (message: unknown, harness: PassHarness): HarnessRead[] | null => {
+const loadedBy = (message: unknown, harness: PassHarness, round: number): HarnessRead[] | null => {
   const loaded = LoadedInstructions.safeParse(message);
   if (!loaded.success) return null;
   const paths = loaded.data.metadata.instruction.paths.map((path) =>
     place(harness.directory, path),
   );
   if (!paths.every(({ inside, path }) => inside && harness.files.has(path))) return null;
-  return paths.map(({ path }) => ({ path, ...WHOLE, outcome: "read" }));
+  return paths.map(({ path }) => ({ path, ...WHOLE, outcome: "read", round, tool: "loaded" }));
 };
 
 /**
@@ -217,7 +231,7 @@ export const readTurn = (
           tools.push(item.type === "tool" ? (item.name ?? "a tool") : item.type);
           continue;
         }
-        const { read, outside } = readOf(item, harness);
+        const { read, outside } = readOf(item, harness, rounds);
         if (read !== null) reads.push(read);
         if (outside !== null) tools.push(outside);
       }
@@ -228,7 +242,8 @@ export const readTurn = (
       idle = ended.data;
       continue;
     }
-    const loaded = harness === null ? null : loadedBy(message, harness);
+    // opencode loads them beside a read, so in the round of the last read.
+    const loaded = harness === null ? null : loadedBy(message, harness, Math.max(rounds, 1));
     if (loaded !== null) reads.push(...loaded);
     else if (!BOOKKEEPING.has(message.type)) tools.push(message.type);
   }

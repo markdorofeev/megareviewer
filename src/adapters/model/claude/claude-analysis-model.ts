@@ -140,7 +140,9 @@ export const createClaudeAnalysisModel = (options: ClaudeAnalysisModelOptions): 
 
         const reading = harness !== null && message.stop_reason === "tool_use";
         if (reading && rounds.length < MAX_READ_ROUNDS) {
-          const served = toolUses(message).map((use) => serveRead(use, harness.contents));
+          const served = toolUses(message).map((use) =>
+            serveRead(use, harness.contents, rounds.length + 1),
+          );
           reads.push(...served.flatMap(({ read }) => (read === null ? [] : [read])));
           rounds.push({ asked: message.content, given: served.map(({ result }) => result) });
           continue;

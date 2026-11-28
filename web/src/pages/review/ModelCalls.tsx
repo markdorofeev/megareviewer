@@ -42,26 +42,96 @@ const outcomeLabel = (call: ModelCall): string => {
 const readLabel = ({ path, fromLine, toLine }: HarnessRead): string =>
   fromLine === null || toLine === null ? path : `${path}, lines ${fromLine}–${toLine}`;
 
-/** What a call read of the harness, each once, and what it was refused. */
-const Reads = ({ reads }: { readonly reads: readonly HarnessRead[] }) => {
-  const labels = (outcome: HarnessRead["outcome"]) => [
-    ...new Set(reads.filter((read) => read.outcome === outcome).map(readLabel)),
-  ];
-  return (["read", "refused"] as const).map((outcome) => {
-    const listed = labels(outcome);
-    return listed.length === 0 ? null : (
-      <div key={outcome} className="mt-1 text-muted-foreground">
-        {outcome === "read" ? "Read" : "Refused"}
-        <ul className="list-disc pl-4">
-          {listed.map((label) => (
-            <li key={label} className="font-mono text-code-compact break-all">
-              {label}
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  });
+/** One use of the reader: a search that showed several files is one entry. */
+interface ReadEntry {
+  readonly first: HarnessRead;
+  readonly shown: readonly string[];
+}
+
+const sameSearch = (a: HarnessRead, b: HarnessRead): boolean =>
+  a.tool === "search" &&
+  b.tool === "search" &&
+  a.round === b.round &&
+  a.outcome === b.outcome &&
+  a.search?.pattern === b.search?.pattern &&
+  a.search?.path === b.search?.path;
+
+const entriesOf = (reads: readonly HarnessRead[]): ReadEntry[] => {
+  const entries: { first: HarnessRead; shown: string[] }[] = [];
+  for (const read of reads) {
+    const last = entries.at(-1);
+    if (last !== undefined && sameSearch(last.first, read)) last.shown.push(read.path);
+    else entries.push({ first: read, shown: [read.path] });
+  }
+  return entries;
+};
+
+const VERBS: Readonly<Record<NonNullable<HarnessRead["tool"]>, string>> = {
+  read: "Read",
+  search: "Searched",
+  loaded: "Loaded by itself",
+};
+
+const verbOf = ({ outcome, tool }: HarnessRead): string => {
+  if (outcome === "refused") return tool === "search" ? "Search refused" : "Refused";
+  return tool === undefined ? "Read" : VERBS[tool];
+};
+
+/** What the entry asked for: a file and its lines, or what a search looked for and where. */
+const askedOf = ({ first, shown }: ReadEntry): string => {
+  if (first.search === undefined) return readLabel(first);
+  const where = `“${first.search.pattern}” in ${first.search.path}`;
+  const files = shown.filter((path) => path !== first.search?.path);
+  return files.length === 0 ? where : `${where}: ${files.join(", ")}`;
+};
+
+/** The reader's log of one call: whether it had the tool, then each use in order, by round. */
+const ReadLog = ({ call }: { readonly call: ModelCall }) => {
+  const entries = entriesOf(call.reads);
+  const header =
+    call.reader === "on"
+      ? `Read tool on ${call.readable ?? 0} ${call.readable === 1 ? "file" : "files"}${entries.length === 0 ? ", nothing read" : ""}`
+      : call.reader === "off"
+        ? "Without the read tool"
+        : null;
+  if (header === null && entries.length === 0) return null;
+  return (
+    <div className="mt-1 text-muted-foreground">
+      {header}
+      {entries.length > 0 && (
+        <ol aria-label="What it read" className="flex flex-col gap-0.5">
+          {entries.map((entry, index) => {
+            const { first } = entry;
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: the log is fixed and can repeat a read.
+              <li key={index} className="flex gap-2">
+                <span className="tabular w-6 shrink-0 text-caption">
+                  {first.round === undefined ? "" : `R${first.round}`}
+                </span>
+                <span className="min-w-0">
+                  <span className={first.outcome === "refused" ? "text-destructive" : undefined}>
+                    {verbOf(first)}
+                  </span>{" "}
+                  <span className="font-mono text-code-compact break-all text-foreground">
+                    {askedOf(entry)}
+                  </span>
+                  {first.chars !== undefined && (
+                    <span className="tabular">
+                      {" "}
+                      · {first.chars.toLocaleString("en-US")} characters
+                    </span>
+                  )}
+                  {first.reason !== undefined && (
+                    <span className="break-words">: {first.reason}</span>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
 };
 
 /** Calls in the order they started; a retry after the call it retries. */
@@ -202,7 +272,7 @@ export const ModelCalls = ({
                           ))}
                         </ul>
                       )}
-                      <Reads reads={call.reads} />
+                      <ReadLog call={call} />
                     </td>
                   </tr>
                 );

@@ -118,6 +118,8 @@ const callChecked = async <T>(
   mend: (value: T) => Mended<T>,
   check: (value: T) => string[],
   { logger, clock }: PassDeps,
+  /** How many harness files the pass's read tool can open; 0 when it has none. */
+  readable: number,
 ): Promise<{
   outcome: Result<{ value: T; problems: string[] }, ModelError>;
   usage: ModelUsage[];
@@ -146,6 +148,11 @@ const callChecked = async <T>(
       problems: found,
       error: result.ok ? null : { kind: result.error.kind, message: result.error.message },
       reads,
+      ...(readable === 0
+        ? {}
+        : options?.withoutReader === true
+          ? { reader: "off" as const }
+          : { reader: "on" as const, readable }),
     });
     if (!result.ok) {
       logger.warn("Model call failed", {
@@ -228,6 +235,8 @@ const checkedMark = (
   return checked;
 };
 
+const readableIn = ({ harness }: AnalysisInput): number => harness?.files.length ?? 0;
+
 const describeUnknown = (hunkId: HunkId): string => `${hunkId} isn't a hunk of this pull request.`;
 
 const intentTexts: Rewrite<Intent> = ({ stated, inferred, mismatches }, text) => ({
@@ -259,6 +268,7 @@ export const runIntent = async (
     refsOutOf(guidance, input, intentTexts),
     (intent) => unknownIn(intent).map(describeUnknown),
     deps,
+    readableIn(input),
   );
   if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
   const { value: intent, problems } = outcome.value;
@@ -321,6 +331,7 @@ export const runFindings = async (
     refsOutOf(guidance, input, findingTexts),
     (drafts) => validateFindings(drafts, hunks, mismatches).map(FINDING_FEEDBACK),
     deps,
+    readableIn(input),
   );
   if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [] };
   const drafts = outcome.value.value;
@@ -449,6 +460,7 @@ export const runSteps = async (
       ...flowProblems(flow).map(describeFlowProblem),
     ],
     deps,
+    readableIn(input),
   );
   if (!outcome.ok) return { outcome, usage, modelCalls, warnings: [], flow: null };
   const { steps: drafts, flow: drafted } = outcome.value.value;

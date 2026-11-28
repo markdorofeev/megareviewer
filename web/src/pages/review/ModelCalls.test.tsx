@@ -68,9 +68,73 @@ describe("ModelCalls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run details…" }));
     const row = within(screen.getByRole("dialog")).getAllByRole("row")[1];
     expect(row?.textContent).toContain("it tried to read /etc/hosts");
-    expect(row?.textContent).toContain(
-      "Readharness/docs/rules.mdharness/ARCHITECTURE.md, lines 27–69Refused/etc/hosts",
-    );
+    const log = within(row as HTMLElement).getByRole("list", { name: "What it read" });
+    expect(
+      within(log)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Read harness/docs/rules.md",
+      "Read harness/docs/rules.md",
+      "Read harness/ARCHITECTURE.md, lines 27–69",
+      "Refused /etc/hosts",
+    ]);
+  });
+
+  it("logs the reader's uses by round: what each gave, a search once, and why one was refused", () => {
+    const reading: ModelCall = {
+      ...failed,
+      outcome: "ok",
+      error: null,
+      reader: "on",
+      readable: 12,
+      reads: [
+        {
+          path: "harness/CLAUDE.md",
+          fromLine: null,
+          toLine: null,
+          outcome: "read",
+          round: 1,
+          tool: "read",
+          chars: 1_204,
+        },
+        ...["harness/docs/rules.md", "harness/docs/plan.md"].map((path) => ({
+          path,
+          fromLine: null,
+          toLine: null,
+          outcome: "read" as const,
+          round: 2,
+          tool: "search" as const,
+          search: { pattern: "cents", path: "harness" },
+          chars: 80,
+        })),
+        {
+          path: "harness/none.md",
+          fromLine: null,
+          toLine: null,
+          outcome: "refused",
+          round: 3,
+          tool: "read",
+          reason: "File does not exist.",
+        },
+      ],
+    };
+    const without: ModelCall = { ...failed, attempt: 2, reader: "off" };
+    render(<ModelCalls calls={[reading, without]} option={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run details…" }));
+    const [, first, second] = within(screen.getByRole("dialog")).getAllByRole("row");
+    expect(first?.textContent).toContain("Read tool on 12 files");
+    const log = within(first as HTMLElement).getByRole("list", { name: "What it read" });
+    expect(
+      within(log)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "R1Read harness/CLAUDE.md · 1,204 characters",
+      "R2Searched “cents” in harness: harness/docs/rules.md, harness/docs/plan.md · 80 characters",
+      "R3Refused harness/none.md: File does not exist.",
+    ]);
+    expect(second?.textContent).toContain("Without the read tool");
   });
 
   it("shows nothing before Claude has run", () => {
