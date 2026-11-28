@@ -78,11 +78,9 @@ describe("receipts-harness over HTTP", () => {
       ["REVIEW.md", true, "prompt"],
       ["CLAUDE.md", true, "prompt"],
     ]);
-    // REVIEW.md only mentions the house rules, which are always loaded since CLAUDE.md imports them.
-    expect(linked(listed, "REVIEW.md")).toEqual([
-      ["docs/house-rules.md", "REVIEW.md", "mention", true, "prompt"],
-      ["docs/naming.md", "docs/house-rules.md", "import", true, "prompt"],
-    ]);
+    // REVIEW.md only mentions the house rules, which are under CLAUDE.md since it imports them.
+    expect(linked(listed, "REVIEW.md")).toEqual([]);
+    expect(listed.guidelineFiles?.[0]?.listedElsewhere).toEqual([{ path: "CLAUDE.md", files: 2 }]);
     expect(linked(listed, "CLAUDE.md")).toEqual([
       ["docs/house-rules.md", "CLAUDE.md", "import", true, "prompt"],
       [ARCHITECTURE, "CLAUDE.md", "import", true, "on-request"],
@@ -116,9 +114,14 @@ describe("receipts-harness over HTTP", () => {
       ["CLAUDE.md", false, null],
     ]);
     // REVIEW.md only mentions the house rules, so without CLAUDE.md nothing is always loaded.
-    expect(linked(claudeOff, "REVIEW.md").map((file) => file[4])).toEqual([
-      "on-request",
-      "on-request",
+    const claude = claudeOff.guidelineFiles?.find(({ path }) => path === "CLAUDE.md");
+    expect(
+      claude?.linked
+        .filter(({ path }) => path === "docs/house-rules.md" || path === "docs/naming.md")
+        .map(({ path, use, currentUse }) => [path, use, currentUse]),
+    ).toEqual([
+      ["docs/house-rules.md", "prompt", "on-request"],
+      ["docs/naming.md", "prompt", "on-request"],
     ]);
     expect(await use()).toEqual({ status: "ready", inPrompt: ["REVIEW.md"], onRequest: 2 });
 

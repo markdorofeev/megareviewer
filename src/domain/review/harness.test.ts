@@ -438,9 +438,22 @@ describe("harnessCopy", () => {
 
 type Link = readonly [path: string, kind: HarnessLinkKind];
 
-const file = (path: string, fileLinks: readonly Link[] = [], bytes = 100): HarnessFile => ({
+const blobs = new Map<string, BlobHash>();
+/** A different content for every path, unless a file's `blob` says it's another's. */
+const blobOf = (path: string): BlobHash => {
+  const blob = blobs.get(path) ?? BlobHash.parse(blobs.size.toString(16).padStart(40, "0"));
+  blobs.set(path, blob);
+  return blob;
+};
+
+const file = (
+  path: string,
+  fileLinks: readonly Link[] = [],
+  bytes = 100,
+  blob = blobOf(path),
+): HarnessFile => ({
   path,
-  blob: BlobHash.parse("a".repeat(40)),
+  blob,
   bytes,
   lines: 1,
   via: GUIDELINE_PATHS.some((root) => root === path) ? "root" : "link",
@@ -602,6 +615,25 @@ describe("harnessReach", () => {
     expect(paths(harnessReach(linked, "CLAUDE.md"))).toEqual(["a.md", "b.md", "c.md"]);
     expect(harnessReach(linked, "none.md")).toEqual([]);
   });
+
+  it("reaches a file `through` refuses, and not what it links", () => {
+    const linked = harness(
+      file("CLAUDE.md", [
+        ["AGENTS.md", "import"],
+        ["a.md", "link"],
+      ]),
+      file("AGENTS.md", [["b.md", "link"]]),
+      file("a.md", [["c.md", "link"]]),
+      file("b.md"),
+      file("c.md"),
+    );
+    const notRoots = ({ via }: HarnessFile) => via !== "root";
+    expect(paths(harnessReach(linked, "CLAUDE.md", notRoots))).toEqual([
+      "AGENTS.md",
+      "a.md",
+      "c.md",
+    ]);
+  });
 });
 
 describe("harnessPlan", () => {
@@ -692,6 +724,46 @@ describe("harnessPlan", () => {
       onRequest: [],
       passedOver: [],
     });
+  });
+
+  it("gives a file with the same content as one before it to neither list", () => {
+    const agents = file("AGENTS.md", [["docs/rules.md", "link"]]);
+    const duplicated = harness(
+      agents,
+      file("CLAUDE.md", [["docs/a.md", "import"]], 100, agents.blob),
+      file("docs/rules.md"),
+      file("docs/a.md", [["docs/same.md", "link"]]),
+      file("docs/same.md", [], 100, agents.blob),
+    );
+    const { duplicates, ...lists } = harnessPlan(duplicated, new Map());
+    expect({ inPrompt: paths(lists.inPrompt), onRequest: paths(lists.onRequest) }).toEqual({
+      inPrompt: ["AGENTS.md", "docs/a.md"],
+      onRequest: ["docs/rules.md"],
+    });
+    expect(duplicates).toEqual(
+      new Map([
+        ["CLAUDE.md", "AGENTS.md"],
+        ["docs/same.md", "AGENTS.md"],
+      ]),
+    );
+    expect(paths(harnessPlan(duplicated, off("AGENTS.md")).inPrompt)).toEqual([
+      "CLAUDE.md",
+      "docs/a.md",
+    ]);
+  });
+
+  it("keeps the one in the prompt over a duplicate before it on request", () => {
+    const linked = file("docs/rules.md");
+    const duplicated = harness(
+      file("AGENTS.md", [["docs/rules.md", "link"]]),
+      file("CLAUDE.md", [["docs/imported.md", "import"]]),
+      linked,
+      file("docs/imported.md", [], 100, linked.blob),
+    );
+    const { inPrompt, onRequest, duplicates } = harnessPlan(duplicated, new Map());
+    expect(paths(inPrompt)).toEqual(["AGENTS.md", "CLAUDE.md", "docs/imported.md"]);
+    expect(paths(onRequest)).toEqual([]);
+    expect(duplicates).toEqual(new Map([["docs/rules.md", "docs/imported.md"]]));
   });
 
   it("gives a file off, or behind one that's off, to neither list", () => {

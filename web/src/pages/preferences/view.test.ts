@@ -73,6 +73,15 @@ describe("the preferences view", () => {
     expect(linkedTotal(linked.slice(0, 1))).toBe("1 linked file, 6.0 KB");
     expect(linkedUses(linked)).toBe("2 in every review, 5 on request");
     expect(linkedUses(linked.map((file) => ({ ...file, use: null })))).toBe("7 ignored");
+    expect(
+      linkedUses(
+        linked.map((file, index) => ({
+          ...file,
+          use: index < 2 ? null : file.use,
+          sameAs: index < 2 ? "AGENTS.md" : null,
+        })),
+      ),
+    ).toBe("1 in every review, 4 on request, 2 duplicates");
   });
 
   it("lists a scope's preferences", () => {

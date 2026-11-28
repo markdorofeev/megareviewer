@@ -222,9 +222,13 @@ test("unfolds what a guideline file links, and switches a linked file off", asyn
   await openScope(page, /^acme\/warehouse/);
   const section = warehouse(page);
   const fold = section.getByRole("button", { name: "7 linked files, 70 KB, from CLAUDE.md" });
-  const uses = section.locator("[data-slot=linked-uses]").nth(1);
+  const uses = section.locator("[data-slot=linked-uses]");
   await expect(fold).toHaveAttribute("aria-expanded", "false");
   await expect(uses).toHaveText("2 in every review, 5 on request");
+  // REVIEW.md mentions the house rules CLAUDE.md imports, which are listed there alone.
+  await expect(section.locator("[data-slot=listed-elsewhere]")).toHaveText(
+    "Links 2 files listed under CLAUDE.md",
+  );
   await expect(section.locator("[data-slot=harness-notes]")).toHaveText(
     "docs/decision-log.md is over 1 MB, so AI reviews don't use it.",
   );

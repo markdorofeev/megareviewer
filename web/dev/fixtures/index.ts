@@ -23,6 +23,7 @@ export {
   fixtureImport,
   fixtureNothingYet,
   fixturePreferencesView,
+  fixtureSharedSection,
   fixtureSuggestions,
 } from "./preferences.ts";
 export { fixturePullRequestStatus } from "./pull-request-status.ts";

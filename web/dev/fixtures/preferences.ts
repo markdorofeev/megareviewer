@@ -71,25 +71,38 @@ export const fixtureImport: PreferenceProposal = proposal(3, {
 
 type Linked = NonNullable<RepositoryPreferences["guidelineFiles"]>[number]["linked"][number];
 
+/** A linked file on, under a guideline file that's off unless `currentUse` says otherwise. */
 const linked = (
   path: string,
   bytes: number,
   linkedFrom: string,
   via: Linked["via"],
   use: Linked["use"] = via === "import" ? "prompt" : "on-request",
-): Linked => ({ path, bytes, linkedFrom, via, enabled: true, use });
+  currentUse: Linked["currentUse"] = null,
+): Linked => ({ path, bytes, linkedFrom, via, enabled: true, use, currentUse, sameAs: null });
+
+const NOTHING_ELSEWHERE = { sameAs: null, listedElsewhere: [] } as const;
 
 /** A repository whose CLAUDE.md, off, imports and links others, with a file too large to use. */
 export const fixtureHarnessSection: RepositoryPreferences = {
   repo: shop,
   guidelineFiles: [
-    { path: "REVIEW.md", bytes: 1_240, enabled: true, tooLarge: false, use: "prompt", linked: [] },
+    {
+      path: "REVIEW.md",
+      bytes: 1_240,
+      enabled: true,
+      tooLarge: false,
+      use: "prompt",
+      linked: [],
+      ...NOTHING_ELSEWHERE,
+    },
     {
       path: "CLAUDE.md",
       bytes: 98_300,
       enabled: false,
       tooLarge: true,
       use: null,
+      ...NOTHING_ELSEWHERE,
       linked: [
         linked("docs/house-rules.md", 6_140, "CLAUDE.md", "import"),
         linked("docs/architecture.md", 71_200, "CLAUDE.md", "import", "on-request"),
@@ -107,11 +120,61 @@ export const fixtureHarnessSection: RepositoryPreferences = {
       tooLarge: false,
       use: null,
       linked: [],
+      ...NOTHING_ELSEWHERE,
     },
   ],
   guidelineNote: null,
   harnessCut: null,
   harnessSkipped: [{ path: "docs/changelog.md", reason: "too-large" }],
+  harnessNote: null,
+};
+
+/**
+ * A repository whose CLAUDE.md imports AGENTS.md and links what it does, with the instructions for
+ * Copilot the same as AGENTS.md.
+ */
+export const fixtureSharedSection: RepositoryPreferences = {
+  repo: shop,
+  guidelineFiles: [
+    {
+      path: "AGENTS.md",
+      bytes: 2_310,
+      enabled: true,
+      tooLarge: false,
+      use: "prompt",
+      ...NOTHING_ELSEWHERE,
+      linked: [
+        linked("docs/rules.md", 5_200, "AGENTS.md", "link", "on-request", "on-request"),
+        linked("docs/testing.md", 3_480, "AGENTS.md", "mention", "on-request", "on-request"),
+      ],
+    },
+    {
+      path: "CLAUDE.md",
+      bytes: 410,
+      enabled: true,
+      tooLarge: false,
+      use: "prompt",
+      sameAs: null,
+      linked: [
+        linked("AGENTS.md", 2_310, "CLAUDE.md", "import", "prompt", "prompt"),
+        linked("docs/claude-code.md", 1_900, "CLAUDE.md", "link", "on-request", "on-request"),
+      ],
+      listedElsewhere: [{ path: "AGENTS.md", files: 2 }],
+    },
+    {
+      path: ".github/copilot-instructions.md",
+      bytes: 2_310,
+      enabled: true,
+      tooLarge: false,
+      use: null,
+      sameAs: "AGENTS.md",
+      linked: [],
+      listedElsewhere: [{ path: "AGENTS.md", files: 2 }],
+    },
+  ],
+  guidelineNote: null,
+  harnessCut: null,
+  harnessSkipped: [],
   harnessNote: null,
 };
 

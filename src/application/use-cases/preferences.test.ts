@@ -205,7 +205,9 @@ describe("getPreferences", () => {
             enabled: true,
             tooLarge: false,
             use: "prompt",
+            sameAs: null,
             linked: [],
+            listedElsewhere: [],
           },
           {
             path: "CLAUDE.md",
@@ -213,7 +215,9 @@ describe("getPreferences", () => {
             enabled: true,
             tooLarge: true,
             use: null,
+            sameAs: null,
             linked: [],
+            listedElsewhere: [],
           },
           {
             path: ".github/copilot-instructions.md",
@@ -221,7 +225,9 @@ describe("getPreferences", () => {
             enabled: true,
             tooLarge: false,
             use: "prompt",
+            sameAs: null,
             linked: [],
+            listedElsewhere: [],
           },
         ],
         guidelineNote: null,
@@ -896,6 +902,7 @@ describe("a repository's harness", () => {
         enabled: false,
         tooLarge: false,
         use: null,
+        sameAs: null,
         linked: [
           {
             path: "docs/style.md",
@@ -904,8 +911,11 @@ describe("a repository's harness", () => {
             via: "link",
             enabled: true,
             use: "on-request",
+            currentUse: null,
+            sameAs: null,
           },
         ],
+        listedElsewhere: [],
       },
     ]);
     expect(made.github.getFilesCalls).toEqual([]);
@@ -942,16 +952,11 @@ describe("a repository's harness", () => {
           ["AGENTS.md", false, null],
         ],
       ],
-      [
-        COPILOT,
-        false,
-        null,
-        [
-          ["CONTRIBUTING.md", false, "prompt"],
-          ["style.md", true, "prompt"],
-          ["AGENTS.md", false, null],
-        ],
-      ],
+      // What another guideline file brings is in its list alone.
+      [COPILOT, false, null, [["CONTRIBUTING.md", false, "prompt"]]],
+    ]);
+    expect((await section(made)).guidelineFiles?.[2]?.listedElsewhere).toEqual([
+      { path: "CONTRIBUTING.md", files: 1 },
     ]);
 
     await made.useCases.setGuidelineSwitch(shop, COPILOT, true);
@@ -966,6 +971,79 @@ describe("a repository's harness", () => {
       ["AGENTS.md", false, null],
       ["CONTRIBUTING.md", false, null],
       [COPILOT, true, "prompt"],
+    ]);
+  });
+
+  it("lists a file two guideline files reach once, under the first, with how the other uses it", async () => {
+    const made = await analyzed({
+      "AGENTS.md": "See docs/rules.md and docs/style.md.\n",
+      "CLAUDE.md": "@AGENTS.md\n\nSee docs/style.md and docs/claude.md.\n",
+      "docs/rules.md": "# Rules\n\nSee testing.md.\n",
+      "docs/testing.md": "x",
+      "docs/style.md": "y",
+      "docs/claude.md": "z",
+    });
+    await made.useCases.setGuidelineSwitch(shop, "AGENTS.md", false);
+    await made.load(baseSha);
+    const files = (await section(made)).guidelineFiles ?? [];
+
+    expect(
+      files.map(({ path, linked, listedElsewhere }) => [
+        path,
+        linked.map((file) => [file.path, file.use, file.currentUse]),
+        listedElsewhere,
+      ]),
+    ).toEqual([
+      [
+        "AGENTS.md",
+        [
+          ["docs/rules.md", "on-request", null],
+          // Under AGENTS.md, which is off, and read all the same since CLAUDE.md links it.
+          ["docs/style.md", "on-request", "on-request"],
+          ["docs/testing.md", "on-request", null],
+        ],
+        [],
+      ],
+      [
+        "CLAUDE.md",
+        [
+          ["AGENTS.md", null, null],
+          ["docs/claude.md", "on-request", "on-request"],
+        ],
+        [{ path: "AGENTS.md", files: 3 }],
+      ],
+    ]);
+  });
+
+  it("says which guideline file has the same content as one a review is given", async () => {
+    const made = await analyzed({
+      "AGENTS.md": "Use pnpm.\n\nSee docs/a.md.\n",
+      "CLAUDE.md": "Use pnpm.\n\nSee docs/a.md.\n",
+      "docs/a.md": "See same.md.\n",
+      "docs/same.md": "Use pnpm.\n\nSee docs/a.md.\n",
+    });
+    await made.load(baseSha);
+    const files = (await section(made)).guidelineFiles ?? [];
+
+    expect(files.map(({ path, use, sameAs }) => [path, use, sameAs])).toEqual([
+      ["AGENTS.md", "prompt", null],
+      ["CLAUDE.md", null, "AGENTS.md"],
+    ]);
+    expect(files[0]?.linked.map(({ path, use, sameAs }) => [path, use, sameAs])).toEqual([
+      ["docs/a.md", "on-request", null],
+      ["docs/same.md", null, "AGENTS.md"],
+    ]);
+
+    await made.useCases.setGuidelineSwitch(shop, "AGENTS.md", false);
+    expect(
+      ((await section(made)).guidelineFiles ?? []).map(({ path, use, sameAs }) => [
+        path,
+        use,
+        sameAs,
+      ]),
+    ).toEqual([
+      ["AGENTS.md", null, null],
+      ["CLAUDE.md", "prompt", null],
     ]);
   });
 
@@ -1047,6 +1125,26 @@ describe("a repository's harness", () => {
       ["CLAUDE.md", true, null],
       [".github/copilot-instructions.md", false, null],
     ]);
+  });
+
+  it("gives a guideline file with the same content as another once while there's no harness", async () => {
+    const { useCases, store, github } = setup();
+    github.setFiles(shop, smallFeature.pullRequest.baseSha, {
+      "AGENTS.md": "Use pnpm.\n",
+      "CLAUDE.md": "Use pnpm.\n",
+    });
+    await store.saveAnalysis(smallFeatureAnalysis);
+
+    const [repository] = (await useCases.getPreferences()).repositories;
+
+    expect(repository?.guidelineFiles?.map(({ path, use, sameAs }) => [path, use, sameAs])).toEqual(
+      [
+        ["REVIEW.md", "prompt", null],
+        ["AGENTS.md", "prompt", null],
+        ["CLAUDE.md", null, "AGENTS.md"],
+        [".github/copilot-instructions.md", null, null],
+      ],
+    );
   });
 });
 

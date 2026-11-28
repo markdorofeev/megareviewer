@@ -7,6 +7,7 @@ import {
   fixtureModelOptions,
   fixtureNothingYet,
   fixturePreferencesView,
+  fixtureSharedSection,
   lockedModelOptions,
 } from "../../dev/fixtures/index.ts";
 import { mockFetch } from "../../dev/mock-fetch.ts";
@@ -106,7 +107,7 @@ const switchedOn: RepositoryPreferences = {
               ? { ...one, enabled: false, use: null }
               : one.linkedFrom === "docs/runbooks/README.md"
                 ? { ...one, use: null }
-                : one,
+                : { ...one, currentUse: one.use },
           ),
         }
       : file,
@@ -136,6 +137,9 @@ const Harnesses = () => (
     </Example>
     <Example title="Cut by a limit">
       <GuidelineFiles section={cutShort} onSwitch={noSave} />
+    </Example>
+    <Example title="Files two of them link, and a duplicate">
+      <GuidelineFiles section={fixtureSharedSection} startOpen={["CLAUDE.md"]} onSwitch={noSave} />
     </Example>
   </div>
 );

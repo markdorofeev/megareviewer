@@ -87,18 +87,25 @@ export const byLinking = (
 export const linkedTotal = (linked: readonly LinkedGuidelineFile[]): string =>
   `${plural(linked.length, "linked file")}, ${formatBytes(linked.reduce((sum, file) => sum + file.bytes, 0))}`;
 
-/** "2 in every review, 5 on request, 1 ignored". */
+const howUsed = ({ use, sameAs }: LinkedGuidelineFile) =>
+  use ?? (sameAs === null ? "ignored" : "duplicate");
+
+/** "2 in every review, 5 on request, 1 duplicate, 1 ignored". */
 export const linkedUses = (linked: readonly LinkedGuidelineFile[]): string =>
   (
     [
-      ["prompt", "in every review"],
-      ["on-request", "on request"],
-      [null, "ignored"],
+      ["prompt", "in every review", "in every review"],
+      ["on-request", "on request", "on request"],
+      ["duplicate", "duplicate", "duplicates"],
+      ["ignored", "ignored", "ignored"],
     ] as const
   )
-    .map(([use, words]) => [linked.filter((file) => file.use === use).length, words] as const)
+    .map(
+      ([use, one, many]) =>
+        [linked.filter((file) => howUsed(file) === use).length, one, many] as const,
+    )
     .filter(([count]) => count > 0)
-    .map(([count, words]) => `${count} ${words}`)
+    .map(([count, one, many]) => `${count} ${count === 1 ? one : many}`)
     .join(", ");
 
 export const preferencesIn = (

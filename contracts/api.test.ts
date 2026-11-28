@@ -65,6 +65,8 @@ const claudeMd = {
       via: "import",
       enabled: true,
       use: "prompt",
+      currentUse: "prompt",
+      sameAs: null,
     },
     {
       path: "docs/testing.md",
@@ -73,8 +75,12 @@ const claudeMd = {
       via: "mention",
       enabled: false,
       use: null,
+      currentUse: null,
+      sameAs: null,
     },
   ],
+  sameAs: null,
+  listedElsewhere: [],
 };
 
 const responses: Record<RouteName, unknown> = {
@@ -172,7 +178,9 @@ const responses: Record<RouteName, unknown> = {
             enabled: true,
             tooLarge: false,
             use: "prompt",
+            sameAs: "AGENTS.md",
             linked: [],
+            listedElsewhere: [{ path: "CLAUDE.md", files: 1 }],
           },
           claudeMd,
         ],

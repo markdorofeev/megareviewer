@@ -2724,6 +2724,26 @@ describe("a model run's guidance", () => {
       ]);
     });
 
+    it("gives a guideline file with the same content as one before it once, with a harness or without", async () => {
+      const DUPLICATED = { ...FILES, "AGENTS.md": FILES["CLAUDE.md"] };
+      const loaded = setup({ harnessSource: source(DUPLICATED) });
+      expect(given(await loaded.analyze())?.map(([, path]) => path)).toEqual([
+        "REVIEW.md",
+        "AGENTS.md",
+        "docs/rules.md",
+        "docs/naming.md",
+        "docs/style.md",
+      ]);
+
+      const harnessSource = source(DUPLICATED);
+      harnessSource.failAlways(hostError("rate-limited"));
+      const alone = setup({ harnessSource, fixtures: [withGuidelines(DUPLICATED)] });
+      expect(given(await alone.analyze())).toEqual([
+        ["g1", "REVIEW.md", null],
+        ["g2", "AGENTS.md", null],
+      ]);
+    });
+
     it("warns once when neither the harness nor the roots can be read", async () => {
       const harnessSource = source(FILES);
       harnessSource.failAlways(hostError("network"));

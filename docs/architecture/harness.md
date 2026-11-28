@@ -23,6 +23,8 @@ A listing says the files under a folder are there, so reading them spends none o
 
 **Loading** starts with an analysis, new or cached, once the PR's base commit is known. Loads of one repository and commit join, whoever starts them, by the store they write into. A map in the analysis runner, as analyses are joined, was the alternative: a model run and the preferences routes join loads too. Nothing is stored until a walk ends, so a source that fails halfway leaves the store as it was. A store that can't be written costs the next load its requests, and not this one its harness.
 
+**Duplicates.** `harnessPlan` leaves out of both lists an enabled file whose blob hash is an earlier one's, the always-loaded files first, and says which in `duplicates`, so the guidance and the preferences page agree; `guidelineDuplicates` does the same by content for the roots read without a harness. Comparing by the blob costs nothing, since every harness file has one.
+
 **Stored** per commit as a list, with contents once per git blob hash, so a file that didn't change between two base commits is fetched and stored once. Rebuilding the list from the file cache was considered; its rows are by commit, so every move of the target branch refetched every file. Reading a blob counts as using it. Harnesses loaded, and blobs last used, more than 30 days ago are dropped when megareviewer starts.
 
 ## Reading the harness

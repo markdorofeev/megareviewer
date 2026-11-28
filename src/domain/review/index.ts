@@ -171,6 +171,7 @@ export {
   GuidelineFile,
   GuidelinePath,
   guidanceOf,
+  guidelineDuplicates,
   guidelineEnabled,
   guidelineFile,
   inCreationOrder,

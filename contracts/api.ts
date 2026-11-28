@@ -3,6 +3,7 @@ import {
   Analysis,
   AnalysisId,
   GuidelineFile,
+  GuidelinePath,
   Harness,
   HarnessLinkKind,
   HostKind,
@@ -185,8 +186,12 @@ export const LinkedGuidelineFile = z
     via: HarnessLinkKind,
     /** Its own switch; a guideline file's, whether a run uses it. */
     enabled: z.boolean(),
-    /** How a run uses it when the guideline file is on; null when it doesn't. */
+    /** How a run uses it when the guideline file it's listed under is on; null when it doesn't. */
     use: GuidelineUse.nullable(),
+    /** How a run uses it with the switches as they are, which another guideline file can make it. */
+    currentUse: GuidelineUse.nullable(),
+    /** With the guideline file on, the file a run is given instead, which has the same content. */
+    sameAs: z.string().nullable(),
   })
   .readonly();
 export type LinkedGuidelineFile = z.infer<typeof LinkedGuidelineFile>;
@@ -195,8 +200,17 @@ export const RepositoryGuidelineFile = GuidelineFile.unwrap()
   .extend({
     /** Null when it's off, or when it's on and no run can be given it. */
     use: GuidelineUse.nullable(),
-    /** Nearest first; none while the harness isn't loaded. */
+    /** The file with the same content a run is given instead. */
+    sameAs: z.string().nullable(),
+    /**
+     * The files it reaches that no guideline file before it does, and the guideline files it links,
+     * nearest first; none while the harness isn't loaded.
+     */
     linked: z.array(LinkedGuidelineFile).readonly(),
+    /** How many of the files it reaches each other guideline file lists. */
+    listedElsewhere: z
+      .array(z.object({ path: GuidelinePath, files: z.number().int().positive() }).readonly())
+      .readonly(),
   })
   .readonly();
 export type RepositoryGuidelineFile = z.infer<typeof RepositoryGuidelineFile>;

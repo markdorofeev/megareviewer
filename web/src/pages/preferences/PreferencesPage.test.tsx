@@ -13,6 +13,7 @@ import {
   fixtureImport,
   fixtureNothingYet,
   fixturePreferencesView,
+  fixtureSharedSection,
   fixtureStatus,
   lockedModelOptions,
 } from "../../../dev/fixtures/index.ts";
@@ -831,6 +832,29 @@ describe("PreferencesPage's repositories", () => {
     // A guideline file another one links is switched on its own row.
     expect(
       within(section).getAllByRole("switch", { name: "Use CONTRIBUTING.md in AI reviews" }),
+    ).toHaveLength(1);
+  });
+
+  it("lists a file two guideline files link under one, and says which file a duplicate is the same as", async () => {
+    renderPage({ path: SHOP, preferences: withSection(fixtureSharedSection) });
+    const section = await panel("acme/shop");
+
+    expect(files(section)).toEqual([
+      "AGENTS.md2.3 KBIn every review2 linked files, 8.5 KB2 on request",
+      "CLAUDE.md410 BIn every review2 linked files, 4.1 KB1 in every review, 1 on requestAlso links 2 files listed under AGENTS.md",
+      ".github/copilot-instructions.md2.3 KBSame as AGENTS.mdLinks 2 files listed under AGENTS.md",
+    ]);
+    for (const button of within(section).getAllByRole("button", { name: /^2 linked files/ })) {
+      await userEvent.click(button);
+    }
+    expect(linkedFiles(within(section).getByRole("list", { name: "Linked by CLAUDE.md" }))).toEqual(
+      [
+        "AGENTS.md2.3 KBimportedIn every review",
+        "docs/claude-code.md1.9 KBRead when the model asks",
+      ],
+    );
+    expect(
+      within(section).getAllByRole("switch", { name: "Use docs/rules.md in AI reviews" }),
     ).toHaveLength(1);
   });
 

@@ -7,6 +7,7 @@ import {
   type Guidance,
   type GuidelinePath,
   guidanceOf,
+  guidelineDuplicates,
   guidelineEnabled,
   HARNESS_ROOT,
   type HarnessFile,
@@ -186,10 +187,11 @@ const rootGuidelines = async (
 ): Promise<Result<Guidelines, UseCaseError>> => {
   const read = await readRootFiles(deps, repo, sha, paths);
   if (!read.ok) return read;
+  const duplicates = guidelineDuplicates(paths, read.value);
   const { fitting, passedOver } = fitInPrompt(
     paths.flatMap((path) => {
       const content = read.value.get(path) ?? null;
-      return content === null
+      return content === null || duplicates.has(path)
         ? []
         : [{ path, content, bytes: utf8.encode(content).byteLength, linkedFrom: null }];
     }),

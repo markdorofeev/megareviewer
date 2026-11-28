@@ -21,6 +21,7 @@ import {
   formatBytes,
   linkedTotal,
   linkedUses,
+  plural,
   sentence,
   USE_WORDS,
   WOULD_USE_WORDS,
@@ -105,19 +106,25 @@ const FileRow = ({
   );
 };
 
-const rootWords = ({ enabled, use }: RepositoryGuidelineFile): string => {
+const sameAsWords = (path: string) => `Same as ${path}`;
+
+const rootWords = ({ enabled, use, sameAs }: RepositoryGuidelineFile): string => {
   if (!enabled) return "Ignored";
+  if (sameAs !== null) return sameAsWords(sameAs);
   return use === null
     ? `Left out: over the ${formatBytes(MAX_INLINE_BYTES)} a review holds`
     : USE_WORDS[use];
 };
 
 const linkedWords = (
-  { enabled, use }: LinkedGuidelineFile,
+  { enabled, use, currentUse, sameAs }: LinkedGuidelineFile,
   isRoot: boolean,
   rootOn: boolean,
 ): string => {
-  if (use !== null) return rootOn ? USE_WORDS[use] : WOULD_USE_WORDS[use];
+  // Another guideline file can bring it while the one it's listed under is off.
+  if (currentUse !== null) return USE_WORDS[currentUse];
+  if (sameAs !== null) return sameAsWords(sameAs);
+  if (use !== null && !rootOn) return WOULD_USE_WORDS[use];
   if (isRoot) return "Has its own switch";
   return enabled ? "Ignored: links to it are off" : "Ignored";
 };
@@ -149,7 +156,7 @@ const LinkedGroup = ({
               bytes={file.bytes}
               note={file.via === "import" ? "imported" : null}
               words={linkedWords(file, roots.has(file.path), rootOn)}
-              used={rootOn && file.use !== null}
+              used={file.currentUse !== null}
               enabled={roots.has(file.path) ? null : file.enabled}
               onSwitch={onSwitch}
               className="min-h-9 py-1"
@@ -160,6 +167,26 @@ const LinkedGroup = ({
     </>
   );
 };
+
+/** "Also links 3 files listed under AGENTS.md and 1 under REVIEW.md", the paths in code. */
+const ListedElsewhere = ({
+  listed,
+  also,
+}: {
+  readonly listed: RepositoryGuidelineFile["listedElsewhere"];
+  readonly also: boolean;
+}) => (
+  <span data-slot="listed-elsewhere" className="text-caption text-muted-foreground">
+    {also ? "Also links " : "Links "}
+    {listed.map(({ path, files }, index) => (
+      <span key={path}>
+        {index === 0 ? "" : index === listed.length - 1 ? " and " : ", "}
+        {index === 0 ? `${plural(files, "file")} listed under ` : `${files} under `}
+        <span className="font-mono break-all">{path}</span>
+      </span>
+    ))}
+  </span>
+);
 
 /** What a guideline file reaches: how many files and how they're used, folded, then each of them. */
 const LinkedFiles = ({
@@ -175,6 +202,13 @@ const LinkedFiles = ({
 }) => {
   const [open, setOpen] = useState(startOpen);
   const id = useId();
+  if (file.linked.length === 0) {
+    return (
+      <div className="flex min-h-6 items-center pl-[25px]">
+        <ListedElsewhere listed={file.listedElsewhere} also={false} />
+      </div>
+    );
+  }
   return (
     <div className="pl-[25px]">
       <div className="flex flex-wrap items-center gap-x-2">
@@ -200,6 +234,7 @@ const LinkedFiles = ({
           {file.enabled ? "" : "When on: "}
           {linkedUses(file.linked)}
         </span>
+        {file.listedElsewhere.length > 0 && <ListedElsewhere listed={file.listedElsewhere} also />}
       </div>
       {open && (
         <div id={id} className="pb-1">
@@ -325,7 +360,7 @@ export const GuidelineFiles = ({
                   onSwitch={onSwitch}
                   className="min-h-7"
                 />
-                {file.linked.length > 0 && (
+                {(file.linked.length > 0 || file.listedElsewhere.length > 0) && (
                   <LinkedFiles
                     file={file}
                     roots={roots}

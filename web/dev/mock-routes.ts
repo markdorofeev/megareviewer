@@ -198,19 +198,22 @@ const switchedSection = (
         enabled,
         use: enabled ? (file.tooLarge ? ("on-request" as const) : ("prompt" as const)) : null,
       }),
-      linked: file.linked.map((one) =>
-        one.path === path
-          ? {
-              ...one,
-              enabled,
-              use: enabled
-                ? one.via === "import"
-                  ? ("prompt" as const)
-                  : ("on-request" as const)
-                : null,
-            }
-          : one,
-      ),
+      linked: file.linked.map((one) => {
+        const switched =
+          one.path === path
+            ? {
+                ...one,
+                enabled,
+                use: enabled
+                  ? one.via === "import"
+                    ? ("prompt" as const)
+                    : ("on-request" as const)
+                  : null,
+              }
+            : one;
+        const rootOn = file.path === path ? enabled : file.enabled;
+        return { ...switched, currentUse: rootOn ? switched.use : null };
+      }),
     })),
   };
 };

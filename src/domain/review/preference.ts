@@ -108,7 +108,11 @@ export const PastComment = z
   .readonly();
 export type PastComment = z.infer<typeof PastComment>;
 
-/** Where a repository's guidelines for writing and reviewing code are looked for, at its root. */
+/**
+ * Where a repository's guidelines for writing and reviewing code are looked for, at its root. Of
+ * two with the same content a run keeps the one first here: AGENTS.md, which every agent reads,
+ * over CLAUDE.md.
+ */
 export const GUIDELINE_PATHS = [
   "REVIEW.md",
   "AGENTS.md",
@@ -251,6 +255,26 @@ export const guidelineFile = (
     enabled: guidelineEnabled(path, switches),
     tooLarge: bytes > MAX_INLINE_BYTES,
   };
+};
+
+/**
+ * Of the guideline files at `paths`, in that order, each with the same content as one before it,
+ * with that one's path: a run without a harness gives it once.
+ */
+export const guidelineDuplicates = <P extends string>(
+  paths: readonly P[],
+  contents: ReadonlyMap<P, string | null>,
+): ReadonlyMap<P, P> => {
+  const first = new Map<string, P>();
+  const duplicates = new Map<P, P>();
+  for (const path of paths) {
+    const content = contents.get(path) ?? null;
+    if (content === null) continue;
+    const of = first.get(content);
+    if (of === undefined) first.set(content, path);
+    else duplicates.set(path, of);
+  }
+  return duplicates;
 };
 
 /** Numbers what a run reads, in the order it's sent. */

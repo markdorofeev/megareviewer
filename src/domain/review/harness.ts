@@ -523,9 +523,28 @@ const reach = (
   return [...reached.values()];
 };
 
-/** Every file a file reaches, nearest first, whatever is switched on. */
-export const harnessReach = (harness: Harness, path: string): HarnessFile[] =>
-  reach(harness, [path], () => true).filter((file) => file.path !== path);
+/**
+ * Every file a file reaches, nearest first, whatever is switched on. A file `through` refuses is
+ * reached, but not what it links.
+ */
+export const harnessReach = (
+  harness: Harness,
+  path: string,
+  through: (file: HarnessFile) => boolean = () => true,
+): HarnessFile[] => {
+  const byPath = new Map(harness.files.map((file) => [file.path, file]));
+  const start = byPath.get(path);
+  if (start === undefined) return [];
+  const reached = new Map([[path, start]]);
+  for (const file of reached.values()) {
+    if (file !== start && !through(file)) continue;
+    for (const link of file.links) {
+      const linked = byPath.get(link.path);
+      if (linked !== undefined && !reached.has(link.path)) reached.set(link.path, linked);
+    }
+  }
+  return [...reached.values()].slice(1);
+};
 
 /**
  * The roots that are on, then breadth-first what they import, and what that imports: what the
@@ -565,7 +584,24 @@ export interface HarnessPlan {
   readonly onRequest: readonly HarnessFile[];
   /** Of `onRequest`, the roots and imports that don't fit the prompt. */
   readonly passedOver: readonly HarnessFile[];
+  /**
+   * The enabled files in neither list since an earlier one has the same content, by path, with that
+   * one's path: a `CLAUDE.md` the same as `AGENTS.md` isn't given twice.
+   */
+  readonly duplicates: ReadonlyMap<string, string>;
 }
+
+/** Each file with the same content as one before it, by path, with the first one's path. */
+const duplicatesIn = (files: readonly HarnessFile[]): ReadonlyMap<string, string> => {
+  const first = new Map<BlobHash, string>();
+  const duplicates = new Map<string, string>();
+  for (const file of files) {
+    const of = first.get(file.blob);
+    if (of === undefined) first.set(file.blob, file.path);
+    else duplicates.set(file.path, of);
+  }
+  return duplicates;
+};
 
 /** The files that fit in a prompt, in order: one that doesn't is passed over and the next tried. */
 export const fitInPrompt = <T extends { readonly bytes: number }>(
@@ -590,11 +626,20 @@ export const harnessPlan = (
   harness: Harness,
   switches: ReadonlyMap<string, boolean>,
 ): HarnessPlan => {
-  const { fitting, passedOver } = fitInPrompt(alwaysLoaded(harness, switches));
+  const loaded = alwaysLoaded(harness, switches);
+  const isLoaded = new Set(loaded.map((file) => file.path));
+  const enabled = enabledFiles(harness, switches);
+  // What's always loaded goes first, so a duplicate is never the one in the prompt.
+  const duplicates = duplicatesIn([
+    ...loaded,
+    ...enabled.filter((file) => !isLoaded.has(file.path)),
+  ]);
+  const { fitting, passedOver } = fitInPrompt(loaded.filter((file) => !duplicates.has(file.path)));
   const given = new Set(fitting.map((file) => file.path));
   return {
     inPrompt: fitting,
-    onRequest: enabledFiles(harness, switches).filter((file) => !given.has(file.path)),
+    onRequest: enabled.filter((file) => !given.has(file.path) && !duplicates.has(file.path)),
     passedOver,
+    duplicates,
   };
 };
