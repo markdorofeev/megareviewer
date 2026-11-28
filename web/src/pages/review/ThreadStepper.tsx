@@ -49,7 +49,7 @@ const ThreadIcon = () => (
 
 /**
  * The pager through the PR's unresolved threads in the page's order: before the first step, their
- * count and how many files they're in; on one, its opening words, which go back to it, and the
+ * count and how many files they're in, which opens the list, with no Start; on one, its opening words, which go back to it, and the
  * position, which opens the list.
  */
 export const ThreadStepper = ({
@@ -77,6 +77,7 @@ export const ThreadStepper = ({
       total={steps.length}
       at={at}
       started={current !== null}
+      start={false}
       icon={<ThreadIcon />}
       count={steps.length}
       countWords="unresolved"

@@ -2906,8 +2906,17 @@ describe("review threads", () => {
 
   describe("stepping through them from the bar", () => {
     const position = () => within(reviewBar()).getByRole("button", { name: /, show all$/ });
-    const step = (name: "Start" | "Next thread" | "Previous thread") =>
+    const step = (name: "Next thread" | "Previous thread") =>
       userEvent.click(within(reviewBar()).getByRole("button", { name }));
+    // The threads' pager has no Start: the first step is the list's first row.
+    const first = async () => {
+      await userEvent.click(position());
+      const list = await screen.findByRole("dialog", { name: /unresolved threads?$/ });
+      const [row] = within(list).getAllByRole("button");
+      if (row === undefined) throw new Error("no thread in the list");
+      await userEvent.click(row);
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    };
     const barStatus = () => within(reviewBar()).getByRole("status").textContent;
 
     it("goes round the unresolved threads in the page's order before Claude runs", async () => {
@@ -2915,7 +2924,7 @@ describe("review threads", () => {
       await loaded();
       // Before the first step, the count: three of the four are unresolved.
       await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
-      await step("Start");
+      await first();
       // orders.ts comes before receipts.ts, so its earlier comment is first.
       expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier");
       expect(focusedLabel()).toBe("Thread on line 60");
@@ -2958,7 +2967,7 @@ describe("review threads", () => {
       renderReview({ view: codeOnly });
       await loaded();
       await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
-      await step("Start");
+      await first();
       await step("Next thread");
       expect(position().textContent).toBe("2 of 3");
       const attempts = document.getElementById("thread-PRRT_attempts") as HTMLElement;
@@ -3015,7 +3024,7 @@ describe("review threads", () => {
       await waitFor(() => expect(position().textContent).toBe("3 unresolvedin 2 files"));
       await userEvent.click(layoutSwitch().getByRole("button", { name: "Overview" }));
       expect(overviewBox()).toBeTruthy();
-      await step("Start");
+      await first();
       await waitFor(() => expect(scrolledTo().at(-1)).toBe("thread-PRRT_earlier"));
       expect(screen.queryByRole("region", { name: "Overview of the changed files" })).toBeNull();
     });

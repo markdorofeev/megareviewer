@@ -59,7 +59,7 @@ const CountUp = ({ count }: { readonly count: number }) => (
 
 /**
  * One outlined pager round a set of steps. Before the first step it's what the steps are, counted,
- * which opens their list, and Start. On a step, Previous and Next at its ends, the current step's
+ * which opens their list, and Start when it has one. On a step, Previous and Next at its ends, the current step's
  * title, which goes back to it, and its position, which opens the list; outside the set, the count
  * in the title's place. Claude's findings and the PR's threads share it.
  */
@@ -70,6 +70,7 @@ export const Stepper = ({
   total,
   at,
   started,
+  start = true,
   icon,
   count,
   countWords,
@@ -92,6 +93,8 @@ export const Stepper = ({
   readonly at: number | null;
   /** Whether a step was gone to, though it may be outside the set: then Previous goes up. */
   readonly started: boolean;
+  /** Whether Start goes to the first step; without it the list is the way in. */
+  readonly start?: boolean;
   /** Before the first step, what the steps are, beside their count. */
   readonly icon: ReactNode;
   /** How many steps there are, said before the first. */
@@ -234,7 +237,7 @@ export const Stepper = ({
           {list(close)}
         </PopoverContent>
       </Popover>
-      {next}
+      {(start || !before) && next}
       {before && summaryWords !== null && (
         <span id={summaryId} hidden>
           {summaryWords}

@@ -35,16 +35,14 @@ const stepper = (props: {
 const position = () => screen.getByRole("button", { name: /, show all$/ });
 
 describe("ThreadStepper", () => {
-  it("counts the steps before the first, with Start, which goes to the first", () => {
-    const onGo = vi.fn();
-    stepper({ onGo });
+  it("counts the steps before the first, with no Start: the list is the way in", () => {
+    stepper({});
     expect(screen.getByRole("group", { name: "Threads" })).toBeTruthy();
     expect(position().textContent).toBe("3 unresolvedin 2 files");
     expect(position().getAttribute("aria-label")).toBe("3 unresolved, show all");
     expect(screen.queryByRole("button", { name: /^Go to thread/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Previous thread" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    expect(onGo.mock.calls).toEqual([["PRRT_earlier"]]);
+    expect(screen.queryByRole("button", { name: /^(Start|Next thread)$/ })).toBeNull();
   });
 
   it("goes up and down the page from a thread outside the steps", () => {
@@ -90,7 +88,7 @@ describe("ThreadStepper", () => {
     stepper({ ordered: [money] });
     // Every thread is resolved: nothing to go round.
     expect(position().textContent).toBe("0 unresolved");
-    expect(screen.getByRole("button", { name: "Start" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("button", { name: /^(Start|Next thread)$/ })).toBeNull();
   });
 });
 

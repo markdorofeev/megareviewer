@@ -633,8 +633,14 @@ test("walks the threads from the bar, before Claude runs and beside its findings
   const position = bar.getByRole("button", { name: /, show all$/ });
   await expect(position).toContainText("5 unresolved");
 
-  // The keyboard steps as the mouse does.
-  await bar.getByRole("button", { name: "Start" }).focus();
+  // No Start: the keyboard goes in by the list, as the mouse does.
+  await expect(bar.getByRole("button", { name: /^(Start|Next thread)$/ })).toHaveCount(0);
+  await position.focus();
+  await page.keyboard.press("Enter");
+  await page
+    .getByRole("dialog", { name: "5 unresolved threads" })
+    .getByRole("button", { name: /Say the charset/ })
+    .focus();
   await page.keyboard.press("Enter");
   await expect(position).toHaveAccessibleName("Thread 1 of 5, show all");
   await expect(bar.getByRole("status")).toHaveText(
